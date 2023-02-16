@@ -17,9 +17,9 @@ import (
 func TestRunningPlugins(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -78,9 +78,9 @@ func TestRunningPlugins(t *testing.T) {
 func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -122,12 +122,12 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	tester.CheckMocks(t)
 }
 
-func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
+func TestMalformedPluginNamesDontCrashExecutor(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -149,9 +149,9 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 func TestOverlappingPluginHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -213,9 +213,9 @@ func TestPluginCloneRetried(t *testing.T) {
 
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -278,23 +278,23 @@ func TestPluginCloneRetried(t *testing.T) {
 // that a plugin modified upstream is treated as expected.  That is, by default, the updates won't
 // take effect, but with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH set, they will.
 func TestModifiedPluginNoForcePull(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
-	// Let's set a fixed location for plugins, otherwise NewBootstrapTester() gives us a random new
+	// Let's set a fixed location for plugins, otherwise NewExecutorTester() gives us a random new
 	// tempdir every time, which defeats our test.  Later we'll use this pluginsDir for the second
 	// test run, too.
-	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
+	pluginsDir, err := os.MkdirTemp("", "executor-plugins")
 	if err != nil {
-		t.Fatalf(`os.MkdirTemp("", "bootstrap-plugins") error = %v`, err)
+		t.Fatalf(`os.MkdirTemp("", "executor-plugins") error = %v`, err)
 	}
 	tester.PluginsDir = pluginsDir
 
 	// There's a bit of machinery in replacePluginPathInEnv to modify only the
-	// BUILDKITE_PLUGINS_PATH, leaving the rest of the environment variables NewBootstrapTester()
+	// BUILDKITE_PLUGINS_PATH, leaving the rest of the environment variables NewExecutorTester()
 	// gave us as-is.
 	tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
 
@@ -343,9 +343,9 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 
 	// Now, we want to "repeat" the test build, having modified the plugin's contents.
-	tester2, err := NewBootstrapTester()
+	tester2, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester2.Close()
 
@@ -385,17 +385,17 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 // and after modifying a plugin's source, but this time with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH
 // set to true.  So, we expect the upstream plugin changes to take effect on our second build.
 func TestModifiedPluginWithForcePull(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	// Let's set a fixed location for plugins, otherwise it'll be a random new tempdir every time
 	// which defeats our test.
-	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
+	pluginsDir, err := os.MkdirTemp("", "executor-plugins")
 	if err != nil {
-		t.Fatalf(`os.MkdirTemp("", "bootstrap-plugins") error = %v`, err)
+		t.Fatalf(`os.MkdirTemp("", "executor-plugins") error = %v`, err)
 	}
 
 	// Same resetting code for BUILDKITE_PLUGINS_PATH as in the previous test
@@ -442,9 +442,9 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester.RunAndCheck(t, env...)
 
-	tester2, err := NewBootstrapTester()
+	tester2, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester2.Close()
 
@@ -573,7 +573,7 @@ func (tp *testPlugin) MarshalJSON() ([]byte, error) {
 }
 
 // replacePluginPathInEnv is useful for modifying the Env blob of a tester created with
-// NewBootstrapTester().  We need to do that because the tester relies on BUILDKITE_PLUGINS_PATH,
+// NewExecutorTester().  We need to do that because the tester relies on BUILDKITE_PLUGINS_PATH,
 // not on the .PluginsDir field as one might expect.
 func replacePluginPathInEnv(originalEnv []string, pluginsDir string) (newEnv []string) {
 	newEnv = []string{}

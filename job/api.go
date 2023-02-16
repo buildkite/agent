@@ -10,7 +10,7 @@ import (
 // startJobAPI starts the job API server, iff the job API experiment is enabled, and the OS of the box supports it
 // otherwise it returns a noop cleanup function
 // It also sets the BUILDKITE_AGENT_JOB_API_SOCKET and BUILDKITE_AGENT_JOB_API_TOKEN environment variables
-func (b *Bootstrap) startJobAPI() (cleanup func(), err error) {
+func (b *Executor) startJobAPI() (cleanup func(), err error) {
 	cleanup = func() {}
 
 	if !experiments.IsEnabled(experiments.JobAPI) {

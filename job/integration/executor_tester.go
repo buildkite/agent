@@ -23,8 +23,8 @@ import (
 	"github.com/buildkite/bintest/v3"
 )
 
-// BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
-type BootstrapTester struct {
+// ExecutorTester invokes a buildkite-agent executor script with a temporary environment
+type ExecutorTester struct {
 	Name          string
 	Args          []string
 	Env           []string
@@ -43,7 +43,7 @@ type BootstrapTester struct {
 	mocks    []*bintest.Mock
 }
 
-func NewBootstrapTester() (*BootstrapTester, error) {
+func NewExecutorTester() (*ExecutorTester, error) {
 	// The job API experiment adds a unix domain socket to a directory in the home directory
 	// UDS names are limited to 108 characters, so we need to use a shorter home directory
 	// Who knows what's going on in windowsland
@@ -57,24 +57,24 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, fmt.Errorf("making home directory: %w", err)
 	}
 
-	pathDir, err := os.MkdirTemp("", "bootstrap-path")
+	pathDir, err := os.MkdirTemp("", "executor-path")
 	if err != nil {
-		return nil, fmt.Errorf("making bootstrap-path directory: %w", err)
+		return nil, fmt.Errorf("making executor-path directory: %w", err)
 	}
 
-	buildDir, err := os.MkdirTemp("", "bootstrap-builds")
+	buildDir, err := os.MkdirTemp("", "executor-builds")
 	if err != nil {
-		return nil, fmt.Errorf("making bootstrap-builds directory: %w", err)
+		return nil, fmt.Errorf("making executor-builds directory: %w", err)
 	}
 
-	hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
+	hooksDir, err := os.MkdirTemp("", "executor-hooks")
 	if err != nil {
-		return nil, fmt.Errorf("making bootstrap-hooks directory: %w", err)
+		return nil, fmt.Errorf("making executor-hooks directory: %w", err)
 	}
 
-	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
+	pluginsDir, err := os.MkdirTemp("", "executor-plugins")
 	if err != nil {
-		return nil, fmt.Errorf("making bootstrap-plugins directory: %w", err)
+		return nil, fmt.Errorf("making executor-plugins directory: %w", err)
 	}
 
 	repo, err := createTestGitRespository()
@@ -82,7 +82,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, fmt.Errorf("creating test git repo: %w", err)
 	}
 
-	bt := &BootstrapTester{
+	bt := &ExecutorTester{
 		Name: os.Args[0],
 		Args: []string{"bootstrap"},
 		Repo: repo,
@@ -118,9 +118,9 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		bt.Env = append(bt.Env, "BUILDKITE_AGENT_EXPERIMENT="+strings.Join(exp, ","))
 
 		if experiments.IsEnabled(experiments.GitMirrors) {
-			gitMirrorsDir, err := os.MkdirTemp("", "bootstrap-git-mirrors")
+			gitMirrorsDir, err := os.MkdirTemp("", "executor-git-mirrors")
 			if err != nil {
-				return nil, fmt.Errorf("making bootstrap-git-mirrors directory: %w", err)
+				return nil, fmt.Errorf("making executor-git-mirrors directory: %w", err)
 			}
 
 			bt.GitMirrorsDir = gitMirrorsDir
@@ -156,7 +156,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 }
 
 // Mock creates a mock for a binary using bintest
-func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
+func (b *ExecutorTester) Mock(name string) (*bintest.Mock, error) {
 	mock, err := bintest.NewMock(filepath.Join(b.PathDir, name))
 	if err != nil {
 		return mock, err
@@ -167,16 +167,16 @@ func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
 }
 
 // MustMock will fail the test if creating the mock fails
-func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
+func (b *ExecutorTester) MustMock(t *testing.T, name string) *bintest.Mock {
 	mock, err := b.Mock(name)
 	if err != nil {
-		t.Fatalf("BootstrapTester.Mock(%q) error = %v", name, err)
+		t.Fatalf("ExecutorTester.Mock(%q) error = %v", name, err)
 	}
 	return mock
 }
 
 // HasMock returns true if a mock has been created by that name
-func (b *BootstrapTester) HasMock(name string) bool {
+func (b *ExecutorTester) HasMock(name string) bool {
 	for _, m := range b.mocks {
 		if strings.TrimSuffix(m.Name, filepath.Ext(m.Name)) == name {
 			return true
@@ -186,7 +186,7 @@ func (b *BootstrapTester) HasMock(name string) bool {
 }
 
 // MockAgent creates a mock for the buildkite-agent binary
-func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
+func (b *ExecutorTester) MockAgent(t *testing.T) *bintest.Mock {
 	agent := b.MustMock(t, "buildkite-agent")
 	agent.Expect("env", "dump").
 		Min(0).
@@ -197,7 +197,7 @@ func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
 }
 
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
-func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
+func (b *ExecutorTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
 	hookScript := filepath.Join(dir, name)
 	body := ""
 
@@ -217,7 +217,7 @@ func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir stri
 
 // ExpectLocalHook creates a mock object and a script in the git repository's buildkite hooks dir
 // that proxies to the mock. This lets you set up expectations on a local  hook
-func (b *BootstrapTester) ExpectLocalHook(name string) *bintest.Expectation {
+func (b *ExecutorTester) ExpectLocalHook(name string) *bintest.Expectation {
 	hooksDir := filepath.Join(b.Repo.Path, ".buildkite", "hooks")
 
 	if err := os.MkdirAll(hooksDir, 0700); err != nil {
@@ -241,7 +241,7 @@ func (b *BootstrapTester) ExpectLocalHook(name string) *bintest.Expectation {
 
 // ExpectGlobalHook creates a mock object and a script in the global buildkite hooks dir
 // that proxies to the mock. This lets you set up expectations on a global hook
-func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
+func (b *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
 	_, err := b.writeHookScript(b.hookMock, name, b.HooksDir, "global", name)
 	if err != nil {
 		panic(err)
@@ -250,8 +250,8 @@ func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
 	return b.hookMock.Expect("global", name)
 }
 
-// Run the bootstrap and return any errors
-func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
+// Run the executor and return any errors
+func (b *ExecutorTester) Run(t *testing.T, env ...string) error {
 	// Mock out the meta-data calls to the agent after checkout
 	if !b.HasMock("buildkite-agent") {
 		agent := b.MockAgent(t)
@@ -271,7 +271,7 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 
 	buf := &buffer{}
 
-	if os.Getenv(`DEBUG_BOOTSTRAP`) == "1" {
+	if os.Getenv("DEBUG_BOOTSTRAP") == "1" {
 		w := newTestLogWriter(t)
 		b.cmd.Stdout = io.MultiWriter(buf, w)
 		b.cmd.Stderr = io.MultiWriter(buf, w)
@@ -295,24 +295,24 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 	return err
 }
 
-func (b *BootstrapTester) Cancel() error {
+func (b *ExecutorTester) Cancel() error {
 	b.cmdLock.Lock()
 	defer b.cmdLock.Unlock()
 	log.Printf("Killing pid %d", b.cmd.Process.Pid)
 	return b.cmd.Process.Signal(syscall.SIGINT)
 }
 
-func (b *BootstrapTester) CheckMocks(t *testing.T) {
+func (b *ExecutorTester) CheckMocks(t *testing.T) {
 	for _, mock := range b.mocks {
 		mock.Check(t)
 	}
 }
 
-func (b *BootstrapTester) CheckoutDir() string {
+func (b *ExecutorTester) CheckoutDir() string {
 	return filepath.Join(b.BuildDir, "test-agent", "test", "test-project")
 }
 
-func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
+func (b *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 	re := regexp.MustCompile(key + "=(.+)\n")
 	matches := re.FindStringSubmatch(b.Output)
 	if len(matches) == 0 {
@@ -321,20 +321,20 @@ func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
 	return matches[1], true
 }
 
-// Run the bootstrap and then check the mocks
-func (b *BootstrapTester) RunAndCheck(t *testing.T, env ...string) {
+// Run the executor and then check the mocks
+func (b *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	err := b.Run(t, env...)
-	t.Logf("Bootstrap output:\n%s", b.Output)
+	t.Logf("Executor output:\n%s", b.Output)
 
 	if err != nil {
-		t.Fatalf("BootstrapTester.Run(%q) = %v", env, err)
+		t.Fatalf("ExecutorTester.Run(%q) = %v", env, err)
 	}
 
 	b.CheckMocks(t)
 }
 
 // Close the tester, delete all the directories and mocks
-func (b *BootstrapTester) Close() error {
+func (b *ExecutorTester) Close() error {
 	for _, mock := range b.mocks {
 		if err := mock.Close(); err != nil {
 			return err
@@ -368,11 +368,11 @@ func (b *BootstrapTester) Close() error {
 	return nil
 }
 
-func mockEnvAsJSONOnStdout(b *BootstrapTester) func(c *bintest.Call) {
+func mockEnvAsJSONOnStdout(b *ExecutorTester) func(c *bintest.Call) {
 	return func(c *bintest.Call) {
 		envMap := map[string]string{}
 
-		for _, e := range b.Env { // The env from the bootstrap tester
+		for _, e := range b.Env { // The env from the executor tester
 			k, v, _ := env.Split(e)
 			envMap[k] = v
 		}

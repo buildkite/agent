@@ -17,9 +17,9 @@ import (
 func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -64,9 +64,9 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -124,9 +124,9 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -158,9 +158,9 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 }
 
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -195,9 +195,9 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -225,9 +225,9 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 func TestReplacingCheckoutHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -254,9 +254,9 @@ func TestReplacingCheckoutHook(t *testing.T) {
 func TestReplacingGlobalCommandHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -279,9 +279,9 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 func TestReplacingLocalCommandHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -305,9 +305,9 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -346,9 +346,9 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 		t.Run(tc.failingHook, func(t *testing.T) {
 			t.Parallel()
 
-			tester, err := NewBootstrapTester()
+			tester, err := NewExecutorTester()
 			if err != nil {
-				t.Fatalf("NewBootstrapTester() error = %v", err)
+				t.Fatalf("NewExecutorTester() error = %v", err)
 			}
 			defer tester.Close()
 
@@ -396,9 +396,9 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -430,9 +430,9 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 		// "post-artifact",
 	} {
 		t.Run(hook, func(t *testing.T) {
-			tester, err := NewBootstrapTester()
+			tester, err := NewExecutorTester()
 			if err != nil {
-				t.Fatalf("NewBootstrapTester() error = %v", err)
+				t.Fatalf("NewExecutorTester() error = %v", err)
 			}
 			defer tester.Close()
 
@@ -460,9 +460,9 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 

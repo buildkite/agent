@@ -26,7 +26,7 @@ type Logger interface {
 	// Errorf shows a Buildkite formatted error expands the previous group
 	Errorf(format string, v ...any)
 
-	// Warningf shows a buildkite bootstrap warning
+	// Warningf shows a buildkite executor warning
 	Warningf(format string, v ...any)
 
 	// Promptf prints a shell prompt

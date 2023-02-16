@@ -17,9 +17,9 @@ func argumentForCommand(cmd string) any {
 }
 
 func TestRunningCommandWithDocker(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -50,9 +50,9 @@ func TestRunningCommandWithDocker(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -84,9 +84,9 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 }
 
 func TestRunningFailingCommandWithDocker(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -123,9 +123,9 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerCompose(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -156,9 +156,9 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 }
 
 func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -196,9 +196,9 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -230,9 +230,9 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -254,7 +254,7 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func expectCommandHooks(exitStatus string, t *testing.T, tester *BootstrapTester) {
+func expectCommandHooks(exitStatus string, t *testing.T, tester *ExecutorTester) {
 	tester.ExpectGlobalHook("pre-command").Once()
 	tester.ExpectLocalHook("pre-command").Once()
 	tester.ExpectGlobalHook("post-command").Once()

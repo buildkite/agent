@@ -14,9 +14,9 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 		t.Skip("batch test only applies to Windows")
 	}
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -42,9 +42,9 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 

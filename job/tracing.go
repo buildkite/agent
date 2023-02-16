@@ -36,7 +36,7 @@ type stopper func()
 
 func noopStopper() {}
 
-func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+func (b *Executor) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	switch b.Config.TracingBackend {
 	case tracetools.BackendDatadog:
 		// Newer versions of the tracing libs print out diagnostic info which spams the
@@ -55,12 +55,12 @@ func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.
 
 	default:
 		b.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", b.Config.TracingBackend)
-		b.Config.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the bootstrap's tracking backend
+		b.Config.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the executor's tracking backend
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 	}
 }
 
-func (b *Bootstrap) ddResourceName() string {
+func (b *Executor) ddResourceName() string {
 	label, ok := b.shell.Env.Get("BUILDKITE_LABEL")
 	if !ok {
 		label = "job"
@@ -71,7 +71,7 @@ func (b *Bootstrap) ddResourceName() string {
 
 // startTracingDatadog sets up tracing based on the config values. It uses opentracing as an
 // abstraction so the agent can support multiple libraries if needbe.
-func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+func (b *Executor) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	opts := []tracer.StartOption{
 		tracer.WithService(b.Config.TracingServiceName),
 		tracer.WithSampler(tracer.NewAllSampler()),
@@ -99,7 +99,7 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
-func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
+func (b *Executor) extractDDTraceCtx() opentracing.SpanContext {
 	sctx, err := tracetools.DecodeTraceContext(b.shell.Env.Dump())
 	if err != nil {
 		// Return nil so a new span will be created
@@ -108,7 +108,7 @@ func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
 	return sctx
 }
 
-func (b *Bootstrap) otRootSpanName() string {
+func (b *Executor) otRootSpanName() string {
 	base := b.OrganizationSlug + "/" + b.PipelineSlug + "/"
 	key, ok := b.shell.Env.Get("BUILDKITE_STEP_KEY")
 	if ok && key != "" {
@@ -123,7 +123,7 @@ func (b *Bootstrap) otRootSpanName() string {
 	return base + "job"
 }
 
-func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+func (b *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	client := otlptracegrpc.NewClient()
 	exporter, err := otlptrace.New(ctx, client)
 	if err != nil {
@@ -182,7 +182,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
 }
 
-func GenericTracingExtras(b *Bootstrap, env *env.Environment) map[string]any {
+func GenericTracingExtras(b *Executor, env *env.Environment) map[string]any {
 	buildID, _ := env.Get("BUILDKITE_BUILD_ID")
 	buildNumber, _ := env.Get("BUILDKITE_BUILD_NUMBER")
 	buildURL, _ := env.Get("BUILDKITE_BUILD_URL")
@@ -287,7 +287,7 @@ func toOpenTelemetryAttributes(extras map[string]any) ([]attribute.KeyValue, map
 	return attrs, unknownAttrTypes
 }
 
-func (b *Bootstrap) implementationSpecificSpanName(otelName, ddName string) string {
+func (b *Executor) implementationSpecificSpanName(otelName, ddName string) string {
 	switch b.TracingBackend {
 	case tracetools.BackendDatadog:
 		return ddName

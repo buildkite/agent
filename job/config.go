@@ -10,14 +10,14 @@ import (
 	"github.com/buildkite/agent/v3/process"
 )
 
-// Config provides the configuration for the Bootstrap. Some of the keys are
+// Config provides the configuration for the Executor. Some of the keys are
 // read from the environment after hooks are run, so we use struct tags to provide
 // that mapping along with some reflection. It's a little bit magical but it's
 // less work to maintain in the long run.
 //
 // To add a new config option that is mapped from an environment variable, add a
 // struct tag, then don't forget to add a corresponding CLI flag over in the
-// clicommand/bootstrap.go(BootstrapConfig) struct, otherwise it won't work.
+// clicommand/executor.go(ExecutorConfig) struct, otherwise it won't work.
 
 type Config struct {
 	// The command to run
@@ -26,7 +26,7 @@ type Config struct {
 	// The ID of the job being run
 	JobID string
 
-	// If the bootstrap is in debug mode
+	// If the executor is in debug mode
 	Debug bool
 
 	// The repository that needs to be cloned
@@ -62,13 +62,13 @@ type Config struct {
 	// Slug of the current pipeline
 	PipelineSlug string
 
-	// Name of the agent running the bootstrap
+	// Name of the agent running the executor
 	AgentName string
 
 	// Name of the queue the agent belongs to, if tagged
 	Queue string
 
-	// Should the bootstrap remove an existing checkout before running the job
+	// Should the executor remove an existing checkout before running the job
 	CleanCheckout bool `env:"BUILDKITE_CLEAN_CHECKOUT"`
 
 	// Flags to pass to "git checkout" command
@@ -196,7 +196,7 @@ func (c *Config) ReadFromEnvironment(environ *env.Environment) map[string]string
 				v.SetBool(newBool)
 				changed[tag] = newStr
 			default:
-				log.Printf("warning: bootstrap.Config.ReadFromEnvironment does not support %v for %s", v.Kind(), tag)
+				log.Printf("warning: executor.Config.ReadFromEnvironment does not support %v for %s", v.Kind(), tag)
 			}
 		}
 	}
