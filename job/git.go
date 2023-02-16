@@ -1,4 +1,4 @@
-package bootstrap
+package job
 
 import (
 	"bufio"
@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/job/shell"
 	"github.com/buildkite/shellwords"
 )
 

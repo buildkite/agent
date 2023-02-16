@@ -8,7 +8,7 @@ import (
 	"io"
 	"path"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/job/shell"
 )
 
 // RedactLengthMin is the shortest string length that will be considered a

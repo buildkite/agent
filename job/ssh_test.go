@@ -1,4 +1,4 @@
-package bootstrap
+package job
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/job/shell"
 	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
 )

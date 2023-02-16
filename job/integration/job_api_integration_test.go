@@ -18,9 +18,9 @@ import (
 func TestBootstrapRunsJobAPI(t *testing.T) {
 	defer experimentWithUndo(experiments.JobAPI)()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewExecutorTester()
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 

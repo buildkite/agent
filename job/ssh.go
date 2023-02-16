@@ -1,4 +1,4 @@
-package bootstrap
+package job
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/job/shell"
 	"github.com/buildkite/roko"
 )
 

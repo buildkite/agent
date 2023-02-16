@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/job/shell"
 )
 
 func LoggerMiddleware(l shell.Logger) func(http.Handler) http.Handler {

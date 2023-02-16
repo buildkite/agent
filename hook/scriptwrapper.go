@@ -10,8 +10,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/job/shell"
 	"github.com/buildkite/agent/v3/shellscript"
 	"github.com/buildkite/agent/v3/utils"
 )
