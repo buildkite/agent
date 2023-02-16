@@ -83,6 +83,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		kubernetesClient := &kubernetes.Client{}
 		if err := b.startKubernetesClient(ctx, kubernetesClient); err != nil {
 			b.shell.Errorf("Failed to start kubernetes client: %v", err)
+			return 1
 		}
 		defer func() {
 			kubernetesClient.Exit(exitCode)
