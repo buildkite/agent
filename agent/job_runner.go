@@ -340,6 +340,34 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	return runner, nil
 }
 
+type hookExit struct {
+	ExitStatus   int
+	SignalReason string
+	Ok           bool
+}
+
+func (r *JobRunner) preExecHook(ctx context.Context, hookName string) hookExit {
+	exit := hookExit{Ok: true}
+	if hookPath, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, hookName); hookPath != "" {
+		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true
+		// positive result from the hook
+		okay, err := r.executePreExecHook(ctx, hookName, hookPath)
+		if !okay {
+			exit.Ok = false
+
+			// Ensure the Job UI knows why this job resulted in failure
+			r.logStreamer.Process([]byte(fmt.Sprintf("%s hook rejected this job, see the buildkite-agent logs for more details", hookName)))
+			// But disclose more information in the agent logs
+			r.logger.Error("%s hook rejected this job: %s", hookName, err)
+
+			exit.ExitStatus = -1
+			exit.SignalReason = "agent_refused"
+		}
+	}
+
+	return exit
+}
+
 // Runs the job
 func (r *JobRunner) Run(ctx context.Context) error {
 	r.logger.Info("Starting job %s", r.job.ID)
@@ -375,43 +403,24 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Default exit status is no exit status
-	exitStatus := ""
-	signal := ""
-	signalReason := ""
-
-	// Before executing the bootstrap process with the received Job env,
-	// execute the pre-bootstrap hook (if present) for it to tell us
+	// Before executing the job process with the received Job env,
+	// execute the pre-bootstrap/pre-exec hook (if present) for it to tell us
 	// whether it is happy to proceed.
-	environmentCommandOkay := true
+	hookExit := r.preExecHook(ctx, "pre-bootstrap")
+	hookExit = r.preExecHook(ctx, "pre-exec")
 
-	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
-		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true
-		// positive result from the hook
-		okay, err := r.executePreBootstrapHook(ctx, hook)
-		if !okay {
-			environmentCommandOkay = false
-
-			// Ensure the Job UI knows why this job resulted in failure
-			r.logStreamer.Process([]byte("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details"))
-			// But disclose more information in the agent logs
-			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
-
-			exitStatus = "-1"
-			signalReason = "agent_refused"
-		}
-	}
-
-	// Used to wait on various routines that we spin up
-	var wg sync.WaitGroup
+	// Default exit status is no exit status
+	signal := ""
+	exitStatus := strconv.Itoa(hookExit.ExitStatus)
+	signalReason := hookExit.SignalReason
 
 	// Set up a child context for helper goroutines related to running the job.
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if environmentCommandOkay {
-		// Kick off log streaming and job status checking when the process
-		// starts.
+	var wg sync.WaitGroup
+	if hookExit.Ok {
+		// Kick off log streaming and job status checking when the process starts.
 		wg.Add(2)
 		go r.jobLogStreamer(cctx, &wg)
 		go r.jobCancellationChecker(cctx, &wg)
@@ -596,7 +605,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		}
 	}
 
-	// Set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings
+	// Set BUILDKITE_IGNORED_ENV so the job executor can show warnings
 	if len(ignoredEnv) > 0 {
 		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
@@ -646,19 +655,19 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
 	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
 
-	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
+	// propagate CancelSignal to job executor, unless it's the default SIGTERM
 	if r.conf.CancelSignal != process.SIGTERM {
 		env["BUILDKITE_CANCEL_SIGNAL"] = r.conf.CancelSignal.String()
 	}
 
-	// Whether to enable profiling in the bootstrap
+	// Whether to enable profiling in the job executor
 	if r.conf.AgentConfiguration.Profile != "" {
 		env["BUILDKITE_AGENT_PROFILE"] = r.conf.AgentConfiguration.Profile
 	}
 
-	// PTY-mode is enabled by default in `start` and `bootstrap`, so we only need
+	// PTY-mode is enabled by default in `start` and `job-exec`, so we only need
 	// to propagate it if it's explicitly disabled.
-	if r.conf.AgentConfiguration.RunInPty == false {
+	if !r.conf.AgentConfiguration.RunInPty {
 		env["BUILDKITE_PTY"] = "false"
 	}
 
@@ -722,8 +731,8 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 	return len(bytes), nil
 }
 
-func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
-	r.logger.Info("Running pre-bootstrap hook %q", hook)
+func (r *JobRunner) executePreExecHook(ctx context.Context, hookName, hookPath string) (bool, error) {
+	r.logger.Info("Running %s hook %q", hookName, hookPath)
 
 	sh, err := shell.New()
 	if err != nil {
@@ -731,19 +740,19 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	}
 
 	// This (plus inherited) is the only ENV that should be exposed
-	// to the pre-bootstrap hook.
+	// to the pre-exec hook.
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
 	sh.Writer = LogWriter{
 		l: r.logger,
 	}
 
-	if err := sh.RunWithoutPrompt(ctx, hook); err != nil {
-		r.logger.Error("Finished pre-bootstrap hook %q: job rejected", hook)
+	if err := sh.RunWithoutPrompt(ctx, hookPath); err != nil {
+		r.logger.Error("Finished %s hook %q: hookName, job rejected", hookPath)
 		return false, err
 	}
 
-	r.logger.Info("Finished pre-bootstrap hook %q: job accepted", hook)
+	r.logger.Info("Finished %s hook %q: hookName, job accepted", hookPath)
 	return true, nil
 }
 
