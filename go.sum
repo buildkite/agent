@@ -263,8 +263,8 @@ github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2 h1:C8RRfIlExwwr
 github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2/go.mod h1:DnJPaYgiKu56EuDp8TU5wFLdZIcAnb/uH9v37ZaMV64=
 github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792 h1:vwTGeGWCew89DI4ZwKCaobGAN7ExvZiBzgn4LZHMVOc=
 github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792/go.mod h1:v+TzC990ezhKzsEvlyorBWqCKtXtv7ihKY0LBSg/45c=
-github.com/rjeczalik/interfaces v0.1.1 h1:xhFQNGtz3T3CQgtJJwWn+i3Ekl1WeObh7wtTtCbyKT0=
-github.com/rjeczalik/interfaces v0.1.1/go.mod h1:TNwD+kCGmXYrXksRDD5ikspp08m/Aosbr67zVLMjnOY=
+github.com/rjeczalik/interfaces v0.3.0 h1:BM+eRAwfOcvW5qVhxv7x09x/0jwHN6z2GB9HsSA2weM=
+github.com/rjeczalik/interfaces v0.3.0/go.mod h1:wfGcwiM/PXv9l6U/CPCb4Yh5KngED3dR3OppEVHMWuU=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/russross/blackfriday/v2 v2.0.1 h1:lPqVAte+HuHNfhJ/0LC98ESWRz8afy9tM/0RK8m9o+Q=
@@ -528,7 +528,6 @@ golang.org/x/tools v0.0.0-20190311212946-11955173bddd/go.mod h1:LCzVGOaR6xXOjkQ3
 golang.org/x/tools v0.0.0-20190312151545-0bb0c0a6e846/go.mod h1:LCzVGOaR6xXOjkQ3onu1FJEFr0SW1gC7cKk1uF8kGRs=
 golang.org/x/tools v0.0.0-20190312170243-e65039ee4138/go.mod h1:LCzVGOaR6xXOjkQ3onu1FJEFr0SW1gC7cKk1uF8kGRs=
 golang.org/x/tools v0.0.0-20190425150028-36563e24a262/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
-golang.org/x/tools v0.0.0-20190501045030-23463209683d/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
 golang.org/x/tools v0.0.0-20190506145303-2d16b83fe98c/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
 golang.org/x/tools v0.0.0-20190524140312-2c0ae7006135/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
 golang.org/x/tools v0.0.0-20190606124116-d0a3d012864b/go.mod h1:/rFqwRUd4F7ZHNgwSSTFct+R/Kf4OFW1sUzUTQQTgfc=
