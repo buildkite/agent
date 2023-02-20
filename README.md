@@ -52,6 +52,7 @@ For example, agent version 3.30.0 is published as:
 - Alpine 3.12
 - Ubuntu 18.04 LTS (x86_64), supported to end of life for 18.04
 - Ubuntu 20.04 LTS (x86_64), supported to end of life for 20.04
+- Ubuntu 22.04 LTS (x86_64), supported to end of life for 22.04
 
 ## Starting
 

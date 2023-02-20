@@ -31,6 +31,7 @@ trigger_step() {
         'agent-docker-image-alpine-k8s': "${agent_docker_image_alpine_k8s}"
         'agent-docker-image-ubuntu-18.04': "${agent_docker_image_ubuntu_bionic}"
         'agent-docker-image-ubuntu-20.04': "${agent_docker_image_ubuntu_focal}"
+        'agent-docker-image-ubuntu-22.04': "${agent_docker_image_ubuntu_jammy}"
         agent-docker-image-sidecar: "${agent_docker_image_sidecar}"
         agent-is-prerelease: "${agent_is_prerelease}"
       env:
@@ -82,6 +83,7 @@ agent_docker_image_alpine=$(buildkite-agent meta-data get "agent-docker-image-al
 agent_docker_image_alpine_k8s=$(buildkite-agent meta-data get "agent-docker-image-alpine-k8s")
 agent_docker_image_ubuntu_bionic=$(buildkite-agent meta-data get "agent-docker-image-ubuntu-18.04")
 agent_docker_image_ubuntu_focal=$(buildkite-agent meta-data get "agent-docker-image-ubuntu-20.04")
+agent_docker_image_ubuntu_jammy=$(buildkite-agent meta-data get "agent-docker-image-ubuntu-22.04")
 agent_docker_image_sidecar=$(buildkite-agent meta-data get "agent-docker-image-sidecar")
 agent_is_prerelease=$(buildkite-agent meta-data get "agent-is-prerelease")
 
