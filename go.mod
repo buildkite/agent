@@ -20,7 +20,7 @@ require (
 	github.com/pborman/uuid v0.0.0-20170112150404-1b00554d8222
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
-	github.com/rjeczalik/interfaces v0.1.1
+	github.com/rjeczalik/interfaces v0.3.0
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/stretchr/testify v1.8.1
 	github.com/urfave/cli v1.22.10
