@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defatultAttempts                = 60
+	defaultAttempts                 = 60
 	defaultSleepDuration            = 5 * time.Second
 	defaultSleepAfterUploadDuration = time.Second
 )
@@ -80,7 +80,7 @@ type pipelineUploadAsyncResult struct {
 func (u *PipelineUploader) pipelineUploadWithRetry(ctx context.Context, l logger.Logger) error {
 	// Retry the pipeline upload a few times before giving up
 	return roko.NewRetrier(
-		roko.WithMaxAttempts(defatultAttempts),
+		roko.WithMaxAttempts(defaultAttempts),
 		roko.WithStrategy(roko.Constant(defaultSleepDuration)),
 		roko.WithSleepFunc(u.RetrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
@@ -123,7 +123,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 	result := &pipelineUploadAsyncResult{}
 	// Retry the pipeline upload a few times before giving up
 	if err := roko.NewRetrier(
-		roko.WithMaxAttempts(defatultAttempts),
+		roko.WithMaxAttempts(defaultAttempts),
 		roko.WithStrategy(roko.Constant(defaultSleepDuration)),
 		roko.WithSleepFunc(u.RetrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
@@ -182,7 +182,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 
 func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l logger.Logger) error {
 	return roko.NewRetrier(
-		roko.WithMaxAttempts(defatultAttempts),
+		roko.WithMaxAttempts(defaultAttempts),
 		roko.WithStrategy(roko.Constant(defaultSleepDuration)),
 		roko.WithSleepFunc(u.RetrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
