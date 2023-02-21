@@ -18,6 +18,7 @@ import (
 )
 
 const regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
+const s3EndpointEnvVar = "BUILDKITE_S3_ENDPOINT"
 
 type buildkiteEnvProvider struct {
 	retrieved bool
@@ -125,6 +126,11 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 		}
 
 		sess = session
+	}
+
+	if endpoint := os.Getenv(s3EndpointEnvVar); endpoint != "" {
+		l.Debug("Setting S3 endpoint from %s to %q", s3EndpointEnvVar, endpoint)
+		sess.Config.Endpoint = &endpoint
 	}
 
 	l.Debug("Testing AWS S3 credentials for bucket %q in region %q...", bucket, *sess.Config.Region)
