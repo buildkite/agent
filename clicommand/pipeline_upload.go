@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -314,6 +315,11 @@ var PipelineUploadCommand = cli.Command{
 			_, err := client.UploadPipeline(ctx, cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+
+				if jsonerr := new(json.MarshalerError); errors.As(err, &jsonerr) {
+					l.Error("Unrecoverable error, skipping retries")
+					r.Break()
+				}
 
 				// 422 responses will always fail no need to retry
 				if apierr, ok := err.(*api.ErrorResponse); ok && apierr.Response.StatusCode == 422 {
