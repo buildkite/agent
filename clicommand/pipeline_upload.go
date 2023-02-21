@@ -319,6 +319,8 @@ var PipelineUploadCommand = cli.Command{
 				if jsonerr := new(json.MarshalerError); errors.As(err, &jsonerr) {
 					l.Error("Unrecoverable error, skipping retries")
 					r.Break()
+
+					return jsonerr
 				}
 
 				// 422 responses will always fail no need to retry
