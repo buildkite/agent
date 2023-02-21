@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -248,8 +249,8 @@ var PipelineUploadCommand = cli.Command{
 
 		if len(cfg.RedactedVars) > 0 {
 			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()))
-			serialisedPipeline, err := result.MarshalJSON()
 
+			serialisedPipeline, err := result.MarshalJSON()
 			if err != nil {
 				l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
 			}
@@ -314,6 +315,13 @@ var PipelineUploadCommand = cli.Command{
 			_, err := client.UploadPipeline(ctx, cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+
+				if jsonerr := new(json.MarshalerError); errors.As(err, &jsonerr) {
+					l.Error("Unrecoverable error, skipping retries")
+					r.Break()
+
+					return jsonerr
+				}
 
 				// 422 responses will always fail no need to retry
 				if apierr, ok := err.(*api.ErrorResponse); ok && apierr.Response.StatusCode == 422 {
