@@ -121,7 +121,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 			l.Debug("Discovered %q bucket region as %q", bucket, bucketRegion)
 			session.Config.Region = &bucketRegion
 		} else {
-			l.Error("Could not discover region for bucket %q. Using the %q region as a fallback, if this is not correct configure a bucket region using the %q environment variable. (%v)", bucket, *sess.Config.Region, regionHintEnvVar, err)
+			l.Error("Could not discover region for bucket %q. Using the %q region as a fallback, if this is not correct configure a bucket region using the %q environment variable. (%v)", bucket, *session.Config.Region, regionHintEnvVar, err)
 		}
 
 		sess = session
