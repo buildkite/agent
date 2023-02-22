@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -19,6 +20,7 @@ import (
 
 const regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
 const s3EndpointEnvVar = "BUILDKITE_S3_ENDPOINT"
+const s3ForcePathStyleEnvVar = "BUILDKITE_S3_FORCE_PATH_STYLE"
 
 type buildkiteEnvProvider struct {
 	retrieved bool
@@ -73,7 +75,14 @@ func awsS3Session(region string) (*session.Session, error) {
 			webIdentityRoleProvider(sess),
 			// EC2 and ECS meta-data providers
 			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
-		})
+		},
+	)
+
+	// Added for MinIO support, perhaps useful for other use-cases.
+	// https://github.com/aws/aws-sdk-go/blob/v1.44.181/aws/config.go#L118-L127
+	if val, err := strconv.ParseBool(os.Getenv(s3ForcePathStyleEnvVar)); err == nil && val {
+		sess.Config.S3ForcePathStyle = aws.Bool(true)
+	}
 
 	return sess, nil
 }
