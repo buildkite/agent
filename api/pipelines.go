@@ -5,22 +5,69 @@ import (
 	"fmt"
 )
 
-// Pipeline represents a Buildkite Agent API Pipeline
-type Pipeline struct {
+// PipelineChange represents a Buildkite Agent API PipelineChange
+type PipelineChange struct {
+	// UUID identifies this pipeline change. We keep this constant during
+	// retry loops so that work is not repeated on the API server
 	UUID     string `json:"uuid"`
 	Pipeline any    `json:"pipeline"`
 	Replace  bool   `json:"replace,omitempty"`
 }
 
-// Uploads the pipeline to the Buildkite Agent API. This request doesn't use JSON,
-// but a multi-part HTTP form upload
-func (c *Client) UploadPipeline(ctx context.Context, jobId string, pipeline *Pipeline) (*Response, error) {
+type PipelineUploadStatus struct {
+	State   string `json:"state"`
+	Message string `json:"message"`
+}
+
+// Uploads the pipeline to the Buildkite Agent API.
+func (c *Client) UploadPipeline(
+	ctx context.Context,
+	jobId string,
+	pipeline *PipelineChange,
+	headers ...Header,
+) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/pipelines", jobId)
 
-	req, err := c.newRequest(ctx, "POST", u, pipeline)
+	req, err := c.newRequest(ctx, "POST", u, pipeline, headers...)
 	if err != nil {
 		return nil, err
 	}
 
 	return c.doRequest(req, nil)
+}
+
+// UploadPipelineAsync uploads the pipeline to the Buildkite Agent API. It does not wait for the upload to complete.
+// but will instead return with a redirect to the location to check the upload's status
+func (c *Client) UploadPipelineAsync(
+	ctx context.Context,
+	jobId string,
+	pipeline *PipelineChange,
+	headers ...Header,
+) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/pipelines?async=true", jobId)
+
+	req, err := c.newRequest(ctx, "POST", u, pipeline, headers...)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req, nil)
+}
+
+func (c *Client) PipelineUploadStatus(
+	ctx context.Context,
+	jobId string,
+	uuid string,
+	headers ...Header,
+) (*PipelineUploadStatus, *Response, error) {
+	u := fmt.Sprintf("jobs/%s/pipelines/%s", jobId, uuid)
+
+	req, err := c.newRequest(ctx, "GET", u, nil, headers...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	status := &PipelineUploadStatus{}
+	resp, err := c.doRequest(req, status)
+	return status, resp, err
 }

@@ -27,6 +27,7 @@ type APIClient interface {
 	Heartbeat(context.Context) (*api.Heartbeat, *api.Response, error)
 	MetaDataKeys(context.Context, string) ([]string, *api.Response, error)
 	Ping(context.Context) (*api.Ping, *api.Response, error)
+	PipelineUploadStatus(context.Context, string, string, ...api.Header) (*api.PipelineUploadStatus, *api.Response, error)
 	Register(context.Context, *api.AgentRegisterRequest) (*api.AgentRegisterResponse, *api.Response, error)
 	SaveHeaderTimes(context.Context, string, *api.HeaderTimes) (*api.Response, error)
 	SearchArtifacts(context.Context, string, *api.ArtifactSearchOptions) ([]*api.Artifact, *api.Response, error)
@@ -36,5 +37,6 @@ type APIClient interface {
 	StepUpdate(context.Context, string, *api.StepUpdate) (*api.Response, error)
 	UpdateArtifacts(context.Context, string, map[string]string) (*api.Response, error)
 	UploadChunk(context.Context, string, *api.Chunk) (*api.Response, error)
-	UploadPipeline(context.Context, string, *api.Pipeline) (*api.Response, error)
+	UploadPipeline(context.Context, string, *api.PipelineChange, ...api.Header) (*api.Response, error)
+	UploadPipelineAsync(context.Context, string, *api.PipelineChange, ...api.Header) (*api.Response, error)
 }

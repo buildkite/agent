@@ -3,7 +3,6 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +19,6 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/stdin"
-	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -299,44 +297,18 @@ var PipelineUploadCommand = cli.Command{
 			l.Fatal("Missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
 		}
 
-		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-
-		// Generate a UUID that will identify this pipeline change. We
-		// do this outside of the retry loop because we want this UUID
-		// to be the same for each attempt at updating the pipeline.
-		uuid := api.NewUUID()
-
-		// Retry the pipeline upload a few times before giving up
-		err = roko.NewRetrier(
-			roko.WithMaxAttempts(60),
-			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			_, err := client.UploadPipeline(ctx, cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
-			if err != nil {
-				l.Warn("%s (%s)", err, r)
-
-				if jsonerr := new(json.MarshalerError); errors.As(err, &jsonerr) {
-					l.Error("Unrecoverable error, skipping retries")
-					r.Break()
-
-					return jsonerr
-				}
-
-				// 422 responses will always fail no need to retry
-				if apierr, ok := err.(*api.ErrorResponse); ok && apierr.Response.StatusCode == 422 {
-					l.Error("Unrecoverable error, skipping retries")
-					r.Break()
-				}
-				return err
-			}
-			return nil
-			// On a server error, it means there is downtime or other problems, we
-			// need to retry. Let's retry every 5 seconds, for a total of 5 minutes.
-		})
-
-		if err != nil {
-			l.Fatal("Failed to upload and process pipeline: %s", err)
+		uploader := &agent.PipelineUploader{
+			Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
+			JobID:  cfg.Job,
+			Change: &api.PipelineChange{
+				UUID:     api.NewUUID(),
+				Replace:  cfg.Replace,
+				Pipeline: result,
+			},
+			RetrySleepFunc: time.Sleep,
+		}
+		if err := uploader.AsyncUploadFlow(ctx, l); err != nil {
+			l.Fatal("%v", err)
 		}
 
 		l.Info("Successfully uploaded and parsed pipeline config")
