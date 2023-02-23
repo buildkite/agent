@@ -887,6 +887,11 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("You can't spawn multiple agents and acquire a job at the same time")
 		}
 
+		basePriority, err := strconv.Atoi(cfg.Priority)
+		if err != nil {
+			basePriority = 0
+		}
+
 		var workers []*agent.AgentWorker
 
 		for i := 1; i <= cfg.Spawn; i++ {
@@ -900,8 +905,22 @@ var AgentStartCommand = cli.Command{
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
 			if cfg.SpawnWithPriority {
-				l.Info("Assigning priority %s for agent %d", strconv.Itoa(i), i)
-				registerReq.Priority = strconv.Itoa(i)
+				// --spawn-with-priority by default assigns the spawn index as
+				// the priority, ignoring --priority. When there are hosts
+				// running different values for --spawn, this results in an
+				// uneven spread of work (hosts with higher --spawn get all the
+				// work first).
+				// inverse-spawn-priority addresses this by counting down
+				// instead of up, ensuring every host has a spawn at the
+				// highest priority. For extra flexibility, the new mode
+				// starts counting from --priority, if that is an integer, or 0.
+				// (Negative priorities are allowed!)
+				p := i
+				if experiments.IsEnabled("inverse-spawn-priority") {
+					p = basePriority - i + 1
+				}
+				l.Info("Assigning priority %d for agent %d", p, i)
+				registerReq.Priority = strconv.Itoa(p)
 			}
 
 			// Register the agent with the buildkite API
