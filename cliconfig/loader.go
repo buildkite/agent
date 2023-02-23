@@ -225,6 +225,13 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 					value, _ = strconv.ParseBool(configFileValue)
 				case reflect.Int:
 					value, _ = strconv.Atoi(configFileValue)
+				case reflect.Ptr:
+					v, _ := reflections.GetField(l.Config, fieldName)
+					if _, ok := v.(*OptionalString); ok {
+						os := &OptionalString{}
+						os.Set(configFileValue)
+						value = os
+					}
 				default:
 					return fmt.Errorf("unable to convert string to type %s", fieldKind)
 				}
@@ -243,6 +250,8 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 				value = l.CLI.Bool(cliName)
 			case reflect.Int:
 				value = l.CLI.Int(cliName)
+			case reflect.Ptr:
+				value = l.CLI.Generic(cliName)
 			default:
 				return fmt.Errorf("unable to handle type: %s", fieldKind)
 			}
