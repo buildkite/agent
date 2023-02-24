@@ -31,7 +31,7 @@ type PipelineUploader struct {
 	RetrySleepFunc func(time.Duration)
 }
 
-// AsyncUploadFlow will first attempt to perform an async pipeline upload and depending
+// Upload will first attempt to perform an async pipeline upload and depending
 // on the API's response it will poll for the upload's status.
 //
 // There are 3 "routes" that are relevant
@@ -45,7 +45,7 @@ type PipelineUploader struct {
 // 1. The Async Route responds 202: poll the Status Route until the upload has beed "applied"
 // 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously (possibly after retry)
 // 3. The Async Route responds with other xxx: retry uploading the pipeline to the Async Route
-func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger) error {
+func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
 	if err != nil {
 		return fmt.Errorf("Failed to upload and accept pipeline: %w", err)

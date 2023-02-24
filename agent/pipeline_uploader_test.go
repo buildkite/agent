@@ -119,7 +119,7 @@ steps:
 				},
 			}
 
-			err = uploader.AsyncUploadFlow(ctx, l)
+			err = uploader.Upload(ctx, l)
 			if test.err == nil {
 				assert.NoError(t, err)
 			} else {
@@ -261,7 +261,7 @@ steps:
 				},
 			}
 
-			err = uploader.AsyncUploadFlow(ctx, l)
+			err = uploader.Upload(ctx, l)
 			if test.errStatus == 0 {
 				assert.NoError(t, err)
 			} else {
