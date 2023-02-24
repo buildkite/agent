@@ -211,11 +211,11 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 	})
 }
 
-type ErrLocationParse struct {
+type errLocationParse struct {
 	location string
 }
 
-func (e *ErrLocationParse) Error() string {
+func (e *errLocationParse) Error() string {
 	return fmt.Sprintf("could not extract job and upload UUIDs from Location %s", e.location)
 }
 
@@ -224,7 +224,7 @@ func extractJobIdUUID(location string) (string, string, error) {
 	jobIDIndex := locationRegex.SubexpIndex("jobID")
 	uuidIndex := locationRegex.SubexpIndex("uploadUUID")
 	if jobIDIndex < 0 || jobIDIndex >= len(matches) || uuidIndex < 0 || uuidIndex >= len(matches) {
-		return "", "", &ErrLocationParse{location: location}
+		return "", "", &errLocationParse{location: location}
 	}
 	return matches[jobIDIndex], matches[uuidIndex], nil
 }
