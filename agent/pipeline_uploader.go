@@ -67,7 +67,7 @@ func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger)
 
 	if jobIDFromResponse != u.JobID {
 		return fmt.Errorf(
-			"JobID from API: %s does not match request: %s",
+			"JobID from API: %q does not match request: %s",
 			jobIDFromResponse,
 			u.JobID,
 		)
@@ -75,7 +75,7 @@ func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger)
 
 	if uuidFromResponse != u.Change.UUID {
 		return fmt.Errorf(
-			"Pipeline Upload UUID from API: %s does not match request: %s",
+			"Pipeline Upload UUID from API: %q does not match request: %s",
 			uuidFromResponse,
 			u.Change.UUID,
 		)
