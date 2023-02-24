@@ -175,7 +175,7 @@ steps:
 				return
 			}
 		case fmt.Sprintf("/jobs/%s/pipelines/%s", jobID, stepUploadUUID):
-			assert.Fail(t, "should not call the async route")
+			assert.Fail(t, "should not call the status route")
 			http.Error(rw, "This route should not have been called", http.StatusServiceUnavailable)
 			return
 		}
