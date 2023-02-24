@@ -23,6 +23,7 @@ const (
 
 var locationRegex = regexp.MustCompile(`jobs/(?P<jobID>[^/]+)/pipelines/(?P<uploadUUID>[^/]+)`)
 
+// PipelineUploader contains the data needed to upload a pipeline to Buildkite
 type PipelineUploader struct {
 	Client         APIClient
 	Change         *api.PipelineChange
