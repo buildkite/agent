@@ -36,8 +36,9 @@ func (c *Client) UploadPipeline(
 	return c.doRequest(req, nil)
 }
 
-// UploadPipelineAsync uploads the pipeline to the Buildkite Agent API. It does not wait for the upload to complete.
-// but will instead return with a redirect to the location to check the upload's status
+// UploadPipelineAsync uploads the pipeline to the Buildkite Agent API. It does not wait for the
+// pipeline to finish processing but will instead return with a redirect to the location to check
+// the pipeline's status.
 func (c *Client) UploadPipelineAsync(
 	ctx context.Context,
 	jobId string,
