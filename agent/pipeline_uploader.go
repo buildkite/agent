@@ -30,14 +30,31 @@ type PipelineUploader struct {
 	RetrySleepFunc func(time.Duration)
 }
 
+// AsyncUploadFlow will first attempt to perform an async pipeline upload and depending
+// on the API's response it will poll for the upload's status.
+//
+// There are 3 "routes" that are relevant
+// 1. Async Route:  /jobs/:job_uuid/pipelines?async=true
+// 2. Upload Route: /jobs/:job_uuid/pipelines
+// 3. Status Route: /jobs/:job_uuid/pipelines/:upload_uuid
+//
+// In this method, the agent will first upload the pipeline to the Async Route.
+// Then, depending on the response it will behave differetly
+//
+// 1. The Async Route responds 202: poll the Status Route until the upload has beed "applied"
+// 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously
+// 3. The Async Route responds with other xxx: retry uploading the pipeine to the Async Route
 func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
 	if err != nil {
 		return fmt.Errorf("Failed to upload and accept pipeline: %w", err)
 	}
 
-	if result.revertToSyncUpload {
-		return u.pipelineUploadWithRetry(ctx, l)
+	// If the route does not support async uploads, and it did not error, then the pipeline
+	// upload completed successfully, either synchronously in 1 attempt or after re-uploading it
+	// in a retry loop.
+	if !result.apiIsAsync {
+		return nil
 	}
 
 	time.Sleep(result.sleepDuration)
@@ -71,49 +88,10 @@ func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger)
 }
 
 type pipelineUploadAsyncResult struct {
-	pipelineStatusURL  *url.URL
-	revertToSyncUpload bool
-	sleepDuration      time.Duration
-}
-
-// TODO: remove this once we are happy that the AsyncUploadFlow works
-func (u *PipelineUploader) pipelineUploadWithRetry(ctx context.Context, l logger.Logger) error {
-	// Retry the pipeline upload a few times before giving up
-	return roko.NewRetrier(
-		roko.WithMaxAttempts(defaultAttempts),
-		roko.WithStrategy(roko.Constant(defaultSleepDuration)),
-		roko.WithSleepFunc(u.RetrySleepFunc),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		_, err := u.Client.UploadPipeline(
-			ctx,
-			u.JobID,
-			u.Change,
-			api.Header{
-				Name:  "X-Buildkite-Backoff-Sequence",
-				Value: fmt.Sprintf("%d", r.AttemptCount()),
-			},
-		)
-		if err != nil {
-			l.Warn("%s (%s)", err, r)
-
-			if jsonerr := new(json.MarshalerError); errors.As(err, &jsonerr) {
-				l.Error("Unrecoverable error, skipping retries")
-				r.Break()
-				return err
-			}
-
-			// 422 responses will always fail no need to retry
-			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
-				l.Error("Unrecoverable error, skipping retries")
-				r.Break()
-				return err
-			}
-
-			return err
-		}
-
-		return nil
-	})
+	pipelineStatusURL *url.URL
+	// This will be true iff the api responds with 202
+	apiIsAsync    bool
+	sleepDuration time.Duration
 }
 
 func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
@@ -152,17 +130,20 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 				return err
 			}
 
+			// 529 or other non 2xx
 			return err
 		}
 
-		// An API that has the AsyncUploadFlow enabled will return 202 with a Location header
-		// Otherwise, the API is telling us to fall back to the previous pipeline upload flow
-		if resp.StatusCode != http.StatusAccepted {
-			l.Warn("Falling out of async pipeline upload flow, the pipeline will be re-uploaded on each retry.")
-			result.revertToSyncUpload = true
+		// An API that has the async upload feature enabled will return 202 with a Location header.
+		// Otherwise, if there was no error, then the upload is done.
+		if resp.StatusCode == http.StatusAccepted {
+			result.apiIsAsync = true
+		} else {
 			return nil
 		}
 
+		// If the API supported async uploads, we need to extract the location to poll for the
+		// upload's status, after sleeping for a bit to allow the upload to have processed
 		if result.sleepDuration, err = time.ParseDuration(resp.Header.Get("Retry-After") + "s"); err != nil {
 			result.sleepDuration = defaultSleepAfterUploadDuration
 		}
