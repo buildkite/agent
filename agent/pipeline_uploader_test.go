@@ -167,10 +167,17 @@ steps:
 	pipeline, err := parser.Parse()
 	assert.NoError(t, err)
 
+	countUploadCalls := 0
+	maxUploadCalls := 1
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case fmt.Sprintf("/jobs/%s/pipelines", jobID):
 			if req.Method == "POST" {
+				countUploadCalls++
+				if countUploadCalls > maxUploadCalls {
+					http.Error(rw, `{"message":"too many call to pipeline upload"}`, http.StatusBadRequest)
+					return
+				}
 				rw.WriteHeader(http.StatusOK)
 				return
 			}
