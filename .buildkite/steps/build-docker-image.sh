@@ -60,6 +60,13 @@ builder_name=$(docker buildx create --use)
 # shellcheck disable=SC2064 # we want the current $builder_name to be trapped, not the runtime one
 trap "docker buildx rm $builder_name || true" EXIT
 
+# Needed for buildking multiarch
+# See https://github.com/docker/buildx/issues/314
+QEMU_VERSION=6.2.0
+echo "--- Installing QEMU $QEMU_VERSION"
+docker run --privileged --userns=host --rm "tonistiigi/binfmt:qemu-v$QEMU_VERSION" --uninstall qemu-*
+docker run --privileged --userns=host --rm "tonistiigi/binfmt:qemu-v$QEMU_VERSION" --install all
+
 echo "--- Building :docker: $image_tag"
 cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
 cp pkg/buildkite-agent-linux-{amd64,arm64} "$packaging_dir"
