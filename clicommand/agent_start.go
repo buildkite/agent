@@ -427,7 +427,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
-			Usage:  "The command that is executed for bootstrapping a job, defaults to the exec-job sub-command of this binary",
+			Usage:  "[DEPRECATED] The command that is executed for bootstrapping a job, defaults to the exec-job sub-command of this binary",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
 		cli.StringFlag{
@@ -675,7 +675,7 @@ var AgentStartCommand = cli.Command{
 			cfg.NoPTY = true
 		}
 
-		// Set a useful default for the bootstrap script
+		// Set a useful default for the job exec script
 		if cfg.JobExecutorScript == "" {
 			exePath, err := os.Executable()
 			if err != nil {

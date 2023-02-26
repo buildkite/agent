@@ -271,7 +271,7 @@ func (b *ExecutorTester) Run(t *testing.T, env ...string) error {
 
 	buf := &buffer{}
 
-	if os.Getenv("DEBUG_BOOTSTRAP") == "1" {
+	if os.Getenv("DEBUG_JOB_EXEC") == "1" {
 		w := newTestLogWriter(t)
 		b.cmd.Stdout = io.MultiWriter(buf, w)
 		b.cmd.Stderr = io.MultiWriter(buf, w)

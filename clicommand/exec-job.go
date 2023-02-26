@@ -87,7 +87,8 @@ type ExecJobConfig struct {
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
 	Experiments                  []string `cli:"experiment" normalize:"list"`
-	Phases                       []string `cli:"phases" normalize:"list"`
+	Phases                       []string `cli:"phases" normalize:"list" deprecated-and-renamed-to:"exec-phases"`
+	ExecPhases                   []string `cli:"exec-phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
 	CancelSignal                 string   `cli:"cancel-signal"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
@@ -322,6 +323,11 @@ var execJobFlags = []cli.Flag{
 	},
 	cli.StringSliceFlag{
 		Name:   "phases",
+		Usage:  "[DEPRECATED] The specific phases to execute. The order they're defined is irrelevant.",
+		EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
+	},
+	cli.StringSliceFlag{
+		Name:   "exec-phases",
 		Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
 		EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 	},
@@ -509,16 +515,12 @@ func execJobAction(c *cli.Context) {
 	os.Exit(exitCode)
 }
 
-var (
-	BootstrapCommand = genBootstrap()
-	ExecJobCommand   = genExecJob()
-)
-
 func genBootstrap() cli.Command {
 	var help strings.Builder
 	help.WriteString("⚠️ ⚠️ ⚠️\n")
 	help.WriteString("DEPRECATED: Use `buildkite-agent exec-job` instead\n")
 	help.WriteString("⚠️ ⚠️ ⚠️\n\n")
+
 	err := execJobHelpTpl.Execute(&help, "bootstrap")
 	if err != nil {
 		// This can only hapen if we've mangled the template or its parsing
@@ -532,7 +534,13 @@ func genBootstrap() cli.Command {
 		Usage:       "[DEPRECATED] Run a Buildkite job locally",
 		Description: help.String(),
 		Flags:       execJobFlags,
-		Action:      execJobAction,
+		Action: func(c *cli.Context) {
+			fmt.Println("⚠️ WARNING ⚠️")
+			fmt.Println("This command (`buildkite-agent bootstrap`) is deprecated and will be removed in a future release")
+			fmt.Println("Please use `buildkite-agent exec-job` instead")
+			fmt.Println("")
+			execJobAction(c)
+		},
 	}
 }
 
@@ -551,12 +559,11 @@ func genExecJob() cli.Command {
 		Usage:       "Run a Buildkite job locally",
 		Description: help.String(),
 		Flags:       execJobFlags,
-		Action: func(c *cli.Context) {
-			fmt.Println("⚠️ WARNING ⚠️")
-			fmt.Println("This command (`buildkite-agent bootstrap`) is deprecated and will be removed in a future release")
-			fmt.Println("Please use `buildkite-agent exec-job` instead.")
-			fmt.Println("")
-			execJobAction(c)
-		},
+		Action:      execJobAction,
 	}
 }
+
+var (
+	BootstrapCommand = genBootstrap()
+	ExecJobCommand   = genExecJob()
+)
