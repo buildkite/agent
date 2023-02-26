@@ -25,6 +25,12 @@ updates:
     ignore:
       - dependency-name: ubuntu
   - package-ecosystem: "docker"
+    directory: /packaging/docker/ubuntu-22.04
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: ubuntu
+  - package-ecosystem: "docker"
     directory: /.buildkite
     schedule:
       interval: "monthly"

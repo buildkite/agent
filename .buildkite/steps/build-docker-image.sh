@@ -4,7 +4,7 @@ set -Eeufo pipefail
 
 ## This script can be run locally like this:
 ##
-## .buildkite/steps/build-docker-image.sh (alpine|alpine-k8s|ubuntu-18.04|ubuntu-20.04|sidecar) (image tag) (codename) (version)
+## .buildkite/steps/build-docker-image.sh (alpine|alpine-k8s|ubuntu-18.04|ubuntu-20.04|ubuntu-22.04|sidecar) (image tag) (codename) (version)
 ## e.g: .buildkite/steps/build-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
 ##
 ## You can then publish that image with
@@ -21,7 +21,7 @@ codename="${3:-}"
 version="${4:-}"
 push="${PUSH_IMAGE:-true}"
 
-if [[ ! "$variant" =~ ^(alpine|alpine-k8s|ubuntu-18\.04|ubuntu-20\.04|sidecar)$ ]] ; then
+if [[ ! "$variant" =~ ^(alpine|alpine-k8s|ubuntu-18\.04|ubuntu-20\.04|ubuntu-22\.04|sidecar)$ ]] ; then
   echo "Unknown docker variant $variant"
   exit 1
 fi
@@ -59,6 +59,13 @@ fi
 builder_name=$(docker buildx create --use)
 # shellcheck disable=SC2064 # we want the current $builder_name to be trapped, not the runtime one
 trap "docker buildx rm $builder_name || true" EXIT
+
+# Needed for buildking multiarch
+# See https://github.com/docker/buildx/issues/314
+QEMU_VERSION=6.2.0
+echo "--- Installing QEMU $QEMU_VERSION"
+docker run --privileged --userns=host --rm "tonistiigi/binfmt:qemu-v$QEMU_VERSION" --uninstall qemu-*
+docker run --privileged --userns=host --rm "tonistiigi/binfmt:qemu-v$QEMU_VERSION" --install all
 
 echo "--- Building :docker: $image_tag"
 cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
