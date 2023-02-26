@@ -518,7 +518,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.GenericFlag{
 			Name:   "spawn-with-priority",
-			Usage:  "Assign priorities to every spawned agent (when using --spawn) corresponding to the agent's index. This can be passed with or without a value. By default (without this flag, or setting it to false) each spawned agent's priority will be equal to --priority. When passed on its own, each spawned agent's priority will equal the agent's index. When passed with 'inverse', each spawned agent's priority will be assigned in reverse (counting down from --priority).",
+			Usage:  "Assign priorities to every spawned agent (when using --spawn) corresponding to the agent's index. This can be passed with or without a value. When this flag is absent or set to false, each spawned agent's priority will be equal to --priority.  Values accepted by this flag are 'ascending', 'descending', 'ascending-from-priority', and 'descending-from-priority'. 'ascending' assigns each priority equal to the agent's index. 'descending' assigns each priority to the negative of the index. 'ascending-from-priority' and 'descending-from-priority' are like 'ascending' and 'descending', but begin counting with the value specified by --priority. The default when passed without a value is 'ascending'.",
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
 			Value:  &cliconfig.OptionalString{},
 		},
@@ -906,19 +906,26 @@ var AgentStartCommand = cli.Command{
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
 			if cfg.SpawnWithPriority.Trueish {
-				// --spawn-with-priority by default assigns the spawn index as
-				// the priority, ignoring --priority. When there are hosts
-				// running different values for --spawn, this results in an
-				// uneven spread of work (hosts with higher --spawn get all the
-				// work first).
-				// --spawn-with-priority=inverse addresses this by counting down
-				// instead of up, ensuring every host has a spawn at the
-				// highest priority. For extra flexibility, inverse mode
-				// starts counting from --priority, if that is an integer, or 0.
-				// (Negative priorities are allowed!)
-				p := i
-				if cfg.SpawnWithPriority.Value == "inverse" {
+				// NB: Negative priorities are allowed!
+				var p int
+				switch cfg.SpawnWithPriority.Value {
+				case "ascending":
+					// Priority = spawn index. Results in assignment
+					// of jobs to agents with higher --spawn first.
+					p = i
+				case "descending":
+					// Priority = negative spawn index. Jobs assigned across
+					// all agents until the ones with lower --spawn are full.
+					p = -i
+				case "ascending-from-priority":
+					// Like ascending, but starts counting from --priority.
+					p = basePriority + i - 1
+				case "descending-from-priority":
+					// Like descending, but starts counting from --priority.
 					p = basePriority - i + 1
+				default:
+					// Default is ascending, for backwards compatibility.
+					p = i
 				}
 				l.Info("Assigning priority %d for agent %d", p, i)
 				registerReq.Priority = strconv.Itoa(p)
