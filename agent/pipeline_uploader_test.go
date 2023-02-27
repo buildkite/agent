@@ -153,7 +153,7 @@ func TestFallbackPipelineUpload(t *testing.T) {
 		num529s         int
 		expectedSleeps  []time.Duration
 		expectedUploads int
-		errStatus       *int
+		errStatus       int // 0 indicates no error should occur
 	}{
 		{
 			name:            "happy",
@@ -178,7 +178,7 @@ func TestFallbackPipelineUpload(t *testing.T) {
 			num529s:         61,
 			expectedSleeps:  genSleeps(59, 5*time.Second),
 			expectedUploads: 60,
-			errStatus:       func(i int) *int { return &i }(529),
+			errStatus:       529,
 		},
 	} {
 		test := test
@@ -266,14 +266,14 @@ steps:
 			}
 
 			err = uploader.AsyncUploadFlow(ctx, l)
-			if test.errStatus == nil {
+			if test.errStatus == 0 {
 				assert.NoError(t, err)
 			} else {
 				assert.True(
 					t,
-					api.IsErrHavingStatus(err, *test.errStatus),
+					api.IsErrHavingStatus(err, test.errStatus),
 					"expected api error with status: %d, received: %v",
-					*test.errStatus, err,
+					test.errStatus, err,
 				)
 			}
 			assert.Equal(t, test.expectedSleeps, retrySleeps)
