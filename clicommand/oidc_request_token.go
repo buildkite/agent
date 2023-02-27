@@ -17,6 +17,8 @@ type OIDCTokenConfig struct {
 	Audience string `cli:"audience"`
 	Lifetime int    `cli:"lifetime"`
 	Job      string `cli:"job"      validate:"required"`
+	// TODO: enumerate possible values, perhaps by adding a link to the documentation
+	Claims []string `cli:"claim"    normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -69,6 +71,13 @@ var OIDCRequestTokenCommand = cli.Command{
 			Name:   "job",
 			Usage:  "Buildkite Job Id to claim in the OIDC token",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+
+		cli.StringSliceFlag{
+			Name:   "claim",
+			Value:  &cli.StringSlice{},
+			Usage:  "Claims to add to the OIDC Token",
+			EnvVar: "BUILDKITE_OIDC_TOKEN_CLAIMS",
 		},
 
 		// API Flags
@@ -127,6 +136,7 @@ var OIDCRequestTokenCommand = cli.Command{
 				Job:      cfg.Job,
 				Audience: cfg.Audience,
 				Lifetime: cfg.Lifetime,
+				Claims:   cfg.Claims,
 			}
 
 			var resp *api.Response
