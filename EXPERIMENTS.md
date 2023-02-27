@@ -58,3 +58,12 @@ Changes the file lock implementation from github.com/nightlyone/lockfile to gith
 When the experiment is enabled the agent will use different lock files from agents where the experiment is disabled, so agents with this experiment enabled should not be run on the same host as agents where the experiment is disabled.
 
 **Status**: Being tested, but it's looking good. We plan to switch lock implementations over the course of a couple of releases, switching over in such a way that nothing gets broken.
+
+### `kubernetes-exec`
+Modifies `start` and `bootstrap` in such a way that they can run in separate Kubernetes containers in the same pod.
+
+Currently, this experiment is being used by [agent-stack-k8s](https://github.com/buildkite/agent-stack-k8s).
+
+This will result in errors unless orchestrated in a similar manner to that project. Please see the [README](https://github.com/buildkite/agent-stack-k8s/blob/main/README.md) of that repository for more details.
+
+**Status**: Being used in a preview release of agent-stack-k8s. As it has little applicability outside of Kubernetes, this will not be the default behaviour.
