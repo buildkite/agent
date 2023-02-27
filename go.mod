@@ -17,7 +17,7 @@ require (
 	github.com/nightlyone/lockfile v0.0.0-20180618180623-0ad87eef1443
 	github.com/oleiade/reflections v1.0.1
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/pborman/uuid v0.0.0-20170112150404-1b00554d8222
+	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
 	github.com/rjeczalik/interfaces v0.3.0
