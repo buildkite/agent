@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.44.0](https://github.com/buildkite/agent/tree/v3.44.0) (2023-02-27)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.43.1...v3.44.0)
+
+### Fixed
+- tini is once again available at the old path (`/usr/sbin/tini`) in the Ubuntu 20.04 image [#1934](https://github.com/buildkite/agent/pull/1934) (@triarius)
+- With `ansi-timestamps` experiment enabled, each line's timestamp is now computed at the end of the line [#1940](https://github.com/buildkite/agent/pull/1940) (@DrJosh9000)
+- A panic when the AWS region for an S3 bucket is undiscoverable [#1964](https://github.com/buildkite/agent/pull/1964) (@DrJosh9000)
+
+### Added
+- An experiment for running jobs under Kubernetes [#1884](https://github.com/buildkite/agent/pull/1884) (@benmoss), [#1968](https://github.com/buildkite/agent/pull/1968) (@triarius)
+- Ubuntu 22.04 Docker Image [#1966](https://github.com/buildkite/agent/pull/1966) (@triarius)
+- Claims can now be added to OIDC token requests [#1951](https://github.com/buildkite/agent/pull/1951) (@triarius)
+- A new flag / environment variable (`--git-checkout-flags` / `BUILDKITE_GIT_CHECKOUT_FLAGS`) for passing extra flags to `git checkout` [#1891](https://github.com/buildkite/agent/pull/1891) (@jmelahman)
+- Reference clones can be used for submodules [#1959](https://github.com/buildkite/agent/pull/1959) (@jonahbull)
+
+### Changed
+- Upstart is no longer supported [#1946](https://github.com/buildkite/agent/pull/1946) (@sj26)
+- For increased compatibility with various container images, `sh` is used instead of `bash` [#1974](https://github.com/buildkite/agent/pull/1974) (@triarius)
+- `pipeline upload` internally uses a new asynchronous upload flow, reducing the number of connections held open [#1927](https://github.com/buildkite/agent/pull/1927) (@triarius)
+- Faster failure when trying to `pipeline upload` a malformed pipeline [#1963](https://github.com/buildkite/agent/pull/1963) (@triarius)
+- Better errors when config loading fails [#1937](https://github.com/buildkite/agent/pull/1937) (@moskyb)
+- Pipelines are now parsed with gopkg.in/yaml.v3. This change should be invisible, but involved a non-trivial amount of new code. [#1930](https://github.com/buildkite/agent/pull/1930) (@DrJosh9000)
+- Many dependency updates, notably Go v1.20.1 [#1955](https://github.com/buildkite/agent/pull/1955).
+- Several minor fixes, improvements and clean-ups (@sj26, @triarius, @jonahbull, @DrJosh9000, @tcptps, @dependabot[bot])
+
 ## [3.43.1](https://github.com/buildkite/agent/tree/3.43.1) (2023-01-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.43.0...3.43.1)
 
