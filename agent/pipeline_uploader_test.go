@@ -140,9 +140,54 @@ func TestFallbackPipelineUpload(t *testing.T) {
 	ctx := context.Background()
 	l := clicommand.CreateLogger(&clicommand.PipelineUploadConfig{LogLevel: "notice"})
 
-	jobID := api.NewUUID()
-	stepUploadUUID := api.NewUUID()
-	pipelineStr := `---
+	genSleeps := func(n int, s time.Duration) []time.Duration {
+		sleeps := make([]time.Duration, 0, n)
+		for i := 0; i < n; i++ {
+			sleeps = append(sleeps, s)
+		}
+		return sleeps
+	}
+
+	for _, test := range []struct {
+		name            string
+		num529s         int
+		expectedSleeps  []time.Duration
+		expectedUploads int
+		errStatus       int // 0 indicates no error should occur
+	}{
+		{
+			name:            "happy",
+			num529s:         0,
+			expectedSleeps:  []time.Duration{},
+			expectedUploads: 1,
+		},
+		{
+			name:            "59_529s",
+			num529s:         59,
+			expectedSleeps:  genSleeps(58, 5*time.Second),
+			expectedUploads: 59,
+		},
+		{
+			name:            "60_529s",
+			num529s:         60,
+			expectedSleeps:  genSleeps(59, 5*time.Second),
+			expectedUploads: 60,
+		},
+		{
+			name:            "61_529s",
+			num529s:         61,
+			expectedSleeps:  genSleeps(59, 5*time.Second),
+			expectedUploads: 60,
+			errStatus:       529,
+		},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			jobID := api.NewUUID()
+			stepUploadUUID := api.NewUUID()
+			pipelineStr := `---
 steps:
   - name: ":s3: xxx"
     command: "script/buildkite/xxx.sh"
@@ -163,46 +208,75 @@ steps:
     agents:
       queue: xxx`
 
-	parser := agent.PipelineParser{Pipeline: []byte(pipelineStr), Env: nil}
-	pipeline, err := parser.Parse()
-	assert.NoError(t, err)
+			parser := agent.PipelineParser{Pipeline: []byte(pipelineStr), Env: nil}
+			pipeline, err := parser.Parse()
+			assert.NoError(t, err)
 
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		switch req.URL.Path {
-		case fmt.Sprintf("/jobs/%s/pipelines", jobID):
-			if req.Method == "POST" {
-				rw.WriteHeader(http.StatusOK)
-				return
+			countUploadCalls := 0
+			server := httptest.NewServer(
+				http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+					switch req.URL.Path {
+					case fmt.Sprintf("/jobs/%s/pipelines", jobID):
+						if req.Method == "POST" {
+							countUploadCalls++
+							if countUploadCalls < test.num529s {
+								http.Error(rw, `{"message":"still waiting"}`, 529)
+								return
+							}
+							if countUploadCalls > test.expectedUploads {
+								http.Error(
+									rw,
+									`{"message":"too many calls to pipeline upload"}`,
+									http.StatusBadRequest,
+								)
+								return
+							}
+							rw.WriteHeader(http.StatusOK)
+							return
+						}
+					case fmt.Sprintf("/jobs/%s/pipelines/%s", jobID, stepUploadUUID):
+						assert.Fail(t, "should not call the status route")
+						http.Error(
+							rw,
+							"This route should not have been called",
+							http.StatusServiceUnavailable,
+						)
+						return
+					}
+					t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
+					http.Error(rw, "Not found", http.StatusNotFound)
+				}),
+			)
+			defer server.Close()
+
+			retrySleeps := []time.Duration{}
+			uploader := &agent.PipelineUploader{
+				Client: api.NewClient(logger.Discard, api.Config{
+					Endpoint: server.URL,
+					Token:    "llamas",
+				}),
+				JobID: jobID,
+				Change: &api.PipelineChange{
+					UUID:     stepUploadUUID,
+					Pipeline: pipeline,
+				},
+				RetrySleepFunc: func(d time.Duration) {
+					retrySleeps = append(retrySleeps, d)
+				},
 			}
-		case fmt.Sprintf("/jobs/%s/pipelines/%s", jobID, stepUploadUUID):
-			assert.Fail(t, "should not call the async route")
-			http.Error(rw, "This route should not have been called", http.StatusServiceUnavailable)
-			return
-		}
-		t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
-		http.Error(rw, "Not found", http.StatusNotFound)
-	}))
-	defer server.Close()
 
-	retrySleeps := []time.Duration{}
-	uploader := &agent.PipelineUploader{
-		Client: api.NewClient(logger.Discard, api.Config{
-			Endpoint: server.URL,
-			Token:    "llamas",
-		}),
-		JobID: jobID,
-		Change: &api.PipelineChange{
-			UUID:     stepUploadUUID,
-			Pipeline: pipeline,
-		},
-		RetrySleepFunc: func(d time.Duration) {
-			retrySleeps = append(retrySleeps, d)
-		},
+			err = uploader.AsyncUploadFlow(ctx, l)
+			if test.errStatus == 0 {
+				assert.NoError(t, err)
+			} else {
+				assert.True(
+					t,
+					api.IsErrHavingStatus(err, test.errStatus),
+					"expected api error with status: %d, received: %v",
+					test.errStatus, err,
+				)
+			}
+			assert.Equal(t, test.expectedSleeps, retrySleeps)
+		})
 	}
-
-	expectedSleeps := []time.Duration{}
-
-	err = uploader.AsyncUploadFlow(ctx, l)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedSleeps, retrySleeps)
 }
