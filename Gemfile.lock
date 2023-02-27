@@ -3,8 +3,7 @@ GEM
   specs:
     addressable (2.8.1)
       public_suffix (>= 2.0.2, < 6.0)
-    arr-pm (0.0.11)
-      cabin (> 0)
+    arr-pm (0.0.12)
     aws-eventstream (1.2.0)
     aws-sdk (2.11.632)
       aws-sdk-resources (= 2.11.632)
