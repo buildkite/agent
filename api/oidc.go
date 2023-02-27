@@ -13,15 +13,18 @@ type OIDCTokenRequest struct {
 	Job      string
 	Audience string
 	Lifetime int
+	Claims   []string
 }
 
 func (c *Client) OIDCToken(ctx context.Context, methodReq *OIDCTokenRequest) (*OIDCToken, *Response, error) {
 	m := &struct {
-		Audience string `json:"audience,omitempty"`
-		Lifetime int    `json:"lifetime,omitempty"`
+		Audience string   `json:"audience,omitempty"`
+		Lifetime int      `json:"lifetime,omitempty"`
+		Claims   []string `json:"claims,omitempty"`
 	}{
 		Audience: methodReq.Audience,
 		Lifetime: methodReq.Lifetime,
+		Claims:   methodReq.Claims,
 	}
 
 	u := fmt.Sprintf("jobs/%s/oidc/tokens", methodReq.Job)
