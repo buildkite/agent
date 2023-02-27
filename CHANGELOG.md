@@ -22,7 +22,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 - Upstart is no longer supported [#1946](https://github.com/buildkite/agent/pull/1946) (@sj26)
-- For increased compatibility with various container images, `sh` is used instead of `bash` [#1974](https://github.com/buildkite/agent/pull/1974) (@triarius)
 - `pipeline upload` internally uses a new asynchronous upload flow, reducing the number of connections held open [#1927](https://github.com/buildkite/agent/pull/1927) (@triarius)
 - Faster failure when trying to `pipeline upload` a malformed pipeline [#1963](https://github.com/buildkite/agent/pull/1963) (@triarius)
 - Better errors when config loading fails [#1937](https://github.com/buildkite/agent/pull/1937) (@moskyb)
