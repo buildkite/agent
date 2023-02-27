@@ -376,7 +376,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra env.Environmen
 		args = []string{"-file", path}
 
 	case !isWindows && isBash:
-		bashPath, err := s.AbsolutePath("bash")
+		bashPath, err := s.AbsolutePath("sh")
 		if err != nil {
 			return fmt.Errorf("Error finding bash, needed to run scripts: %v.", err)
 		}
