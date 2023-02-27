@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-zglob v0.0.0-20180803001819-2ea3427bfa53
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nightlyone/lockfile v0.0.0-20180618180623-0ad87eef1443
-	github.com/oleiade/reflections v0.0.0-20160817071559-0e86b3c98b2f
+	github.com/oleiade/reflections v1.0.1
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pborman/uuid v0.0.0-20170112150404-1b00554d8222
 	github.com/pkg/errors v0.9.1 // indirect
