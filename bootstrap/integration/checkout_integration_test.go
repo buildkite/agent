@@ -229,6 +229,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	if experiments.IsEnabled("git-mirrors") {
 		git.ExpectAll([][]any{
 			{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--mirror", "-v", "--", submoduleRepo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -236,7 +237,8 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"submodule", "sync", "--recursive"},
 			{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-			{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force"},
+			{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force", "--reference", submoduleRepo.Path},
+			{"--git-dir", matchSubDir(tester.GitMirrorsDir), "remote", "add", "submodule-1", submoduleRepo.Path},
 			{"submodule", "foreach", "--recursive", "git reset --hard"},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},

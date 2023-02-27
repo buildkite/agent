@@ -1160,9 +1160,9 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit st
 	return true
 }
 
-func (b *Bootstrap) updateGitMirror(ctx context.Context) (string, error) {
+func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (string, error) {
 	// Create a unique directory for the repository mirror
-	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
+	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(repository))
 
 	// Create the mirrors path if it doesn't exist
 	if baseDir := filepath.Dir(mirrorDir); !utils.FileExists(baseDir) {
@@ -1192,7 +1192,7 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context) (string, error) {
 	if !utils.FileExists(mirrorDir) {
 		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
 		flags := "--mirror " + b.GitCloneMirrorFlags
-		if err := gitClone(ctx, b.shell, flags, b.Repository, mirrorDir); err != nil {
+		if err := gitClone(ctx, b.shell, flags, repository, mirrorDir); err != nil {
 			b.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
 			if err := os.RemoveAll(mirrorDir); err != nil {
 				b.shell.Errorf("Failed to remove \"%s\" (%s)", mirrorDir, err)
@@ -1253,6 +1253,29 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context) (string, error) {
 	return mirrorDir, nil
 }
 
+func (b *Bootstrap) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
+	var mirrorDir string
+	var err error
+	// Skip updating the Git mirror before using it?
+	if b.Config.GitMirrorsSkipUpdate {
+		mirrorDir = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(repository))
+		b.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
+
+		// Check if specified mirrorDir exists, otherwise the clone will fail.
+		if !utils.FileExists(mirrorDir) {
+			// Fall back to a clean clone, rather than failing the clone and therefore the build
+			b.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
+			mirrorDir = ""
+		}
+	} else {
+		mirrorDir, err = b.updateGitMirror(ctx, repository)
+		if err != nil {
+			return "", err
+		}
+	}
+	return mirrorDir, nil
+}
+
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
@@ -1275,23 +1298,9 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
-
-		// Skip updating the Git mirror before using it?
-		if b.Config.GitMirrorsSkipUpdate {
-			mirrorDir = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
-			b.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", b.Repository, mirrorDir)
-
-			// Check if specified mirrorDir exists, otherwise the clone will fail.
-			if !utils.FileExists(mirrorDir) {
-				// Fall back to a clean clone, rather than failing the clone and therefore the build
-				b.shell.Commentf("No existing mirror found for repository %s at %s.", b.Repository, mirrorDir)
-				mirrorDir = ""
-			}
-		} else {
-			mirrorDir, err = b.updateGitMirror(ctx)
-			if err != nil {
-				return err
-			}
+		mirrorDir, err = b.getOrUpdateMirrorDir(ctx, b.Repository)
+		if err != nil {
+			return err
 		}
 
 		b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
@@ -1411,31 +1420,68 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 			gitVersionOutput, _ := b.shell.RunAndCapture(ctx, "git", "--version")
 			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
-
+		args := []string{}
+		for _, config := range b.GitSubmoduleCloneConfig {
+			args = append(args, "-c", config)
+		}
 		// Checking for submodule repositories
 		submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, b.shell)
 		if err != nil {
 			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
-			for _, repository := range submoduleRepos {
+			mirrorSubmodules := experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != ""
+			for idx, repository := range submoduleRepos {
+				submoduleArgs := append([]string(nil), args...)
 				// submodules might need their fingerprints verified too
 				if b.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(ctx, b.shell, repository)
 				}
+				if mirrorSubmodules {
+					mirrorDir, err := b.getOrUpdateMirrorDir(ctx, repository)
+					if err != nil {
+						return err
+					}
+					// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
+					if err := b.createCheckoutDir(); err != nil {
+						return err
+					}
+					name := fmt.Sprintf("submodule-%d", idx+1)
+					if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "add", name, repository); err != nil {
+						// Per https://git-scm.com/docs/git-remote#_exit_status: When the remote already exists, the exit status is 3
+						// That shouldn't be a fatal error in this case, so ignore it.
+						if shell.GetExitCode(err) != 3 {
+							return err
+						}
+						b.shell.Commentf("Skipping adding %s as the remote %s as it already exists", repository, name)
+					}
+					// Tests use a local temp path for the repository, real repositories don't. Handle both.
+					var repositoryPath string
+					if !utils.FileExists(repository) {
+						repositoryPath = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(repository))
+					} else {
+						repositoryPath = repository
+					}
+					if mirrorDir != "" {
+						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
+					} else {
+						// Fall back to a clean update, rather than failing the checkout and therefore the build
+						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
+					}
+					if err := b.shell.Run(ctx, "git", submoduleArgs...); err != nil {
+						return err
+					}
+				}
 			}
-		}
 
-		args := []string{}
-		for _, config := range b.GitSubmoduleCloneConfig {
-			args = append(args, "-c", config)
-		}
-		args = append(args, "submodule", "update", "--init", "--recursive", "--force")
-		if err := b.shell.Run(ctx, "git", args...); err != nil {
-			return err
-		}
-
-		if err := b.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
-			return err
+			if !mirrorSubmodules {
+				args = append(args, "submodule", "update", "--init", "--recursive", "--force")
+				if err := b.shell.Run(ctx, "git", args...); err != nil {
+					return err
+				}
+			}
+			if err := b.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
+				return err
+			}
 		}
 	}
 
