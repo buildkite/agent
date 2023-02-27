@@ -518,7 +518,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.GenericFlag{
 			Name:   "spawn-with-priority",
-			Usage:  "Assign priorities to every spawned agent (when using --spawn) corresponding to the agent's index. This can be passed with or without a value. When this flag is absent or set to false, each spawned agent's priority will be equal to --priority.  Values accepted by this flag are 'ascending', 'descending', 'ascending-from-priority', and 'descending-from-priority'. 'ascending' assigns each priority equal to the agent's index. 'descending' assigns each priority to the negative of the index. 'ascending-from-priority' and 'descending-from-priority' are like 'ascending' and 'descending', but begin counting with the value specified by --priority. The default when passed without a value is 'ascending'.",
+			Usage:  "When using --spawn, causes priorities assigned to every spawned agent to correspond to the agent's spawn index. This can be passed with or without a value. Values accepted by this flag are 'ascending', 'descending', and Boolean values. When this flag is absent, or set to 'false', each spawned agent's priority will be equal to --priority. Passing with 'ascending' (or 'true') assignes priorities counting upwards from the value of --priority. Passing with 'descending' counts down from --priority. The default when passed without a value is 'ascending'.",
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
 			Value:  &cliconfig.OptionalString{},
 		},
@@ -906,26 +906,18 @@ var AgentStartCommand = cli.Command{
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
 			if cfg.SpawnWithPriority.Trueish {
-				// NB: Negative priorities are allowed!
 				var p int
 				switch cfg.SpawnWithPriority.Value {
-				case "ascending":
-					// Priority = spawn index. Results in assignment
-					// of jobs to agents with higher --spawn first.
-					p = i
 				case "descending":
-					// Priority = negative spawn index. Jobs assigned across
-					// all agents until the ones with lower --spawn are full.
-					p = -i
-				case "ascending-from-priority":
-					// Like ascending, but starts counting from --priority.
-					p = basePriority + i - 1
-				case "descending-from-priority":
-					// Like descending, but starts counting from --priority.
+					// Priority = negative spawn index (plus --priority).
+					// Results in assignment of jobs across all hosts until the
+					// ones with lower --spawn are full.
+					// NB: Negative priorities are allowed!
 					p = basePriority - i + 1
-				default:
-					// Default is ascending, for backwards compatibility.
-					p = i
+				default: // including "ascending"
+					// Priority = spawn index (plus --priority). Results in
+					// assignment of jobs to hosts with higher --spawn first.
+					p = basePriority + i - 1
 				}
 				l.Info("Assigning priority %d for agent %d", p, i)
 				registerReq.Priority = strconv.Itoa(p)
