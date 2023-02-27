@@ -32,7 +32,7 @@ GEM
       pleaserun (~> 0.0.29)
       rexml
       stud
-    git (1.12.0)
+    git (1.13.2)
       addressable (~> 2.8)
       rchardet (~> 1.8)
     insist (1.0.0)
@@ -46,7 +46,7 @@ GEM
       insist
       mustache (= 0.99.8)
       stud
-    public_suffix (5.0.0)
+    public_suffix (5.0.1)
     rchardet (1.8.0)
     rexml (3.2.5)
     stud (0.0.23)
