@@ -35,14 +35,14 @@ type PipelineUploader struct {
 //
 // There are 3 "routes" that are relevant
 // 1. Async Route:  /jobs/:job_uuid/pipelines?async=true
-// 2. Upload Route: /jobs/:job_uuid/pipelines
+// 2. Sync Route: /jobs/:job_uuid/pipelines
 // 3. Status Route: /jobs/:job_uuid/pipelines/:upload_uuid
 //
 // In this method, the agent will first upload the pipeline to the Async Route.
 // Then, depending on the response it will behave differetly
 //
 // 1. The Async Route responds 202: poll the Status Route until the upload has beed "applied"
-// 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously
+// 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously (possibly after retry)
 // 3. The Async Route responds with other xxx: retry uploading the pipeine to the Async Route
 func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
