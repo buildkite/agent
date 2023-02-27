@@ -43,7 +43,7 @@ type PipelineUploader struct {
 //
 // 1. The Async Route responds 202: poll the Status Route until the upload has beed "applied"
 // 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously
-// 3. The Async Route responds with other xxx: retry uploading the pipeine to the Async Route
+// 3. The Async Route responds with other xxx: retry uploading the pipeline to the Async Route
 func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
 	if err != nil {
