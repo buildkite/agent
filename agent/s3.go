@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -19,9 +18,8 @@ import (
 )
 
 const (
-	regionHintEnvVar       = "BUILDKITE_S3_DEFAULT_REGION"
-	s3EndpointEnvVar       = "BUILDKITE_S3_ENDPOINT"
-	s3ForcePathStyleEnvVar = "BUILDKITE_S3_FORCE_PATH_STYLE"
+	regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
+	s3EndpointEnvVar = "BUILDKITE_S3_ENDPOINT"
 )
 
 type buildkiteEnvProvider struct {
@@ -86,16 +84,18 @@ func awsS3Session(region string, l logger.Logger) (*session.Session, error) {
 	if endpoint := os.Getenv(s3EndpointEnvVar); endpoint != "" {
 		l.Debug("S3 session Endpoint from %s: %q", s3EndpointEnvVar, endpoint)
 		sess.Config.Endpoint = aws.String(endpoint)
-	}
 
-	// Optionally force the S3 client to use path-style addressing instead of the default
-	// DNS-style “virtual hosted bucket addressing”. See:
-	// - https://docs.aws.amazon.com/sdk-for-go/api/aws/#Config.WithS3ForcePathStyle
-	// - https://github.com/aws/aws-sdk-go/blob/v1.44.181/aws/config.go#L118-L127
-	// This is useful for S3-compatible servers like MinIO when they're deployed
-	// without subdomain support.
-	if enabled, err := strconv.ParseBool(os.Getenv(s3ForcePathStyleEnvVar)); err == nil && enabled {
-		l.Debug("S3 session S3ForcePathStyle from %s: %v", s3ForcePathStyleEnvVar, enabled)
+		// Configure the S3 client to use path-style addressing instead of the
+		// default DNS-style “virtual hosted bucket addressing”. See:
+		// - https://docs.aws.amazon.com/sdk-for-go/api/aws/#Config.WithS3ForcePathStyle
+		// - https://github.com/aws/aws-sdk-go/blob/v1.44.181/aws/config.go#L118-L127
+		// This is useful for S3-compatible servers like MinIO when they're deployed
+		// without subdomain support.
+
+		// AWS CLI does this by default when a custom endpoint is specified [1] so
+		// we will too.
+		// [1]: https://github.com/aws/aws-cli/blob/2.9.18/awscli/botocore/args.py#L414-L417
+		l.Debug("S3 session S3ForcePathStyle=true because custom Endpoint specified")
 		sess.Config.S3ForcePathStyle = aws.Bool(true)
 	}
 
