@@ -58,60 +58,60 @@ Example:
 // - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
 
 type AgentStartConfig struct {
-	Config                      string                    `cli:"config"`
-	Name                        string                    `cli:"name"`
-	Priority                    string                    `cli:"priority"`
-	AcquireJob                  string                    `cli:"acquire-job"`
-	DisconnectAfterJob          bool                      `cli:"disconnect-after-job"`
-	DisconnectAfterIdleTimeout  int                       `cli:"disconnect-after-idle-timeout"`
-	BootstrapScript             string                    `cli:"bootstrap-script" normalize:"commandpath"`
-	CancelGracePeriod           int                       `cli:"cancel-grace-period"`
-	EnableJobLogTmpfile         bool                      `cli:"enable-job-log-tmpfile"`
-	BuildPath                   string                    `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                   string                    `cli:"hooks-path" normalize:"filepath"`
-	PluginsPath                 string                    `cli:"plugins-path" normalize:"filepath"`
-	Shell                       string                    `cli:"shell"`
-	Tags                        []string                  `cli:"tags" normalize:"list"`
-	TagsFromEC2MetaData         bool                      `cli:"tags-from-ec2-meta-data"`
-	TagsFromEC2MetaDataPaths    []string                  `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
-	TagsFromEC2Tags             bool                      `cli:"tags-from-ec2-tags"`
-	TagsFromECSMetaData         bool                      `cli:"tags-from-ecs-meta-data"`
-	TagsFromGCPMetaData         bool                      `cli:"tags-from-gcp-meta-data"`
-	TagsFromGCPMetaDataPaths    []string                  `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
-	TagsFromGCPLabels           bool                      `cli:"tags-from-gcp-labels"`
-	TagsFromHost                bool                      `cli:"tags-from-host"`
-	WaitForEC2TagsTimeout       string                    `cli:"wait-for-ec2-tags-timeout"`
-	WaitForEC2MetaDataTimeout   string                    `cli:"wait-for-ec2-meta-data-timeout"`
-	WaitForECSMetaDataTimeout   string                    `cli:"wait-for-ecs-meta-data-timeout"`
-	WaitForGCPLabelsTimeout     string                    `cli:"wait-for-gcp-labels-timeout"`
-	GitCheckoutFlags            string                    `cli:"git-checkout-flags"`
-	GitCloneFlags               string                    `cli:"git-clone-flags"`
-	GitCloneMirrorFlags         string                    `cli:"git-clone-mirror-flags"`
-	GitCleanFlags               string                    `cli:"git-clean-flags"`
-	GitFetchFlags               string                    `cli:"git-fetch-flags"`
-	GitMirrorsPath              string                    `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout       int                       `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate        bool                      `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules             bool                      `cli:"no-git-submodules"`
-	NoSSHKeyscan                bool                      `cli:"no-ssh-keyscan"`
-	NoCommandEval               bool                      `cli:"no-command-eval"`
-	NoLocalHooks                bool                      `cli:"no-local-hooks"`
-	NoPlugins                   bool                      `cli:"no-plugins"`
-	NoPluginValidation          bool                      `cli:"no-plugin-validation"`
-	NoPTY                       bool                      `cli:"no-pty"`
-	NoFeatureReporting          bool                      `cli:"no-feature-reporting"`
-	TimestampLines              bool                      `cli:"timestamp-lines"`
-	HealthCheckAddr             string                    `cli:"health-check-addr"`
-	MetricsDatadog              bool                      `cli:"metrics-datadog"`
-	MetricsDatadogHost          string                    `cli:"metrics-datadog-host"`
-	MetricsDatadogDistributions bool                      `cli:"metrics-datadog-distributions"`
-	TracingBackend              string                    `cli:"tracing-backend"`
-	TracingServiceName          string                    `cli:"tracing-service-name"`
-	Spawn                       int                       `cli:"spawn"`
-	SpawnWithPriority           *cliconfig.OptionalString `cli:"spawn-with-priority"`
-	LogFormat                   string                    `cli:"log-format"`
-	CancelSignal                string                    `cli:"cancel-signal"`
-	RedactedVars                []string                  `cli:"redacted-vars" normalize:"list"`
+	Config                      string   `cli:"config"`
+	Name                        string   `cli:"name"`
+	Priority                    string   `cli:"priority"`
+	AcquireJob                  string   `cli:"acquire-job"`
+	DisconnectAfterJob          bool     `cli:"disconnect-after-job"`
+	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
+	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
+	CancelGracePeriod           int      `cli:"cancel-grace-period"`
+	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
+	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
+	Shell                       string   `cli:"shell"`
+	Tags                        []string `cli:"tags" normalize:"list"`
+	TagsFromEC2MetaData         bool     `cli:"tags-from-ec2-meta-data"`
+	TagsFromEC2MetaDataPaths    []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
+	TagsFromEC2Tags             bool     `cli:"tags-from-ec2-tags"`
+	TagsFromECSMetaData         bool     `cli:"tags-from-ecs-meta-data"`
+	TagsFromGCPMetaData         bool     `cli:"tags-from-gcp-meta-data"`
+	TagsFromGCPMetaDataPaths    []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
+	TagsFromGCPLabels           bool     `cli:"tags-from-gcp-labels"`
+	TagsFromHost                bool     `cli:"tags-from-host"`
+	WaitForEC2TagsTimeout       string   `cli:"wait-for-ec2-tags-timeout"`
+	WaitForEC2MetaDataTimeout   string   `cli:"wait-for-ec2-meta-data-timeout"`
+	WaitForECSMetaDataTimeout   string   `cli:"wait-for-ecs-meta-data-timeout"`
+	WaitForGCPLabelsTimeout     string   `cli:"wait-for-gcp-labels-timeout"`
+	GitCheckoutFlags            string   `cli:"git-checkout-flags"`
+	GitCloneFlags               string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
+	GitCleanFlags               string   `cli:"git-clean-flags"`
+	GitFetchFlags               string   `cli:"git-fetch-flags"`
+	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
+	NoGitSubmodules             bool     `cli:"no-git-submodules"`
+	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval               bool     `cli:"no-command-eval"`
+	NoLocalHooks                bool     `cli:"no-local-hooks"`
+	NoPlugins                   bool     `cli:"no-plugins"`
+	NoPluginValidation          bool     `cli:"no-plugin-validation"`
+	NoPTY                       bool     `cli:"no-pty"`
+	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
+	TimestampLines              bool     `cli:"timestamp-lines"`
+	HealthCheckAddr             string   `cli:"health-check-addr"`
+	MetricsDatadog              bool     `cli:"metrics-datadog"`
+	MetricsDatadogHost          string   `cli:"metrics-datadog-host"`
+	MetricsDatadogDistributions bool     `cli:"metrics-datadog-distributions"`
+	TracingBackend              string   `cli:"tracing-backend"`
+	TracingServiceName          string   `cli:"tracing-service-name"`
+	Spawn                       int      `cli:"spawn"`
+	SpawnWithPriority           string   `cli:"spawn-with-priority"`
+	LogFormat                   string   `cli:"log-format"`
+	CancelSignal                string   `cli:"cancel-signal"`
+	RedactedVars                []string `cli:"redacted-vars" normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -230,6 +230,23 @@ func DefaultConfigFilePaths() (paths []string) {
 	}
 
 	return
+}
+
+type priorityAssigner func(base, index int) int
+
+var priorityAssigners = map[string]priorityAssigner{
+	// none: do not vary priority by index.
+	"none": func(base, _ int) int { return base },
+
+	// ascending: Priority = spawn index (plus --priority). Results in
+	// assignment of jobs to hosts with higher --spawn first.
+	"ascending": func(base, index int) int { return base + index - 1 },
+
+	// descending: Priority = negative spawn index (plus --priority).
+	// Results in assignment of jobs across all hosts until the
+	// ones with lower --spawn are full.
+	// NB: Negative priorities are allowed!
+	"descending": func(base, index int) int { return base - index + 1 },
 }
 
 var AgentStartCommand = cli.Command{
@@ -516,11 +533,11 @@ var AgentStartCommand = cli.Command{
 			Value:  1,
 			EnvVar: "BUILDKITE_AGENT_SPAWN",
 		},
-		cli.GenericFlag{
+		cli.StringFlag{
 			Name:   "spawn-with-priority",
-			Usage:  "When using --spawn, causes priorities assigned to every spawned agent to correspond to the agent's spawn index. This can be passed with or without a value. Values accepted by this flag are 'ascending', 'descending', and Boolean values. When this flag is absent, or set to 'false', each spawned agent's priority will be equal to --priority. Passing with 'ascending' (or 'true') assignes priorities counting upwards from the value of --priority. Passing with 'descending' counts down from --priority. The default when passed without a value is 'ascending'.",
+			Usage:  `When using --spawn, causes priorities assigned to every spawned agent to correspond to the agent's spawn index. Values accepted by this flag are "none", "ascending", and "descending". By default ("none"), all spawned agent's priority will be equal to --priority. With "ascending", priorities are assigned counting upwards, starting with the integer value of --priority. "descending" is like "ascending", but priorities count down instead of up.`,
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
-			Value:  &cliconfig.OptionalString{},
+			Value:  "none",
 		},
 		cli.StringFlag{
 			Name:   "cancel-signal",
@@ -733,6 +750,10 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		if t := cfg.SpawnWithPriority; priorityAssigners[t] == nil {
+			l.Fatal(`Invalid choice %q for spawn-with-priority; must be one of "none", "ascending", "descending"`, t)
+		}
+
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
 			Datadog:              cfg.MetricsDatadog,
 			DatadogHost:          cfg.MetricsDatadogHost,
@@ -875,7 +896,7 @@ var AgentStartCommand = cli.Command{
 				WaitForECSMetaDataTimeout: ecsMetaDataTimeout,
 				WaitForGCPLabelsTimeout:   gcpLabelsTimeout,
 			}),
-			// We only want this agent to be ingored in Buildkite
+			// We only want this agent to be ignored in Buildkite
 			// dispatches if it's being booted to acquire a
 			// specific job.
 			IgnoreInDispatches: cfg.AcquireJob != "",
@@ -905,20 +926,8 @@ var AgentStartCommand = cli.Command{
 			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
-			if cfg.SpawnWithPriority.Trueish {
-				var p int
-				switch cfg.SpawnWithPriority.Value {
-				case "descending":
-					// Priority = negative spawn index (plus --priority).
-					// Results in assignment of jobs across all hosts until the
-					// ones with lower --spawn are full.
-					// NB: Negative priorities are allowed!
-					p = basePriority - i + 1
-				default: // including "ascending"
-					// Priority = spawn index (plus --priority). Results in
-					// assignment of jobs to hosts with higher --spawn first.
-					p = basePriority + i - 1
-				}
+			if cfg.SpawnWithPriority != "none" {
+				p := priorityAssigners[cfg.SpawnWithPriority](basePriority, i)
 				l.Info("Assigning priority %d for agent %d", p, i)
 				registerReq.Priority = strconv.Itoa(p)
 			}

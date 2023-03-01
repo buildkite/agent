@@ -16,3 +16,4 @@ packaging/docker/*/hooks/
 
 .idea
 .vscode
+.DS_Store
