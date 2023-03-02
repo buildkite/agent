@@ -42,7 +42,7 @@ const startDescription = `Usage:
 
 Description:
 
-   When a job is ready to run it will call the "job-executor-script"
+   When a job is ready to run it will call the "run-job-script"
    and pass it all the environment variables required for the job to run.
    This script is responsible for checking out the code, and running the
    actual build script defined in the pipeline.
@@ -57,7 +57,7 @@ Example:
 // - The AgentStartConfig struct with a cli parameter
 // - As a flag in the AgentStartCommand (with matching env)
 // - Into an env to be passed to the job executor in agent/job_runner.go, createEnvironment()
-// - Into clicommand/exec-job.go to read it from the env into the job executor config
+// - Into clicommand/run_job.go to read it from the env into the job executor config
 
 type AgentStartConfig struct {
 	Config                      string   `cli:"config"`
@@ -66,7 +66,7 @@ type AgentStartConfig struct {
 	AcquireJob                  string   `cli:"acquire-job"`
 	DisconnectAfterJob          bool     `cli:"disconnect-after-job"`
 	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
-	JobExecutorScript           string   `cli:"job-executor-script" normalize:"commandpath"`
+	JobExecutorScript           string   `cli:"run-job-script" normalize:"commandpath"`
 	CancelGracePeriod           int      `cli:"cancel-grace-period"`
 	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
 	WriteJobLogsToStdout        bool     `cli:"write-job-logs-to-stdout"`
@@ -427,13 +427,13 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
-			Usage:  "[DEPRECATED] The command that is executed for bootstrapping a job, defaults to the exec-job sub-command of this binary",
+			Usage:  "[DEPRECATED] The command that is executed for bootstrapping a job, defaults to the run-job sub-command of this binary",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
 		cli.StringFlag{
-			Name:   "job-executor-script",
+			Name:   "run-job-script",
 			Value:  "",
-			Usage:  "The command that is executed for running a job, defaults to the exec-job sub-command of this binary",
+			Usage:  "The command that is executed for running a job, defaults to the run-job sub-command of this binary",
 			EnvVar: "BUILDKITE_JOB_EXECUTOR_SCRIPT_PATH",
 		},
 		cli.StringFlag{
@@ -681,7 +681,7 @@ var AgentStartCommand = cli.Command{
 			if err != nil {
 				l.Fatal("Unable to find our executable path to construct the job executor script: %v", err)
 			}
-			cfg.JobExecutorScript = fmt.Sprintf("%s exec-job", shellwords.Quote(exePath))
+			cfg.JobExecutorScript = fmt.Sprintf("%s run-job", shellwords.Quote(exePath))
 		}
 
 		isSetNoPlugins := c.IsSet("no-plugins")

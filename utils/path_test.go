@@ -47,9 +47,9 @@ func TestNormalizingCommands(t *testing.T) {
 	usr, err := user.Current()
 	assert.NoError(t, err)
 
-	c, err := NormalizeCommand(filepath.Join("~/", "buildkite-agent", "exec-job"))
+	c, err := NormalizeCommand(filepath.Join("~/", "buildkite-agent", "run-job"))
 	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(usr.HomeDir, "buildkite-agent", "exec-job"), c)
+	assert.Equal(t, filepath.Join(usr.HomeDir, "buildkite-agent", "run-job"), c)
 
 	c, err = NormalizeCommand("cat test.log")
 	assert.NoError(t, err)

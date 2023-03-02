@@ -84,7 +84,7 @@ func NewExecutorTester() (*ExecutorTester, error) {
 
 	bt := &ExecutorTester{
 		Name: os.Args[0],
-		Args: []string{"exec-job"},
+		Args: []string{"run-job"},
 		Repo: repo,
 		Env: []string{
 			"HOME=" + homeDir,

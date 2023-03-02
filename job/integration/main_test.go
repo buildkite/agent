@@ -13,13 +13,13 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// If we are passed "exec-job", execute like the exec-job cli
-	if len(os.Args) > 1 && os.Args[1] == "exec-job" {
+	// If we are passed "run-job", execute like the run-job cli
+	if len(os.Args) > 1 && os.Args[1] == "run-job" {
 		app := cli.NewApp()
 		app.Name = "buildkite-agent"
 		app.Version = version.Version()
 		app.Commands = []cli.Command{
-			clicommand.ExecJobCommand,
+			clicommand.RunJobCommand,
 		}
 
 		if err := app.Run(os.Args); err != nil {

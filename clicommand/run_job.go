@@ -18,7 +18,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var execJobHelpTpl = template.Must(template.New("execJobHelp").Parse(`Usage:
+var runJobHelpTpl = template.Must(template.New("runJobHelp").Parse(`Usage:
 
    buildkite-agent {{.}} [options...]
 
@@ -44,7 +44,7 @@ Example:
      "https://api.buildkite.com/v2/organizations/[org]/pipelines/[proj]/builds/[build]/jobs/[job]/env.txt" | sed 's/^/export /')
    $ buildkite-agent {{.}} --build-path builds`))
 
-type ExecJobConfig struct {
+type RunJobConfig struct {
 	Command                      string   `cli:"command"`
 	JobID                        string   `cli:"job" validate:"required"`
 	Repository                   string   `cli:"repository" validate:"required"`
@@ -96,7 +96,7 @@ type ExecJobConfig struct {
 	TracingServiceName           string   `cli:"tracing-service-name"`
 }
 
-var execJobFlags = []cli.Flag{
+var runJobFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:   "command",
 		Value:  "",
@@ -360,9 +360,9 @@ var execJobFlags = []cli.Flag{
 	ProfileFlag,
 }
 
-func execJobAction(c *cli.Context) {
+func runJobAction(c *cli.Context) {
 	// The configuration will be loaded into this struct
-	cfg := ExecJobConfig{}
+	cfg := RunJobConfig{}
 
 	loader := cliconfig.Loader{CLI: c, Config: &cfg}
 	warnings, err := loader.Load()
@@ -518,10 +518,10 @@ func execJobAction(c *cli.Context) {
 func genBootstrap() cli.Command {
 	var help strings.Builder
 	help.WriteString("⚠️ ⚠️ ⚠️\n")
-	help.WriteString("DEPRECATED: Use `buildkite-agent exec-job` instead\n")
+	help.WriteString("DEPRECATED: Use `buildkite-agent run-job` instead\n")
 	help.WriteString("⚠️ ⚠️ ⚠️\n\n")
 
-	err := execJobHelpTpl.Execute(&help, "bootstrap")
+	err := runJobHelpTpl.Execute(&help, "bootstrap")
 	if err != nil {
 		// This can only hapen if we've mangled the template or its parsing
 		// and will be caught by tests and local usage
@@ -533,20 +533,20 @@ func genBootstrap() cli.Command {
 		Name:        "bootstrap",
 		Usage:       "[DEPRECATED] Run a Buildkite job locally",
 		Description: help.String(),
-		Flags:       execJobFlags,
+		Flags:       runJobFlags,
 		Action: func(c *cli.Context) {
 			fmt.Println("⚠️ WARNING ⚠️")
 			fmt.Println("This command (`buildkite-agent bootstrap`) is deprecated and will be removed in a future release")
-			fmt.Println("Please use `buildkite-agent exec-job` instead")
+			fmt.Println("Please use `buildkite-agent run-job` instead")
 			fmt.Println("")
-			execJobAction(c)
+			runJobAction(c)
 		},
 	}
 }
 
-func genExecJob() cli.Command {
+func genRunJob() cli.Command {
 	var help strings.Builder
-	err := execJobHelpTpl.Execute(&help, "exec-job")
+	err := runJobHelpTpl.Execute(&help, "run-job")
 	if err != nil {
 		// This can only hapen if we've mangled the template or its parsing
 		// and will be caught by tests and local usage
@@ -555,15 +555,15 @@ func genExecJob() cli.Command {
 	}
 
 	return cli.Command{
-		Name:        "exec-job",
+		Name:        "run-job",
 		Usage:       "Run a Buildkite job locally",
 		Description: help.String(),
-		Flags:       execJobFlags,
-		Action:      execJobAction,
+		Flags:       runJobFlags,
+		Action:      runJobAction,
 	}
 }
 
 var (
 	BootstrapCommand = genBootstrap()
-	ExecJobCommand   = genExecJob()
+	RunJobCommand    = genRunJob()
 )

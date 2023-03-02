@@ -137,7 +137,7 @@ func main() {
 			},
 		},
 		clicommand.BootstrapCommand,
-		clicommand.ExecJobCommand,
+		clicommand.RunJobCommand,
 	}
 
 	app.ErrWriter = os.Stderr
