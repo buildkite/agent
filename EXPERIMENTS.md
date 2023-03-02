@@ -68,10 +68,19 @@ This will result in errors unless orchestrated in a similar manner to that proje
 
 **Status**: Being used in a preview release of agent-stack-k8s. As it has little applicability outside of Kubernetes, this will not be the default behaviour.
 
-### `descending-spawn-priority`
+### `job-api`
 
-Changes the priority numbering when using `--spawn-with-priority`. By default, priorities start at 1 and increase. Using this experiment, priorities start at -1 and decrease. (Yes, negative priorities are allowed!) This experiment fixes imbalanced work assignment among different hosts with agents that have different values for `--spawn`. 
+Exposes a local API for the currently running job to introspect and mutate its state in the form of environment variables. This allows you to write scripts, hooks and plugins in languages other than bash, using them to interact with the agent.
 
-For example, without this experiment and all other things being equal, a host with `--spawn=3` would normally need to be running at least two jobs before a host with `--spawn=1` would see any work, because the two extra spawn would have higher priorities. With this experiment, one job would be running on both hosts before the additional spawn on the first host are assigned work.
+The API is exposed via a Unix Domain Socket, whose path is exposed to running jobs with the `BUILDKITE_AGENT_JOB_API_SOCKET` envar, and authenticated with a token exposed using the `BUILDKITE_AGENT_JOB_API_TOKEN` envar, using the `Bearer` HTTP Authorization scheme.
 
-**Status**: Likely to become the default in a release soon.
+The API exposes the following endpoints:
+- `GET /api/current-job/v0/env` - returns a JSON object of all environment variables for the current job
+- `PATCH /api/current-job/v0/env` - accepts a JSON object of environment variables to set for the current job
+- `DELETE /api/current-job/v0/env` - accepts a JSON array of environment variable names to unset for the current job
+
+See [jobapi/payloads.go](./jobapi/payloads.go) for the full API request/response definitions.
+
+The Job API is unavailable on windows agents running versions of windows prior to build 17063, as this was when windows added Unix Domain Socket support. Using this experiment on such agents will output a warning, and the API will be unavailable.
+
+**Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™️.

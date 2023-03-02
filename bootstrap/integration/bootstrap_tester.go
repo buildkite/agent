@@ -44,7 +44,7 @@ type BootstrapTester struct {
 }
 
 func NewBootstrapTester() (*BootstrapTester, error) {
-	homeDir, err := os.MkdirTemp("", "home")
+	homeDir, err := os.MkdirTemp("/tmp", "home")
 	if err != nil {
 		return nil, fmt.Errorf("making home directory: %w", err)
 	}
