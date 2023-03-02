@@ -22,7 +22,7 @@ Available commands are:
   pipeline   Make changes to the pipeline of the currently running build
   step       Make changes to a step (this includes any jobs that were created from the step)
   bootstrap  [DEPRECATED] Run a Buildkite job locally
-  run-job   Run a Buildkite job locally
+  run-job    Run a Buildkite job locally
   help       Shows a list of commands or help for one command
 
 Use "buildkite-agent <command> --help" for more information about a command.
