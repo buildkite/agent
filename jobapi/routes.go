@@ -15,9 +15,9 @@ import (
 func (s *Server) router() chi.Router {
 	r := chi.NewRouter()
 	r.Use(
+		LoggerMiddleware(s.Logger),
 		middleware.Recoverer,
-		// middleware.Logger, // REVIEW: Should we log requests to this API? If so, where should we log them to? The job logs?
-		HeadersMiddleware(),
+		HeadersMiddleware,
 		AuthMiddleware(s.token),
 	)
 

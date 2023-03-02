@@ -29,7 +29,7 @@ func (b *Bootstrap) startJobAPI() (cleanup func(), err error) {
 		return cleanup, fmt.Errorf("creating job API socket path: %v", err)
 	}
 
-	srv, token, err := jobapi.NewServer(socketPath, b.shell.Env)
+	srv, token, err := jobapi.NewServer(b.shell.Logger, socketPath, b.shell.Env)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API server: %v", err)
 	}
@@ -45,8 +45,6 @@ func (b *Bootstrap) startJobAPI() (cleanup func(), err error) {
 		err = srv.Stop()
 		if err != nil {
 			b.shell.Errorf("Error stopping Job API server: %v", err)
-		} else {
-			b.shell.Commentf("Stopped Job API server")
 		}
 	}, nil
 }

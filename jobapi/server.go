@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
 )
 
@@ -22,6 +23,7 @@ import (
 type Server struct {
 	// SocketPath is the path to the socket that the server is (or will be) listening on
 	SocketPath string
+	Logger     shell.Logger
 
 	environ env.Environment
 	token   string
@@ -33,7 +35,7 @@ type Server struct {
 // NewServer creates a new Job API server
 // socketPath is the path to the socket on which the server will listen
 // environ is the environment which the server will mutate and inspect as part of its operation
-func NewServer(socketPath string, environ env.Environment) (server *Server, token string, err error) {
+func NewServer(logger shell.Logger, socketPath string, environ env.Environment) (server *Server, token string, err error) {
 	if len(socketPath) >= socketPathLength() {
 		return nil, "", fmt.Errorf("socket path %s is too long (path length: %d, max %d characters). This is a limitation of your host OS", socketPath, len(socketPath), socketPathLength())
 	}
@@ -54,6 +56,7 @@ func NewServer(socketPath string, environ env.Environment) (server *Server, toke
 
 	return &Server{
 		SocketPath: socketPath,
+		Logger:     logger,
 		environ:    environ,
 		token:      token,
 	}, token, nil
@@ -77,6 +80,8 @@ func (s *Server) Start() error {
 	}()
 	s.started = true
 
+	s.Logger.Commentf("Job API server listening on %s", s.SocketPath)
+
 	return nil
 }
 
@@ -96,7 +101,7 @@ func (s *Server) Stop() error {
 	go func() {
 		<-shutdownCtx.Done()
 		if shutdownCtx.Err() == context.DeadlineExceeded {
-			// What should we do in this situation? Force a return? Log something?
+			s.Logger.Warningf("Job API server shutdown timed out, forcing server shutdown")
 		}
 	}()
 
@@ -105,6 +110,8 @@ func (s *Server) Stop() error {
 	if err != nil {
 		return fmt.Errorf("shutting down Job API server: %w", err)
 	}
+
+	s.Logger.Commentf("Successfully shut down Job API server")
 
 	return nil
 }
