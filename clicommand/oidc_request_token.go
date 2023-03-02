@@ -76,7 +76,7 @@ var OIDCRequestTokenCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "claim",
 			Value:  &cli.StringSlice{},
-			Usage:  "Claims to add to the OIDC Token",
+			Usage:  "Claims to add to the OIDC token",
 			EnvVar: "BUILDKITE_OIDC_TOKEN_CLAIMS",
 		},
 
