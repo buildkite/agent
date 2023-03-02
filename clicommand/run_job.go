@@ -536,9 +536,16 @@ func genBootstrap() cli.Command {
 		Flags:       runJobFlags,
 		Action: func(c *cli.Context) {
 			fmt.Println("⚠️ WARNING ⚠️")
-			fmt.Println("This command (`buildkite-agent bootstrap`) is deprecated and will be removed in a future release")
-			fmt.Println("Please use `buildkite-agent run-job` instead")
-			fmt.Println("")
+			fmt.Println("This command (`buildkite-agent bootstrap`) is deprecated and will be removed in the next major version of the Buildkite Agent")
+			fmt.Println()
+			fmt.Println("You're probably seeing this message because you're using the `--bootstrap-script` flag (or its associated environment variable) and manually calling `buildkite-agent bootstrap` from your custom bootstrap script, customising the behaviour of the agent when it runs a job")
+			fmt.Println()
+			fmt.Println("This workflow is still totally supported, but we've renamed the command to `buildkite-agent run-job` to make it more obvious what it does")
+			fmt.Println("You can update your bootstrap script to use `buildkite-agent run-job` instead of `buildkite-agent bootstrap` and everything will work pretty much exactly the same")
+			fmt.Println("Also, the `--bootstrap-script` flag is now called `--run-job-script`, but the change is backwards compatible -- the old flag will still work for now")
+			fmt.Println()
+			fmt.Println("For more information, see https://github.com/buildkite/agent/pull/1958")
+			fmt.Println()
 			runJobAction(c)
 		},
 	}
