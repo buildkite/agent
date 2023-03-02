@@ -87,8 +87,7 @@ type RunJobConfig struct {
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
 	Experiments                  []string `cli:"experiment" normalize:"list"`
-	Phases                       []string `cli:"phases" normalize:"list" deprecated-and-renamed-to:"exec-phases"`
-	ExecPhases                   []string `cli:"exec-phases" normalize:"list"`
+	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
 	CancelSignal                 string   `cli:"cancel-signal"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
@@ -323,13 +322,8 @@ var runJobFlags = []cli.Flag{
 	},
 	cli.StringSliceFlag{
 		Name:   "phases",
-		Usage:  "[DEPRECATED] The specific phases to execute. The order they're defined is irrelevant.",
-		EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
-	},
-	cli.StringSliceFlag{
-		Name:   "exec-phases",
 		Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
-		EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
+		EnvVar: "BUILDKITE_BOOTSTRAP_PHASES,BUILDKITE_JOB_RUN_PHASES",
 	},
 	cli.StringFlag{
 		Name:   "cancel-signal",
