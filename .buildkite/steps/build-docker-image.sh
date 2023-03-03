@@ -60,12 +60,36 @@ builder_name=$(docker buildx create --use)
 # shellcheck disable=SC2064 # we want the current $builder_name to be trapped, not the runtime one
 trap "docker buildx rm $builder_name || true" EXIT
 
-# Needed for buildking multiarch
+# Needed a more recent version of QEMU than what's on the host for building multiarch images.
 # See https://github.com/docker/buildx/issues/314
 QEMU_VERSION=6.2.0
 echo "--- Installing QEMU $QEMU_VERSION"
-docker run --privileged --userns=host --rm "tonistiigi/binfmt:qemu-v$QEMU_VERSION" --uninstall qemu-*
-docker run --privileged --userns=host --rm "tonistiigi/binfmt:qemu-v$QEMU_VERSION" --install all
+# There isn't a good way to see if this script has already installed qemu-binfmt.
+# So we uninstall and install it each time. This would create a race condition between the
+# uninstall and install if multiple agents are running on an agent's host.
+#
+# Thus, we use flock(1) to hold an exclusive lock while this is happening.
+# The syntax is a bit arcane, but the jist is:
+# ```bash
+# (
+#   flock -x "$variable"
+#   commands to run under lock
+# ) {variable}>filename
+# ```
+# This first set of round braces run the commands in a subshell. In the subshell, flock(1) is
+# executed with a file descriptor number. This will wait for the lock. The lock will be released
+# by the kernel when the subshell exists (and the file descriptor is closed).
+# See https://linux.die.net/man/1/flock, in particular the "third form".
+#
+# The curly braces are an automatic file descriptor allocation introduced in bash 4.1.
+# See https://wiki.bash-hackers.org/scripting/bashchanges
+# Finally, the file with the path `filename` in the filesystem is opened with that file descriptor.
+(
+  echo Obtaining lock with file descriptor "$file_descriptor" at
+  flock -x "$file_descriptor"
+  docker run --privileged --userns=host --rm "tonistiigi/binfmt:qemu-v$QEMU_VERSION" --uninstall qemu-*
+  docker run --privileged --userns=host --rm "tonistiigi/binfmt:qemu-v$QEMU_VERSION" --install all
+) {file_descriptor}>/tmp/install-qemu-binfmt.flock
 
 echo "--- Building :docker: $image_tag"
 cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
