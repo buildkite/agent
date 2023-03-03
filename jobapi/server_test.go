@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/google/go-cmp/cmp"
@@ -30,13 +31,13 @@ func testEnviron() env.Environment {
 	return e
 }
 
-func testServer(e env.Environment) (*jobapi.Server, string, error) {
+func testServer(t *testing.T, e env.Environment) (*jobapi.Server, string, error) {
 	sockName, err := jobapi.NewSocketPath()
 	if err != nil {
 		return nil, "", fmt.Errorf("creating socket path: %w", err)
 	}
 
-	return jobapi.NewServer(sockName, e)
+	return jobapi.NewServer(shell.TestingLogger{T: t}, sockName, e)
 }
 
 func testSocketClient(socketPath string) *http.Client {
@@ -53,19 +54,19 @@ func TestServerStartStop(t *testing.T) {
 	t.Parallel()
 
 	env := testEnviron()
-	srv, _, err := testServer(env)
+	srv, _, err := testServer(t, env)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("testServer(t, env) error = %v", err)
 	}
 
 	err = srv.Start()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("srv.Start() = %v", err)
 	}
 
 	info, err := os.Stat(srv.SocketPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.Stat(%q) error = %v", srv.SocketPath, err)
 	}
 
 	isSocket := info.Mode()&os.ModeSocket != 0
@@ -75,15 +76,11 @@ func TestServerStartStop(t *testing.T) {
 
 	err = srv.Stop()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("srv.Stop() = %v", err)
 	}
 
 	time.Sleep(100 * time.Millisecond) // Wait for the socket file to be unlinked
-	info, err = os.Stat(srv.SocketPath)
-	if err == nil {
-		t.Fatalf("expected server socket file %s to be removed, got mode %s", srv.SocketPath, info.Mode())
-	}
-
+	_, err = os.Stat(srv.SocketPath)
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected os.Stat(%s) = _, os.ErrNotExist, got %v", srv.SocketPath, err)
 	}
@@ -91,7 +88,7 @@ func TestServerStartStop(t *testing.T) {
 
 func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	sockName := path.Join(os.TempDir(), "test-socket-collision.sock")
-	srv1, _, err := jobapi.NewServer(sockName, env.Environment{})
+	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.Environment{})
 	if err != nil {
 		t.Fatalf("expected initial server creation to succeed, got %v", err)
 	}
@@ -102,14 +99,14 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	}
 	defer srv1.Stop()
 
-	expectedErr := fmt.Sprintf("creating server: file already exists at socket path %s", sockName)
-	_, _, err = jobapi.NewServer(sockName, env.Environment{})
+	expectedErr := fmt.Sprintf("file already exists at socket path %s", sockName)
+	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.Environment{})
 	if err == nil {
 		t.Fatalf("expected second server creation to fail with %s, got nil", expectedErr)
 	}
 
 	if err.Error() != expectedErr {
-		t.Fatalf("expected second server start to fail with %v, got %v", expectedErr, err)
+		t.Fatalf("expected second server start to fail with %q, got %q", expectedErr, err)
 	}
 }
 
@@ -159,7 +156,7 @@ func TestDeleteEnv(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(environ)
+			srv, token, err := testServer(t, environ)
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}
@@ -181,7 +178,7 @@ func TestDeleteEnv(t *testing.T) {
 			buf := bytes.NewBuffer(nil)
 			err = json.NewEncoder(buf).Encode(c.requestBody)
 			if err != nil {
-				t.Fatal()
+				t.Fatalf("JSON-encoding c.requestBody into buf: %v", err)
 			}
 
 			req, err := http.NewRequest(http.MethodDelete, "http://bootstrap/api/current-job/v0/env", buf)
@@ -256,7 +253,7 @@ func TestPatchEnv(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(environ)
+			srv, token, err := testServer(t, environ)
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}
@@ -298,7 +295,7 @@ func TestGetEnv(t *testing.T) {
 	t.Parallel()
 
 	env := testEnviron()
-	srv, token, err := testServer(env)
+	srv, token, err := testServer(t, env)
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}

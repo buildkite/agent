@@ -16,7 +16,23 @@ func testHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("{}"))
 }
 
-func TestAuthMdlw(t *testing.T) {
+func shouldCall(t *testing.T) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func shouldNotCall(t *testing.T) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("next.ServeHTTP should not be called")
+		})
+	}
+}
+
+func TestAuthMiddleware(t *testing.T) {
 	t.Parallel()
 
 	token := "llamas"
@@ -25,30 +41,35 @@ func TestAuthMdlw(t *testing.T) {
 		auth     string
 		wantCode int
 		wantBody map[string]string
+		next     func(http.Handler) http.Handler
 	}{
 		{
 			title:    "valid token",
 			auth:     fmt.Sprintf("Bearer %s", token),
 			wantCode: http.StatusOK,
 			wantBody: map[string]string{},
+			next:     shouldCall(t),
 		},
 		{
 			title:    "invalid token",
 			auth:     "Bearer alpacas",
 			wantCode: http.StatusUnauthorized,
 			wantBody: map[string]string{"error": "invalid authorization token"},
+			next:     shouldNotCall(t),
 		},
 		{
 			title:    "non-bearer auth",
 			auth:     fmt.Sprintf("Basic %s", token),
 			wantCode: http.StatusUnauthorized,
 			wantBody: map[string]string{"error": "invalid authorization header: type must be Bearer"},
+			next:     shouldNotCall(t),
 		},
 		{
 			title:    "no auth",
 			auth:     "",
 			wantCode: http.StatusUnauthorized,
 			wantBody: map[string]string{"error": "authorization header is required"},
+			next:     shouldNotCall(t),
 		},
 	}
 
@@ -63,7 +84,7 @@ func TestAuthMdlw(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			mdlw := jobapi.AuthMiddleware(token)
-			wrapped := mdlw(http.HandlerFunc(testHandler))
+			wrapped := mdlw(c.next(http.HandlerFunc(testHandler)))
 			wrapped.ServeHTTP(w, req)
 
 			gotCode := w.Result().StatusCode
@@ -83,10 +104,10 @@ func TestAuthMdlw(t *testing.T) {
 	}
 }
 
-func TestHeadersMdlw(t *testing.T) {
+func TestHeadersMiddleware(t *testing.T) {
 	t.Parallel()
 
-	mdlw := jobapi.HeadersMiddleware()
+	mdlw := jobapi.HeadersMiddleware
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
 
