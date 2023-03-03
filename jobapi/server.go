@@ -92,22 +92,16 @@ func (s *Server) Stop() error {
 		return errors.New("server not started")
 	}
 
-	serverCtx, serverStopCtx := context.WithCancel(context.Background())
+	// Shutdown signal with grace period of 10 seconds
+	shutdownCtx, serverStopCtx := context.WithTimeout(context.Background(), 10*time.Second)
 	defer serverStopCtx()
-
-	// Shutdown signal with grace period of 30 seconds
-	shutdownCtx, _ := context.WithTimeout(serverCtx, 10*time.Second)
-
-	go func() {
-		<-shutdownCtx.Done()
-		if shutdownCtx.Err() == context.DeadlineExceeded {
-			s.Logger.Warningf("Job API server shutdown timed out, forcing server shutdown")
-		}
-	}()
 
 	// Trigger graceful shutdown
 	err := s.httpSvr.Shutdown(shutdownCtx)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			s.Logger.Warningf("Job API server shutdown timed out, server shutdown forced")
+		}
 		return fmt.Errorf("shutting down Job API server: %w", err)
 	}
 
