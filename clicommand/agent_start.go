@@ -30,6 +30,7 @@ import (
 	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
+	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
 )
@@ -69,6 +70,7 @@ type AgentStartConfig struct {
 	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
 	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
+	SocketsPath                 string   `cli:"sockets-path" normalize:"filepath"`
 	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
 	Shell                       string   `cli:"shell"`
 	Tags                        []string `cli:"tags" normalize:"list"`
@@ -433,6 +435,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
 		cli.StringFlag{
+			Name:   "sockets-path",
+			Value:  defaultSocketsPath(),
+			Usage:  "Directory where the agent will place sockets",
+			EnvVar: "BUILDKITE_SOCKETS_PATH",
+		},
+		cli.StringFlag{
 			Name:   "plugins-path",
 			Value:  "",
 			Usage:  "Directory where the plugins are saved to",
@@ -747,6 +755,7 @@ var AgentStartCommand = cli.Command{
 		agentConf := agent.AgentConfiguration{
 			BootstrapScript:            cfg.BootstrapScript,
 			BuildPath:                  cfg.BuildPath,
+			SocketsPath:                cfg.SocketsPath,
 			GitMirrorsPath:             cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:       cfg.GitMirrorsSkipUpdate,
@@ -1075,4 +1084,13 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	// wait for hook to finish and output to flush to logger
 	wg.Wait()
 	return nil
+}
+
+func defaultSocketsPath() string {
+	home, err := homedir.Dir()
+	if err != nil {
+		return filepath.Join(os.TempDir(), "buildkite-sockets")
+	}
+
+	return filepath.Join(home, ".buildkite-agent", "sockets")
 }

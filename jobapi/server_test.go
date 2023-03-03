@@ -32,7 +32,7 @@ func testEnviron() env.Environment {
 }
 
 func testServer(t *testing.T, e env.Environment) (*jobapi.Server, string, error) {
-	sockName, err := jobapi.NewSocketPath()
+	sockName, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
 		return nil, "", fmt.Errorf("creating socket path: %w", err)
 	}

@@ -24,7 +24,7 @@ func (b *Bootstrap) startJobAPI() (cleanup func(), err error) {
 		return cleanup, nil
 	}
 
-	socketPath, err := jobapi.NewSocketPath()
+	socketPath, err := jobapi.NewSocketPath(b.Config.SocketsPath)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API socket path: %v", err)
 	}

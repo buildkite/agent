@@ -74,6 +74,7 @@ type BootstrapConfig struct {
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
+	SocketsPath                  string   `cli:"sockets-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool     `cli:"command-eval"`
 	PluginsEnabled               bool     `cli:"plugins-enabled"`
@@ -271,6 +272,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
 		cli.StringFlag{
+			Name:   "sockets-path",
+			Value:  defaultSocketsPath(),
+			Usage:  "Directory where the agent will place sockets",
+			EnvVar: "BUILDKITE_SOCKETS_PATH",
+		},
+		cli.StringFlag{
 			Name:   "plugins-path",
 			Value:  "",
 			Usage:  "Directory where the plugins are saved to",
@@ -411,6 +418,7 @@ var BootstrapCommand = cli.Command{
 			BinPath:                      cfg.BinPath,
 			Branch:                       cfg.Branch,
 			BuildPath:                    cfg.BuildPath,
+			SocketsPath:                  cfg.SocketsPath,
 			CancelSignal:                 cancelSig,
 			CleanCheckout:                cfg.CleanCheckout,
 			Command:                      cfg.Command,
