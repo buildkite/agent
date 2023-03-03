@@ -65,7 +65,7 @@ trap "docker buildx rm $builder_name || true" EXIT
 QEMU_VERSION=6.2.0
 echo "--- Installing QEMU $QEMU_VERSION"
 # There isn't a good way to see if this script has already installed qemu-binfmt.
-# So we unintstall and install it each time. This would create a race condition between the
+# So we uninstall and install it each time. This would create a race condition between the
 # uninstall and install if multiple agents are running on an agent's host.
 #
 # Thus, we use flock(1) to hold an exclusive lock while this is hapening.
