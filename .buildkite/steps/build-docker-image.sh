@@ -68,7 +68,7 @@ echo "--- Installing QEMU $QEMU_VERSION"
 # So we uninstall and install it each time. This would create a race condition between the
 # uninstall and install if multiple agents are running on an agent's host.
 #
-# Thus, we use flock(1) to hold an exclusive lock while this is hapening.
+# Thus, we use flock(1) to hold an exclusive lock while this is happening.
 # The syntax is a bit arcane, but the jist is:
 # ```bash
 # (
@@ -79,7 +79,7 @@ echo "--- Installing QEMU $QEMU_VERSION"
 # This first set of round braces run the commands in a subshell. In the subshell, flock(1) is
 # executed with a file descriptor number. This will wait for the lock. The lock will be released
 # by the kernel when the subshell exists (and the file descriptor is closed).
-# See https://linux.die.net/man/1/flock, in particualr the "third form".
+# See https://linux.die.net/man/1/flock, in particular the "third form".
 #
 # The curly braces are an automatic file descriptor allocation introduced in bash 4.1.
 # See https://wiki.bash-hackers.org/scripting/bashchanges
