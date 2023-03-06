@@ -97,9 +97,19 @@ fi
 
 # Restart on upgrade, if we can
 if [ "$OPERATION" = "upgrade" ] ; then
-  if [ $BK_SYSTEMD_EXISTS -eq 0 ] && systemctl is-active buildkite-agent --quiet; then
-    # Try using systemd, if the unit is active
-    systemctl try-restart buildkite-agent
+  # Try restarting with systemd, if the unit is active
+  if [ $BK_SYSTEMD_EXISTS -eq 0 ]; then
+    if systemctl is-active buildkite-agent --quiet; then
+      systemctl try-restart buildkite-agent
+    fi
+
+    # For instantiations of the template. Trying to find one pattern that covers
+    # all instantiations and the non-templated version is possible, it is
+    # `buildkite-agent*`, however that would also cover other service names such
+    # as `buildkite-agentless`. It's safer to do two, more restrictive restarts.
+    if systemctl is-active 'buildkite-agent@*' --quiet; then
+      systemctl try-restart 'buildkite-agent@*'
+    fi
   elif [ -x /etc/init.d/buildkite-agent ] && /etc/init.d/buildkite-agent status > /dev/null 2>&1; then
     # Fall back to systemv, if the process is running
     /etc/init.d/buildkite-agent restart
