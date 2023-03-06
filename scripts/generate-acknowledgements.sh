@@ -12,8 +12,12 @@ OUTPUT_FILE="ACKNOWLEDGEMENTS.md"
 go mod download
 
 # Get go-licenses tool
-go install github.com/google/go-licenses@latest
-GO_LICENSES="${HOME}/go/bin/go-licenses"
+if ! command -v go-licenses >/dev/null; then
+	go install github.com/google/go-licenses@latest
+	GO_LICENSES="$(go env GOPATH)/bin/go-licenses"
+else
+	GO_LICENSES="$(command -v go-licenses)"
+fi
 
 # Save licenses
 export TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)" || exit 1
