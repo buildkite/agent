@@ -97,15 +97,26 @@ fi
 
 # Restart on upgrade, if we can
 if [ "$OPERATION" = "upgrade" ] ; then
-  if [ $BK_SYSTEMD_EXISTS -eq 0 ] && systemctl is-active buildkite-agent --quiet; then
-    # Try restarting with systemd, if the unit is active
-    systemctl try-restart buildkite-agent
-  elif [ $BK_SYSTEMD_EXISTS -eq 0 ] && systemctl is-active 'buildkite-agent@*' --quiet; then
-    # For instantiations of the template. Trying to find one pattern that covers
-    # all instantiations and the non-templated version is possible, it is
-    # `buildkite-agent*`, however that would also cover other service names such
-    # as `buildkite-agentless`. It's safer to do two, more restrictive restarts.
-    systemctl try-restart 'buildkite-agent@*'
+  # Try restarting with systemd, if the unit is active.
+  #
+  # Why two patterns?
+  #
+  # The second pattern is for instantiations of the template.
+  # Trying to find one pattern that covers such instantiations and the base
+  # unit is possible, it is `buildkite-agent*`. However that would also cover
+  # other service names such as `buildkite-agentless`.
+  # It's safer to use two, more restrictive patterns.
+  #
+  # Does using two patterns in the same invocation work?
+  #
+  # `is-active` is used to check if any of the base or template instance
+  # services are running.
+  # `try-restart` will then restart any of them if they are running.
+  # See man systemctl for more details
+  #
+  # Thus if any of them are running, they will be restarted respectively.
+  if [ $BK_SYSTEMD_EXISTS -eq 0 ] && systemctl is-active buildkite-agent 'buildkite-agent@*' --quiet; then
+    systemctl try-restart buildkite-agent 'buildkite-agent@*'
   elif [ -x /etc/init.d/buildkite-agent ] && /etc/init.d/buildkite-agent status > /dev/null 2>&1; then
     # Fall back to systemv, if the process is running
     /etc/init.d/buildkite-agent restart
