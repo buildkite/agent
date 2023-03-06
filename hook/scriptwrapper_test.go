@@ -150,7 +150,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 	hookFile, err := shell.TempFileWithExtension("hookName")
 	assert.NoError(t, err)
 
-	_, err = fmt.Fprintln(hookFile, `echo "Hello There!"`)
+	_, err = fmt.Fprintln(hookFile, "#!/bin/dash\necho 'Hello There!'")
 	assert.NoError(t, err)
 
 	hookFile.Close()
@@ -163,10 +163,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 
 	defer wrapper.Close()
 
-	scriptTemplate := `buildkite-agent env dump > "%s"
+	scriptTemplate := `#!/bin/dash
+buildkite-agent env dump > "%s"
 . "%s"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
-export BUILDKITE_HOOK_WORKING_DIR=$PWD
+export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
 buildkite-agent env dump > "%s"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 

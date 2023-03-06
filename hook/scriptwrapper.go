@@ -1,16 +1,17 @@
 package hook
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/template"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/shellscript"
 	"github.com/buildkite/agent/v3/utils"
 )
 
@@ -35,10 +36,12 @@ $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
 buildkite-agent env dump | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
-	bashScript = `buildkite-agent env dump > "{{.BeforeEnvFileName}}"
+	posixShellScript = `{{if .ShebangLine}}{{.ShebangLine}}
+{{end -}}
+buildkite-agent env dump > "{{.BeforeEnvFileName}}"
 . "{{.PathToHook}}"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
-export BUILDKITE_HOOK_WORKING_DIR=$PWD
+export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
 buildkite-agent env dump > "{{.AfterEnvFileName}}"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
@@ -46,10 +49,11 @@ exit $BUILDKITE_HOOK_EXIT_STATUS`
 var (
 	batchScriptTmpl      = template.Must(template.New("batch").Parse(batchScript))
 	powershellScriptTmpl = template.Must(template.New("pwsh").Parse(powershellScript))
-	bashScriptTmpl       = template.Must(template.New("bash").Parse(bashScript))
+	posixShellScriptTmpl = template.Must(template.New("bash").Parse(posixShellScript))
 )
 
 type scriptTemplateInput struct {
+	ShebangLine       string
 	BeforeEnvFileName string
 	AfterEnvFileName  string
 	PathToHook        string
@@ -126,21 +130,40 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 		return nil, fmt.Errorf("Hook path was not provided")
 	}
 
-	var err error
-	var isBashHook bool
-	var isPwshHook bool
+	// Extract any shebang line from the hook to copy into the wrapper.
+	shebang, err := shellscript.ShebangLine(wrap.hookPath)
+	if err != nil {
+		return nil, fmt.Errorf("Hook path could not be read: %w", err)
+	}
+
+	// Previously we assumed Bash, because the wrapper relied on a Bash-ism.
+	// By using `bk-agent env dump`, the wrapper is compatible with /bin/sh.
+	//
+	// If there is no shebang line, the decision on what shell to use is the
+	// responsibility of the job executor.
+	//
+	// But if the shebang specifies something weird like Ruby 🤪
+	// the wrapper won't work. Stick to POSIX shells for now.
+	if shebang != "" && !shellscript.IsPOSIXShell(shebang) {
+		return nil, fmt.Errorf("Hook starts with an unsupported shebang line %q", shebang)
+	}
+
+	var isPOSIXHook, isPwshHook bool
 
 	scriptFileName := "buildkite-agent-bootstrap-hook-runner"
 	isWindows := wrap.os == "windows"
 
 	// we use bash hooks for scripts with no extension, otherwise on windows
 	// we probably need a .bat extension
-	if filepath.Ext(wrap.hookPath) == ".ps1" {
+	switch {
+	case filepath.Ext(wrap.hookPath) == ".ps1":
 		isPwshHook = true
 		scriptFileName += ".ps1"
-	} else if filepath.Ext(wrap.hookPath) == "" {
-		isBashHook = true
-	} else if isWindows {
+
+	case filepath.Ext(wrap.hookPath) == "":
+		isPOSIXHook = true
+
+	case isWindows:
 		scriptFileName += ".bat"
 	}
 
@@ -175,19 +198,23 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	}
 
 	tmplInput := scriptTemplateInput{
+		ShebangLine:       shebang,
 		BeforeEnvFileName: wrap.beforeEnvFile.Name(),
 		AfterEnvFileName:  wrap.afterEnvFile.Name(),
 		PathToHook:        absolutePathToHook,
 	}
 
 	// Create the hook runner code
-	buf := &bytes.Buffer{}
-	if isWindows && !isBashHook && !isPwshHook {
+	buf := &strings.Builder{}
+	switch {
+	case isWindows && !isPOSIXHook && !isPwshHook:
 		batchScriptTmpl.Execute(buf, tmplInput)
-	} else if isWindows && isPwshHook {
+
+	case isWindows && isPwshHook:
 		powershellScriptTmpl.Execute(buf, tmplInput)
-	} else {
-		bashScriptTmpl.Execute(buf, tmplInput)
+
+	default:
+		posixShellScriptTmpl.Execute(buf, tmplInput)
 	}
 	script := buf.String()
 

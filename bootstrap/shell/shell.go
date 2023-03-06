@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/shellscript"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
@@ -350,12 +351,12 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra env.Environmen
 	// we apply a variety of "feature detection checks" to figure out how we should
 	// best run the script
 
-	var isBash = filepath.Ext(path) == "" || filepath.Ext(path) == ".sh"
-	var isWindows = runtime.GOOS == "windows"
-	var isPwsh = filepath.Ext(path) == ".ps1"
+	isSh := filepath.Ext(path) == "" || filepath.Ext(path) == ".sh"
+	isWindows := runtime.GOOS == "windows"
+	isPwsh := filepath.Ext(path) == ".ps1"
 
 	switch {
-	case isWindows && isBash:
+	case isWindows && isSh:
 		if s.Debug {
 			s.Commentf("Attempting to run %s with Bash for Windows", path)
 		}
@@ -366,7 +367,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra env.Environmen
 				"Is Git for Windows installed and correctly in your PATH variable?", err)
 		}
 		command = bashPath
-		args = []string{"-c", filepath.ToSlash(path)}
+		args = []string{filepath.ToSlash(path)}
 
 	case isWindows && isPwsh:
 		if s.Debug {
@@ -375,17 +376,37 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra env.Environmen
 		command = "powershell.exe"
 		args = []string{"-file", path}
 
-	case !isWindows && isBash:
-		bashPath, err := s.AbsolutePath("bash")
-		if err != nil {
-			return fmt.Errorf("Error finding bash, needed to run scripts: %v.", err)
+	case !isWindows && isSh:
+		// If the script contains a shebang line, it can be run directly,
+		// with the shebang line choosing the interpreter.
+		sb, err := shellscript.ShebangLine(path)
+		if err == nil && sb != "" {
+			command = path
+			args = nil
+			break
 		}
-		command = bashPath
-		args = []string{"-c", path}
+
+		// Bash was the default, so must remain the default.
+		shPath, err := s.AbsolutePath("bash")
+		if err != nil {
+			// It's increasingly popular to not include bash in more minimal
+			// container images (e.g. Alpine-based). But because bash has been
+			// assumed for so long, many hooks and plugins will be written
+			// assuming Bash features.
+			// Emit a warning, keep calm, and carry on.
+			s.Warningf("Couldn't find bash (%v). Attempting to fall back to sh. This may cause issues for hooks and plugins that assume Bash features.", err)
+			shPath, err = s.AbsolutePath("sh")
+			if err != nil {
+				return fmt.Errorf("Error finding a shell, needed to run scripts: %v.", err)
+			}
+		}
+		command = shPath
+		args = []string{path}
 
 	default:
+		// Something else.
 		command = path
-		args = []string{}
+		args = nil
 	}
 
 	cmd, err := s.buildCommand(command, args...)
