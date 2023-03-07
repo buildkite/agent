@@ -29,7 +29,11 @@ func (e ECSMetadata) Get() (map[string]string, error) {
 			metaData["ecs:memory-limit"] = strconv.Itoa(m.Limits.Memory)
 		}
 	case *metadata.TaskMetadataV4:
-		metaData["ecs:availability-zone"] = m.AvailabilityZone
+		// This might be missing on some versions of Fargate which
+		// seems to unmarshal as "true"
+		if m.AvailabilityZone != "true" {
+			metaData["ecs:availability-zone"] = m.AvailabilityZone
+		}
 		metaData["ecs:launch-type"] = m.LaunchType
 		metaData["ecs:task-arn"] = m.TaskARN
 		if m.Limits.CPU != 0 {
