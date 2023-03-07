@@ -63,6 +63,7 @@ func main() {
 	app.Name = "buildkite-agent"
 	app.Version = version.Version()
 	app.Commands = []cli.Command{
+		clicommand.AcknowledgementsCommand,
 		clicommand.AgentStartCommand,
 		clicommand.AnnotateCommand,
 		{
