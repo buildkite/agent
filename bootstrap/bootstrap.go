@@ -1329,17 +1329,19 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 		return "", err
 	}
 
-	if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
-		b.shell.Commentf("Fetch and mirror pull request head from GitHub")
-		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
-		// Fetch the PR head from the upstream repository into the mirror.
-		if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
-			return "", err
-		}
-	} else {
-		// Fetch the build branch from the upstream repository into the mirror.
-		if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
-			return "", err
+	if repository == b.Repository {
+		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+			b.shell.Commentf("Fetch and mirror pull request head from GitHub")
+			refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
+			// Fetch the PR head from the upstream repository into the mirror.
+			if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
+				return "", err
+			}
+		} else {
+			// Fetch the build branch from the upstream repository into the mirror.
+			if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
+				return "", err
+			}
 		}
 	}
 
