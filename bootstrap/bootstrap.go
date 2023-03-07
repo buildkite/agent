@@ -1430,7 +1430,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
 			mirrorSubmodules := experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != ""
-			for idx, repository := range submoduleRepos {
+			for _, repository := range submoduleRepos {
 				submoduleArgs := append([]string(nil), args...)
 				// submodules might need their fingerprints verified too
 				if b.SSHKeyscan {
@@ -1444,15 +1444,6 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 					// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
 					if err := b.createCheckoutDir(); err != nil {
 						return err
-					}
-					name := fmt.Sprintf("submodule-%d", idx+1)
-					if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "add", name, repository); err != nil {
-						// Per https://git-scm.com/docs/git-remote#_exit_status: When the remote already exists, the exit status is 3
-						// That shouldn't be a fatal error in this case, so ignore it.
-						if shell.GetExitCode(err) != 3 {
-							return err
-						}
-						b.shell.Commentf("Skipping adding %s as the remote %s as it already exists", repository, name)
 					}
 					// Tests use a local temp path for the repository, real repositories don't. Handle both.
 					var repositoryPath string
