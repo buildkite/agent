@@ -120,7 +120,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			globfunc = zglob.GlobFollowSymlinks
 		}
 		files, err := globfunc(globPath)
-		if err == os.ErrNotExist {
+		if errors.Is(err, os.ErrNotExist) {
 			a.logger.Info("File not found: %s", globPath)
 			continue
 		} else if err != nil {
