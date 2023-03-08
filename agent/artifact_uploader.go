@@ -71,17 +71,17 @@ func (a *ArtifactUploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect()
 	if err != nil {
-		return err
+		return fmt.Errorf("collecting artifacts: %w", err)
 	}
 
 	if len(artifacts) == 0 {
 		a.logger.Info("No files matched paths: %s", a.conf.Paths)
-	} else {
-		a.logger.Info("Found %d files that match \"%s\"", len(artifacts), a.conf.Paths)
+		return nil
+	}
 
-		if err := a.upload(ctx, artifacts); err != nil {
-			return err
-		}
+	a.logger.Info("Found %d files that match %q", len(artifacts), a.conf.Paths)
+	if err := a.upload(ctx, artifacts); err != nil {
+		return fmt.Errorf("uploading artifacts: %w", err)
 	}
 
 	return nil
@@ -98,7 +98,7 @@ func isDir(path string) bool {
 func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting working directory: %w", err)
 	}
 
 	// file paths are deduplicated after resolving globs etc
@@ -124,14 +124,14 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			a.logger.Info("File not found: %s", globPath)
 			continue
 		} else if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("resolving glob: %w", err)
 		}
 
 		// Process each glob match into an api.Artifact
 		for _, file := range files {
 			absolutePath, err := filepath.Abs(file)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("resolving absolute path for file %s: %w", file, err)
 			}
 
 			// dedupe based on resolved absolutePath
@@ -162,7 +162,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 
 			path, err := filepath.Rel(wd, absolutePath)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("resolving relative path for file %s: %w", file, err)
 			}
 
 			if experiments.IsEnabled("normalised-upload-paths") {
@@ -173,7 +173,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			// Build an artifact object using the paths we have.
 			artifact, err := a.build(path, absolutePath, globPath)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("building artifact: %w", err)
 			}
 
 			artifacts = append(artifacts, artifact)
@@ -187,14 +187,14 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	// Temporarily open the file to get its size
 	file, err := os.Open(absolutePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("opening file %s: %w", absolutePath, err)
 	}
 	defer file.Close()
 
 	// Grab its file info (which includes its file size)
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting file info for %s: %w", absolutePath, err)
 	}
 
 	// Generate a SHA-1 and SHA-256 checksums for the file
@@ -251,7 +251,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 				DebugHTTP:   a.conf.DebugHTTP,
 			})
 		} else {
-			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination))
+			return fmt.Errorf("invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload schemes are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination)
 		}
 
 		a.logger.Info("Uploading to %q, using your agent configuration", a.conf.Destination)
@@ -265,7 +265,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 
 	// Check if creation caused an error
 	if err != nil {
-		return fmt.Errorf("Error creating uploader: %v", err)
+		return fmt.Errorf("creating uploader: %v", err)
 	}
 
 	// Set the URLs of the artifacts based on the uploader
@@ -418,7 +418,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 	stateUploaderWaitGroup.Wait()
 
 	if len(errors) > 0 {
-		return fmt.Errorf("There were errors with uploading some of the artifacts")
+		return fmt.Errorf("errors uploading artifacts: %v", errors)
 	}
 
 	a.logger.Info("Artifact uploads completed successfully")
