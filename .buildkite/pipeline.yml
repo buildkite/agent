@@ -11,6 +11,14 @@ steps:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
+        
+  - name: ":office_worker: Acknowledgements diff"
+    key: test-acknowledgements-diff
+    command: ".buildkite/steps/test-acknowledgements-diff.sh"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
 
   - name: ":linux: Linux AMD64 Tests"
     key: test-linux-amd64

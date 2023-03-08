@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 if [[ ! -f "./go.mod" ]]; then
@@ -45,7 +45,7 @@ addfile "$(go env GOROOT)/LICENSE" "Go standard library"
 
 ## Now add all the modules.
 export -f addfile
-find "${TEMPDIR}" -type f -exec bash -c 'addfile "$1"' _ {} \;
+find "${TEMPDIR}" -type f -print | sort | xargs -I {} bash -c 'addfile "{}"'
 
 ## Add trailer
 printf "\n\n---\n\nFile generated using %s\n%s\n" "$0" "$(date)" >> "${TEMPFILE}" 
