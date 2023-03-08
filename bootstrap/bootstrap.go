@@ -25,6 +25,7 @@ import (
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/redaction"
+	"github.com/buildkite/agent/v3/shellscript"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/roko"
@@ -1679,8 +1680,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 	var cmdToExec string
 
 	// The shell gets parsed based on the operating system
-	var shell []string
-	shell, err = shellwords.Split(b.Shell)
+	shell, err := shellwords.Split(b.Shell)
 	if err != nil {
 		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
 	}
@@ -1764,7 +1764,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 	// If we aren't running a script, try and detect if we are using a posix shell
 	// and if so add a trap so that the intermediate shell doesn't swallow signals
 	// from cancellation
-	if !commandIsScript && isPosixShell(shell) {
+	if !commandIsScript && shellscript.IsPOSIXShell(b.Shell) {
 		cmdToExec = fmt.Sprintf("trap 'kill -- $$' INT TERM QUIT; %s", cmdToExec)
 	}
 
@@ -1783,22 +1783,6 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 
 	err = b.shell.RunWithoutPrompt(ctx, cmd[0], cmd[1:]...)
 	return err
-}
-
-// isPosixShell attempts to detect posix shells (e.g bash, sh, zsh )
-func isPosixShell(shell []string) bool {
-	bin := filepath.Base(shell[0])
-
-	if filepath.Base(shell[0]) == "env" {
-		bin = filepath.Base(shell[1])
-	}
-
-	switch bin {
-	case "bash", "sh", "zsh", "ksh", "dash":
-		return true
-	default:
-		return false
-	}
 }
 
 /*
