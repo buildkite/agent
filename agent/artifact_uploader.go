@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha1"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"io"
 	"os"
