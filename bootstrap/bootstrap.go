@@ -656,7 +656,7 @@ func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
 		var err error
 		checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
 
-		if err == plugin.ErrDefinitionNotFound {
+		if errors.Is(err, plugin.ErrDefinitionNotFound) {
 			b.shell.Warningf("Failed to find plugin definition for plugin %s", checkout.Plugin.Name())
 			return nil
 		} else if err != nil {

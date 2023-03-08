@@ -162,7 +162,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 		MaxKeys: aws.Int64(0),
 	})
 	if err != nil {
-		if err == credentials.ErrNoValidProvidersFoundInChain {
+		if errors.Is(err, credentials.ErrNoValidProvidersFoundInChain) {
 			hasProxy := os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != ""
 			hasNoProxyIdmsException := strings.Contains(os.Getenv("NO_PROXY"), "169.254.169.254")
 
