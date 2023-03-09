@@ -62,6 +62,11 @@ test_docker_compose_v2() {
   docker run --rm --platform "$platform" --entrypoint docker "$image_tag" compose version
 }
 
+test_docker_buildx() {
+  echo "--- :hammer: Testing $image_tag has buildx"
+  docker run --rm --platform "$platform" --entrypoint docker "$image_tag" buildx version
+}
+
 test_tini() {
   echo "--- :hammer: Testing $image_tag has tini"
   docker run --rm --platform "$platform" --entrypoint tini "$image_tag" --version
