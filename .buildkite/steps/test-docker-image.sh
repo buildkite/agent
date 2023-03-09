@@ -88,6 +88,7 @@ case $variant in
     test_docker_socket
     test_docker_compose
     test_docker_compose_v2
+    test_docker_buildx
     test_tini
     test_tini_old_path
     ;;
