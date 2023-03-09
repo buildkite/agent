@@ -34,7 +34,7 @@ apt-get install -y --no-install-recommends \
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
 add-apt-repository "deb [arch=$TARGETARCH] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 apt-get update
-apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin
+apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin docker-buildx-plugin
 rm -rf /var/lib/apt/lists/*
 
 pip3 install docker-compose==$DOCKER_COMPOSE_VERSION
