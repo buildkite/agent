@@ -23,6 +23,7 @@ const (
 
 var locationRegex = regexp.MustCompile(`jobs/(?P<jobID>[^/]+)/pipelines/(?P<uploadUUID>[^/]+)`)
 
+// PipelineUploader contains the data needed to upload a pipeline to Buildkite
 type PipelineUploader struct {
 	Client         APIClient
 	Change         *api.PipelineChange
@@ -30,7 +31,7 @@ type PipelineUploader struct {
 	RetrySleepFunc func(time.Duration)
 }
 
-// AsyncUploadFlow will first attempt to perform an async pipeline upload and depending
+// Upload will first attempt to perform an async pipeline upload and depending
 // on the API's response it will poll for the upload's status.
 //
 // There are 3 "routes" that are relevant
@@ -44,7 +45,7 @@ type PipelineUploader struct {
 // 1. The Async Route responds 202: poll the Status Route until the upload has beed "applied"
 // 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously (possibly after retry)
 // 3. The Async Route responds with other xxx: retry uploading the pipeline to the Async Route
-func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger) error {
+func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
 	if err != nil {
 		return fmt.Errorf("Failed to upload and accept pipeline: %w", err)
@@ -66,7 +67,7 @@ func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger)
 
 	if jobIDFromResponse != u.JobID {
 		return fmt.Errorf(
-			"JobID from API: %s does not match request: %s",
+			"JobID from API: %q does not match request: %s",
 			jobIDFromResponse,
 			u.JobID,
 		)
@@ -74,7 +75,7 @@ func (u *PipelineUploader) AsyncUploadFlow(ctx context.Context, l logger.Logger)
 
 	if uuidFromResponse != u.Change.UUID {
 		return fmt.Errorf(
-			"Pipeline Upload UUID from API: %s does not match request: %s",
+			"Pipeline Upload UUID from API: %q does not match request: %s",
 			uuidFromResponse,
 			u.Change.UUID,
 		)
@@ -210,11 +211,11 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 	})
 }
 
-type ErrLocationParse struct {
+type errLocationParse struct {
 	location string
 }
 
-func (e *ErrLocationParse) Error() string {
+func (e *errLocationParse) Error() string {
 	return fmt.Sprintf("could not extract job and upload UUIDs from Location %s", e.location)
 }
 
@@ -223,7 +224,7 @@ func extractJobIdUUID(location string) (string, string, error) {
 	jobIDIndex := locationRegex.SubexpIndex("jobID")
 	uuidIndex := locationRegex.SubexpIndex("uploadUUID")
 	if jobIDIndex < 0 || jobIDIndex >= len(matches) || uuidIndex < 0 || uuidIndex >= len(matches) {
-		return "", "", &ErrLocationParse{location: location}
+		return "", "", &errLocationParse{location: location}
 	}
 	return matches[jobIDIndex], matches[uuidIndex], nil
 }

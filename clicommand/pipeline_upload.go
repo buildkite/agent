@@ -307,7 +307,7 @@ var PipelineUploadCommand = cli.Command{
 			},
 			RetrySleepFunc: time.Sleep,
 		}
-		if err := uploader.AsyncUploadFlow(ctx, l); err != nil {
+		if err := uploader.Upload(ctx, l); err != nil {
 			l.Fatal("%v", err)
 		}
 
