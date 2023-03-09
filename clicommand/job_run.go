@@ -18,7 +18,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var runJobHelpTpl = template.Must(template.New("runJobHelp").Parse(`Usage:
+var jobRunHelpTpl = template.Must(template.New("jobRunHelp").Parse(`Usage:
 
    buildkite-agent {{.}} [options...]
 
@@ -44,7 +44,7 @@ Example:
      "https://api.buildkite.com/v2/organizations/[org]/pipelines/[proj]/builds/[build]/jobs/[job]/env.txt" | sed 's/^/export /')
    $ buildkite-agent {{.}} --build-path builds`))
 
-type RunJobConfig struct {
+type JobRunConfig struct {
 	Command                      string   `cli:"command"`
 	JobID                        string   `cli:"job" validate:"required"`
 	Repository                   string   `cli:"repository" validate:"required"`
@@ -95,7 +95,7 @@ type RunJobConfig struct {
 	TracingServiceName           string   `cli:"tracing-service-name"`
 }
 
-var runJobFlags = []cli.Flag{
+var jobRunFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:   "command",
 		Value:  "",
@@ -354,9 +354,9 @@ var runJobFlags = []cli.Flag{
 	ProfileFlag,
 }
 
-func runJobAction(c *cli.Context) {
+func jobRunAction(c *cli.Context) {
 	// The configuration will be loaded into this struct
-	cfg := RunJobConfig{}
+	cfg := JobRunConfig{}
 
 	loader := cliconfig.Loader{CLI: c, Config: &cfg}
 	warnings, err := loader.Load()
@@ -512,10 +512,10 @@ func runJobAction(c *cli.Context) {
 func genBootstrap() cli.Command {
 	var help strings.Builder
 	help.WriteString("⚠️ ⚠️ ⚠️\n")
-	help.WriteString("DEPRECATED: Use `buildkite-agent run-job` instead\n")
+	help.WriteString("DEPRECATED: Use `buildkite-agent job run` instead\n")
 	help.WriteString("⚠️ ⚠️ ⚠️\n\n")
 
-	err := runJobHelpTpl.Execute(&help, "bootstrap")
+	err := jobRunHelpTpl.Execute(&help, "bootstrap")
 	if err != nil {
 		// This can only hapen if we've mangled the template or its parsing
 		// and will be caught by tests and local usage
@@ -527,27 +527,27 @@ func genBootstrap() cli.Command {
 		Name:        "bootstrap",
 		Usage:       "[DEPRECATED] Run a Buildkite job locally",
 		Description: help.String(),
-		Flags:       runJobFlags,
+		Flags:       jobRunFlags,
 		Action: func(c *cli.Context) {
 			fmt.Println("⚠️ WARNING ⚠️")
 			fmt.Println("This command (`buildkite-agent bootstrap`) is deprecated and will be removed in the next major version of the Buildkite Agent")
 			fmt.Println()
 			fmt.Println("You're probably seeing this message because you're using the `--bootstrap-script` flag (or its associated environment variable) and manually calling `buildkite-agent bootstrap` from your custom bootstrap script, customising the behaviour of the agent when it runs a job")
 			fmt.Println()
-			fmt.Println("This workflow is still totally supported, but we've renamed the command to `buildkite-agent run-job` to make it more obvious what it does")
-			fmt.Println("You can update your bootstrap script to use `buildkite-agent run-job` instead of `buildkite-agent bootstrap` and everything will work pretty much exactly the same")
-			fmt.Println("Also, the `--bootstrap-script` flag is now called `--run-job-script`, but the change is backwards compatible -- the old flag will still work for now")
+			fmt.Println("This workflow is still totally supported, but we've renamed the command to `buildkite-agent job-run` to make it more obvious what it does")
+			fmt.Println("You can update your bootstrap script to use `buildkite-agent job run` instead of `buildkite-agent bootstrap` and everything will work pretty much exactly the same")
+			fmt.Println("Also, the `--bootstrap-script` flag is now called `--job-run-script`, but the change is backwards compatible -- the old flag will still work for now")
 			fmt.Println()
 			fmt.Println("For more information, see https://github.com/buildkite/agent/pull/1958")
 			fmt.Println()
-			runJobAction(c)
+			jobRunAction(c)
 		},
 	}
 }
 
-func genRunJob() cli.Command {
+func genJobRun() cli.Command {
 	var help strings.Builder
-	err := runJobHelpTpl.Execute(&help, "run-job")
+	err := jobRunHelpTpl.Execute(&help, "job run")
 	if err != nil {
 		// This can only hapen if we've mangled the template or its parsing
 		// and will be caught by tests and local usage
@@ -556,15 +556,15 @@ func genRunJob() cli.Command {
 	}
 
 	return cli.Command{
-		Name:        "run-job",
+		Name:        "run",
 		Usage:       "Run a Buildkite job locally",
 		Description: help.String(),
-		Flags:       runJobFlags,
-		Action:      runJobAction,
+		Flags:       jobRunFlags,
+		Action:      jobRunAction,
 	}
 }
 
 var (
 	BootstrapCommand = genBootstrap()
-	RunJobCommand    = genRunJob()
+	JobRunCommand    = genJobRun()
 )

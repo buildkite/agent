@@ -200,10 +200,10 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	}
 
 	// The job executor script gets parsed based on the operating system
-	cmd, err := shellwords.Split(conf.AgentConfiguration.JobExecutorScript)
+	cmd, err := shellwords.Split(conf.AgentConfiguration.JobRunScript)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to split job executor script (%q) into tokens: %v",
-			conf.AgentConfiguration.JobExecutorScript, err)
+			conf.AgentConfiguration.JobRunScript, err)
 	}
 
 	// Our log streamer works off a buffer of output

@@ -113,7 +113,7 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 	scope := m.Scope(metrics.Tags{})
 
 	// set the executor into the config
-	cfg.JobExecutorScript = bs.Path
+	cfg.JobRunScript = bs.Path
 
 	client := api.NewClient(l, api.Config{
 		Endpoint: server.URL,

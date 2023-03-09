@@ -42,7 +42,7 @@ const startDescription = `Usage:
 
 Description:
 
-   When a job is ready to run it will call the "run-job-script"
+   When a job is ready to run it will call the "job-run-script"
    and pass it all the environment variables required for the job to run.
    This script is responsible for checking out the code, and running the
    actual build script defined in the pipeline.
@@ -66,7 +66,7 @@ type AgentStartConfig struct {
 	AcquireJob                  string   `cli:"acquire-job"`
 	DisconnectAfterJob          bool     `cli:"disconnect-after-job"`
 	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
-	JobExecutorScript           string   `cli:"run-job-script" normalize:"commandpath"`
+	JobRunScript                string   `cli:"job-run-script" normalize:"commandpath"`
 	CancelGracePeriod           int      `cli:"cancel-grace-period"`
 	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
 	WriteJobLogsToStdout        bool     `cli:"write-job-logs-to-stdout"`
@@ -138,7 +138,7 @@ type AgentStartConfig struct {
 	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
 	TagsFromEC2                  bool     `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
 	TagsFromGCP                  bool     `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
-	BootstrapScript              string   `cli:"bootstrap-script" deprecated-and-renamed-to:"JobExecutorScript" normalize:"commandpath"`
+	BootstrapScript              string   `cli:"bootstrap-script" deprecated-and-renamed-to:"JobRunScript" normalize:"commandpath"`
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
@@ -427,13 +427,13 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
-			Usage:  "[DEPRECATED] The command that is executed for bootstrapping a job, defaults to the run-job sub-command of this binary",
+			Usage:  "[DEPRECATED] The command that is executed for running a job, defaults to the `buildkite-agent job run`",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
 		cli.StringFlag{
-			Name:   "run-job-script",
+			Name:   "job-run-script",
 			Value:  "",
-			Usage:  "The command that is executed for running a job, defaults to the run-job sub-command of this binary",
+			Usage:  "The command that is executed for running a job, defaults to the `buildkite-agent job run`",
 			EnvVar: "BUILDKITE_JOB_EXECUTOR_SCRIPT_PATH",
 		},
 		cli.StringFlag{
@@ -676,12 +676,12 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Set a useful default for the job exec script
-		if cfg.JobExecutorScript == "" {
+		if cfg.JobRunScript == "" {
 			exePath, err := os.Executable()
 			if err != nil {
 				l.Fatal("Unable to find our executable path to construct the job executor script: %v", err)
 			}
-			cfg.JobExecutorScript = fmt.Sprintf("%s run-job", shellwords.Quote(exePath))
+			cfg.JobRunScript = fmt.Sprintf("%s job run", shellwords.Quote(exePath))
 		}
 
 		isSetNoPlugins := c.IsSet("no-plugins")
@@ -776,7 +776,7 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			JobExecutorScript:          cfg.JobExecutorScript,
+			JobRunScript:               cfg.JobRunScript,
 			BuildPath:                  cfg.BuildPath,
 			SocketsPath:                cfg.SocketsPath,
 			GitMirrorsPath:             cfg.GitMirrorsPath,
@@ -844,7 +844,7 @@ var AgentStartCommand = cli.Command{
 			l.WithFields(logger.StringField(`path`, agentConf.ConfigPath)).Info("Configuration loaded")
 		}
 
-		l.Debug("Job Exec command: %s", agentConf.JobExecutorScript)
+		l.Debug("Job Exec command: %s", agentConf.JobRunScript)
 		l.Debug("Build path: %s", agentConf.BuildPath)
 		l.Debug("Hooks directory: %s", agentConf.HooksPath)
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
