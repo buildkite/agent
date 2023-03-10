@@ -275,7 +275,18 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	}
 
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
-		allWriters = append(allWriters, conf.AgentStdout)
+		if conf.AgentConfiguration.StructuredLogs {
+			var structure = process.NewStructure(conf.AgentStdout, map[string]string{
+				"org":      job.Env["BUILDKITE_ORGANIZATION_SLUG"],
+				"pipeline": job.Env["BUILDKITE_PIPELINE_SLUG"],
+				"branch":   job.Env["BUILDKITE_BRANCH"],
+				"queue":    job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"],
+				"job_id":   job.ID,
+			})
+			allWriters = append(allWriters, structure)
+		} else {
+			allWriters = append(allWriters, conf.AgentStdout)
+		}
 	}
 
 	// The writer that output from the process goes into
