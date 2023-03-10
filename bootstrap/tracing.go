@@ -73,7 +73,7 @@ func (b *Bootstrap) ddResourceName() string {
 // abstraction so the agent can support multiple libraries if needbe.
 func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	opts := []tracer.StartOption{
-		tracer.WithServiceName(b.Config.TracingServiceName),
+		tracer.WithService(b.Config.TracingServiceName),
 		tracer.WithSampler(tracer.NewAllSampler()),
 		tracer.WithAnalytics(true),
 	}
