@@ -141,15 +141,13 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 		Token:    "llamas",
 	})
 
-	l := logger.NewBuffer()
-
 	retrySleeps := []time.Duration{}
 	retrySleepFunc := func(d time.Duration) {
 		retrySleeps = append(retrySleeps, d)
 	}
 
 	worker := &AgentWorker{
-		logger:             l,
+		logger:             logger.Discard,
 		agent:              nil,
 		apiClient:          client,
 		agentConfiguration: AgentConfiguration{},
