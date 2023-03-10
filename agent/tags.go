@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/denisbrodbeck/machineid"
@@ -35,6 +36,9 @@ type FetchTagsConfig struct {
 // FetchTags loads tags from a variety of sources
 func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []string {
 	f := &tagFetcher{
+		k8s: func() (map[string]string, error) {
+			return K8sTagsFromEnv(os.Environ())
+		},
 		ec2MetaDataDefault: func() (map[string]string, error) {
 			return EC2MetaData{}.Get()
 		},
@@ -61,6 +65,7 @@ func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []str
 }
 
 type tagFetcher struct {
+	k8s                func() (map[string]string, error)
 	ec2MetaDataDefault func() (map[string]string, error)
 	ec2MetaDataPaths   func(map[string]string) (map[string]string, error)
 	ec2Tags            func() (map[string]string, error)
@@ -72,6 +77,16 @@ type tagFetcher struct {
 
 func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []string {
 	tags := conf.Tags
+
+	if experiments.IsEnabled("kubernetes-exec") {
+		k8sTags, err := t.k8s()
+		if err != nil {
+			l.Warn("Could not fetch tags from k8s: %s", err)
+		}
+		for tag, value := range k8sTags {
+			tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+		}
+	}
 
 	// Load tags from host
 	if conf.TagsFromHost {
