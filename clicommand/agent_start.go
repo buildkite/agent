@@ -67,6 +67,7 @@ type AgentStartConfig struct {
 	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
 	CancelGracePeriod           int      `cli:"cancel-grace-period"`
 	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
+	JobLogFilepath              string   `cli:"job-log-filepath"`
 	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
@@ -282,6 +283,12 @@ var AgentStartCommand = cli.Command{
 			Name:   "enable-job-log-tmpfile",
 			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job",
 			EnvVar: "BUILDKITE_ENABLE_JOB_LOG_TMPFILE",
+		},
+		cli.StringFlag{
+			Name:   "job-log-filepath",
+			Value:  "",
+			Usage:  "If given, job logs will be written to this file. Cannot be used with the temp job log.",
+			EnvVar: "BUILDKITE_JOB_LOG_FILEPATH",
 		},
 		cli.StringFlag{
 			Name:   "shell",
@@ -743,6 +750,10 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
+		if cfg.EnableJobLogTmpfile && cfg.JobLogFilepath != "" {
+			l.Fatal("Both temp job log file and job log filepath arguments cannot be given.")
+		}
+
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
 			BootstrapScript:            cfg.BootstrapScript,
@@ -769,6 +780,7 @@ var AgentStartCommand = cli.Command{
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
 			CancelGracePeriod:          cfg.CancelGracePeriod,
 			EnableJobLogTmpfile:        cfg.EnableJobLogTmpfile,
+			JobLogFilepath:             cfg.JobLogFilepath,
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,

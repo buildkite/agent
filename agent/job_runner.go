@@ -240,6 +240,10 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// if agent config "EnableJobLogTmpfile" is set, we extend the processWriter to write to a temporary file.
 	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the path to this temporary file.
 	var tmpFile *os.File
+	// The job log file setting is a bit different: It allows you to configure a persistent location for logs
+	// can be collected by another system. So it doesn't use tmpFile, bc that file gets deleted when the process
+	// compeletes.
+	var teeFile *os.File
 	if conf.AgentConfiguration.EnableJobLogTmpfile {
 		tmpFile, err = os.CreateTemp("", "buildkite_job_log")
 		if err != nil {
@@ -247,6 +251,12 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}
 		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
 		processWriter = io.MultiWriter(processWriter, tmpFile)
+	} else if conf.AgentConfiguration.JobLogFilepath != "" {
+		teeFile, err = os.OpenFile(conf.AgentConfiguration.JobLogFilepath, os.O_APPEND|os.O_RDWR, 0666)
+		if err != nil {
+			return nil, err
+		}
+		processWriter = io.MultiWriter(processWriter, teeFile)
 	}
 
 	// Copy the current processes ENV and merge in the new ones. We do this
@@ -291,6 +301,11 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}
 		if tmpFile != nil {
 			if err := os.Remove(tmpFile.Name()); err != nil {
+				l.Error("%v", err)
+			}
+		}
+		if teeFile != nil {
+			if err := teeFile.Close(); err != nil {
 				l.Error("%v", err)
 			}
 		}
