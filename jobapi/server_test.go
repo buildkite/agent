@@ -9,7 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -100,7 +100,7 @@ func TestServerStartStop(t *testing.T) {
 }
 
 func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
-	sockName := path.Join(os.TempDir(), "test-socket-collision.sock")
+	sockName := filepath.Join(os.TempDir(), "test-socket-collision.sock")
 	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.Environment{})
 	if err != nil {
 		t.Fatalf("expected initial server creation to succeed, got %v", err)
