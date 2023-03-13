@@ -211,7 +211,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	pr, pw := io.Pipe()
 
-	var allWriters = make([]io.Writer, 0)
+	allWriters := []io.Writer{}
 
 	switch {
 	case experiments.IsEnabled("ansi-timestamps"):
@@ -275,22 +275,22 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	}
 
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
-		if conf.AgentConfiguration.StructuredLogs {
-			var structure = process.NewStructure(conf.AgentStdout, map[string]string{
-				"org":      job.Env["BUILDKITE_ORGANIZATION_SLUG"],
-				"pipeline": job.Env["BUILDKITE_PIPELINE_SLUG"],
-				"branch":   job.Env["BUILDKITE_BRANCH"],
-				"queue":    job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"],
-				"job_id":   job.ID,
-			})
-			allWriters = append(allWriters, structure)
+		if conf.AgentConfiguration.LogFormat == "json" {
+			log := newJobLogger(
+				conf.AgentStdout, logger.StringField("org", job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
+				logger.StringField("pipeline", job.Env["BUILDKITE_PIPELINE_SLUG"]),
+				logger.StringField("branch", job.Env["BUILDKITE_BRANCH"]),
+				logger.StringField("queue", job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
+				logger.StringField("job_id", job.ID),
+			)
+			allWriters = append(allWriters, log)
 		} else {
 			allWriters = append(allWriters, conf.AgentStdout)
 		}
 	}
 
 	// The writer that output from the process goes into
-	var processWriter = io.MultiWriter(allWriters...)
+	processWriter := io.MultiWriter(allWriters...)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -961,4 +961,28 @@ func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) 
 
 		return err
 	})
+}
+
+// jobLogger is just a simple wrapper around a JSON Logger that satisfies the
+// io.Writer interface so it can be seemlessly use with existing job logging code.
+type jobLogger struct {
+	log logger.Logger
+}
+
+func newJobLogger(stdout io.Writer, fields ...logger.Field) jobLogger {
+	l := logger.NewConsoleLogger(logger.NewJSONPrinter(stdout), os.Exit)
+	l = l.WithFields(logger.StringField("source", "job"))
+	l = l.WithFields(fields...)
+	return jobLogger{log: l}
+}
+
+// Write adapts the underlying JSON logger to match the io.Writer interface to
+// easier slotting into job logger code. This will write existing fields
+// attached to the logger, the message, and write out to the INFO level.
+func (l jobLogger) Write(data []byte) (int, error) {
+	// When writing as a structured log, trailing newlines and carriage returns
+	// generally don't make sense.
+	msg := strings.TrimRight(string(data), "\r\n")
+	l.log.Info(msg)
+	return len(data), nil
 }

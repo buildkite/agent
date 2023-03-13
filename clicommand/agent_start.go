@@ -69,7 +69,6 @@ type AgentStartConfig struct {
 	CancelGracePeriod           int      `cli:"cancel-grace-period"`
 	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
 	WriteJobLogsToStdout        bool     `cli:"write-job-logs-to-stdout"`
-	StructuredLogs              bool     `cli:"structured-logs"`
 	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
 	SocketsPath                 string   `cli:"sockets-path" normalize:"filepath"`
@@ -291,11 +290,6 @@ var AgentStartCommand = cli.Command{
 			Name:   "write-job-logs-to-stdout",
 			Usage:  "Writes job logs to the agent process' stdout. This simplifies log collection if running agents in Docker.",
 			EnvVar: "BUILDKITE_WRITE_JOB_LOGS_TO_STDOUT",
-		},
-		cli.BoolFlag{
-			Name:   "structured-logs",
-			Usage:  "Write jobs' logs out in a structured format that includes metadata about the job. Requires `job-log-filepath`. Logs sent to Buildkite are not structured, to maintain human-readable output.",
-			EnvVar: "BUILDKITE_STRUCTURED_LOGS",
 		},
 		cli.StringFlag{
 			Name:   "shell",
@@ -640,6 +634,10 @@ var AgentStartCommand = cli.Command{
 		}
 
 		l := CreateLogger(cfg)
+		// Add this when using JSON output to help differentiate agent vs job logs.
+		if cfg.LogFormat == "json" {
+			l = l.WithFields(logger.StringField("source", "agent"))
+		}
 
 		// Show warnings now we have a logger
 		for _, warning := range warnings {
@@ -763,8 +761,8 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
-		if cfg.StructuredLogs && !cfg.WriteJobLogsToStdout {
-			l.Fatal("Structured log output doesn't make sense without writing job logs to the agent's stdout.")
+		if cfg.LogFormat == "json" && !cfg.WriteJobLogsToStdout {
+			l.Fatal("JSON log output doesn't make sense without writing job logs to the agent's stdout.")
 		}
 
 		// AgentConfiguration is the runtime configuration for an agent
@@ -795,7 +793,7 @@ var AgentStartCommand = cli.Command{
 			CancelGracePeriod:          cfg.CancelGracePeriod,
 			EnableJobLogTmpfile:        cfg.EnableJobLogTmpfile,
 			WriteJobLogsToStdout:       cfg.WriteJobLogsToStdout,
-			StructuredLogs:             cfg.StructuredLogs,
+			LogFormat:                  cfg.LogFormat,
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
@@ -824,6 +822,9 @@ var AgentStartCommand = cli.Command{
 			} else {
 				fmt.Fprintf(os.Stderr, welcomeMessage, "", "")
 			}
+		} else if cfg.LogFormat != "json" {
+			// TODO If/when cli is upgraded to v2, choice validation can be done with per-argument Actions.
+			l.Fatal("Invalid log format %v. Only 'text' or 'json' are allowed.", cfg.LogFormat)
 		}
 
 		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), fmt.Sprintf("%d", os.Getpid()))
