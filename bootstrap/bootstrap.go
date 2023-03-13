@@ -229,7 +229,7 @@ type HookConfig struct {
 	Name           string
 	Scope          string
 	Path           string
-	Env            env.Environment
+	Env            *env.Environment
 	SpanAttributes map[string]string
 	PluginName     string
 }
@@ -369,7 +369,7 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 
 	// reset output redactors based on new environment variable values
 	redactors.Flush()
-	redactors.Reset(redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, mergedEnv))
+	redactors.Reset(redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, mergedEnv.Dump()))
 
 	// First, let see any of the environment variables are supposed
 	// to change the bootstrap configuration at run time.
@@ -1957,7 +1957,7 @@ func (b *Bootstrap) ignoredEnv() []string {
 // matching environment vars.
 // redaction.RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
 func (b *Bootstrap) setupRedactors() redaction.RedactorMux {
-	valuesToRedact := redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env)
+	valuesToRedact := redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump())
 	if len(valuesToRedact) == 0 {
 		return nil
 	}

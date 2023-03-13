@@ -246,7 +246,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if len(cfg.RedactedVars) > 0 {
-			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()))
+			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).Dump())
 
 			serialisedPipeline, err := result.MarshalJSON()
 			if err != nil {

@@ -26,7 +26,7 @@ func NewTestShell(t *testing.T) *Shell {
 
 	// Windows requires certain env variables to be present
 	if runtime.GOOS == "windows" {
-		sh.Env = env.Environment{
+		sh.Env = env.FromMap(map[string]string{
 			//"PATH":        os.Getenv("PATH"),
 			"SystemRoot":  os.Getenv("SystemRoot"),
 			"WINDIR":      os.Getenv("WINDIR"),
@@ -35,11 +35,11 @@ func NewTestShell(t *testing.T) *Shell {
 			"TMP":         os.Getenv("TMP"),
 			"TEMP":        os.Getenv("TEMP"),
 			"ProgramData": os.Getenv("ProgramData"),
-		}
+		})
 	} else {
-		sh.Env = env.Environment{
+		sh.Env = env.FromMap(map[string]string{
 			"PATH": os.Getenv("PATH"),
-		}
+		})
 	}
 
 	return sh

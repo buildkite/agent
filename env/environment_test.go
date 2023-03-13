@@ -170,7 +170,7 @@ func TestEmptyDiff(t *testing.T) {
 func TestEnvironmentApply(t *testing.T) {
 	t.Parallel()
 
-	env := Environment{}
+	env := New()
 	env = env.Apply(Diff{
 		Added: map[string]string{
 			"LLAMAS_ENABLED": "1",
@@ -180,7 +180,7 @@ func TestEnvironmentApply(t *testing.T) {
 	})
 	assert.Equal(t, FromSlice([]string{
 		"LLAMAS_ENABLED=1",
-	}), env)
+	}).Dump(), env.Dump())
 
 	env = env.Apply(Diff{
 		Added: map[string]string{
@@ -197,7 +197,7 @@ func TestEnvironmentApply(t *testing.T) {
 	assert.Equal(t, FromSlice([]string{
 		"ALPACAS_ENABLED=1",
 		"LLAMAS_ENABLED=0",
-	}), env)
+	}).Dump(), env.Dump())
 
 	env = env.Apply(Diff{
 		Added:   map[string]string{},
@@ -207,7 +207,7 @@ func TestEnvironmentApply(t *testing.T) {
 			"ALPACAS_ENABLED": {},
 		},
 	})
-	assert.Equal(t, FromSlice([]string{}), env)
+	assert.Equal(t, FromSlice([]string{}).Dump(), env.Dump())
 }
 
 func TestSplit(t *testing.T) {

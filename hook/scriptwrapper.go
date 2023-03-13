@@ -2,6 +2,7 @@ package hook
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -127,13 +128,13 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	}
 
 	if wrap.hookPath == "" {
-		return nil, fmt.Errorf("Hook path was not provided")
+		return nil, errors.New("hook path was not provided")
 	}
 
 	// Extract any shebang line from the hook to copy into the wrapper.
 	shebang, err := shellscript.ShebangLine(wrap.hookPath)
 	if err != nil {
-		return nil, fmt.Errorf("Hook path could not be read: %w", err)
+		return nil, fmt.Errorf("reading hook path: %w", err)
 	}
 
 	// Previously we assumed Bash, because the wrapper relied on a Bash-ism.
@@ -145,7 +146,7 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	// But if the shebang specifies something weird like Ruby 🤪
 	// the wrapper won't work. Stick to POSIX shells for now.
 	if shebang != "" && !shellscript.IsPOSIXShell(shebang) {
-		return nil, fmt.Errorf("Hook starts with an unsupported shebang line %q", shebang)
+		return nil, fmt.Errorf("hook starts with an unsupported shebang line %q", shebang)
 	}
 
 	var isPOSIXHook, isPwshHook bool
@@ -194,7 +195,7 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 
 	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", wrap.hookPath, err)
+		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
 	tmplInput := scriptTemplateInput{
@@ -249,12 +250,12 @@ func (wrap *ScriptWrapper) Close() {
 func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	beforeEnvContents, err := os.ReadFile(wrap.beforeEnvFile.Name())
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.beforeEnvFile.Name(), err)
+		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.beforeEnvFile.Name(), err)
 	}
 
 	afterEnvContents, err := os.ReadFile(wrap.afterEnvFile.Name())
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.afterEnvFile.Name(), err)
+		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.afterEnvFile.Name(), err)
 	}
 
 	// An empty afterEnvFile indicates that the hook early-exited from within the
@@ -265,18 +266,18 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	}
 
 	var (
-		beforeEnv env.Environment
-		afterEnv  env.Environment
+		beforeEnv *env.Environment
+		afterEnv  *env.Environment
 	)
 
 	err = json.Unmarshal(beforeEnvContents, &beforeEnv)
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %q", err, string(beforeEnvContents))
+		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %s", err, string(beforeEnvContents))
 	}
 
 	err = json.Unmarshal(afterEnvContents, &afterEnv)
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %q", err, string(afterEnvContents))
+		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %s", err, string(afterEnvContents))
 	}
 
 	diff := afterEnv.Diff(beforeEnv)

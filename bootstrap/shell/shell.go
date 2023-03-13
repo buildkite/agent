@@ -45,7 +45,7 @@ type Shell struct {
 	Logger
 
 	// The running environment for the shell
-	Env env.Environment
+	Env *env.Environment
 
 	// Whether the shell is a PTY
 	PTY bool
@@ -327,13 +327,13 @@ func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string
 
 // injectTraceCtx adds tracing information to the given env vars to support
 // distributed tracing across jobs/builds.
-func (s *Shell) injectTraceCtx(ctx context.Context, env env.Environment) {
+func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 	span := opentracing.SpanFromContext(ctx)
 	// Not all shell runs will have tracing (nor do they really need to).
 	if span == nil {
 		return
 	}
-	if err := tracetools.EncodeTraceContext(span, env); err != nil {
+	if err := tracetools.EncodeTraceContext(span, env.Dump()); err != nil {
 		if s.Debug {
 			s.Logger.Warningf("Failed to encode trace context: %v", err)
 		}
@@ -344,7 +344,7 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env env.Environment) {
 // RunScript is like Run, but the target is an interpreted script which has
 // some extra checks to ensure it gets to the correct interpreter. Extra environment vars
 // can also be passed the script
-func (s *Shell) RunScript(ctx context.Context, path string, extra env.Environment) error {
+func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
 	var command string
 	var args []string
 
