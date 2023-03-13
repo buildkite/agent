@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-var random = rand.New(rand.NewSource(time.Now().UnixNano()))
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // NewSocketPath generates a path to a socket file (without actually creating the file itself) that can be used with the
 // job api.
@@ -19,6 +21,6 @@ func NewSocketPath(base string) (string, error) {
 		return "", fmt.Errorf("creating socket directory: %w", err)
 	}
 
-	sockNum := random.Int63() % 100_000
+	sockNum := rand.Int63() % 100_000
 	return filepath.Join(path, fmt.Sprintf("%d-%d.sock", os.Getpid(), sockNum)), nil
 }
