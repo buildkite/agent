@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"runtime"
 	"testing"
 	"time"
 
@@ -64,15 +65,27 @@ func TestServerStartStop(t *testing.T) {
 		t.Fatalf("srv.Start() = %v", err)
 	}
 
-	info, err := os.Stat(srv.SocketPath)
-	if err != nil {
-		t.Fatalf("os.Stat(%q) error = %v", srv.SocketPath, err)
+	// Check the socket path exists and is a socket.
+	// Note that os.ModeSocket might not be set on Windows.
+	// (https://github.com/golang/go/issues/33357)
+	if runtime.GOOS != "windows" {
+		fi, err := os.Stat(srv.SocketPath)
+		if err != nil {
+			t.Fatalf("os.Stat(%q) = %v", srv.SocketPath, err)
+		}
+
+		if fi.Mode()&os.ModeSocket == 0 {
+			t.Fatalf("%q is not a socket", srv.SocketPath)
+		}
 	}
 
-	isSocket := info.Mode()&os.ModeSocket != 0
-	if !isSocket {
-		t.Fatalf("expected server socket file %s to be socket mode, got %v", srv.SocketPath, info.Mode())
+	// Try to connect to the socket.
+	test, err := net.Dial("unix", srv.SocketPath)
+	if err != nil {
+		t.Fatalf("socket test connection: %v", err)
 	}
+
+	test.Close()
 
 	err = srv.Stop()
 	if err != nil {
