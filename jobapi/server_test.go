@@ -100,6 +100,10 @@ func TestServerStartStop(t *testing.T) {
 }
 
 func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("socket collision detection isn't support on windows. If the current go version is >1.23, it might be worth re-enabling this test, because hopefully the bug (https://github.com/golang/go/issues/33357) is fixed")
+	}
+
 	sockName := filepath.Join(os.TempDir(), "test-socket-collision.sock")
 	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.Environment{})
 	if err != nil {

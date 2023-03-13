@@ -110,17 +110,23 @@ func (s *Server) Stop() error {
 	return nil
 }
 
+// socketExists returns true if the socket path exists on linux and darwin
+// on windows it always returns false, because of https://github.com/golang/go/issues/33357 (stat on sockets is broken on windows)
 func socketExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-
-	if errors.Is(err, os.ErrNotExist) {
+	if runtime.GOOS == "windows" {
 		return false, nil
 	}
 
-	return false, fmt.Errorf("checking if socket exists: %w", err)
+	_, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("stat socket: %w", err)
+	}
+
+	return true, nil
 }
 
 func generateToken(len int) (string, error) {
