@@ -159,13 +159,11 @@ func (w waitStatus) Signaled() bool {
 }
 
 func (r *Runner) WaitStatus() process.WaitStatus {
-	var ws process.WaitStatus
+	ws := waitStatus{}
 	for _, client := range r.clients {
 		if client.ExitStatus != 0 {
 			return waitStatus{Code: client.ExitStatus}
 		}
-		// just return any ExitStatus if we don't find any "interesting" ones
-		ws = waitStatus{Code: client.ExitStatus}
 	}
 	return ws
 }
