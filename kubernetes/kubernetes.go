@@ -164,6 +164,11 @@ func (r *Runner) WaitStatus() process.WaitStatus {
 		if client.ExitStatus != 0 {
 			return waitStatus{Code: client.ExitStatus}
 		}
+
+		if client.State == stateUnknown {
+			// use an unusual status code to distinguish this unusual state
+			ws.Code += -10
+		}
 	}
 	return ws
 }
