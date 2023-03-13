@@ -900,8 +900,14 @@ var AgentStartCommand = cli.Command{
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
 			if cfg.SpawnWithPriority {
-				l.Info("Assigning priority %s for agent %d", strconv.Itoa(i), i)
-				registerReq.Priority = strconv.Itoa(i)
+				p := i
+				if experiments.IsEnabled("descending-spawn-priority") {
+					// This experiment helps jobs be assigned across all hosts
+					// in cases where the value of --spawn varies between hosts.
+					p = -i
+				}
+				l.Info("Assigning priority %d for agent %d", p, i)
+				registerReq.Priority = strconv.Itoa(p)
 			}
 
 			// Register the agent with the buildkite API

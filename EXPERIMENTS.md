@@ -67,3 +67,11 @@ Currently, this experiment is being used by [agent-stack-k8s](https://github.com
 This will result in errors unless orchestrated in a similar manner to that project. Please see the [README](https://github.com/buildkite/agent-stack-k8s/blob/main/README.md) of that repository for more details.
 
 **Status**: Being used in a preview release of agent-stack-k8s. As it has little applicability outside of Kubernetes, this will not be the default behaviour.
+
+### `descending-spawn-priority`
+
+Changes the priority numbering when using `--spawn-with-priority`. By default, priorities start at 1 and increase. Using this experiment, priorities start at -1 and decrease. (Yes, negative priorities are allowed!) This experiment fixes imbalanced work assignment among different hosts with agents that have different values for `--spawn`. 
+
+For example, without this experiment and all other things being equal, a host with `--spawn=3` would normally need to be running at least two jobs before a host with `--spawn=1` would see any work, because the two extra spawn would have higher priorities. With this experiment, one job would be running on both hosts before the additional spawn on the first host are assigned work.
+
+**Status**: Likely to become the default in a release soon.
