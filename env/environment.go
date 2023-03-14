@@ -67,12 +67,6 @@ func FromSlice(s []string) *Environment {
 	return env
 }
 
-// Get returns a key from the environment
-func (e *Environment) Get(key string) (string, bool) {
-	v, ok := e.underlying.Load(normalizeKeyName(key))
-	return v, ok
-}
-
 // Dump returns a copy of the environment with all keys normalized
 func (e *Environment) Dump() map[string]string {
 	d := make(map[string]string, e.underlying.Size())
@@ -82,6 +76,12 @@ func (e *Environment) Dump() map[string]string {
 	})
 
 	return d
+}
+
+// Get returns a key from the environment
+func (e *Environment) Get(key string) (string, bool) {
+	v, ok := e.underlying.Load(normalizeKeyName(key))
+	return v, ok
 }
 
 // Get a boolean value from environment, with a default for empty. Supports true|false, on|off, 1|0
@@ -100,13 +100,13 @@ func (e *Environment) GetBool(key string, defaultValue bool) bool {
 
 // Exists returns true/false depending on whether or not the key exists in the env
 func (e *Environment) Exists(key string) bool {
-	_, ok := e.underlying.Load(key)
+	_, ok := e.underlying.Load(normalizeKeyName(key))
 	return ok
 }
 
 // Set sets a key in the environment
 func (e *Environment) Set(key string, value string) string {
-	e.underlying.Store(key, value)
+	e.underlying.Store(normalizeKeyName(key), value)
 	return value
 }
 
@@ -114,7 +114,7 @@ func (e *Environment) Set(key string, value string) string {
 func (e *Environment) Remove(key string) string {
 	value, ok := e.Get(key)
 	if ok {
-		e.underlying.Delete(key)
+		e.underlying.Delete(normalizeKeyName(key))
 	}
 	return value
 }
@@ -138,6 +138,7 @@ func (e *Environment) Diff(other *Environment) Diff {
 			diff.Removed[k] = struct{}{}
 			return true
 		})
+
 		return diff
 	}
 

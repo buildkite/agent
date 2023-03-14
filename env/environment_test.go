@@ -1,6 +1,8 @@
 package env
 
 import (
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,7 +11,7 @@ import (
 func TestEnvironmentExists(t *testing.T) {
 	t.Parallel()
 
-	env := FromSlice([]string{})
+	env := New()
 
 	env.Set("FOO", "bar")
 	env.Set("EMPTY", "")
@@ -22,13 +24,55 @@ func TestEnvironmentExists(t *testing.T) {
 func TestEnvironmentSet(t *testing.T) {
 	t.Parallel()
 
-	env := FromSlice([]string{})
+	env := New()
 
 	env.Set("    THIS_IS_THE_BEST   \n\n", "\"IT SURE IS\"\n\n")
 
 	v, ok := env.Get("    THIS_IS_THE_BEST   \n\n")
 	assert.Equal(t, v, "\"IT SURE IS\"\n\n")
 	assert.True(t, ok)
+}
+
+func TestEnvironmentSet_NormalizesKeyNames(t *testing.T) {
+	t.Parallel()
+	e := New()
+
+	mountain := "Mountain"
+	e.Set(mountain, "Cerro Torre")
+
+	switch runtime.GOOS {
+	case "windows":
+		// All keys are treated as being in the same case so long as they have the same letters
+		// (i.e. "Mountain", "mountain" and "MOUNTAIN" are treated the same key)
+		assert.True(t, e.Exists(mountain))
+		assert.True(t, e.Exists(strings.ToUpper(mountain)))
+
+		v, _ := e.Get(strings.ToUpper(mountain))
+		assert.Equal(t, v, "Cerro Torre")
+
+		e.Set(strings.ToUpper(mountain), "Cerro Poincenot")
+
+		v, _ = e.Get(mountain)
+		assert.Equal(t, v, "Cerro Poincenot")
+
+		v, _ = e.Get(strings.ToUpper(mountain))
+		assert.Equal(t, v, "Cerro Poincenot")
+
+	default:
+		// Two keys with the same letters but different cases can coexist
+		// (i.e. "Mountain", "mountain", "MOUNTAIN" are treated as three different keys)
+		assert.True(t, e.Exists(mountain))
+		assert.False(t, e.Exists(strings.ToUpper(mountain)))
+
+		e.Set(strings.ToUpper(mountain), "Cerro Poincenot")
+
+		camel, _ := e.Get(mountain)
+		assert.Equal(t, camel, "Cerro Torre")
+
+		upper, _ := e.Get(strings.ToUpper(mountain))
+		assert.Equal(t, upper, "Cerro Poincenot")
+	}
+
 }
 
 func TestEnvironmentGetBool(t *testing.T) {
