@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "utils",
+    srcs = [
+        "doc.go",
+        "file.go",
+        "path.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/utils",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "utils_test",
+    srcs = [
+        "path_test.go",
+        "path_windows_test.go",
+    ],
+    embed = [":utils"],
+    deps = ["@com_github_stretchr_testify//assert"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":utils",
+    visibility = ["//visibility:public"],
+)

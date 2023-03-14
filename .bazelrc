@@ -1,0 +1,15 @@
+build --copt="-std=c++14"
+build --cxxopt="-std=c++14"
+
+# Use our custom-configured c++ toolchain.
+
+#build:clang_config --crosstool_top=//toolchain:clang_suite
+
+# Use --cpu as a differentiator.
+
+#build:clang_config --cpu=k8
+
+# Use the default Bazel C++ toolchain to build the tools used during the
+# build.
+
+#build:clang_config --host_crosstool_top=@bazel_tools//tools/cpp:toolchain

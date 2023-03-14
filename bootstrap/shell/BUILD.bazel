@@ -1,0 +1,51 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "shell",
+    srcs = [
+        "batch.go",
+        "logger.go",
+        "lookpath.go",
+        "lookpath_windows.go",
+        "shell.go",
+        "signal.go",
+        "signal_windows.go",
+        "tempfile.go",
+        "test.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/bootstrap/shell",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//env",
+        "//experiments",
+        "//logger",
+        "//process",
+        "//shellscript",
+        "//tracetools",
+        "@com_github_buildkite_shellwords//:shellwords",
+        "@com_github_gofrs_flock//:flock",
+        "@com_github_nightlyone_lockfile//:lockfile",
+        "@com_github_opentracing_opentracing_go//:opentracing-go",
+    ],
+)
+
+go_test(
+    name = "shell_test",
+    srcs = [
+        "export_test.go",
+        "logger_test.go",
+        "shell_test.go",
+    ],
+    embed = [":shell"],
+    deps = [
+        "//experiments",
+        "@com_github_buildkite_bintest_v3//:bintest",
+        "@com_github_google_go_cmp//cmp",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":shell",
+    visibility = ["//visibility:public"],
+)

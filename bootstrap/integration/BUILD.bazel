@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "integration",
+    srcs = [
+        "bootstrap_tester.go",
+        "doc.go",
+        "git.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/bootstrap/integration",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//env",
+        "//experiments",
+        "@com_github_buildkite_bintest_v3//:bintest",
+    ],
+)
+
+go_test(
+    name = "integration_test",
+    srcs = [
+        "artifact_integration_test.go",
+        "checkout_integration_test.go",
+        "command_integration_test.go",
+        "docker_integration_test.go",
+        "hooks_integration_test.go",
+        "main_test.go",
+        "plugin_integration_test.go",
+    ],
+    embed = [":integration"],
+    deps = [
+        "//bootstrap/shell",
+        "//clicommand",
+        "//experiments",
+        "//version",
+        "@com_github_buildkite_bintest_v3//:bintest",
+        "@com_github_urfave_cli//:cli",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":integration",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "race",
+    srcs = [
+        "disabled.go",
+        "doc.go",
+        "enabled.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/race",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":race",
+    visibility = ["//visibility:public"],
+)

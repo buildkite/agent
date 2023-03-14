@@ -14,5 +14,8 @@
 packaging/docker/*/buildkite-agent
 packaging/docker/*/hooks/
 
+bazel-*
+
+.DS_Store
 .idea
 .vscode

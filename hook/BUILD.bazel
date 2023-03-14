@@ -1,0 +1,36 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "hook",
+    srcs = [
+        "hook.go",
+        "scriptwrapper.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/hook",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//bootstrap/shell",
+        "//env",
+        "//shellscript",
+        "//utils",
+    ],
+)
+
+go_test(
+    name = "hook_test",
+    srcs = ["scriptwrapper_test.go"],
+    embed = [":hook"],
+    deps = [
+        "//bootstrap/shell",
+        "//env",
+        "@com_github_buildkite_bintest_v3//:bintest",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":hook",
+    visibility = ["//visibility:public"],
+)

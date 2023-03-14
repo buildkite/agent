@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "stdin",
+    srcs = ["stdin.go"],
+    importpath = "github.com/buildkite/agent/v3/stdin",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "stdin_test",
+    srcs = ["main_test.go"],
+    deps = [":stdin"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":stdin",
+    visibility = ["//visibility:public"],
+)

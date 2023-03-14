@@ -1,0 +1,24 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@bazel_gazelle//:def.bzl", "gazelle")
+
+# gazelle:go_naming_convention import_alias
+# gazelle:prefix github.com/buildkite/agent/v3
+gazelle(name = "gazelle")
+
+go_binary(
+    name = "buildkite-agent",
+    embed = [":agent_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "agent_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/buildkite/agent/v3",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//clicommand",
+        "//version",
+        "@com_github_urfave_cli//:cli",
+    ],
+)
