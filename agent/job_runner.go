@@ -352,7 +352,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			environmentCommandOkay = false
 
 			// Ensure the Job UI knows why this job resulted in failure
-			r.logStreamer.Process("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details")
+			r.logStreamer.Process([]byte("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details"))
 			// But disclose more information in the agent logs
 			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
@@ -378,14 +378,14 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		// Run the process. This will block until it finishes.
 		if err := r.process.Run(cctx); err != nil {
 			// Send the error as output
-			r.logStreamer.Process(fmt.Sprintf("%s", err))
+			r.logStreamer.Process([]byte(err.Error()))
 
 			// The process did not run at all, so make sure it fails
 			exitStatus = "-1"
 			signalReason = "process_run_error"
 		} else {
 			// Add the final output to the streamer
-			r.logStreamer.Process(r.output.String())
+			r.logStreamer.Process(r.output.ReadAndTruncate())
 
 			// Collect the finished process' exit status
 			exitStatus = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
@@ -816,7 +816,7 @@ func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
 
 		// Send the output of the process to the log streamer
 		// for processing
-		r.logStreamer.Process(r.output.String())
+		r.logStreamer.Process(r.output.ReadAndTruncate())
 
 		setStat("😴 Sleeping for a bit")
 

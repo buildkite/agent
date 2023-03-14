@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 	"sync/atomic"
 
@@ -53,7 +52,7 @@ type LogStreamer struct {
 
 type LogStreamerChunk struct {
 	// The contents of the chunk
-	Data string
+	Data []byte
 
 	// The sequence number of this chunk
 	Order int
@@ -92,54 +91,40 @@ func (ls *LogStreamer) FailedChunks() int {
 	return int(atomic.LoadInt32(&ls.chunksFailedCount))
 }
 
-// Takes the full process output, grabs the portion we don't have, and adds it
-// to the stream queue
-func (ls *LogStreamer) Process(output string) error {
-	bytes := len(output)
-
+// Process streams the output.
+func (ls *LogStreamer) Process(output []byte) error {
 	// Only allow one streamer process at a time
 	ls.processMutex.Lock()
+	defer ls.processMutex.Unlock()
 
-	if ls.bytes != bytes {
-		// Grab the part of the log that we haven't seen yet
-		blob := output[ls.bytes:bytes]
+	for len(output) > 0 {
+		// Add another chunk...
+		ls.chunkWaitGroup.Add(1)
 
-		// How many chunks do we have that fit within the MaxChunkSizeBytes?
-		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(ls.conf.MaxChunkSizeBytes)))
-
-		// Increase the wait group by the amount of chunks we're going
-		// to add
-		ls.chunkWaitGroup.Add(numberOfChunks)
-
-		for i := 0; i < numberOfChunks; i++ {
-			// Find the upper limit of the blob
-			upperLimit := (i + 1) * ls.conf.MaxChunkSizeBytes
-			if upperLimit > len(blob) {
-				upperLimit = len(blob)
-			}
-
-			// Grab the 100kb section of the blob
-			partialChunk := blob[i*ls.conf.MaxChunkSizeBytes : upperLimit]
-
-			// Increment the order
-			ls.order += 1
-
-			// Create the chunk and append it to our list
-			chunk := LogStreamerChunk{
-				Data:   partialChunk,
-				Order:  ls.order,
-				Offset: ls.bytes,
-				Size:   len(partialChunk),
-			}
-
-			ls.queue <- &chunk
-
-			// Save the new amount of bytes
-			ls.bytes += len(partialChunk)
+		// Find the upper limit of the blob
+		size := ls.conf.MaxChunkSizeBytes
+		if size > len(output) {
+			size = len(output)
 		}
-	}
 
-	ls.processMutex.Unlock()
+		// Grab the ≤100kb section of the blob.
+		// Leave the remainder for the next iteration.
+		chunk := output[:size]
+		output = output[size:]
+
+		ls.order++
+
+		// Create the chunk and append it to our list
+		ls.queue <- &LogStreamerChunk{
+			Data:   chunk,
+			Order:  ls.order,
+			Offset: ls.bytes,
+			Size:   size,
+		}
+
+		// Save the new amount of bytes
+		ls.bytes += size
+	}
 
 	return nil
 }

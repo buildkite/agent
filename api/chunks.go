@@ -9,7 +9,7 @@ import (
 
 // Chunk represents a Buildkite Agent API Chunk
 type Chunk struct {
-	Data     string
+	Data     []byte
 	Sequence int
 	Offset   int
 	Size     int
@@ -21,7 +21,7 @@ func (c *Client) UploadChunk(ctx context.Context, jobId string, chunk *Chunk) (*
 	// Create a compressed buffer of the log content
 	body := &bytes.Buffer{}
 	gzipper := gzip.NewWriter(body)
-	gzipper.Write([]byte(chunk.Data))
+	gzipper.Write(chunk.Data)
 	if err := gzipper.Close(); err != nil {
 		return nil, err
 	}
