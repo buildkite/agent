@@ -53,9 +53,6 @@ func TestPrefixer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("pw.Write([]byte(%q)) error = %v", tc.input, err)
 			}
-			if err := pw.Flush(); err != nil {
-				t.Fatalf("pw.Flush() = %v", err)
-			}
 
 			if got, want := n, len(tc.input); got != want {
 				t.Errorf("pw.Write([]byte(%q)) length = %d, want %d", tc.input, got, want)

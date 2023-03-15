@@ -16,61 +16,55 @@ var lineBreakEscapeRE = regexp.MustCompile(`\n|\x1b\[[012]?K`)
 // any temporarily-buffered data is written out, be sure to call Flush when
 // done.
 type Prefixer struct {
-	w   io.Writer
-	f   func() string
-	buf []byte
+	w  io.Writer
+	f  func() string
+	st bool // at start of line
 }
 
 // NewPrefixer sets up a Prefixer outputting to an io.Writer w and reading
 // prefixes from the callback f.
 func NewPrefixer(w io.Writer, f func() string) *Prefixer {
 	return &Prefixer{
-		w: w,
-		f: f,
+		w:  w,
+		f:  f,
+		st: true,
 	}
-}
-
-// Flush writes any unwritten data from the internal buffer with a prefix,
-// unless there is no unwritten data, in which case Flush does nothing.
-func (p *Prefixer) Flush() error {
-	if len(p.buf) == 0 {
-		return nil
-	}
-	if _, err := p.w.Write([]byte(p.f())); err != nil {
-		return err
-	}
-	if _, err := p.w.Write(p.buf); err != nil {
-		return err
-	}
-	p.buf = nil
-	return nil
 }
 
 // Write writes the given data, plus any additional prefixes necessary, to the
-// Prefixer's output. Prefixes are computed at each newline or erase-in-line
-// escape sequence. Some data may be held back in an internal buffer and written
-// in a subsequent call to Write.
+// Prefixer's output. Prefixes are computed at the *start* of each line.
 func (p *Prefixer) Write(data []byte) (n int, err error) {
-	// Add it to the buffer, then process the buffer.
-	p.buf = append(p.buf, data...)
+	written := 0
+	for len(data) > 0 {
+		// When at the start of a line, write a prefix.
+		if p.st {
+			// Prefixes are not included in the written total.
+			if _, err := p.w.Write([]byte(p.f())); err != nil {
+				return written, err
+			}
+			p.st = false
+		}
 
-	for len(p.buf) > 0 {
 		// Find the next newline or line-break escape sequence.
 		// FindIndex returns a two-element slice denoting the matched range.
-		idx := lineBreakEscapeRE.FindIndex(p.buf)
+		idx := lineBreakEscapeRE.FindIndex(data)
 		if idx == nil {
-			return len(data), nil
+			// Write all remaining data. The line continues into the next Write
+			// call.
+			n, err := p.w.Write(data)
+			written += n
+			return written, err
 		}
 
-		// Write the prefix, then the line, then advance the buffer.
-		if _, err := p.w.Write([]byte(p.f())); err != nil {
-			return 0, err
+		// Write up to (and including) the newline / breaking sequence, ready to
+		// start a new line in the next iteration or Write.
+		n, err := p.w.Write(data[:idx[1]])
+		written += n
+		if err != nil {
+			return written, err
 		}
-		if _, err := p.w.Write(p.buf[:idx[1]]); err != nil {
-			return 0, err
-		}
-		p.buf = p.buf[idx[1]:]
+		data = data[idx[1]:]
+		p.st = true
 	}
-
-	return len(data), nil
+	return written, nil
 }
