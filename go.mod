@@ -3,14 +3,20 @@ module github.com/buildkite/agent/v3
 go 1.18
 
 require (
+	cloud.google.com/go/compute/metadata v0.2.3
 	github.com/DataDog/datadog-go/v5 v5.2.0
 	github.com/aws/aws-sdk-go v1.44.181
+	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.1.1
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
+	github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/creack/pty v1.1.18
 	github.com/denisbrodbeck/machineid v1.0.1
+	github.com/gliderlabs/ssh v0.3.5
+	github.com/go-chi/chi/v5 v5.0.8
 	github.com/gofrs/flock v0.8.1
+	github.com/google/go-cmp v0.5.9
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/mattn/go-zglob v0.0.4
 	github.com/mitchellh/go-homedir v1.1.0
@@ -18,27 +24,11 @@ require (
 	github.com/oleiade/reflections v1.0.1
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pborman/uuid v1.2.1
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/puzpuzpuz/xsync/v2 v2.4.0
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
 	github.com/rjeczalik/interfaces v0.3.0
-	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/stretchr/testify v1.8.2
 	github.com/urfave/cli v1.22.10
-	golang.org/x/crypto v0.6.0
-	golang.org/x/oauth2 v0.6.0
-	golang.org/x/sys v0.6.0
-	google.golang.org/api v0.112.0
-	gopkg.in/DataDog/dd-trace-go.v1 v1.46.1
-)
-
-require (
-	cloud.google.com/go/compute/metadata v0.2.3
-	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
-	github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157
-	github.com/gliderlabs/ssh v0.3.5
-	github.com/go-chi/chi/v5 v5.0.8
-	github.com/google/go-cmp v0.5.9
-	github.com/puzpuzpuz/xsync/v2 v2.4.0
 	go.opentelemetry.io/contrib/propagators/aws v1.15.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.12.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.12.0
@@ -48,7 +38,12 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.14.0
 	go.opentelemetry.io/otel/sdk v1.14.0
 	go.opentelemetry.io/otel/trace v1.14.0
+	golang.org/x/crypto v0.6.0
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
+	golang.org/x/oauth2 v0.6.0
+	golang.org/x/sys v0.6.0
+	google.golang.org/api v0.112.0
+	gopkg.in/DataDog/dd-trace-go.v1 v1.46.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -81,11 +76,13 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/philhofer/fwd v1.1.1 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2 // indirect
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
 	github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.4.0 // indirect
+	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/tinylib/msgp v1.1.6 // indirect
 	go.opencensus.io v0.24.0 // indirect
