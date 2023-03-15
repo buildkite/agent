@@ -13,6 +13,7 @@ import (
 )
 
 const envSetHelpDescription = `Usage:
+
   buildkite-agent env set [variable]
 
 Description:
@@ -30,16 +31,16 @@ Description:
 
 Example (sets the variables ′LLAMA′ and ′ALPACA′):
 
-    $ buildkite-agent env set LLAMA=Kuzco "ALPACA=Geronimo the Incredible"
-	Added:
-	+ LLAMA
-	Updated:
-	~ ALPACA	
+   $ buildkite-agent env set LLAMA=Kuzco "ALPACA=Geronimo the Incredible"
+   Added:
+   + LLAMA
+   Updated:
+   ~ ALPACA	
 	
 Example (sets the variables ′LLAMA′ and ′ALPACA′ using a JSON object supplied
 over standard input):
 
-    $ echo '{"ALPACA":"Geronimo the Incredible","LLAMA":"Kuzco"}' | buildkite-agent env set --input-format=json --output-format=quiet -
+   $ echo '{"ALPACA":"Geronimo the Incredible","LLAMA":"Kuzco"}' | buildkite-agent env set --input-format=json --output-format=quiet -
 `
 
 type EnvSetConfig struct{}
@@ -66,7 +67,7 @@ var EnvSetCommand = cli.Command{
 }
 
 func envSetAction(c *cli.Context) error {
-	cli, err := jobapi.NewDefaultClient()
+	cl, err := jobapi.NewDefaultClient()
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
 		os.Exit(1)
@@ -125,7 +126,7 @@ func envSetAction(c *cli.Context) error {
 		}
 	}
 
-	resp, err := cli.EnvUpdate(context.Background(), req)
+	resp, err := cl.EnvUpdate(context.Background(), req)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Couldn't update the job executor environment: %v\n", err)
 	}

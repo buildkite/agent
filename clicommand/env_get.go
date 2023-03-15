@@ -17,6 +17,7 @@ where the "job-api" experiment is enabled.
 `
 
 const envGetHelpDescription = `Usage:
+
   buildkite-agent env get [variables]
 
 Description:
@@ -28,36 +29,36 @@ Description:
    
    Changes to the job environment only apply to the environments of subsequent
    phases of the job. However, ′env get′ can be used to inspect the changes made
-   with ′env set′ and ′env delete′.
+   with ′env set′ and ′env unset′.
 
 Example (gets all variables in key=value format):
 
-    $ buildkite-agent env get
-	ALPACA=Geronimo the Incredible
-	BUILDKITE=true
-	LLAMA=Kuzco
-	...
+   $ buildkite-agent env get
+   ALPACA=Geronimo the Incredible
+   BUILDKITE=true
+   LLAMA=Kuzco
+   ...
 	
 Example (gets the value of one variable):
 
-    $ buildkite-agent env get LLAMA
-	Kuzco
+   $ buildkite-agent env get LLAMA
+   Kuzco
 	
 Example (gets multiple specific variables):
 
-	$ buildkite-agent env get LLAMA ALPACA
-	ALPACA=Geronimo the Incredible
-	LLAMA=Kuzco
+   $ buildkite-agent env get LLAMA ALPACA
+   ALPACA=Geronimo the Incredible
+   LLAMA=Kuzco
 	
 Example (gets variables as a JSON object):
 
-    $ buildkite-agent env get --format=json-pretty
-	{
-	  "ALPACA": "Geronimo the Incredible",
-	  "BUILDKITE": "true",
-	  "LLAMA": "Kuzco",
-	  ...
-	}
+   $ buildkite-agent env get --format=json-pretty
+   {
+     "ALPACA": "Geronimo the Incredible",
+     "BUILDKITE": "true",
+     "LLAMA": "Kuzco",
+     ...
+   }
 `
 
 type EnvGetConfig struct{}
@@ -78,19 +79,19 @@ var EnvGetCommand = cli.Command{
 }
 
 func envGetAction(c *cli.Context) error {
-	cli, err := jobapi.NewDefaultClient()
+	client, err := jobapi.NewDefaultClient()
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	envMap, err := cli.EnvGet(context.Background())
+	envMap, err := client.EnvGet(context.Background())
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Couldn't fetch the job executor environment variables: %v\n", err)
 		os.Exit(1)
 	}
 
-	var notFound []string
+	notFound := false
 
 	// Filter envMap by any remaining args.
 	if len(c.Args()) > 0 {
@@ -98,7 +99,7 @@ func envGetAction(c *cli.Context) error {
 		for _, arg := range c.Args() {
 			v, ok := envMap[arg]
 			if !ok {
-				notFound = append(notFound, arg)
+				notFound = true
 				fmt.Fprintf(c.App.ErrWriter, "%q is not set\n", arg)
 				continue
 			}
@@ -136,7 +137,7 @@ func envGetAction(c *cli.Context) error {
 		fmt.Fprintf(c.App.ErrWriter, "Invalid output format %q\n", c.String("format"))
 	}
 
-	if len(notFound) > 0 {
+	if notFound {
 		os.Exit(1)
 	}
 	return nil

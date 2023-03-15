@@ -12,6 +12,7 @@ import (
 )
 
 const envUnsetHelpDescription = `Usage:
+
   buildkite-agent env unset [variables]
 
 Description:
@@ -28,15 +29,15 @@ Description:
 
 Example (un-sets the variables ′LLAMA′ and ′ALPACA′):
 
-    $ buildkite-agent env unset LLAMA ALPACA
-    Un-set:
-    - ALPACA
-    - LLAMA
+   $ buildkite-agent env unset LLAMA ALPACA
+   Un-set:
+   - ALPACA
+   - LLAMA
 	
 Example (Un-sets the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied
 over standard input):
     
-    $ echo '["LLAMA","ALPACA"]' | buildkite-agent env unset --input-format=json --output-format=quiet -
+   $ echo '["LLAMA","ALPACA"]' | buildkite-agent env unset --input-format=json --output-format=quiet -
 `
 
 type EnvUnsetConfig struct{}
@@ -63,7 +64,7 @@ var EnvUnsetCommand = cli.Command{
 }
 
 func envUnsetAction(c *cli.Context) error {
-	cli, err := jobapi.NewDefaultClient()
+	client, err := jobapi.NewDefaultClient()
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
 		os.Exit(1)
@@ -115,7 +116,7 @@ func envUnsetAction(c *cli.Context) error {
 		}
 	}
 
-	unset, err := cli.EnvDelete(context.Background(), del)
+	unset, err := client.EnvDelete(context.Background(), del)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Couldn't un-set the job executor environment variables: %v\n", err)
 	}
