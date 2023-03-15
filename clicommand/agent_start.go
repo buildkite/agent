@@ -761,10 +761,6 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
-		if cfg.LogFormat == "json" && !cfg.WriteJobLogsToStdout {
-			l.Fatal("JSON log output doesn't make sense without writing job logs to the agent's stdout.")
-		}
-
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
 			BootstrapScript:            cfg.BootstrapScript,
