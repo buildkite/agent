@@ -37,6 +37,7 @@ require (
 	github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/google/go-cmp v0.5.9
+	github.com/puzpuzpuz/xsync/v2 v2.4.0
 	go.opentelemetry.io/contrib/propagators/aws v1.15.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.12.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.12.0

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/buildkite/agent/v3/env"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -372,11 +371,11 @@ func TestConfigurationToEnvironment(t *testing.T) {
 
 	tests := []struct {
 		configJSON string
-		wantEnvMap env.Environment
+		wantEnvMap map[string]string
 	}{
 		{
 			configJSON: `{ "config-key": 42 }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":             `{"config-key":42}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONFIG_KEY": "42",
 				"BUILDKITE_PLUGIN_NAME":                      "DOCKER_COMPOSE",
@@ -384,7 +383,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		},
 		{
 			configJSON: `{ "container": "app", "some-other-setting": "else right here" }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":                     `{"container":"app","some-other-setting":"else right here"}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONTAINER":          "app",
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING": "else right here",
@@ -393,7 +392,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		},
 		{
 			configJSON: `{ "and _ with a    - number": 12 }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":                    `{"and _ with a    - number":12}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER": "12",
 				"BUILDKITE_PLUGIN_NAME":                             "DOCKER_COMPOSE",
@@ -401,7 +400,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		},
 		{
 			configJSON: `{ "bool-true-key": true, "bool-false-key": false }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":                 `{"bool-false-key":false,"bool-true-key":true}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_BOOL_FALSE_KEY": "false",
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_BOOL_TRUE_KEY":  "true",
@@ -410,7 +409,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		},
 		{
 			configJSON: `{ "array-key": [ "array-val-1", "array-val-2" ] }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":              `{"array-key":["array-val-1","array-val-2"]}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0": "array-val-1",
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_1": "array-val-2",
@@ -419,7 +418,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		},
 		{
 			configJSON: `{ "array-key": [ 42, 43, 44 ] }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":              `{"array-key":[42,43,44]}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0": "42",
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_1": "43",
@@ -429,7 +428,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		},
 		{
 			configJSON: `{ "array-key": [ 42, 43, "foo" ] }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":              `{"array-key":[42,43,"foo"]}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0": "42",
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_1": "43",
@@ -439,7 +438,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		},
 		{
 			configJSON: `{ "array-key": [ { "subkey": "subval" } ] }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":                     `{"array-key":[{"subkey":"subval"}]}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0_SUBKEY": "subval",
 				"BUILDKITE_PLUGIN_NAME":                              "DOCKER_COMPOSE",
@@ -447,7 +446,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		},
 		{
 			configJSON: `{ "array-key": [ { "subkey": [1, 2, "llamas"] } ] }`,
-			wantEnvMap: env.Environment{
+			wantEnvMap: map[string]string{
 				"BUILDKITE_PLUGIN_CONFIGURATION":                       `{"array-key":[{"subkey":[1,2,"llamas"]}]}`,
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0_SUBKEY_0": "1",
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0_SUBKEY_1": "2",
@@ -465,10 +464,11 @@ func TestConfigurationToEnvironment(t *testing.T) {
 			if err != nil {
 				t.Fatalf("pluginFromConfig(%q) error = %v", tc.configJSON, err)
 			}
-			envMap, err := plugin.ConfigurationToEnvironment()
+			env, err := plugin.ConfigurationToEnvironment()
 			if err != nil {
 				t.Errorf("plugin.ConfigurationToEnvironment() error = %v", err)
 			}
+			envMap := env.Dump()
 			if diff := cmp.Diff(envMap, tc.wantEnvMap); diff != "" {
 				t.Errorf("plugin.ConfigurationToEnvironment() envMap diff (-got +want)\n%s", diff)
 			}
@@ -508,12 +508,12 @@ func TestConfigurationToEnvironment_DuplicatePlugin(t *testing.T) {
 	if err != nil {
 		t.Errorf("plugins[0].ConfigurationToEnvironment() error = %v", err)
 	}
-	wantEnv1 := env.Environment{
+	wantEnv1 := map[string]string{
 		"BUILDKITE_PLUGIN_CONFIGURATION":             `{"config-key":41}`,
 		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONFIG_KEY": "41",
 		"BUILDKITE_PLUGIN_NAME":                      "DOCKER_COMPOSE",
 	}
-	if diff := cmp.Diff(envMap1, wantEnv1); diff != "" {
+	if diff := cmp.Diff(envMap1.Dump(), wantEnv1); diff != "" {
 		t.Errorf("plugins[0].ConfigurationToEnvironment() envMap diff (-got +want)\n%s", diff)
 	}
 
@@ -521,12 +521,14 @@ func TestConfigurationToEnvironment_DuplicatePlugin(t *testing.T) {
 	if err != nil {
 		t.Errorf("plugins[1].ConfigurationToEnvironment() error = %v", err)
 	}
-	wantEnv2 := env.Environment{
+
+	wantEnv2 := map[string]string{
 		"BUILDKITE_PLUGIN_CONFIGURATION":                 `{"second-ref-key":42}`,
 		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_SECOND_REF_KEY": "42",
 		"BUILDKITE_PLUGIN_NAME":                          "DOCKER_COMPOSE",
 	}
-	if diff := cmp.Diff(envMap2, wantEnv2); diff != "" {
+
+	if diff := cmp.Diff(envMap2.Dump(), wantEnv2); diff != "" {
 		t.Errorf("plugins[0].ConfigurationToEnvironment() envMap diff (-got +want)\n%s", diff)
 	}
 }

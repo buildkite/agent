@@ -30,7 +30,7 @@ export TEMPFILE="$(mktemp acknowledgements.XXXXXX)" || exit 1
 cat > "${TEMPFILE}" <<EOF
 # Buildkite Agent OSS Attributions
 
-The Buildkite Agent would not be possible without open-source software. 
+The Buildkite Agent would not be possible without open-source software.
 Licenses for the libraries used are reproduced below.
 EOF
 
@@ -41,14 +41,19 @@ addfile() {
 }
 
 ## The Go standard library also counts.
-addfile "$(go env GOROOT)/LICENSE" "Go standard library"
+license_path="$(go env GOROOT)/LICENSE"
+if [[ "$(go env GOROOT)" == /opt/homebrew/* ]]; then
+  license_path="$(go env GOROOT)/../LICENSE"
+fi
+
+addfile "$license_path" "Go standard library"
 
 ## Now add all the modules.
 export -f addfile
 find "${TEMPDIR}" -type f -print | sort | xargs -I {} bash -c 'addfile "{}"'
 
 ## Add trailer
-printf "\n\n---\n\nFile generated using %s\n%s\n" "$0" "$(date)" >> "${TEMPFILE}" 
+printf "\n\n---\n\nFile generated using %s\n%s\n" "$0" "$(date)" >> "${TEMPFILE}"
 
 # Replace existing acknowledgements file
 mv "${TEMPFILE}" "${OUTPUT_FILE}"

@@ -100,7 +100,7 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
 func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
-	sctx, err := tracetools.DecodeTraceContext(b.shell.Env)
+	sctx, err := tracetools.DecodeTraceContext(b.shell.Env.Dump())
 	if err != nil {
 		// Return nil so a new span will be created
 		return nil
@@ -182,7 +182,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
 }
 
-func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
+func GenericTracingExtras(b *Bootstrap, env *env.Environment) map[string]any {
 	buildID, _ := env.Get("BUILDKITE_BUILD_ID")
 	buildNumber, _ := env.Get("BUILDKITE_BUILD_NUMBER")
 	buildURL, _ := env.Get("BUILDKITE_BUILD_URL")

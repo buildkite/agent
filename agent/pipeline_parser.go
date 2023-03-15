@@ -17,7 +17,7 @@ import (
 // PipelineParser parses a pipeline, optionally interpolating values from
 // a given environment.
 type PipelineParser struct {
-	Env             env.Environment
+	Env             *env.Environment
 	Filename        string
 	Pipeline        []byte
 	NoInterpolation bool
