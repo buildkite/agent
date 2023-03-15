@@ -404,6 +404,10 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			exitStatus = "-1"
 			signalReason = "process_run_error"
 		} else {
+			if experiments.IsEnabled("kubernetes-exec") && r.process.WaitStatus().ExitStatus() < 0 && r.process.WaitStatus().ExitStatus()%10 == 0 {
+				_ = r.logStreamer.Process([]byte(":k8s: Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff :k8s:"))
+			}
+
 			// Add the final output to the streamer
 			r.logStreamer.Process(r.output.ReadAndTruncate())
 
