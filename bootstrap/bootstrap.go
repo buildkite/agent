@@ -109,6 +109,18 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 	}()
 
+	// Create an empty env for us to keep track of our env changes in
+	b.shell.Env = env.FromSlice(os.Environ())
+
+	// Initialize the job API, iff the experiment is enabled. Noop otherwise
+	cleanup, err := b.startJobAPI()
+	if err != nil {
+		b.shell.Errorf("Error setting up job API: %v", err)
+		return 1
+	}
+
+	defer cleanup()
+
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
 		if err = b.tearDown(ctx); err != nil {
@@ -515,9 +527,6 @@ func (b *Bootstrap) setUp(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
-
-	// Create an empty env for us to keep track of our env changes in
-	b.shell.Env = env.FromSlice(os.Environ())
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if b.BinPath != "" {

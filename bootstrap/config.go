@@ -110,6 +110,9 @@ type Config struct {
 	// Path where the builds will be run
 	BuildPath string
 
+	// Path where the sockets are stored
+	SocketsPath string
+
 	// Path where the repository mirrors are stored
 	GitMirrorsPath string
 

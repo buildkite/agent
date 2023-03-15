@@ -30,12 +30,12 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 
-	if os.Getenv(`BINTEST_DEBUG`) == "1" {
+	if os.Getenv("BINTEST_DEBUG") == "1" {
 		bintest.Debug = true
 	}
 
 	// Support running the test suite against a given experiment
-	if exp := os.Getenv(`TEST_EXPERIMENT`); exp != "" {
+	if exp := os.Getenv("TEST_EXPERIMENT"); exp != "" {
 		experiments.Enable(exp)
 		fmt.Printf("!!! Enabling experiment %q for test suite\n", exp)
 	}

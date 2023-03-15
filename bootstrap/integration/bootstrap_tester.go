@@ -44,7 +44,15 @@ type BootstrapTester struct {
 }
 
 func NewBootstrapTester() (*BootstrapTester, error) {
-	homeDir, err := os.MkdirTemp("", "home")
+	// The job API experiment adds a unix domain socket to a directory in the home directory
+	// UDS names are limited to 108 characters, so we need to use a shorter home directory
+	// Who knows what's going on in windowsland
+	tmpHomeDir := "/tmp"
+	if runtime.GOOS == "windows" {
+		tmpHomeDir = ""
+	}
+
+	homeDir, err := os.MkdirTemp(tmpHomeDir, "home")
 	if err != nil {
 		return nil, fmt.Errorf("making home directory: %w", err)
 	}

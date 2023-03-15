@@ -44,6 +44,33 @@ const (
 	BuildkiteMessageName = "BUILDKITE_MESSAGE"
 )
 
+// Certain env can only be set by agent configuration.
+// We show the user a warning in the bootstrap if they use any of these at a job level.
+var ProtectedEnv = map[string]struct{}{
+	"BUILDKITE_AGENT_ENDPOINT":           {},
+	"BUILDKITE_AGENT_ACCESS_TOKEN":       {},
+	"BUILDKITE_AGENT_DEBUG":              {},
+	"BUILDKITE_AGENT_PID":                {},
+	"BUILDKITE_BIN_PATH":                 {},
+	"BUILDKITE_CONFIG_PATH":              {},
+	"BUILDKITE_BUILD_PATH":               {},
+	"BUILDKITE_GIT_MIRRORS_PATH":         {},
+	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":  {},
+	"BUILDKITE_HOOKS_PATH":               {},
+	"BUILDKITE_PLUGINS_PATH":             {},
+	"BUILDKITE_SSH_KEYSCAN":              {},
+	"BUILDKITE_GIT_SUBMODULES":           {},
+	"BUILDKITE_COMMAND_EVAL":             {},
+	"BUILDKITE_PLUGINS_ENABLED":          {},
+	"BUILDKITE_LOCAL_HOOKS_ENABLED":      {},
+	"BUILDKITE_GIT_CLONE_FLAGS":          {},
+	"BUILDKITE_GIT_FETCH_FLAGS":          {},
+	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
+	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
+	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
+	"BUILDKITE_SHELL":                    {},
+}
+
 type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
@@ -534,41 +561,12 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
 	}
 
-	// Certain env can only be set by agent configuration.
-	// We show the user a warning in the bootstrap if they use any of these at a job level.
-
-	var protectedEnv = []string{
-		"BUILDKITE_AGENT_ENDPOINT",
-		"BUILDKITE_AGENT_ACCESS_TOKEN",
-		"BUILDKITE_AGENT_DEBUG",
-		"BUILDKITE_AGENT_PID",
-		"BUILDKITE_BIN_PATH",
-		"BUILDKITE_CONFIG_PATH",
-		"BUILDKITE_BUILD_PATH",
-		"BUILDKITE_GIT_MIRRORS_PATH",
-		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-		"BUILDKITE_HOOKS_PATH",
-		"BUILDKITE_PLUGINS_PATH",
-		"BUILDKITE_SSH_KEYSCAN",
-		"BUILDKITE_GIT_SUBMODULES",
-		"BUILDKITE_COMMAND_EVAL",
-		"BUILDKITE_PLUGINS_ENABLED",
-		"BUILDKITE_LOCAL_HOOKS_ENABLED",
-		"BUILDKITE_GIT_CHECKOUT_FLAGS",
-		"BUILDKITE_GIT_CLONE_FLAGS",
-		"BUILDKITE_GIT_FETCH_FLAGS",
-		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
-		"BUILDKITE_GIT_CLEAN_FLAGS",
-		"BUILDKITE_SHELL",
-	}
-
 	var ignoredEnv []string
 
 	// Check if the user has defined any protected env
-	for _, p := range protectedEnv {
-		if _, exists := r.job.Env[p]; exists {
-			ignoredEnv = append(ignoredEnv, p)
+	for k := range ProtectedEnv {
+		if _, exists := r.job.Env[k]; exists {
+			ignoredEnv = append(ignoredEnv, k)
 		}
 	}
 
@@ -602,6 +600,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	// Add options from the agent configuration
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
+	env["BUILDKITE_SOCKETS_PATH"] = r.conf.AgentConfiguration.SocketsPath
 	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
 	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
 	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
