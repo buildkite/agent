@@ -24,15 +24,15 @@ func pt(s string) *string {
 	return &s
 }
 
-func testEnviron() env.Environment {
-	e := env.Environment{}
+func testEnviron() *env.Environment {
+	e := env.New()
 	e.Set("MOUNTAIN", "cotopaxi")
 	e.Set("CAPITAL", "quito")
 
 	return e
 }
 
-func testServer(t *testing.T, e env.Environment) (*jobapi.Server, string, error) {
+func testServer(t *testing.T, e *env.Environment) (*jobapi.Server, string, error) {
 	sockName, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
 		return nil, "", fmt.Errorf("creating socket path: %w", err)
@@ -105,7 +105,7 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	}
 
 	sockName := filepath.Join(os.TempDir(), "test-socket-collision.sock")
-	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.Environment{})
+	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New())
 	if err != nil {
 		t.Fatalf("expected initial server creation to succeed, got %v", err)
 	}
@@ -117,7 +117,7 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	defer srv1.Stop()
 
 	expectedErr := fmt.Sprintf("file already exists at socket path %s", sockName)
-	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.Environment{})
+	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New())
 	if err == nil {
 		t.Fatalf("expected second server creation to fail with %s, got nil", expectedErr)
 	}
@@ -132,7 +132,7 @@ type apiTestCase[Req, Resp any] struct {
 	requestBody          *Req
 	expectedStatus       int
 	expectedResponseBody *Resp
-	expectedEnv          env.Environment
+	expectedEnv          map[string]string
 	expectedError        *jobapi.ErrorResponse
 }
 
@@ -145,14 +145,14 @@ func TestDeleteEnv(t *testing.T) {
 			requestBody:          &jobapi.EnvDeleteRequest{Keys: []string{"MOUNTAIN"}},
 			expectedStatus:       http.StatusOK,
 			expectedResponseBody: &jobapi.EnvDeleteResponse{Deleted: []string{"MOUNTAIN"}},
-			expectedEnv:          env.Environment{"CAPITAL": "quito"}.Dump(),
+			expectedEnv:          env.FromMap(map[string]string{"CAPITAL": "quito"}).Dump(),
 		},
 		{
 			name:                 "deleting a non-existent key is a no-op",
 			requestBody:          &jobapi.EnvDeleteRequest{Keys: []string{"NATIONAL_PARKS"}},
 			expectedStatus:       http.StatusOK,
 			expectedResponseBody: &jobapi.EnvDeleteResponse{Deleted: []string{}},
-			expectedEnv:          testEnviron(), // ie no change
+			expectedEnv:          testEnviron().Dump(), // ie no change
 		},
 		{
 			name: "deleting protected keys returns a 422",
@@ -163,7 +163,7 @@ func TestDeleteEnv(t *testing.T) {
 			expectedError: &jobapi.ErrorResponse{
 				Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_AGENT_PID]",
 			},
-			expectedEnv: testEnviron(), // ie no change
+			expectedEnv: testEnviron().Dump(), // ie no change
 		},
 	}
 
@@ -228,11 +228,11 @@ func TestPatchEnv(t *testing.T) {
 				Added:   []string{"NATIONAL_PARKS"},
 				Updated: []string{"CAPITAL", "MOUNTAIN"},
 			},
-			expectedEnv: env.Environment{
+			expectedEnv: env.FromMap(map[string]string{
 				"MOUNTAIN":       "chimborazo",
 				"NATIONAL_PARKS": "cayambe-coca,el-cajas,galápagos",
 				"CAPITAL":        "quito",
-			}.Dump(),
+			}).Dump(),
 		},
 		{
 			name: "setting to nil returns a 422",
@@ -246,7 +246,7 @@ func TestPatchEnv(t *testing.T) {
 			expectedError: &jobapi.ErrorResponse{
 				Error: "removing environment variables (ie setting them to null) is not permitted on this endpoint. The following keys were set to null: [NATIONAL_PARKS]",
 			},
-			expectedEnv: testEnviron(), // ie no changes
+			expectedEnv: testEnviron().Dump(), // ie no changes
 		},
 		{
 			name: "setting protected variables returns a 422",
@@ -260,7 +260,7 @@ func TestPatchEnv(t *testing.T) {
 			expectedError: &jobapi.ErrorResponse{
 				Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_AGENT_PID]",
 			},
-			expectedEnv: testEnviron(), // ie no changes
+			expectedEnv: testEnviron().Dump(), // ie no changes
 		},
 	}
 
@@ -341,7 +341,7 @@ func TestGetEnv(t *testing.T) {
 	testAPI(t, env, req, client, apiTestCase[any, jobapi.EnvGetResponse]{
 		expectedStatus: http.StatusOK,
 		expectedResponseBody: &jobapi.EnvGetResponse{
-			Env: testEnviron(),
+			Env: testEnviron().Dump(),
 		},
 	})
 
@@ -363,7 +363,7 @@ func TestGetEnv(t *testing.T) {
 	})
 }
 
-func testAPI[Req, Resp any](t *testing.T, env env.Environment, req *http.Request, client *http.Client, testCase apiTestCase[Req, Resp]) {
+func testAPI[Req, Resp any](t *testing.T, env *env.Environment, req *http.Request, client *http.Client, testCase apiTestCase[Req, Resp]) {
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("expected no error for client.Do(req) (got %v)", err)
@@ -390,7 +390,7 @@ func testAPI[Req, Resp any](t *testing.T, env env.Environment, req *http.Request
 	}
 
 	if testCase.expectedEnv != nil {
-		if !cmp.Equal(testCase.expectedEnv, env) {
+		if !cmp.Equal(testCase.expectedEnv, env.Dump()) {
 			t.Fatalf("\n\texpected env: % #v\n\tgot: % #v\n\tdiff = %s)", testCase.expectedEnv, env, cmp.Diff(testCase.expectedEnv, env))
 		}
 	}

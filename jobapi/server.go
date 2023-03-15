@@ -25,7 +25,7 @@ type Server struct {
 	SocketPath string
 	Logger     shell.Logger
 
-	environ env.Environment
+	environ *env.Environment
 	token   string
 	httpSvr *http.Server
 	started bool
@@ -35,7 +35,7 @@ type Server struct {
 // NewServer creates a new Job API server
 // socketPath is the path to the socket on which the server will listen
 // environ is the environment which the server will mutate and inspect as part of its operation
-func NewServer(logger shell.Logger, socketPath string, environ env.Environment) (server *Server, token string, err error) {
+func NewServer(logger shell.Logger, socketPath string, environ *env.Environment) (server *Server, token string, err error) {
 	if len(socketPath) >= socketPathLength() {
 		return nil, "", fmt.Errorf("socket path %s is too long (path length: %d, max %d characters). This is a limitation of your host OS", socketPath, len(socketPath), socketPathLength())
 	}

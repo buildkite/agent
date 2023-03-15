@@ -84,16 +84,6 @@ func (e *Environment) Get(key string) (string, bool) {
 	return v, ok
 }
 
-// Dump returns a copy of the environment with all keys normalized
-func (e Environment) Dump() Environment {
-	d := make(Environment, len(e))
-	for k, v := range e {
-		d.Set(k, v)
-	}
-
-	return d
-}
-
 // Get a boolean value from environment, with a default for empty. Supports true|false, on|off, 1|0
 func (e *Environment) GetBool(key string, defaultValue bool) bool {
 	v, _ := e.Get(key)
