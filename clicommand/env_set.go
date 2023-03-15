@@ -67,7 +67,7 @@ var EnvSetCommand = cli.Command{
 }
 
 func envSetAction(c *cli.Context) error {
-	cl, err := jobapi.NewDefaultClient()
+	client, err := jobapi.NewDefaultClient()
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
 		os.Exit(1)
@@ -126,7 +126,7 @@ func envSetAction(c *cli.Context) error {
 		}
 	}
 
-	resp, err := cl.EnvUpdate(context.Background(), req)
+	resp, err := client.EnvUpdate(context.Background(), req)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Couldn't update the job executor environment: %v\n", err)
 	}
