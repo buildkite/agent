@@ -165,12 +165,21 @@ func (r *Runner) WaitStatus() process.WaitStatus {
 			return waitStatus{Code: client.ExitStatus}
 		}
 
+		// use an unusual status code to distinguish this unusual state
 		if client.State == stateUnknown {
-			// use an unusual status code to distinguish this unusual state
 			ws.Code += -10
 		}
 	}
 	return ws
+}
+
+func (r *Runner) ClientStateUnknown() bool {
+	for _, client := range r.clients {
+		if client.State == stateUnknown {
+			return true
+		}
+	}
+	return false
 }
 
 // ==== sidecar api ====
