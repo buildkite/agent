@@ -159,15 +159,27 @@ func (w waitStatus) Signaled() bool {
 }
 
 func (r *Runner) WaitStatus() process.WaitStatus {
-	var ws process.WaitStatus
+	ws := waitStatus{}
 	for _, client := range r.clients {
 		if client.ExitStatus != 0 {
 			return waitStatus{Code: client.ExitStatus}
 		}
-		// just return any ExitStatus if we don't find any "interesting" ones
-		ws = waitStatus{Code: client.ExitStatus}
+
+		// use an unusual status code to distinguish this unusual state
+		if client.State == stateUnknown {
+			ws.Code -= 10
+		}
 	}
 	return ws
+}
+
+func (r *Runner) ClientStateUnknown() bool {
+	for _, client := range r.clients {
+		if client.State == stateUnknown {
+			return true
+		}
+	}
+	return false
 }
 
 // ==== sidecar api ====

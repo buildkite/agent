@@ -404,6 +404,18 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			exitStatus = "-1"
 			signalReason = "process_run_error"
 		} else {
+			// Intended to capture situations where the job-exec (aka bootstrap) container did not
+			// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
+			// to the user as they may be the caused by errors in the pipeline definition.
+			if r.cancelled && !r.stopped {
+				k8sProcess, ok := r.process.(*kubernetes.Runner)
+				if ok && k8sProcess.ClientStateUnknown() {
+					r.logStreamer.Process([]byte(
+						"Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.",
+					))
+				}
+			}
+
 			// Add the final output to the streamer
 			r.logStreamer.Process(r.output.ReadAndTruncate())
 
