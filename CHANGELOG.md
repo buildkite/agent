@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [3.45.0](https://github.com/buildkite/agent/tree/3.45.0) (2023-03-16)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.44.0...3.45.0)
+
+It's a busy one! The major new feature in this release is the `job-api` experiment, which enables an HTTP API within the agent that allows jobs to inspect and mutate their environment, without using the normal bash-isms that we normally require. This is a big step towards supporting hooks and plugins in other languages, and we're really excited to see what you all do with it!
+
+When this experiment is enabled, the agent will start an HTTP server on a unix domain socket, the address of which will be made available through the `BUILDKITE_AGENT_JOB_API_SOCKET` environment variable, with a token available through the `BUILDKITE_AGENT_JOB_API_TOKEN` environment variable. This socket can be used with the `buildkite-agent env {get,set,unset}` commands on the commandline, or directly through cURL or other HTTP client. Included in this release of the agent is a [golang client](https://github.com/buildkite/agent/blob/main/jobapi/client.go), which can be imported directly into your Go projects.
+
+Also included is another experimental feature, `descending-spawn-priority`, which makes agents using the `--spawn-with-priority` flag spawn agents with a descending priority, rather than the default ascending priority. This is useful when running agents on heterogeneous hardware (ie, having two agents on one machine and four on another), as it means that jobs will be spread more evenly across the agents. For more information, see [the original issue](https://github.com/buildkite/agent/issues/1929), and [@DrJosh9000's PR](https://github.com/buildkite/agent/pull/2004). Huge thanks to @nick-f for bringing this to our attention!
+
+Full changelog follows:
+
+### Added
+- Add current-job api [#1943](https://github.com/buildkite/agent/pull/1943) [#1944](https://github.com/buildkite/agent/pull/1944) [#2013](https://github.com/buildkite/agent/pull/2013) [#2017](https://github.com/buildkite/agent/pull/2017) (@moskyb + @DrJosh9000)
+- Agent docker images now include [`buildx`](https://github.com/docker/buildx) [#2005](https://github.com/buildkite/agent/pull/2005) (@triarius)
+- Add `descending-spawn-priority` experiment. [#2004](https://github.com/buildkite/agent/pull/2004) (@DrJosh9000)
+- We now publish OSS acknowledgements with the agent. You can read them at [ACKNOWLEDGEMENTS.md](https://github.com/buildkite/agent/blob/main/ACKNOWLEDGEMENTS.md), or by running `buildkite-agent acknowledgements` [#1945](https://github.com/buildkite/agent/pull/1945) [#2000](https://github.com/buildkite/agent/pull/2000) (@DrJosh9000)
+- BUILDKITE_S3_ENDPOINT env var, allowing jobs to upload artifacts to non-S3 endpoints eg minio [#1965](https://github.com/buildkite/agent/pull/1965) (@pda)
+
+### Fixed
+- Avoid holding full job logs, reducing agent memory consumption [#2014](https://github.com/buildkite/agent/pull/2014) (@DrJosh9000)
+- ansi-timestamps: Compute prefixes at start of line [#2016](https://github.com/buildkite/agent/pull/2016) (@DrJosh9000)
+- Fix DD trace setup warning [#2007](https://github.com/buildkite/agent/pull/2007) (@goodspark)
+
+### Changed
+- Kubernetes improvements:
+  - Set a non-zero exit status when a job is cancelled in Kubernetes [#2010](https://github.com/buildkite/agent/pull/2010) (@triarius)
+  - Add tags from env variables provided by the controller in agent-stack-k8s if kuberenetes-exec experiment is enabled [#2003](https://github.com/buildkite/agent/pull/2003) (@triarius)
+- Globs parsed by the agent now support negation and bracketing [#2001](https://github.com/buildkite/agent/pull/2001) (@moskyb)
+- Allow the use of non-bash shells to execute agent hooks [#1995](https://github.com/buildkite/agent/pull/1995) (@DrJosh9000)
+- Don't add custom remotes for submodules when using git-mirrors [#1991](https://github.com/buildkite/agent/pull/1991) (@jonahbull)
+- Improve systemd behaviour when updating the agent [#1993](https://github.com/buildkite/agent/pull/1993) (@triarius)
+- ... And as always, the usual crop of small fixes, dependency updates, and cleanups (@moskyb, @dependabot, @DrJosh9000, @triarius)
+
 ## [v3.44.0](https://github.com/buildkite/agent/tree/v3.44.0) (2023-02-27)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.43.1...v3.44.0)
 
