@@ -172,35 +172,27 @@ func (e *Environment) Diff(other *Environment) Diff {
 }
 
 // Merge merges another env into this one and returns the result
-func (e *Environment) Merge(other *Environment) *Environment {
-	c := e.Copy()
-
+func (e *Environment) Merge(other *Environment) {
 	if other == nil {
-		return c
+		return
 	}
 
 	other.underlying.Range(func(k, v string) bool {
-		c.Set(k, v)
+		e.Set(k, v)
 		return true
 	})
-
-	return c
 }
 
-func (e *Environment) Apply(diff Diff) *Environment {
-	c := e.Copy()
-
+func (e *Environment) Apply(diff Diff) {
 	for k, v := range diff.Added {
-		c.Set(k, v)
+		e.Set(k, v)
 	}
 	for k, v := range diff.Changed {
-		c.Set(k, v.New)
+		e.Set(k, v.New)
 	}
 	for k := range diff.Removed {
-		c.underlying.Delete(k)
+		e.Remove(k)
 	}
-
-	return c
 }
 
 // Copy returns a copy of the env

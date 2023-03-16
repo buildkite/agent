@@ -59,7 +59,8 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	// Windows’ batch 'SET >' normalises environment variables case so we apply
 	// the 'expected' and 'actual' diffs to a blank Environment which handles
 	// case normalisation for us
-	expected := env.New().Apply(env.Diff{
+	expected := env.New()
+	expected.Apply(env.Diff{
 		Added: map[string]string{
 			"LLAMAS":  "rock",
 			"Alpacas": "are ok",
@@ -68,7 +69,8 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		Removed: map[string]struct{}{},
 	})
 
-	actual := env.New().Apply(changes.Diff)
+	actual := env.New()
+	actual.Apply(changes.Diff)
 
 	// The strict equals check here also ensures we aren't bubbling up the
 	// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
