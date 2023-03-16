@@ -167,7 +167,7 @@ func (r *Runner) WaitStatus() process.WaitStatus {
 
 		// use an unusual status code to distinguish this unusual state
 		if client.State == stateUnknown {
-			ws.Code += -10
+			ws.Code -= 10
 		}
 	}
 	return ws
