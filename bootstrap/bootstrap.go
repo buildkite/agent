@@ -377,15 +377,15 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 		return
 	}
 
-	mergedEnv := b.shell.Env.Apply(changes.Diff)
+	b.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
 	redactors.Flush()
-	redactors.Reset(redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, mergedEnv.Dump()))
+	redactors.Reset(redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump()))
 
 	// First, let see any of the environment variables are supposed
 	// to change the bootstrap configuration at run time.
-	bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(mergedEnv)
+	bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(b.shell.Env)
 
 	// Print out the env vars that changed. As we go through each
 	// one, we'll determine if it was a special "bootstrap"
@@ -418,11 +418,6 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 			b.shell.Commentf("%s removed", k)
 		}
 	}
-
-	// Now that we've finished telling the user what's changed,
-	// let's mutate the current shell environment to include all
-	// the new values.
-	b.shell.Env = mergedEnv
 }
 
 func (b *Bootstrap) hasGlobalHook(name string) bool {

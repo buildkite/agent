@@ -112,9 +112,9 @@ func TestEnvironmentMerge(t *testing.T) {
 	env1 := FromSlice([]string{"FOO=bar"})
 	env2 := FromSlice([]string{"BAR=foo"})
 
-	env3 := env1.Merge(env2)
+	env1.Merge(env2)
 
-	assert.Equal(t, env3.ToSlice(), []string{"BAR=foo", "FOO=bar"})
+	assert.Equal(t, env1.ToSlice(), []string{"BAR=foo", "FOO=bar"})
 }
 
 func TestEnvironmentCopy(t *testing.T) {
@@ -215,7 +215,7 @@ func TestEnvironmentApply(t *testing.T) {
 	t.Parallel()
 
 	env := New()
-	env = env.Apply(Diff{
+	env.Apply(Diff{
 		Added: map[string]string{
 			"LLAMAS_ENABLED": "1",
 		},
@@ -226,7 +226,7 @@ func TestEnvironmentApply(t *testing.T) {
 		"LLAMAS_ENABLED=1",
 	}).Dump(), env.Dump())
 
-	env = env.Apply(Diff{
+	env.Apply(Diff{
 		Added: map[string]string{
 			"ALPACAS_ENABLED": "1",
 		},
@@ -243,7 +243,7 @@ func TestEnvironmentApply(t *testing.T) {
 		"LLAMAS_ENABLED=0",
 	}).Dump(), env.Dump())
 
-	env = env.Apply(Diff{
+	env.Apply(Diff{
 		Added:   map[string]string{},
 		Changed: map[string]DiffPair{},
 		Removed: map[string]struct{}{

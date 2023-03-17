@@ -416,9 +416,9 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 	}
 
 	// Combine the two slices of env, let the latter overwrite the former
-	currentEnv := env.FromSlice(cmd.Env)
-	customEnv := currentEnv.Merge(extra)
-	cmd.Env = customEnv.ToSlice()
+	environ := env.FromSlice(cmd.Env)
+	environ.Merge(extra)
+	cmd.Env = environ.ToSlice()
 
 	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
 		Stdout: true,
