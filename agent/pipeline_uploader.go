@@ -45,6 +45,13 @@ type PipelineUploader struct {
 // 1. The Async Route responds 202: poll the Status Route until the upload has beed "applied"
 // 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously (possibly after retry)
 // 3. The Async Route responds with other xxx: retry uploading the pipeline to the Async Route
+//
+// Note that the Sync Route is not used at all. However, the API has the option to treat the Async
+// Route as if it were the Sync Route by not return in a 202 Accepted. While it currently does not
+// do this we want to maintain the flexbitity to do so in the future.
+// If so, the Status Route will not be polled, and either the Async Route will be retried (non 2xx)
+// until a 2xx is returned from the API, or the method will exit early with no error.
+// If the 2xx is a 202, then we assume the API change to supporting Async Uploads between retries.
 func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
 	if err != nil {
