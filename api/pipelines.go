@@ -19,27 +19,10 @@ type PipelineUploadStatus struct {
 	Message string `json:"message"`
 }
 
-// Uploads the pipeline to the Buildkite Agent API.
-func (c *Client) UploadPipeline(
-	ctx context.Context,
-	jobId string,
-	pipeline *PipelineChange,
-	headers ...Header,
-) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/pipelines", jobId)
-
-	req, err := c.newRequest(ctx, "POST", u, pipeline, headers...)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.doRequest(req, nil)
-}
-
-// UploadPipelineAsync uploads the pipeline to the Buildkite Agent API. It does not wait for the
+// UploadPipeline uploads the pipeline to the Buildkite Agent API. It does not wait for the
 // pipeline to finish processing but will instead return with a redirect to the location to check
 // the pipeline's status.
-func (c *Client) UploadPipelineAsync(
+func (c *Client) UploadPipeline(
 	ctx context.Context,
 	jobId string,
 	pipeline *PipelineChange,

@@ -38,5 +38,4 @@ type APIClient interface {
 	UpdateArtifacts(context.Context, string, map[string]string) (*api.Response, error)
 	UploadChunk(context.Context, string, *api.Chunk) (*api.Response, error)
 	UploadPipeline(context.Context, string, *api.PipelineChange, ...api.Header) (*api.Response, error)
-	UploadPipelineAsync(context.Context, string, *api.PipelineChange, ...api.Header) (*api.Response, error)
 }
