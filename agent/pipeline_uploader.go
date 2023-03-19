@@ -106,7 +106,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 		roko.WithStrategy(roko.Constant(defaultSleepDuration)),
 		roko.WithSleepFunc(u.RetrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		resp, err := u.Client.UploadPipelineAsync(
+		resp, err := u.Client.UploadPipeline(
 			ctx,
 			u.JobID,
 			u.Change,
