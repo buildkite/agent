@@ -31,8 +31,8 @@ type PipelineUploader struct {
 	RetrySleepFunc func(time.Duration)
 }
 
-// Upload will first attempt to perform an async pipeline upload and depending
-// on the API's response it will poll for the upload's status.
+// Upload will first attempt to perform an async pipeline upload and, depending on the API's
+// response, it will poll for the upload's status.
 //
 // There are 3 "routes" that are relevant
 // 1. Async Route:  /jobs/:job_uuid/pipelines?async=true
@@ -46,12 +46,17 @@ type PipelineUploader struct {
 // 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously (possibly after retry)
 // 3. The Async Route responds with other xxx: retry uploading the pipeline to the Async Route
 //
-// Note that the Sync Route is not used at all. However, the API has the option to treat the Async
-// Route as if it were the Sync Route by not return in a 202 Accepted. While it currently does not
-// do this we want to maintain the flexbitity to do so in the future.
-// If so, the Status Route will not be polled, and either the Async Route will be retried (non 2xx)
-// until a 2xx is returned from the API, or the method will exit early with no error.
-// If the 2xx is a 202, then we assume the API change to supporting Async Uploads between retries.
+// Note that the Sync Route is not used by this version of the agent at all. Typically, the Aysnc
+// Route will return 202 whether or not the pipeline upload has been processed.
+//
+// However, the API has the option to treat the Async Route as if it were the Sync Route by
+// returning a 2xx that's not a 202. This will tigger option 2. While the API currently does not do
+// this, we want to maintain the flexbitity to do so in the future. If that is implemented, the
+// Status Route will not be polled, and either the Async Route will be retried until a (non 202) 2xx
+// is returned from the API, or the method will exit early with no error. This reiterates option 2.
+//
+// If, during a retry loop in option 3, the API returns a 2xx that is a 202, then we assume the API
+// changed to supporting Async Uploads between retries and option 1 will be taken.
 func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
 	if err != nil {
