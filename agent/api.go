@@ -18,14 +18,14 @@ type APIClient interface {
 	Connect(context.Context) (*api.Response, error)
 	CreateArtifacts(context.Context, string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error)
 	Disconnect(context.Context) (*api.Response, error)
-	ExistsMetaData(context.Context, string, string) (*api.MetaDataExists, *api.Response, error)
+	ExistsMetaData(context.Context, string, string, string) (*api.MetaDataExists, *api.Response, error)
 	FinishJob(context.Context, *api.Job) (*api.Response, error)
 	FromAgentRegisterResponse(*api.AgentRegisterResponse) *api.Client
 	FromPing(*api.Ping) *api.Client
 	GetJobState(context.Context, string) (*api.JobState, *api.Response, error)
-	GetMetaData(context.Context, string, string) (*api.MetaData, *api.Response, error)
+	GetMetaData(context.Context, string, string, string) (*api.MetaData, *api.Response, error)
 	Heartbeat(context.Context) (*api.Heartbeat, *api.Response, error)
-	MetaDataKeys(context.Context, string) ([]string, *api.Response, error)
+	MetaDataKeys(context.Context, string, string) ([]string, *api.Response, error)
 	Ping(context.Context) (*api.Ping, *api.Response, error)
 	PipelineUploadStatus(context.Context, string, string, ...api.Header) (*api.PipelineUploadStatus, *api.Response, error)
 	Register(context.Context, *api.AgentRegisterRequest) (*api.AgentRegisterResponse, *api.Response, error)
