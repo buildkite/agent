@@ -26,7 +26,6 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/puzpuzpuz/xsync/v2 v2.4.0
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
-	github.com/rjeczalik/interfaces v0.3.0
 	github.com/stretchr/testify v1.8.2
 	github.com/urfave/cli v1.22.10
 	go.opentelemetry.io/contrib/propagators/aws v1.15.0
@@ -96,7 +95,6 @@ require (
 	golang.org/x/term v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
-	golang.org/x/tools v0.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230303212802-e74f57abe488 // indirect
