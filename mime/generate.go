@@ -1,5 +1,4 @@
 //go:build ignore
-// +build ignore
 
 // This is a `go generate` script generates the MIME type mappings written to
 // mime.go. Both this script and the generated output are intended for internal
