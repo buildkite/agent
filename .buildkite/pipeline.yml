@@ -11,10 +11,18 @@ steps:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
-        
+
   - name: ":office_worker: Acknowledgements diff"
     key: test-acknowledgements-diff
     command: ".buildkite/steps/test-acknowledgements-diff.sh"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
+  - name: ":robot_face: Check code generation"
+    key: check-code-generation
+    command: .buildkite/steps/check-code-generation.sh
     plugins:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
