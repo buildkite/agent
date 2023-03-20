@@ -24,7 +24,7 @@ steps:
     key: check-code-generation
     command: .buildkite/steps/check-code-generation.sh
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.11.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
