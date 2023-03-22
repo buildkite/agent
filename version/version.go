@@ -15,7 +15,6 @@ import (
 //
 // Pre-release builds' versions must be in the format `x.y-beta`, `x.y-beta.z` or `x.y-beta.z.a`
 
-//go:generate bash gen_version.sh
 //go:embed VERSION
 var baseVersion string
 var buildVersion string
@@ -25,10 +24,11 @@ func Version() string {
 }
 
 func BuildVersion() string {
-	if buildVersion == "" {
+	if buildVersion != "" {
+		return buildVersion
+	} else {
 		return "x"
 	}
-	return buildVersion
 }
 
 func UserAgent() string {
