@@ -327,10 +327,14 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 
 				// Update the states of the artifacts in bulk.
 				err := roko.NewRetrier(
-					roko.WithMaxAttempts(10),
-					roko.WithStrategy(roko.Constant(5*time.Second)),
+					// TODO: roko.ExponentialSubsecond(500*time.Millisecond) WithMaxAttempts(10)
+					// Meanwhile, 8 roko.Exponential(2sec) attempts is 1,2,4,8,16,32,64 seconds delay (~2 mins)
+					roko.WithMaxAttempts(8),
+					roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 				).DoWithContext(ctx, func(r *roko.Retrier) error {
-					if _, err := a.apiClient.UpdateArtifacts(ctx, a.conf.JobID, statesToUpload); err != nil {
+					ctxShort, cancel := context.WithTimeout(ctx, 5*time.Second)
+					defer cancel()
+					if _, err := a.apiClient.UpdateArtifacts(ctxShort, a.conf.JobID, statesToUpload); err != nil {
 						a.logger.Warn("%s (%s)", err, r)
 						return err
 					}
