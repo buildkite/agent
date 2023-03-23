@@ -17,12 +17,12 @@ const envSetHelpDescription = `Usage:
   buildkite-agent env set [variable]
 
 Description:
-   Sets environment variable values in the current job execution environment. 
+   Sets environment variable values in the current job execution environment.
    Existing variables will be overwritten.
 
    Note that this subcommand is only available from within the job executor with
    the ′job-api′ experiment enabled.
-   
+
    Note that changes to the job environment variables only apply to subsequent
    phases of the job. To read the new values of variables from within the
    current phase, use ′env get′.
@@ -35,8 +35,8 @@ Example (sets the variables ′LLAMA′ and ′ALPACA′):
    Added:
    + LLAMA
    Updated:
-   ~ ALPACA	
-	
+   ~ ALPACA
+
 Example (sets the variables ′LLAMA′ and ′ALPACA′ using a JSON object supplied
 over standard input):
 

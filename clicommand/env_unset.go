@@ -16,7 +16,7 @@ const envUnsetHelpDescription = `Usage:
   buildkite-agent env unset [variables]
 
 Description:
-   Un-sets environment variables in the current job execution environment. 
+   Un-sets environment variables in the current job execution environment.
 
    Note that this subcommand is only available from within the job executor with
    the ′job-api′ experiment enabled.
@@ -33,10 +33,10 @@ Example (un-sets the variables ′LLAMA′ and ′ALPACA′):
    Un-set:
    - ALPACA
    - LLAMA
-	
+
 Example (Un-sets the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied
 over standard input):
-    
+
    $ echo '["LLAMA","ALPACA"]' | buildkite-agent env unset --input-format=json --output-format=quiet -
 `
 

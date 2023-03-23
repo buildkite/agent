@@ -22,11 +22,11 @@ const envGetHelpDescription = `Usage:
 
 Description:
    Retrieves environment variables and their current values from the current job
-   execution environment. 
+   execution environment.
 
    Note that this subcommand is only available from within the job executor with
    the ′job-api′ experiment enabled.
-   
+
    Changes to the job environment only apply to the environments of subsequent
    phases of the job. However, ′env get′ can be used to inspect the changes made
    with ′env set′ and ′env unset′.
@@ -38,18 +38,18 @@ Example (gets all variables in key=value format):
    BUILDKITE=true
    LLAMA=Kuzco
    ...
-	
+
 Example (gets the value of one variable):
 
    $ buildkite-agent env get LLAMA
    Kuzco
-	
+
 Example (gets multiple specific variables):
 
    $ buildkite-agent env get LLAMA ALPACA
    ALPACA=Geronimo the Incredible
    LLAMA=Kuzco
-	
+
 Example (gets variables as a JSON object):
 
    $ buildkite-agent env get --format=json-pretty
