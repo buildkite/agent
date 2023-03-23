@@ -14,7 +14,7 @@ import (
 
 const envSetHelpDescription = `Usage:
 
-  buildkite-agent env set [variable]
+   buildkite-agent env set [variable]
 
 Description:
    Sets environment variable values in the current job execution environment.

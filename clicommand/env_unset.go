@@ -13,7 +13,7 @@ import (
 
 const envUnsetHelpDescription = `Usage:
 
-  buildkite-agent env unset [variables]
+   buildkite-agent env unset [variables]
 
 Description:
    Un-sets environment variables in the current job execution environment.

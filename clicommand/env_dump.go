@@ -10,7 +10,8 @@ import (
 )
 
 const envDumpHelpDescription = `Usage:
-  buildkite-agent env dump [options]
+
+   buildkite-agent env dump [options]
 
 Description:
    Prints out the environment of the current process as a JSON object, easily

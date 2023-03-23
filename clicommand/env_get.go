@@ -18,7 +18,7 @@ where the "job-api" experiment is enabled.
 
 const envGetHelpDescription = `Usage:
 
-  buildkite-agent env get [variables]
+   buildkite-agent env get [variables]
 
 Description:
    Retrieves environment variables and their current values from the current job
