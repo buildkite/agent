@@ -26,7 +26,8 @@ Example:
    $ buildkite-agent meta-data keys`
 
 type MetaDataKeysConfig struct {
-	Job string `cli:"job" validate:"required"`
+	Job   string `cli:"job"`
+	Build string `cli:"build"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -52,6 +53,12 @@ var MetaDataKeysCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job's build should the meta-data be checked for",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			Usage:  "Which build should the meta-data be retrieved from. --build will take precedence over --job",
+			EnvVar: "BUILDKITE_METADATA_BUILD_ID",
 		},
 
 		// API Flags
@@ -98,11 +105,19 @@ var MetaDataKeysCommand = cli.Command{
 		var keys []string
 		var resp *api.Response
 
+		scope := "job"
+		id := cfg.Job
+
+		if cfg.Build != "" {
+			scope = "build"
+			id = cfg.Build
+		}
+
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			keys, resp, err = client.MetaDataKeys(ctx, cfg.Job)
+			keys, resp, err = client.MetaDataKeys(ctx, scope, id)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}

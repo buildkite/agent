@@ -27,7 +27,8 @@ Example:
 type MetaDataGetConfig struct {
 	Key     string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Default string `cli:"default"`
-	Job     string `cli:"job" validate:"required"`
+	Job     string `cli:"job"`
+	Build   string `cli:"build"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -58,6 +59,12 @@ var MetaDataGetCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job's build should the meta-data be retrieved from",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			Usage:  "Which build should the meta-data be retrieved from. --build will take precedence over --job",
+			EnvVar: "BUILDKITE_METADATA_BUILD_ID",
 		},
 
 		// API Flags
@@ -104,11 +111,19 @@ var MetaDataGetCommand = cli.Command{
 		var metaData *api.MetaData
 		var resp *api.Response
 
+		scope := "job"
+		id := cfg.Job
+
+		if cfg.Build != "" {
+			scope = "build"
+			id = cfg.Build
+		}
+
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			metaData, resp, err = client.GetMetaData(ctx, cfg.Job, cfg.Key)
+			metaData, resp, err = client.GetMetaData(ctx, scope, id, cfg.Key)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				r.Break()
