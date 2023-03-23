@@ -1,6 +1,6 @@
 package api
 
-//go:generate interfacer -for github.com/buildkite/agent/v3/api.Client -as agent.APIClient -o ../agent/api.go
+//go:generate go run github.com/rjeczalik/interfaces/cmd/interfacer@v0.3.0 -for github.com/buildkite/agent/v3/api.Client -as agent.APIClient -o ../agent/api.go
 
 import (
 	"bytes"
