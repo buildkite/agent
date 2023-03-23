@@ -16,7 +16,7 @@ const envUnsetHelpDescription = `Usage:
    buildkite-agent env unset [variables]
 
 Description:
-   Un-sets environment variables in the current job execution environment.
+   Unsets environment variables in the current job execution environment.
 
    Note that this subcommand is only available from within the job executor with
    the ′job-api′ experiment enabled.
@@ -27,14 +27,14 @@ Description:
 
    Note that Buildkite read-only variables cannot be un-set.
 
-Example (un-sets the variables ′LLAMA′ and ′ALPACA′):
+Example (unsets the variables ′LLAMA′ and ′ALPACA′):
 
    $ buildkite-agent env unset LLAMA ALPACA
-   Un-set:
+   Unset:
    - ALPACA
    - LLAMA
 
-Example (Un-sets the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied
+Example (Unsets the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied
 over standard input):
 
    $ echo '["LLAMA","ALPACA"]' | buildkite-agent env unset --input-format=json --output-format=quiet -
@@ -44,7 +44,7 @@ type EnvUnsetConfig struct{}
 
 var EnvUnsetCommand = cli.Command{
 	Name:        "unset",
-	Usage:       "Un-sets variables from the job execution environment",
+	Usage:       "Unsets variables from the job execution environment",
 	Description: envUnsetHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
@@ -118,7 +118,7 @@ func envUnsetAction(c *cli.Context) error {
 
 	unset, err := client.EnvDelete(context.Background(), del)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Couldn't un-set the job executor environment variables: %v\n", err)
+		fmt.Fprintf(c.App.ErrWriter, "Couldn't unset the job executor environment variables: %v\n", err)
 	}
 
 	switch c.String("output-format") {
@@ -127,12 +127,12 @@ func envUnsetAction(c *cli.Context) error {
 
 	case "plain":
 		if len(unset) > 0 {
-			fmt.Fprintln(c.App.Writer, "Un-set:")
+			fmt.Fprintln(c.App.Writer, "Unset:")
 			for _, d := range unset {
 				fmt.Fprintf(c.App.Writer, "- %s\n", d)
 			}
 		} else {
-			fmt.Fprintln(c.App.Writer, "No variables un-set.")
+			fmt.Fprintln(c.App.Writer, "No variables unset.")
 		}
 
 	case "json", "json-pretty":
