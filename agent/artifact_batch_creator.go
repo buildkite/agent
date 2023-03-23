@@ -18,6 +18,10 @@ type ArtifactBatchCreatorConfig struct {
 
 	// Where the artifacts are being uploaded to on the command line
 	UploadDestination string
+
+	// CreateArtifactsTimeout, sets a context.WithTimeout around the CreateArtifacts API.
+	// If it's zero, there's no context timeout and the default HTTP timeout will prevail.
+	CreateArtifactsTimeout time.Duration
 }
 
 type ArtifactBatchCreator struct {
@@ -72,10 +76,21 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 
 		// Retry the batch upload a couple of times
 		err = roko.NewRetrier(
-			roko.WithMaxAttempts(10),
-			roko.WithStrategy(roko.Constant(5*time.Second)),
+			// TODO: e.g. roko.ExponentialSubsecond(500*time.Millisecond) WithMaxAttempts(10)
+			// see: https://github.com/buildkite/roko/pull/8
+			// Meanwhile, 8 roko.Exponential(2sec) attempts is 1,2,4,8,16,32,64 seconds delay (~2 mins)
+			roko.WithMaxAttempts(8),
+			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			creation, resp, err = a.apiClient.CreateArtifacts(ctx, a.conf.JobID, batch)
+
+			ctxTimeout := ctx
+			if a.conf.CreateArtifactsTimeout != 0 {
+				var cancel func()
+				ctxTimeout, cancel = context.WithTimeout(ctx, a.conf.CreateArtifactsTimeout)
+				defer cancel()
+			}
+
+			creation, resp, err = a.apiClient.CreateArtifacts(ctxTimeout, a.conf.JobID, batch)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
