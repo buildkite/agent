@@ -165,8 +165,12 @@ func HandleGlobalFlags(l logger.Logger, cfg any) func() {
 		experimentNamesSlice, ok := experimentNames.([]string)
 		if ok {
 			for _, name := range experimentNamesSlice {
-				experiments.Enable(name)
-				l.Debug("Enabled experiment `%s`", name)
+				known := experiments.Enable(name)
+				if !known {
+					l.Warn("Unknown experiment enabled: %q", name)
+					continue
+				}
+				l.Debug("Enabled experiment %q", name)
 			}
 		}
 	}

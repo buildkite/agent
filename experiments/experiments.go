@@ -4,11 +4,26 @@
 // It is intended for internal use by buildkite-agent only.
 package experiments
 
-var experiments = make(map[string]bool)
+var (
+	Available = map[string]struct{}{
+		"job-api":                       {},
+		"kubernetes-exec":               {},
+		"ansi-timestamps":               {},
+		"git-mirrors":                   {},
+		"flock-file-locks":              {},
+		"resolve-commit-after-checkout": {},
+		"descending-spawn-priority":     {},
+		"inbuilt-status-page":           {},
+	}
+
+	experiments = make(map[string]bool, len(Available))
+)
 
 // Enable a particular experiment in the agent.
-func Enable(key string) {
+func Enable(key string) (known bool) {
 	experiments[key] = true
+	_, known = Available[key] // is the experiment they've enabled one that we know of?
+	return known
 }
 
 // Disable a particular experiment in the agent.
