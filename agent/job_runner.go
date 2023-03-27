@@ -83,6 +83,9 @@ type JobRunnerConfig struct {
 
 	// Whether to set debug HTTP Requests in the job
 	DebugHTTP bool
+
+	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
+	AgentStdout io.Writer
 }
 
 type jobRunner interface {
@@ -206,10 +209,9 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// Our log streamer works off a buffer of output
 	runner.output = &process.Buffer{}
 
-	// The writer that output from the process goes into
-	var processWriter io.Writer
-
 	pr, pw := io.Pipe()
+
+	allWriters := []io.Writer{}
 
 	switch {
 	case experiments.IsEnabled("ansi-timestamps"):
@@ -219,12 +221,12 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 			return fmt.Sprintf("\x1b_bk;t=%d\x07",
 				time.Now().UnixNano()/int64(time.Millisecond))
 		})
-		processWriter = prefixer
+		allWriters = append(allWriters, prefixer)
 
 	case conf.AgentConfiguration.TimestampLines:
 		// If we have timestamp lines on, we have to buffer lines before we flush them
 		// because we need to know if the line is a header or not. It's a bummer.
-		processWriter = pw
+		allWriters = append(allWriters, pw)
 
 		go func() {
 			// Use a scanner to process output line by line
@@ -247,7 +249,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	default:
 		// Write output directly to the line buffer so we
-		processWriter = io.MultiWriter(pw, runner.output)
+		allWriters = append(allWriters, pw, runner.output)
 
 		// Use a scanner to process output for headers only
 		go func() {
@@ -269,8 +271,26 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 			return nil, err
 		}
 		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
-		processWriter = io.MultiWriter(processWriter, tmpFile)
+		allWriters = append(allWriters, tmpFile)
 	}
+
+	if conf.AgentConfiguration.WriteJobLogsToStdout {
+		if conf.AgentConfiguration.LogFormat == "json" {
+			log := newJobLogger(
+				conf.AgentStdout, logger.StringField("org", job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
+				logger.StringField("pipeline", job.Env["BUILDKITE_PIPELINE_SLUG"]),
+				logger.StringField("branch", job.Env["BUILDKITE_BRANCH"]),
+				logger.StringField("queue", job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
+				logger.StringField("job_id", job.ID),
+			)
+			allWriters = append(allWriters, log)
+		} else {
+			allWriters = append(allWriters, conf.AgentStdout)
+		}
+	}
+
+	// The writer that output from the process goes into
+	processWriter := io.MultiWriter(allWriters...)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -941,4 +961,28 @@ func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) 
 
 		return err
 	})
+}
+
+// jobLogger is just a simple wrapper around a JSON Logger that satisfies the
+// io.Writer interface so it can be seemlessly use with existing job logging code.
+type jobLogger struct {
+	log logger.Logger
+}
+
+func newJobLogger(stdout io.Writer, fields ...logger.Field) jobLogger {
+	l := logger.NewConsoleLogger(logger.NewJSONPrinter(stdout), os.Exit)
+	l = l.WithFields(logger.StringField("source", "job"))
+	l = l.WithFields(fields...)
+	return jobLogger{log: l}
+}
+
+// Write adapts the underlying JSON logger to match the io.Writer interface to
+// easier slotting into job logger code. This will write existing fields
+// attached to the logger, the message, and write out to the INFO level.
+func (l jobLogger) Write(data []byte) (int, error) {
+	// When writing as a structured log, trailing newlines and carriage returns
+	// generally don't make sense.
+	msg := strings.TrimRight(string(data), "\r\n")
+	l.log.Info(msg)
+	return len(data), nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -33,6 +34,9 @@ type AgentWorkerConfig struct {
 
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
+
+	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
+	AgentStdout io.Writer
 }
 
 type agentStats struct {
@@ -91,6 +95,9 @@ type AgentWorker struct {
 	// Hopefully this can be replaced with a global setting for tests in future:
 	// https://github.com/buildkite/roko/issues/2
 	retrySleepFunc func(time.Duration)
+
+	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
+	agentStdout io.Writer
 }
 
 type errUnrecoverable struct {
@@ -131,6 +138,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 		cancelSig:          c.CancelSignal,
 		spawnIndex:         c.SpawnIndex,
 		retrySleepFunc:     time.Sleep, // https://github.com/buildkite/roko/issues/2
+		agentStdout:        c.AgentStdout,
 	}
 }
 
@@ -644,6 +652,7 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 		DebugHTTP:          a.debugHTTP,
 		CancelSignal:       a.cancelSig,
 		AgentConfiguration: a.agentConfiguration,
+		AgentStdout:        a.agentStdout,
 	})
 	if err != nil {
 		return fmt.Errorf("Failed to initialize job: %v", err)

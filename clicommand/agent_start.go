@@ -68,6 +68,7 @@ type AgentStartConfig struct {
 	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
 	CancelGracePeriod           int      `cli:"cancel-grace-period"`
 	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
+	WriteJobLogsToStdout        bool     `cli:"write-job-logs-to-stdout"`
 	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
 	SocketsPath                 string   `cli:"sockets-path" normalize:"filepath"`
@@ -284,6 +285,11 @@ var AgentStartCommand = cli.Command{
 			Name:   "enable-job-log-tmpfile",
 			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job",
 			EnvVar: "BUILDKITE_ENABLE_JOB_LOG_TMPFILE",
+		},
+		cli.BoolFlag{
+			Name:   "write-job-logs-to-stdout",
+			Usage:  "Writes job logs to the agent process' stdout. This simplifies log collection if running agents in Docker.",
+			EnvVar: "BUILDKITE_WRITE_JOB_LOGS_TO_STDOUT",
 		},
 		cli.StringFlag{
 			Name:   "shell",
@@ -628,6 +634,10 @@ var AgentStartCommand = cli.Command{
 		}
 
 		l := CreateLogger(cfg)
+		// Add this when using JSON output to help differentiate agent vs job logs.
+		if cfg.LogFormat == "json" {
+			l = l.WithFields(logger.StringField("source", "agent"))
+		}
 
 		// Show warnings now we have a logger
 		for _, warning := range warnings {
@@ -778,6 +788,8 @@ var AgentStartCommand = cli.Command{
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
 			CancelGracePeriod:          cfg.CancelGracePeriod,
 			EnableJobLogTmpfile:        cfg.EnableJobLogTmpfile,
+			WriteJobLogsToStdout:       cfg.WriteJobLogsToStdout,
+			LogFormat:                  cfg.LogFormat,
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
@@ -806,6 +818,9 @@ var AgentStartCommand = cli.Command{
 			} else {
 				fmt.Fprintf(os.Stderr, welcomeMessage, "", "")
 			}
+		} else if cfg.LogFormat != "json" {
+			// TODO If/when cli is upgraded to v2, choice validation can be done with per-argument Actions.
+			l.Fatal("Invalid log format %v. Only 'text' or 'json' are allowed.", cfg.LogFormat)
 		}
 
 		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), fmt.Sprintf("%d", os.Getpid()))
@@ -934,6 +949,7 @@ var AgentStartCommand = cli.Command{
 						Debug:              cfg.Debug,
 						DebugHTTP:          cfg.DebugHTTP,
 						SpawnIndex:         i,
+						AgentStdout:        os.Stdout,
 					}))
 		}
 
