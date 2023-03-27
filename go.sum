@@ -62,6 +62,8 @@ github.com/aws/aws-sdk-go v1.44.181 h1:w4OzE8bwIVo62gUTAp/uEFO2HSsUtf1pjXpSs36cl
 github.com/aws/aws-sdk-go v1.44.181/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
 github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf h1:WCnJxXZXx9c8gwz598wvdqmu+YTzB9wx2X1OovK3Le8=
 github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf/go.mod h1:CeKhh8xSs3WZAc50xABMxu+FlfAAd5PNumo7NfOv7EE=
+github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd h1:C0dfBzAdNMqxokqWUysk2KTJSMmqvh9cNW1opdy5+0Q=
+github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd/go.mod h1:CeKhh8xSs3WZAc50xABMxu+FlfAAd5PNumo7NfOv7EE=
 github.com/buildkite/bintest/v3 v3.1.1 h1:bS924OU8Ljm46DesONXzxxTBMjbliQRnPB+H4DOeUDE=
 github.com/buildkite/bintest/v3 v3.1.1/go.mod h1:T3Et1VwEizryWfwLLruFqExHsEU+wjkxOlL54283ccc=
 github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251 h1:k6UDF1uPYOs0iy1HPeotNa155qXRWrzKnqAaGXHLZCE=

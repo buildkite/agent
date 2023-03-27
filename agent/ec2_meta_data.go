@@ -36,27 +36,20 @@ func (e EC2MetaData) Get() (map[string]string, error) {
 		return metaData, err
 	}
 
-	instanceId, err := c.GetMetadata("instance-id")
+	document, err := c.GetInstanceIdentityDocument()
 	if err != nil {
 		return metaData, err
 	}
-	metaData["aws:instance-id"] = string(instanceId)
 
-	instanceType, err := c.GetMetadata("instance-type")
-	if err != nil {
-		return metaData, err
-	}
-	metaData["aws:instance-type"] = string(instanceType)
-
-	amiId, err := c.GetMetadata("ami-id")
-	if err != nil {
-		return metaData, err
-	}
-	metaData["aws:ami-id"] = string(amiId)
+	metaData["aws:instance-id"] = document.InstanceID
+	metaData["aws:instance-type"] = document.InstanceType
+	metaData["aws:ami-id"] = document.ImageID
+	metaData["aws:availability-zone"] = document.AvailabilityZone
+	metaData["aws:region"] = document.Region
 
 	instanceLifeCycle, err := c.GetMetadata("instance-life-cycle")
 	if err == nil {
-		metaData["aws:instance-life-cycle"] = string(instanceLifeCycle)
+		metaData["aws:instance-life-cycle"] = instanceLifeCycle
 	}
 
 	return metaData, nil
