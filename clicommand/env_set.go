@@ -25,7 +25,8 @@ Description:
 
    Note that this subcommand is only available from within the job executor with the job-api experiment enabled.
 
-Example (sets the variables ′LLAMA′ and ′ALPACA′):
+Examples:
+   Setting the variables ′LLAMA′ and ′ALPACA′:
 
    $ buildkite-agent env set LLAMA=Kuzco "ALPACA=Geronimo the Incredible"
    Added:
@@ -33,8 +34,7 @@ Example (sets the variables ′LLAMA′ and ′ALPACA′):
    Updated:
    ~ ALPACA
 
-Example (sets the variables ′LLAMA′ and ′ALPACA′ using a JSON object supplied
-over standard input):
+   Setting the variables ′LLAMA′ and ′ALPACA′ using a JSON object supplied over standard input:
 
    $ echo '{"ALPACA":"Geronimo the Incredible","LLAMA":"Kuzco"}' | buildkite-agent env set --input-format=json --output-format=quiet -
 `

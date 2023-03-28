@@ -31,7 +31,8 @@ Description:
    phases of the job. However, ′env get′ can be used to inspect the changes made
    with ′env set′ and ′env unset′.
 
-Example (gets all variables in key=value format):
+Examples:
+   Getting all variables in key=value format:
 
    $ buildkite-agent env get
    ALPACA=Geronimo the Incredible
@@ -39,18 +40,18 @@ Example (gets all variables in key=value format):
    LLAMA=Kuzco
    ...
 
-Example (gets the value of one variable):
+   Getting the value of one variable:
 
    $ buildkite-agent env get LLAMA
    Kuzco
 
-Example (gets multiple specific variables):
+   Getting multiple specific variables:
 
    $ buildkite-agent env get LLAMA ALPACA
    ALPACA=Geronimo the Incredible
    LLAMA=Kuzco
 
-Example (gets variables as a JSON object):
+   Getting variables as a JSON object:
 
    $ buildkite-agent env get --format=json-pretty
    {

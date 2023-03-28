@@ -24,15 +24,16 @@ Description:
 
    Note that this subcommand is only available from within the job executor with the job-api experiment enabled.
 
-Example (unsets the variables ′LLAMA′ and ′ALPACA′):
+Examples:
+
+   Unsetting the variables ′LLAMA′ and ′ALPACA′)
 
    $ buildkite-agent env unset LLAMA ALPACA
    Unset:
    - ALPACA
    - LLAMA
 
-Example (Unsets the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied
-over standard input):
+   Unsetting the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied over standard input
 
    $ echo '["LLAMA","ALPACA"]' | buildkite-agent env unset --input-format=json --output-format=quiet -
 `
