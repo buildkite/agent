@@ -24,7 +24,6 @@ var (
 		JobAPI:                     {},
 		KubernetesExec:             {},
 		ANSITimestamps:             {},
-		GitMirrors:                 {},
 		FlockFileLocks:             {},
 		ResolveCommitAfterCheckout: {},
 		DescendingSpawnPrioity:     {},

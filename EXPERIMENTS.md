@@ -18,14 +18,6 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
-### `git-mirrors`
-
-Maintain a single bare git mirror for each repository on a host that is shared amongst multiple agents and pipelines. Checkouts reference the git mirror using `git clone --reference`, as do submodules.
-
-You must set a `git-mirrors-path` in your config for this to work.
-
-**Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
-
 ### `ansi-timestamps`
 
 Outputs inline ANSI timestamps for each line of log output which enables toggle-able timestamps in the Buildkite UI.

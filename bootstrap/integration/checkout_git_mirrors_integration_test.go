@@ -14,19 +14,51 @@ import (
 	"github.com/buildkite/bintest/v3"
 )
 
-// Example commit info:
-//
-// commit 65e2f46931cf9fe1ba9e445d92d213cfa3be5312
-// abbrev-commit 65e2f46931
-// Author:     Example Human <legit@example.com>
-//
-//	hello world
-var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit [0-9a-f]+\n.*^Author:`)
+func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
+	t.Parallel()
 
-// We expect this arg multiple times, just define it once.
-var gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
 
-func TestWithResolvingCommitExperiment(t *testing.T) {
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// But assert which ones are called
+	git.ExpectAll([][]any{
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "refs/pull/123/head"},
+		{"rev-parse", "FETCH_HEAD"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestWithResolvingCommitExperiment_WithGitMirrors(t *testing.T) {
 	// t.Parallel() cannot be used with experiments.Enable()
 	defer experiments.EnableWithUndo(experiments.ResolveCommitAfterCheckout)()
 
@@ -35,6 +67,10 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
@@ -48,9 +84,10 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		MustMock(t, "git").
 		PassthroughToLocalCommand()
 
-	// But assert which ones are called
+		// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -67,7 +104,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutLocalGitProject(t *testing.T) {
+func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -75,6 +112,10 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
@@ -90,7 +131,8 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "--config", "pack.threads=35", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -106,7 +148,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
+func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	// Git for windows seems to struggle with local submodules in the temp dir
@@ -119,6 +161,10 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	submoduleRepo, err := createTestGitRespository()
 	if err != nil {
@@ -150,14 +196,16 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "--mirror", "-v", "--", submoduleRepo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force"},
+		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force", "--reference", submoduleRepo.Path},
 		{"submodule", "foreach", "--recursive", "git reset --hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -172,7 +220,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
+func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	// Git for windows seems to struggle with local submodules in the temp dir
@@ -185,6 +233,10 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	submoduleRepo, err := createTestGitRespository()
 	if err != nil {
@@ -216,7 +268,8 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
@@ -233,7 +286,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
+func TestCheckingOutShallowCloneOfLocalGitProject_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -241,6 +294,10 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--depth=1",
@@ -256,7 +313,8 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"clone", "--depth=1", "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "--depth=1", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -272,7 +330,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
+func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -280,6 +338,10 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	agent := tester.MockAgent(t)
 	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
@@ -288,7 +350,7 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 	tester.RunAndCheck(t)
 }
 
-func TestCheckingOutWithSSHKeyscan(t *testing.T) {
+func TestCheckingOutWithSSHKeyscan_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -296,6 +358,10 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	tester.MustMock(t, "ssh-keyscan").
 		Expect("github.com").
@@ -305,7 +371,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "git@github.com:buildkite/agent.git", ".").
+	git.Expect("clone", "--mirror", "-v", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
 		AndExitWith(0)
 
 	env := []string{
@@ -316,7 +382,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
+func TestCheckingOutWithoutSSHKeyscan_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -324,6 +390,10 @@ func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	tester.MustMock(t, "ssh-keyscan").
 		Expect("github.com").
@@ -337,7 +407,7 @@ func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
+func TestCheckingOutWithSSHKeyscanAndUnscannableRepo_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -346,6 +416,10 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	}
 	defer tester.Close()
 
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
+
 	tester.MustMock(t, "ssh-keyscan").
 		Expect("github.com").
 		NotCalled()
@@ -353,7 +427,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
+	git.Expect("clone", "--mirror", "-v", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
 		AndExitWith(0)
 
 	env := []string{
@@ -364,7 +438,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCleaningAnExistingCheckout(t *testing.T) {
+func TestCleaningAnExistingCheckout_WithGitMirrors(t *testing.T) {
 	t.Skip("TODO: Figure out what this test is actually supposed to be testing")
 
 	t.Parallel()
@@ -374,6 +448,10 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	// Create an existing checkout
 	out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, tester.CheckoutDir())
@@ -402,12 +480,16 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 	}
 }
 
-func TestForcingACleanCheckout(t *testing.T) {
+func TestForcingACleanCheckout_WithGitMirrors(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
@@ -422,12 +504,16 @@ func TestForcingACleanCheckout(t *testing.T) {
 	}
 }
 
-func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
+func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder_WithGitMirrors(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	// Create an existing checkout
 	out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, tester.CheckoutDir())
@@ -447,12 +533,16 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 	tester.RunAndCheck(t)
 }
 
-func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
+func TestCheckoutRetriesOnCleanFailure_WithGitMirrors(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	var cleanCounter int32
 
@@ -473,12 +563,16 @@ func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
 	tester.RunAndCheck(t)
 }
 
-func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
+func TestCheckoutRetriesOnCloneFailure_WithGitMirrors(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	var cloneCounter int32
 
@@ -497,12 +591,16 @@ func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
 	tester.RunAndCheck(t)
 }
 
-func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
+func TestCheckoutDoesNotRetryOnHookFailure_WithGitMirrors(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	var checkoutCounter int32
 
@@ -524,7 +622,7 @@ func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 	tester.CheckMocks(t)
 }
 
-func TestRepositorylessCheckout(t *testing.T) {
+func TestRepositorylessCheckout_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	if runtime.GOOS == "windows" {
@@ -536,6 +634,10 @@ func TestRepositorylessCheckout(t *testing.T) {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
 	var script = []string{
 		"#!/bin/bash",
@@ -557,21 +659,57 @@ func TestRepositorylessCheckout(t *testing.T) {
 	tester.RunAndCheck(t)
 }
 
-type subDirMatcher struct {
-	dir string
-}
+func TestGitMirrorEnv(t *testing.T) {
+	t.Parallel()
 
-func (mf subDirMatcher) Match(s string) (bool, string) {
-	if filepath.Dir(s) == mf.dir {
-		return true, ""
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
-	return false, fmt.Sprintf("%s wasn't a sub directory of %s", s, mf.dir)
-}
+	defer tester.Close()
 
-func (mf subDirMatcher) String() string {
-	return fmt.Sprintf("subDirMatcher(%q)", mf.dir)
-}
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
 
-func matchSubDir(dir string) bintest.Matcher {
-	return subDirMatcher{dir: dir}
+	// assert the correct BUILDKITE_REPO_MIRROR _after_ the bootstrap has run
+	gitMirrorPath := ""
+	tester.ExpectGlobalHook("pre-command").Once().AndCallFunc(func(c *bintest.Call) {
+		gitMirrorPath = c.GetEnv("BUILDKITE_REPO_MIRROR")
+		c.Exit(0)
+	})
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// But assert which ones are called
+	git.ExpectAll([][]any{
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	if !strings.HasPrefix(gitMirrorPath, tester.GitMirrorsDir) {
+		t.Errorf("gitMirrorPath = %q, want prefix %q", gitMirrorPath, tester.GitMirrorsDir)
+	}
 }
