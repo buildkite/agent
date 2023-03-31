@@ -20,6 +20,7 @@ import (
 	"github.com/buildkite/agent/v3/mime"
 	"github.com/buildkite/agent/v3/pool"
 	"github.com/buildkite/roko"
+	"github.com/dustin/go-humanize"
 	zglob "github.com/mattn/go-zglob"
 )
 
@@ -370,7 +371,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 
 		p.Spawn(func() {
 			// Show a nice message that we're starting to upload the file
-			a.logger.Info("Uploading artifact %s %s (%d bytes)", artifact.ID, artifact.Path, artifact.FileSize)
+			a.logger.Info("Uploading artifact %s %s (%s)", artifact.ID, artifact.Path, humanize.Bytes(uint64(artifact.FileSize)))
 
 			var state string
 
