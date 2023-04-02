@@ -13,6 +13,7 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
+	"github.com/dustin/go-humanize"
 )
 
 type DownloadConfig struct {
@@ -152,7 +153,7 @@ func (d Download) try(ctx context.Context) error {
 		return fmt.Errorf("Error when copying data %s (%T: %v)", d.conf.URL, err, err)
 	}
 
-	d.logger.Info("Successfully downloaded \"%s\" %d bytes", d.conf.Path, bytes)
+	d.logger.Info("Successfully downloaded \"%s\" %s", d.conf.Path, humanize.Bytes(uint64(bytes)))
 
 	return nil
 }
