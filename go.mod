@@ -21,7 +21,7 @@ require (
 	github.com/google/go-querystring v1.1.0
 	github.com/mattn/go-zglob v0.0.4
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/nightlyone/lockfile v0.0.0-20180618180623-0ad87eef1443
+	github.com/nightlyone/lockfile v1.0.0
 	github.com/oleiade/reflections v1.0.1
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pborman/uuid v1.2.1
