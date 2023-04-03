@@ -145,9 +145,9 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	//
 	// But if the shebang specifies something weird like Ruby 🤪
 	// the wrapper won't work. Stick to POSIX shells for now.
-	if shebang != "" && !shellscript.IsPOSIXShell(shebang) {
-		return nil, fmt.Errorf("hook starts with an unsupported shebang line %q", shebang)
-	}
+	// if shebang != "" && !shellscript.IsPOSIXShell(shebang) {
+	// 	return nil, fmt.Errorf("hook starts with an unsupported shebang line %q", shebang)
+	// }
 
 	var isPOSIXHook, isPwshHook bool
 

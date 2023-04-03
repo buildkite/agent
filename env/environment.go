@@ -197,6 +197,10 @@ func (e *Environment) Apply(diff Diff) {
 
 // Copy returns a copy of the env
 func (e *Environment) Copy() *Environment {
+	if e == nil {
+		return New()
+	}
+
 	c := New()
 
 	e.underlying.Range(func(k, v string) bool {
