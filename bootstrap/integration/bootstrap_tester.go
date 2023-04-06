@@ -100,7 +100,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			"BUILDKITE_PULL_REQUEST=",
 			"BUILDKITE_PIPELINE_PROVIDER=git",
 			"BUILDKITE_COMMIT=HEAD",
-			"BUILDKITE_BRANCH=master",
+			"BUILDKITE_BRANCH=main",
 			"BUILDKITE_COMMAND_EVAL=true",
 			"BUILDKITE_ARTIFACT_PATHS=",
 			"BUILDKITE_COMMAND=true",

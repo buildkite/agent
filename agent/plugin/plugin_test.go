@@ -78,10 +78,10 @@ func TestCreateFromJSON(t *testing.T) {
 			}},
 		},
 		{
-			`["github.com/buildkite-plugins/fake-plugin#master"]`,
+			`["github.com/buildkite-plugins/fake-plugin#main"]`,
 			[]*Plugin{{
 				Location:      "github.com/buildkite-plugins/fake-plugin",
-				Version:       "master",
+				Version:       "main",
 				Scheme:        "",
 				Configuration: map[string]any{},
 			}},
@@ -130,8 +130,8 @@ func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 			"JSON structure was not an array",
 		},
 		{
-			`["github.com/buildkite-plugins/ping#master#lololo"]`,
-			"Too many #'s in \"github.com/buildkite-plugins/ping#master#lololo\"",
+			`["github.com/buildkite-plugins/ping#main#lololo"]`,
+			"Too many #'s in \"github.com/buildkite-plugins/ping#main#lololo\"",
 		},
 	}
 
@@ -224,8 +224,8 @@ func TestIdentifier(t *testing.T) {
 		location, wantID string
 	}{
 		{
-			location: "github.com/buildkite/plugins/docker-compose/beta#master",
-			wantID:   "github-com-buildkite-plugins-docker-compose-beta-master",
+			location: "github.com/buildkite/plugins/docker-compose/beta#main",
+			wantID:   "github-com-buildkite-plugins-docker-compose-beta-main",
 		},
 		{
 			location: "github.com/buildkite/plugins/docker-compose/beta",
