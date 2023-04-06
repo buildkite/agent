@@ -13,7 +13,7 @@ func createTestGitRespository() (*gitRepository, error) {
 		return nil, err
 	}
 
-	if err = repo.CreateBranch("master"); err != nil {
+	if err = repo.CreateBranch("main"); err != nil {
 		return nil, err
 	}
 
@@ -49,7 +49,7 @@ func createTestGitRespository() (*gitRepository, error) {
 		return nil, err
 	}
 
-	if err = repo.CheckoutBranch("master"); err != nil {
+	if err = repo.CheckoutBranch("main"); err != nil {
 		return nil, err
 	}
 
