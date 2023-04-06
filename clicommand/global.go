@@ -88,7 +88,14 @@ var RedactedVars = cli.StringSliceFlag{
 	Name:   "redacted-vars",
 	Usage:  "Pattern of environment variable names containing sensitive values",
 	EnvVar: "BUILDKITE_REDACTED_VARS",
-	Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN", "*_ACCESS_KEY", "*_SECRET_KEY"},
+	Value: &cli.StringSlice{
+		"*_PASSWORD",
+		"*_SECRET",
+		"*_TOKEN",
+		"*_PRIVATE_KEY",
+		"*_ACCESS_KEY",
+		"*_SECRET_KEY",
+	},
 }
 
 func CreateLogger(cfg any) logger.Logger {
