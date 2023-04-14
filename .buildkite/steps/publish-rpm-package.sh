@@ -30,14 +30,14 @@ echo '--- Installing dependencies'
 #         required by: createrepo_c-libs-0.17.1-r2[so:libcrypto.so.3]
 # So, we add alpine/edge/main for libcrypto3 and alpine/edge/testing for createrepo_c.
 # In future we can probably remove the explicit libcrypto3 install, and the alpine/edge/main repo.
-apk add \
+apk add --update-cache --no-progress \
   --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main \
   --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing \
   'libcrypto3>=3.0.5-r2' \
   createrepo_c
 
 # createrepo_c requires some exotic flags on the cp, which aren't available on the busybox version
-apk --no-cache add coreutils
+apk add --no-progress coreutils aws-cli
 
 # Make sure we have a local copy of the yum repo
 echo "--- Syncing s3://$RPM_S3_BUCKET to `hostname`"
