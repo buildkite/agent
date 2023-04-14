@@ -84,3 +84,7 @@ See [jobapi/payloads.go](./jobapi/payloads.go) for the full API request/response
 The Job API is unavailable on windows agents running versions of windows prior to build 17063, as this was when windows added Unix Domain Socket support. Using this experiment on such agents will output a warning, and the API will be unavailable.
 
 **Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™️.
+
+## `cancel-checkout`
+
+Bug fix in testing: Don't retry git checkout when the job has been canceled during the checkout phase
