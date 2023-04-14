@@ -24,6 +24,7 @@ mkdir -p rpm
 buildkite-agent artifact download --build "$artifacts_build" "rpm/*.rpm" rpm/
 
 echo '--- Installing dependencies'
+apk add aws-cli
 # currently, the libcrypto3-3.0.5-r0 in the alpine/v3.16/main repo isn't compatible with createrepo_c:
 #     ERROR: unable to select packages:
 #       so:libcrypto.so.3 (no such package):
