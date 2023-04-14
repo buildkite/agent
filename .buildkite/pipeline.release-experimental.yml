@@ -28,6 +28,7 @@ steps:
           account-ids: "032379705303"
       - docker#v3.5.0:
           image: "buildkite/agent:3.45.0"
+          entrypoint: bash
           propagate-environment: true
           volumes:
             - "/yum.buildkite.com"
