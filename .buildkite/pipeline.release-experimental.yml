@@ -23,9 +23,6 @@ steps:
     agents:
       queue: "deploy"
     plugins:
-      - ecr#v2.0.0:
-          login: true
-          account-ids: "032379705303"
       - docker#v3.5.0:
           image: "buildkite/agent:3.45.0"
           entrypoint: bash
