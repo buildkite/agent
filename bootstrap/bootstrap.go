@@ -92,10 +92,20 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	var err error
-
 	span, ctx, stopper := b.startTracing(ctx)
 	defer stopper()
 	defer func() { span.FinishWithError(err) }()
+
+	// Create a context to use for cancelation of the job
+	var cancelCtx context.Context
+	var cancel context.CancelFunc
+	if experiments.IsEnabled("cancel-checkout") {
+		cancelCtx, cancel = context.WithCancel(ctx)
+	} else {
+		cancelCtx = ctx
+		cancel = func() {}
+	}
+	defer cancel()
 
 	// Listen for cancellation
 	go func() {
@@ -106,6 +116,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		case <-b.cancelCh:
 			b.shell.Commentf("Received cancellation signal, interrupting")
 			b.shell.Interrupt()
+			cancel()
 		}
 	}()
 
@@ -161,7 +172,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	if phaseErr == nil && includePhase("checkout") {
-		phaseErr = b.CheckoutPhase(ctx)
+		phaseErr = b.CheckoutPhase(cancelCtx)
 	} else {
 		checkoutDir, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 		if exists {
@@ -1068,6 +1079,10 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 
 				case errors.Is(err, context.Canceled):
 					b.shell.Warningf("Checkout was cancelled")
+					r.Break()
+
+				case experiments.IsEnabled("cancel-checkout") && errors.Is(ctx.Err(), context.Canceled):
+					b.shell.Warningf("Checkout was cancelled due to context cancellation")
 					r.Break()
 
 				default:
