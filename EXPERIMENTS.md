@@ -87,4 +87,6 @@ The Job API is unavailable on windows agents running versions of windows prior t
 
 ## `cancel-checkout`
 
-Bug fix in testing: Don't retry git checkout when the job has been canceled during the checkout phase
+Don't retry git checkout when the job has been canceled during the checkout phase.
+
+**Status:** Bug fix in testing. We well remove or promote it soon.
