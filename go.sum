@@ -68,6 +68,8 @@ github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251 h1:k6UDF1uPY
 github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251/go.mod h1:gbPR1gPu9dB96mucYIR7T3B7p/78hRVSOuzIWLHK2Y4=
 github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157 h1:lqcTyaty4fY7XmGPKep+MtOYDvj7OKogKX2C2Y783BQ=
 github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157/go.mod h1:b3U4GZW/n8GbCh9+pIFLvdY+B+jlh5zOgS8s3WdELbs=
+github.com/buildkite/roko v1.1.0 h1:UKCUXuW8l9Jl6ep5VXtEX1dloFkIOJ8A7+2GvrvySZI=
+github.com/buildkite/roko v1.1.0/go.mod h1:b3U4GZW/n8GbCh9+pIFLvdY+B+jlh5zOgS8s3WdELbs=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000 h1:hiVSLk7s3yFKFOHF/huoShLqrj13RMguWX2yzfvy7es=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000/go.mod h1:gv0DYOzHEsKgo31lTCDGauIg4DTTGn41Bzp+t3wSOlk=
 github.com/cenkalti/backoff/v4 v4.2.0 h1:HN5dHm3WBOgndBH6E8V0q2jIYIR3s9yglV8k/+MN3u4=
