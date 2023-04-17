@@ -43,7 +43,7 @@ Description:
    - buildkite/pipeline.json
 
    You can also pipe build pipelines to the command allowing you to create
-   scripts that generate dynamic pipelines.The configuration file has a
+   scripts that generate dynamic pipelines. The configuration file has a
    limit of 500 steps per file. Configuration files with over 500 steps
    must be split into multiple files and uploaded in separate steps.
 
