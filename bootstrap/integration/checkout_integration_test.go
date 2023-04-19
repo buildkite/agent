@@ -17,13 +17,14 @@ import (
 // Example commit info:
 //
 // commit 65e2f46931cf9fe1ba9e445d92d213cfa3be5312
+// abbrev-commit 65e2f46931
 // Author:     Example Human <legit@example.com>
-// AuthorDate: Thu Jan 15 11:05:16 2015 +0800
-// Commit:     Example Human <legit@example.com>
-// CommitDate: Thu Jan 15 11:05:16 2015 +0800
 //
 //	hello world
-var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\n.*^Author:`)
+var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit [0-9a-f]+\n.*^Author:`)
+
+// We expect this arg multiple times, just define it once.
+var gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
 
 // Enable an experiment, returning a function to restore the previous state.
 // Usage: defer experimentWithUndo("foo")()
@@ -67,7 +68,7 @@ func TestCheckingOutGitHubPullRequestsWithGitMirrorsExperiment(t *testing.T) {
 		{"rev-parse", "FETCH_HEAD"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+		{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -109,7 +110,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 			{"fetch", "-v", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 			{"rev-parse", "HEAD"},
 		})
 	} else {
@@ -119,7 +120,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 			{"fetch", "-v", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 			{"rev-parse", "HEAD"},
 		})
 	}
@@ -162,7 +163,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 			{"fetch", "-v", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	} else {
 		git.ExpectAll([][]any{
@@ -171,7 +172,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 			{"fetch", "-v", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	}
 
@@ -241,7 +242,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 			{"submodule", "foreach", "--recursive", "git reset --hard"},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	} else {
 		git.ExpectAll([][]any{
@@ -256,7 +257,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 			{"submodule", "foreach", "--recursive", "git reset --hard"},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	}
 
@@ -320,7 +321,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 			{"fetch", "-v", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	} else {
 		git.ExpectAll([][]any{
@@ -330,7 +331,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 			{"fetch", "-v", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	}
 
@@ -372,7 +373,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 			{"fetch", "--depth=1", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	} else {
 		git.ExpectAll([][]any{
@@ -381,7 +382,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 			{"fetch", "--depth=1", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	}
 
@@ -726,7 +727,7 @@ func TestGitMirrorEnv(t *testing.T) {
 			{"fetch", "-v", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	} else {
 		git.ExpectAll([][]any{
@@ -735,7 +736,7 @@ func TestGitMirrorEnv(t *testing.T) {
 			{"fetch", "-v", "--", "origin", "main"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"--no-pager", "show", "HEAD", "--no-patch", "--no-color", gitShowFormatArg},
 		})
 	}
 
