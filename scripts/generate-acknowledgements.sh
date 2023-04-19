@@ -42,8 +42,14 @@ addfile() {
 
 ## The Go standard library also counts.
 license_path="$(go env GOROOT)/LICENSE"
-if [[ "$(go env GOROOT)" == /opt/homebrew/* ]]; then
+if [[ ! -f $license_path ]]; then
+  # Homebrew and/or macOS does it different? Try up a directory.
+  echo "Could not find Go's LICENSE file at $license_path"
   license_path="$(go env GOROOT)/../LICENSE"
+fi
+if [[ ! -f $license_path ]]; then
+  echo "Could not find Go's LICENSE file at $license_path"
+  exit 1
 fi
 
 addfile "$license_path" "Go standard library"

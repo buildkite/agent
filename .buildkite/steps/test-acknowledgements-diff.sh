@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-trap "rm ACKNOWLEDGEMENTS-{orig,new}.md" EXIT
+trap "rm -f ACKNOWLEDGEMENTS-{orig,new}.md" EXIT
 
 # Make a comparison copy without the generate timestamp
 sed -e '$d' ACKNOWLEDGEMENTS.md > ACKNOWLEDGEMENTS-orig.md
@@ -10,7 +10,7 @@ sed -e '$d' ACKNOWLEDGEMENTS.md > ACKNOWLEDGEMENTS-orig.md
 ./scripts/generate-acknowledgements.sh
 sed -e '$d' ACKNOWLEDGEMENTS.md > ACKNOWLEDGEMENTS-new.md
 
-if diff -q ACKNOWLEDGEMENTS-{orig,new}.md ; then
+if diff -u ACKNOWLEDGEMENTS-{orig,new}.md ; then
   echo "Acknowledgements are up-to-date! 🎉"
   exit 0
 fi
