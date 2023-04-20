@@ -21,12 +21,22 @@ fi
 
 # Save licenses
 export TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)" || exit 1
-rmdir "${TEMPDIR}"
-"${GO_LICENSES}" save . --save_path="${TEMPDIR}"
+export COMBINEDIR="${TEMPDIR}/combined"
+mkdir -p "${COMBINEDIR}"
+
+# go-licenses output can vary by GOOS.
+# https://github.com/google/go-licenses/issues/187
+# Run it for each OS we release for, and combine the results.
+for goos in darwin dragonfly freebsd linux netbsd openbsd windows ; do
+  GOOS="${goos}" "${GO_LICENSES}" save . --save_path="${TEMPDIR}/${goos}"
+  cp -fR "${TEMPDIR}/${goos}"/* "${COMBINEDIR}"
+done
+
 trap "rm -fr ${TEMPDIR}" EXIT
 
 # Build acknowledgements file
 export TEMPFILE="$(mktemp acknowledgements.XXXXXX)" || exit 1
+trap "rm -f ${TEMPFILE}" EXIT
 cat > "${TEMPFILE}" <<EOF
 # Buildkite Agent OSS Attributions
 
@@ -35,22 +45,28 @@ Licenses for the libraries used are reproduced below.
 EOF
 
 addfile() {
-    printf "\n\n---\n\n## %s\n\n\`\`\`\n" "${2:-${1#${TEMPDIR}/}}" >> "${TEMPFILE}"
+    printf "\n\n---\n\n## %s\n\n\`\`\`\n" "${2:-${1#${COMBINEDIR}/}}" >> "${TEMPFILE}"
     cat "$1" >> "${TEMPFILE}"
     printf "\n\`\`\`\n" >> "${TEMPFILE}"
 }
 
 ## The Go standard library also counts.
 license_path="$(go env GOROOT)/LICENSE"
-if [[ "$(go env GOROOT)" == /opt/homebrew/* ]]; then
+if [[ ! -f $license_path ]]; then
+  # Homebrew and/or macOS does it different? Try up a directory.
+  echo "Could not find Go's LICENSE file at $license_path"
   license_path="$(go env GOROOT)/../LICENSE"
+fi
+if [[ ! -f $license_path ]]; then
+  echo "Could not find Go's LICENSE file at $license_path"
+  exit 1
 fi
 
 addfile "$license_path" "Go standard library"
 
 ## Now add all the modules.
 export -f addfile
-find "${TEMPDIR}" -type f -print | sort | xargs -I {} bash -c 'addfile "{}"'
+find "${COMBINEDIR}" -type f -print | sort | xargs -I {} bash -c 'addfile "{}"'
 
 ## Add trailer
 printf "\n\n---\n\nFile generated using %s\n%s\n" "$0" "$(date)" >> "${TEMPFILE}"

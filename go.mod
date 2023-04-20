@@ -5,11 +5,11 @@ go 1.18
 require (
 	cloud.google.com/go/compute/metadata v0.2.3
 	github.com/DataDog/datadog-go/v5 v5.3.0
-	github.com/aws/aws-sdk-go v1.44.181
+	github.com/aws/aws-sdk-go v1.44.239
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.1.1
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
-	github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157
+	github.com/buildkite/roko v1.1.0
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/creack/pty v1.1.18
 	github.com/denisbrodbeck/machineid v1.0.1

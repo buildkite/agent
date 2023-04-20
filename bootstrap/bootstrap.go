@@ -92,10 +92,20 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	var err error
-
 	span, ctx, stopper := b.startTracing(ctx)
 	defer stopper()
 	defer func() { span.FinishWithError(err) }()
+
+	// Create a context to use for cancelation of the job
+	var cancelCtx context.Context
+	var cancel context.CancelFunc
+	if experiments.IsEnabled("cancel-checkout") {
+		cancelCtx, cancel = context.WithCancel(ctx)
+	} else {
+		cancelCtx = ctx
+		cancel = func() {}
+	}
+	defer cancel()
 
 	// Listen for cancellation
 	go func() {
@@ -106,6 +116,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		case <-b.cancelCh:
 			b.shell.Commentf("Received cancellation signal, interrupting")
 			b.shell.Interrupt()
+			cancel()
 		}
 	}()
 
@@ -161,7 +172,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	if phaseErr == nil && includePhase("checkout") {
-		phaseErr = b.CheckoutPhase(ctx)
+		phaseErr = b.CheckoutPhase(cancelCtx)
 	} else {
 		checkoutDir, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 		if exists {
@@ -1070,6 +1081,10 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 					b.shell.Warningf("Checkout was cancelled")
 					r.Break()
 
+				case experiments.IsEnabled("cancel-checkout") && errors.Is(ctx.Err(), context.Canceled):
+					b.shell.Warningf("Checkout was cancelled due to context cancellation")
+					r.Break()
+
 				default:
 					b.shell.Warningf("Checkout failed! %s (%s)", err, r)
 
@@ -1507,14 +1522,30 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		b.resolveCommit(ctx)
 	}
 
-	// Grab author and commit information and send
-	// it back to Buildkite. But before we do,
-	// we'll check to see if someone else has done
-	// it first.
+	// Grab author and commit information and send it back to Buildkite. But before we do, we'll check
+	// to see if someone else has done it first.
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
 	if err := b.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
-		out, err := b.shell.RunAndCapture(ctx, "git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--")
+		// Format:
+		//
+		// commit 0123456789abcdef0123456789abcdef01234567
+		// abbrev-commit 0123456789
+		// Author: John Citizen <john@example.com>
+		//
+		//    Subject of the commit message
+		//
+		//    Body of the commit message, which
+		//    may span multiple lines.
+		gitArgs := []string{
+			"--no-pager",
+			"show",
+			"HEAD",
+			"--no-patch",
+			"--no-color",
+			"--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B",
+		}
+		out, err := b.shell.RunAndCapture(ctx, "git", gitArgs...)
 		if err != nil {
 			return err
 		}
