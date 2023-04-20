@@ -24,12 +24,14 @@ export TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)" || exit 1
 export COMBINEDIR="${TEMPDIR}/combined"
 mkdir -p "${COMBINEDIR}"
 
-# go-licenses output can vary by GOOS.
+# go-licenses output can vary by GOOS and GOARCH
 # https://github.com/google/go-licenses/issues/187
 # Run it for each OS we release for, and combine the results.
 for goos in darwin dragonfly freebsd linux netbsd openbsd windows ; do
-  GOOS="${goos}" "${GO_LICENSES}" save . --save_path="${TEMPDIR}/${goos}"
-  cp -fR "${TEMPDIR}/${goos}"/* "${COMBINEDIR}"
+  for goarch in amd64 arm64 ; do
+    GOOS="${goos}" GOARCH="${goarch}" "${GO_LICENSES}" save . --save_path="${TEMPDIR}/${goos}-${goarch}"
+    cp -fR "${TEMPDIR}/${goos}-${goarch}"/* "${COMBINEDIR}"
+  done
 done
 
 trap "rm -fr ${TEMPDIR}" EXIT
