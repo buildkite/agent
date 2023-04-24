@@ -70,4 +70,6 @@ find "${TEMPDIR}" -type f -print | sort | xargs -I {} bash -c 'addfile "{}"'
 gzip -f "${TEMPFILE}"
 mv "${TEMPFILE}.gz" clicommand/ACKNOWLEDGEMENTS.md.gz
 
+echo -e "\nGenerated \033[33mclicommand/ACKNOWLEDGEMENTS.md.gz\033[0m 🧑‍💼"
+
 exit 0
