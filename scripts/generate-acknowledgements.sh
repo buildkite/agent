@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo '+++ Generating OSS attributions'
+echo 'Generating OSS attributions'
 
 # Note that go-licenses output can vary by GOOS and GOARCH.
 # https://github.com/google/go-licenses/issues/187
