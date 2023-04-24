@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo '+++ Generating OSS attributions'
+
+# Note that go-licenses output can vary by GOOS and GOARCH.
+# https://github.com/google/go-licenses/issues/187
+echo "GOOS=${GOOS:-not set}"
+echo "GOARCH=${GOARCH:-not set}"
+
+cd $(git rev-parse --show-toplevel)
+
 if [[ ! -f "./go.mod" ]]; then
-    echo "Need to run this from the directory containing go.mod"
+    echo "Couldn't find go.mod - are you in the agent repository?"
     exit 1
 fi
-
-OUTPUT_FILE="ACKNOWLEDGEMENTS.md"
 
 # Ensure modules are downloaded
 go mod download
@@ -19,24 +26,15 @@ else
 	GO_LICENSES="$(command -v go-licenses)"
 fi
 
-# Save licenses
-export TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)" || exit 1
-export COMBINEDIR="${TEMPDIR}/combined"
-mkdir -p "${COMBINEDIR}"
+# Create temporary directory and file
+# TEMPFILE is not in TEMPDIR, because this causes infinite recursion later on.
+export TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)"
+export TEMPFILE="$(mktemp /tmp/acknowledgements.XXXXXX)"
+trap "rm -fr ${TEMPDIR} ${TEMPFILE}" EXIT
 
-# go-licenses output can vary by GOOS.
-# https://github.com/google/go-licenses/issues/187
-# Run it for each OS we release for, and combine the results.
-for goos in darwin dragonfly freebsd linux netbsd openbsd windows ; do
-  GOOS="${goos}" "${GO_LICENSES}" save . --save_path="${TEMPDIR}/${goos}"
-  cp -fR "${TEMPDIR}/${goos}"/* "${COMBINEDIR}"
-done
-
-trap "rm -fr ${TEMPDIR}" EXIT
+"${GO_LICENSES}" save . --save_path="${TEMPDIR}" --force
 
 # Build acknowledgements file
-export TEMPFILE="$(mktemp acknowledgements.XXXXXX)" || exit 1
-trap "rm -f ${TEMPFILE}" EXIT
 cat > "${TEMPFILE}" <<EOF
 # Buildkite Agent OSS Attributions
 
@@ -45,7 +43,7 @@ Licenses for the libraries used are reproduced below.
 EOF
 
 addfile() {
-    printf "\n\n---\n\n## %s\n\n\`\`\`\n" "${2:-${1#${COMBINEDIR}/}}" >> "${TEMPFILE}"
+    printf "\n\n---\n\n## %s\n\n\`\`\`\n" "${2:-${1#${TEMPDIR}/}}" >> "${TEMPFILE}"
     cat "$1" >> "${TEMPFILE}"
     printf "\n\`\`\`\n" >> "${TEMPFILE}"
 }
@@ -64,19 +62,12 @@ fi
 
 addfile "$license_path" "Go standard library"
 
-## Now add all the modules.
+# Now add all the modules that go-licenses found.
 export -f addfile
-find "${COMBINEDIR}" -type f -print | sort | xargs -I {} bash -c 'addfile "{}"'
+find "${TEMPDIR}" -type f -print | sort | xargs -I {} bash -c 'addfile "{}"'
 
-## Add trailer
-printf "\n\n---\n\nFile generated using %s\n%s\n" "$0" "$(date)" >> "${TEMPFILE}"
-
-# Replace existing acknowledgements file
-mv "${TEMPFILE}" "${OUTPUT_FILE}"
-chmod 644 "${OUTPUT_FILE}"
-
-# gzipped version for embedding purposes
-gzip -kf "${OUTPUT_FILE}"
-mv "${OUTPUT_FILE}.gz" clicommand/
+# Finally, gzip the file to reduce output binary size, and move into place
+gzip -f "${TEMPFILE}"
+mv "${TEMPFILE}.gz" clicommand/ACKNOWLEDGEMENTS.md.gz
 
 exit 0
