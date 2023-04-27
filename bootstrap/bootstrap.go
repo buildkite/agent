@@ -297,39 +297,20 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 
 	b.shell.Headerf("Running %s hook", hookName)
 
-	isBinary, err := shellscript.IsBinaryExecutable(hookCfg.Path)
+	hookType, err := hook.Type(hookCfg.Path)
 	if err != nil {
-		return fmt.Errorf("checking if %s hook is a binary: %w", hookName, err)
+		return fmt.Errorf("determining hook type for %q hook: %w", hookName, err)
 	}
 
-	shebangLine, err := shellscript.ShebangLine(hookCfg.Path)
-	if err != nil {
-		return fmt.Errorf("reading shebang line for %s hook: %w", hookName, err)
-	}
-
-	switch {
-	case isBinary:
+	switch hookType {
+	case hook.TypeBinary, hook.TypeScript:
 		// It's a binary, so we'll just run it directly, no wrapping needed or possible
 		return b.runUnwrappedHook(ctx, hookName, hookCfg)
-	case shellscript.IsPOSIXShell(shebangLine):
+	case hook.TypeShell:
 		// It's definitely a shell script, wrap it so that we can snaffle the changed environment variables
 		return b.runWrappedShellScriptHook(ctx, hookName, hookCfg)
-	case shebangLine != "" && !shellscript.IsPOSIXShell(shebangLine):
-		// It's an interpretable-something with a shebang line, and it almost certainly isn't a shell script,
-		// so it won't be capable of setting environment variables (outside of the job api), so just run it directly
-		return b.runUnwrappedHook(ctx, hookName, hookCfg)
-	case shebangLine == "":
-		// If there's no shebang line in the hook, and it's not a binary, so let's just assume that it's a shell script
-		// The OS will complain if we do something stupid, so we'll just give it a shot
-		return b.runWrappedShellScriptHook(ctx, hookName, hookCfg)
 	default:
-		return fmt.Errorf(`the buildkite agent wasn't able to determine the type of hook it was trying to run.
-This is a bug, please contact support@buildkite.com and/or submit an issue on the github.com/buildkite/agent repo with the following information:
-Hook scope: %q
-Hook path: %q
-Hook type: %q
-Shebang line: %q
-Is binary?: %t`, hookCfg.Scope, hookCfg.Path, hookName, shebangLine, isBinary)
+		return fmt.Errorf("unknown hook type %q for %q hook", hookType, hookName)
 	}
 }
 
