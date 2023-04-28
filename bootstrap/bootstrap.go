@@ -80,7 +80,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.Debug = b.Config.Debug
 		b.shell.InterruptSignal = b.Config.CancelSignal
 	}
-	if experiments.IsEnabled("kubernetes-exec") {
+	if experiments.IsEnabled(experiments.KubernetesExec) {
 		kubernetesClient := &kubernetes.Client{}
 		if err := b.startKubernetesClient(ctx, kubernetesClient); err != nil {
 			b.shell.Errorf("Failed to start kubernetes client: %v", err)
@@ -99,7 +99,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Create a context to use for cancelation of the job
 	var cancelCtx context.Context
 	var cancel context.CancelFunc
-	if experiments.IsEnabled("cancel-checkout") {
+	if experiments.IsEnabled(experiments.CancelCheckout) {
 		cancelCtx, cancel = context.WithCancel(ctx)
 	} else {
 		cancelCtx = ctx
@@ -1081,7 +1081,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 					b.shell.Warningf("Checkout was cancelled")
 					r.Break()
 
-				case experiments.IsEnabled("cancel-checkout") && errors.Is(ctx.Err(), context.Canceled):
+				case experiments.IsEnabled(experiments.CancelCheckout) && errors.Is(ctx.Err(), context.Canceled):
 					b.shell.Warningf("Checkout was cancelled due to context cancellation")
 					r.Break()
 
@@ -1517,7 +1517,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	}
 
 	// resolve BUILDKITE_COMMIT based on the local git repo
-	if experiments.IsEnabled("resolve-commit-after-checkout") {
+	if experiments.IsEnabled(experiments.ResolveCommitAfterCheckout) {
 		b.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
 		b.resolveCommit(ctx)
 	}

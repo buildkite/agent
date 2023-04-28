@@ -313,8 +313,8 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 }
 
 func TestFlockRetriesAndTimesOut(t *testing.T) {
-	experiments.Enable("flock-file-locks")
-	defer experiments.Disable("flock-file-locks")
+	experiments.Enable(experiments.FlockFileLocks)
+	defer experiments.Disable(experiments.FlockFileLocks)
 
 	TestLockFileRetriesAndTimesOut(t)
 }
@@ -322,7 +322,7 @@ func TestFlockRetriesAndTimesOut(t *testing.T) {
 func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 	flockExperimentEnabled := false
 	expectedLockPath := lockfile
-	if experiments.IsEnabled("flock-file-locks") {
+	if experiments.IsEnabled(experiments.FlockFileLocks) {
 		flockExperimentEnabled = true
 		expectedLockPath = lockfile + "f" // flock-locked files are created with the suffix 'f'
 	}
@@ -354,9 +354,9 @@ func TestAcquiringLockHelperProcess(t *testing.T) {
 	}
 
 	if os.Getenv("FLOCK_EXPERIMENT_ENABLED") == "true" {
-		experiments.Enable("flock-file-locks")
+		experiments.Enable(experiments.FlockFileLocks)
 	} else {
-		experiments.Disable("flock-file-locks")
+		experiments.Disable(experiments.FlockFileLocks)
 	}
 
 	fileName := os.Args[len(os.Args)-1]

@@ -13,7 +13,7 @@ import (
 func (b *Bootstrap) startJobAPI() (cleanup func(), err error) {
 	cleanup = func() {}
 
-	if !experiments.IsEnabled("job-api") {
+	if !experiments.IsEnabled(experiments.JobAPI) {
 		return cleanup, nil
 	}
 

@@ -117,7 +117,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	if exp := experiments.Enabled(); len(exp) > 0 {
 		bt.Env = append(bt.Env, "BUILDKITE_AGENT_EXPERIMENT="+strings.Join(exp, ","))
 
-		if experiments.IsEnabled("git-mirrors") {
+		if experiments.IsEnabled(experiments.GitMirrors) {
 			gitMirrorsDir, err := os.MkdirTemp("", "bootstrap-git-mirrors")
 			if err != nil {
 				return nil, fmt.Errorf("making bootstrap-git-mirrors directory: %w", err)

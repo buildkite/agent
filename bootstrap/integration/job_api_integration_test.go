@@ -10,12 +10,13 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/bintest/v3"
 )
 
 func TestBootstrapRunsJobAPI(t *testing.T) {
-	defer experimentWithUndo("job-api")()
+	defer experimentWithUndo(experiments.JobAPI)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {

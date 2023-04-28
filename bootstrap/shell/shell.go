@@ -261,7 +261,7 @@ func (s *Shell) flock(ctx context.Context, path string, timeout time.Duration) (
 
 // Create a cross-process file-based lock based on pid files
 func (s *Shell) LockFile(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
-	if experiments.IsEnabled("flock-file-locks") {
+	if experiments.IsEnabled(experiments.FlockFileLocks) {
 		s.Commentf("Using flock-file-locks experiment 🧪")
 		return s.flock(ctx, path, timeout)
 	}

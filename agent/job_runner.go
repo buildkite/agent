@@ -214,7 +214,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	allWriters := []io.Writer{}
 
 	switch {
-	case experiments.IsEnabled("ansi-timestamps"):
+	case experiments.IsEnabled(experiments.ANSITimestamps):
 		// If we have ansi-timestamps, we can skip line timestamps AND header times
 		// this is the future of timestamping
 		prefixer := process.NewPrefixer(runner.output, func() string {
@@ -299,7 +299,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	processEnv := append(os.Environ(), env...)
 
 	// The process that will run the bootstrap script
-	if experiments.IsEnabled("kubernetes-exec") {
+	if experiments.IsEnabled(experiments.KubernetesExec) {
 		containerCount, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_COUNT"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
