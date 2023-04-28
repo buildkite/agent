@@ -4,17 +4,29 @@
 // It is intended for internal use by buildkite-agent only.
 package experiments
 
+const (
+	JobAPI                     = "job-api"
+	KubernetesExec             = "kubernetes-exec"
+	ANSITimestamps             = "ansi-timestamps"
+	GitMirrors                 = "git-mirrors"
+	FlockFileLocks             = "flock-file-locks"
+	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
+	DescendingSpawnPrioity     = "descending-spawn-priority"
+	InbuiltStatusPage          = "inbuilt-status-page"
+	CancelCheckout             = "cancel-checkout"
+)
+
 var (
 	Available = map[string]struct{}{
-		"job-api":                       {},
-		"kubernetes-exec":               {},
-		"ansi-timestamps":               {},
-		"git-mirrors":                   {},
-		"flock-file-locks":              {},
-		"resolve-commit-after-checkout": {},
-		"descending-spawn-priority":     {},
-		"inbuilt-status-page":           {},
-		"cancel-checkout":               {},
+		JobAPI:                     {},
+		KubernetesExec:             {},
+		ANSITimestamps:             {},
+		GitMirrors:                 {},
+		FlockFileLocks:             {},
+		ResolveCommitAfterCheckout: {},
+		DescendingSpawnPrioity:     {},
+		InbuiltStatusPage:          {},
+		CancelCheckout:             {},
 	}
 
 	experiments = make(map[string]bool, len(Available))
