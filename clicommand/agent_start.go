@@ -656,7 +656,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Check if git-mirrors are enabled
-		if experiments.IsEnabled("git-mirrors") {
+		if experiments.IsEnabled(experiments.GitMirrors) {
 			if cfg.GitMirrorsPath == "" {
 				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
 			}
@@ -925,7 +925,7 @@ var AgentStartCommand = cli.Command{
 
 			if cfg.SpawnWithPriority {
 				p := i
-				if experiments.IsEnabled("descending-spawn-priority") {
+				if experiments.IsEnabled(experiments.DescendingSpawnPrioity) {
 					// This experiment helps jobs be assigned across all hosts
 					// in cases where the value of --spawn varies between hosts.
 					p = -i
@@ -982,7 +982,7 @@ var AgentStartCommand = cli.Command{
 				}
 			})
 
-			if experiments.IsEnabled("inbuilt-status-page") {
+			if experiments.IsEnabled(experiments.InbuiltStatusPage) {
 				http.HandleFunc("/status", status.Handle)
 			}
 

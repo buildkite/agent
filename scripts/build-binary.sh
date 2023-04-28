@@ -43,6 +43,9 @@ fi
 # Disable CGO completely
 export CGO_ENABLED=0
 
+# Generated files
+"$(dirname $0)"/generate-acknowledgements.sh
+
 mkdir -p $BUILD_PATH
 go build -v -ldflags "-X github.com/buildkite/agent/v3/agent.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME .
 

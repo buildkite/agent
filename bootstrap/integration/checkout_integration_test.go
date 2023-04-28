@@ -40,7 +40,7 @@ func experimentWithUndo(name string) func() {
 
 func TestCheckingOutGitHubPullRequestsWithGitMirrorsExperiment(t *testing.T) {
 	// t.Parallel() cannot be used with experiments.Enable()
-	defer experimentWithUndo("git-mirrors")()
+	defer experimentWithUndo(experiments.GitMirrors)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -81,7 +81,7 @@ func TestCheckingOutGitHubPullRequestsWithGitMirrorsExperiment(t *testing.T) {
 
 func TestWithResolvingCommitExperiment(t *testing.T) {
 	// t.Parallel() cannot be used with experiments.Enable()
-	defer experimentWithUndo("resolve-commit-after-checkout")()
+	defer experimentWithUndo(experiments.ResolveCommitAfterCheckout)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -102,7 +102,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// But assert which ones are called
-	if experiments.IsEnabled("git-mirrors") {
+	if experiments.IsEnabled(experiments.GitMirrors) {
 		git.ExpectAll([][]any{
 			{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
@@ -155,7 +155,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// But assert which ones are called
-	if experiments.IsEnabled("git-mirrors") {
+	if experiments.IsEnabled(experiments.GitMirrors) {
 		git.ExpectAll([][]any{
 			{"clone", "--mirror", "--config", "pack.threads=35", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
@@ -227,7 +227,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// But assert which ones are called
-	if experiments.IsEnabled("git-mirrors") {
+	if experiments.IsEnabled(experiments.GitMirrors) {
 		git.ExpectAll([][]any{
 			{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "--mirror", "-v", "--", submoduleRepo.Path, matchSubDir(tester.GitMirrorsDir)},
@@ -312,7 +312,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// But assert which ones are called
-	if experiments.IsEnabled("git-mirrors") {
+	if experiments.IsEnabled(experiments.GitMirrors) {
 		git.ExpectAll([][]any{
 			{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
@@ -365,7 +365,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// But assert which ones are called
-	if experiments.IsEnabled("git-mirrors") {
+	if experiments.IsEnabled(experiments.GitMirrors) {
 		git.ExpectAll([][]any{
 			{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
@@ -427,7 +427,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	if experiments.IsEnabled("git-mirrors") {
+	if experiments.IsEnabled(experiments.GitMirrors) {
 		git.Expect("clone", "--mirror", "-v", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
 			AndExitWith(0)
 	} else {
@@ -480,7 +480,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	if experiments.IsEnabled("git-mirrors") {
+	if experiments.IsEnabled(experiments.GitMirrors) {
 		git.Expect("clone", "--mirror", "-v", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
 			AndExitWith(0)
 	} else {
@@ -691,7 +691,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 
 func TestGitMirrorEnv(t *testing.T) {
 	// t.Parallel() cannot test experiment flags in parallel
-	defer experimentWithUndo("git-mirrors")()
+	defer experimentWithUndo(experiments.GitMirrors)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -719,7 +719,7 @@ func TestGitMirrorEnv(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// But assert which ones are called
-	if experiments.IsEnabled("git-mirrors") {
+	if experiments.IsEnabled(experiments.GitMirrors) {
 		git.ExpectAll([][]any{
 			{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
