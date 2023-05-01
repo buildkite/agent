@@ -87,7 +87,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 		}
 
 		mtn := "chimborazo"
-		b, err := json.Marshal(jobapi.EnvUpdateRequest{Env: map[string]*string{"MOUNTAIN": &mtn}})
+		b, err := json.Marshal(jobapi.EnvUpdateRequest{Env: map[string]string{"MOUNTAIN": mtn}})
 		if err != nil {
 			t.Errorf("marshaling env update request: %v", err)
 			c.Exit(1)

@@ -72,7 +72,7 @@ func envSetAction(c *cli.Context) error {
 	}
 
 	req := &jobapi.EnvUpdateRequest{
-		Env: make(map[string]*string),
+		Env: make(map[string]string),
 	}
 
 	var parse func(string) error
@@ -84,7 +84,7 @@ func envSetAction(c *cli.Context) error {
 			if !ok {
 				return fmt.Errorf("%q is not in key=value format", input)
 			}
-			req.Env[e] = &v
+			req.Env[e] = v
 			return nil
 		}
 
