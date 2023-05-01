@@ -213,10 +213,10 @@ func TestDeleteEnv(t *testing.T) {
 func TestPatchEnv(t *testing.T) {
 	t.Parallel()
 
-	cases := []apiTestCase[jobapi.EnvUpdateRequest, jobapi.EnvUpdateResponse]{
+	cases := []apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
 		{
 			name: "happy case",
-			requestBody: &jobapi.EnvUpdateRequest{
+			requestBody: &jobapi.EnvUpdateRequestPayload{
 				Env: map[string]*string{
 					"MOUNTAIN":       pt("chimborazo"),
 					"CAPITAL":        pt("quito"),
@@ -236,7 +236,7 @@ func TestPatchEnv(t *testing.T) {
 		},
 		{
 			name: "setting to nil returns a 422",
-			requestBody: &jobapi.EnvUpdateRequest{
+			requestBody: &jobapi.EnvUpdateRequestPayload{
 				Env: map[string]*string{
 					"NATIONAL_PARKS": nil,
 					"MOUNTAIN":       pt("chimborazo"),
@@ -250,7 +250,7 @@ func TestPatchEnv(t *testing.T) {
 		},
 		{
 			name: "setting protected variables returns a 422",
-			requestBody: &jobapi.EnvUpdateRequest{
+			requestBody: &jobapi.EnvUpdateRequestPayload{
 				Env: map[string]*string{
 					"BUILDKITE_AGENT_PID": pt("12345"),
 					"MOUNTAIN":            pt("antisana"),

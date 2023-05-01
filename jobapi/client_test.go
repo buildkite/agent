@@ -62,7 +62,7 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "PATCH":
-		var req EnvUpdateRequest
+		var req EnvUpdateRequestPayload
 		var resp EnvUpdateResponse
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
@@ -170,11 +170,10 @@ func TestClientEnvUpdate(t *testing.T) {
 		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
 	}
 
-	sp := func(s string) *string { return &s }
 	req := &EnvUpdateRequest{
-		Env: map[string]*string{
-			"PACHA": sp("Friend"),
-			"YZMA":  sp("Kitten"),
+		Env: map[string]string{
+			"PACHA": "Friend",
+			"YZMA":  "Kitten",
 		},
 	}
 

@@ -41,7 +41,7 @@ func (s *Server) getEnv(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
-	var req EnvUpdateRequest
+	var req EnvUpdateRequestPayload
 	err := json.NewDecoder(r.Body).Decode(&req)
 	defer r.Body.Close()
 	if err != nil {

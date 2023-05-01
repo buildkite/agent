@@ -14,6 +14,11 @@ type EnvGetResponse struct {
 
 // EnvUpdateRequest is the request body for the PATCH /env endpoint
 type EnvUpdateRequest struct {
+	Env map[string]string `json:"env"`
+}
+
+// EnvUpdateRequestPayload is the request body that the PATCH /env endpoint unmarshalls requests into
+type EnvUpdateRequestPayload struct {
 	Env map[string]*string `json:"env"`
 }
 
