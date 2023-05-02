@@ -39,28 +39,25 @@ Examples:
 `
 
 type LockDoConfig struct {
+	// Common config options
+	LockScope   string `cli:"lock-scope"`
+	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
+
 	LockWaitTimeout time.Duration `cli:"lock-wait-timeout"`
-	SocketsPath     string        `cli:"sockets-path" normalize:"filepath"`
 }
 
 var LockDoCommand = cli.Command{
 	Name:        "do",
 	Usage:       "Begins a do-once lock",
 	Description: lockDoHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(
+		lockCommonFlags,
 		cli.DurationFlag{
 			Name:   "lock-wait-timeout",
-			Value:  300 * time.Second,
-			Usage:  "Maximum duration to wait for a lock before giving up",
+			Usage:  "If specified, sets a maximum duration to wait for a lock before giving up",
 			EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
 		},
-		cli.StringFlag{
-			Name:   "sockets-path",
-			Value:  defaultSocketsPath(),
-			Usage:  "Directory where the agent will place sockets",
-			EnvVar: "BUILDKITE_SOCKETS_PATH",
-		},
-	},
+	),
 	Action: lockDoAction,
 }
 
@@ -72,7 +69,7 @@ func lockDoAction(c *cli.Context) error {
 	key := c.Args()[0]
 
 	// Load the configuration
-	cfg := LockAcquireConfig{}
+	cfg := LockDoConfig{}
 	loader := cliconfig.Loader{
 		CLI:                    c,
 		Config:                 &cfg,
@@ -87,8 +84,17 @@ func lockDoAction(c *cli.Context) error {
 		fmt.Fprintln(c.App.ErrWriter, warning)
 	}
 
-	ctx, canc := context.WithTimeout(context.Background(), cfg.LockWaitTimeout)
-	defer canc()
+	if cfg.LockScope != "machine" {
+		fmt.Fprintln(c.App.Writer, "Only 'machine' scope for locks is supported in this version.")
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	if cfg.LockWaitTimeout <= 0 {
+		cctx, canc := context.WithTimeout(ctx, cfg.LockWaitTimeout)
+		defer canc()
+		ctx = cctx
+	}
 
 	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
 	if err != nil {
@@ -136,19 +142,5 @@ func lockDoAction(c *cli.Context) error {
 			fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q for do-once\n", state)
 			os.Exit(1)
 		}
-
-	}
-}
-
-// sleep sleeps in a context-aware way. The only non-nil errors returned are
-// from ctx.Err.
-func sleep(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-t.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 }

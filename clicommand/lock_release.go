@@ -27,6 +27,8 @@ Examples:
 `
 
 type LockReleaseConfig struct {
+	// Common config options
+	LockScope   string `cli:"lock-scope"`
 	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
 }
 
@@ -34,15 +36,8 @@ var LockReleaseCommand = cli.Command{
 	Name:        "release",
 	Usage:       "Releases a previously-acquired lock",
 	Description: lockReleaseHelpDescription,
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:   "sockets-path",
-			Value:  defaultSocketsPath(),
-			Usage:  "Directory where the agent will place sockets",
-			EnvVar: "BUILDKITE_SOCKETS_PATH",
-		},
-	},
-	Action: lockReleaseAction,
+	Flags:       lockCommonFlags,
+	Action:      lockReleaseAction,
 }
 
 func lockReleaseAction(c *cli.Context) error {
@@ -53,7 +48,7 @@ func lockReleaseAction(c *cli.Context) error {
 	key := c.Args()[0]
 
 	// Load the configuration
-	cfg := LockAcquireConfig{}
+	cfg := LockReleaseConfig{}
 	loader := cliconfig.Loader{
 		CLI:                    c,
 		Config:                 &cfg,
@@ -66,6 +61,11 @@ func lockReleaseAction(c *cli.Context) error {
 	}
 	for _, warning := range warnings {
 		fmt.Fprintln(c.App.ErrWriter, warning)
+	}
+
+	if cfg.LockScope != "machine" {
+		fmt.Fprintln(c.App.Writer, "Only 'machine' scope for locks is supported in this version.")
+		os.Exit(1)
 	}
 
 	ctx := context.Background()

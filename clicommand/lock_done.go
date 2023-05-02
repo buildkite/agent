@@ -26,10 +26,11 @@ Examples:
 	  buildkite-agent lock done llama
    fi
 
-
 `
 
 type LockDoneConfig struct {
+	// Common config options
+	LockScope   string `cli:"lock-scope"`
 	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
 }
 
@@ -37,15 +38,8 @@ var LockDoneCommand = cli.Command{
 	Name:        "done",
 	Usage:       "Completes a do-once lock",
 	Description: lockDoneHelpDescription,
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:   "sockets-path",
-			Value:  defaultSocketsPath(),
-			Usage:  "Directory where the agent will place sockets",
-			EnvVar: "BUILDKITE_SOCKETS_PATH",
-		},
-	},
-	Action: lockDoneAction,
+	Flags:       lockCommonFlags,
+	Action:      lockDoneAction,
 }
 
 func lockDoneAction(c *cli.Context) error {
@@ -56,7 +50,7 @@ func lockDoneAction(c *cli.Context) error {
 	key := c.Args()[0]
 
 	// Load the configuration
-	cfg := LockAcquireConfig{}
+	cfg := LockDoneConfig{}
 	loader := cliconfig.Loader{
 		CLI:                    c,
 		Config:                 &cfg,
@@ -69,6 +63,11 @@ func lockDoneAction(c *cli.Context) error {
 	}
 	for _, warning := range warnings {
 		fmt.Fprintln(c.App.ErrWriter, warning)
+	}
+
+	if cfg.LockScope != "machine" {
+		fmt.Fprintln(c.App.Writer, "Only 'machine' scope for locks is supported in this version.")
+		os.Exit(1)
 	}
 
 	ctx := context.Background()

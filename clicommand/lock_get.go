@@ -10,11 +10,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-const lockClientErrMessage = `Could not connect to Agent API: %v
-This command can only be used when at least one agent is running with the
-"agent-api" experiment enabled.
-`
-
 const lockGetHelpDescription = `Usage:
 
    buildkite-agent lock get [key]
@@ -35,6 +30,8 @@ Examples:
 `
 
 type LockGetConfig struct {
+	// Common config options
+	LockScope   string `cli:"lock-scope"`
 	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
 }
 
@@ -42,15 +39,8 @@ var LockGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Gets a lock value from the agent leader",
 	Description: lockGetHelpDescription,
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:   "sockets-path",
-			Value:  defaultSocketsPath(),
-			Usage:  "Directory where the agent will place sockets",
-			EnvVar: "BUILDKITE_SOCKETS_PATH",
-		},
-	},
-	Action: lockGetAction,
+	Flags:       lockCommonFlags,
+	Action:      lockGetAction,
 }
 
 func lockGetAction(c *cli.Context) error {
@@ -61,7 +51,7 @@ func lockGetAction(c *cli.Context) error {
 	key := c.Args()[0]
 
 	// Load the configuration
-	cfg := LockAcquireConfig{}
+	cfg := LockGetConfig{}
 	loader := cliconfig.Loader{
 		CLI:                    c,
 		Config:                 &cfg,
@@ -74,6 +64,11 @@ func lockGetAction(c *cli.Context) error {
 	}
 	for _, warning := range warnings {
 		fmt.Fprintln(c.App.ErrWriter, warning)
+	}
+
+	if cfg.LockScope != "machine" {
+		fmt.Fprintln(c.App.Writer, "Only 'machine' scope for locks is supported in this version.")
+		os.Exit(1)
 	}
 
 	ctx := context.Background()
