@@ -39,8 +39,8 @@ Examples:
 `
 
 type LockDoConfig struct {
-	LockWaitTimeout int    `cli:"lock-wait-timeout"`
-	SocketsPath     string `cli:"sockets-path" normalize:"filepath"`
+	LockWaitTimeout time.Duration `cli:"lock-wait-timeout"`
+	SocketsPath     string        `cli:"sockets-path" normalize:"filepath"`
 }
 
 var LockDoCommand = cli.Command{
@@ -48,10 +48,10 @@ var LockDoCommand = cli.Command{
 	Usage:       "Begins a do-once lock",
 	Description: lockDoHelpDescription,
 	Flags: []cli.Flag{
-		cli.IntFlag{
+		cli.DurationFlag{
 			Name:   "lock-wait-timeout",
-			Value:  300,
-			Usage:  "Maximum number of seconds to wait for a lock before giving up",
+			Value:  300 * time.Second,
+			Usage:  "Maximum duration to wait for a lock before giving up",
 			EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
 		},
 		cli.StringFlag{
@@ -87,7 +87,7 @@ func lockDoAction(c *cli.Context) error {
 		fmt.Fprintln(c.App.ErrWriter, warning)
 	}
 
-	ctx, canc := context.WithTimeout(context.Background(), time.Duration(cfg.LockWaitTimeout)*time.Second)
+	ctx, canc := context.WithTimeout(context.Background(), cfg.LockWaitTimeout)
 	defer canc()
 
 	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
