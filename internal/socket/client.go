@@ -17,6 +17,17 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// APIErr is an error type used for API error responses (the API returned a
+// well-formed JSON ErrorResponse and a non-200 status code).
+type APIErr struct {
+	Msg        string
+	StatusCode int
+}
+
+func (e APIErr) Error() string {
+	return fmt.Sprintf("API status %d: %s", e.StatusCode, e.Msg)
+}
+
 // Client is a client for a HTTP-over-Unix Domain Socket API.
 type Client struct {
 	cli   *http.Client
@@ -90,12 +101,15 @@ func (c *Client) Do(ctx context.Context, method, url string, req, resp any) erro
 	defer hresp.Body.Close()
 	dec := json.NewDecoder(hresp.Body)
 
-	if hresp.StatusCode != 200 {
+	if hresp.StatusCode != http.StatusOK {
 		var er ErrorResponse
 		if err := dec.Decode(&er); err != nil {
 			return fmt.Errorf("decoding error response: %w", err)
 		}
-		return fmt.Errorf("error from API: %s", er.Error)
+		return APIErr{
+			Msg:        er.Error,
+			StatusCode: hresp.StatusCode,
+		}
 	}
 
 	if resp == nil {
