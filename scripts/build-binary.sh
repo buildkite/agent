@@ -47,7 +47,7 @@ export CGO_ENABLED=0
 "$(dirname $0)"/generate-acknowledgements.sh
 
 mkdir -p $BUILD_PATH
-go build -v -ldflags "-X github.com/buildkite/agent/v3/agent.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME .
+go build -v -ldflags "-X github.com/buildkite/agent/v3/version.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME .
 
 chmod +x $BUILD_PATH/$BINARY_FILENAME
 
