@@ -16,7 +16,7 @@ import (
 )
 
 func TestBootstrapRunsJobAPI(t *testing.T) {
-	defer experimentWithUndo(experiments.JobAPI)()
+	defer experiments.EnableWithUndo(experiments.JobAPI)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
