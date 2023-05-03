@@ -12,12 +12,13 @@ type Server struct {
 	lockSvr *lockServer
 }
 
-// NewServer listens on a socket at the given path.
-func NewServer(path string, log logger.Logger) (*Server, error) {
+// NewServer creates a new Agent API server that, when started, listens on the
+// socketPath.
+func NewServer(socketPath string, log logger.Logger) (*Server, error) {
 	s := &Server{
 		lockSvr: newLockServer(log),
 	}
-	svr, err := socket.NewServer(path, s.router(log))
+	svr, err := socket.NewServer(socketPath, s.router(log))
 	if err != nil {
 		return nil, err
 	}

@@ -2,24 +2,56 @@ package socket
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 )
 
 // Server hosts a HTTP server on a Unix domain socket.
 type Server struct {
-	svr *http.Server
+	path    string
+	svr     *http.Server
+	started bool
 }
 
-// NewServer listens on a socket at the given path and starts the server.
-func NewServer(path string, handler http.Handler) (*Server, error) {
-	ln, err := net.Listen("unix", path)
+// NewServer creates a server that, when started, will listen on a socket at the
+// given path.
+func NewServer(socketPath string, handler http.Handler) (*Server, error) {
+	if len(socketPath) >= socketPathLength() {
+		return nil, fmt.Errorf("socket path %s is too long (path length: %d, max %d characters). This is a limitation of your host OS", socketPath, len(socketPath), socketPathLength())
+	}
+
+	exists, err := socketExists(socketPath)
 	if err != nil {
 		return nil, err
 	}
-	svr := &http.Server{Handler: handler}
-	go svr.Serve(ln)
-	return &Server{svr: svr}, nil
+
+	if exists {
+		return nil, fmt.Errorf("file already exists at socket path %s", socketPath)
+	}
+
+	return &Server{
+		path: socketPath,
+		svr:  &http.Server{Handler: handler},
+	}, nil
+}
+
+// Start starts the server.
+func (s *Server) Start() error {
+	if s.started {
+		return errors.New("server already started")
+	}
+
+	ln, err := net.Listen("unix", s.path)
+	if err != nil {
+		return err
+	}
+
+	go s.svr.Serve(ln)
+	s.started = true
+
+	return nil
 }
 
 // Close immediately closes down the server. Prefer Shutdown for ordinary use.

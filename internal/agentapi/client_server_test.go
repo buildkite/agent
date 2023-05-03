@@ -25,6 +25,9 @@ func testServerAndClient(t *testing.T, ctx context.Context) (*Server, *Client) {
 	if err != nil {
 		t.Fatalf("NewServer(%q, logger) = error %v", sockPath, err)
 	}
+	if err := svr.Start(); err != nil {
+		t.Fatalf("svr.Start() = %v", err)
+	}
 
 	cli, err := NewClient(ctx, sockPath)
 	if err != nil {

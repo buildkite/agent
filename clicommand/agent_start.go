@@ -1125,9 +1125,13 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) func(
 	// If a previous agent crashed and left behind a socket, we can
 	// remove it.
 	os.Remove(path)
+
 	svr, err := agentapi.NewServer(path, l)
 	if err != nil {
-		l.Fatal("Couldn't serve Agent API socket: %v", err)
+		l.Fatal("Couldn't create Agent API server: %v", err)
+	}
+	if err := svr.Start(); err != nil {
+		l.Fatal("Couldn't start Agent API server: %v", err)
 	}
 
 	// Try to be the leader - no worries if this fails.
