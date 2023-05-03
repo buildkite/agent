@@ -5,6 +5,7 @@
 package experiments
 
 const (
+	PolyglotHooks              = "polyglot-hooks"
 	JobAPI                     = "job-api"
 	KubernetesExec             = "kubernetes-exec"
 	ANSITimestamps             = "ansi-timestamps"
@@ -19,6 +20,7 @@ const (
 
 var (
 	Available = map[string]struct{}{
+		PolyglotHooks:              {},
 		JobAPI:                     {},
 		KubernetesExec:             {},
 		ANSITimestamps:             {},

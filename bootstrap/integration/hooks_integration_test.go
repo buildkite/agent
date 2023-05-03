@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -500,7 +501,7 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 		t.Fatal("ruby not found in $PATH. This test requires ruby to be installed on the host")
 	}
 
-	defer experiments.WithUndo(experiments.PolyglotHooks)()
+	defer experiments.EnableWithUndo(experiments.PolyglotHooks)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -526,8 +527,8 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 }
 
 func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
-	defer experiments.WithUndo(experiments.PolyglotHooks)()
-	defer experiments.WithUndo(experiments.JobAPI)()
+	defer experiments.EnableWithUndo(experiments.PolyglotHooks)()
+	defer experiments.EnableWithUndo(experiments.JobAPI)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
