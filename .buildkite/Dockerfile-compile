@@ -1,3 +1,6 @@
 FROM golang:1.20.4@sha256:6876eff5b20336c5c2896b0c3055f3258bdeba7aa38bbdabcb5a4abb5cdd39c7
 COPY build/ssh.conf /etc/ssh/ssh_config.d/
 RUN go install github.com/google/go-licenses@latest
+
+# Ruby used for polyglot hook integration tests
+RUN apt update && apt install -y ruby
