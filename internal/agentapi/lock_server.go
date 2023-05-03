@@ -25,13 +25,13 @@ func newLockServer(logger logger.Logger) *lockServer {
 
 // routes defines routes for the lockServer.
 func (s *lockServer) routes(r chi.Router) {
-	r.Get("/{key}", s.getLock)
-	r.Patch("/{key}", s.patchLock)
+	r.Get("/", s.getLock)
+	r.Patch("/", s.patchLock)
 }
 
 // getLock atomically retrieves the current lock value.
 func (s *lockServer) getLock(w http.ResponseWriter, r *http.Request) {
-	key := chi.URLParam(r, "key")
+	key := r.URL.Query().Get("key")
 	if key == "" {
 		http.Error(w, "key missing", http.StatusNotFound)
 		return
@@ -46,7 +46,7 @@ func (s *lockServer) getLock(w http.ResponseWriter, r *http.Request) {
 
 // patchLock tries to atomically update the lock value.
 func (s *lockServer) patchLock(w http.ResponseWriter, r *http.Request) {
-	key := chi.URLParam(r, "key")
+	key := r.URL.Query().Get("key")
 	if key == "" {
 		http.Error(w, "key missing", http.StatusNotFound)
 		return

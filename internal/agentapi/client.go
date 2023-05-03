@@ -42,7 +42,7 @@ func (c *Client) Ping(ctx context.Context) error {
 
 // LockGet gets the current value of the lock key.
 func (c *Client) LockGet(ctx context.Context, key string) (string, error) {
-	uk := url.PathEscape(key)
+	uk := "?key=" + url.QueryEscape(key)
 
 	var resp ValueResponse
 	if err := c.sc.Do(ctx, "GET", lockAPIPrefix+uk, nil, &resp); err != nil {
@@ -55,7 +55,7 @@ func (c *Client) LockGet(ctx context.Context, key string) (string, error) {
 // value, or performs no modification. It returns the most up-to-date value for
 // the key, and reports whether the new value was written.
 func (c *Client) LockCompareAndSwap(ctx context.Context, key, old, new string) (string, bool, error) {
-	uk := url.PathEscape(key)
+	uk := "?key=" + url.QueryEscape(key)
 
 	req := LockCASRequest{
 		Old: old,
