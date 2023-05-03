@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/bintest/v3"
 )
 

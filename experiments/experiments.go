@@ -34,6 +34,11 @@ var (
 	experiments = make(map[string]bool, len(Available))
 )
 
+func WithUndo(key string) func() {
+	Enable(key)
+	return func() { Disable(key) }
+}
+
 // Enable a particular experiment in the agent.
 func Enable(key string) (known bool) {
 	experiments[key] = true

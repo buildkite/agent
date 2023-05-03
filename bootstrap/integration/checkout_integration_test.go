@@ -26,21 +26,9 @@ var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit
 // We expect this arg multiple times, just define it once.
 var gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
 
-// Enable an experiment, returning a function to restore the previous state.
-// Usage: defer experimentWithUndo("foo")()
-func experimentWithUndo(name string) func() {
-	prev := experiments.IsEnabled(name)
-	experiments.Enable(name)
-	return func() {
-		if !prev {
-			experiments.Disable(name)
-		}
-	}
-}
-
 func TestCheckingOutGitHubPullRequestsWithGitMirrorsExperiment(t *testing.T) {
 	// t.Parallel() cannot be used with experiments.Enable()
-	defer experimentWithUndo(experiments.GitMirrors)()
+	defer experiments.WithUndo(experiments.GitMirrors)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -81,7 +69,7 @@ func TestCheckingOutGitHubPullRequestsWithGitMirrorsExperiment(t *testing.T) {
 
 func TestWithResolvingCommitExperiment(t *testing.T) {
 	// t.Parallel() cannot be used with experiments.Enable()
-	defer experimentWithUndo(experiments.ResolveCommitAfterCheckout)()
+	defer experiments.WithUndo(experiments.ResolveCommitAfterCheckout)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -691,7 +679,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 
 func TestGitMirrorEnv(t *testing.T) {
 	// t.Parallel() cannot test experiment flags in parallel
-	defer experimentWithUndo(experiments.GitMirrors)()
+	defer experiments.WithUndo(experiments.GitMirrors)()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
