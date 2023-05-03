@@ -297,6 +297,10 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 
 	b.shell.Headerf("Running %s hook", hookName)
 
+	if !experiments.IsEnabled(experiments.PolyglotHooks) {
+		return b.runWrappedShellScriptHook(ctx, hookName, hookCfg)
+	}
+
 	hookType, err := hook.Type(hookCfg.Path)
 	if err != nil {
 		return fmt.Errorf("determining hook type for %q hook: %w", hookName, err)
