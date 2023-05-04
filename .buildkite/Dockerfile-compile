@@ -1,3 +1,3 @@
-FROM golang:1.20.3@sha256:403f48633fb5ebd49f9a2b6ad6719f912df23dae44974a0c9445be331e72ff5e
+FROM golang:1.20.4@sha256:6876eff5b20336c5c2896b0c3055f3258bdeba7aa38bbdabcb5a4abb5cdd39c7
 COPY build/ssh.conf /etc/ssh/ssh_config.d/
 RUN go install github.com/google/go-licenses@latest
