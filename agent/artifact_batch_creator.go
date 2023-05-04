@@ -76,11 +76,8 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 
 		// Retry the batch upload a couple of times
 		err = roko.NewRetrier(
-			// TODO: e.g. roko.ExponentialSubsecond(500*time.Millisecond) WithMaxAttempts(10)
-			// see: https://github.com/buildkite/roko/pull/8
-			// Meanwhile, 8 roko.Exponential(2sec) attempts is 1,2,4,8,16,32,64 seconds delay (~2 mins)
-			roko.WithMaxAttempts(8),
-			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+			roko.WithMaxAttempts(10),
+			roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 
 			ctxTimeout := ctx
