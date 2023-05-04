@@ -13,7 +13,6 @@ const (
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
 	DescendingSpawnPrioity     = "descending-spawn-priority"
 	InbuiltStatusPage          = "inbuilt-status-page"
-	CancelCheckout             = "cancel-checkout"
 )
 
 var (
@@ -26,7 +25,6 @@ var (
 		ResolveCommitAfterCheckout: {},
 		DescendingSpawnPrioity:     {},
 		InbuiltStatusPage:          {},
-		CancelCheckout:             {},
 	}
 
 	experiments = make(map[string]bool, len(Available))
