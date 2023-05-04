@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [3.46.0](https://github.com/buildkite/agent/tree/3.46.0) (2023-05-04)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.45.0...3.46.0)
+
+### Added
+- Add `*_PRIVATE_KEY` to auto-redacted vars [#2043](https://github.com/buildkite/agent/pull/2043) (@moskyb)
+- Warn on unknown experiments [#2030](https://github.com/buildkite/agent/pull/2030) (@moskyb)
+- More aws tags [#1994](https://github.com/buildkite/agent/pull/1994) (@sj26)
+- Add option for outputting structured logs for collection and searching [#2009](https://github.com/buildkite/agent/pull/2009) (@goodspark)
+- Include abbrev-commit in `buildkite:git:commit` meta-data [#2054](https://github.com/buildkite/agent/pull/2054) (@pda)
+- Add agent support for getting meta-data by build [#2025](https://github.com/buildkite/agent/pull/2025) (@123sarahj123)
+
+### Fixed
+- Prevent job cancellation during checkout from retrying [#2047](https://github.com/buildkite/agent/pull/2047) [#2068](https://github.com/buildkite/agent/pull/2068) (@matthewborden + @triarius + @moskyb)
+- ArtifactUploader API calls: faster timeout & retry [#2028](https://github.com/buildkite/agent/pull/2028) [#2069](https://github.com/buildkite/agent/pull/2069) (@pda)
+- Give a nicer error when empty strings are used as metadata values [#2067](https://github.com/buildkite/agent/pull/2067) (@moskyb)
+- Fix BUILDKITE_GIT_CLONE_MIRROR_FLAGS environment variable not working correctly [#2056](https://github.com/buildkite/agent/pull/2056) (@ppatwf)
+
+As always, @dependabot and friends have been deep in the update mines ensuring that all of our dependencies are up to date. Thanks, dependabot!
+
 ## [3.45.0](https://github.com/buildkite/agent/tree/3.45.0) (2023-03-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.44.0...3.45.0)
 
