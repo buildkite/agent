@@ -73,20 +73,20 @@ func lockDoneAction(c *cli.Context) error {
 
 	ctx := context.Background()
 
-	cli, err := agentapi.NewClient(agentapi.LeaderPath(cfg.SocketsPath))
+	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	val, done, err := cli.CompareAndSwap(ctx, key, "doing", "done")
+	val, done, err := cli.LockCompareAndSwap(ctx, key, "doing", "done")
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Error performing compare-and-swap: %v\n", err)
 		os.Exit(1)
 	}
 
 	if !done {
-		fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q to mark complete - investigate with 'lock get'\n", val)
+		fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q to mark complete\n", val)
 		os.Exit(1)
 	}
 	return nil

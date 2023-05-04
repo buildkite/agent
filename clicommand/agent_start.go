@@ -762,22 +762,9 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
-		if experiments.IsEnabled("agent-api") {
-			path := agentapi.DefaultServerPath(cfg.SocketsPath)
-			// There should be only one Agent API socket per agent process.
-			// If a previous agent crashed and left behind a socket, we can
-			// remove it.
-			os.Remove(path)
-			agentAPISvr, err := agentapi.NewServer(path, l)
-			if err != nil {
-				l.Fatal("Couldn't serve Agent API: %v", err)
-			}
-			if agentAPISvr != nil {
-				defer agentAPISvr.Shutdown(ctx)
-
-				// Try to be the leader - no worries if not.
-				os.Symlink(path, agentapi.LeaderPath(cfg.SocketsPath))
-			}
+		if experiments.IsEnabled(experiments.AgentAPI) {
+			shutdown := runAgentAPI(ctx, l, cfg.SocketsPath)
+			defer shutdown()
 		}
 
 		// AgentConfiguration is the runtime configuration for an agent
@@ -1128,4 +1115,68 @@ func defaultSocketsPath() string {
 	}
 
 	return filepath.Join(home, ".buildkite-agent", "sockets")
+}
+
+// runAgentAPI runs an API socket that can be used to interact with this
+// (top-level) agent. It returns a shutdown function.
+func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) func() {
+	path := agentapi.DefaultServerPath(socketsPath)
+	// There should be only one Agent API socket per agent process.
+	// If a previous agent crashed and left behind a socket, we can
+	// remove it.
+	os.Remove(path)
+	svr, err := agentapi.NewServer(path, l)
+	if err != nil {
+		l.Fatal("Couldn't serve Agent API socket: %v", err)
+	}
+
+	// Try to be the leader - no worries if this fails.
+	leaderPath := agentapi.LeaderPath(socketsPath)
+	if err := os.Symlink(path, leaderPath); err == nil {
+		l.Info("Agent API: This agent became leader")
+	}
+
+	// Whoever the leader is, ping them every so often as a health-check.
+	go leaderPinger(ctx, l, path, leaderPath)
+
+	return func() {
+		svr.Shutdown(ctx)
+		if d, err := os.Readlink(leaderPath); err == nil && d == path {
+			os.Remove(leaderPath)
+		}
+	}
+}
+
+// leaderPinger pings the leader socket for liveness, and takes over if it
+// fails.
+func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string) {
+	pingLeader := func() error {
+		d, err := os.Readlink(leaderPath)
+		if err != nil {
+			// Not a symlink?
+			return err
+		}
+		if d == path {
+			// It's me! Don't bother pinging.
+			return nil
+		}
+
+		ctx, canc := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer canc()
+
+		cli, err := agentapi.NewClient(ctx, leaderPath)
+		if err != nil {
+			return err
+		}
+		return cli.Ping(ctx)
+	}
+
+	for range time.Tick(100 * time.Millisecond) {
+		if err := pingLeader(); err != nil {
+			l.Warn("Agent API: Leader ping failed, staging coup: %v", err)
+			l.Warn("Agent API: Leader state (locks) has been lost!")
+			os.Remove(leaderPath)
+			os.Symlink(path, leaderPath)
+		}
+	}
 }

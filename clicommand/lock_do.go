@@ -82,14 +82,14 @@ func lockDoAction(c *cli.Context) error {
 
 	ctx := context.Background()
 
-	cli, err := agentapi.NewClient(agentapi.LeaderPath(cfg.SocketsPath))
+	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
 		os.Exit(1)
 	}
 
 	for {
-		state, err := cli.Get(ctx, key)
+		state, err := cli.LockGet(ctx, key)
 		if err != nil {
 			fmt.Fprintf(c.App.ErrWriter, "Error performing get: %v\n", err)
 			os.Exit(1)
@@ -98,7 +98,7 @@ func lockDoAction(c *cli.Context) error {
 		switch state {
 		case "":
 			// Try to acquire the lock by changing to state 1
-			_, done, err := cli.CompareAndSwap(ctx, key, "", "doing")
+			_, done, err := cli.LockCompareAndSwap(ctx, key, "", "doing")
 			if err != nil {
 				fmt.Fprintf(c.App.ErrWriter, "Error performing compare-and-swap: %v\n", err)
 				os.Exit(1)
@@ -125,13 +125,15 @@ func lockDoAction(c *cli.Context) error {
 
 		default:
 			// Invalid state.
-			fmt.Fprintln(c.App.ErrWriter, "Lock in invalid state for do-once - investigate with 'lock get'")
+			fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q for do-once\n", state)
 			os.Exit(1)
 		}
 
 	}
 }
 
+// sleep sleeps in a context-aware way. The only non-nil errors returned are
+// from ctx.Err.
 func sleep(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
 	defer t.Stop()

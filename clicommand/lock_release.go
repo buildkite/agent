@@ -70,20 +70,20 @@ func lockReleaseAction(c *cli.Context) error {
 
 	ctx := context.Background()
 
-	cli, err := agentapi.NewClient(agentapi.LeaderPath(cfg.SocketsPath))
+	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	val, done, err := cli.CompareAndSwap(ctx, key, "acquired", "")
+	val, done, err := cli.LockCompareAndSwap(ctx, key, "acquired", "")
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Error performing compare-and-swap: %v\n", err)
 		os.Exit(1)
 	}
 
 	if !done {
-		fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q to release - investigate with 'lock get'\n", val)
+		fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q to release\n", val)
 		os.Exit(1)
 	}
 	return nil

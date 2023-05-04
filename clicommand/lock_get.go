@@ -10,9 +10,9 @@ import (
 	"github.com/urfave/cli"
 )
 
-const lockClientErrMessage = `Could not connect to Leader API: %v
+const lockClientErrMessage = `Could not connect to Agent API: %v
 This command can only be used when at least one agent is running with the
-"leader-api" experiment enabled.
+"agent-api" experiment enabled.
 `
 
 const lockGetHelpDescription = `Usage:
@@ -78,13 +78,13 @@ func lockGetAction(c *cli.Context) error {
 
 	ctx := context.Background()
 
-	cli, err := agentapi.NewClient(agentapi.LeaderPath(cfg.SocketsPath))
+	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	v, err := cli.Get(ctx, key)
+	v, err := cli.LockGet(ctx, key)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Error from leader client: %v\n", err)
 		os.Exit(1)

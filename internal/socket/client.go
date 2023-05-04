@@ -23,8 +23,9 @@ type Client struct {
 	token string
 }
 
-// NewClient creates a new Client.
-func NewClient(path, token string) (*Client, error) {
+// NewClient creates a new Client. The context is used for an internal check
+// that the socket can be dialled.
+func NewClient(ctx context.Context, path, token string) (*Client, error) {
 	// Check the socket path exists and is a socket.
 	// Note that os.ModeSocket might not be set on Windows.
 	// (https://github.com/golang/go/issues/33357)
@@ -38,14 +39,15 @@ func NewClient(path, token string) (*Client, error) {
 		}
 	}
 
+	dialer := net.Dialer{}
+
 	// Try to connect to the socket.
-	test, err := net.Dial("unix", path)
+	test, err := dialer.DialContext(ctx, "unix", path)
 	if err != nil {
 		return nil, fmt.Errorf("socket test connection: %w", err)
 	}
 	test.Close()
 
-	dialer := net.Dialer{}
 	return &Client{
 		cli: &http.Client{
 			Transport: &http.Transport{

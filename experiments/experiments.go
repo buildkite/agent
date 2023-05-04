@@ -13,7 +13,7 @@ const (
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
 	DescendingSpawnPrioity     = "descending-spawn-priority"
 	InbuiltStatusPage          = "inbuilt-status-page"
-	LeaderAPI                  = "leader-api"
+	AgentAPI                   = "agent-api"
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 		ResolveCommitAfterCheckout: {},
 		DescendingSpawnPrioity:     {},
 		InbuiltStatusPage:          {},
-		LeaderAPI:                  {},
+		AgentAPI:                   {},
 	}
 
 	experiments = make(map[string]bool, len(Available))

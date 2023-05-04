@@ -1,5 +1,12 @@
 package agentapi
 
+import "time"
+
+// PingResponse is the response body for the ping endpoint.
+type PingResponse struct {
+	Now time.Time `json:"now"`
+}
+
 // ValueResponse is the response body for endpoints that return a single value.
 type ValueResponse struct {
 	Value string `json:"value"`

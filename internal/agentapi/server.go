@@ -65,12 +65,23 @@ func (s *Server) router() chi.Router {
 		headersMiddleware,
 	)
 
-	r.Route("/api/leader/v0/lock", func(r chi.Router) {
-		r.Get("/{key}", s.getLock)
-		r.Patch("/{key}", s.patchLock)
+	r.Route("/api/leader/v0", func(r chi.Router) {
+		r.Get("/ping", s.ping)
+		r.Route("/lock", func(r chi.Router) {
+			r.Get("/{key}", s.getLock)
+			r.Patch("/{key}", s.patchLock)
+		})
 	})
 
 	return r
+}
+
+// ping is a trivial handler used for liveness checks.
+func (s *Server) ping(w http.ResponseWriter, r *http.Request) {
+	resp := &PingResponse{Now: time.Now()}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		s.Logger.Error("Leader API: couldn't encode response body: %v", err)
+	}
 }
 
 // getLock atomically retrieves the current lock value.
@@ -84,7 +95,7 @@ func (s *Server) getLock(w http.ResponseWriter, r *http.Request) {
 		Value: s.lockLoad(key),
 	}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		s.Logger.Error("Leader API: couldn't encode response body: %v", err)
+		s.Logger.Error("Agent API: couldn't encode response body: %v", err)
 	}
 }
 
@@ -107,7 +118,7 @@ func (s *Server) patchLock(w http.ResponseWriter, r *http.Request) {
 		Swapped: ok,
 	}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		s.Logger.Error("Leader API: couldn't encode response body: %v", err)
+		s.Logger.Error("Agent API: couldn't encode response body: %v", err)
 	}
 }
 
@@ -135,7 +146,8 @@ func loggerMiddleware(l logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			t := time.Now()
-			defer l.Info("Leader API:\t%s\t%s\t%s", r.Method, r.URL.Path, time.Since(t))
+			// This is very noisy, hence debug level.
+			defer l.Debug("Agent API:\t%s\t%s\t%s", r.Method, r.URL.Path, time.Since(t))
 			next.ServeHTTP(w, r)
 		})
 	}
