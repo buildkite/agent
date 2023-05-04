@@ -97,14 +97,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	defer func() { span.FinishWithError(err) }()
 
 	// Create a context to use for cancelation of the job
-	var cancelCtx context.Context
-	var cancel context.CancelFunc
-	if experiments.IsEnabled(experiments.CancelCheckout) {
-		cancelCtx, cancel = context.WithCancel(ctx)
-	} else {
-		cancelCtx = ctx
-		cancel = func() {}
-	}
+	cancelCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Listen for cancellation
@@ -1081,7 +1074,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 					b.shell.Warningf("Checkout was cancelled")
 					r.Break()
 
-				case experiments.IsEnabled(experiments.CancelCheckout) && errors.Is(ctx.Err(), context.Canceled):
+				case errors.Is(ctx.Err(), context.Canceled):
 					b.shell.Warningf("Checkout was cancelled due to context cancellation")
 					r.Break()
 
