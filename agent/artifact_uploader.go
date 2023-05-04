@@ -329,11 +329,8 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 
 				// Update the states of the artifacts in bulk.
 				err := roko.NewRetrier(
-					// TODO: e.g. roko.ExponentialSubsecond(500*time.Millisecond) WithMaxAttempts(10)
-					// see: https://github.com/buildkite/roko/pull/8
-					// Meanwhile, 8 roko.Exponential(2sec) attempts is 1,2,4,8,16,32,64 seconds delay (~2 mins)
-					roko.WithMaxAttempts(8),
-					roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+					roko.WithMaxAttempts(10),
+					roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
 				).DoWithContext(ctx, func(r *roko.Retrier) error {
 					ctxShort, cancel := context.WithTimeout(ctx, 5*time.Second)
 					defer cancel()
