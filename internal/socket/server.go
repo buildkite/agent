@@ -56,11 +56,17 @@ func (s *Server) Start() error {
 
 // Close immediately closes down the server. Prefer Shutdown for ordinary use.
 func (s *Server) Close() error {
+	if !s.started {
+		return errors.New("server not started")
+	}
 	return s.svr.Close()
 }
 
 // Shutdown calls Shutdown on the inner HTTP server, which closes the socket.
 // Shutdown performs a graceful shutdown, and is preferred over Close.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if !s.started {
+		return errors.New("server not started")
+	}
 	return s.svr.Shutdown(ctx)
 }
