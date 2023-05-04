@@ -94,6 +94,17 @@ func main() {
 			},
 		},
 		{
+			Name:  "lock",
+			Usage: "Process lock subcommands",
+			Subcommands: []cli.Command{
+				clicommand.LockAcquireCommand,
+				clicommand.LockDoCommand,
+				clicommand.LockDoneCommand,
+				clicommand.LockGetCommand,
+				clicommand.LockReleaseCommand,
+			},
+		},
+		{
 			Name:  "meta-data",
 			Usage: "Get/set data from Buildkite jobs",
 			Subcommands: []cli.Command{

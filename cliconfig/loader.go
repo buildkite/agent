@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/utils"
@@ -175,7 +176,11 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	// Get the kind of field we need to set
 	fieldKind, err := reflections.GetFieldKind(l.Config, fieldName)
 	if err != nil {
-		return fmt.Errorf("getting the type of struct field %s: %w", fieldName, err)
+		return fmt.Errorf("getting the kind of struct field %q: %w", fieldName, err)
+	}
+	fieldType, err := reflections.GetFieldType(l.Config, fieldName)
+	if err != nil {
+		return fmt.Errorf("getting the type of struct field %q: %w", fieldName, err)
 	}
 
 	var value any
@@ -198,7 +203,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 		}
 
 		// Otherwise see if we can pull it from an environment variable
-		// (and fail gracefuly if we can't)
+		// (and fail gracefully if we can't)
 		if value == nil {
 			envName, err := reflections.GetFieldTag(l.Config, fieldName, "env")
 			if err == nil {
@@ -225,6 +230,15 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 					value, _ = strconv.ParseBool(configFileValue)
 				case reflect.Int:
 					value, _ = strconv.Atoi(configFileValue)
+				case reflect.Int64:
+					switch fieldType {
+					case "int64":
+						value, _ = strconv.ParseInt(configFileValue, 10, 64)
+					case "time.Duration":
+						value, _ = time.ParseDuration(configFileValue)
+					default:
+						return fmt.Errorf("unsupported field type %s for kind int64", fieldType)
+					}
 				default:
 					return fmt.Errorf("unable to convert string to type %s", fieldKind)
 				}
@@ -243,6 +257,15 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 				value = l.CLI.Bool(cliName)
 			case reflect.Int:
 				value = l.CLI.Int(cliName)
+			case reflect.Int64:
+				switch fieldType {
+				case "int64":
+					value = l.CLI.Int64(cliName)
+				case "time.Duration":
+					value = l.CLI.Duration(cliName)
+				default:
+					return fmt.Errorf("unsupported field type %s for kind int64", fieldType)
+				}
 			default:
 				return fmt.Errorf("unable to handle type: %s", fieldKind)
 			}
