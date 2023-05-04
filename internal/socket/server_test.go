@@ -1,21 +1,25 @@
 package socket
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
+var testSocketCounter uint32
+
 func testSocketPath() string {
-	return filepath.Join(os.TempDir(), fmt.Sprintf("test-%d-%d", os.Getpid(), rand.Uint32()))
+	id := atomic.AddUint32(&testSocketCounter, 1)
+	return filepath.Join(os.TempDir(), fmt.Sprintf("test-%d-%d", os.Getpid(), id))
 }
 
 type yesNoServer struct{}
@@ -84,6 +88,9 @@ func TestServerStartStop(t *testing.T) {
 func TestServerHandler(t *testing.T) {
 	t.Parallel()
 
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(canc)
+
 	sockPath := testSocketPath()
 	svr, err := NewServer(sockPath, yesNoServer{})
 	if err != nil {
@@ -93,7 +100,7 @@ func TestServerHandler(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("svr.Start() = %v", err)
 	}
-	defer svr.Close()
+	t.Cleanup(func() { svr.Close() })
 
 	cli := &http.Client{
 		Transport: &http.Transport{
@@ -134,8 +141,11 @@ func TestServerHandler(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.method+" "+test.url, func(t *testing.T) {
-			req, err := http.NewRequest(test.method, test.url, nil)
+			t.Parallel()
+
+			req, err := http.NewRequestWithContext(ctx, test.method, test.url, nil)
 			if err != nil {
 				t.Fatalf("http.NewRequest(%q, %q, nil) = error %v", test.method, test.url, err)
 			}

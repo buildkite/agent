@@ -1168,11 +1168,11 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 		ctx, canc := context.WithTimeout(ctx, 100*time.Millisecond)
 		defer canc()
 
-		cli, err := agentapi.NewClient(ctx, leaderPath)
+		cl, err := agentapi.NewClient(ctx, leaderPath)
 		if err != nil {
 			return err
 		}
-		return cli.Ping(ctx)
+		return cl.Ping(ctx)
 	}
 
 	for range time.Tick(100 * time.Millisecond) {

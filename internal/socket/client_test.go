@@ -40,7 +40,7 @@ func TestClientDo(t *testing.T) {
 	t.Parallel()
 
 	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
-	defer canc()
+	t.Cleanup(canc)
 
 	sockPath := testSocketPath()
 	svr, err := NewServer(sockPath, yesNoJSONServer{})
@@ -51,7 +51,7 @@ func TestClientDo(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("srv.Start() = %v", err)
 	}
-	defer svr.Close()
+	t.Cleanup(func() { svr.Close() })
 
 	cli, err := NewClient(ctx, sockPath, "llama")
 	if err != nil {
@@ -80,7 +80,9 @@ func TestClientDo(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.method+" "+test.url, func(t *testing.T) {
+			t.Parallel()
 			var got messageResponse
 			if err := cli.Do(ctx, test.method, test.url, nil, &got); err != nil {
 				t.Errorf("cli.Do(ctx, %q, %q, nil, &got) = %v", test.method, test.url, err)
@@ -96,7 +98,7 @@ func TestClientDoErrors(t *testing.T) {
 	t.Parallel()
 
 	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
-	defer canc()
+	t.Cleanup(canc)
 
 	sockPath := testSocketPath()
 	svr, err := NewServer(sockPath, yesNoJSONServer{})
@@ -107,7 +109,7 @@ func TestClientDoErrors(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("srv.Start() = %v", err)
 	}
-	defer svr.Close()
+	t.Cleanup(func() { svr.Close() })
 
 	cli, err := NewClient(ctx, sockPath, "alpaca")
 	if err != nil {
@@ -145,7 +147,9 @@ func TestClientDoErrors(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.method+" "+test.url, func(t *testing.T) {
+			t.Parallel()
 			var dummy messageResponse
 			err := cli.Do(ctx, test.method, test.url, nil, &dummy)
 			if diff := cmp.Diff(err, test.want); diff != "" {

@@ -3,24 +3,34 @@ package agentapi
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/logger"
 )
 
-func testServerArgs(t *testing.T) (string, logger.Logger) {
+var testSocketCounter uint32
+
+func testSocketPath() string {
+	id := atomic.AddUint32(&testSocketCounter, 1)
+	return filepath.Join(os.TempDir(), fmt.Sprintf("test-%d-%d", os.Getpid(), id))
+}
+
+func testLogger(t *testing.T) logger.Logger {
 	t.Helper()
-	sockName := filepath.Join(os.TempDir(), fmt.Sprintf("test-%d-%d", os.Getpid(), rand.Uint32()))
-	logger := logger.NewConsoleLogger(logger.NewTextPrinter(os.Stderr), func(int) { t.Fail() })
-	return sockName, logger
+	logger := logger.NewConsoleLogger(
+		logger.NewTextPrinter(os.Stderr),
+		func(c int) { t.Fatalf("exit(%d)", c) },
+	)
+	return logger
 }
 
 func testServerAndClient(t *testing.T, ctx context.Context) (*Server, *Client) {
 	t.Helper()
-	sockPath, logger := testServerArgs(t)
+	sockPath, logger := testSocketPath(), testLogger(t)
 	svr, err := NewServer(sockPath, logger)
 	if err != nil {
 		t.Fatalf("NewServer(%q, logger) = error %v", sockPath, err)
@@ -38,7 +48,9 @@ func testServerAndClient(t *testing.T, ctx context.Context) (*Server, *Client) {
 }
 
 func TestPing(t *testing.T) {
-	ctx := context.Background()
+	t.Parallel()
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
 	defer svr.Close()
@@ -49,7 +61,9 @@ func TestPing(t *testing.T) {
 }
 
 func TestLockOperations(t *testing.T) {
-	ctx := context.Background()
+	t.Parallel()
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
 	defer svr.Close()
