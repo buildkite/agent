@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -23,6 +24,9 @@ Description:
 
    You can supply the value as an argument to the command, or pipe in a file or
    script output.
+
+   The value must be a non-empty string, and strings containing only whitespace
+   characters are not allowed.
 
 Example:
 
@@ -107,6 +111,14 @@ var MetaDataSetCommand = cli.Command{
 				l.Fatal("Failed to read from STDIN: %s", err)
 			}
 			cfg.Value = string(input)
+		}
+
+		if strings.TrimSpace(cfg.Key) == "" {
+			l.Fatal("Key cannot be empty, or composed of only whitespace characters")
+		}
+
+		if strings.TrimSpace(cfg.Value) == "" {
+			l.Fatal("Value cannot be empty, or composed of only whitespace characters")
 		}
 
 		// Create the API client
