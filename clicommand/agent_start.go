@@ -1120,7 +1120,7 @@ func defaultSocketsPath() string {
 // runAgentAPI runs an API socket that can be used to interact with this
 // (top-level) agent. It returns a shutdown function.
 func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) func() {
-	path := agentapi.DefaultServerPath(socketsPath)
+	path := agentapi.DefaultSocketPath(socketsPath)
 	// There should be only one Agent API socket per agent process.
 	// If a previous agent crashed and left behind a socket, we can
 	// remove it.
