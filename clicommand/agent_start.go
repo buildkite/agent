@@ -22,6 +22,7 @@ import (
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -759,6 +760,24 @@ var AgentStartCommand = cli.Command{
 		// Sense check supported tracing backends, we don't want bootstrapped jobs to silently have no tracing
 		if _, has := tracetools.ValidTracingBackends[cfg.TracingBackend]; !has {
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
+		}
+
+		if experiments.IsEnabled("agent-api") {
+			path := agentapi.DefaultServerPath(cfg.SocketsPath)
+			// There should be only one Agent API socket per agent process.
+			// If a previous agent crashed and left behind a socket, we can
+			// remove it.
+			os.Remove(path)
+			agentAPISvr, err := agentapi.NewServer(path, l)
+			if err != nil {
+				l.Fatal("Couldn't serve Agent API: %v", err)
+			}
+			if agentAPISvr != nil {
+				defer agentAPISvr.Shutdown(ctx)
+
+				// Try to be the leader - no worries if not.
+				os.Symlink(path, agentapi.LeaderPath(cfg.SocketsPath))
+			}
 		}
 
 		// AgentConfiguration is the runtime configuration for an agent

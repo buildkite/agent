@@ -12,7 +12,7 @@ type EnvGetResponse struct {
 	Env map[string]string `json:"env"` // Different to EnvUpdateRequest because we don't want to send nulls
 }
 
-// EnvUpdateRequest is the request body for the GET /env endpoint
+// EnvUpdateRequest is the request body for the PATCH /env endpoint
 type EnvUpdateRequest struct {
 	Env map[string]*string `json:"env"`
 }
