@@ -308,3 +308,36 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 		paths,
 	)
 }
+
+func TestCollectMatchesUploadSymlinks(t *testing.T) {
+	wd, _ := os.Getwd()
+	root := filepath.Join(wd, "..")
+	os.Chdir(root)
+	defer os.Chdir(wd)
+
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+		Paths: strings.Join([]string{
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+		}, ";"),
+		NoUploadSymlinks: true,
+	})
+
+	artifacts, err := uploader.Collect()
+	if err != nil {
+		t.Fatalf("uploader.Collect() error = %v", err)
+	}
+
+	paths := []string{}
+	for _, a := range artifacts {
+		paths = append(paths, a.Path)
+	}
+	assert.ElementsMatch(
+		t,
+		[]string{
+			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+		},
+		paths,
+	)
+}
