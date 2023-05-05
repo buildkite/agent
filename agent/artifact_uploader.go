@@ -47,6 +47,9 @@ type ArtifactUploaderConfig struct {
 
 	// Whether to follow symbolic links when resolving globs
 	FollowSymlinks bool
+
+	// Whether to not upload symlinks
+	NoUploadSymlinks bool
 }
 
 type ArtifactUploader struct {
@@ -86,6 +89,14 @@ func (a *ArtifactUploader) Upload(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func isSymlink(path string) bool {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeSymlink != 0
 }
 
 func isDir(path string) bool {
@@ -145,6 +156,11 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			// Ignore directories, we only want files
 			if isDir(absolutePath) {
 				a.logger.Debug("Skipping directory %s", file)
+				continue
+			}
+
+			if a.conf.NoUploadSymlinks && isSymlink(absolutePath) {
+				a.logger.Debug("Skipping symlink %s", file)
 				continue
 			}
 

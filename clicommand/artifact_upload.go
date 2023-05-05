@@ -84,6 +84,7 @@ type ArtifactUploadConfig struct {
 
 	// Uploader flags
 	FollowSymlinks bool `cli:"follow-symlinks"`
+	UploadSymlinks bool `cli:"no-upload-symlinks"`
 }
 
 var ArtifactUploadCommand = cli.Command{
@@ -102,6 +103,11 @@ var ArtifactUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
 			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
+		},
+		cli.BoolTFlag{
+			Name:   "upload-symlinks",
+			Usage:  "Whether, after the glob has been resolved, symlinks to files should be uploaded",
+			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_SYMLINKS",
 		},
 
 		// API Flags
@@ -147,12 +153,13 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
-			JobID:          cfg.Job,
-			Paths:          cfg.UploadPaths,
-			Destination:    cfg.Destination,
-			ContentType:    cfg.ContentType,
-			DebugHTTP:      cfg.DebugHTTP,
-			FollowSymlinks: cfg.FollowSymlinks,
+			JobID:            cfg.Job,
+			Paths:            cfg.UploadPaths,
+			Destination:      cfg.Destination,
+			ContentType:      cfg.ContentType,
+			DebugHTTP:        cfg.DebugHTTP,
+			FollowSymlinks:   cfg.FollowSymlinks,
+			NoUploadSymlinks: !cfg.UploadSymlinks,
 		})
 
 		// Upload the artifacts
