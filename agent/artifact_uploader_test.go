@@ -226,7 +226,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 		}, ";"),
-		FollowSymlinks: true,
+		GlobResolveFollowSymlinks: true,
 	})
 
 	artifacts, err := uploader.Collect()
@@ -284,7 +284,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
 		}, ";"),
-		FollowSymlinks: true,
+		GlobResolveFollowSymlinks: true,
 	})
 
 	artifacts, err := uploader.Collect()
@@ -319,7 +319,7 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 		Paths: strings.Join([]string{
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 		}, ";"),
-		NoUploadSymlinks: true,
+		UploadSkipSymlinks: true,
 	})
 
 	artifacts, err := uploader.Collect()

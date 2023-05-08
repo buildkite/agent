@@ -77,10 +77,11 @@ type ArtifactUploadConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 
 	// Uploader flags
-	UploadSymlinks bool `cli:"no-upload-symlinks"`
+	GlobResolveFollowSymlinks bool `cli:"glob-resolve-follow-symlinks"`
+	UploadSkipSymlinks        bool `cli:"upload-skip-symlinks"`
 
 	// deprecated
-	FollowSymlinks bool `cli:"follow-symlinks"`
+	FollowSymlinks bool `cli:"follow-symlinks" deprecated-and-renamed-to:"GlobResolveFollowSymlinks"`
 }
 
 var ArtifactUploadCommand = cli.Command{
@@ -100,10 +101,20 @@ var ArtifactUploadCommand = cli.Command{
 			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
 			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
 		},
-		cli.BoolTFlag{
-			Name:   "upload-symlinks",
-			Usage:  "Whether, after the glob has been resolved, symlinks to files should be uploaded",
-			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_SYMLINKS",
+		cli.BoolFlag{
+			Name:   "glob-resolve-follow-symlinks",
+			Usage:  "Follow symbolic links to directories while resolving globs",
+			EnvVar: "BUILDKITE_AGENT_ARTIFACT_GLOB_RESOLVE_FOLLOW_SYMLINKS",
+		},
+		cli.BoolFlag{
+			Name:   "upload-skip-symlinks",
+			Usage:  "After the glob has been resolved to a list of files to upload, skip symbolic links to files",
+			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_FOLLOW_SYMLINKS",
+		},
+		cli.BoolFlag{ // Deprecated
+			Name:   "follow-symlinks",
+			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead.",
+			EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
 		},
 
 		// API Flags
@@ -148,13 +159,16 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
-			JobID:            cfg.Job,
-			Paths:            cfg.UploadPaths,
-			Destination:      cfg.Destination,
-			ContentType:      cfg.ContentType,
-			DebugHTTP:        cfg.DebugHTTP,
-			FollowSymlinks:   cfg.FollowSymlinks,
-			NoUploadSymlinks: !cfg.UploadSymlinks,
+			JobID:       cfg.Job,
+			Paths:       cfg.UploadPaths,
+			Destination: cfg.Destination,
+			ContentType: cfg.ContentType,
+			DebugHTTP:   cfg.DebugHTTP,
+
+			// If the deprecated flag was set to true, pretend its replacement was set to true too
+			// this works as long as the user only sets one of the two flags
+			GlobResolveFollowSymlinks: (cfg.GlobResolveFollowSymlinks || cfg.FollowSymlinks),
+			UploadSkipSymlinks:        cfg.UploadSkipSymlinks,
 		})
 
 		// Upload the artifacts

@@ -46,10 +46,10 @@ type ArtifactUploaderConfig struct {
 	DebugHTTP bool
 
 	// Whether to follow symbolic links when resolving globs
-	FollowSymlinks bool
+	GlobResolveFollowSymlinks bool
 
 	// Whether to not upload symlinks
-	NoUploadSymlinks bool
+	UploadSkipSymlinks bool
 }
 
 type ArtifactUploader struct {
@@ -127,7 +127,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 		// Resolve the globs (with * and ** in them), if it's a non-globbed path and doesn't exists
 		// then we will get the ErrNotExist that is handled below
 		globfunc := zglob.Glob
-		if a.conf.FollowSymlinks {
+		if a.conf.GlobResolveFollowSymlinks {
 			// Follow symbolic links for files & directories while expanding globs
 			globfunc = zglob.GlobFollowSymlinks
 		}
@@ -159,7 +159,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 				continue
 			}
 
-			if a.conf.NoUploadSymlinks && isSymlink(absolutePath) {
+			if a.conf.UploadSkipSymlinks && isSymlink(absolutePath) {
 				a.logger.Debug("Skipping symlink %s", file)
 				continue
 			}
