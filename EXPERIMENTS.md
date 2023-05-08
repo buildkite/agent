@@ -84,3 +84,12 @@ See [jobapi/payloads.go](./jobapi/payloads.go) for the full API request/response
 The Job API is unavailable on windows agents running versions of windows prior to build 17063, as this was when windows added Unix Domain Socket support. Using this experiment on such agents will output a warning, and the API will be unavailable.
 
 **Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™️.
+
+### `agent-api`
+
+Like `job-api`, this exposes a local API for interacting with the agent process.
+...with primitives that can be used to solve local concurrency problems (such as multiple agents handling some shared local resource).
+
+The API is exposed via a Unix Domain Socket. Unlike the `job-api`, the path to the socket is not available via a environment variable - rather, there is a single (configurable) path on the system.
+
+**Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™.
