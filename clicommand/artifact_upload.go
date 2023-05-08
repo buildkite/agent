@@ -57,12 +57,6 @@ Example:
    $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
    $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID`
 
-var FollowSymlinksFlag = cli.BoolFlag{
-	Name:   "follow-symlinks",
-	Usage:  "Follow symbolic links while resolving globs",
-	EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
-}
-
 type ArtifactUploadConfig struct {
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
 	Destination string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
@@ -83,8 +77,10 @@ type ArtifactUploadConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 
 	// Uploader flags
-	FollowSymlinks bool `cli:"follow-symlinks"`
 	UploadSymlinks bool `cli:"no-upload-symlinks"`
+
+	// deprecated
+	FollowSymlinks bool `cli:"follow-symlinks"`
 }
 
 var ArtifactUploadCommand = cli.Command{
@@ -122,7 +118,6 @@ var ArtifactUploadCommand = cli.Command{
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
-		FollowSymlinksFlag,
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
