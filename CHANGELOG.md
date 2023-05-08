@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [3.46.1](https://github.com/buildkite/agent/tree/3.46.1) (2023-05-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.46.0...3.46.1)
+
+### Fixed
+
+- Avoid long `--no-patch` arg added to `git show` in v1.8.4, to e.g. support CentOS 7 [#2075](https://github.com/buildkite/agent/pull/2075) (@pda)
+
 ## [3.46.0](https://github.com/buildkite/agent/tree/3.46.0) (2023-05-04)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.45.0...3.46.0)
 
