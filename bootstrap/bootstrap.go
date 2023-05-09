@@ -1308,7 +1308,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
-	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
+	if experiments.IsEnabled(experiments.GitMirrors) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
 		mirrorDir, err = b.getOrUpdateMirrorDir(ctx, b.Repository)
@@ -1442,7 +1442,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		if err != nil {
 			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
-			mirrorSubmodules := experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != ""
+			mirrorSubmodules := experiments.IsEnabled(experiments.GitMirrors) && b.Config.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
 				submoduleArgs := append([]string(nil), args...)
 				// submodules might need their fingerprints verified too
