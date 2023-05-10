@@ -166,7 +166,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 				return nil, fmt.Errorf("resolving relative path for file %s: %w", file, err)
 			}
 
-			if experiments.IsEnabled(experiments.NormalizedUploadPaths) {
+			if experiments.IsEnabled(experiments.NormalisedUploadPaths) {
 				// Convert any Windows paths to Unix/URI form
 				path = filepath.ToSlash(path)
 			}

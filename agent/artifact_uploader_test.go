@@ -100,7 +100,7 @@ func TestCollect(t *testing.T) {
 	// path.Join function instead (which uses Unix/URI-style path separators,
 	// regardless of platform)
 
-	experimentKey := experiments.NormalizedUploadPaths
+	experimentKey := experiments.NormalisedUploadPaths
 	experimentPrev := experiments.IsEnabled(experimentKey)
 	defer func() {
 		if experimentPrev {

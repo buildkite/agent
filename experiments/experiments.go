@@ -14,7 +14,7 @@ const (
 	DescendingSpawnPrioity     = "descending-spawn-priority"
 	InbuiltStatusPage          = "inbuilt-status-page"
 	AgentAPI                   = "agent-api"
-	NormalizedUploadPaths      = "normalised-upload-paths"
+	NormalisedUploadPaths      = "normalised-upload-paths"
 )
 
 var (
@@ -28,7 +28,7 @@ var (
 		DescendingSpawnPrioity:     {},
 		InbuiltStatusPage:          {},
 		AgentAPI:                   {},
-		NormalizedUploadPaths:      {},
+		NormalisedUploadPaths:      {},
 	}
 
 	experiments = make(map[string]bool, len(Available))
