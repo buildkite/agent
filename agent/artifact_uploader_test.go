@@ -100,7 +100,7 @@ func TestCollect(t *testing.T) {
 	// path.Join function instead (which uses Unix/URI-style path separators,
 	// regardless of platform)
 
-	experimentKey := "normalised-upload-paths"
+	experimentKey := experiments.NormalisedUploadPaths
 	experimentPrev := experiments.IsEnabled(experimentKey)
 	defer func() {
 		if experimentPrev {
@@ -109,14 +109,14 @@ func TestCollect(t *testing.T) {
 			experiments.Disable(experimentKey)
 		}
 	}()
-	experiments.Disable("normalised-upload-paths")
+	experiments.Disable(experimentKey)
 	artifactsWithoutExperimentEnabled, err := uploader.Collect()
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
 
-	experiments.Enable("normalised-upload-paths")
+	experiments.Enable(experimentKey)
 	artifactsWithExperimentEnabled, err := uploader.Collect()
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)
