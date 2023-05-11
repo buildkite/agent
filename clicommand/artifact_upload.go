@@ -55,7 +55,18 @@ Example:
    $ export BUILDKITE_ARTIFACTORY_URL=http://my-artifactory-instance.com/artifactory
    $ export BUILDKITE_ARTIFACTORY_USER=carol-danvers
    $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
-   $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID`
+   $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID
+
+   By default, symlinks to directories will not be explored when resolving the glob, but symlinks to files will be uploaded as the linked files.
+   To ignore symlinks to files use:
+
+   $ buildkite-agent artifact upload --upload-skip-symlinks "log/**/*.log"
+
+   Note uploading symlinks to files without following them is not supported.
+   If you need to preserve them in direcotory, we recommend creating a tar archive:
+
+   $ tar -cvf log.tar log/**/*
+   $ buildkite-agent upload log.tar`
 
 type ArtifactUploadConfig struct {
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
@@ -103,17 +114,17 @@ var ArtifactUploadCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "glob-resolve-follow-symlinks",
-			Usage:  "Follow symbolic links to directories while resolving globs",
+			Usage:  "Follow symbolic links to directories while resolving globs. Note: this will not prevent symlinks to files from being uploaded. Use --upload-skip-symlinks to do that",
 			EnvVar: "BUILDKITE_AGENT_ARTIFACT_GLOB_RESOLVE_FOLLOW_SYMLINKS",
 		},
 		cli.BoolFlag{
 			Name:   "upload-skip-symlinks",
-			Usage:  "After the glob has been resolved to a list of files to upload, skip symbolic links to files",
+			Usage:  "After the glob has been resolved to a list of files to upload, skip uploading those that are symlinks to files",
 			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_FOLLOW_SYMLINKS",
 		},
 		cli.BoolFlag{ // Deprecated
 			Name:   "follow-symlinks",
-			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead.",
+			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead",
 			EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
 		},
 
