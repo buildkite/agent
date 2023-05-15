@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/go-chi/chi/v5"
 )
@@ -33,7 +34,7 @@ func (s *lockServer) routes(r chi.Router) {
 func (s *lockServer) getLock(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
-		http.Error(w, "key missing", http.StatusNotFound)
+		socket.WriteError(w, "key missing", http.StatusNotFound)
 		return
 	}
 	resp := &ValueResponse{
@@ -48,13 +49,14 @@ func (s *lockServer) getLock(w http.ResponseWriter, r *http.Request) {
 func (s *lockServer) patchLock(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
-		http.Error(w, "key missing", http.StatusNotFound)
+		socket.WriteError(w, "key missing", http.StatusNotFound)
 		return
 	}
 
 	var req LockCASRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("couldn't decode request body: %v", err), http.StatusBadRequest)
+		socket.WriteError(w, fmt.Sprintf("couldn't decode request body: %v", err), http.StatusBadRequest)
+		return
 	}
 
 	v, ok := s.locks.cas(key, req.Old, req.New)

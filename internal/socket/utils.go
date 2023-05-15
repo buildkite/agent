@@ -3,8 +3,10 @@ package socket
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -53,4 +55,11 @@ func GenerateToken(len int) (string, error) {
 
 	withEqualses := base64.URLEncoding.EncodeToString(b)
 	return strings.TrimRight(withEqualses, "="), nil // Trim the equals signs because they're not valid in env vars
+}
+
+// WriteError writes an error as an ErrorResponse (JSON-encoded). The err value
+// is converted to a string with fmt.Sprint.
+func WriteError(w http.ResponseWriter, err any, code int) {
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprint(err)})
 }
