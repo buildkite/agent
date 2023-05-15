@@ -47,7 +47,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	defer r.Body.Close()
 	if err != nil {
-		writeError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest)
+		socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest)
 		return
 	}
 
@@ -56,7 +56,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	protected := checkProtected(maps.Keys(req.Env))
 
 	if len(protected) > 0 {
-		writeError(
+		socket.WriteError(
 			w,
 			fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected),
 			http.StatusUnprocessableEntity,
@@ -73,7 +73,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(nils) > 0 {
-		writeError(
+		socket.WriteError(
 			w,
 			fmt.Sprintf("removing environment variables (ie setting them to null) is not permitted on this endpoint. The following keys were set to null: % v", nils),
 			http.StatusUnprocessableEntity,
@@ -109,13 +109,13 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	if err != nil {
 		err = fmt.Errorf("failed to decode request body: %w", err)
-		writeError(w, err, http.StatusBadRequest)
+		socket.WriteError(w, err, http.StatusBadRequest)
 		return
 	}
 
 	protected := checkProtected(req.Keys)
 	if len(protected) > 0 {
-		writeError(
+		socket.WriteError(
 			w,
 			fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected),
 			http.StatusUnprocessableEntity,
@@ -148,9 +148,4 @@ func checkProtected(candidates []string) []string {
 		}
 	}
 	return protected
-}
-
-func writeError(w http.ResponseWriter, err any, code int) {
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprint(err)})
 }

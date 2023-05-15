@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -47,11 +48,11 @@ func (f *fakeServer) Close() { f.svr.Close() }
 
 func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+f.token {
-		writeError(w, "invalid Authorization header", http.StatusForbidden)
+		socket.WriteError(w, "invalid Authorization header", http.StatusForbidden)
 		return
 	}
 	if r.URL.Path != "/api/current-job/v0/env" {
-		writeError(w, fmt.Sprintf("not found: %q", r.URL.Path), http.StatusNotFound)
+		socket.WriteError(w, fmt.Sprintf("not found: %q", r.URL.Path), http.StatusNotFound)
 		return
 	}
 
@@ -59,23 +60,23 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		b := EnvGetResponse{Env: f.env}
 		if err := json.NewEncoder(w).Encode(&b); err != nil {
-			writeError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
 		}
 
 	case "PATCH":
 		var req EnvUpdateRequest
 		var resp EnvUpdateResponse
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
 			return
 		}
 		for k, v := range req.Env {
 			if k == "READONLY" {
-				writeError(w, "mutating READONLY is not allowed", http.StatusBadRequest)
+				socket.WriteError(w, "mutating READONLY is not allowed", http.StatusBadRequest)
 				return
 			}
 			if v == nil {
-				writeError(w, fmt.Sprintf("setting %q to null is not allowed", k), http.StatusBadRequest)
+				socket.WriteError(w, fmt.Sprintf("setting %q to null is not allowed", k), http.StatusBadRequest)
 				return
 			}
 		}
@@ -89,19 +90,19 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Normalize()
 		if err := json.NewEncoder(w).Encode(&resp); err != nil {
-			writeError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
 		}
 
 	case "DELETE":
 		var req EnvDeleteRequest
 		var resp EnvDeleteResponse
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
 			return
 		}
 		for _, k := range req.Keys {
 			if k == "READONLY" {
-				writeError(w, "deleting READONLY is not allowed", http.StatusBadRequest)
+				socket.WriteError(w, "deleting READONLY is not allowed", http.StatusBadRequest)
 			}
 		}
 		for _, k := range req.Keys {
@@ -113,11 +114,11 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Normalize()
 		if err := json.NewEncoder(w).Encode(&resp); err != nil {
-			writeError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
 		}
 
 	default:
-		writeError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest)
+		socket.WriteError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest)
 	}
 }
 

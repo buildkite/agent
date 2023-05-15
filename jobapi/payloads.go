@@ -1,11 +1,13 @@
 package jobapi
 
-import "sort"
+import (
+	"sort"
 
-// Error response is the response body for any errors that occur
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
+	"github.com/buildkite/agent/v3/internal/socket"
+)
+
+// ErrorResponse is the response body for any errors that occur.
+type ErrorResponse = socket.ErrorResponse
 
 // EnvGetResponse is the response body for the GET /env endpoint
 type EnvGetResponse struct {
