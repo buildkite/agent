@@ -1313,7 +1313,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
 		mirrorDir, err = b.getOrUpdateMirrorDir(ctx, b.Repository)
 		if err != nil {
-			return err
+			return fmt.Errorf("getting/updating git mirror: %w", err)
 		}
 
 		b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
@@ -1321,7 +1321,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 
 	// Make sure the build directory exists and that we change directory into it
 	if err := b.createCheckoutDir(); err != nil {
-		return err
+		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
 	gitCloneFlags := b.GitCloneFlags
@@ -1334,11 +1334,11 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	if utils.FileExists(existingGitDir) {
 		// Update the origin of the repository so we can gracefully handle repository renames
 		if err := b.shell.Run(ctx, "git", "remote", "set-url", "origin", b.Repository); err != nil {
-			return err
+			return fmt.Errorf("setting origin: %w", err)
 		}
 	} else {
 		if err := gitClone(ctx, b.shell, gitCloneFlags, b.Repository, "."); err != nil {
-			return err
+			return fmt.Errorf("cloning git repository: %w", err)
 		}
 	}
 
@@ -1346,12 +1346,12 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	// disabled to ensure previous submodules are cleaned up
 	if hasGitSubmodules(b.shell) {
 		if err := gitCleanSubmodules(ctx, b.shell, b.GitCleanFlags); err != nil {
-			return err
+			return fmt.Errorf("cleaning git submodules: %w", err)
 		}
 	}
 
 	if err := gitClean(ctx, b.shell, b.GitCleanFlags); err != nil {
-		return err
+		return fmt.Errorf("cleaning git repository: %w", err)
 	}
 
 	gitFetchFlags := b.GitFetchFlags
@@ -1361,7 +1361,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	if b.RefSpec != "" {
 		b.shell.Commentf("Fetch and checkout custom refspec")
 		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", b.RefSpec); err != nil {
-			return err
+			return fmt.Errorf("fetching refspec %q: %w", b.RefSpec, err)
 		}
 
 		// GitHub has a special ref which lets us fetch a pull request head, whether
@@ -1373,7 +1373,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
 
 		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", refspec); err != nil {
-			return err
+			return fmt.Errorf("fetching PR refspec %q: %w", refspec, err)
 		}
 
 		gitFetchHead, _ := b.shell.RunAndCapture(ctx, "git", "rev-parse", "FETCH_HEAD")
@@ -1384,7 +1384,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	} else if b.Commit == "HEAD" {
 		b.shell.Commentf("Fetch and checkout remote branch HEAD commit")
 		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", b.Branch); err != nil {
-			return err
+			return fmt.Errorf("fetching branch %q: %w", b.Branch, err)
 		}
 
 		// Otherwise fetch and checkout the commit directly. Some repositories don't
@@ -1398,7 +1398,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 			// excludes the default refspec.
 			gitFetchRefspec, _ := b.shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
 			if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
-				return err
+				return fmt.Errorf("fetching commit %q: %w", b.Commit, err)
 			}
 		}
 	}
@@ -1407,11 +1407,11 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 
 	if b.Commit == "HEAD" {
 		if err := gitCheckout(ctx, b.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
-			return err
+			return fmt.Errorf("checking out FETCH_HEAD: %w", err)
 		}
 	} else {
 		if err := gitCheckout(ctx, b.shell, gitCheckoutFlags, b.Commit); err != nil {
-			return err
+			return fmt.Errorf("checking out commit %q: %w", b.Commit, err)
 		}
 	}
 
@@ -1433,10 +1433,12 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 			gitVersionOutput, _ := b.shell.RunAndCapture(ctx, "git", "--version")
 			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
+
 		args := []string{}
 		for _, config := range b.GitSubmoduleCloneConfig {
 			args = append(args, "-c", config)
 		}
+
 		// Checking for submodule repositories
 		submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, b.shell)
 		if err != nil {
@@ -1449,15 +1451,18 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 				if b.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(ctx, b.shell, repository)
 				}
+
 				if mirrorSubmodules {
 					mirrorDir, err := b.getOrUpdateMirrorDir(ctx, repository)
 					if err != nil {
-						return err
+						return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 					}
+
 					// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
 					if err := b.createCheckoutDir(); err != nil {
-						return err
+						return fmt.Errorf("creating checkout dir: %w", err)
 					}
+
 					// Tests use a local temp path for the repository, real repositories don't. Handle both.
 					var repositoryPath string
 					if !utils.FileExists(repository) {
@@ -1465,14 +1470,16 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 					} else {
 						repositoryPath = repository
 					}
+
 					if mirrorDir != "" {
 						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
 					} else {
 						// Fall back to a clean update, rather than failing the checkout and therefore the build
 						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
 					}
+
 					if err := b.shell.Run(ctx, "git", submoduleArgs...); err != nil {
-						return err
+						return fmt.Errorf("updating submodules: %w", err)
 					}
 				}
 			}
@@ -1480,11 +1487,12 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 			if !mirrorSubmodules {
 				args = append(args, "submodule", "update", "--init", "--recursive", "--force")
 				if err := b.shell.Run(ctx, "git", args...); err != nil {
-					return err
+					return fmt.Errorf("updating submodules: %w", err)
 				}
 			}
+
 			if err := b.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
-				return err
+				return fmt.Errorf("resetting submodules: %w", err)
 			}
 		}
 	}
@@ -1495,12 +1503,12 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	b.shell.Commentf("Cleaning again to catch any post-checkout changes")
 
 	if err := gitClean(ctx, b.shell, b.GitCleanFlags); err != nil {
-		return err
+		return fmt.Errorf("cleaning repository post-checkout: %w", err)
 	}
 
 	if gitSubmodules {
 		if err := gitCleanSubmodules(ctx, b.shell, b.GitCleanFlags); err != nil {
-			return err
+			return fmt.Errorf("cleaning submodules post-checkout: %w", err)
 		}
 	}
 
@@ -1540,11 +1548,11 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		}
 		out, err := b.shell.RunAndCapture(ctx, "git", gitArgs...)
 		if err != nil {
-			return err
+			return fmt.Errorf("getting git commit information: %w", err)
 		}
 		stdin := strings.NewReader(out)
 		if err := b.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", "buildkite:git:commit"); err != nil {
-			return err
+			return fmt.Errorf("sending git commit information to Buildkite: %w", err)
 		}
 	}
 
