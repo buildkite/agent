@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -121,8 +122,11 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestClient_NoSocket(t *testing.T) {
-	if _, err := NewDefaultClient(); err == nil {
-		t.Errorf("NewDefaultClient() error = %v, want nil", err)
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(canc)
+
+	if _, err := NewDefaultClient(ctx); err == nil {
+		t.Errorf("NewDefaultClient(ctx) error = %v, want nil", err)
 	}
 }
 
@@ -135,7 +139,10 @@ func TestClientEnvGet(t *testing.T) {
 	}
 	defer svr.Close()
 
-	cli, err := NewClient(svr.sock, svr.token)
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(canc)
+
+	cli, err := NewClient(ctx, svr.sock, svr.token)
 	if err != nil {
 		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
 	}
@@ -165,7 +172,10 @@ func TestClientEnvUpdate(t *testing.T) {
 	}
 	defer svr.Close()
 
-	cli, err := NewClient(svr.sock, svr.token)
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(canc)
+
+	cli, err := NewClient(ctx, svr.sock, svr.token)
 	if err != nil {
 		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
 	}
@@ -201,7 +211,10 @@ func TestClientEnvDelete(t *testing.T) {
 	}
 	defer svr.Close()
 
-	cli, err := NewClient(svr.sock, svr.token)
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(canc)
+
+	cli, err := NewClient(ctx, svr.sock, svr.token)
 	if err != nil {
 		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
 	}
