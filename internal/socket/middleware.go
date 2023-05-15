@@ -2,6 +2,7 @@ package socket
 
 import (
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -26,6 +27,39 @@ func HeadersMiddleware(headers http.Header) func(http.Handler) http.Handler {
 			for k, v := range headers {
 				h[k] = v
 			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// AuthMiddleware is a middleware that checks the Authorization header of an
+// incoming request for a Bearer token and checks that that token is the
+// correct one.
+func AuthMiddleware(token string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			if auth == "" {
+				WriteError(w, "authorization header is required", http.StatusUnauthorized)
+				return
+			}
+
+			authType, reqToken, found := strings.Cut(auth, " ")
+			if !found {
+				WriteError(w, "invalid authorization header: must be in the form `Bearer <token>`", http.StatusUnauthorized)
+				return
+			}
+
+			if authType != "Bearer" {
+				WriteError(w, "invalid authorization header: type must be Bearer", http.StatusUnauthorized)
+				return
+			}
+
+			if reqToken != token {
+				WriteError(w, "invalid authorization token", http.StatusUnauthorized)
+				return
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}

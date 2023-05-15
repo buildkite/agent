@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/exp/maps"
@@ -15,10 +16,11 @@ import (
 func (s *Server) router() chi.Router {
 	r := chi.NewRouter()
 	r.Use(
-		LoggerMiddleware(s.Logger),
+		socket.LoggerMiddleware("Job API", s.Logger.Commentf),
 		middleware.Recoverer,
-		HeadersMiddleware,
-		AuthMiddleware(s.token),
+		// All responses are in JSON.
+		socket.HeadersMiddleware(http.Header{"Content-Type": []string{"application/json"}}),
+		socket.AuthMiddleware(s.token),
 	)
 
 	r.Route("/api/current-job/v0", func(r chi.Router) {
