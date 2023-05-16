@@ -82,7 +82,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 			w := httptest.NewRecorder()
 
-			mdlw := AuthMiddleware(token)
+			mdlw := AuthMiddleware(token, t.Errorf)
 			wrapped := mdlw(c.next(http.HandlerFunc(testHandler)))
 			wrapped.ServeHTTP(w, req)
 

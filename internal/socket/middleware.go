@@ -34,29 +34,41 @@ func HeadersMiddleware(headers http.Header) func(http.Handler) http.Handler {
 
 // AuthMiddleware is a middleware that checks the Authorization header of an
 // incoming request for a Bearer token and checks that that token is the
-// correct one.
-func AuthMiddleware(token string) func(http.Handler) http.Handler {
+// correct one. If there is an error while responding with an auth failure,
+// it is logged with errorLogf.
+func AuthMiddleware(token string, errorLogf func(f string, v ...any)) func(http.Handler) http.Handler {
+	if errorLogf == nil {
+		errorLogf = func(string, ...any) {}
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := r.Header.Get("Authorization")
 			if auth == "" {
-				WriteError(w, "authorization header is required", http.StatusUnauthorized)
+				if err := WriteError(w, "authorization header is required", http.StatusUnauthorized); err != nil {
+					errorLogf("AuthMiddleware: couldn't write error response: %v", err)
+				}
 				return
 			}
 
 			authType, reqToken, found := strings.Cut(auth, " ")
 			if !found {
-				WriteError(w, "invalid authorization header: must be in the form `Bearer <token>`", http.StatusUnauthorized)
+				if err := WriteError(w, "invalid authorization header: must be in the form `Bearer <token>`", http.StatusUnauthorized); err != nil {
+					errorLogf("AuthMiddleware: couldn't write error response: %v", err)
+				}
 				return
 			}
 
 			if authType != "Bearer" {
-				WriteError(w, "invalid authorization header: type must be Bearer", http.StatusUnauthorized)
+				if err := WriteError(w, "invalid authorization header: type must be Bearer", http.StatusUnauthorized); err != nil {
+					errorLogf("AuthMiddleware: couldn't write error response: %v", err)
+				}
 				return
 			}
 
 			if reqToken != token {
-				WriteError(w, "invalid authorization token", http.StatusUnauthorized)
+				if err := WriteError(w, "invalid authorization token", http.StatusUnauthorized); err != nil {
+					errorLogf("AuthMiddleware: couldn't write error response: %v", err)
+				}
 				return
 			}
 

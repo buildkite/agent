@@ -20,7 +20,7 @@ func (s *Server) router() chi.Router {
 		middleware.Recoverer,
 		// All responses are in JSON.
 		socket.HeadersMiddleware(http.Header{"Content-Type": []string{"application/json"}}),
-		socket.AuthMiddleware(s.token),
+		socket.AuthMiddleware(s.token, s.Logger.Errorf),
 	)
 
 	r.Route("/api/current-job/v0", func(r chi.Router) {
@@ -39,7 +39,9 @@ func (s *Server) getEnv(w http.ResponseWriter, _ *http.Request) {
 
 	resp := EnvGetResponse{Env: normalizedEnv}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
+	}
 }
 
 func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +49,9 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	defer r.Body.Close()
 	if err != nil {
-		socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest)
+		if err := socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest); err != nil {
+			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+		}
 		return
 	}
 
@@ -56,11 +60,14 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	protected := checkProtected(maps.Keys(req.Env))
 
 	if len(protected) > 0 {
-		socket.WriteError(
+		err := socket.WriteError(
 			w,
 			fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected),
 			http.StatusUnprocessableEntity,
 		)
+		if err != nil {
+			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+		}
 		return
 	}
 
@@ -73,11 +80,14 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(nils) > 0 {
-		socket.WriteError(
+		err := socket.WriteError(
 			w,
 			fmt.Sprintf("removing environment variables (ie setting them to null) is not permitted on this endpoint. The following keys were set to null: % v", nils),
 			http.StatusUnprocessableEntity,
 		)
+		if err != nil {
+			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+		}
 		return
 	}
 
@@ -100,7 +110,9 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	resp.Normalize()
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
+	}
 }
 
 func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
@@ -108,18 +120,23 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	defer r.Body.Close()
 	if err != nil {
-		err = fmt.Errorf("failed to decode request body: %w", err)
-		socket.WriteError(w, err, http.StatusBadRequest)
+		err := socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest)
+		if err != nil {
+			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+		}
 		return
 	}
 
 	protected := checkProtected(req.Keys)
 	if len(protected) > 0 {
-		socket.WriteError(
+		err := socket.WriteError(
 			w,
 			fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected),
 			http.StatusUnprocessableEntity,
 		)
+		if err != nil {
+			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+		}
 		return
 	}
 
@@ -137,7 +154,9 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	resp.Normalize()
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
+	}
 }
 
 func checkProtected(candidates []string) []string {
