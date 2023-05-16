@@ -162,7 +162,6 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 		}
 
 		if result.pipelineStatusURL, err = resp.Location(); err != nil {
-			l.Warn("%s (%s)", err, r)
 			return err
 		}
 
