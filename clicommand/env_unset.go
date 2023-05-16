@@ -62,7 +62,9 @@ var EnvUnsetCommand = cli.Command{
 }
 
 func envUnsetAction(c *cli.Context) error {
-	client, err := jobapi.NewDefaultClient()
+	ctx := context.Background()
+
+	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
 		os.Exit(1)
@@ -114,7 +116,7 @@ func envUnsetAction(c *cli.Context) error {
 		}
 	}
 
-	unset, err := client.EnvDelete(context.Background(), del)
+	unset, err := client.EnvDelete(ctx, del)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Couldn't unset the job executor environment variables: %v\n", err)
 	}

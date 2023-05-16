@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
 )
 
@@ -17,7 +18,7 @@ func (b *Bootstrap) startJobAPI() (cleanup func(), err error) {
 		return cleanup, nil
 	}
 
-	if !jobapi.Available() {
+	if !socket.Available() {
 		b.shell.Warningf("The Job API isn't available on this machine, as it's running an unsupported version of Windows")
 		b.shell.Warningf("The Job API is available on Unix agents, and agents running Windows versions after build 17063")
 		b.shell.Warningf("We'll continue to run your job, but you won't be able to use the Job API")

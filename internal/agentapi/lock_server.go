@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/go-chi/chi/v5"
 )
@@ -33,7 +34,9 @@ func (s *lockServer) routes(r chi.Router) {
 func (s *lockServer) getLock(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
-		http.Error(w, "key missing", http.StatusNotFound)
+		if err := socket.WriteError(w, "key missing", http.StatusNotFound); err != nil {
+			s.logger.Error("Agent API: couldn't write error: %v", err)
+		}
 		return
 	}
 	resp := &ValueResponse{
@@ -48,13 +51,18 @@ func (s *lockServer) getLock(w http.ResponseWriter, r *http.Request) {
 func (s *lockServer) patchLock(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
-		http.Error(w, "key missing", http.StatusNotFound)
+		if err := socket.WriteError(w, "key missing", http.StatusNotFound); err != nil {
+			s.logger.Error("Agent API: couldn't write error: %v", err)
+		}
 		return
 	}
 
 	var req LockCASRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("couldn't decode request body: %v", err), http.StatusBadRequest)
+		if err := socket.WriteError(w, fmt.Sprintf("couldn't decode request body: %v", err), http.StatusBadRequest); err != nil {
+			s.logger.Error("Agent API: couldn't write error: %v", err)
+		}
+		return
 	}
 
 	v, ok := s.locks.cas(key, req.Old, req.New)

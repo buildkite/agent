@@ -116,7 +116,7 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	}
 	defer srv1.Stop()
 
-	expectedErr := fmt.Sprintf("file already exists at socket path %s", sockName)
+	expectedErr := fmt.Sprintf("creating socket server: file already exists at socket path %s", sockName)
 	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New())
 	if err == nil {
 		t.Fatalf("expected second server creation to fail with %s, got nil", expectedErr)

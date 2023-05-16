@@ -80,13 +80,15 @@ var EnvGetCommand = cli.Command{
 }
 
 func envGetAction(c *cli.Context) error {
-	client, err := jobapi.NewDefaultClient()
+	ctx := context.Background()
+
+	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	envMap, err := client.EnvGet(context.Background())
+	envMap, err := client.EnvGet(ctx)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Couldn't fetch the job executor environment variables: %v\n", err)
 		os.Exit(1)
