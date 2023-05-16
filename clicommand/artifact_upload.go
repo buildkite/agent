@@ -120,7 +120,7 @@ var ArtifactUploadCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "upload-skip-symlinks",
 			Usage:  "After the glob has been resolved to a list of files to upload, skip uploading those that are symlinks to files",
-			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_FOLLOW_SYMLINKS",
+			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_SKIP_SYMLINKS",
 		},
 		cli.BoolFlag{ // Deprecated
 			Name:   "follow-symlinks",
