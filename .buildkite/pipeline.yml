@@ -62,7 +62,7 @@ steps:
 
   - name: ":windows: Windows AMD64 Tests"
     key: test-windows
-    command: "bash .buildkite\\steps\\tests.sh"
+    command: "powershell.exe .buildkite\\steps\\tests-windows.ps1"
     artifact_paths: junit-*.xml
     agents:
       queue: agent-runners-windows-amd64
