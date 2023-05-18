@@ -492,6 +492,10 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 }
 
 func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("script hooks aren't supported on windows")
+	}
+
 	path, err := exec.LookPath("ruby")
 	if err != nil {
 		t.Fatal("error finding path to ruby executable: %w", err)
