@@ -546,6 +546,11 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 
 	fmt.Println("Building test-binary-hook")
 	hookPath := filepath.Join(tester.HooksDir, "environment")
+
+	if runtime.GOOS == "windows" {
+		hookPath += ".exe"
+	}
+
 	output, err := exec.Command("go", "build", "-o", hookPath, "./test-binary-hook").CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to build test-binary-hook: %v, output: %s", err, string(output))
