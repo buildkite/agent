@@ -1,4 +1,4 @@
-FROM alpine:3.17.3
+FROM alpine:3.18.0
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -7,9 +7,8 @@ RUN apk add --no-cache \
     bash \
     curl \
     docker-cli \
-    docker-cli-buildx \
     docker-cli-compose \
-    docker-compose \
+    docker-cli-buildx \
     git \
     jq \
     libc6-compat \
@@ -21,6 +20,8 @@ RUN apk add --no-cache \
     su-exec \
     tini \
     tzdata
+
+RUN ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/bin/docker-compose
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
