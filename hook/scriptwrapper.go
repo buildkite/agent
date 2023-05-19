@@ -144,10 +144,11 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	// responsibility of the job executor.
 	//
 	// But if the shebang specifies something weird like Ruby 🤪
-	// the wrapper won't work. Stick to POSIX shells for now.
-	// if shebang != "" && !shellscript.IsPOSIXShell(shebang) {
-	// 	return nil, fmt.Errorf("hook starts with an unsupported shebang line %q", shebang)
-	// }
+	// the wrapper won't work. We do support ruby (and other interpreted) hooks via polyglot hooks (see: https://github.com/buildkite/agent/pull/2040),
+	// but they should never be wrapped, and if they have been, something has gone wrong.
+	if shebang != "" && !shellscript.IsPOSIXShell(shebang) {
+		return nil, fmt.Errorf("scriptwrapper tried to wrap hook with invalid shebang: %q", shebang)
+	}
 
 	var isPOSIXHook, isPwshHook bool
 

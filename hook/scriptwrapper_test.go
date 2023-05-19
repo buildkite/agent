@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
@@ -331,4 +332,27 @@ func mockAgent() (*bintest.Mock, func(), error) {
 		})
 
 	return agent, cleanup, nil
+}
+
+func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
+	t.Parallel()
+
+	hookFile, err := shell.TempFileWithExtension("hookName")
+	assert.NoError(t, err)
+
+	script := strings.Join([]string{
+		"#!/usr/bin/env ruby",
+		"puts 'Hello There!'",
+	}, "\n")
+
+	_, err = fmt.Fprintln(hookFile, script)
+	assert.NoError(t, err)
+
+	hookFile.Close()
+
+	_, err = NewScriptWrapper(
+		WithHookPath(hookFile.Name()),
+		WithOS("linux"),
+	)
+	assert.Error(t, err, `scriptwrapper tried to wrap hook with invalid shebang: "#!/usr/bin/env ruby"`)
 }
