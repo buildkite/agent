@@ -72,10 +72,8 @@ func TestHookType(t *testing.T) {
 		for _, arch := range []string{"amd64", "arm64"} {
 
 			binaryName := fmt.Sprintf("test-binary-%s-%s", operatingSystem, arch)
-			binaryPath := hookFixture(root, binaryName)
+			binaryPath := filepath.Join(os.TempDir(), binaryName)
 			sourcePath := hookFixture(root)
-
-			fmt.Println(binaryPath)
 
 			cmd := exec.Command("go", "build", "-o", binaryPath, sourcePath)
 			extraEnv := []string{
@@ -87,17 +85,9 @@ func TestHookType(t *testing.T) {
 			cmd.Env = append(os.Environ(), extraEnv...)
 
 			output, err := cmd.CombinedOutput()
-			fmt.Println(string(output))
 			if err != nil {
 				t.Fatalf("Failed to build test-binary-hook: %v, output: %s", err, string(output))
 			}
-
-			t.Cleanup(func() {
-				err = os.Remove(binaryPath)
-				if err != nil {
-					t.Fatalf("Failed to remove test-binary-hook: %v", err)
-				}
-			})
 
 			cases = append(cases, testCase{
 				name:             fmt.Sprintf("binary for %s/%s", operatingSystem, arch),
