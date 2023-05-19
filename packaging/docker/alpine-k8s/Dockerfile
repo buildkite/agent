@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM alpine:3.17.3 AS base
+FROM alpine:3.18.0 AS base
 
 RUN apk update && apk add --no-cache \
     bash \
@@ -8,7 +8,6 @@ RUN apk update && apk add --no-cache \
     docker-cli \
     docker-cli-buildx \
     docker-cli-compose \
-    docker-compose \
     git \
     jq \
     libc6-compat \
@@ -21,7 +20,9 @@ RUN apk update && apk add --no-cache \
     tini \
     tzdata
 
-FROM alpine:3.17.3 AS kubectl-downloader
+RUN ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/bin/docker-compose
+
+FROM alpine:3.18.0 AS kubectl-downloader
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -34,7 +35,7 @@ wget -qO kubectl \
 chmod +x kubectl
 EOF
 
-FROM alpine:3.17.3 AS kustomize-downloader
+FROM alpine:3.18.0 AS kustomize-downloader
 ARG TARGETOS
 ARG TARGETARCH
 
