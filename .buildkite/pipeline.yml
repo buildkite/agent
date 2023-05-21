@@ -46,20 +46,6 @@ steps:
         files: "junit-*.xml"
         format: "junit"
 
-  - name: ":satellite: Detect Data Races"
-    key: test-race-linux-arm64
-    command: ".buildkite/steps/tests.sh -race"
-    artifact_paths: junit-*.xml
-    agents:
-      queue: agent-runners-linux-arm64
-    plugins:
-      docker-compose#v3.0.0:
-        config: .buildkite/docker-compose.yml
-        run: agent
-      test-collector#v1.2.0:
-        files: "junit-*.xml"
-        format: "junit"
-
   - name: ":windows: Windows AMD64 Tests"
     key: test-windows
     command: "bash .buildkite\\steps\\tests.sh"
