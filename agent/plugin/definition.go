@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,9 +29,9 @@ var (
 // Definition defines the contents of the plugin.{yml,yaml,json} file that
 // each plugin has.
 type Definition struct {
-	Name          string                 `json:"name"`
-	Requirements  []string               `json:"requirements"`
-	Configuration *jsonschema.RootSchema `json:"configuration"`
+	Name          string             `json:"name"`
+	Requirements  []string           `json:"requirements"`
+	Configuration *jsonschema.Schema `json:"configuration"`
 }
 
 // ParseDefinition parses either YAML or JSON bytes into a Definition.
@@ -122,7 +123,7 @@ func (v Validator) Validate(def *Definition, config map[string]any) ValidateResu
 
 	// validate that the config matches the json schema we have
 	if def.Configuration != nil {
-		valErrors, err := def.Configuration.ValidateBytes(configJSON)
+		valErrors, err := def.Configuration.ValidateBytes(context.TODO(), configJSON)
 		if err != nil {
 			result.errors = append(result.errors, err)
 		}

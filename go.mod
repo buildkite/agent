@@ -26,7 +26,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pborman/uuid v1.2.1
 	github.com/puzpuzpuz/xsync/v2 v2.4.0
-	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
+	github.com/qri-io/jsonschema v0.2.1
 	github.com/stretchr/testify v1.8.3
 	github.com/urfave/cli v1.22.13
 	go.opentelemetry.io/contrib/propagators/aws v1.15.0
@@ -78,7 +78,7 @@ require (
 	github.com/philhofer/fwd v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2 // indirect
+	github.com/qri-io/jsonpointer v0.1.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.4.0 // indirect

@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -131,9 +132,15 @@ func TestDefinitionWithoutAdditionalProperties(t *testing.T) {
 	if res.Valid() {
 		t.Errorf("validator.Validate(def, {llamas:always,camels:never}).Valid() = true, want false")
 	}
+
 	// TODO: Testing error strings is fragile - replace with a more semantic test.
-	if got, want := res.Error(), `/camels: "never" cannot match schema`; got != want {
-		t.Errorf("validator.Validate(def, {llamas:always,camels:never}).Error() = %q, want %q", got, want)
+	errStr := res.Error()
+	if errStr == "" {
+		t.Errorf("expected validator.Validate(def, {llamas:always,camels:never}).Error() to be non-empty")
+	}
+
+	if !strings.HasSuffix(errStr, "additional properties are not allowed") {
+		t.Errorf("validator.Validate(def, {llamas:always,camels:never}).Error() = %q, want to end with %q", errStr, "additional properties are not allowed")
 	}
 }
 
