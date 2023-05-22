@@ -321,9 +321,9 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 			// Regardless: not supported right now, or potentially ever.
 			sheb, _ := shellscript.ShebangLine(hookCfg.Path) // we know this won't error because it must have a shebang to be a script
 
-			err := fmt.Sprintf(`when trying to run the hook at %q, the agent found that it was a script with a shebang that isn't for a shellscripting language - in this case, %q.
+			err := fmt.Errorf(`when trying to run the hook at %q, the agent found that it was a script with a shebang that isn't for a shellscripting language - in this case, %q.
 Hooks of this kind are unfortunately not supported on Windows, as we have no way of interpreting a shebang on Windows`, hookCfg.Path, sheb)
-			return fmt.Errorf(err)
+			return err
 		}
 
 		// It's a script, and we can rely on the OS to figure out how to run it (because we're not on windows), so run it

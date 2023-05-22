@@ -498,7 +498,7 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 
 	path, err := exec.LookPath("ruby")
 	if err != nil {
-		t.Fatal("error finding path to ruby executable: %w", err)
+		t.Fatalf("error finding path to ruby executable: %v", err)
 	}
 
 	if path == "" {
@@ -520,13 +520,13 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 	}
 
 	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0755); err != nil {
-		t.Fatalf("os.WriteFile(%q, script, 0755 = %v", filename, err)
+		t.Fatalf("os.WriteFile(%q, script, 0755) = %v", filename, err)
 	}
 
 	tester.RunAndCheck(t)
 
 	if !strings.Contains(tester.Output, "ohai, it's ruby!") {
-		t.Fatalf("tester.Output %s does not contain expected output: %q", tester.Output, "ohai, it's ruby!")
+		t.Fatalf("tester.Output %q does not contain expected output: %q", tester.Output, "ohai, it's ruby!")
 	}
 }
 
