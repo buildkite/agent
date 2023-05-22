@@ -4,6 +4,14 @@
 // It is intended for internal use by buildkite-agent only.
 package experiments
 
+import (
+	"fmt"
+
+	"github.com/buildkite/agent/v3/logger"
+)
+
+type State string
+
 const (
 	PolyglotHooks              = "polyglot-hooks"
 	JobAPI                     = "job-api"
@@ -16,6 +24,10 @@ const (
 	InbuiltStatusPage          = "inbuilt-status-page"
 	AgentAPI                   = "agent-api"
 	NormalisedUploadPaths      = "normalised-upload-paths"
+
+	StateKnown    State = "known"
+	StatePromoted State = "promoted"
+	StateUnknown  State = "unknown"
 )
 
 var (
@@ -24,13 +36,16 @@ var (
 		JobAPI:                     {},
 		KubernetesExec:             {},
 		ANSITimestamps:             {},
-		GitMirrors:                 {},
 		FlockFileLocks:             {},
 		ResolveCommitAfterCheckout: {},
 		DescendingSpawnPrioity:     {},
 		InbuiltStatusPage:          {},
 		AgentAPI:                   {},
 		NormalisedUploadPaths:      {},
+	}
+
+	Promoted = map[string]string{
+		GitMirrors: fmt.Sprintf("The %s experiment has been promoted to a stable feature. You can safely remove the `--experiment %s` flag to silence this message and continue using the feature", GitMirrors, GitMirrors),
 	}
 
 	experiments = make(map[string]bool, len(Available))
@@ -41,11 +56,32 @@ func EnableWithUndo(key string) func() {
 	return func() { Disable(key) }
 }
 
+func EnableWithWarnings(l logger.Logger, key string) State {
+	state := Enable(key)
+	switch state {
+	case StateKnown:
+	// Noop
+	case StateUnknown:
+		l.Warn("Unknown experiment %q", key)
+	case StatePromoted:
+		l.Warn(Promoted[key])
+	}
+	return state
+}
+
 // Enable a particular experiment in the agent.
-func Enable(key string) (known bool) {
+func Enable(key string) (state State) {
 	experiments[key] = true
-	_, known = Available[key] // is the experiment they've enabled one that we know of?
-	return known
+
+	if _, promoted := Promoted[key]; promoted {
+		return StatePromoted
+	}
+
+	if _, known := Available[key]; known {
+		return StateKnown
+	}
+
+	return StateUnknown
 }
 
 // Disable a particular experiment in the agent.

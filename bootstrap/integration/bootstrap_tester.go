@@ -114,18 +114,9 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	}
 
 	// Support testing experiments
-	if exp := experiments.Enabled(); len(exp) > 0 {
-		bt.Env = append(bt.Env, "BUILDKITE_AGENT_EXPERIMENT="+strings.Join(exp, ","))
-
-		if experiments.IsEnabled(experiments.GitMirrors) {
-			gitMirrorsDir, err := os.MkdirTemp("", "bootstrap-git-mirrors")
-			if err != nil {
-				return nil, fmt.Errorf("making bootstrap-git-mirrors directory: %w", err)
-			}
-
-			bt.GitMirrorsDir = gitMirrorsDir
-			bt.Env = append(bt.Env, "BUILDKITE_GIT_MIRRORS_PATH="+gitMirrorsDir)
-		}
+	experiments := experiments.Enabled()
+	if len(experiments) > 0 {
+		bt.Env = append(bt.Env, "BUILDKITE_AGENT_EXPERIMENT="+strings.Join(experiments, ","))
 	}
 
 	// Windows requires certain env variables to be present
@@ -153,6 +144,18 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	bt.hookMock = hook
 
 	return bt, nil
+}
+
+func (b *BootstrapTester) EnableGitMirrors() error {
+	gitMirrorsDir, err := os.MkdirTemp("", "bootstrap-git-mirrors")
+	if err != nil {
+		return fmt.Errorf("making bootstrap-git-mirrors directory: %w", err)
+	}
+
+	b.GitMirrorsDir = gitMirrorsDir
+	b.Env = append(b.Env, "BUILDKITE_GIT_MIRRORS_PATH="+gitMirrorsDir)
+
+	return nil
 }
 
 // Mock creates a mock for a binary using bintest

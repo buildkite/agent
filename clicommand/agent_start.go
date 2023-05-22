@@ -656,13 +656,6 @@ var AgentStartCommand = cli.Command{
 			os.Exit(1)
 		}
 
-		// Check if git-mirrors are enabled
-		if experiments.IsEnabled(experiments.GitMirrors) {
-			if cfg.GitMirrorsPath == "" {
-				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
-			}
-		}
-
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
