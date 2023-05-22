@@ -24,7 +24,7 @@ import (
 var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit [0-9a-f]+\n.*^Author:`)
 
 // We expect this arg multiple times, just define it once.
-var gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
+const gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
 
 func TestWithResolvingCommitExperiment(t *testing.T) {
 	// t.Parallel() cannot be used with experiments.Enable()

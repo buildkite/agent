@@ -382,10 +382,7 @@ var BootstrapCommand = cli.Command{
 
 		// Enable experiments
 		for _, name := range cfg.Experiments {
-			known := experiments.Enable(name)
-			if !known {
-				l.Warn("Unknown experiment enabled: %q", name)
-			}
+			experiments.EnableWithWarnings(l, name)
 		}
 
 		// Handle profiling flag
