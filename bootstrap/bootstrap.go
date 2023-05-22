@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -297,11 +298,74 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 
 	b.shell.Headerf("Running %s hook", hookName)
 
+	if !experiments.IsEnabled(experiments.PolyglotHooks) {
+		return b.runWrappedShellScriptHook(ctx, hookName, hookCfg)
+	}
+
+	hookType, err := hook.Type(hookCfg.Path)
+	if err != nil {
+		return fmt.Errorf("determining hook type for %q hook: %w", hookName, err)
+	}
+
+	switch hookType {
+	case hook.TypeScript:
+		if runtime.GOOS == "windows" {
+			// We use shebangs to figure out how to run scripts, and Windows has no way to interpret a shebang
+			// ie, on linux, we can just point the OS to a file of some sort and say "run that", and as part of that it will try to
+			// read a shebang, and run the script using the interpreter specified. Windows can't do this, so we can't run scripts
+			// directly on Windows
+
+			// Potentially there's something that we could do with file extensions, but that's a bit of a minefield, and would
+			// probably mean that we have to have a list of blessed hook runtimes on windows only... or something.
+
+			// Regardless: not supported right now, or potentially ever.
+			sheb, _ := shellscript.ShebangLine(hookCfg.Path) // we know this won't error because it must have a shebang to be a script
+
+			err := fmt.Errorf(`when trying to run the hook at %q, the agent found that it was a script with a shebang that isn't for a shellscripting language - in this case, %q.
+Hooks of this kind are unfortunately not supported on Windows, as we have no way of interpreting a shebang on Windows`, hookCfg.Path, sheb)
+			return err
+		}
+
+		// It's a script, and we can rely on the OS to figure out how to run it (because we're not on windows), so run it
+		// directly without wrapping
+		if err := b.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
+			return fmt.Errorf("running %q script hook: %w", hookName, err)
+		}
+
+		return nil
+	case hook.TypeBinary:
+		// It's a binary, so we'll just run it directly, no wrapping needed or possible
+		if err := b.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
+			return fmt.Errorf("running %q binary hook: %w", hookName, err)
+		}
+
+		return nil
+	case hook.TypeShell:
+		// It's definitely a shell script, wrap it so that we can snaffle the changed environment variables
+		if err := b.runWrappedShellScriptHook(ctx, hookName, hookCfg); err != nil {
+			return fmt.Errorf("running %q shell hook: %w", hookName, err)
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("unknown hook type %q for %q hook", hookType, hookName)
+	}
+}
+
+func (b *Bootstrap) runUnwrappedHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
+	environ := hookCfg.Env.Copy()
+
+	environ.Set("BUILDKITE_HOOK_PHASE", hookCfg.Name)
+	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
+	environ.Set("BUILDKITE_HOOK_TRIGGERED_FROM", hookCfg.Scope)
+
+	return b.shell.RunWithEnv(ctx, environ, hookCfg.Path)
+}
+
+func (b *Bootstrap) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	redactors := b.setupRedactors()
 	defer redactors.Flush()
 
-	// We need a script to wrap the hook script so that we can snaffle the changed
-	// environment variables
 	script, err := hook.NewScriptWrapper(hook.WithHookPath(hookCfg.Path))
 	if err != nil {
 		b.shell.Errorf("Error creating hook script: %v", err)

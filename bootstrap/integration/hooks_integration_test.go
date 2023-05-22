@@ -3,6 +3,7 @@ package integration
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -487,4 +489,86 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 	wg.Wait()
 
 	tester.CheckMocks(t)
+}
+
+func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("script hooks aren't supported on windows")
+	}
+
+	path, err := exec.LookPath("ruby")
+	if err != nil {
+		t.Fatalf("error finding path to ruby executable: %v", err)
+	}
+
+	if path == "" {
+		t.Fatal("ruby not found in $PATH. This test requires ruby to be installed on the host")
+	}
+
+	defer experiments.EnableWithUndo(experiments.PolyglotHooks)()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	filename := "environment"
+	script := []string{
+		"#!/usr/bin/env ruby",
+		`puts "ohai, it's ruby!"`,
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0755); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0755) = %v", filename, err)
+	}
+
+	tester.RunAndCheck(t)
+
+	if !strings.Contains(tester.Output, "ohai, it's ruby!") {
+		t.Fatalf("tester.Output %q does not contain expected output: %q", tester.Output, "ohai, it's ruby!")
+	}
+}
+
+func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
+	defer experiments.EnableWithUndo(experiments.PolyglotHooks)()
+	defer experiments.EnableWithUndo(experiments.JobAPI)()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// We build a binary as part of this test so that we can produce a binary hook
+	// Forgive me for my sins, RSC, but it's better than the alternatives.
+	// The code that we're building is in ./test-binary-hook/main.go, it's pretty straightforward.
+
+	fmt.Println("Building test-binary-hook")
+	hookPath := filepath.Join(tester.HooksDir, "environment")
+
+	if runtime.GOOS == "windows" {
+		hookPath += ".exe"
+	}
+
+	output, err := exec.Command("go", "build", "-o", hookPath, "./test-binary-hook").CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build test-binary-hook: %v, output: %s", err, string(output))
+	}
+
+	tester.ExpectGlobalHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		// Set via ./test-binary-hook/main.go
+		if c.GetEnv("OCEAN") != "Pacífico" {
+			fmt.Fprintf(c.Stderr, "Expected OCEAN to be Pacífico, got %q", c.GetEnv("OCEAN"))
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t)
+
+	if !strings.Contains(tester.Output, "hi there from golang 🌊") {
+		t.Fatalf("tester.Output %s does not contain expected output: %q", tester.Output, "hi there from golang 🌊")
+	}
 }

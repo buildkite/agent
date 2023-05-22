@@ -282,6 +282,30 @@ func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
 	return s.RunWithoutPrompt(ctx, command, arg...)
 }
 
+func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, command string, arg ...string) error {
+	formatted := process.FormatCommand(command, arg)
+	if s.stdin == nil {
+		s.Promptf("%s", formatted)
+	} else {
+		// bash-syntax-compatible indication that input is coming from somewhere
+		s.Promptf("%s < /dev/stdin", formatted)
+	}
+
+	cmd, err := s.buildCommand(command, arg...)
+	if err != nil {
+		s.Errorf("Error building command: %v", err)
+		return err
+	}
+
+	cmd.Env = append(cmd.Env, environ.ToSlice()...)
+
+	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
+		Stdout: true,
+		Stderr: true,
+		PTY:    s.PTY,
+	})
+}
+
 // RunWithoutPrompt runs a command, writes stdout and err to the logger,
 // and returns an error if it fails. It doesn't show a prompt.
 func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...string) error {
@@ -379,6 +403,8 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 	case !isWindows && isSh:
 		// If the script contains a shebang line, it can be run directly,
 		// with the shebang line choosing the interpreter.
+		// note that this means that it isn't necessarily a shell script in this case!
+		// #!/usr/bin/env python would be totally valid, and would execute as a python script
 		sb, err := shellscript.ShebangLine(path)
 		if err == nil && sb != "" {
 			command = path
@@ -397,7 +423,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 			s.Warningf("Couldn't find bash (%v). Attempting to fall back to sh. This may cause issues for hooks and plugins that assume Bash features.", err)
 			shPath, err = s.AbsolutePath("sh")
 			if err != nil {
-				return fmt.Errorf("Error finding a shell, needed to run scripts: %v.", err)
+				return fmt.Errorf("error finding a shell, needed to run scripts: %v", err)
 			}
 		}
 		command = shPath
