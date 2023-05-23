@@ -1,7 +1,9 @@
 package plugin
 
 import (
+	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -55,7 +57,7 @@ func TestDefinitionValidationFailsIfDependenciesNotMet(t *testing.T) {
 		Requirements: []string{"llamas"},
 	}
 
-	res := validator.Validate(def, nil)
+	res := validator.Validate(context.Background(), def, nil)
 
 	if res.Valid() {
 		t.Errorf("validator.Validate(def, nil).Valid() = true, want false")
@@ -90,16 +92,17 @@ func TestDefinitionValidatesConfiguration(t *testing.T) {
 		}`),
 	}
 
-	res := validator.Validate(def, map[string]any{
+	cfg := map[string]any{
 		"llamas": "always",
-	})
+	}
+	res := validator.Validate(context.Background(), def, cfg)
 
 	if res.Valid() {
-		t.Errorf("validator.Validate(def, {llamas: always}).Valid() = true, want false")
+		t.Errorf("validator.Validate(def, % #v).Valid() = true, want false", cfg)
 	}
 	// TODO: Testing error strings is fragile - replace with a more semantic test.
 	if got, want := res.Error(), `/: {"llamas":"always"} "alpacas" value is required`; got != want {
-		t.Errorf("validator.Validate(def, {llamas: always}).Error() = %q, want %q", got, want)
+		t.Errorf("validator.Validate(def, % #v).Error() = %q, want %q", cfg, got, want)
 	}
 }
 
@@ -123,17 +126,18 @@ func TestDefinitionWithoutAdditionalProperties(t *testing.T) {
 		}`),
 	}
 
-	res := validator.Validate(def, map[string]any{
+	cfg := map[string]any{
 		"alpacas": "definitely",
 		"camels":  "never",
-	})
+	}
+	res := validator.Validate(context.Background(), def, cfg)
 
 	if res.Valid() {
-		t.Errorf("validator.Validate(def, {llamas:always,camels:never}).Valid() = true, want false")
+		t.Errorf("validator.Validate(def, % #v).Valid() = true, want false", cfg)
 	}
 	// TODO: Testing error strings is fragile - replace with a more semantic test.
-	if got, want := res.Error(), `/camels: "never" cannot match schema`; got != want {
-		t.Errorf("validator.Validate(def, {llamas:always,camels:never}).Error() = %q, want %q", got, want)
+	if got, wantSuffix := res.Error(), "additional properties are not allowed"; !strings.HasSuffix(got, wantSuffix) {
+		t.Errorf("validator.Validate(def, % #v).Error() = %q, want suffix %q", cfg, got, wantSuffix)
 	}
 }
 
@@ -157,12 +161,13 @@ func TestDefinitionWithAdditionalProperties(t *testing.T) {
 		}`),
 	}
 
-	res := validator.Validate(def, map[string]any{
+	cfg := map[string]any{
 		"alpacas": "definitely",
 		"camels":  "never",
-	})
+	}
+	res := validator.Validate(context.Background(), def, cfg)
 
 	if !res.Valid() {
-		t.Errorf("validator.Validate(def, {alpacas:definitely,camels:never}).Valid() = false, want true")
+		t.Errorf("validator.Validate(def, % #v).Valid() = false, want true", cfg)
 	}
 }
