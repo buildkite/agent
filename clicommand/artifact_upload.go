@@ -62,8 +62,8 @@ Example:
 
    $ buildkite-agent artifact upload --upload-skip-symlinks "log/**/*.log"
 
-   Note uploading symlinks to files without following them is not supported.
-   If you need to preserve them in direcotory, we recommend creating a tar archive:
+   Note: uploading symlinks to files without following them is not supported.
+   If you need to preserve them in a direcotory, we recommend creating a tar archive:
 
    $ tar -cvf log.tar log/**/*
    $ buildkite-agent upload log.tar`
