@@ -98,11 +98,11 @@ func TestDefinitionValidatesConfiguration(t *testing.T) {
 	res := validator.Validate(context.Background(), def, cfg)
 
 	if res.Valid() {
-		t.Errorf("validator.Validate(def, %v).Valid() = true, want false", cfg)
+		t.Errorf("validator.Validate(def, % #v).Valid() = true, want false", cfg)
 	}
 	// TODO: Testing error strings is fragile - replace with a more semantic test.
 	if got, want := res.Error(), `/: {"llamas":"always"} "alpacas" value is required`; got != want {
-		t.Errorf("validator.Validate(def, %v).Error() = %q, want %q", cfg, got, want)
+		t.Errorf("validator.Validate(def, % #v).Error() = %q, want %q", cfg, got, want)
 	}
 }
 
@@ -133,11 +133,11 @@ func TestDefinitionWithoutAdditionalProperties(t *testing.T) {
 	res := validator.Validate(context.Background(), def, cfg)
 
 	if res.Valid() {
-		t.Errorf("validator.Validate(def, %v).Valid() = true, want false", cfg)
+		t.Errorf("validator.Validate(def, % #v).Valid() = true, want false", cfg)
 	}
 	// TODO: Testing error strings is fragile - replace with a more semantic test.
 	if got, wantSuffix := res.Error(), "additional properties are not allowed"; !strings.HasSuffix(got, wantSuffix) {
-		t.Errorf("validator.Validate(def, %v).Error() = %q, want suffix %q", cfg, got, wantSuffix)
+		t.Errorf("validator.Validate(def, % #v).Error() = %q, want suffix %q", cfg, got, wantSuffix)
 	}
 }
 
@@ -168,6 +168,6 @@ func TestDefinitionWithAdditionalProperties(t *testing.T) {
 	res := validator.Validate(context.Background(), def, cfg)
 
 	if !res.Valid() {
-		t.Errorf("validator.Validate(def, %v).Valid() = false, want true", cfg)
+		t.Errorf("validator.Validate(def, % #v).Valid() = false, want true", cfg)
 	}
 }
