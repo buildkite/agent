@@ -715,7 +715,7 @@ func (b *Bootstrap) preparePlugins() error {
 	return nil
 }
 
-func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
+func (b *Bootstrap) validatePluginCheckout(ctx context.Context, checkout *pluginCheckout) error {
 	if !b.Config.PluginValidation {
 		return nil
 	}
@@ -738,7 +738,7 @@ func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
 	}
 
 	val := &plugin.Validator{}
-	result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
+	result := val.Validate(ctx, checkout.Definition, checkout.Plugin.Configuration)
 
 	if !result.Valid() {
 		b.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
@@ -777,7 +777,7 @@ func (b *Bootstrap) PluginPhase(ctx context.Context) error {
 			return fmt.Errorf("Failed to checkout plugin %s: %w", p.Name(), err)
 		}
 
-		err = b.validatePluginCheckout(checkout)
+		err = b.validatePluginCheckout(ctx, checkout)
 		if err != nil {
 			return err
 		}
@@ -830,7 +830,7 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 			return fmt.Errorf("Vendored plugin paths must be within the checked-out repository")
 		}
 
-		err = b.validatePluginCheckout(checkout)
+		err = b.validatePluginCheckout(ctx, checkout)
 		if err != nil {
 			return err
 		}
