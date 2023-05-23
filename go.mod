@@ -13,7 +13,7 @@ require (
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/creack/pty v1.1.18
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/dustin/go-humanize v1.0.0
+	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/gofrs/flock v0.8.1
