@@ -357,7 +357,7 @@ func (b *Bootstrap) runUnwrappedHook(ctx context.Context, hookName string, hookC
 
 	environ.Set("BUILDKITE_HOOK_PHASE", hookCfg.Name)
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
-	environ.Set("BUILDKITE_HOOK_TRIGGERED_FROM", hookCfg.Scope)
+	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
 	return b.shell.RunWithEnv(ctx, environ, hookCfg.Path)
 }
