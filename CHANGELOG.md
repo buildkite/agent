@@ -35,14 +35,14 @@ Two new and very noteworthy experiments!
 - Alpine images updated to Alpine 3.18 [#2098](https://github.com/buildkite/agent/pull/2098) (@moskyb)
 
 ## [3.46.1](https://github.com/buildkite/agent/tree/3.46.1) (2023-05-08)
-[Full Changelog](https://github.com/buildkite/agent/compare/v3.46.0...3.46.1)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.46.0...v3.46.1)
 
 ### Fixed
 
 - Avoid long `--no-patch` arg added to `git show` in v1.8.4, to e.g. support CentOS 7 [#2075](https://github.com/buildkite/agent/pull/2075) (@pda)
 
 ## [3.46.0](https://github.com/buildkite/agent/tree/3.46.0) (2023-05-04)
-[Full Changelog](https://github.com/buildkite/agent/compare/v3.45.0...3.46.0)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.45.0...v3.46.0)
 
 ### Added
 - Add `*_PRIVATE_KEY` to auto-redacted vars [#2043](https://github.com/buildkite/agent/pull/2043) (@moskyb)
