@@ -562,10 +562,10 @@ type subDirMatcher struct {
 }
 
 func (mf subDirMatcher) Match(s string) (bool, string) {
-	if filepath.Dir(s) == mf.dir {
+	if filepath.Dir(filepath.Clean(s)) == mf.dir {
 		return true, ""
 	}
-	return false, fmt.Sprintf("%s wasn't a sub directory of %s", s, mf.dir)
+	return false, fmt.Sprintf("%q wasn't a sub directory of %q", s, mf.dir)
 }
 
 func (mf subDirMatcher) String() string {
@@ -573,5 +573,5 @@ func (mf subDirMatcher) String() string {
 }
 
 func matchSubDir(dir string) bintest.Matcher {
-	return subDirMatcher{dir: dir}
+	return subDirMatcher{dir: filepath.Clean(dir)}
 }
