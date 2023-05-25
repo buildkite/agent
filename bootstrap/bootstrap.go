@@ -855,12 +855,16 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 			return err
 		}
 
-		env, _ := p.ConfigurationToEnvironment()
-		err = b.executeHook(ctx, HookConfig{
+		envMap, err := p.ConfigurationToEnvironment()
+		if err != nil {
+			b.shell.Logger.Warningf("%s", err)
+		}
+
+		if err := b.executeHook(ctx, HookConfig{
 			Scope:      "plugin",
 			Name:       name,
 			Path:       hookPath,
-			Env:        env,
+			Env:        envMap,
 			PluginName: p.Plugin.Name(),
 			SpanAttributes: map[string]string{
 				"plugin.name":        p.Plugin.Name(),
@@ -868,8 +872,7 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 				"plugin.location":    p.Plugin.Location,
 				"plugin.is_vendored": strconv.FormatBool(p.Vendored),
 			},
-		})
-		if err != nil {
+		}); err != nil {
 			return err
 		}
 	}
