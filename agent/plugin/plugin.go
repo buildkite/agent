@@ -239,6 +239,60 @@ func walkConfigValues(prefix string, v any, into *[]string) error {
 	return fmt.Errorf("Unknown type %T %v", v, v)
 }
 
+type DeprecatedNameErrors struct {
+	errs []DeprecatedNameError
+}
+
+func (e *DeprecatedNameErrors) Len() int {
+	if e == nil {
+		return 0
+	}
+	return len(e.errs)
+}
+
+func (e *DeprecatedNameErrors) Error() string {
+	builder := strings.Builder{}
+	for i, err := range e.errs {
+		_, _ = builder.WriteString(err.Error())
+		if i < len(e.errs)-1 {
+			_, _ = builder.WriteRune('\n')
+		}
+	}
+
+	return builder.String()
+}
+
+func (e *DeprecatedNameErrors) Append(errs ...DeprecatedNameError) *DeprecatedNameErrors {
+	if e == nil {
+		return &DeprecatedNameErrors{errs: errs}
+	}
+
+	e.errs = append(e.errs, errs...)
+
+	return e
+}
+
+// Is returns true if and only if a error that is wrapped in target
+// has the same []DeprecatedNameError slice as the receiver.
+func (e *DeprecatedNameErrors) Is(target error) bool {
+	if e == nil {
+		return target == nil
+	}
+
+	var targetErr *DeprecatedNameErrors
+	if !errors.As(target, &targetErr) {
+		return false
+	}
+
+	for i, err := range targetErr.errs {
+		if e.errs[i] != err {
+			return false
+		}
+	}
+
+	return true
+}
+
 type DeprecatedNameError struct {
 	old string
 	new string
@@ -249,10 +303,16 @@ func (e *DeprecatedNameError) Error() string {
 }
 
 func (e *DeprecatedNameError) Is(target error) bool {
-	if targetErr, ok := target.(*DeprecatedNameError); ok {
-		return e.old == targetErr.old && e.new == targetErr.new
+	if e == nil {
+		return target == nil
 	}
-	return false
+
+	var targetErr *DeprecatedNameError
+	if !errors.As(target, &targetErr) {
+		return false
+	}
+
+	return e.old == targetErr.old && e.new == targetErr.new
 }
 
 // ConfigurationToEnvironment converts the plugin configuration values to
@@ -260,6 +320,16 @@ func (e *DeprecatedNameError) Is(target error) bool {
 func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 	envSlice := []string{}
 	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
+
+	// Append current plugin name
+	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
+
+	// Append current plugin configuration as JSON
+	configJSON, err := json.Marshal(p.Configuration)
+	if err != nil {
+		return env.New(), err
+	}
+	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJSON))
 
 	for k, v := range p.Configuration {
 		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
@@ -276,7 +346,7 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 
 	// Detect if any env keys have consecutive underscores and add copy of the value with
 	// a new key where the consecutive underscores are replaced
-	var err error
+	var dnerrs *DeprecatedNameErrors
 	for _, kv := range envSliceBefore {
 		k, v, ok := strings.Cut(kv, "=")
 
@@ -287,21 +357,14 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 		noConsecutiveUnderScoreKey := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
 		if k != noConsecutiveUnderScoreKey {
 			envSlice = append(envSlice, fmt.Sprintf("%s=%s", noConsecutiveUnderScoreKey, v))
-			err = errors.Join(err, &DeprecatedNameError{old: noConsecutiveUnderScoreKey, new: k})
+			dnerrs = dnerrs.Append(DeprecatedNameError{old: noConsecutiveUnderScoreKey, new: k})
 		}
 	}
-
-	// Append current plugin name
-	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
-
-	// Append current plugin configuration as JSON
-	configJSON, marshalErr := json.Marshal(p.Configuration)
-	if err != nil {
-		return env.New(), marshalErr
+	if dnerrs.Len() != 0 {
+		return env.FromSlice(envSlice), dnerrs
 	}
-	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJSON))
 
-	return env.FromSlice(envSlice), err
+	return env.FromSlice(envSlice), nil
 }
 
 // Label returns a pretty name for the plugin.
