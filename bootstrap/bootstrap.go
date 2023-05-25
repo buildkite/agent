@@ -857,7 +857,12 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 
 		envMap, err := p.ConfigurationToEnvironment()
 		if err != nil {
-			b.shell.Logger.Warningf("%s", err)
+			if dnerr := (&plugin.DeprecatedNameErrors{}); errors.As(err, &dnerr) {
+				b.shell.Logger.Warningf("Exporting plugin environment variables whose names are deprecated and will be replaced.")
+				for _, err := range dnerr.Errors() {
+					b.shell.Logger.Warningf("%s", err.Error())
+				}
+			}
 		}
 
 		if err := b.executeHook(ctx, HookConfig{

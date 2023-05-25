@@ -243,6 +243,14 @@ type DeprecatedNameErrors struct {
 	errs []DeprecatedNameError
 }
 
+func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
+	if e == nil {
+		return []DeprecatedNameError{}
+	}
+
+	return e.errs
+}
+
 func (e *DeprecatedNameErrors) Len() int {
 	if e == nil {
 		return 0
@@ -299,7 +307,7 @@ type DeprecatedNameError struct {
 }
 
 func (e *DeprecatedNameError) Error() string {
-	return fmt.Sprintf(`old name: %q, new name: %q`, e.old, e.new)
+	return fmt.Sprintf("deprecated name: %q, replacement name: %q", e.old, e.new)
 }
 
 func (e *DeprecatedNameError) Is(target error) bool {
