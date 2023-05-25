@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 )
 
 // Server hosts a HTTP server on a Unix domain socket.
@@ -20,6 +22,10 @@ type Server struct {
 func NewServer(socketPath string, handler http.Handler) (*Server, error) {
 	if len(socketPath) >= socketPathLength() {
 		return nil, fmt.Errorf("socket path %s is too long (path length: %d, max %d characters). This is a limitation of your host OS", socketPath, len(socketPath), socketPathLength())
+	}
+
+	if err := os.MkdirAll(filepath.Dir(socketPath), os.FileMode(0700)); err != nil {
+		return nil, fmt.Errorf("creating socket directory: %w", err)
 	}
 
 	exists, err := socketExists(socketPath)
