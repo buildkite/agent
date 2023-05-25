@@ -42,7 +42,8 @@ func TestCreateFromJSON(t *testing.T) {
 				Configuration: map[string]any{},
 			}},
 		},
-		{`[{"https://gitlab.example.com/path/to/repo#main":{}}]`,
+		{
+			`[{"https://gitlab.example.com/path/to/repo#main":{}}]`,
 			[]*Plugin{{
 				Location:      "gitlab.example.com/path/to/repo",
 				Version:       "main",
@@ -50,7 +51,8 @@ func TestCreateFromJSON(t *testing.T) {
 				Configuration: map[string]any{},
 			}},
 		},
-		{`[{"https://gitlab.com/group/team/path/to/repo#main":{}}]`,
+		{
+			`[{"https://gitlab.com/group/team/path/to/repo#main":{}}]`,
 			[]*Plugin{{
 				Location:      "gitlab.com/group/team/path/to/repo",
 				Version:       "main",
@@ -477,14 +479,18 @@ func TestConfigurationToEnvironment(t *testing.T) {
 
 }
 
-func pluginFromConfig(configJson string) (*Plugin, error) {
+func pluginFromConfig(configJSON string) (*Plugin, error) {
 	var config map[string]any
 
-	if err := json.Unmarshal([]byte(configJson), &config); err != nil {
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
 		return nil, err
 	}
 
-	jsonString := fmt.Sprintf(`[ { "%s": %s } ]`, "github.com/buildkite-plugins/docker-compose-buildkite-plugin", configJson)
+	jsonString := fmt.Sprintf(
+		`[ { "%s": %s } ]`,
+		"github.com/buildkite-plugins/docker-compose-buildkite-plugin",
+		configJSON,
+	)
 
 	plugins, err := CreateFromJSON(jsonString)
 	if err != nil {
@@ -498,6 +504,8 @@ func pluginFromConfig(configJson string) (*Plugin, error) {
 }
 
 func TestConfigurationToEnvironment_DuplicatePlugin(t *testing.T) {
+	t.Parallel()
+
 	// Ensure on duplicate plugin definition, each plugin gets its respective config exported
 	plugins, err := duplicatePluginFromConfig(`{ "config-key": 41 }`, `{ "second-ref-key": 42 }`)
 	if err != nil {
@@ -543,7 +551,13 @@ func duplicatePluginFromConfig(cfgJSON1, cfgJSON2 string) ([]*Plugin, error) {
 		return nil, err
 	}
 
-	jsonString := fmt.Sprintf(`[ { "%s": %s }, { "%s": %s } ]`, "github.com/buildkite-plugins/docker-compose-buildkite-plugin", cfgJSON1, "github.com/buildkite-plugins/docker-compose-buildkite-plugin", cfgJSON2)
+	jsonString := fmt.Sprintf(
+		`[ { "%s": %s }, { "%s": %s } ]`,
+		"github.com/buildkite-plugins/docker-compose-buildkite-plugin",
+		cfgJSON1,
+		"github.com/buildkite-plugins/docker-compose-buildkite-plugin",
+		cfgJSON2,
+	)
 
 	plugins, err := CreateFromJSON(jsonString)
 	if err != nil {
