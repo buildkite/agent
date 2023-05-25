@@ -81,7 +81,7 @@ func lockAcquireAction(c *cli.Context) error {
 	}
 
 	ctx := context.Background()
-	if cfg.LockWaitTimeout <= 0 {
+	if cfg.LockWaitTimeout != 0 {
 		cctx, canc := context.WithTimeout(ctx, cfg.LockWaitTimeout)
 		defer canc()
 		ctx = cctx
