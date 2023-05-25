@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -372,8 +373,9 @@ func TestConfigurationToEnvironment(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		configJSON string
-		wantEnvMap map[string]string
+		configJSON  string
+		wantEnvMap  map[string]string
+		expectedErr error
 	}{
 		{
 			configJSON: `{ "config-key": 42 }`,
@@ -395,9 +397,41 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		{
 			configJSON: `{ "and _ with a    - number": 12 }`,
 			wantEnvMap: map[string]string{
-				"BUILDKITE_PLUGIN_CONFIGURATION":                    `{"and _ with a    - number":12}`,
-				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER": "12",
-				"BUILDKITE_PLUGIN_NAME":                             "DOCKER_COMPOSE",
+				"BUILDKITE_PLUGIN_CONFIGURATION":                           `{"and _ with a    - number":12}`,
+				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER":        "12",
+				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER": "12",
+				"BUILDKITE_PLUGIN_NAME":                                    "DOCKER_COMPOSE",
+			},
+			expectedErr: &DeprecatedNameErrors{
+				errs: []DeprecatedNameError{
+					{
+						old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER",
+						new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER",
+					},
+				},
+			},
+		},
+		{
+			configJSON: `{ "and _ with a    - number": 12, "A - B": 13 }`,
+			wantEnvMap: map[string]string{
+				"BUILDKITE_PLUGIN_CONFIGURATION":                           `{"A - B":13,"and _ with a    - number":12}`,
+				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER":        "12",
+				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER": "12",
+				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_A_B":                      "13",
+				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_A___B":                    "13",
+				"BUILDKITE_PLUGIN_NAME":                                    "DOCKER_COMPOSE",
+			},
+			expectedErr: &DeprecatedNameErrors{
+				errs: []DeprecatedNameError{
+					{
+						old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER",
+						new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER",
+					},
+					{
+						old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_A_B",
+						new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_A___B",
+					},
+				},
 			},
 		},
 		{
@@ -467,8 +501,8 @@ func TestConfigurationToEnvironment(t *testing.T) {
 				t.Fatalf("pluginFromConfig(%q) error = %v", tc.configJSON, err)
 			}
 			env, err := plugin.ConfigurationToEnvironment()
-			if err != nil {
-				t.Errorf("plugin.ConfigurationToEnvironment() error = %v", err)
+			if !errors.Is(err, tc.expectedErr) {
+				t.Errorf("plugin.ConfigurationToEnvironment() error got:\n%v\nwant:\n%v", err, tc.expectedErr)
 			}
 			envMap := env.Dump()
 			if diff := cmp.Diff(envMap, tc.wantEnvMap); diff != "" {
@@ -476,7 +510,6 @@ func TestConfigurationToEnvironment(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func pluginFromConfig(configJSON string) (*Plugin, error) {
