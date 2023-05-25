@@ -5,15 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.47.0](https://github.com/buildkite/agent/tree/v3.47.0) (2023-05-25)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.46.1...v3.47.0)
+
+Two new and very noteworthy experiments!
+
+1. Have you ever wanted to write hooks in a compiled language? Or in Python or
+   Ruby? Well now you can! With `--experiment=polyglot-hooks` the agent can run
+   all sorts of hooks and plugins directly. Combined with 
+   `--experiment=job-api`, your hooks-of-a-different-language can alter
+    environment variables through the local Job API!
+2. Concurrency groups are great, but have you ever wanted to manage multiple
+   agents running on the same host concurrently accessing a shared resource? 
+   Well now you can! With `--experiment=agent-api`, the agent now has an inbuilt
+   locking service, accessible through new `lock` subcommands and also via a
+   Unix socket (like the `job-api`).
+
+### Added
+- Experiment: Polyglot hooks [#2040](https://github.com/buildkite/agent/pull/2040) (@moskyb)
+- Experiment: Local Agent API, with locking service [#2042](https://github.com/buildkite/agent/pull/2042) (@DrJosh9000)
+- New flag `--upload-skip-symlinks` (on `artifact upload`) allows skipping symlinks when uploading files. `--follow-symlinks` has been deprecated and renamed to `--glob-resolve-follow-symlinks` [#2072](https://github.com/buildkite/agent/pull/2072) (@triarius)
+
+### Fixed
+- The `normalised-upload-paths` experiment was unintentionally left out of the available experiments list [#2076](https://github.com/buildkite/agent/pull/2076) (@MatthewDolan)
+
+### Changed
+- The `git-mirrors` experiment is promoted to full functionality [#2032](https://github.com/buildkite/agent/pull/2032) (@moskyb)
+- Errors in the git checkout process are now easier to diagnose [#2074](https://github.com/buildkite/agent/pull/2074) (@moskyb)
+- Alpine images updated to Alpine 3.18 [#2098](https://github.com/buildkite/agent/pull/2098) (@moskyb)
+
 ## [3.46.1](https://github.com/buildkite/agent/tree/3.46.1) (2023-05-08)
-[Full Changelog](https://github.com/buildkite/agent/compare/v3.46.0...3.46.1)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.46.0...v3.46.1)
 
 ### Fixed
 
 - Avoid long `--no-patch` arg added to `git show` in v1.8.4, to e.g. support CentOS 7 [#2075](https://github.com/buildkite/agent/pull/2075) (@pda)
 
 ## [3.46.0](https://github.com/buildkite/agent/tree/3.46.0) (2023-05-04)
-[Full Changelog](https://github.com/buildkite/agent/compare/v3.45.0...3.46.0)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.45.0...v3.46.0)
 
 ### Added
 - Add `*_PRIVATE_KEY` to auto-redacted vars [#2043](https://github.com/buildkite/agent/pull/2043) (@moskyb)
