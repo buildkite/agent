@@ -93,7 +93,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 		switch vv := v.(type) {
 		case string:
 			// Add the plugin with no config to the array
-			plugin, err := CreatePlugin(string(vv), map[string]any{})
+			plugin, err := CreatePlugin(vv, map[string]any{})
 			if err != nil {
 				return nil, err
 			}
@@ -103,7 +103,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 			for location, config := range vv {
 				// Plugins without configs are easy!
 				if config == nil {
-					plugin, err := CreatePlugin(string(location), map[string]any{})
+					plugin, err := CreatePlugin(location, map[string]any{})
 					if err != nil {
 						return nil, err
 					}
@@ -119,7 +119,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 				}
 
 				// Add the plugin with config to the array
-				plugin, err := CreatePlugin(string(location), config)
+				plugin, err := CreatePlugin(location, config)
 				if err != nil {
 					return nil, err
 				}
@@ -214,7 +214,6 @@ func formatEnvKey(key string) string {
 
 func walkConfigValues(prefix string, v any, into *[]string) error {
 	switch vv := v.(type) {
-
 	// handles all of our primitive types, golang provides a good string representation
 	case string, bool, json.Number:
 		*into = append(*into, fmt.Sprintf("%s=%v", prefix, vv))
