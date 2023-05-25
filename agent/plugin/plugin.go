@@ -264,7 +264,7 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 	for k, v := range p.Configuration {
 		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
 		if err := walkConfigValues(configPrefix, v, &envSlice); err != nil {
-			return nil, err
+			return env.New(), err
 		}
 	}
 
@@ -295,9 +295,9 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
 
 	// Append current plugin configuration as JSON
-	configJSON, err := json.Marshal(p.Configuration)
+	configJSON, marshalErr := json.Marshal(p.Configuration)
 	if err != nil {
-		return nil, err
+		return env.New(), marshalErr
 	}
 	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJSON))
 
