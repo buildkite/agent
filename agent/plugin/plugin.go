@@ -341,7 +341,7 @@ type DeprecatedNameError struct {
 }
 
 func (e *DeprecatedNameError) Error() string {
-	return fmt.Sprintf("deprecated name: %q, replacement name: %q", e.old, e.new)
+	return fmt.Sprintf(" deprecated: %q\nreplacement: %q\n", e.old, e.new)
 }
 
 func (e *DeprecatedNameError) Is(target error) bool {
