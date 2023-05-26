@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
@@ -355,8 +354,6 @@ func fanOutDeprectatedEnvVarNames(envSlice []string) ([]string, error) {
 			dnerrs = dnerrs.Append(DeprecatedNameError{old: noConsecutiveUnderScoreKey, new: k})
 		}
 	}
-
-	sort.Strings(envSliceAfter)
 
 	// guarantee that the error value is nil if there are no deprecations
 	if dnerrs.Len() != 0 {
