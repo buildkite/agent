@@ -239,10 +239,12 @@ func walkConfigValues(prefix string, v any, into *[]string) error {
 	return fmt.Errorf("Unknown type %T %v", v, v)
 }
 
+// DeprecatedNameErrors contains an aggregation of DeprecatedNameError
 type DeprecatedNameErrors struct {
 	errs []DeprecatedNameError
 }
 
+// Errors returns the underlying slice
 func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
 	if e == nil {
 		return []DeprecatedNameError{}
@@ -251,6 +253,7 @@ func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
 	return e.errs
 }
 
+// Len is the length of the underlying slice or 0 if nil
 func (e *DeprecatedNameErrors) Len() int {
 	if e == nil {
 		return 0
@@ -258,6 +261,7 @@ func (e *DeprecatedNameErrors) Len() int {
 	return len(e.errs)
 }
 
+// Error returns each error message in the underlying slice on new line
 func (e *DeprecatedNameErrors) Error() string {
 	builder := strings.Builder{}
 	for i, err := range e.errs {
@@ -270,6 +274,9 @@ func (e *DeprecatedNameErrors) Error() string {
 	return builder.String()
 }
 
+// Append DeprecatedNameError to the underlying slice and return the reciver
+// returning the reveiver is necessary to support appending to nil. So this
+// should be used just like the builtin append function
 func (e *DeprecatedNameErrors) Append(errs ...DeprecatedNameError) *DeprecatedNameErrors {
 	if e == nil {
 		return &DeprecatedNameErrors{errs: errs}
@@ -281,7 +288,7 @@ func (e *DeprecatedNameErrors) Append(errs ...DeprecatedNameError) *DeprecatedNa
 }
 
 // Is returns true if and only if a error that is wrapped in target
-// has the same []DeprecatedNameError slice as the receiver.
+// has the same underlying slice as the receiver. The order is significant.
 func (e *DeprecatedNameErrors) Is(target error) bool {
 	if e == nil {
 		return target == nil
@@ -301,6 +308,8 @@ func (e *DeprecatedNameErrors) Is(target error) bool {
 	return true
 }
 
+// DeprecatedNameError contains information about environment variable names that
+// are deprecated. Both the deprecated name and its replacement are held
 type DeprecatedNameError struct {
 	old string
 	new string
