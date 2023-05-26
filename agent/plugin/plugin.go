@@ -323,6 +323,39 @@ func (e *DeprecatedNameError) Is(target error) bool {
 	return e.old == targetErr.old && e.new == targetErr.new
 }
 
+// The input should be a slice of Env Variables of the form `k=v` where `k` is the variable name
+// and `v` is its value. If it can be determined that any of the env variables names is part of a
+// deprecation, either as the deprecated variable name or its replacement, append both to the
+// returned slice, and also append a deprecation error to the error value. If there are no
+// deprecations, the error value is guaranteed to be nil.
+func fanOutDeprectatedEnvVarNames(envSlice []string) ([]string, error) {
+	envSliceAfter := envSlice
+
+	var dnerrs *DeprecatedNameErrors
+	for _, kv := range envSlice {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok { // this is impossible if the precondition is met
+			continue
+		}
+
+		// the form with consecutive underscores is replacing the form without, but the replacement
+		// is what is expected to be in input slice
+		noConsecutiveUnderScoreKey := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
+		if k != noConsecutiveUnderScoreKey {
+			envSliceAfter = append(envSliceAfter, fmt.Sprintf("%s=%s", noConsecutiveUnderScoreKey, v))
+			dnerrs = dnerrs.Append(DeprecatedNameError{old: noConsecutiveUnderScoreKey, new: k})
+		}
+	}
+
+	sort.Strings(envSliceAfter)
+
+	// guarantee that the error value is nil if there are no deprecations
+	if dnerrs.Len() != 0 {
+		return envSliceAfter, dnerrs
+	}
+	return envSliceAfter, nil
+}
+
 // ConfigurationToEnvironment converts the plugin configuration values to
 // environment variables.
 func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
@@ -346,33 +379,8 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 		}
 	}
 
-	// Sort them into a consistent order
-	sort.Strings(envSlice)
-
-	// Some env vars will fan out to more env vars
-	envSliceBefore := envSlice
-
-	// Detect if any env keys have consecutive underscores and add copy of the value with
-	// a new key where the consecutive underscores are replaced
-	var dnerrs *DeprecatedNameErrors
-	for _, kv := range envSliceBefore {
-		k, v, ok := strings.Cut(kv, "=")
-
-		if !ok { // this is impossible as the array contains strings with an "=" by construction
-			continue
-		}
-
-		noConsecutiveUnderScoreKey := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
-		if k != noConsecutiveUnderScoreKey {
-			envSlice = append(envSlice, fmt.Sprintf("%s=%s", noConsecutiveUnderScoreKey, v))
-			dnerrs = dnerrs.Append(DeprecatedNameError{old: noConsecutiveUnderScoreKey, new: k})
-		}
-	}
-	if dnerrs.Len() != 0 {
-		return env.FromSlice(envSlice), dnerrs
-	}
-
-	return env.FromSlice(envSlice), nil
+	envSlice, err = fanOutDeprectatedEnvVarNames(envSlice)
+	return env.FromSlice(envSlice), err
 }
 
 // Label returns a pretty name for the plugin.
