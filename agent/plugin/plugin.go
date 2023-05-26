@@ -272,7 +272,7 @@ func (e *DeprecatedNameErrors) Len() int {
 // Error returns each error message in the underlying slice on new line
 func (e *DeprecatedNameErrors) Error() string {
 	builder := strings.Builder{}
-	for i, err := range e.errs {
+	for i, err := range e.Errors() {
 		_, _ = builder.WriteString(err.Error())
 		if i < len(e.errs)-1 {
 			_, _ = builder.WriteRune('\n')
