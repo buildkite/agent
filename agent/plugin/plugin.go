@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
@@ -243,13 +244,21 @@ type DeprecatedNameErrors struct {
 	errs []DeprecatedNameError
 }
 
-// Errors returns the underlying slice
+// Errors returns the underlying slice in sorted order
 func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
 	if e == nil {
 		return []DeprecatedNameError{}
 	}
 
-	return e.errs
+	errs := e.errs
+	sort.Slice(errs, func(i, j int) bool {
+		if errs[i].old == errs[j].old {
+			return errs[i].new < errs[j].new
+		}
+		return errs[i].old < errs[j].old
+	})
+
+	return errs
 }
 
 // Len is the length of the underlying slice or 0 if nil
@@ -287,7 +296,7 @@ func (e *DeprecatedNameErrors) Append(errs ...DeprecatedNameError) *DeprecatedNa
 }
 
 // Is returns true if and only if a error that is wrapped in target
-// has the same underlying slice as the receiver. The order is significant.
+// has the same underlying slice as the receiver, regardless of order.
 func (e *DeprecatedNameErrors) Is(target error) bool {
 	if e == nil {
 		return target == nil
@@ -298,8 +307,25 @@ func (e *DeprecatedNameErrors) Is(target error) bool {
 		return false
 	}
 
-	for i, err := range targetErr.errs {
-		if e.errs[i] != err {
+	dict := make(map[DeprecatedNameError]int, len(e.errs))
+	for _, err := range e.errs {
+		if c, exists := dict[err]; !exists {
+			dict[err] = 1
+		} else {
+			dict[err] = c + 1
+		}
+	}
+
+	for _, err := range targetErr.errs {
+		c, exists := dict[err]
+		if !exists {
+			return false
+		}
+		dict[err] = c - 1
+	}
+
+	for _, v := range dict {
+		if v != 0 {
 			return false
 		}
 	}
