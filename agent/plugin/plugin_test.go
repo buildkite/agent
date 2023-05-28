@@ -402,14 +402,12 @@ func TestConfigurationToEnvironment(t *testing.T) {
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER": "12",
 				"BUILDKITE_PLUGIN_NAME":                                    "DOCKER_COMPOSE",
 			},
-			expectedErr: &DeprecatedNameErrors{
-				errs: []DeprecatedNameError{
-					{
-						old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER",
-						new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER",
-					},
+			expectedErr: (&DeprecatedNameErrors{}).Append(
+				DeprecatedNameError{
+					old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER",
+					new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER",
 				},
-			},
+			),
 		},
 		{
 			configJSON: `{ "and _ with a    - number": 12, "A - B": 13 }`,
@@ -421,18 +419,16 @@ func TestConfigurationToEnvironment(t *testing.T) {
 				"BUILDKITE_PLUGIN_DOCKER_COMPOSE_A___B":                    "13",
 				"BUILDKITE_PLUGIN_NAME":                                    "DOCKER_COMPOSE",
 			},
-			expectedErr: &DeprecatedNameErrors{
-				errs: []DeprecatedNameError{
-					{
-						old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER",
-						new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER",
-					},
-					{
-						old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_A_B",
-						new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_A___B",
-					},
+			expectedErr: (&DeprecatedNameErrors{}).Append(
+				DeprecatedNameError{
+					old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER",
+					new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND___WITH_A______NUMBER",
 				},
-			},
+				DeprecatedNameError{
+					old: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_A_B",
+					new: "BUILDKITE_PLUGIN_DOCKER_COMPOSE_A___B",
+				},
+			),
 		},
 		{
 			configJSON: `{ "bool-true-key": true, "bool-false-key": false }`,

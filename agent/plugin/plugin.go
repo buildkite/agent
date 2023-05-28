@@ -262,7 +262,7 @@ func fanOutDeprectatedEnvVarNames(envSlice []string) ([]string, error) {
 	}
 
 	// guarantee that the error value is nil if there are no deprecations
-	if dnerrs.Len() != 0 {
+	if !dnerrs.IsEmpty() {
 		return envSliceAfter, dnerrs
 	}
 	return envSliceAfter, nil

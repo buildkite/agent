@@ -7,9 +7,16 @@ import (
 	"strings"
 )
 
-// DeprecatedNameErrors contains an aggregation of DeprecatedNameError
+type unit struct{}
+
+// DeprecatedNameErrors contains a set of DeprecatedNameError
 type DeprecatedNameErrors struct {
-	errs []DeprecatedNameError
+	errs map[DeprecatedNameError]unit
+}
+
+// IsEmpty return true if and only if `e` contains no errors
+func (e *DeprecatedNameErrors) IsEmpty() bool {
+	return e == nil || len(e.errs) == 0
 }
 
 // Errors returns the contained set of errors in sorted order
@@ -18,8 +25,10 @@ func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
 		return []DeprecatedNameError{}
 	}
 
-	errs := make([]DeprecatedNameError, len(e.errs))
-	copy(errs, e.errs)
+	errs := make([]DeprecatedNameError, 0, len(e.errs))
+	for err := range e.errs {
+		errs = append(errs, err)
+	}
 
 	sort.Slice(errs, func(i, j int) bool {
 		if errs[i].old == errs[j].old {
@@ -29,14 +38,6 @@ func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
 	})
 
 	return errs
-}
-
-// Len is the length of the underlying slice or 0 if nil
-func (e *DeprecatedNameErrors) Len() int {
-	if e == nil {
-		return 0
-	}
-	return len(e.errs)
 }
 
 // Error returns each contained error on a new line
@@ -56,10 +57,14 @@ func (e *DeprecatedNameErrors) Error() string {
 // should be used just like the builtin `append` function.
 func (e *DeprecatedNameErrors) Append(errs ...DeprecatedNameError) *DeprecatedNameErrors {
 	if e == nil {
-		return &DeprecatedNameErrors{errs: errs}
+		e = &DeprecatedNameErrors{errs: map[DeprecatedNameError]unit{}}
+	} else if e.errs == nil {
+		e.errs = map[DeprecatedNameError]unit{}
 	}
 
-	e.errs = append(e.errs, errs...)
+	for _, err := range errs {
+		e.errs[err] = unit{}
+	}
 
 	return e
 }
@@ -76,25 +81,12 @@ func (e *DeprecatedNameErrors) Is(target error) bool {
 		return false
 	}
 
-	dict := make(map[DeprecatedNameError]int, len(e.errs))
-	for _, err := range e.errs {
-		if c, exists := dict[err]; !exists {
-			dict[err] = 1
-		} else {
-			dict[err] = c + 1
-		}
+	if len(e.errs) != len(targetErr.errs) {
+		return false
 	}
 
-	for _, err := range targetErr.errs {
-		c, exists := dict[err]
-		if !exists {
-			return false
-		}
-		dict[err] = c - 1
-	}
-
-	for _, v := range dict {
-		if v != 0 {
+	for err := range e.errs {
+		if _, exists := targetErr.errs[err]; !exists {
 			return false
 		}
 	}
