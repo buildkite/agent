@@ -18,7 +18,9 @@ func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
 		return []DeprecatedNameError{}
 	}
 
-	errs := e.errs
+	errs := make([]DeprecatedNameError, len(e.errs))
+	copy(errs, e.errs)
+
 	sort.Slice(errs, func(i, j int) bool {
 		if errs[i].old == errs[j].old {
 			return errs[i].new < errs[j].new
