@@ -5,11 +5,9 @@ package plugin
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
@@ -237,124 +235,6 @@ func walkConfigValues(prefix string, v any, into *[]string) error {
 	}
 
 	return fmt.Errorf("Unknown type %T %v", v, v)
-}
-
-// DeprecatedNameErrors contains an aggregation of DeprecatedNameError
-type DeprecatedNameErrors struct {
-	errs []DeprecatedNameError
-}
-
-// Errors returns the underlying slice in sorted order
-func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
-	if e == nil {
-		return []DeprecatedNameError{}
-	}
-
-	errs := e.errs
-	sort.Slice(errs, func(i, j int) bool {
-		if errs[i].old == errs[j].old {
-			return errs[i].new < errs[j].new
-		}
-		return errs[i].old < errs[j].old
-	})
-
-	return errs
-}
-
-// Len is the length of the underlying slice or 0 if nil
-func (e *DeprecatedNameErrors) Len() int {
-	if e == nil {
-		return 0
-	}
-	return len(e.errs)
-}
-
-// Error returns each error message in the underlying slice on new line
-func (e *DeprecatedNameErrors) Error() string {
-	builder := strings.Builder{}
-	for i, err := range e.Errors() {
-		_, _ = builder.WriteString(err.Error())
-		if i < len(e.errs)-1 {
-			_, _ = builder.WriteRune('\n')
-		}
-	}
-
-	return builder.String()
-}
-
-// Append DeprecatedNameError to the underlying slice and return the reciver
-// returning the reveiver is necessary to support appending to nil. So this
-// should be used just like the builtin append function
-func (e *DeprecatedNameErrors) Append(errs ...DeprecatedNameError) *DeprecatedNameErrors {
-	if e == nil {
-		return &DeprecatedNameErrors{errs: errs}
-	}
-
-	e.errs = append(e.errs, errs...)
-
-	return e
-}
-
-// Is returns true if and only if a error that is wrapped in target
-// has the same underlying slice as the receiver, regardless of order.
-func (e *DeprecatedNameErrors) Is(target error) bool {
-	if e == nil {
-		return target == nil
-	}
-
-	var targetErr *DeprecatedNameErrors
-	if !errors.As(target, &targetErr) {
-		return false
-	}
-
-	dict := make(map[DeprecatedNameError]int, len(e.errs))
-	for _, err := range e.errs {
-		if c, exists := dict[err]; !exists {
-			dict[err] = 1
-		} else {
-			dict[err] = c + 1
-		}
-	}
-
-	for _, err := range targetErr.errs {
-		c, exists := dict[err]
-		if !exists {
-			return false
-		}
-		dict[err] = c - 1
-	}
-
-	for _, v := range dict {
-		if v != 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
-// DeprecatedNameError contains information about environment variable names that
-// are deprecated. Both the deprecated name and its replacement are held
-type DeprecatedNameError struct {
-	old string
-	new string
-}
-
-func (e *DeprecatedNameError) Error() string {
-	return fmt.Sprintf(" deprecated: %q\nreplacement: %q\n", e.old, e.new)
-}
-
-func (e *DeprecatedNameError) Is(target error) bool {
-	if e == nil {
-		return target == nil
-	}
-
-	var targetErr *DeprecatedNameError
-	if !errors.As(target, &targetErr) {
-		return false
-	}
-
-	return e.old == targetErr.old && e.new == targetErr.new
 }
 
 // The input should be a slice of Env Variables of the form `k=v` where `k` is the variable name
