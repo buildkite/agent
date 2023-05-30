@@ -22,6 +22,10 @@ func (e *DeprecatedNameErrors) IsEmpty() bool {
 // Errors returns the contained set of errors in sorted order
 func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
 	if e == nil {
+		return nil
+	}
+
+	if e.errs == nil {
 		return []DeprecatedNameError{}
 	}
 
