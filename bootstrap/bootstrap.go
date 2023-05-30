@@ -867,6 +867,8 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 			for _, err := range dnerr.Errors() {
 				b.shell.Logger.Printf("%s", err.Error())
 			}
+		} else if err != nil {
+			b.shell.Logger.Warningf("Error configuring plugin environment: %s", err)
 		}
 
 		if err := b.executeHook(ctx, HookConfig{
