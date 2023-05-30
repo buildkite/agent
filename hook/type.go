@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/shellscript"
+	"github.com/buildkite/agent/v3/internal/shellscript"
 )
 
 const (
