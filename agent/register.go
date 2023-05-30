@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/system"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/system"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
 	"github.com/denisbrodbeck/machineid"
