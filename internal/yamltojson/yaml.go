@@ -1,7 +1,5 @@
 // Package yamltojson provides helpers for using yaml.Node, particularly a
 // converter into JSON.
-//
-// It is intended for internal use by buildkite-agent only.
 package yamltojson
 
 import (
