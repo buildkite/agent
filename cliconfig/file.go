@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/agent/v3/utils"
+	"github.com/buildkite/agent/v3/internal/utils"
 )
 
 type File struct {

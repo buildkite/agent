@@ -23,12 +23,12 @@ import (
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/agent/v3/tracetools"
-	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
 	"github.com/mitchellh/go-homedir"
@@ -981,9 +981,7 @@ var AgentStartCommand = cli.Command{
 				}
 			})
 
-			if experiments.IsEnabled(experiments.InbuiltStatusPage) {
-				http.HandleFunc("/status", status.Handle)
-			}
+			http.HandleFunc("/status", status.Handle)
 
 			go func() {
 				_, setStatus, done := status.AddSimpleItem(ctx, "Health check server")

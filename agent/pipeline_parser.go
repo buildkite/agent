@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/yamltojson"
 	"github.com/buildkite/agent/v3/tracetools"
-	"github.com/buildkite/agent/v3/yamltojson"
 	"github.com/buildkite/interpolate"
 
 	"gopkg.in/yaml.v3"

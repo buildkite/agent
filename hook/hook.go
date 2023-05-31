@@ -10,7 +10,7 @@ import (
 	"runtime"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/agent/v3/utils"
+	"github.com/buildkite/agent/v3/internal/utils"
 )
 
 // Find returns the absolute path to the best matching hook file in a path, or

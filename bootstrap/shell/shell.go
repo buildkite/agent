@@ -24,9 +24,9 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
-	"github.com/buildkite/agent/v3/shellscript"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
