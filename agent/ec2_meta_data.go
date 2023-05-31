@@ -47,7 +47,6 @@ func (e EC2MetaData) Get() (map[string]string, error) {
 	metaData["aws:availability-zone"] = document.AvailabilityZone
 	metaData["aws:instance-id"] = document.InstanceID
 	metaData["aws:instance-type"] = document.InstanceType
-	metaData["aws:private-ip"] = document.PrivateIP
 	metaData["aws:region"] = document.Region
 
 	instanceLifeCycle, err := c.GetMetadata("instance-life-cycle")
