@@ -8,18 +8,17 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
 )
 
 var (
-	nonIDCharacterRE   = regexp.MustCompile(`[^a-zA-Z0-9]`)
-	doubleHyphenRE     = regexp.MustCompile(`-+`)
-	toDashRE           = regexp.MustCompile(`-|\s+`)
-	whitespaceRE       = regexp.MustCompile(`\s+`)
-	doubleUnderscoreRE = regexp.MustCompile(`_+`)
+	nonIDCharacterRE        = regexp.MustCompile(`[^a-zA-Z0-9]`)
+	consecutiveHyphenRE     = regexp.MustCompile(`-+`)
+	hypenOrSpaceRE          = regexp.MustCompile(`-|\s`)
+	whitespaceRE            = regexp.MustCompile(`\s+`)
+	consecutiveUnderscoreRE = regexp.MustCompile(`_+`)
 )
 
 // Plugin describes where to find, and how to configure, an agent plugin.
@@ -93,7 +92,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 		switch vv := v.(type) {
 		case string:
 			// Add the plugin with no config to the array
-			plugin, err := CreatePlugin(string(vv), map[string]any{})
+			plugin, err := CreatePlugin(vv, map[string]any{})
 			if err != nil {
 				return nil, err
 			}
@@ -103,7 +102,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 			for location, config := range vv {
 				// Plugins without configs are easy!
 				if config == nil {
-					plugin, err := CreatePlugin(string(location), map[string]any{})
+					plugin, err := CreatePlugin(location, map[string]any{})
 					if err != nil {
 						return nil, err
 					}
@@ -119,7 +118,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 				}
 
 				// Add the plugin with config to the array
-				plugin, err := CreatePlugin(string(location), config)
+				plugin, err := CreatePlugin(location, config)
 				if err != nil {
 					return nil, err
 				}
@@ -161,7 +160,7 @@ func (p *Plugin) Name() string {
 func (p *Plugin) Identifier() (string, error) {
 	id := p.Label()
 	id = nonIDCharacterRE.ReplaceAllString(id, "-")
-	id = doubleHyphenRE.ReplaceAllString(id, "-")
+	id = consecutiveHyphenRE.ReplaceAllString(id, "-")
 	id = strings.Trim(id, "-")
 
 	return id, nil
@@ -205,16 +204,12 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 
 // formatEnvKey converts strings into an ENV key friendly format
 func formatEnvKey(key string) string {
-	key = strings.ToUpper(key)
-	key = whitespaceRE.ReplaceAllString(key, " ")
-	key = toDashRE.ReplaceAllString(key, "_")
-	key = doubleUnderscoreRE.ReplaceAllString(key, "_")
-	return key
+	newKey := strings.ToUpper(key)
+	return hypenOrSpaceRE.ReplaceAllString(newKey, "_")
 }
 
 func walkConfigValues(prefix string, v any, into *[]string) error {
 	switch vv := v.(type) {
-
 	// handles all of our primitive types, golang provides a good string representation
 	case string, bool, json.Number:
 		*into = append(*into, fmt.Sprintf("%s=%v", prefix, vv))
@@ -242,21 +237,42 @@ func walkConfigValues(prefix string, v any, into *[]string) error {
 	return fmt.Errorf("Unknown type %T %v", v, v)
 }
 
+// The input should be a slice of Env Variables of the form `k=v` where `k` is the variable name
+// and `v` is its value. If it can be determined that any of the env variables names is part of a
+// deprecation, either as the deprecated variable name or its replacement, append both to the
+// returned slice, and also append a deprecation error to the error value. If there are no
+// deprecations, the error value is guaranteed to be nil.
+func fanOutDeprecatedEnvVarNames(envSlice []string) ([]string, error) {
+	envSliceAfter := envSlice
+
+	var dnerrs *DeprecatedNameErrors
+	for _, kv := range envSlice {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok { // this is impossible if the precondition is met
+			continue
+		}
+
+		// the form with consecutive underscores is replacing the form without, but the replacement
+		// is what is expected to be in input slice
+		noConsecutiveUnderScoreKey := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
+		if k != noConsecutiveUnderScoreKey {
+			envSliceAfter = append(envSliceAfter, fmt.Sprintf("%s=%s", noConsecutiveUnderScoreKey, v))
+			dnerrs = dnerrs.Append(DeprecatedNameError{old: noConsecutiveUnderScoreKey, new: k})
+		}
+	}
+
+	// guarantee that the error value is nil if there are no deprecations
+	if !dnerrs.IsEmpty() {
+		return envSliceAfter, dnerrs
+	}
+	return envSliceAfter, nil
+}
+
 // ConfigurationToEnvironment converts the plugin configuration values to
 // environment variables.
 func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 	envSlice := []string{}
 	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
-
-	for k, v := range p.Configuration {
-		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
-		if err := walkConfigValues(configPrefix, v, &envSlice); err != nil {
-			return nil, err
-		}
-	}
-
-	// Sort them into a consistent order
-	sort.Strings(envSlice)
 
 	// Append current plugin name
 	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
@@ -264,11 +280,19 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 	// Append current plugin configuration as JSON
 	configJSON, err := json.Marshal(p.Configuration)
 	if err != nil {
-		return nil, err
+		return env.New(), err
 	}
 	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJSON))
 
-	return env.FromSlice(envSlice), nil
+	for k, v := range p.Configuration {
+		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
+		if err := walkConfigValues(configPrefix, v, &envSlice); err != nil {
+			return env.New(), err
+		}
+	}
+
+	envSlice, err = fanOutDeprecatedEnvVarNames(envSlice)
+	return env.FromSlice(envSlice), err
 }
 
 // Label returns a pretty name for the plugin.

@@ -855,12 +855,27 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 			return err
 		}
 
-		env, _ := p.ConfigurationToEnvironment()
-		err = b.executeHook(ctx, HookConfig{
+		envMap, err := p.ConfigurationToEnvironment()
+		if dnerr := (&plugin.DeprecatedNameErrors{}); err != nil && errors.As(err, &dnerr) {
+			b.shell.Logger.Headerf("Deprecated environment variables for plugin %s", p.Plugin.Name())
+			b.shell.Logger.Printf("%s", strings.Join([]string{
+				"The way that environment variables are derived from the plugin configuration is changing.",
+				"We'll export both the deprecated and the replacement names for now,",
+				"You may be able to avoid this by removing consecutive underscore, hyphen, or whitespace",
+				"characters in your plugin configuration.",
+			}, " "))
+			for _, err := range dnerr.Errors() {
+				b.shell.Logger.Printf("%s", err.Error())
+			}
+		} else if err != nil {
+			b.shell.Logger.Warningf("Error configuring plugin environment: %s", err)
+		}
+
+		if err := b.executeHook(ctx, HookConfig{
 			Scope:      "plugin",
 			Name:       name,
 			Path:       hookPath,
-			Env:        env,
+			Env:        envMap,
 			PluginName: p.Plugin.Name(),
 			SpanAttributes: map[string]string{
 				"plugin.name":        p.Plugin.Name(),
@@ -868,8 +883,7 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 				"plugin.location":    p.Plugin.Location,
 				"plugin.is_vendored": strconv.FormatBool(p.Vendored),
 			},
-		})
-		if err != nil {
+		}); err != nil {
 			return err
 		}
 	}
