@@ -1,7 +1,5 @@
 // Package stdin provides a cross-platform method for determining if standard
 // input is readable.
-//
-// It is intended for internal use by buildkite-agent only.
 package stdin
 
 import (

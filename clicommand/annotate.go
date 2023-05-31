@@ -9,8 +9,8 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/stdin"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
