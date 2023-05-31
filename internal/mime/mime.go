@@ -4,8 +4,6 @@
 // https://hg.nginx.org/nginx/raw-file/default/conf/mime.types
 
 // Package mime provides an extended mapping of file extensions to MIME types.
-//
-// It is intended for internal use by buildkite-agent only.
 package mime
 
 import (

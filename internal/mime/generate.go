@@ -31,8 +31,6 @@ var mimeFileTemplate = template.Must(template.New("").Parse(
 // {{ .URLs.nginx }}
 
 // Package mime provides an extended mapping of file extensions to MIME types.
-//
-// It is intended for internal use by buildkite-agent only.
 package mime
 
 import (

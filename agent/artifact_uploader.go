@@ -16,8 +16,8 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/mime"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/mime"
 	"github.com/buildkite/agent/v3/pool"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"

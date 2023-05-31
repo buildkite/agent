@@ -3,8 +3,8 @@
 package main
 
 // see https://blog.golang.org/generate
-//go:generate go run mime/generate.go
-//go:generate go fmt mime/mime.go
+//go:generate go run internal/mime/generate.go
+//go:generate go fmt internal/mime/mime.go
 
 import (
 	"fmt"
