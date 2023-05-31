@@ -859,9 +859,9 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 		if dnerr := (&plugin.DeprecatedNameErrors{}); err != nil && errors.As(err, &dnerr) {
 			b.shell.Logger.Headerf("Deprecated environment variables for plugin %s", p.Plugin.Name())
 			b.shell.Logger.Printf(
-				"The way that environment variables are derived from the plugin configuration is changing." +
-					"We'll export both the deprecated and the replacement names for now." +
-					"You may be able avoid this by removing consecutive underscore, hypen, or whitespace" +
+				"The way that environment variables are derived from the plugin configuration is changing. " +
+					"We'll export both the deprecated and the replacement names for now. " +
+					"You may be able avoid this by removing consecutive underscore, hypen, or whitespace " +
 					"characters in your plugin configuration.",
 			)
 			for _, err := range dnerr.Errors() {
