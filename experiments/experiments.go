@@ -21,7 +21,6 @@ const (
 
 const (
 	// Available experiments
-	ANSITimestamps             = "ansi-timestamps"
 	AgentAPI                   = "agent-api"
 	DescendingSpawnPrioity     = "descending-spawn-priority"
 	JobAPI                     = "job-api"
@@ -31,6 +30,7 @@ const (
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
 
 	// Promoted experiments
+	ANSITimestamps    = "ansi-timestamps"
 	FlockFileLocks    = "flock-file-locks"
 	GitMirrors        = "git-mirrors"
 	InbuiltStatusPage = "inbuilt-status-page"
@@ -38,7 +38,6 @@ const (
 
 var (
 	Available = map[string]struct{}{
-		ANSITimestamps:             {},
 		AgentAPI:                   {},
 		DescendingSpawnPrioity:     {},
 		JobAPI:                     {},
@@ -49,6 +48,7 @@ var (
 	}
 
 	Promoted = map[string]string{
+		ANSITimestamps:    standardPromotionMsg(ANSITimestamps),
 		FlockFileLocks:    standardPromotionMsg(FlockFileLocks),
 		GitMirrors:        standardPromotionMsg(GitMirrors),
 		InbuiltStatusPage: standardPromotionMsg(InbuiltStatusPage),

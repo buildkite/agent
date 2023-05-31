@@ -209,58 +209,13 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// Our log streamer works off a buffer of output
 	runner.output = &process.Buffer{}
 
-	pr, pw := io.Pipe()
-
-	allWriters := []io.Writer{}
-
-	switch {
-	case experiments.IsEnabled(experiments.ANSITimestamps):
-		// If we have ansi-timestamps, we can skip line timestamps AND header times
-		// this is the future of timestamping
-		prefixer := process.NewPrefixer(runner.output, func() string {
-			return fmt.Sprintf("\x1b_bk;t=%d\x07",
-				time.Now().UnixNano()/int64(time.Millisecond))
-		})
-		allWriters = append(allWriters, prefixer)
-
-	case conf.AgentConfiguration.TimestampLines:
-		// If we have timestamp lines on, we have to buffer lines before we flush them
-		// because we need to know if the line is a header or not. It's a bummer.
-		allWriters = append(allWriters, pw)
-
-		go func() {
-			// Use a scanner to process output line by line
-			err := process.NewScanner(l).ScanLines(pr, func(line string) {
-				// Send to our header streamer and determine if it's a header
-				isHeader := runner.headerTimesStreamer.Scan(line)
-
-				// Prefix non-header log lines with timestamps
-				if !(isHeaderExpansion(line) || isHeader) {
-					line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
-				}
-
-				// Write the log line to the buffer
-				_, _ = runner.output.Write([]byte(line + "\n"))
-			})
-			if err != nil {
-				l.Error("[JobRunner] Encountered error %v", err)
-			}
-		}()
-
-	default:
-		// Write output directly to the line buffer so we
-		allWriters = append(allWriters, pw, runner.output)
-
-		// Use a scanner to process output for headers only
-		go func() {
-			err := process.NewScanner(l).ScanLines(pr, func(line string) {
-				runner.headerTimesStreamer.Scan(line)
-			})
-			if err != nil {
-				l.Error("[JobRunner] Encountered error %v", err)
-			}
-		}()
-	}
+	// Prefix each line with an ANSI escape containing the millisecond timestamp
+	// of the line (the artist formerly known as "ansi-timestamps").
+	prefixer := process.NewPrefixer(runner.output, func() string {
+		return fmt.Sprintf("\x1b_bk;t=%d\x07",
+			time.Now().UnixNano()/int64(time.Millisecond))
+	})
+	allWriters := []io.Writer{prefixer}
 
 	// if agent config "EnableJobLogTmpfile" is set, we extend the processWriter to write to a temporary file.
 	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the path to this temporary file.
@@ -326,9 +281,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// Close the writer end of the pipe when the process finishes
 	go func() {
 		<-runner.process.Done()
-		if err := pw.Close(); err != nil {
-			l.Error("%v", err)
-		}
 		if tmpFile != nil {
 			if err := os.Remove(tmpFile.Name()); err != nil {
 				l.Error("%v", err)
