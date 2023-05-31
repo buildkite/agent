@@ -24,7 +24,6 @@ const (
 	ANSITimestamps             = "ansi-timestamps"
 	AgentAPI                   = "agent-api"
 	DescendingSpawnPrioity     = "descending-spawn-priority"
-	FlockFileLocks             = "flock-file-locks"
 	JobAPI                     = "job-api"
 	KubernetesExec             = "kubernetes-exec"
 	NormalisedUploadPaths      = "normalised-upload-paths"
@@ -32,6 +31,7 @@ const (
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
 
 	// Promoted experiments
+	FlockFileLocks    = "flock-file-locks"
 	GitMirrors        = "git-mirrors"
 	InbuiltStatusPage = "inbuilt-status-page"
 )
@@ -41,7 +41,6 @@ var (
 		ANSITimestamps:             {},
 		AgentAPI:                   {},
 		DescendingSpawnPrioity:     {},
-		FlockFileLocks:             {},
 		JobAPI:                     {},
 		KubernetesExec:             {},
 		NormalisedUploadPaths:      {},
@@ -50,6 +49,7 @@ var (
 	}
 
 	Promoted = map[string]string{
+		FlockFileLocks:    standardPromotionMsg(FlockFileLocks),
 		GitMirrors:        standardPromotionMsg(GitMirrors),
 		InbuiltStatusPage: standardPromotionMsg(InbuiltStatusPage),
 	}
