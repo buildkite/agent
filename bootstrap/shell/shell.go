@@ -23,14 +23,12 @@ import (
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
-	"github.com/nightlyone/lockfile"
 )
 
 var (
@@ -188,42 +186,7 @@ type LockFile interface {
 	Unlock() error
 }
 
-func (s *Shell) lockfile(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
-	absolutePathToLock, err := filepath.Abs(path)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
-	}
-
-	lock, err := lockfile.New(absolutePathToLock)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", absolutePathToLock, err)
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	for {
-		// Keep trying the lock until we get it
-		if err := lock.TryLock(); err != nil {
-			s.Commentf("Could not acquire lock on \"%s\" (%s)", absolutePathToLock, err)
-			s.Commentf("Trying again in %s...", lockRetryDuration)
-			time.Sleep(lockRetryDuration)
-		} else {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			// No value ready, moving on
-		}
-	}
-
-	return &lock, err
-}
-
-func (s *Shell) flock(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
+func (s *Shell) flock(ctx context.Context, path string, timeout time.Duration) (*flock.Flock, error) {
 	absolutePathToLock, err := filepath.Abs(path + "f") // + "f" to ensure that flocks and lockfiles never share a filename
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
@@ -261,11 +224,7 @@ func (s *Shell) flock(ctx context.Context, path string, timeout time.Duration) (
 
 // Create a cross-process file-based lock based on pid files
 func (s *Shell) LockFile(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
-	if experiments.IsEnabled(experiments.FlockFileLocks) {
-		s.Commentf("Using flock-file-locks experiment 🧪")
-		return s.flock(ctx, path, timeout)
-	}
-	return s.lockfile(ctx, path, timeout)
+	return s.flock(ctx, path, timeout)
 }
 
 // Run runs a command, write stdout and stderr to the logger and return an error
