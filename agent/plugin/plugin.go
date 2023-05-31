@@ -242,7 +242,7 @@ func walkConfigValues(prefix string, v any, into *[]string) error {
 // deprecation, either as the deprecated variable name or its replacement, append both to the
 // returned slice, and also append a deprecation error to the error value. If there are no
 // deprecations, the error value is guaranteed to be nil.
-func fanOutDeprectatedEnvVarNames(envSlice []string) ([]string, error) {
+func fanOutDeprecatedEnvVarNames(envSlice []string) ([]string, error) {
 	envSliceAfter := envSlice
 
 	var dnerrs *DeprecatedNameErrors
@@ -291,7 +291,7 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 		}
 	}
 
-	envSlice, err = fanOutDeprectatedEnvVarNames(envSlice)
+	envSlice, err = fanOutDeprecatedEnvVarNames(envSlice)
 	return env.FromSlice(envSlice), err
 }
 
