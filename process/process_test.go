@@ -20,6 +20,13 @@ import (
 	"github.com/buildkite/agent/v3/process"
 )
 
+const longTestOutput = `+++ My header
+llamas
+and more llamas
+a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line
+and some alpacas
+`
+
 func TestProcessOutput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

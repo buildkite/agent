@@ -104,7 +104,6 @@ type AgentStartConfig struct {
 	NoPluginValidation          bool     `cli:"no-plugin-validation"`
 	NoPTY                       bool     `cli:"no-pty"`
 	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
-	TimestampLines              bool     `cli:"timestamp-lines"`
 	HealthCheckAddr             string   `cli:"health-check-addr"`
 	MetricsDatadog              bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost          string   `cli:"metrics-datadog-host"`
@@ -139,6 +138,7 @@ type AgentStartConfig struct {
 	TagsFromEC2                  bool     `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
 	TagsFromGCP                  bool     `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
+	TimestampLines               bool     `cli:"timestamp-lines" deprecated:"Timestamps are now enabled always"`
 }
 
 func (asc AgentStartConfig) Features() []string {
@@ -782,7 +782,6 @@ var AgentStartCommand = cli.Command{
 			PluginValidation:           !cfg.NoPluginValidation,
 			LocalHooksEnabled:          !cfg.NoLocalHooks,
 			RunInPty:                   !cfg.NoPTY,
-			TimestampLines:             cfg.TimestampLines,
 			DisconnectAfterJob:         cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
 			CancelGracePeriod:          cfg.CancelGracePeriod,

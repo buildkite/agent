@@ -118,9 +118,6 @@ type JobRunner struct {
 	// The internal buffer of the process output
 	output *process.Buffer
 
-	// The internal header time streamer
-	headerTimesStreamer *headerTimesStreamer
-
 	// The internal log streamer
 	logStreamer *LogStreamer
 
@@ -166,9 +163,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		clientConf.Token = job.Token
 		runner.apiClient = api.NewClient(l, clientConf)
 	}
-
-	// Create our header times struct
-	runner.headerTimesStreamer = newHeaderTimesStreamer(l, runner.onUploadHeaderTime)
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
@@ -318,9 +312,6 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		}
 	}
 
-	// Start the header time streamer
-	go r.headerTimesStreamer.Run(ctx)
-
 	// Start the log streamer. Launches multiple goroutines.
 	if err := r.logStreamer.Start(ctx); err != nil {
 		return err
@@ -409,10 +400,6 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	// Store the finished at time
 	finishedAt := time.Now()
-
-	// Stop the header time streamer. This will block until all the chunks
-	// have been uploaded
-	r.headerTimesStreamer.Stop()
 
 	// Stop the log streamer. This will block until all the chunks have
 	// been uploaded
@@ -856,25 +843,6 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 			return
 		}
 	}
-}
-
-func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, times map[string]string) {
-	roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.SaveHeaderTimes(ctx, r.job.ID, &api.HeaderTimes{Times: times})
-		if err != nil {
-			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
-				r.logger.Warn("Buildkite rejected the header times (%s)", err)
-				retrier.Break()
-			} else {
-				r.logger.Warn("%s (%s)", err, retrier)
-			}
-		}
-
-		return err
-	})
 }
 
 // onUploadChunk uploads a log streamer chunk. If a valid chunk cannot be
