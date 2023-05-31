@@ -12,44 +12,54 @@ import (
 
 type State string
 
+// Experiment states
 const (
-	PolyglotHooks              = "polyglot-hooks"
-	JobAPI                     = "job-api"
-	KubernetesExec             = "kubernetes-exec"
-	ANSITimestamps             = "ansi-timestamps"
-	GitMirrors                 = "git-mirrors"
-	FlockFileLocks             = "flock-file-locks"
-	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
-	DescendingSpawnPrioity     = "descending-spawn-priority"
-	InbuiltStatusPage          = "inbuilt-status-page"
-	AgentAPI                   = "agent-api"
-	NormalisedUploadPaths      = "normalised-upload-paths"
-
 	StateKnown    State = "known"
 	StatePromoted State = "promoted"
 	StateUnknown  State = "unknown"
 )
 
+const (
+	// Available experiments
+	ANSITimestamps             = "ansi-timestamps"
+	AgentAPI                   = "agent-api"
+	DescendingSpawnPrioity     = "descending-spawn-priority"
+	FlockFileLocks             = "flock-file-locks"
+	JobAPI                     = "job-api"
+	KubernetesExec             = "kubernetes-exec"
+	NormalisedUploadPaths      = "normalised-upload-paths"
+	PolyglotHooks              = "polyglot-hooks"
+	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
+
+	// Promoted experiments
+	GitMirrors        = "git-mirrors"
+	InbuiltStatusPage = "inbuilt-status-page"
+)
+
 var (
 	Available = map[string]struct{}{
-		PolyglotHooks:              {},
+		ANSITimestamps:             {},
+		AgentAPI:                   {},
+		DescendingSpawnPrioity:     {},
+		FlockFileLocks:             {},
 		JobAPI:                     {},
 		KubernetesExec:             {},
-		ANSITimestamps:             {},
-		FlockFileLocks:             {},
-		ResolveCommitAfterCheckout: {},
-		DescendingSpawnPrioity:     {},
-		InbuiltStatusPage:          {},
-		AgentAPI:                   {},
 		NormalisedUploadPaths:      {},
+		PolyglotHooks:              {},
+		ResolveCommitAfterCheckout: {},
 	}
 
 	Promoted = map[string]string{
-		GitMirrors: fmt.Sprintf("The %s experiment has been promoted to a stable feature. You can safely remove the `--experiment %s` flag to silence this message and continue using the feature", GitMirrors, GitMirrors),
+		GitMirrors:        standardPromotionMsg(GitMirrors),
+		InbuiltStatusPage: standardPromotionMsg(InbuiltStatusPage),
 	}
 
 	experiments = make(map[string]bool, len(Available))
 )
+
+func standardPromotionMsg(key string) string {
+	return fmt.Sprintf("The %s experiment has been promoted to a stable feature. You can safely remove the `--experiment %s` flag to silence this message and continue using the feature", key, key)
+}
 
 func EnableWithUndo(key string) func() {
 	Enable(key)
