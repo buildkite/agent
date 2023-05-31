@@ -981,9 +981,7 @@ var AgentStartCommand = cli.Command{
 				}
 			})
 
-			if experiments.IsEnabled(experiments.InbuiltStatusPage) {
-				http.HandleFunc("/status", status.Handle)
-			}
+			http.HandleFunc("/status", status.Handle)
 
 			go func() {
 				_, setStatus, done := status.AddSimpleItem(ctx, "Health check server")
