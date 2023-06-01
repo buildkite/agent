@@ -24,6 +24,7 @@ type AgentConfiguration struct {
 	PluginValidation           bool
 	LocalHooksEnabled          bool
 	RunInPty                   bool
+	ANSITimestamps             bool
 	TimestampLines             bool
 	HealthCheckAddr            string
 	DisconnectAfterJob         bool
