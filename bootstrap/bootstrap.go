@@ -1160,7 +1160,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 					b.shell.Warningf("Checkout failed! %s (%s)", err, r)
 
 					// Specifically handle git errors
-					if ge, ok := err.(*gitError); ok {
+					if ge := new(gitError); errors.As(err, &ge) {
 						switch ge.Type {
 						// These types can fail because of corrupted checkouts
 						case gitErrorClone:
@@ -1186,7 +1186,6 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 					if err := b.createCheckoutDir(); err != nil {
 						return err
 					}
-
 				}
 
 				return err

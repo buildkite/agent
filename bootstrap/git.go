@@ -31,6 +31,10 @@ type gitError struct {
 	Type int
 }
 
+func (e *gitError) Unwrap() error {
+	return e.error
+}
+
 type shellRunner interface {
 	Run(context.Context, string, ...string) error
 }
