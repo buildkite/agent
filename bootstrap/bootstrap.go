@@ -1133,68 +1133,70 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 			return err
 		}
 	default:
-		if b.Config.Repository != "" {
-			err := roko.NewRetrier(
-				roko.WithMaxAttempts(3),
-				roko.WithStrategy(roko.Constant(2*time.Second)),
-			).DoWithContext(ctx, func(r *roko.Retrier) error {
-				err := b.defaultCheckoutPhase(ctx)
-				if err == nil {
-					return nil
-				}
+		if b.Config.Repository == "" {
+			b.shell.Commentf("Skipping checkout, BUILDKITE_REPO is empty")
+			break
+		}
 
-				switch {
-				case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
-					b.shell.Warningf("Checkout was interrupted by a signal")
-					r.Break()
+		if err := roko.NewRetrier(
+			roko.WithMaxAttempts(3),
+			roko.WithStrategy(roko.Constant(2*time.Second)),
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			err := b.defaultCheckoutPhase(ctx)
+			if err == nil {
+				return nil
+			}
 
-				case errors.Is(err, context.Canceled):
-					b.shell.Warningf("Checkout was cancelled")
-					r.Break()
+			switch {
+			case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
+				b.shell.Warningf("Checkout was interrupted by a signal")
+				r.Break()
 
-				case errors.Is(ctx.Err(), context.Canceled):
-					b.shell.Warningf("Checkout was cancelled due to context cancellation")
-					r.Break()
+			case errors.Is(err, context.Canceled):
+				b.shell.Warningf("Checkout was cancelled")
+				r.Break()
 
-				default:
-					b.shell.Warningf("Checkout failed! %s (%s)", err, r)
+			case errors.Is(ctx.Err(), context.Canceled):
+				b.shell.Warningf("Checkout was cancelled due to context cancellation")
+				r.Break()
 
-					// Specifically handle git errors
-					if ge := new(gitError); errors.As(err, &ge) {
-						switch ge.Type {
-						// These types can fail because of corrupted checkouts
-						case gitErrorClone:
-						case gitErrorClean:
-						case gitErrorCleanSubmodules:
-							// do nothing, this will fall through to destroy the checkout
+			default:
+				b.shell.Warningf("Checkout failed! %s (%s)", err, r)
 
-						default:
-							return err
-						}
-					}
+				// Specifically handle git errors
+				if ge := new(gitError); errors.As(err, &ge) {
+					switch ge.Type {
+					// These types can fail because of corrupted checkouts
+					case gitErrorClean:
+					case gitErrorCleanSubmodules:
+					case gitErrorClone:
+						// do nothing, this will fall through to destroy the checkout
 
-					// Checkout can fail because of corrupted files in the checkout
-					// which can leave the agent in a state where it keeps failing
-					// This removes the checkout dir, which means the next checkout
-					// will be a lot slower (clone vs fetch), but hopefully will
-					// allow the agent to self-heal
-					_ = b.removeCheckoutDir()
-
-					// Now make sure the build directory exists again before we try
-					// to checkout again, or proceed and run hooks which presume the
-					// checkout dir exists
-					if err := b.createCheckoutDir(); err != nil {
+					default:
 						return err
 					}
 				}
 
-				return err
-			})
-			if err != nil {
-				return err
+				// Checkout can fail because of corrupted files in the checkout
+				// which can leave the agent in a state where it keeps failing
+				// This removes the checkout dir, which means the next checkout
+				// will be a lot slower (clone vs fetch), but hopefully will
+				// allow the agent to self-heal
+				if err := b.removeCheckoutDir(); err != nil {
+					b.shell.Printf("Failed to remove checkout dir while cleaning up after a checkout error.")
+				}
+
+				// Now make sure the build directory exists again before we try
+				// to checkout again, or proceed and run hooks which presume the
+				// checkout dir exists
+				if err := b.createCheckoutDir(); err != nil {
+					return err
+				}
 			}
-		} else {
-			b.shell.Commentf("Skipping checkout, BUILDKITE_REPO is empty")
+
+			return err
+		}); err != nil {
+			return err
 		}
 	}
 
