@@ -1202,7 +1202,10 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
-	previousCheckoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	previousCheckoutPath, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if !exists {
+		b.shell.Printf("Could not determine previous checkout path from BUILDKITE_BUILD_CHECKOUT_PATH")
+	}
 
 	// Run post-checkout hooks
 	if err := b.executeGlobalHook(ctx, "post-checkout"); err != nil {
