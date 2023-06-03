@@ -1171,6 +1171,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 					case gitErrorClean:
 					case gitErrorCleanSubmodules:
 					case gitErrorClone:
+					case gitErrorFetch:
 						// do nothing, this will fall through to destroy the checkout
 
 					default:
