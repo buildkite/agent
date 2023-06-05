@@ -60,7 +60,7 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
 
-		// 128 is extremely broad, but it seems permissions errors, network unreaable errors etc, don't result in it
+		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorCheckoutRetryClean}
 		}
@@ -139,7 +139,7 @@ func gitFetch(ctx context.Context, sh shellRunner, gitFetchFlags, repository str
 	}
 
 	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
-		// 128 is extremely broad, but it seems permissions errors, network uncreachable errors etc, don't result in it
+		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorFetchRetryClean}
 		}
