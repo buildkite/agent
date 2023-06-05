@@ -186,7 +186,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}
 	}
 
-	// Prepare a file to recieve the given job environment
+	// Prepare a file to receive the given job environment
 	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", job.ID)); err != nil {
 		return runner, err
 	} else {
@@ -211,10 +211,13 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	pr, pw := io.Pipe()
 
-	allWriters := []io.Writer{}
+	// {stdout, stderr} -> processWriter	// processWriter = io.MultiWriter(allWriters...)
+	var allWriters []io.Writer
 
 	switch {
-	case experiments.IsEnabled(experiments.ANSITimestamps):
+	case conf.AgentConfiguration.ANSITimestamps:
+		// processWriter -> prefixer -> runner.output
+
 		// If we have ansi-timestamps, we can skip line timestamps AND header times
 		// this is the future of timestamping
 		prefixer := process.NewPrefixer(runner.output, func() string {
@@ -224,6 +227,8 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		allWriters = append(allWriters, prefixer)
 
 	case conf.AgentConfiguration.TimestampLines:
+		// processWriter -> pw -> pr -> process.Scanner -> {headerTimesStreamer, runner.output}
+
 		// If we have timestamp lines on, we have to buffer lines before we flush them
 		// because we need to know if the line is a header or not. It's a bummer.
 		allWriters = append(allWriters, pw)
@@ -248,7 +253,10 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}()
 
 	default:
-		// Write output directly to the line buffer so we
+		// processWriter -> {pw, runner.output};
+		// pw -> pr -> process.Scanner -> headerTimesStreamer
+
+		// Write output directly to the line buffer
 		allWriters = append(allWriters, pw, runner.output)
 
 		// Use a scanner to process output for headers only

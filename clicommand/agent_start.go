@@ -104,6 +104,7 @@ type AgentStartConfig struct {
 	NoPluginValidation          bool     `cli:"no-plugin-validation"`
 	NoPTY                       bool     `cli:"no-pty"`
 	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
+	NoANSITimestamps            bool     `cli:"no-ansi-timestamps"`
 	TimestampLines              bool     `cli:"timestamp-lines"`
 	HealthCheckAddr             string   `cli:"health-check-addr"`
 	MetricsDatadog              bool     `cli:"metrics-datadog"`
@@ -454,8 +455,13 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_PLUGINS_PATH",
 		},
 		cli.BoolFlag{
+			Name:   "no-ansi-timestamps",
+			Usage:  "Do not insert ANSI timestamp codes at the start of each line of job output",
+			EnvVar: "BUILDKITE_NO_ANSI_TIMESTAMPS",
+		},
+		cli.BoolFlag{
 			Name:   "timestamp-lines",
-			Usage:  "Prepend timestamps on each line of output.",
+			Usage:  "Prepend timestamps on each line of job output. Has no effect unless --no-ansi-timestamps is also used",
 			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
 		},
 		cli.StringFlag{
@@ -782,6 +788,7 @@ var AgentStartCommand = cli.Command{
 			PluginValidation:           !cfg.NoPluginValidation,
 			LocalHooksEnabled:          !cfg.NoLocalHooks,
 			RunInPty:                   !cfg.NoPTY,
+			ANSITimestamps:             !cfg.NoANSITimestamps,
 			TimestampLines:             cfg.TimestampLines,
 			DisconnectAfterJob:         cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
