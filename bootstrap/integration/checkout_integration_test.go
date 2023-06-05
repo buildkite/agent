@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -261,6 +263,131 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 		{"fetch", "--depth=1", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckoutErrorIsRetried(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+	}
+
+	// Simulate state from a previous checkout
+	if err := os.MkdirAll(tester.CheckoutDir(), 0755); err != nil {
+		t.Fatalf("error creating dir to clone from: %s", err)
+	}
+	cmd := exec.Command("git", "clone", "-v", "--", tester.Repo.Path, ".")
+	cmd.Dir = tester.CheckoutDir()
+	if _, err = cmd.Output(); err != nil {
+		t.Fatalf("error cloning test repo: %s", err)
+	}
+
+	// Make the git dir dirty to simulate a SIGKILLed git process
+	gitDir := path.Join(tester.CheckoutDir(), ".git")
+	lockFilePath := path.Join(gitDir, "index.lock")
+	f, err := os.Create(lockFilePath)
+	if err != nil {
+		t.Fatalf("error creating lock file: %s", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("error closing lock file: %s", err)
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// But assert which ones are called
+	git.ExpectAll([][]any{
+		{"remote", "set-url", "origin", tester.Repo.Path},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestFetchErrorIsRetried(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --depth=1",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-ffxdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --prune --depth=1",
+	}
+
+	// Simulate state from a previous checkout
+	if err := os.MkdirAll(tester.CheckoutDir(), 0755); err != nil {
+		t.Fatalf("error creating dir to clone from: %s", err)
+	}
+	cmd := exec.Command("git", "clone", "-v", "--", tester.Repo.Path, ".")
+	cmd.Dir = tester.CheckoutDir()
+	if _, err = cmd.Output(); err != nil {
+		t.Fatalf("error cloning test repo: %s", err)
+	}
+
+	// Make the git dir dirty to simulate a SIGKILLed git process
+	gitDir := path.Join(tester.CheckoutDir(), ".git")
+	lockFilePath := path.Join(gitDir, "shallow.lock")
+	f, err := os.Create(lockFilePath)
+	if err != nil {
+		t.Fatalf("error creating lock file: %s", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("error closing lock file: %s", err)
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// But assert which ones are called
+	git.ExpectAll([][]any{
+		{"remote", "set-url", "origin", tester.Repo.Path},
+		{"clean", "-ffxdq"},
+		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
+		{"clone", "-v", "--depth=1", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
 		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 

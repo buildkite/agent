@@ -171,6 +171,7 @@ func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
 
 // MustMock will fail the test if creating the mock fails
 func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
+	t.Helper()
 	mock, err := b.Mock(name)
 	if err != nil {
 		t.Fatalf("BootstrapTester.Mock(%q) error = %v", name, err)
@@ -190,6 +191,7 @@ func (b *BootstrapTester) HasMock(name string) bool {
 
 // MockAgent creates a mock for the buildkite-agent binary
 func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
+	t.Helper()
 	agent := b.MustMock(t, "buildkite-agent")
 	agent.Expect("env", "dump").
 		Min(0).
@@ -211,11 +213,11 @@ func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir stri
 		body = "#!/bin/sh\n" + strings.Join(append([]string{m.Path}, args...), " ")
 	}
 
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 
-	return hookScript, os.WriteFile(hookScript, []byte(body), 0600)
+	return hookScript, os.WriteFile(hookScript, []byte(body), 0o600)
 }
 
 // ExpectLocalHook creates a mock object and a script in the git repository's buildkite hooks dir
@@ -223,7 +225,7 @@ func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir stri
 func (b *BootstrapTester) ExpectLocalHook(name string) *bintest.Expectation {
 	hooksDir := filepath.Join(b.Repo.Path, ".buildkite", "hooks")
 
-	if err := os.MkdirAll(hooksDir, 0700); err != nil {
+	if err := os.MkdirAll(hooksDir, 0o700); err != nil {
 		panic(err)
 	}
 
@@ -255,6 +257,8 @@ func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
 
 // Run the bootstrap and return any errors
 func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
+	t.Helper()
+
 	// Mock out the meta-data calls to the agent after checkout
 	if !b.HasMock("buildkite-agent") {
 		agent := b.MockAgent(t)
@@ -306,6 +310,7 @@ func (b *BootstrapTester) Cancel() error {
 }
 
 func (b *BootstrapTester) CheckMocks(t *testing.T) {
+	t.Helper()
 	for _, mock := range b.mocks {
 		mock.Check(t)
 	}
@@ -326,6 +331,8 @@ func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
 
 // Run the bootstrap and then check the mocks
 func (b *BootstrapTester) RunAndCheck(t *testing.T, env ...string) {
+	t.Helper()
+
 	err := b.Run(t, env...)
 	t.Logf("Bootstrap output:\n%s", b.Output)
 
@@ -402,6 +409,8 @@ type testLogWriter struct {
 }
 
 func newTestLogWriter(t *testing.T) *testLogWriter {
+	t.Helper()
+
 	r, w := io.Pipe()
 	in := bufio.NewScanner(r)
 	lw := &testLogWriter{Writer: w}

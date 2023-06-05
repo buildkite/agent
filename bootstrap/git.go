@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -18,8 +19,10 @@ import (
 const (
 	gitErrorCheckout = iota
 	gitErrorCheckoutReferenceIsNotATree
+	gitErrorCheckoutRetryClean
 	gitErrorClone
 	gitErrorFetch
+	gitErrorFetchRetryClean
 	gitErrorClean
 	gitErrorCleanSubmodules
 )
@@ -29,6 +32,10 @@ var errNoHostname = errors.New("no hostname found")
 type gitError struct {
 	error
 	Type int
+}
+
+func (e *gitError) Unwrap() error {
+	return e.error
 }
 
 type shellRunner interface {
@@ -51,6 +58,11 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
 		if strings.HasPrefix(err.Error(), "fatal: reference is not a tree: ") {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
+		}
+
+		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
+		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
+			return &gitError{error: err, Type: gitErrorCheckoutRetryClean}
 		}
 		return &gitError{error: err, Type: gitErrorCheckout}
 	}
@@ -127,6 +139,10 @@ func gitFetch(ctx context.Context, sh shellRunner, gitFetchFlags, repository str
 	}
 
 	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
+		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
+		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
+			return &gitError{error: err, Type: gitErrorFetchRetryClean}
+		}
 		return &gitError{error: err, Type: gitErrorFetch}
 	}
 
