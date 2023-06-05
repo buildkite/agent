@@ -1167,13 +1167,9 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 				if ge := new(gitError); errors.As(err, &ge) {
 					switch ge.Type {
 					// These types can fail because of corrupted checkouts
-					case gitErrorCheckout:
-					case gitErrorClean:
-					case gitErrorCleanSubmodules:
-					case gitErrorClone:
-					case gitErrorFetch:
-						// do nothing, this will fall through to destroy the checkout
-
+					case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone,
+						gitErrorCheckoutRetryClean, gitErrorFetchRetryClean:
+					// Otherwise, don't clean the checkout dir
 					default:
 						return err
 					}
