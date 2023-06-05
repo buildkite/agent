@@ -141,7 +141,7 @@ binary is fairly portable and should run out of the box on most UNIX like system
   - CentOS 7
   - CentOS 8
 - Amazon Linux 2
-- macOS [1]
+- macOS [^1]
   - 10.12
   - 10.13
   - 10.14
@@ -152,7 +152,7 @@ binary is fairly portable and should run out of the box on most UNIX like system
   - 2016
   - 2019
 
-[1] See https://github.com/golang/go/issues/23011 for macOS / golang support and
+[^1]: See https://github.com/golang/go/issues/23011 for macOS / golang support and
 [Supported macOS Versions](./docs/macos.md) for the last supported version of the
 Buildkite Agent for versions of macOS prior to those listed above.
 
