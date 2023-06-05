@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/agent/v3/redaction"
+	"github.com/buildkite/agent/v3/internal/redaction"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"

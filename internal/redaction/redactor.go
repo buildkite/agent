@@ -1,6 +1,4 @@
 // Package redaction provides an efficient configurable string redactor.
-//
-// It is intended for internal use by buildkite-agent only.
 package redaction
 
 import (
