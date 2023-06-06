@@ -1325,7 +1325,7 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 	b.shell.Commentf("Updating existing repository mirror to find commit %s", b.Commit)
 
 	// Update the origin of the repository so we can gracefully handle repository renames
-	if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "set-url", "origin", b.Repository); err != nil {
+	if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "set-url", "origin", repository); err != nil {
 		return "", err
 	}
 
