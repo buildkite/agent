@@ -17,8 +17,8 @@ import (
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/redaction"
 	"github.com/buildkite/agent/v3/internal/stdin"
-	"github.com/buildkite/agent/v3/redaction"
 	"github.com/urfave/cli"
 )
 
