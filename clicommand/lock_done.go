@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
 )
 
@@ -72,20 +72,14 @@ func lockDoneAction(c *cli.Context) error {
 
 	ctx := context.Background()
 
-	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
+	cli, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	val, done, err := cli.LockCompareAndSwap(ctx, key, "doing", "done")
-	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Error performing compare-and-swap: %v\n", err)
-		os.Exit(1)
-	}
-
-	if !done {
-		fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q to mark complete\n", val)
+	if err := cli.DoOnceEnd(ctx, key); err != nil {
+		fmt.Fprintf(c.App.ErrWriter, "Couldn't complete do-once lock: %v\n", err)
 		os.Exit(1)
 	}
 	return nil

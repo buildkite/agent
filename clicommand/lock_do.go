@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
 )
 
@@ -96,51 +96,22 @@ func lockDoAction(c *cli.Context) error {
 		ctx = cctx
 	}
 
-	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
+	cli, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	for {
-		state, err := cli.LockGet(ctx, key)
-		if err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Error performing get: %v\n", err)
-			os.Exit(1)
-		}
-
-		switch state {
-		case "":
-			// Try to acquire the lock by changing to state 1
-			_, done, err := cli.LockCompareAndSwap(ctx, key, "", "doing")
-			if err != nil {
-				fmt.Fprintf(c.App.ErrWriter, "Error performing compare-and-swap: %v\n", err)
-				os.Exit(1)
-			}
-			if done {
-				// Lock acquired, exit 0.
-				fmt.Fprintln(c.App.Writer, "do")
-				return nil
-			}
-			// Lock not acquired (perhaps something else acquired it).
-			// Go through the loop again.
-
-		case "doing":
-			// Work in progress - wait until state 2.
-			if err := sleep(ctx, 100*time.Millisecond); err != nil {
-				fmt.Fprintf(c.App.ErrWriter, "Exceeded deadline or context cancelled: %v\n", err)
-				os.Exit(1)
-			}
-
-		case "done":
-			// Work completed!
-			fmt.Fprintln(c.App.Writer, "done")
-			return nil
-
-		default:
-			// Invalid state.
-			fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q for do-once\n", state)
-			os.Exit(1)
-		}
+	do, err := cli.DoOnceStart(ctx, key)
+	if err != nil {
+		fmt.Fprintf(c.App.ErrWriter, "Couldn't start do-once lock: %v\n", err)
+		os.Exit(1)
 	}
+
+	if do {
+		fmt.Fprintln(c.App.Writer, "do")
+		return nil
+	}
+	fmt.Fprintln(c.App.Writer, "done")
+	return nil
 }

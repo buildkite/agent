@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
 )
 
@@ -20,9 +20,9 @@ Description:
 
 Examples:
 
-   $ buildkite-agent lock acquire llama
+   $ token=$(buildkite-agent lock acquire llama)
    $ critical_section()
-   $ buildkite-agent lock release llama
+   $ buildkite-agent lock release llama "${token}"
 
 `
 
@@ -41,11 +41,11 @@ var LockReleaseCommand = cli.Command{
 }
 
 func lockReleaseAction(c *cli.Context) error {
-	if c.NArg() != 1 {
+	if c.NArg() != 2 {
 		fmt.Fprint(c.App.ErrWriter, lockReleaseHelpDescription)
 		os.Exit(1)
 	}
-	key := c.Args()[0]
+	key, token := c.Args()[0], c.Args()[1]
 
 	// Load the configuration
 	cfg := LockReleaseConfig{}
@@ -70,21 +70,16 @@ func lockReleaseAction(c *cli.Context) error {
 
 	ctx := context.Background()
 
-	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
+	cli, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	val, done, err := cli.LockCompareAndSwap(ctx, key, "acquired", "")
-	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Error performing compare-and-swap: %v\n", err)
+	if err := cli.Unlock(ctx, key, token); err != nil {
+		fmt.Fprintf(c.App.ErrWriter, "Could not release lock: %v\n", err)
 		os.Exit(1)
 	}
 
-	if !done {
-		fmt.Fprintf(c.App.ErrWriter, "Lock in invalid state %q to release\n", val)
-		os.Exit(1)
-	}
 	return nil
 }
