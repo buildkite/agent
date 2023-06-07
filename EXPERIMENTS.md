@@ -18,12 +18,6 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
-### `ansi-timestamps`
-
-Outputs inline ANSI timestamps for each line of log output which enables toggle-able timestamps in the Buildkite UI.
-
-**Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
-
 ### `normalised-upload-paths`
 
 Artifacts found by `buildkite-agent artifact upload` will be uploaded using URI/Unix-style paths, even on Windows. This changes the URLs that artifacts uploaded from Windows agents are stored at, but to one which is URI-compatible.
@@ -42,14 +36,6 @@ Take `buildkite-agent artifact upload coverage\report.xml` as an example:
 After repository checkout, resolve `BUILDKITE_COMMIT` to a commit hash. This makes `BUILDKITE_COMMIT` useful for builds triggered against non-commit-hash refs such as `HEAD`.
 
 **Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
-
-### `flock-file-locks`
-
-Changes the file lock implementation from github.com/nightlyone/lockfile to github.com/gofrs/flock to address an issue where file locks are never released by agents that don't shut down cleanly.
-
-When the experiment is enabled the agent will use different lock files from agents where the experiment is disabled, so agents with this experiment enabled should not be run on the same host as agents where the experiment is disabled.
-
-**Status**: Being tested, but it's looking good. We plan to switch lock implementations over the course of a couple of releases, switching over in such a way that nothing gets broken.
 
 ### `kubernetes-exec`
 Modifies `start` and `bootstrap` in such a way that they can run in separate Kubernetes containers in the same pod.

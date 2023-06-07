@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.48.0](https://github.com/buildkite/agent/tree/v3.48.0) (2023-06-06)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.47.0...v3.48.0)
+
+The de-experimentification release!
+
+- The `ansi-timestamps` experiment is now enabled by default. To remove the
+  timestamps from your logs, you can pass the `--no-ansi-timestamps` flag.
+- The `flock-file-locks` experiment is now enabled by default. Because the old
+  and new file lock systems don't interact, we *strongly* recommend not running
+  multiple agents of different versions on the same host.
+- The `inbuilt-status-page` experiment is now enabled by default. For those
+  running the agent with `--health-check-addr`, go to `/status` to see a
+  human-friendly status page.
+
+And whatever happened to `git-mirrors`? It graduated from experiment-hood in 
+v3.47.0!
+
+### Changed
+- De-experimentify ansi-timestamps [#2133](https://github.com/buildkite/agent/pull/2133) (@DrJosh9000)
+- Preserve plugin config env var names with consecutive underscores [#2116](https://github.com/buildkite/agent/pull/2116) (@triarius)
+- De-experimentify flock-file-locks [#2131](https://github.com/buildkite/agent/pull/2131) (@DrJosh9000)
+- Report more AWS metadata [#2118](https://github.com/buildkite/agent/pull/2118) (@david-poirier)
+- De-experimentify inbuilt-status-page [#2126](https://github.com/buildkite/agent/pull/2126) (@DrJosh9000)
+
+### Fixed
+- Fix origin for mirrored submodules [#2144](https://github.com/buildkite/agent/pull/2144) (@DrJosh9000)
+- Wipe checkout directory on `git checkout` and `git fetch` failure and retry [#2137](https://github.com/buildkite/agent/pull/2137) (@triarius)
+
+
 ## [v3.47.0](https://github.com/buildkite/agent/tree/v3.47.0) (2023-05-25)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.46.1...v3.47.0)
 
