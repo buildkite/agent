@@ -55,6 +55,10 @@ func (c *Client) Locker(key string) sync.Locker {
 // token or an error. The token must be passed to Unlock in order to unlock the
 // lock later on.
 func (c *Client) Lock(ctx context.Context, key string) (string, error) {
+	// The token generation only has to avoid making the same token twice to
+	// prevent separate processes unlocking each other.
+	// Using crypto/rand to generate 16 bytes is possibly overkill - it's not a
+	// goal to be cryptographically secure - but ensures the result.
 	otp := make([]byte, 16)
 	if _, err := rand.Read(otp); err != nil {
 		return "", err

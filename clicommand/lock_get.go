@@ -12,11 +12,14 @@ import (
 
 const lockGetHelpDescription = `Usage:
 
-    buildkite-agent lock get [key]
+   buildkite-agent lock get [key]
 
 Description:
    Retrieves the value of a lock key. Any key not in use returns an empty 
    string.
+   
+   Note that this subcommand is only available when an agent has been started
+   with the ′agent-api′ experiment enabled.
    
    ′lock get′ is generally only useful for inspecting lock state, as the value
    can change concurrently. To acquire or release a lock, use ′lock acquire′ and

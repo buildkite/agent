@@ -20,6 +20,9 @@ Description:
    wait for completion of some shared work, where only one process should do
    the work. 
    
+   Note that this subcommand is only available when an agent has been started
+   with the ′agent-api′ experiment enabled.
+   
    ′lock do′ will do one of two things:
    
    - Print 'do'. The calling process should proceed to do the work and then

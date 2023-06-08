@@ -17,6 +17,9 @@ const lockDoneHelpDescription = `Usage:
 Description:
    Completes a do-once lock. This should only be used by the process performing
    the work.
+   
+   Note that this subcommand is only available when an agent has been started
+   with the ′agent-api′ experiment enabled.
 
 Examples:
 
