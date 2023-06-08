@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
 )
 
@@ -17,6 +17,9 @@ const lockGetHelpDescription = `Usage:
 Description:
    Retrieves the value of a lock key. Any key not in use returns an empty 
    string.
+   
+   Note that this subcommand is only available when an agent has been started
+   with the ′agent-api′ experiment enabled.
    
    ′lock get′ is generally only useful for inspecting lock state, as the value
    can change concurrently. To acquire or release a lock, use ′lock acquire′ and
@@ -73,15 +76,15 @@ func lockGetAction(c *cli.Context) error {
 
 	ctx := context.Background()
 
-	cli, err := agentapi.NewClient(ctx, agentapi.LeaderPath(cfg.SocketsPath))
+	cli, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
 		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
 		os.Exit(1)
 	}
 
-	v, err := cli.LockGet(ctx, key)
+	v, err := cli.Get(ctx, key)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Error from leader client: %v\n", err)
+		fmt.Fprintf(c.App.ErrWriter, "Couldn't get lock state: %v\n", err)
 		os.Exit(1)
 	}
 

@@ -16,14 +16,14 @@ var testSocketCounter uint32
 
 func testSocketPath() string {
 	id := atomic.AddUint32(&testSocketCounter, 1)
-	return filepath.Join(os.TempDir(), fmt.Sprintf("test-%d-%d", os.Getpid(), id))
+	return filepath.Join(os.TempDir(), fmt.Sprintf("internal_agentapi_test-%d-%d", os.Getpid(), id))
 }
 
 func testLogger(t *testing.T) logger.Logger {
 	t.Helper()
 	logger := logger.NewConsoleLogger(
 		logger.NewTextPrinter(os.Stderr),
-		func(c int) { t.Fatalf("exit(%d)", c) },
+		func(c int) { t.Errorf("exit(%d)", c) },
 	)
 	return logger
 }
@@ -53,7 +53,7 @@ func TestPing(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	defer svr.Close()
+	t.Cleanup(func() { svr.Close() })
 
 	if err := cli.Ping(ctx); err != nil {
 		t.Errorf("cli.Ping(ctx) = %v", err)
@@ -66,7 +66,7 @@ func TestLockOperations(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	defer svr.Close()
+	t.Cleanup(func() { svr.Close() })
 
 	const key = "llama"
 

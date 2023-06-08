@@ -1,11 +1,6 @@
 package clicommand
 
-import (
-	"context"
-	"time"
-
-	"github.com/urfave/cli"
-)
+import "github.com/urfave/cli"
 
 const lockClientErrMessage = `Could not connect to Agent API: %v
 This command can only be used when at least one agent is running with the
@@ -33,17 +28,4 @@ var lockCommonFlags = []cli.Flag{
 		Usage:  "Directory where the agent will place sockets",
 		EnvVar: "BUILDKITE_SOCKETS_PATH",
 	},
-}
-
-// sleep sleeps in a context-aware way. The only non-nil errors returned are
-// from ctx.Err.
-func sleep(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-t.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
