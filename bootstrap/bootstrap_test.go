@@ -86,7 +86,7 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 	b := New(Config{})
 
 	oriCtx := context.Background()
-	b.shell, err = shell.New()
+	b.shell, err = shell.New(oriCtx, shell.Config{})
 	assert.NoError(t, err)
 
 	span, _, stopper := b.startTracing(oriCtx)
@@ -107,7 +107,7 @@ func TestStartTracing_Datadog(t *testing.T) {
 	b := New(cfg)
 
 	oriCtx := context.Background()
-	b.shell, err = shell.New()
+	b.shell, err = shell.New(oriCtx, shell.Config{})
 	assert.NoError(t, err)
 
 	span, ctx, stopper := b.startTracing(oriCtx)

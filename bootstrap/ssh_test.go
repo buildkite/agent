@@ -18,7 +18,7 @@ func init() {
 func TestFindingSSHTools(t *testing.T) {
 	t.Parallel()
 
-	sh, err := shell.New()
+	sh, err := shell.New(context.Background(), shell.Config{})
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}

@@ -963,10 +963,10 @@ var AgentStartCommand = cli.Command{
 		pool := agent.NewAgentPool(workers)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer agentShutdownHook(l, cfg)
+		defer agentShutdownHook(ctx, l, cfg)
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
-		if err := agentStartupHook(l, cfg); err != nil {
+		if err := agentStartupHook(ctx, l, cfg); err != nil {
 			l.Fatal("%s", err)
 		}
 
@@ -1052,17 +1052,17 @@ func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPo
 	return signals
 }
 
-func agentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
-	return agentLifecycleHook("agent-startup", log, cfg)
+func agentStartupHook(ctx context.Context, log logger.Logger, cfg AgentStartConfig) error {
+	return agentLifecycleHook(ctx, "agent-startup", log, cfg)
 }
-func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
-	_ = agentLifecycleHook("agent-shutdown", log, cfg)
+func agentShutdownHook(ctx context.Context, log logger.Logger, cfg AgentStartConfig) {
+	_ = agentLifecycleHook(ctx, "agent-shutdown", log, cfg)
 }
 
 // agentLifecycleHook looks for a hook script in the hooks path
 // and executes it if found. Output (stdout + stderr) is streamed into the main
 // agent logger. Exit status failure is logged and returned for the caller to handle
-func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig) error {
+func agentLifecycleHook(ctx context.Context, hookName string, log logger.Logger, cfg AgentStartConfig) error {
 	// search for hook (including .bat & .ps1 files on Windows)
 	p, err := hook.Find(cfg.HooksPath, hookName)
 	if err != nil {
@@ -1072,7 +1072,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		}
 		return nil
 	}
-	sh, err := shell.New()
+	sh, err := shell.New(ctx, shell.Config{})
 	if err != nil {
 		log.Error("creating shell for %q hook: %v", hookName, err)
 		return err

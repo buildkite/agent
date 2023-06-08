@@ -131,7 +131,7 @@ func TestContextCancelTerminates(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sh, err := shell.New()
+	sh, err := shell.New(ctx, shell.Config{})
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}
@@ -165,7 +165,7 @@ func TestInterrupt(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sh, err := shell.New()
+	sh, err := shell.New(ctx, shell.Config{})
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}
@@ -190,7 +190,7 @@ func TestInterrupt(t *testing.T) {
 }
 
 func TestDefaultWorkingDirFromSystem(t *testing.T) {
-	sh, err := shell.New()
+	sh, err := shell.New(context.Background(), shell.Config{})
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}
@@ -231,7 +231,7 @@ func TestWorkingDir(t *testing.T) {
 		t.Fatalf("os.Getwd() error = %v", err)
 	}
 
-	sh, err := shell.New()
+	sh, err := shell.New(context.Background(), shell.Config{})
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}
@@ -353,7 +353,7 @@ func TestAcquiringLockHelperProcess(t *testing.T) {
 }
 
 func newShellForTest(t *testing.T) *shell.Shell {
-	sh, err := shell.New()
+	sh, err := shell.New(context.Background(), shell.Config{})
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}
@@ -362,7 +362,7 @@ func newShellForTest(t *testing.T) *shell.Shell {
 }
 
 func TestRunWithoutPrompt(t *testing.T) {
-	sh, err := shell.New()
+	sh, err := shell.New(context.Background(), shell.Config{})
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}

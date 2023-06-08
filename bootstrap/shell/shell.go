@@ -23,7 +23,9 @@ import (
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/internal/shellscript"
+	"github.com/buildkite/agent/v3/lock"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -67,23 +69,45 @@ type Shell struct {
 	cmd     *command
 	cmdLock sync.Mutex
 
+	// Lock service client, if available
+	lockClient *lock.Client
+
 	// The signal to use to interrupt the command
 	InterruptSignal process.Signal
 }
 
-// New returns a new Shell
-func New() (*Shell, error) {
+// Config contains configuration options for creating a Shell.
+type Config struct {
+	SocketsPath string
+}
+
+// New returns a new Shell.
+func New(ctx context.Context, cfg Config) (*Shell, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find current working directory: %w", err)
 	}
 
-	return &Shell{
+	sh := &Shell{
 		Logger: StderrLogger,
 		Env:    env.FromSlice(os.Environ()),
 		Writer: os.Stdout,
 		wd:     wd,
-	}, nil
+	}
+
+	// Use the Agent API for locking?
+	if cfg.SocketsPath != "" && experiments.IsEnabled(experiments.AgentAPI) {
+		ctx, canc := context.WithTimeout(ctx, 10*time.Second)
+		defer canc()
+		lc, err := lock.NewClient(ctx, cfg.SocketsPath)
+		if err != nil {
+			sh.Logger.Errorf("Couldn't use Agent API for locking, so falling back to using flock-based locks: %v", err)
+			lc = nil
+		}
+		sh.lockClient = lc
+	}
+
+	return sh, nil
 }
 
 // WithStdin returns a copy of the Shell with the provided io.Reader set as the
@@ -181,8 +205,8 @@ func (s *Shell) WaitStatus() (process.WaitStatus, error) {
 	return s.cmd.proc.WaitStatus(), nil
 }
 
-// LockFile is a pid-based lock for cross-process locking
-type LockFile interface {
+// Unlocker types can unlock a cross-process lock (such as an flock).
+type Unlocker interface {
 	Unlock() error
 }
 
@@ -222,8 +246,44 @@ func (s *Shell) flock(ctx context.Context, path string, timeout time.Duration) (
 	return lock, err
 }
 
+// agentAPILock contains all the information required to unlock an Agent API
+// lock-service lock.
+type agentAPILock struct {
+	client     *lock.Client
+	key, token string
+}
+
+func (l *agentAPILock) Unlock() error {
+	return l.client.Unlock(context.Background(), l.key, l.token)
+}
+
+// lockWithAgentAPI acquires a lock in the Agent API lock service.
+func (s *Shell) lockWithAgentAPI(ctx context.Context, path string, timeout time.Duration) (*agentAPILock, error) {
+	absolutePathToLock, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	token, err := s.lockClient.Lock(ctx, absolutePathToLock)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to acquire lock for %q: %v", path, err)
+	}
+
+	return &agentAPILock{
+		client: s.lockClient,
+		key:    absolutePathToLock,
+		token:  token,
+	}, err
+}
+
 // Create a cross-process file-based lock based on pid files
-func (s *Shell) LockFile(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
+func (s *Shell) LockFile(ctx context.Context, path string, timeout time.Duration) (Unlocker, error) {
+	if s.lockClient != nil {
+		return s.lockWithAgentAPI(ctx, path, timeout)
+	}
 	return s.flock(ctx, path, timeout)
 }
 
