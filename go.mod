@@ -27,7 +27,7 @@ require (
 	github.com/puzpuzpuz/xsync/v2 v2.4.1
 	github.com/qri-io/jsonschema v0.2.1
 	github.com/stretchr/testify v1.8.4
-	github.com/urfave/cli v1.22.13
+	github.com/urfave/cli v1.22.14
 	go.opentelemetry.io/contrib/propagators/aws v1.17.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.17.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.17.0
