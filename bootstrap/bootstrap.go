@@ -932,11 +932,11 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 	// Try and lock this particular plugin while we check it out (we create
 	// the file outside of the plugin directory so git clone doesn't have
 	// a cry about the directory not being empty)
-	pluginCheckoutHook, err := b.shell.LockFile(ctx, filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
+	pluginCheckoutLock, err := b.shell.LockFile(ctx, filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
 	if err != nil {
 		return nil, err
 	}
-	defer pluginCheckoutHook.Unlock()
+	defer pluginCheckoutLock.Unlock()
 
 	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
 	// BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true).
