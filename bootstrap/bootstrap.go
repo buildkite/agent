@@ -1256,6 +1256,7 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit st
 func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (string, error) {
 	// Create a unique directory for the repository mirror
 	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(repository))
+	isMainRepository := repository == b.Repository
 
 	// Create the mirrors path if it doesn't exist
 	if baseDir := filepath.Dir(mirrorDir); !utils.FileExists(baseDir) {
@@ -1300,9 +1301,11 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 	mirrorCloneLock.Unlock()
 
 	// Check if the mirror has a commit, this is atomic so should be safe to do
-	if hasGitCommit(ctx, b.shell, mirrorDir, b.Commit) {
-		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
-		return mirrorDir, nil
+	if isMainRepository {
+		if hasGitCommit(ctx, b.shell, mirrorDir, b.Commit) {
+			b.shell.Commentf("Commit %q exists in mirror", b.Commit)
+			return mirrorDir, nil
+		}
 	}
 
 	if b.Debug {
@@ -1316,10 +1319,12 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 	}
 	defer mirrorUpdateLock.Unlock()
 
-	// Check again after we get a lock, in case the other process has already updated
-	if hasGitCommit(ctx, b.shell, mirrorDir, b.Commit) {
-		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
-		return mirrorDir, nil
+	if isMainRepository {
+		// Check again after we get a lock, in case the other process has already updated
+		if hasGitCommit(ctx, b.shell, mirrorDir, b.Commit) {
+			b.shell.Commentf("Commit %q exists in mirror", b.Commit)
+			return mirrorDir, nil
+		}
 	}
 
 	b.shell.Commentf("Updating existing repository mirror to find commit %s", b.Commit)
@@ -1329,17 +1334,19 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 		return "", err
 	}
 
-	if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
-		b.shell.Commentf("Fetch and mirror pull request head from GitHub")
-		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
-		// Fetch the PR head from the upstream repository into the mirror.
-		if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
-			return "", err
-		}
-	} else {
-		// Fetch the build branch from the upstream repository into the mirror.
-		if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
-			return "", err
+	if isMainRepository {
+		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+			b.shell.Commentf("Fetch and mirror pull request head from GitHub")
+			refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
+			// Fetch the PR head from the upstream repository into the mirror.
+			if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
+				return "", err
+			}
+		} else {
+			// Fetch the build branch from the upstream repository into the mirror.
+			if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
+				return "", err
+			}
 		}
 	}
 
