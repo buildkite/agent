@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/clicommand"
+	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
 )
@@ -77,7 +78,7 @@ steps:
     agents:
       queue: xxx`
 
-			parser := agent.PipelineParser{Pipeline: []byte(pipelineStr), Env: nil}
+			parser := pipeline.Parser{Pipeline: []byte(pipelineStr), Env: nil}
 			pipeline, err := parser.Parse()
 			assert.NoError(t, err)
 
@@ -204,7 +205,7 @@ steps:
     agents:
       queue: xxx`
 
-			parser := agent.PipelineParser{Pipeline: []byte(pipelineStr), Env: nil}
+			parser := pipeline.Parser{Pipeline: []byte(pipelineStr), Env: nil}
 			pipeline, err := parser.Parse()
 			assert.NoError(t, err)
 

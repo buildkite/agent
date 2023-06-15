@@ -1,4 +1,4 @@
-package agent
+package pipeline
 
 import (
 	"bytes"
@@ -14,9 +14,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// PipelineParser parses a pipeline, optionally interpolating values from
+// Parser parses a pipeline, optionally interpolating values from
 // a given environment.
-type PipelineParser struct {
+type Parser struct {
 	Env             *env.Environment
 	Filename        string
 	Pipeline        []byte
@@ -24,7 +24,7 @@ type PipelineParser struct {
 }
 
 // Parse runs the parser.
-func (p *PipelineParser) Parse() (*PipelineParserResult, error) {
+func (p *Parser) Parse() (*ParserResult, error) {
 	if p.Env == nil {
 		p.Env = env.New()
 	}
@@ -70,7 +70,7 @@ func (p *PipelineParser) Parse() (*PipelineParserResult, error) {
 
 	// No interpolation? No more to do.
 	if p.NoInterpolation {
-		return &PipelineParserResult{pipeline: pipeline}, nil
+		return &ParserResult{pipeline: pipeline}, nil
 	}
 
 	// Find the env map, if present.
@@ -110,13 +110,13 @@ func (p *PipelineParser) Parse() (*PipelineParserResult, error) {
 		return nil, err
 	}
 
-	return &PipelineParserResult{pipeline: pipeline}, nil
+	return &ParserResult{pipeline: pipeline}, nil
 }
 
 // interpolateEnvBlock runs Interpolate on each string value in the envMap,
 // interpolating with the variables defined in p.Env, and then adding the
 // results back into to p.Env.
-func (p *PipelineParser) interpolateEnvBlock(envMap *yaml.Node) error {
+func (p *Parser) interpolateEnvBlock(envMap *yaml.Node) error {
 	return yamltojson.RangeMap(envMap, func(k string, v *yaml.Node) error {
 		if v.Kind != yaml.ScalarNode || v.Tag != "!!str" {
 			return nil
@@ -135,7 +135,7 @@ func formatYAMLError(err error) error {
 }
 
 // interpolateNode interpolates the YAML in-place.
-func (p *PipelineParser) interpolateNode(n *yaml.Node) error {
+func (p *Parser) interpolateNode(n *yaml.Node) error {
 	if n == nil {
 		return nil
 	}
@@ -170,12 +170,12 @@ func (p *PipelineParser) interpolateNode(n *yaml.Node) error {
 	return nil
 }
 
-// PipelineParserResult is the ordered parse tree of a Pipeline document.
-type PipelineParserResult struct {
+// ParserResult is the ordered parse tree of a Pipeline document.
+type ParserResult struct {
 	pipeline *yaml.Node
 }
 
-func (p *PipelineParserResult) MarshalJSON() ([]byte, error) {
+func (p *ParserResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	if err := yamltojson.Encode(&buf, p.pipeline); err != nil {
 		return nil, err
