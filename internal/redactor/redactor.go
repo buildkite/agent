@@ -27,8 +27,11 @@ type Redactor struct {
 	// Replacement string (e.g. "[REDACTED]")
 	subst []byte
 
-	// Secrets to redact (looking for these needles in the haystack).
-	needles []string
+	// Secrets to redact (looking for these needles in the haystack),
+	// organised by first byte.
+	// Why first byte? Because looking up needles by the first byte is a lot
+	// faster than _filtering_ all the needles by first byte.
+	needlesByFirstByte [256][]string
 
 	// For synchronising writes. Each write can touch everything below.
 	mu sync.Mutex
@@ -53,10 +56,9 @@ type Redactor struct {
 
 // New returns a new Redactor.
 func New(dst io.Writer, subst string, needles []string) *Redactor {
-	return &Redactor{
-		dst:     dst,
-		subst:   []byte(subst),
-		needles: needles,
+	r := &Redactor{
+		dst:   dst,
+		subst: []byte(subst),
 
 		// Preallocate a few things.
 		buf:        make([]byte, 0, 65536),
@@ -64,6 +66,8 @@ func New(dst io.Writer, subst string, needles []string) *Redactor {
 		nextStates: make([]state, 0, len(needles)),
 		redact:     make([]subrange, 0, len(needles)),
 	}
+	r.Reset(needles)
+	return r
 }
 
 // Write redacts any secrets from the stream, and forwards the redacted stream
@@ -128,10 +132,7 @@ func (r *Redactor) Write(b []byte) (int, error) {
 		}
 
 		// Start redacting something?
-		for _, s := range r.needles {
-			if len(s) == 0 || s[0] != c {
-				continue
-			}
+		for _, s := range r.needlesByFirstByte[c] {
 			if len(s) == 1 {
 				// A pathological case; in practice we don't redact secrets
 				// smaller than RedactLengthMin.
@@ -274,7 +275,15 @@ func (r *Redactor) Reset(needles []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.needles = needles
+	for i := range r.needlesByFirstByte {
+		r.needlesByFirstByte[i] = nil
+	}
+	for _, s := range needles {
+		if len(s) == 0 {
+			continue
+		}
+		r.needlesByFirstByte[s[0]] = append(r.needlesByFirstByte[s[0]], s)
+	}
 }
 
 // state tracks how far through one of the needles we are redacting.
