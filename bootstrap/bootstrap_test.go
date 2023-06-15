@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/agent/v3/internal/redaction"
+	"github.com/buildkite/agent/v3/internal/redactor"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
@@ -45,7 +46,7 @@ func TestDirForRepository(t *testing.T) {
 	}
 }
 
-func TestGetValuesToRedact(t *testing.T) {
+func TestValuesToRedact(t *testing.T) {
 	t.Parallel()
 
 	redactConfig := []string{
@@ -58,12 +59,15 @@ func TestGetValuesToRedact(t *testing.T) {
 		"DATABASE_PASSWORD":  "hunter2",
 	}
 
-	valuesToRedact := redaction.GetValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+	got := redactor.ValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+	want := []string{"hunter2"}
 
-	assert.Equal(t, []string{"hunter2"}, valuesToRedact)
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("redactor.ValuesToRedact(%q, %q) diff (-got +want)\n%s", redactConfig, environment, diff)
+	}
 }
 
-func TestGetValuesToRedactEmpty(t *testing.T) {
+func TestValuesToRedactEmpty(t *testing.T) {
 	t.Parallel()
 
 	redactConfig := []string{}
@@ -72,11 +76,10 @@ func TestGetValuesToRedactEmpty(t *testing.T) {
 		"BUILDKITE_PIPELINE": "unit-test",
 	}
 
-	valuesToRedact := redaction.GetValuesToRedact(shell.DiscardLogger, redactConfig, environment)
-
-	var expected []string
-	assert.Equal(t, expected, valuesToRedact)
-	assert.Equal(t, 0, len(valuesToRedact))
+	got := redactor.ValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+	if len(got) != 0 {
+		t.Errorf("redactor.ValuesToRedact(%q, %q) = %q, want empty slice", redactConfig, environment, got)
+	}
 }
 
 func TestStartTracing_NoTracingBackend(t *testing.T) {
