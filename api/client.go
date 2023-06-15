@@ -299,12 +299,12 @@ type ErrorResponse struct {
 }
 
 func (r *ErrorResponse) Error() string {
-	s := fmt.Sprintf("%v %v: %d",
+	s := fmt.Sprintf("%v %v: %s",
 		r.Response.Request.Method, r.Response.Request.URL,
-		r.Response.StatusCode)
+		r.Response.Status)
 
 	if r.Message != "" {
-		s = fmt.Sprintf("%s %v", s, r.Message)
+		s = fmt.Sprintf("%s: %v", s, r.Message)
 	}
 
 	return s
