@@ -343,18 +343,36 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 					a.logger.Debug("Artifact `%s` has state `%s`", id, state)
 				}
 
+				timeout := 5 * time.Second
+
 				// Update the states of the artifacts in bulk.
 				err := roko.NewRetrier(
 					roko.WithMaxAttempts(10),
 					roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
 				).DoWithContext(ctx, func(r *roko.Retrier) error {
-					ctxShort, cancel := context.WithTimeout(ctx, 5*time.Second)
-					defer cancel()
-					if _, err := a.apiClient.UpdateArtifacts(ctxShort, a.conf.JobID, statesToUpload); err != nil {
-						a.logger.Warn("%s (%s)", err, r)
-						return err
+
+					ctxTimeout := ctx
+					if timeout != 0 {
+						var cancel func()
+						ctxTimeout, cancel = context.WithTimeout(ctx, timeout)
+						defer cancel()
 					}
-					return nil
+
+					_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, statesToUpload)
+					if err != nil {
+						a.logger.Warn("%s (%s)", err, r)
+					}
+
+					// after four attempts (0, 1, 2, 3)...
+					if r.AttemptCount() == 3 {
+						// The short timeout has given us fast feedback on the first couple of attempts,
+						// but perhaps the server needs more time to complete the request, so fall back to
+						// the default HTTP client timeout.
+						a.logger.Debug("UpdateArtifacts timeout (%s) removed for subsequent attempts", timeout)
+						timeout = 0
+					}
+
+					return err
 				})
 				if err != nil {
 					a.logger.Error("Error uploading artifact states: %s", err)
