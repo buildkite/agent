@@ -74,6 +74,8 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 		var resp *api.Response
 		var err error
 
+		timeout := a.conf.CreateArtifactsTimeout
+
 		// Retry the batch upload a couple of times
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
@@ -81,7 +83,7 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 
 			ctxTimeout := ctx
-			if a.conf.CreateArtifactsTimeout != 0 {
+			if timeout != 0 {
 				var cancel func()
 				ctxTimeout, cancel = context.WithTimeout(ctx, a.conf.CreateArtifactsTimeout)
 				defer cancel()
@@ -93,6 +95,15 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 			}
 			if err != nil {
 				a.logger.Warn("%s (%s)", err, r)
+			}
+
+			// after four attempts (0, 1, 2, 3)...
+			if r.AttemptCount() == 3 {
+				// The short timeout has given us fast feedback on the first couple of attempts,
+				// but perhaps the server needs more time to complete the request, so fall back to
+				// the default HTTP client timeout.
+				a.logger.Debug("CreateArtifacts timeout (%s) removed for subsequent attempts", timeout)
+				timeout = 0
 			}
 
 			return err
