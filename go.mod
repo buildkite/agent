@@ -41,7 +41,7 @@ require (
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
 	golang.org/x/oauth2 v0.8.0
 	golang.org/x/sys v0.9.0
-	google.golang.org/api v0.126.0
+	google.golang.org/api v0.128.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.51.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -66,7 +66,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/s2a-go v0.1.4 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.2.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.10.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
