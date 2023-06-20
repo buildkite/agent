@@ -2,6 +2,7 @@ env:
   DRY_RUN: false # set to true to disable publishing releases
 agents:
   queue: agent-runners-linux-amd64
+  buildkite-aws-stack: v5.21.0-79-gcc760fa
 
 steps:
   - name: ":go: go fmt"
@@ -153,6 +154,7 @@ steps:
         key: build-docker
         agents:
           queue: elastic-builders
+          buildkite-aws-stack: "*"
         depends_on:
           - build-binary
           - set-metadata
@@ -172,6 +174,7 @@ steps:
         key: test-docker-amd64
         agents:
           queue: elastic-builders
+          buildkite-aws-stack: "*"
         depends_on:
           - build-docker
         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
@@ -189,6 +192,7 @@ steps:
         key: test-docker-arm64
         agents:
           queue: elastic-builders-arm64
+          buildkite-aws-stack: "*"
         depends_on:
           - build-docker
         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
