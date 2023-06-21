@@ -21,6 +21,8 @@ RUN apk add --no-cache \
     tini \
     tzdata
 
+RUN ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/bin/docker-compose
+
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
 RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
