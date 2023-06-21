@@ -13,9 +13,9 @@ import (
 
 func TestParserParsesYaml(t *testing.T) {
 	parser := Parser{
-		Env:      env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
-		Filename: "awesome.yml",
-		Pipeline: []byte("steps:\n  - label: \"hello ${ENV_VAR_FRIEND}\""),
+		Env:            env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
+		Filename:       "awesome.yml",
+		PipelineSource: []byte("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\""),
 	}
 	result, err := parser.Parse()
 
@@ -24,13 +24,13 @@ func TestParserParsesYaml(t *testing.T) {
 	if err != nil {
 		t.Errorf("json.Marshal(result) error = %v", err)
 	}
-	assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
+	assert.Equal(t, `{"steps":[{"command":"hello \"friend\""}]}`, string(j))
 }
 
 func TestParserParsesYamlWithNoInterpolation(t *testing.T) {
 	parser := Parser{
 		Filename:        "awesome.yml",
-		Pipeline:        []byte("steps:\n  - label: \"hello ${ENV_VAR_FRIEND}\""),
+		PipelineSource:  []byte("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\""),
 		NoInterpolation: true,
 	}
 	result, err := parser.Parse()
@@ -40,7 +40,7 @@ func TestParserParsesYamlWithNoInterpolation(t *testing.T) {
 	if err != nil {
 		t.Errorf("json.Marshal(result) error = %v", err)
 	}
-	assert.Equal(t, `{"steps":[{"label":"hello ${ENV_VAR_FRIEND}"}]}`, string(j))
+	assert.Equal(t, `{"steps":[{"command":"hello ${ENV_VAR_FRIEND}"}]}`, string(j))
 }
 
 func TestParserSupportsYamlMergesAndAnchors(t *testing.T) {
@@ -58,8 +58,8 @@ steps:
       queue: default`
 
 	parser := Parser{
-		Filename: "awesome.yml",
-		Pipeline: []byte(complexYAML),
+		Filename:       "awesome.yml",
+		PipelineSource: []byte(complexYAML),
 	}
 	result, err := parser.Parse()
 
@@ -73,8 +73,8 @@ steps:
 
 func TestParserReturnsYamlParsingErrors(t *testing.T) {
 	parser := Parser{
-		Filename: "awesome.yml",
-		Pipeline: []byte("steps: %blah%"),
+		Filename:       "awesome.yml",
+		PipelineSource: []byte("steps: %blah%"),
 	}
 	_, err := parser.Parse()
 
@@ -83,8 +83,8 @@ func TestParserReturnsYamlParsingErrors(t *testing.T) {
 
 func TestParserReturnsJsonParsingErrors(t *testing.T) {
 	parser := Parser{
-		Filename: "awesome.json",
-		Pipeline: []byte("{"),
+		Filename:       "awesome.json",
+		PipelineSource: []byte("{"),
 	}
 	_, err := parser.Parse()
 
@@ -93,9 +93,9 @@ func TestParserReturnsJsonParsingErrors(t *testing.T) {
 
 func TestParserParsesJson(t *testing.T) {
 	parser := Parser{
-		Env:      env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
-		Filename: "thing.json",
-		Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"),
+		Env:            env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
+		Filename:       "thing.json",
+		PipelineSource: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"),
 	}
 	result, err := parser.Parse()
 
@@ -109,8 +109,8 @@ func TestParserParsesJson(t *testing.T) {
 
 func TestParserParsesJsonObjects(t *testing.T) {
 	parser := Parser{
-		Env:      env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
-		Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"),
+		Env:            env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
+		PipelineSource: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"),
 	}
 	result, err := parser.Parse()
 
@@ -124,8 +124,8 @@ func TestParserParsesJsonObjects(t *testing.T) {
 
 func TestParserParsesJsonArrays(t *testing.T) {
 	parser := Parser{
-		Env:      env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
-		Pipeline: []byte("\n\n     \n  [ { \"foo\": \"bye ${ENV_VAR_FRIEND}\" } ]\n"),
+		Env:            env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
+		PipelineSource: []byte("\n\n     \n  [ { \"foo\": \"bye ${ENV_VAR_FRIEND}\" } ]\n"),
 	}
 	result, err := parser.Parse()
 
@@ -139,7 +139,7 @@ func TestParserParsesJsonArrays(t *testing.T) {
 
 func TestParserParsesTopLevelSteps(t *testing.T) {
 	parser := Parser{
-		Pipeline: []byte("---\n- name: Build\n  command: echo hello world\n- wait\n"),
+		PipelineSource: []byte("---\n- name: Build\n  command: echo hello world\n- wait\n"),
 	}
 	result, err := parser.Parse()
 
@@ -153,7 +153,7 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 
 func TestParserPreservesBools(t *testing.T) {
 	parser := Parser{
-		Pipeline: []byte("steps:\n  - trigger: hello\n    async: true"),
+		PipelineSource: []byte("steps:\n  - trigger: hello\n    async: true"),
 	}
 	result, err := parser.Parse()
 
@@ -167,7 +167,7 @@ func TestParserPreservesBools(t *testing.T) {
 
 func TestParserPreservesInts(t *testing.T) {
 	parser := Parser{
-		Pipeline: []byte("steps:\n  - label: hello\n    parallelism: 10"),
+		PipelineSource: []byte("steps:\n  - label: hello\n    parallelism: 10"),
 	}
 	result, err := parser.Parse()
 
@@ -181,7 +181,7 @@ func TestParserPreservesInts(t *testing.T) {
 
 func TestParserPreservesNull(t *testing.T) {
 	parser := Parser{
-		Pipeline: []byte("steps:\n  - wait: ~"),
+		PipelineSource: []byte("steps:\n  - wait: ~"),
 	}
 	result, err := parser.Parse()
 
@@ -195,7 +195,7 @@ func TestParserPreservesNull(t *testing.T) {
 
 func TestParserPreservesFloats(t *testing.T) {
 	parser := Parser{
-		Pipeline: []byte("steps:\n  - trigger: hello\n    llamas: 3.142"),
+		PipelineSource: []byte("steps:\n  - trigger: hello\n    llamas: 3.142"),
 	}
 	result, err := parser.Parse()
 
@@ -209,7 +209,7 @@ func TestParserPreservesFloats(t *testing.T) {
 
 func TestParserHandlesDates(t *testing.T) {
 	parser := Parser{
-		Pipeline: []byte("steps:\n  - trigger: hello\n    llamas: 2002-08-15T17:18:23.18-06:00"),
+		PipelineSource: []byte("steps:\n  - trigger: hello\n    llamas: 2002-08-15T17:18:23.18-06:00"),
 	}
 	result, err := parser.Parse()
 
@@ -234,8 +234,8 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 	}
 
 	parser := Parser{
-		Env:      env.FromSlice([]string{"FROM_ENV=llamas"}),
-		Pipeline: []byte(pipeline),
+		Env:            env.FromSlice([]string{"FROM_ENV=llamas"}),
+		PipelineSource: []byte(pipeline),
 	}
 	result, err := parser.Parse()
 
@@ -269,8 +269,8 @@ func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 	}
 
 	parser := Parser{
-		Pipeline: []byte(pipeline),
-		Env:      env.FromSlice([]string{"YEAR_FROM_SHELL=1912"}),
+		PipelineSource: []byte(pipeline),
+		Env:            env.FromSlice([]string{"YEAR_FROM_SHELL=1912"}),
 	}
 	result, err := parser.Parse()
 
@@ -315,7 +315,7 @@ steps:
     agents:
       queue: xxx`
 
-	parser := Parser{Pipeline: []byte(pipeline), Env: nil}
+	parser := Parser{PipelineSource: []byte(pipeline), Env: nil}
 	result, err := parser.Parse()
 	if err != nil {
 		t.Fatalf("Parser{}.Parse() error = %v", err)
@@ -340,7 +340,7 @@ func TestParserParsesConditionalWithEndOfLineAnchorDollarSign(t *testing.T) {
 		{true, "steps:\n  - if: build.env(\"ACCOUNT\") =~ /^(foo|bar)$/"},
 	} {
 		parser := Parser{
-			Pipeline:        []byte(row.pipeline),
+			PipelineSource:  []byte(row.pipeline),
 			NoInterpolation: row.noInterpolation,
 		}
 		result, err := parser.Parse()
@@ -365,8 +365,8 @@ func TestPipelinePropagatesTracingDataIfAvailable(t *testing.T) {
 			pipelineYaml += "env:\n  ASD: 1"
 		}
 		parser := Parser{
-			Pipeline: []byte(pipelineYaml),
-			Env:      e,
+			PipelineSource: []byte(pipelineYaml),
+			Env:            e,
 		}
 		result, err := parser.Parse()
 		assert.NoError(t, err)

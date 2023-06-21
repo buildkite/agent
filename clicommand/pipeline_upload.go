@@ -240,7 +240,7 @@ var PipelineUploadCommand = cli.Command{
 		parser := pipeline.Parser{
 			Env:             environ,
 			Filename:        filename,
-			Pipeline:        input,
+			PipelineSource:  input,
 			NoInterpolation: cfg.NoInterpolation,
 		}
 		result, err := parser.Parse()
@@ -251,7 +251,7 @@ var PipelineUploadCommand = cli.Command{
 		if len(cfg.RedactedVars) > 0 {
 			needles := redactor.VarsToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).Dump())
 
-			serialisedPipeline, err := result.MarshalJSON()
+			serialisedPipeline, err := json.Marshal(result)
 			if err != nil {
 				l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
 			}

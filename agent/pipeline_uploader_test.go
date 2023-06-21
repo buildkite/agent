@@ -78,7 +78,7 @@ steps:
     agents:
       queue: xxx`
 
-			parser := pipeline.Parser{Pipeline: []byte(pipelineStr), Env: nil}
+			parser := pipeline.Parser{PipelineSource: []byte(pipelineStr), Env: nil}
 			pipeline, err := parser.Parse()
 			assert.NoError(t, err)
 
@@ -205,7 +205,7 @@ steps:
     agents:
       queue: xxx`
 
-			parser := pipeline.Parser{Pipeline: []byte(pipelineStr), Env: nil}
+			parser := pipeline.Parser{PipelineSource: []byte(pipelineStr), Env: nil}
 			pipeline, err := parser.Parse()
 			assert.NoError(t, err)
 
