@@ -208,26 +208,39 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	// Our log streamer works off a buffer of output
 	runner.output = &process.Buffer{}
+	var outputWriter io.Writer = runner.output
 
 	pr, pw := io.Pipe()
 
 	// {stdout, stderr} -> processWriter	// processWriter = io.MultiWriter(allWriters...)
 	var allWriters []io.Writer
 
+	// if agent config "EnableJobLogTmpfile" is set, we extend the outputWriter to write to a temporary file.
+	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the path to this temporary file.
+	var tmpFile *os.File
+	if conf.AgentConfiguration.EnableJobLogTmpfile {
+		tmpFile, err = os.CreateTemp("", "buildkite_job_log")
+		if err != nil {
+			return nil, err
+		}
+		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
+		outputWriter = io.MultiWriter(outputWriter, tmpFile)
+	}
+
 	switch {
 	case conf.AgentConfiguration.ANSITimestamps:
-		// processWriter -> prefixer -> runner.output
+		// processWriter -> prefixer -> outputWriter
 
 		// If we have ansi-timestamps, we can skip line timestamps AND header times
 		// this is the future of timestamping
-		prefixer := process.NewPrefixer(runner.output, func() string {
+		prefixer := process.NewPrefixer(outputWriter, func() string {
 			return fmt.Sprintf("\x1b_bk;t=%d\x07",
 				time.Now().UnixNano()/int64(time.Millisecond))
 		})
 		allWriters = append(allWriters, prefixer)
 
 	case conf.AgentConfiguration.TimestampLines:
-		// processWriter -> pw -> pr -> process.Scanner -> {headerTimesStreamer, runner.output}
+		// processWriter -> pw -> pr -> process.Scanner -> {headerTimesStreamer, outputWriter}
 
 		// If we have timestamp lines on, we have to buffer lines before we flush them
 		// because we need to know if the line is a header or not. It's a bummer.
@@ -245,7 +258,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 				}
 
 				// Write the log line to the buffer
-				_, _ = runner.output.Write([]byte(line + "\n"))
+				_, _ = outputWriter.Write([]byte(line + "\n"))
 			})
 			if err != nil {
 				l.Error("[JobRunner] Encountered error %v", err)
@@ -253,11 +266,11 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}()
 
 	default:
-		// processWriter -> {pw, runner.output};
+		// processWriter -> {pw, outputWriter};
 		// pw -> pr -> process.Scanner -> headerTimesStreamer
 
 		// Write output directly to the line buffer
-		allWriters = append(allWriters, pw, runner.output)
+		allWriters = append(allWriters, pw, outputWriter)
 
 		// Use a scanner to process output for headers only
 		go func() {
@@ -268,18 +281,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 				l.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
-	}
-
-	// if agent config "EnableJobLogTmpfile" is set, we extend the processWriter to write to a temporary file.
-	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the path to this temporary file.
-	var tmpFile *os.File
-	if conf.AgentConfiguration.EnableJobLogTmpfile {
-		tmpFile, err = os.CreateTemp("", "buildkite_job_log")
-		if err != nil {
-			return nil, err
-		}
-		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
-		allWriters = append(allWriters, tmpFile)
 	}
 
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
