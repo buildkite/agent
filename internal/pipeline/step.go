@@ -10,6 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var _ signedFielder = (*CommandStep)(nil)
+
 // Step models a step in the pipeline. It will be a pointer to one of:
 // - CommandStep
 // - WaitStep
@@ -86,6 +88,21 @@ func (c *CommandStep) UnmarshalYAML(n *yaml.Node) error {
 	c.Signature = full.Signature
 	c.RemainingFields = full.RemainingFields
 	return nil
+}
+
+// signedFields returns the contents of fields to sign.
+func (c *CommandStep) signedFields(version string) ([]string, error) {
+	switch version {
+	case "v1":
+		// These fields, in this order.
+		// Do not change the contents or order of old versions.
+		return []string{
+			c.Command,
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported version %q", version)
+	}
 }
 
 // WaitStep models a wait step.
@@ -196,10 +213,4 @@ func unmarshalStep(n *yaml.Node) (Step, error) {
 	default:
 		return nil, fmt.Errorf("line %d, col %d: unsupported YAML node kind %x for Step", n.Line, n.Column, n.Kind)
 	}
-}
-
-// Signature models a signature (on a step, etc).
-type Signature struct {
-	Version string `yaml:"version"`
-	Value   string `yaml:"value"`
 }
