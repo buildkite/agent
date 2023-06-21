@@ -15,6 +15,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -171,6 +172,15 @@ func (c *Client) newRequest(
 	}
 
 	req.Header.Add("User-Agent", c.conf.UserAgent)
+
+	// If our context has a timeout/deadline, tell the server how long is remaining.
+	// This may allow the server to configure its own timeouts accordingly.
+	if deadline, ok := ctx.Deadline(); ok {
+		ms := time.Until(deadline).Milliseconds()
+		if ms > 0 {
+			req.Header.Add("Buildkite-Timeout-Milliseconds", strconv.FormatInt(ms, 10))
+		}
+	}
 
 	for _, header := range headers {
 		req.Header.Add(header.Name, header.Value)
