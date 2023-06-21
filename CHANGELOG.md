@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.49.0](https://github.com/buildkite/agent/tree/v3.49.0) (2023-06-21)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.48.0...v3.49.0)
+
+### Fixed
+- CreateArtifacts & UpdateArtifacts: remove sometimes-too-short timeout after 4 attempts [#2159](https://github.com/buildkite/agent/pull/2159) (@pda)
+- Fix submodule mirror repository remote using main repo URL [#1998](https://github.com/buildkite/agent/pull/1998) (@francoiscampbell)
+- Update job log file to include line transforms [#2157](https://github.com/buildkite/agent/pull/2157) (@chasestarr)
+- Clearer HTTP error logging from API client [#2156](https://github.com/buildkite/agent/pull/2156) (@moskyb)
+
+### Changed
+- `Buildkite-Timeout-Milliseconds` API request header [#2160](https://github.com/buildkite/agent/pull/2160) (@pda)
+- Extract pipeline parser to package internal/pipeline [#2158](https://github.com/buildkite/agent/pull/2158) (@DrJosh9000)
+- Minor dependency updates [#2165](https://github.com/buildkite/agent/pull/2165) [#2164](https://github.com/buildkite/agent/pull/2164) [#2162](https://github.com/buildkite/agent/pull/2162) [#2161](https://github.com/buildkite/agent/pull/2161) [#2153](https://github.com/buildkite/agent/pull/2153) [#2152](https://github.com/buildkite/agent/pull/2152) [#2151](https://github.com/buildkite/agent/pull/2151) (@dependabot[bot])
+- Lock library [#2145](https://github.com/buildkite/agent/pull/2145) (@DrJosh9000)
+
+
 ## [v3.48.0](https://github.com/buildkite/agent/tree/v3.48.0) (2023-06-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.47.0...v3.48.0)
 
