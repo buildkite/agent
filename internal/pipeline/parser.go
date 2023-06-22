@@ -71,11 +71,15 @@ func (p *Parser) Parse() (*Pipeline, error) {
 // results back into to p.Env.
 func (p *Parser) interpolateEnvBlock(env map[string]string) error {
 	for k, v := range env {
-		interped, err := interpolate.Interpolate(p.Env, v)
+		intk, err := interpolate.Interpolate(p.Env, k)
 		if err != nil {
 			return err
 		}
-		p.Env.Set(k, interped)
+		intv, err := interpolate.Interpolate(p.Env, v)
+		if err != nil {
+			return err
+		}
+		p.Env.Set(intk, intv)
 	}
 	return nil
 }
@@ -128,25 +132,48 @@ func (p *Parser) interpolateAny(o any) (any, error) {
 }
 
 func interpolateSlice[E any, S ~[]E](p *Parser, s S) error {
-	for i, t := range s {
+	for i, e := range s {
 		// It could be a string, so replace the old value with the new.
-		interped, err := p.interpolateAny(t)
+		inte, err := p.interpolateAny(e)
 		if err != nil {
 			return err
 		}
-		s[i] = interped.(E)
+		if inte == nil {
+			// Then e was nil to begin with. No need to update it.
+			continue
+		}
+		s[i] = inte.(E)
 	}
 	return nil
 }
 
 func interpolateMap[V any, M ~map[string]V](p *Parser, m M) error {
 	for k, v := range m {
-		// It could be a string, so replace the old value with the new.
-		interped, err := p.interpolateAny(v)
+		// We interpolate both keys and values.
+		intk, err := p.interpolateStr(k)
 		if err != nil {
 			return err
 		}
-		m[k] = interped.(V)
+
+		// V could be string, so be sure to replace the old value with the new.
+		intv, err := p.interpolateAny(v)
+		if err != nil {
+			return err
+		}
+
+		// If the key changed due to interpolation, delete the old key.
+		if k != intk {
+			delete(m, k)
+		}
+		if intv == nil {
+			// Then v was nil to begin with.
+			// In case we're changing keys, we should reassign.
+			// But we don't know the type, so can't assign nil.
+			// Fortunately, v itself must be the right type.
+			m[intk] = v
+			continue
+		}
+		m[intk] = intv.(V)
 	}
 	return nil
 }

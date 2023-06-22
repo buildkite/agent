@@ -133,6 +133,15 @@ func (c *CommandStep) signedFields(version string) ([]string, error) {
 // Standard caveats apply - see the package comment.
 type WaitStep map[string]any
 
+// MarshalJSON marshals a wait step as "wait" if w is empty, or the only key is
+// "wait" and it has nil value. Otherwise it marshals as a standard map.
+func (w WaitStep) MarshalJSON() ([]byte, error) {
+	if len(w) <= 1 && w["wait"] == nil {
+		return []byte(`"wait"`), nil
+	}
+	return json.Marshal(map[string]any(w))
+}
+
 func (w WaitStep) interpolate(pr *Parser) error {
 	return interpolateMap(pr, w)
 }
@@ -207,7 +216,7 @@ func unmarshalStep(n *yaml.Node) (Step, error) {
 
 		// It's just "wait".
 		if n.Value == "wait" {
-			return &WaitStep{}, nil
+			return WaitStep{}, nil
 		}
 
 		// ????
@@ -222,13 +231,13 @@ func unmarshalStep(n *yaml.Node) (Step, error) {
 				step = new(CommandStep)
 
 			case "wait", "waiter":
-				step = new(WaitStep)
+				step = make(WaitStep)
 
 			case "block", "input", "manual":
-				step = new(InputStep)
+				step = make(InputStep)
 
 			case "trigger":
-				step = new(TriggerStep)
+				step = make(TriggerStep)
 
 			case "group":
 				step = new(GroupStep)

@@ -39,7 +39,11 @@ func (p *Plugin) MarshalYAML() (any, error) {
 }
 
 func (p *Plugin) interpolate(pr *Parser) error {
-	// Question: interpolate the plugin name?
+	name, err := pr.interpolateStr(p.Name)
+	if err != nil {
+		return err
+	}
+	p.Name = name
 	if _, err := pr.interpolateAny(p.Config); err != nil {
 		return err
 	}

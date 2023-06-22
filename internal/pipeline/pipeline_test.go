@@ -60,7 +60,7 @@ steps:
 			want: &Pipeline{
 				Steps: Steps{
 					&CommandStep{Command: "echo llama"},
-					&WaitStep{},
+					WaitStep{},
 					&CommandStep{Command: "echo was here"},
 				},
 			},

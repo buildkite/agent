@@ -94,14 +94,11 @@ func (p *Pipeline) UnmarshalYAML(n *yaml.Node) error {
 }
 
 func (p *Pipeline) interpolate(pr *Parser) error {
+	if err := interpolateMap(pr, p.Env); err != nil {
+		return err
+	}
 	if err := p.Steps.interpolate(pr); err != nil {
 		return err
 	}
-	if _, err := pr.interpolateAny(p.Env); err != nil {
-		return err
-	}
-	if _, err := pr.interpolateAny(p.RemainingFields); err != nil {
-		return err
-	}
-	return nil
+	return interpolateMap(pr, p.RemainingFields)
 }
