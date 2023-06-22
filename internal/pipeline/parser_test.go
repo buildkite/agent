@@ -368,6 +368,79 @@ func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 	}
 }
 
+func TestParserMultipleInterpolation(t *testing.T) {
+	parser := Parser{
+		PipelineSource: []byte(`
+{
+	"env": {
+		"TEAM1": "England",
+		"TEAM2": "Australia",
+		"HEADLINE": "${TEAM1} vs ${TEAM2}: ${TEAM1} wins!!"
+	},
+	"steps": [{
+		"command": "echo ${HEADLINE}"
+	}]
+}`),
+	}
+	got, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("parser.Parse() error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo England vs Australia: England wins!!",
+			},
+		},
+		Env: map[string]string{
+			"TEAM1":    "England",
+			"TEAM2":    "Australia",
+			"HEADLINE": "England vs Australia: England wins!!",
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestParserEnvInterpolationCycle(t *testing.T) {
+	parser := Parser{
+		Env: env.FromSlice([]string{"PRESENTING=Presenting", "THREE_STOOGES=Three Stooges"}),
+		PipelineSource: []byte(`
+{
+	"env": {
+		"LARRY": "${CURLY}",
+		"CURLY": "${MOE}",
+		"MOE": "${LARRY}"
+	},
+	"steps": [{
+		"command": "echo ${PRESENTING} the ${THREE_STOOGES}: ${LARRY}, ${CURLY}, and ${MOE}"
+	}]
+}`),
+	}
+	got, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("parser.Parse() error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo Presenting the Three Stooges: , , and ",
+			},
+		},
+		Env: map[string]string{
+			"LARRY": "",
+			"CURLY": "",
+			"MOE":   "",
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserPreservesOrderOfPlugins(t *testing.T) {
 	parser := Parser{
 		PipelineSource: []byte(`---
