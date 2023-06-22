@@ -11,7 +11,11 @@ import (
 // Because yaml (like json) duck-types its decoding target to figure out whether
 // or not to call a custom unmarshaling method, there's no other code that will
 // fail to compile if these don't satisfy the interface.
-var _ yaml.Unmarshaler = (*Steps)(nil)
+var (
+	_ yaml.Unmarshaler = (*Steps)(nil)
+
+	_ selfInterpolater = (*Pipeline)(nil)
+)
 
 var (
 	// Returned when a pipeline has no steps.
@@ -89,25 +93,15 @@ func (p *Pipeline) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Steps contains multiple steps. It is useful for unmarshaling step sequences,
-// since it has custom logic for determining the correct step type.
-type Steps []Step
-
-// UnmarshalYAML unmarshals a sequence (of steps). An empty sequence is an error.
-func (s *Steps) UnmarshalYAML(n *yaml.Node) error {
-	if n.Kind != yaml.SequenceNode {
-		return fmt.Errorf("line %d, col %d: wrong node kind %v for step sequence", n.Line, n.Column, n.Kind)
+func (p *Pipeline) interpolate(pr *Parser) error {
+	if err := p.Steps.interpolate(pr); err != nil {
+		return err
 	}
-	if len(n.Content) == 0 {
-		return ErrNoSteps
+	if _, err := pr.interpolateAny(p.Env); err != nil {
+		return err
 	}
-
-	for _, c := range n.Content {
-		step, err := unmarshalStep(c)
-		if err != nil {
-			return err
-		}
-		*s = append(*s, step)
+	if _, err := pr.interpolateAny(p.RemainingFields); err != nil {
+		return err
 	}
 	return nil
 }

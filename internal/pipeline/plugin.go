@@ -38,6 +38,14 @@ func (p *Plugin) MarshalYAML() (any, error) {
 	}, nil
 }
 
+func (p *Plugin) interpolate(pr *Parser) error {
+	// Question: interpolate the plugin name?
+	if _, err := pr.interpolateAny(p.Config); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Plugins is a sequence of plugins. It is useful for unmarshaling.
 type Plugins []Plugin
 
@@ -82,4 +90,8 @@ func (p *Plugins) UnmarshalYAML(n *yaml.Node) error {
 
 	}
 	return nil
+}
+
+func (p Plugins) interpolate(pr *Parser) error {
+	return interpolateSlice(pr, p)
 }

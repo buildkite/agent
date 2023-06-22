@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestParserParsesYaml(t *testing.T) {
+func TestParserParsesYAML(t *testing.T) {
 	parser := Parser{
 		Env:            env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`}),
 		Filename:       "awesome.yml",
@@ -27,7 +27,7 @@ func TestParserParsesYaml(t *testing.T) {
 	assert.Equal(t, `{"steps":[{"command":"hello \"friend\""}]}`, string(j))
 }
 
-func TestParserParsesYamlWithNoInterpolation(t *testing.T) {
+func TestParserParsesYAMLWithNoInterpolation(t *testing.T) {
 	parser := Parser{
 		Filename:        "awesome.yml",
 		PipelineSource:  []byte("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\""),

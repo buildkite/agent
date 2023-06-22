@@ -20,6 +20,8 @@ var _ signedFielder = (*CommandStep)(nil)
 // - GroupStep
 type Step interface {
 	stepTag() // allow only the step types below
+
+	selfInterpolater
 }
 
 // CommandStep models a command step.
@@ -35,8 +37,6 @@ type CommandStep struct {
 	// survive an unmarshal-marshal round-trip.
 	RemainingFields map[string]any `yaml:",inline"`
 }
-
-func (CommandStep) stepTag() {}
 
 // MarshalJSON marshals a pipeline to JSON. Special handling is needed because
 // yaml.v3 has "inline" but encoding/json has no concept of it.
@@ -90,6 +90,29 @@ func (c *CommandStep) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
+func (c *CommandStep) interpolate(pr *Parser) error {
+	cmd, err := pr.interpolateStr(c.Command)
+	if err != nil {
+		return err
+	}
+	label, err := pr.interpolateStr(c.Label)
+	if err != nil {
+		return err
+	}
+	if err := c.Plugins.interpolate(pr); err != nil {
+		return err
+	}
+	// Don't interpolate Signature.
+	if _, err := pr.interpolateAny(c.RemainingFields); err != nil {
+		return err
+	}
+	c.Command = cmd
+	c.Label = label
+	return nil
+}
+
+func (CommandStep) stepTag() {}
+
 // signedFields returns the contents of fields to sign.
 func (c *CommandStep) signedFields(version string) ([]string, error) {
 	switch version {
@@ -110,12 +133,20 @@ func (c *CommandStep) signedFields(version string) ([]string, error) {
 // Standard caveats apply - see the package comment.
 type WaitStep map[string]any
 
+func (w WaitStep) interpolate(pr *Parser) error {
+	return interpolateMap(pr, w)
+}
+
 func (WaitStep) stepTag() {}
 
 // InputStep models a block or input step.
 //
 // Standard caveats apply - see the package comment.
 type InputStep map[string]any
+
+func (i InputStep) interpolate(pr *Parser) error {
+	return interpolateMap(pr, i)
+}
 
 func (InputStep) stepTag() {}
 
@@ -124,6 +155,10 @@ func (InputStep) stepTag() {}
 // Standard caveats apply - see the package comment.
 type TriggerStep map[string]any
 
+func (t TriggerStep) interpolate(pr *Parser) error {
+	return interpolateMap(pr, t)
+}
+
 func (TriggerStep) stepTag() {}
 
 // GroupStep models a group step.
@@ -131,10 +166,17 @@ func (TriggerStep) stepTag() {}
 // Standard caveats apply - see the package comment.
 type GroupStep struct {
 	Steps Steps `yaml:"steps"`
-	
+
 	// RemainingFields stores any other top-level mapping items so they at least
 	// survive an unmarshal-marshal round-trip.
 	RemainingFields map[string]any `yaml:",inline"`
+}
+
+func (g GroupStep) interpolate(pr *Parser) error {
+	if err := g.Steps.interpolate(pr); err != nil {
+		return err
+	}
+	return interpolateMap(pr, g.RemainingFields)
 }
 
 func (GroupStep) stepTag() {}
@@ -213,4 +255,31 @@ func unmarshalStep(n *yaml.Node) (Step, error) {
 	default:
 		return nil, fmt.Errorf("line %d, col %d: unsupported YAML node kind %x for Step", n.Line, n.Column, n.Kind)
 	}
+}
+
+// Steps contains multiple steps. It is useful for unmarshaling step sequences,
+// since it has custom logic for determining the correct step type.
+type Steps []Step
+
+// UnmarshalYAML unmarshals a sequence (of steps). An empty sequence is an error.
+func (s *Steps) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.SequenceNode {
+		return fmt.Errorf("line %d, col %d: wrong node kind %v for step sequence", n.Line, n.Column, n.Kind)
+	}
+	if len(n.Content) == 0 {
+		return ErrNoSteps
+	}
+
+	for _, c := range n.Content {
+		step, err := unmarshalStep(c)
+		if err != nil {
+			return err
+		}
+		*s = append(*s, step)
+	}
+	return nil
+}
+
+func (s Steps) interpolate(pr *Parser) error {
+	return interpolateSlice(pr, s)
 }
