@@ -1737,6 +1737,9 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 
 	// Run the actual command
 	commandExitError := b.runCommand(ctx)
+
+	b.shell.Commentf("Command exited with error %v", commandExitError)
+
 	var realCommandError error
 
 	// If the command returned an exit that wasn't a `exec.ExitError`
