@@ -154,7 +154,9 @@ func (s *Shell) Interrupt() {
 	defer s.cmdLock.Unlock()
 
 	if s.cmd != nil && s.cmd.proc != nil {
-		s.cmd.proc.Interrupt()
+		if err := s.cmd.proc.Interrupt(); err != nil {
+			s.Errorf("Failed to interrupt command: %v", err)
+		}
 	}
 }
 

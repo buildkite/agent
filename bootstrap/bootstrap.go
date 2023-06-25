@@ -110,6 +110,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		case <-b.cancelCh:
 			b.shell.Commentf("Received cancellation signal, interrupting")
 			b.shell.Interrupt()
+			b.shell.Commentf("Received cancellation signal, cancelling cancel context")
 			cancel()
 		}
 	}()
