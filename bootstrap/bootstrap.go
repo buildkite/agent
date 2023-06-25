@@ -182,6 +182,12 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	if phaseErr == nil && includePhase("command") {
 		var commandErr error
 		phaseErr, commandErr = b.CommandPhase(ctx)
+		if commandErr != nil {
+			b.shell.Commentf("user command error: %v", commandErr)
+		}
+		if phaseErr != nil {
+			b.shell.Commentf("phase error: %v", phaseErr)
+		}
 		/*
 			Five possible states at this point:
 
