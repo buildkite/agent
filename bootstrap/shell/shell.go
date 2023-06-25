@@ -485,6 +485,8 @@ func round(d time.Duration) time.Duration {
 }
 
 func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, flags executeFlags) error {
+	s.Commentf("Running command %s", process.FormatCommand(cmd.Path, cmd.Args))
+
 	// Combine the two slices of env, let the latter overwrite the former
 	tracedEnv := env.FromSlice(cmd.Env)
 	s.injectTraceCtx(ctx, tracedEnv)
