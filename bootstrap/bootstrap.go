@@ -246,6 +246,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 // Cancel interrupts any running shell processes and causes the bootstrap to stop
 func (b *Bootstrap) Cancel() error {
 	b.cancelCh <- struct{}{}
+	b.shell.Errorf("Canceling bootstrap")
 	return nil
 }
 
