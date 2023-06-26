@@ -153,6 +153,10 @@ func (s *Shell) Interrupt() {
 	s.cmdLock.Lock()
 	defer s.cmdLock.Unlock()
 
+	s.Printf("Interrupting command")
+	s.Printf("s.cmd: %#v", s.cmd)
+	s.Printf("s.cmd.proc: %#v", s.cmd.proc)
+
 	if s.cmd != nil && s.cmd.proc != nil {
 		if err := s.cmd.proc.Interrupt(); err != nil {
 			s.Errorf("Failed to interrupt command: %v", err)
