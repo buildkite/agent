@@ -554,7 +554,7 @@ func (r *JobRunner) Cancel() error {
 
 	select {
 	// Grace period for cancelling
-	case <-time.After(time.Second * time.Duration(r.conf.AgentConfiguration.CancelGracePeriod)):
+	case <-time.After(6 * time.Second * time.Duration(r.conf.AgentConfiguration.CancelGracePeriod)):
 		r.logger.Info("Job %s hasn't stopped in time, terminating", r.job.ID)
 
 		// Terminate the process as we've exceeded our context
