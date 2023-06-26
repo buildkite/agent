@@ -3,10 +3,10 @@ package pipeline
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/interpolate"
 
@@ -47,9 +47,9 @@ func (p *Parser) Parse() (*Pipeline, error) {
 	// Propagate distributed tracing context to the new pipelines if available
 	if tracing, has := p.Env.Get(tracetools.EnvVarTraceContextKey); has {
 		if pipeline.Env == nil {
-			pipeline.Env = make(map[string]string)
+			pipeline.Env = ordered.NewMap[string, string](1)
 		}
-		pipeline.Env[tracetools.EnvVarTraceContextKey] = tracing
+		pipeline.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
 	}
 
 	// Preprocess any env that are defined in the top level block and place them
@@ -70,101 +70,27 @@ func (p *Parser) Parse() (*Pipeline, error) {
 // interpolateEnvBlock runs Interpolate on each string value in the envMap,
 // interpolating with the variables defined in p.Env, and then adding the
 // results back into to p.Env.
-func (p *Parser) interpolateEnvBlock(env map[string]string) error {
-	// We interpolate both keys and values.
-	// For simplicity, only interpolate the original p.Env into keys.
-	for k, v := range env {
+func (p *Parser) interpolateEnvBlock(env *ordered.Map[string, string]) error {
+	return env.Range(func(k, v string) error {
+		// We interpolate both keys and values.
 		intk, err := interpolate.Interpolate(p.Env, k)
 		if err != nil {
 			return err
 		}
 
-		// If the key changed due to interpolation, update it.
-		if k == intk {
-			continue
-		}
-		delete(env, k)
-		env[intk] = v
-	}
-
-	// Iteration order flakes the interpolation of env vars in other env vars.
-	// Instead of relying on order, let's do a topological sort. That way we can
-	// write variables out of order, and they'll still interpolate in one
-	// another as long as there are no dependency cycles!
-
-	next := make(map[string][]string)
-	pred := make(map[string]int, len(env))
-	for k, v := range env {
-		// Ensure all keys are present in pred.
-		pred[k] = 0
-
-		ids, err := interpolate.Identifiers(v)
+		// v is always a string in this case.
+		intv, err := p.interpolateStr(v)
 		if err != nil {
 			return err
 		}
 
-		for _, id := range ids {
-			if _, known := p.Env.Get(id); known {
-				// if we already know what id is (it's in p.Env), skip it
-				continue
-			}
-			// id is a predecessor of k - resolving id helps resolve k
-			pred[k]++
-			next[id] = append(next[id], k)
-		}
-	}
+		env.Replace(k, intk, intv)
 
-	for len(pred) > 0 {
-		// Find all the keys with no predecessors, enqueue them
-		queue := make([]string, 0, len(pred))
-		for k, c := range pred {
-			if c == 0 {
-				queue = append(queue, k)
-			}
-		}
-
-		// Queue empty? Uh oh! We found a cycle.
-		if len(queue) == 0 {
-			// O(n) find the least destructive way to break the cycle:
-			// The key with the fewest successors.
-			var bestK string
-			minnext := math.MaxInt
-			for k, ns := range next {
-				if len(ns) < minnext {
-					bestK = k
-				}
-			}
-			queue = append(queue, bestK)
-		}
-
-		// Process the queue, enqueueing keys that are resolved as we go
-		for len(queue) > 0 {
-			k := queue[0]
-			queue = queue[1:]
-			delete(pred, k)
-
-			// Resolve k
-			intv, err := interpolate.Interpolate(p.Env, env[k])
-			if err != nil {
-				return err
-			}
-			p.Env.Set(k, intv)
-
-			for _, id := range next[k] {
-				// Decrement pred[id], but only if id is still in pred.
-				// This is only needed in the cycle case.
-				_, ok := pred[id]
-				if !ok {
-					continue
-				}
-				pred[id]--
-				if pred[id] <= 0 {
-					queue = append(queue, id)
-				}
-			}
-		}
-	}
-	return nil
+		// Bonus part for the env block!
+		// Add the results back into p.Env.
+		p.Env.Set(intk, intv)
+		return nil
+	})
 }
 
 func formatYAMLError(err error) error {
@@ -205,6 +131,12 @@ func (p *Parser) interpolateAny(o any) (any, error) {
 
 	case map[string]string:
 		return o, interpolateMap(p, o)
+
+	case *ordered.Map[string, any]:
+		return o, interpolateOrderedMap(p, o)
+
+	case *ordered.Map[string, string]:
+		return o, interpolateOrderedMap(p, o)
 
 	case selfInterpolater:
 		return o, o.interpolate(p)
@@ -259,4 +191,22 @@ func interpolateMap[V any, M ~map[string]V](p *Parser, m M) error {
 		m[intk] = intv.(V)
 	}
 	return nil
+}
+
+func interpolateOrderedMap[K comparable, V any](p *Parser, m *ordered.Map[K, V]) error {
+	return m.Range(func(k K, v V) error {
+		// We interpolate both keys and values.
+		intk, err := p.interpolateAny(k)
+		if err != nil {
+			return err
+		}
+		intv, err := p.interpolateAny(v)
+		if err != nil {
+			return err
+		}
+
+		// interpolateAny preserves the type, so these assertions are safe.
+		m.Replace(k, intk.(K), intv.(V))
+		return nil
+	})
 }

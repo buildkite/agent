@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,8 +27,8 @@ var (
 //
 // Standard caveats apply - see the package comment.
 type Pipeline struct {
-	Steps Steps             `yaml:"steps"`
-	Env   map[string]string `yaml:"env,omitempty"`
+	Steps Steps                        `yaml:"steps"`
+	Env   *ordered.Map[string, string] `yaml:"env,omitempty"`
 
 	// RemainingFields stores any other top-level mapping items so they at least
 	// survive an unmarshal-marshal round-trip.
@@ -40,7 +41,7 @@ func (p *Pipeline) MarshalJSON() ([]byte, error) {
 	out := map[string]any{
 		"steps": p.Steps,
 	}
-	if len(p.Env) > 0 {
+	if !p.Env.IsZero() {
 		out["env"] = p.Env
 	}
 	for k, v := range p.RemainingFields {
@@ -94,7 +95,7 @@ func (p *Pipeline) UnmarshalYAML(n *yaml.Node) error {
 }
 
 func (p *Pipeline) interpolate(pr *Parser) error {
-	if err := interpolateMap(pr, p.Env); err != nil {
+	if err := interpolateOrderedMap(pr, p.Env); err != nil {
 		return err
 	}
 	if err := p.Steps.interpolate(pr); err != nil {

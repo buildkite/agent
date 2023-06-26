@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/agent/v3/internal/yamltojson"
 	"gopkg.in/yaml.v3"
 )
@@ -18,8 +19,11 @@ var (
 //
 // Standard caveats apply - see the package comment.
 type Plugin struct {
-	Name   string
-	Config map[string]any
+	Name string
+
+	// Config is stored in an ordered map in case any plugins are accidentally
+	// relying on ordering.
+	Config *ordered.Map[string, any]
 }
 
 // MarshalJSON returns the plugin in "one-key object" form.
@@ -33,7 +37,7 @@ func (p *Plugin) MarshalJSON() ([]byte, error) {
 
 // MarshalYAML returns the plugin in "one-item map" form.
 func (p *Plugin) MarshalYAML() (any, error) {
-	return map[string]map[string]any{
+	return map[string]*ordered.Map[string, any]{
 		p.Name: p.Config,
 	}, nil
 }
@@ -58,13 +62,15 @@ type Plugins []Plugin
 //   - a mapping (where order is important...non-normal form).
 //
 // "plugins" is supposed to be a sequence of one-item maps, since order matters.
-// But some people (even us) write plugins into one big mapping.
+// But some people (even us) write plugins into one big mapping and rely on
+// order preservation.
 func (p *Plugins) UnmarshalYAML(n *yaml.Node) error {
 	// Whether processing one big map, or a sequence of small maps, the central
 	// part remains the same.
+	// Parse each "key: value" as "name: config", then append in order.
 	unmarshalMap := func(n *yaml.Node) error {
 		return yamltojson.RangeMap(n, func(key string, val *yaml.Node) error {
-			var cfg map[string]any
+			cfg := ordered.NewMap[string, any](len(n.Content) / 2)
 			if err := val.Decode(&cfg); err != nil {
 				return err
 			}

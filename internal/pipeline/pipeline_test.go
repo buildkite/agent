@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/google/go-cmp/cmp"
 	"gopkg.in/yaml.v3"
 )
@@ -91,7 +92,9 @@ steps:
 				Steps: Steps{
 					&CommandStep{Command: "echo llama"},
 				},
-				Env: map[string]string{"LLAMA": "Kuzco"},
+				Env: ordered.MapFromItems(
+					ordered.TupleSS{Key: "LLAMA", Value: "Kuzco"},
+				),
 			},
 		},
 		{
@@ -115,17 +118,17 @@ steps:
 						Plugins: Plugins{
 							{
 								Name: "new-groove#v1.0.0",
-								Config: map[string]any{
-									"llama":   "Kuzco",
-									"villain": "Yzma",
-								},
+								Config: ordered.MapFromItems(
+									ordered.TupleSA{Key: "llama", Value: "Kuzco"},
+									ordered.TupleSA{Key: "villain", Value: "Yzma"},
+								),
 							},
 							{
 								Name: "docker-compose#v3.0.0",
-								Config: map[string]any{
-									"config": ".buildkite/docker-compose.yml",
-									"run":    "agent",
-								},
+								Config: ordered.MapFromItems(
+									ordered.TupleSA{Key: "config", Value: ".buildkite/docker-compose.yml"},
+									ordered.TupleSA{Key: "run", Value: "agent"},
+								),
 							},
 							{
 								Name: "library-example#v1.0.0",
@@ -156,17 +159,17 @@ steps:
 						Plugins: Plugins{
 							{
 								Name: "new-groove#v1.0.0",
-								Config: map[string]any{
-									"llama":   "Kuzco",
-									"villain": "Yzma",
-								},
+								Config: ordered.MapFromItems(
+									ordered.TupleSA{Key: "llama", Value: "Kuzco"},
+									ordered.TupleSA{Key: "villain", Value: "Yzma"},
+								),
 							},
 							{
 								Name: "docker-compose#v3.0.0",
-								Config: map[string]any{
-									"config": ".buildkite/docker-compose.yml",
-									"run":    "agent",
-								},
+								Config: ordered.MapFromItems(
+									ordered.TupleSA{Key: "config", Value: ".buildkite/docker-compose.yml"},
+									ordered.TupleSA{Key: "run", Value: "agent"},
+								),
 							},
 							{
 								Name: "library-example#v1.0.0",
@@ -188,7 +191,7 @@ steps:
 				t.Fatalf("yaml.Unmarshal(%q, got) = %v", test.input, err)
 			}
 
-			if diff := cmp.Diff(got, test.want); diff != "" {
+			if diff := cmp.Diff(got, test.want, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS)); diff != "" {
 				t.Errorf("Unmarshalled Pipeline diff (-got +want):\n%s", diff)
 			}
 		})

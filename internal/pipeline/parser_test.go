@@ -1,11 +1,13 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
@@ -29,6 +31,22 @@ func TestParserParsesYAML(t *testing.T) {
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "steps": [
+    {
+      "command": "hello \"friend\""
+    }
+  ]
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestParserParsesYAMLWithNoInterpolation(t *testing.T) {
@@ -49,6 +67,22 @@ func TestParserParsesYAMLWithNoInterpolation(t *testing.T) {
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "steps": [
+    {
+      "command": "hello ${ENV_VAR_FRIEND}"
+    }
+  ]
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -99,6 +133,36 @@ steps:
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "base_step": {
+    "agent_query_rules": [
+      "queue=default"
+    ],
+    "type": "script"
+  },
+  "steps": [
+    {
+      "agent_query_rules": [
+        "queue=default"
+      ],
+      "agents": {
+        "queue": "default"
+      },
+      "command": "docker build .",
+      "name": ":docker: building image",
+      "type": "script"
+    }
+  ]
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestParserReturnsYAMLParsingErrors(t *testing.T) {
@@ -139,6 +203,22 @@ func TestParserParsesJSON(t *testing.T) {
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "steps": [
+    {
+      "command": "bye \"friend\""
+    }
+  ]
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -321,12 +401,12 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{WaitStep{}},
-		Env: map[string]string{
-			"llamasTEST1": "MyTest",
-			"TEST2":       "llamas",
-		},
+		Env: ordered.MapFromItems(
+			ordered.TupleSS{Key: "llamasTEST1", Value: "MyTest"},
+			ordered.TupleSS{Key: "TEST2", Value: "llamas"},
+		),
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS)); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 }
@@ -357,13 +437,13 @@ func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 				Command: "echo England smashes Australia to win the ashes in 1912!!",
 			},
 		},
-		Env: map[string]string{
-			"TEAM1":    "England",
-			"TEAM2":    "Australia",
-			"HEADLINE": "England smashes Australia to win the ashes in 1912!!",
-		},
+		Env: ordered.MapFromItems(
+			ordered.TupleSS{Key: "TEAM1", Value: "England"},
+			ordered.TupleSS{Key: "TEAM2", Value: "Australia"},
+			ordered.TupleSS{Key: "HEADLINE", Value: "England smashes Australia to win the ashes in 1912!!"},
+		),
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS)); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 }
@@ -393,50 +473,13 @@ func TestParserMultipleInterpolation(t *testing.T) {
 				Command: "echo England vs Australia: England wins!!",
 			},
 		},
-		Env: map[string]string{
-			"TEAM1":    "England",
-			"TEAM2":    "Australia",
-			"HEADLINE": "England vs Australia: England wins!!",
-		},
+		Env: ordered.MapFromItems(
+			ordered.TupleSS{Key: "TEAM1", Value: "England"},
+			ordered.TupleSS{Key: "TEAM2", Value: "Australia"},
+			ordered.TupleSS{Key: "HEADLINE", Value: "England vs Australia: England wins!!"},
+		),
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestParserEnvInterpolationCycle(t *testing.T) {
-	parser := Parser{
-		Env: env.FromSlice([]string{"PRESENTING=Presenting", "THREE_STOOGES=Three Stooges"}),
-		PipelineSource: []byte(`
-{
-	"env": {
-		"LARRY": "${CURLY}",
-		"CURLY": "${MOE}",
-		"MOE": "${LARRY}"
-	},
-	"steps": [{
-		"command": "echo ${PRESENTING} the ${THREE_STOOGES}: ${LARRY}, ${CURLY}, and ${MOE}"
-	}]
-}`),
-	}
-	got, err := parser.Parse()
-	if err != nil {
-		t.Fatalf("parser.Parse() error = %v", err)
-	}
-
-	want := &Pipeline{
-		Steps: Steps{
-			&CommandStep{
-				Command: "echo Presenting the Three Stooges: , , and ",
-			},
-		},
-		Env: map[string]string{
-			"LARRY": "",
-			"CURLY": "",
-			"MOE":   "",
-		},
-	}
-	if diff := cmp.Diff(got, want); diff != "" {
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS)); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 }
@@ -477,29 +520,29 @@ steps:
 				Plugins: Plugins{
 					{
 						Name: "xxx/aws-assume-role#v0.1.0",
-						Config: map[string]any{
-							"role": "arn:aws:iam::xxx:role/xxx",
-						},
+						Config: ordered.MapFromItems(
+							ordered.TupleSA{Key: "role", Value: "arn:aws:iam::xxx:role/xxx"},
+						),
 					},
 					{
 						Name: "ecr#v1.1.4",
-						Config: map[string]any{
-							"login":           true,
-							"account_ids":     "xxx",
-							"registry_region": "us-east-1",
-						},
+						Config: ordered.MapFromItems(
+							ordered.TupleSA{Key: "login", Value: true},
+							ordered.TupleSA{Key: "account_ids", Value: "xxx"},
+							ordered.TupleSA{Key: "registry_region", Value: "us-east-1"},
+						),
 					},
 					{
 						Name: "docker-compose#v2.5.1",
-						Config: map[string]any{
-							"run":    "xxx",
-							"config": ".buildkite/docker/docker-compose.yml",
-							"env": []any{
+						Config: ordered.MapFromItems(
+							ordered.TupleSA{Key: "run", Value: "xxx"},
+							ordered.TupleSA{Key: "config", Value: ".buildkite/docker/docker-compose.yml"},
+							ordered.TupleSA{Key: "env", Value: []any{
 								"AWS_ACCESS_KEY_ID",
 								"AWS_SECRET_ACCESS_KEY",
 								"AWS_SESSION_TOKEN",
-							},
-						},
+							}},
+						),
 					},
 				},
 				RemainingFields: map[string]any{
@@ -511,7 +554,7 @@ steps:
 			},
 		},
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 }
@@ -586,9 +629,9 @@ steps:
  - command: echo asd
 `,
 			want: &Pipeline{
-				Env: map[string]string{
-					"BUILDKITE_TRACE_CONTEXT": "123",
-				},
+				Env: ordered.MapFromItems(
+					ordered.TupleSS{Key: "BUILDKITE_TRACE_CONTEXT", Value: "123"},
+				),
 				Steps: Steps{
 					&CommandStep{
 						Command: "echo asd",
@@ -605,10 +648,10 @@ steps:
  - command: echo asd
 `,
 			want: &Pipeline{
-				Env: map[string]string{
-					"ASD":                     "1",
-					"BUILDKITE_TRACE_CONTEXT": "123",
-				},
+				Env: ordered.MapFromItems(
+					ordered.TupleSS{Key: "ASD", Value: "1"},
+					ordered.TupleSS{Key: "BUILDKITE_TRACE_CONTEXT", Value: "123"},
+				),
 				Steps: Steps{
 					&CommandStep{
 						Command: "echo asd",
@@ -629,7 +672,7 @@ steps:
 				t.Fatalf("parser.Parse() error = %v", err)
 			}
 
-			if diff := cmp.Diff(got, test.want); diff != "" {
+			if diff := cmp.Diff(got, test.want, cmp.Comparer(ordered.EqualSS)); diff != "" {
 				t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 			}
 		})
