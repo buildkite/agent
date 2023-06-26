@@ -308,8 +308,10 @@ func (p *Process) Interrupt() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	p.logger.Warn("[Process] Interrupting process %d", p.pid)
+
 	if p.command == nil || p.command.Process == nil {
-		p.logger.Debug("[Process] No process to interrupt yet")
+		p.logger.Notice("[Process] No process to interrupt yet")
 		return nil
 	}
 
