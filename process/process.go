@@ -325,6 +325,8 @@ func (p *Process) Interrupt() error {
 		}
 	}
 
+	p.logger.Notice("[Process] interrupted proess %d", p.pid)
+
 	return nil
 }
 
