@@ -373,8 +373,8 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 			break
 		}
 
+		shPath, err := s.AbsolutePath("sh")
 		// Bash was the default, so must remain the default.
-		shPath, err := s.AbsolutePath("bash")
 		if err != nil {
 			// It's increasingly popular to not include bash in more minimal
 			// container images (e.g. Alpine-based). But because bash has been
