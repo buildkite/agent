@@ -63,6 +63,18 @@ The Job API is unavailable on windows agents running versions of windows prior t
 
 **Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™️.
 
+### `polyglot-hooks`
+
+Allows the agent to run hooks written in languages other than bash. This enables the agent to run hooks written in any language, as long as the language has a runtime available on the agent. Polyglot hooks can be in interpreted languages, so long as they have a valid shebang, and the interpreter specified in the shebang is installed on the agent.
+
+This experiment also allows the agent to run compiled binaries (such as those produced by Go, Rust, Zig, C et al.) as hooks, so long as they are executable.
+
+Hooks are run in a subshell, so they can't modify the environment of the agent process. However, they can use the [job-api](#job-api) to modify the environment of the job.
+
+Binary hooks are available on all platforms, but interpreted hooks are unfortunately unavailable on Windows, as Windows does not support shebangs.
+
+**Status:** Experimental while we try to cover the various corner cases. We'll probably promote this to non-experiment soon™️.
+
 ### `agent-api`
 
 Like `job-api`, this exposes a local API for interacting with the agent process.
