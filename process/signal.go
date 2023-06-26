@@ -38,8 +38,13 @@ func (p *Process) interruptProcessGroup() error {
 		intSignal = SIGTERM
 	}
 
-	p.logger.Debug("[Process] Sending signal %s to PGID: %d", intSignal, p.pid)
-	return syscall.Kill(-p.pid, syscall.Signal(intSignal))
+	p.logger.Warn("[Process] Sending signal %s to PGID: %d", intSignal, p.pid)
+	if err := syscall.Kill(-p.pid, syscall.Signal(intSignal)); err != nil {
+		return err
+	}
+
+	p.logger.Notice("[Process] Sent signal %s to PGID: %d", intSignal, p.pid)
+	return nil
 }
 
 func GetPgid(pid int) (int, error) {
