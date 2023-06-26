@@ -483,8 +483,12 @@ var BootstrapCommand = cli.Command{
 			signalMu.Lock()
 			defer signalMu.Unlock()
 
+			l.Warn("Bootstrap received signal %s", sig)
+
 			// Cancel the bootstrap
-			bootstrap.Cancel()
+			if err := bootstrap.Cancel(); err != nil {
+				l.Error("Failed to cancel bootstrap: %v", err)
+			}
 
 			// Track the state and signal used
 			cancelled = true
