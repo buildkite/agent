@@ -226,12 +226,11 @@ func (p *Process) Run(ctx context.Context) error {
 		go func() {
 			select {
 			case <-ctx.Done():
-				p.logger.Debug("[Process] Context done, terminating")
-				if err := p.Terminate(); err != nil {
-					p.logger.Debug("[Process] Failed terminate: %v", err)
+				p.logger.Warn("[Process] Context done, terminating")
+				if err := p.Interrupt(); err != nil {
+					p.logger.Warn("[Process] Failed terminate: %v", err)
 				}
 				return
-
 			case <-p.Done():
 				return
 			}
