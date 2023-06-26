@@ -111,7 +111,6 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 			b.shell.Commentf("Received cancellation signal, interrupting")
 			b.shell.Interrupt()
 			b.shell.Commentf("Received cancellation signal, cancelling cancel context")
-			cancel()
 		}
 	}()
 
