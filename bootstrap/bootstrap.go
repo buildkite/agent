@@ -1731,6 +1731,10 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 	commandExitError := b.runCommand(ctx)
 	var realCommandError error
 
+	if commandExitError != nil {
+		b.shell.Warningf("Command exited with error %v", commandExitError)
+	}
+
 	// If the command returned an exit that wasn't a `exec.ExitError`
 	// (which is returned when the command is actually run, but fails),
 	// then we'll show it in the log.
