@@ -448,7 +448,6 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 	b.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	//redactors.Flush()
 	redactors.Reset(redactor.ValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump()))
 
 	// First, let see any of the environment variables are supposed

@@ -261,7 +261,7 @@ func (r *Redactor) flushUpTo(limit int) error {
 	// buffer. We also move them to the start of the slice to avoid allocation.
 	rem := len(r.completedMatches[done+1:]) // number of remaining matches
 	for i, match := range r.completedMatches[done+1:] {
-		// Note that i ranges from 0 to done, but rg ranges the values:
+		// Note that i ranges from 0 to done, but `match` ranges the values:
 		// r.completedMatches[0] = r.completedMatches[done+1].sub(bufidx)
 		// r.completedMatches[1] = r.completedMatches[done+2].sub(bufidx)
 		// etc
