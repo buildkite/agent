@@ -44,14 +44,15 @@ type Redactor struct {
 	// we might not be).
 	buf []byte
 
-	// Current redaction states - if we have begun redacting a potential secret
-	// there will be at least one of these.
-	// nextStates is the next set of states. To avoid creating millions of new
-	// slices, Write alternates between these two.
-	states, nextStates []state
+	// Current redaction partialMatches - if we have begun redacting a potential
+	// secret there will be at least one of these.
+	// nextMatches is the next set of partialMatches.
+	// Write alternates between these two, rather than creating a new slice to
+	// hold the next set of matches for every byte of the input.
+	partialMatches, nextMatches []partialMatch
 
 	// The ranges in buf we must redact on flush.
-	redact []subrange
+	completedMatches []subrange
 }
 
 // New returns a new Redactor.
@@ -61,10 +62,10 @@ func New(dst io.Writer, subst string, needles []string) *Redactor {
 		subst: []byte(subst),
 
 		// Preallocate a few things.
-		buf:        make([]byte, 0, 65536),
-		states:     make([]state, 0, len(needles)),
-		nextStates: make([]state, 0, len(needles)),
-		redact:     make([]subrange, 0, len(needles)),
+		buf:              make([]byte, 0, 65536),
+		partialMatches:   make([]partialMatch, 0, len(needles)),
+		nextMatches:      make([]partialMatch, 0, len(needles)),
+		completedMatches: make([]subrange, 0, len(needles)),
 	}
 	r.Reset(needles)
 	return r
@@ -93,7 +94,7 @@ func (r *Redactor) Write(b []byte) (int, error) {
 	// incomplete matches (in case they _don't_ match), as well as some extra
 	// state (r.states) for tracking where we are in each incomplete match.
 	//
-	// Step 4 (mostly in flushTo) only looks complicated because it has to
+	// Step 4 (mostly in flushUpTo) only looks complicated because it has to
 	// alternate between unredacted and redacted ranges, *and* handle the case
 	// where we've chosen to flush to inside a redacted range.
 
@@ -107,10 +108,11 @@ func (r *Redactor) Write(b []byte) (int, error) {
 	for n, c := range b {
 		bufidx := n + prevBufLen // where we are in the whole buffer
 
-		// In the middle of redacting?
-		for _, s := range r.states {
+		// In the middle of matching?
+		for _, s := range r.partialMatches {
 			// Does the needle match on this byte?
 			if c != s.needle[s.matched] {
+				// No - drop this partial match.
 				continue
 			}
 
@@ -120,54 +122,55 @@ func (r *Redactor) Write(b []byte) (int, error) {
 			// Have we fully matched this needle?
 			if s.matched < len(s.needle) {
 				// This state survives for another byte.
-				r.nextStates = append(r.nextStates, s)
+				r.nextMatches = append(r.nextMatches, s)
 				continue
 			}
 
 			// Match complete; save range to redact.
-			r.redact = append(r.redact, subrange{
+			r.completedMatches = append(r.completedMatches, subrange{
 				from: bufidx - len(s.needle) + 1,
 				to:   bufidx + 1,
 			})
 		}
 
-		// Start redacting something?
+		// Start matching something?
 		for _, s := range r.needlesByFirstByte[c] {
 			if len(s) == 1 {
 				// A pathological case; in practice we don't redact secrets
 				// smaller than RedactLengthMin.
-				r.redact = append(r.redact, subrange{
+				r.completedMatches = append(r.completedMatches, subrange{
 					from: bufidx,
 					to:   bufidx + 1,
 				})
 				continue
 			}
-			r.nextStates = append(r.nextStates, state{
+			r.nextMatches = append(r.nextMatches, partialMatch{
 				needle:  s,
 				matched: 1,
 			})
 		}
 
-		// r.nextStates contains the new set of states.
-		// Re-use the array underlying the old r.states for r.nextStates.
-		r.states, r.nextStates = r.nextStates, r.states[:0]
+		// r.nextMatches now contains the new set of partial matches.
+		// Re-use the array underlying the old r.partialMatches for the new
+		// r.nextMatches, instead of allocating a new one.
+		r.partialMatches, r.nextMatches = r.nextMatches, r.partialMatches[:0]
 	}
 
 	// 3. Merge overlapping redaction ranges.
 	// Because they were added from start to end, they are in order.
-	r.redact = mergeOverlaps(r.redact)
+	r.completedMatches = mergeOverlaps(r.completedMatches)
 
 	// 4. Write as much of the buffer as we can without spilling incomplete
 	//    matches.
-	flushTo := len(r.buf)
-	for _, s := range r.states {
-		if to := len(r.buf) - s.matched; to < flushTo {
-			flushTo = to
+	limit := len(r.buf)
+	for _, s := range r.partialMatches {
+		if to := len(r.buf) - s.matched; to < limit {
+			limit = to
 		}
 	}
-	if err := r.flushTo(flushTo); err != nil {
+	if err := r.flushUpTo(limit); err != nil {
 		// We "wrote" this much of b in this Write at the point of error.
-		return flushTo - prevBufLen, err
+		return limit - prevBufLen, err
 	}
 
 	// We "wrote" all of b, so report len(b).
@@ -180,47 +183,46 @@ func (r *Redactor) Flush() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// We know all the complete matches in each Write, what we don't know
-	// are any incomplete matches. Since there is no more incoming data, any
-	// remaining states must all be incomplete.
-	r.states = r.states[:0]
-	return r.flushTo(len(r.buf))
+	// Since there is no more incoming data, any remaining partial matches
+	// cannot complete.
+	r.partialMatches = r.partialMatches[:0]
+	return r.flushUpTo(len(r.buf))
 }
 
-// flush writes out the buffer up to an index. flushTo is an upper limit.
-func (r *Redactor) flushTo(flushTo int) error {
-	if flushTo == 0 || len(r.buf) == 0 {
+// flush writes out the buffer up to an index. limit is an upper limit.
+func (r *Redactor) flushUpTo(limit int) error {
+	if limit == 0 || len(r.buf) == 0 {
 		return nil
 	}
 
 	bufidx := 0 // where we are up to in the buffer
+	done := -1  // the index of the last match processed
 
-	// Stop when we're out of redactions, or the next one is after flushTo.
-	// Track the last range processed.
-	done := -1
-	for ri, rg := range r.redact {
-		if rg.from >= flushTo {
+	// Stop when we're out of redactions, or the next one is after limit.
+
+	for ri, match := range r.completedMatches {
+		if match.from >= limit {
 			// This range is after the cutoff point.
 			break
 		}
 		done = ri
 
 		switch {
-		case bufidx < rg.from:
+		case bufidx < match.from:
 			// A non-redacted range (followed by a redacted range).
-			if _, err := r.dst.Write(r.buf[bufidx:rg.from]); err != nil {
+			if _, err := r.dst.Write(r.buf[bufidx:match.from]); err != nil {
 				return err
 			}
 			fallthrough
 
-		case bufidx == rg.from:
+		case bufidx == match.from:
 			// A redacted range.
 			// Write a r.subst instead of the redacted range.
 			if _, err := r.dst.Write(r.subst); err != nil {
 				return err
 			}
-			bufidx = rg.to
-			// bufidx could now be after flushTo, but that's OK.
+			bufidx = match.to
+			// bufidx could now be after limit, but that's OK.
 			// We were going to write r.subst anyway. It just might be continued
 			// by an overlap.
 
@@ -228,24 +230,25 @@ func (r *Redactor) flushTo(flushTo int) error {
 			// This should only happen if bufidx = 0 and a previous flush
 			// moved earlier ranges before the start of the buffer.
 			// r.subst should have been written in the earlier flush.
-			bufidx = rg.to
+			bufidx = match.to
 		}
 	}
 
-	// Anything between here and flushTo?
-	if bufidx < flushTo {
-		if _, err := r.dst.Write(r.buf[bufidx:flushTo]); err != nil {
+	// Anything between here and limit?
+	if bufidx < limit {
+		if _, err := r.dst.Write(r.buf[bufidx:limit]); err != nil {
 			return err
 		}
-		bufidx = flushTo
+		bufidx = limit
 	}
 
+	// We got to the end of the buffer?
 	if bufidx >= len(r.buf) {
 		// Truncate the buffer, preserving capacity.
 		r.buf = r.buf[:0]
 
 		// All the redactions were also processed.
-		r.redact = r.redact[:0]
+		r.completedMatches = r.completedMatches[:0]
 		return nil
 	}
 
@@ -256,11 +259,15 @@ func (r *Redactor) flushTo(flushTo int) error {
 	// Because redactions refer to buffer positions, and the buffer shrank,
 	// update the redaction ranges to point at the correct locations in the
 	// buffer. We also move them to the start of the slice to avoid allocation.
-	rem := len(r.redact[done+1:]) // remaining ranges
-	for i, rg := range r.redact[done+1:] {
-		r.redact[i] = rg.sub(bufidx)
+	rem := len(r.completedMatches[done+1:]) // number of remaining matches
+	for i, match := range r.completedMatches[done+1:] {
+		// Note that i ranges from 0 to done, but rg ranges the values:
+		// r.completedMatches[0] = r.completedMatches[done+1].sub(bufidx)
+		// r.completedMatches[1] = r.completedMatches[done+2].sub(bufidx)
+		// etc
+		r.completedMatches[i] = match.sub(bufidx)
 	}
-	r.redact = r.redact[:rem]
+	r.completedMatches = r.completedMatches[:rem]
 
 	return nil
 }
@@ -286,8 +293,8 @@ func (r *Redactor) Reset(needles []string) {
 	}
 }
 
-// state tracks how far through one of the needles we are redacting.
-type state struct {
+// partialMatch tracks how far through one of the needles we have matched.
+type partialMatch struct {
 	needle  string
 	matched int
 }
