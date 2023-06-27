@@ -18,7 +18,7 @@ import (
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/pipeline"
-	"github.com/buildkite/agent/v3/internal/redaction"
+	"github.com/buildkite/agent/v3/internal/redactor"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/urfave/cli"
 )
@@ -249,7 +249,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if len(cfg.RedactedVars) > 0 {
-			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).Dump())
+			needles := redactor.VarsToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).Dump())
 
 			serialisedPipeline, err := result.MarshalJSON()
 			if err != nil {

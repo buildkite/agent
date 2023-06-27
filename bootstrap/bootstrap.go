@@ -23,7 +23,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
-	"github.com/buildkite/agent/v3/internal/redaction"
+	"github.com/buildkite/agent/v3/internal/redactor"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/kubernetes"
@@ -433,7 +433,7 @@ func (b *Bootstrap) runWrappedShellScriptHook(ctx context.Context, hookName stri
 	return nil
 }
 
-func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors redaction.RedactorMux) {
+func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors redactor.Mux) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != b.shell.Getwd() {
 			_ = b.shell.Chdir(afterWd)
@@ -448,8 +448,7 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 	b.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	redactors.Flush()
-	redactors.Reset(redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump()))
+	redactors.Reset(redactor.ValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump()))
 
 	// First, let see any of the environment variables are supposed
 	// to change the bootstrap configuration at run time.
@@ -2077,9 +2076,9 @@ func (b *Bootstrap) ignoredEnv() []string {
 // setupRedactors wraps shell output and logging in Redactor if any redaction
 // is necessary based on RedactedVars configuration and the existence of
 // matching environment vars.
-// redaction.RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
-func (b *Bootstrap) setupRedactors() redaction.RedactorMux {
-	valuesToRedact := redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump())
+// redactor.Mux (possibly empty) is returned so the caller can `defer redactor.Flush()`
+func (b *Bootstrap) setupRedactors() redactor.Mux {
+	valuesToRedact := redactor.ValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump())
 	if len(valuesToRedact) == 0 {
 		return nil
 	}
@@ -2088,40 +2087,36 @@ func (b *Bootstrap) setupRedactors() redaction.RedactorMux {
 		b.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", b.Config.RedactedVars)
 	}
 
-	var mux redaction.RedactorMux
+	var mux redactor.Mux
 
 	// If the shell Writer is already a Redactor, reset the values to redact.
-	if redactor, ok := b.shell.Writer.(*redaction.Redactor); ok {
-		redactor.Reset(valuesToRedact)
-		mux = append(mux, redactor)
-	} else if len(valuesToRedact) == 0 {
-		// skip
+	if rdc, ok := b.shell.Writer.(*redactor.Redactor); ok {
+		rdc.Reset(valuesToRedact)
+		mux = append(mux, rdc)
 	} else {
-		redactor := redaction.NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
-		b.shell.Writer = redactor
-		mux = append(mux, redactor)
+		rdc := redactor.New(b.shell.Writer, "[REDACTED]", valuesToRedact)
+		b.shell.Writer = rdc
+		mux = append(mux, rdc)
 	}
 
 	// If the shell.Logger is already a redacted WriterLogger, reset the values to redact.
 	// (maybe there's a better way to do two levels of type assertion? ...
 	// shell.Logger may be a WriterLogger, and its Writer may be a Redactor)
 	var shellWriterLogger *shell.WriterLogger
-	var shellLoggerRedactor *redaction.Redactor
+	var shellLoggerRedactor *redactor.Redactor
 	if logger, ok := b.shell.Logger.(*shell.WriterLogger); ok {
 		shellWriterLogger = logger
-		if redactor, ok := logger.Writer.(*redaction.Redactor); ok {
+		if redactor, ok := logger.Writer.(*redactor.Redactor); ok {
 			shellLoggerRedactor = redactor
 		}
 	}
-	if redactor := shellLoggerRedactor; redactor != nil {
-		redactor.Reset(valuesToRedact)
-		mux = append(mux, redactor)
-	} else if len(valuesToRedact) == 0 {
-		// skip
+	if rdc := shellLoggerRedactor; rdc != nil {
+		rdc.Reset(valuesToRedact)
+		mux = append(mux, rdc)
 	} else if shellWriterLogger != nil {
-		redactor := redaction.NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
-		shellWriterLogger.Writer = redactor
-		mux = append(mux, redactor)
+		rdc := redactor.New(b.shell.Writer, "[REDACTED]", valuesToRedact)
+		shellWriterLogger.Writer = rdc
+		mux = append(mux, rdc)
 	}
 
 	return mux
