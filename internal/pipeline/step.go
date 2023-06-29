@@ -114,13 +114,14 @@ func (c *CommandStep) interpolate(pr *Parser) error {
 func (CommandStep) stepTag() {}
 
 // signedFields returns the contents of fields to sign.
-func (c *CommandStep) signedFields(version string) ([]string, error) {
+func (c *CommandStep) signedFields(version string) (map[string]string, error) {
 	switch version {
 	case "v1":
-		// These fields, in this order.
-		// Do not change the contents or order of old versions.
-		return []string{
-			c.Command,
+		// These fields, all these fields, and only these fields.
+		// The map will be sorted by Sign.
+		// Do not change the contents of old versions.
+		return map[string]string{
+			"command": c.Command,
 		}, nil
 
 	default:

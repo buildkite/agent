@@ -249,7 +249,7 @@ func TestPipelineAddSignatures(t *testing.T) {
 				Command: "echo asd",
 				Signature: &Signature{
 					Version: "v1",
-					Value:   "YYUNoOTyPOBZ6R485Fe8MhBgIzfBTOnkFGbogHyhQX8=",
+					Value:   "r6PeyzKp8Af5cxsXB2VyPr4jiOqL/eBPZU2DbdxOoBU=",
 				},
 			},
 		},
