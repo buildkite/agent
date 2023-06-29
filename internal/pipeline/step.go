@@ -228,7 +228,8 @@ func unmarshalStep(n *yaml.Node) (Step, error) {
 		found := errors.New("found")
 		err := yamltojson.RangeMap(n, func(key string, val *yaml.Node) error {
 			switch key {
-			case "command", "commands":
+			// NB: some steps are commandless containers to run plugins.
+			case "command", "commands", "plugins":
 				step = new(CommandStep)
 
 			case "wait", "waiter":
