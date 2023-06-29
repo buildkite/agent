@@ -228,3 +228,34 @@ env:
 		})
 	}
 }
+
+func TestPipelineAddSignatures(t *testing.T) {
+	t.Parallel()
+
+	p := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo asd",
+			},
+		},
+	}
+	if err := p.AddSignatures("llamas"); err != nil {
+		t.Errorf("(*Pipeline).AddSignatures(llamas) = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo asd",
+				Signature: &Signature{
+					Version: "v1",
+					Value:   "YYUNoOTyPOBZ6R485Fe8MhBgIzfBTOnkFGbogHyhQX8=",
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(p, want); diff != "" {
+		t.Errorf("post-AddSignatures pipeline diff (-got +want):\n%s", diff)
+	}
+}

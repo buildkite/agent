@@ -62,6 +62,7 @@ type PipelineUploadConfig struct {
 	NoInterpolation bool     `cli:"no-interpolation"`
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 	RejectSecrets   bool     `cli:"reject-secrets"`
+	SigningKey      string   `cli:"signing-key"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -107,6 +108,11 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "reject-secrets",
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+		},
+		cli.StringFlag{
+			Name:   "signing-key",
+			Usage:  "Symmetric key used to sign commands in command steps",
+			EnvVar: "BUILDKITE_PIPELINE_SIGNING_KEY",
 		},
 
 		// API Flags
@@ -242,10 +248,17 @@ var PipelineUploadCommand = cli.Command{
 			Filename:        filename,
 			PipelineSource:  input,
 			NoInterpolation: cfg.NoInterpolation,
+			SigningKey:      cfg.SigningKey,
 		}
 		result, err := parser.Parse()
 		if err != nil {
 			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", src, err)
+		}
+
+		if cfg.SigningKey != "" {
+			if err := result.AddSignatures(cfg.SigningKey); err != nil {
+				l.Fatal("Couldn't add signatures to the pipeline: %v", err)
+			}
 		}
 
 		if len(cfg.RedactedVars) > 0 {

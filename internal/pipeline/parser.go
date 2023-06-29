@@ -13,13 +13,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Parser parses a pipeline, optionally interpolating values from
-// a given environment.
+// Parser parses a pipeline, optionally interpolating values from a given
+// environment.
 type Parser struct {
 	Env             *env.Environment
 	Filename        string
 	PipelineSource  []byte
 	NoInterpolation bool
+	SigningKey      string
 }
 
 // Parse runs the parser.

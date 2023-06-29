@@ -35,6 +35,22 @@ type Pipeline struct {
 	RemainingFields map[string]any `yaml:",inline"`
 }
 
+// AddSignatures adds Signatures to command steps.
+func (p *Pipeline) AddSignatures(key string) error {
+	for _, step := range p.Steps {
+		cs, ok := step.(*CommandStep)
+		if !ok {
+			continue
+		}
+		sig, err := Sign(cs, "v1", []byte(key))
+		if err != nil {
+			return err
+		}
+		cs.Signature = sig
+	}
+	return nil
+}
+
 // MarshalJSON marshals a pipeline to JSON. Special handling is needed because
 // yaml.v3 has "inline" but encoding/json has no concept of it.
 func (p *Pipeline) MarshalJSON() ([]byte, error) {
