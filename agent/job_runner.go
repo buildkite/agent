@@ -733,7 +733,7 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
 	r.logger.Info("Running pre-bootstrap hook %q", hook)
 
-	sh, err := shell.New()
+	sh, err := shell.New(ctx, shell.Config{})
 	if err != nil {
 		return false, err
 	}

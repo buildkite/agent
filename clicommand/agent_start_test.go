@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -50,7 +51,7 @@ func TestAgentStartupHook(t *testing.T) {
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-startup")
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg(hooksPath))
+		err := agentStartupHook(context.Background(), log, cfg(hooksPath))
 
 		if assert.NoError(t, err, log.Messages) {
 			assert.Equal(t, []string{
@@ -64,14 +65,14 @@ func TestAgentStartupHook(t *testing.T) {
 		defer closer()
 
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg(hooksPath))
+		err := agentStartupHook(context.Background(), log, cfg(hooksPath))
 		if assert.NoError(t, err, log.Messages) {
 			assert.Equal(t, []string{}, log.Messages)
 		}
 	})
 	t.Run("with bad hooks path", func(t *testing.T) {
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg("zxczxczxc"))
+		err := agentStartupHook(context.Background(), log, cfg("zxczxczxc"))
 
 		if assert.NoError(t, err, log.Messages) {
 			assert.Equal(t, []string{}, log.Messages)
@@ -95,7 +96,7 @@ func TestAgentShutdownHook(t *testing.T) {
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-shutdown")
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg(hooksPath))
+		agentShutdownHook(context.Background(), log, cfg(hooksPath))
 
 		assert.Equal(t, []string{
 			"[info] " + prompt + " " + filepath, // prompt
@@ -107,12 +108,12 @@ func TestAgentShutdownHook(t *testing.T) {
 		defer closer()
 
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg(hooksPath))
+		agentShutdownHook(context.Background(), log, cfg(hooksPath))
 		assert.Equal(t, []string{}, log.Messages)
 	})
 	t.Run("with bad hooks path", func(t *testing.T) {
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg("zxczxczxc"))
+		agentShutdownHook(context.Background(), log, cfg("zxczxczxc"))
 		assert.Equal(t, []string{}, log.Messages)
 	})
 }

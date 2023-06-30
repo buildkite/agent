@@ -70,16 +70,20 @@ func New(conf Config) *Bootstrap {
 func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
-		var err error
-		b.shell, err = shell.New()
+		// The Agent API socket could be important for file locking.
+		cfg := shell.Config{
+			SocketsPath: b.Config.SocketsPath,
+		}
+		sh, err := shell.New(ctx, cfg)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
 		}
 
-		b.shell.PTY = b.Config.RunInPty
-		b.shell.Debug = b.Config.Debug
-		b.shell.InterruptSignal = b.Config.CancelSignal
+		sh.PTY = b.Config.RunInPty
+		sh.Debug = b.Config.Debug
+		sh.InterruptSignal = b.Config.CancelSignal
+		b.shell = sh
 	}
 	if experiments.IsEnabled(experiments.KubernetesExec) {
 		kubernetesClient := &kubernetes.Client{}

@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"io"
 	"os"
 	"runtime"
@@ -11,7 +12,7 @@ import (
 
 // NewTestShell creates a minimal shell suitable for tests.
 func NewTestShell(t *testing.T) *Shell {
-	sh, err := New()
+	sh, err := New(context.Background(), Config{})
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}
