@@ -31,6 +31,7 @@ type AgentConfiguration struct {
 	DisconnectAfterIdleTimeout int
 	CancelGracePeriod          int
 	EnableJobLogTmpfile        bool
+	JobLogPath                 string
 	WriteJobLogsToStdout       bool
 	LogFormat                  string
 	Shell                      string

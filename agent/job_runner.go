@@ -216,10 +216,16 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	var allWriters []io.Writer
 
 	// if agent config "EnableJobLogTmpfile" is set, we extend the outputWriter to write to a temporary file.
-	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the path to this temporary file.
+	// By default, the tmp file will be created on os.TempDir unless config "JobLogPath" is specified.
+	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the full path to this temporary file.
 	var tmpFile *os.File
 	if conf.AgentConfiguration.EnableJobLogTmpfile {
-		tmpFile, err = os.CreateTemp("", "buildkite_job_log")
+		jobLogDir := ""
+		if conf.AgentConfiguration.JobLogPath != "" {
+			jobLogDir = conf.AgentConfiguration.JobLogPath
+			l.Debug("[JobRunner] Job Log Path: %s", jobLogDir)
+		}
+		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
 			return nil, err
 		}
