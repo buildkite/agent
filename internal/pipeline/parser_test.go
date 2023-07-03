@@ -13,9 +13,12 @@ import (
 func TestParserParsesYAML(t *testing.T) {
 	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 	input := strings.NewReader("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\"")
-	got, err := Parse(input, envMap)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, %v) error = %v", envMap, err)
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+	if err := got.Interpolate(envMap); err != nil {
+		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -37,9 +40,9 @@ func TestParserParsesYAML(t *testing.T) {
 
 func TestParserParsesYAMLWithNoInterpolation(t *testing.T) {
 	input := strings.NewReader("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\"")
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -74,9 +77,9 @@ steps:
       queue: default`
 
 	input := strings.NewReader(complexYAML)
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -112,32 +115,35 @@ steps:
 
 func TestParserReturnsYAMLParsingErrors(t *testing.T) {
 	input := strings.NewReader("steps: %blah%")
-	_, err := Parse(input, nil)
+	_, err := Parse(input)
 
 	// TODO: avoid testing for specific error strings
 	got, want := err.Error(), `found character that cannot start any token`
 	if got != want {
-		t.Errorf("Parse(input, nil) error = %q, want %q", got, want)
+		t.Errorf("Parse(input) error = %q, want %q", got, want)
 	}
 }
 
 func TestParserReturnsJSONParsingErrors(t *testing.T) {
 	input := strings.NewReader("{")
-	_, err := Parse(input, nil)
+	_, err := Parse(input)
 
 	// TODO: avoid testing for specific error strings
 	got, want := err.Error(), `line 1: did not find expected node content`
 	if got != want {
-		t.Errorf("Parse(input, nil) error = %q, want %q", got, want)
+		t.Errorf("Parse(input) error = %q, want %q", got, want)
 	}
 }
 
 func TestParserParsesJSON(t *testing.T) {
 	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 	input := strings.NewReader("\n\n     \n  { \"steps\": [{\"command\" : \"bye ${ENV_VAR_FRIEND}\"  } ] }\n")
-	got, err := Parse(input, envMap)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, %v) error = %v", envMap, err)
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+	if err := got.Interpolate(envMap); err != nil {
+		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -160,9 +166,12 @@ func TestParserParsesJSON(t *testing.T) {
 func TestParserParsesJSONArrays(t *testing.T) {
 	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 	input := strings.NewReader("\n\n     \n  [ { \"command\": \"bye ${ENV_VAR_FRIEND}\" } ]\n")
-	got, err := Parse(input, envMap)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, %v) error = %v", envMap, err)
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+	if err := got.Interpolate(envMap); err != nil {
+		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -183,9 +192,9 @@ func TestParserParsesJSONArrays(t *testing.T) {
 
 func TestParserParsesTopLevelSteps(t *testing.T) {
 	input := strings.NewReader("---\n- name: Build\n  command: echo hello world\n- wait\n")
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -208,9 +217,9 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 
 func TestParserPreservesBools(t *testing.T) {
 	input := strings.NewReader("steps:\n  - trigger: hello\n    async: true")
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -232,9 +241,9 @@ func TestParserPreservesBools(t *testing.T) {
 
 func TestParserPreservesInts(t *testing.T) {
 	input := strings.NewReader("steps:\n  - command: hello\n    parallelism: 10")
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -256,9 +265,9 @@ func TestParserPreservesInts(t *testing.T) {
 
 func TestParserPreservesNull(t *testing.T) {
 	input := strings.NewReader("steps:\n  - wait: ~")
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -279,9 +288,9 @@ func TestParserPreservesNull(t *testing.T) {
 
 func TestParserPreservesFloats(t *testing.T) {
 	input := strings.NewReader("steps:\n  - trigger: hello\n    llamas: 3.142")
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -303,9 +312,9 @@ func TestParserPreservesFloats(t *testing.T) {
 
 func TestParserHandlesDates(t *testing.T) {
 	input := strings.NewReader("steps:\n  - trigger: hello\n    llamas: 2002-08-15T17:18:23.18-06:00")
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -335,9 +344,12 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 	"steps": ["wait"]
 }`)
 
-	got, err := Parse(input, envMap)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, %v) error = %v", envMap, err)
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+	if err := got.Interpolate(envMap); err != nil {
+		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
 	}
 	want := &Pipeline{
 		Env: ordered.MapFromItems(
@@ -364,9 +376,12 @@ func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 		"command": "echo ${HEADLINE}"
 	}]
 }`)
-	got, err := Parse(input, envMap)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, %v) error = %v", envMap, err)
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+	if err := got.Interpolate(envMap); err != nil {
+		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
 	}
 	want := &Pipeline{
 		Env: ordered.MapFromItems(
@@ -407,9 +422,9 @@ steps:
     agents:
       queue: xxx`)
 
-	got, err := Parse(input, nil)
+	got, err := Parse(input)
 	if err != nil {
-		t.Fatalf("Parse(input, nil) error = %v", err)
+		t.Fatalf("Parse(input) error = %v", err)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -453,13 +468,13 @@ steps:
 
 func TestParserParsesConditionalWithEndOfLineAnchorDollarSign(t *testing.T) {
 	tests := []struct {
-		desc     string
-		envMap   *env.Environment
-		pipeline string
+		desc        string
+		interpolate bool
+		pipeline    string
 	}{
 		{
-			desc:   "with interpolation",
-			envMap: env.New(),
+			desc:        "with interpolation",
+			interpolate: true,
 			// dollar sign must be escaped when interpolation is in effect
 			pipeline: `---
 steps:
@@ -468,8 +483,8 @@ steps:
 `,
 		},
 		{
-			desc:   "without interpolation",
-			envMap: nil,
+			desc:        "without interpolation",
+			interpolate: false,
 			pipeline: `---
 steps:
  - wait: ~
@@ -490,9 +505,14 @@ steps:
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			input := strings.NewReader(test.pipeline)
-			got, err := Parse(input, test.envMap)
+			got, err := Parse(input)
 			if err != nil {
-				t.Fatalf("Parse(input, %v) error = %v", test.envMap, err)
+				t.Fatalf("Parse(input) error = %v", err)
+			}
+			if test.interpolate {
+				if err := got.Interpolate(nil); err != nil {
+					t.Fatalf("p.Interpolate(nil) error = %v", err)
+				}
 			}
 
 			gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -556,9 +576,12 @@ steps:
 			input := strings.NewReader(test.pipeline)
 			e := env.New()
 			e.Set("BUILDKITE_TRACE_CONTEXT", "123")
-			got, err := Parse(input, e)
+			got, err := Parse(input)
 			if err != nil {
-				t.Fatalf("Parse(input, %v) error = %v", e, err)
+				t.Fatalf("Parse(input) error = %v", err)
+			}
+			if err := got.Interpolate(e); err != nil {
+				t.Fatalf("p.Interpolate(%v) error = %v", e, err)
 			}
 
 			gotJSON, err := json.MarshalIndent(got, "", "  ")

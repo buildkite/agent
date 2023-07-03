@@ -79,7 +79,7 @@ steps:
     agents:
       queue: xxx`
 
-			pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr), nil)
+			pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr))
 			assert.NoError(t, err)
 
 			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -205,7 +205,7 @@ steps:
     agents:
       queue: xxx`
 
-			pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr), nil)
+			pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr))
 			assert.NoError(t, err)
 
 			countUploadCalls := 0

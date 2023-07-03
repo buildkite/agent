@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/ordered"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
@@ -86,12 +88,63 @@ func (p *Pipeline) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-func (p *Pipeline) interpolate(env interpolate.Env) error {
-	if err := interpolateSlice(env, p.Steps); err != nil {
+// Interpolate interpolates variables defined in both envMap and p.Env into the
+// pipeline.
+// More specifically, it does these things:
+//   - Copy tracing context keys from envMap into pipeline.Env.
+//   - Interpolate pipeline.Env and copy the results into envMap to apply later.
+//   - Interpolate any string value in the rest of the pipeline.
+func (p *Pipeline) Interpolate(envMap *env.Environment) error {
+	if envMap == nil {
+		envMap = env.New()
+	}
+
+	// Propagate distributed tracing context to the new pipelines if available
+	if tracing, has := envMap.Get(tracetools.EnvVarTraceContextKey); has {
+		if p.Env == nil {
+			p.Env = ordered.NewMap[string, string](1)
+		}
+		p.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
+	}
+
+	// Preprocess any env that are defined in the top level block and place them
+	// into env for later interpolation into the rest of the pipeline.
+	if err := p.interpolateEnvBlock(envMap); err != nil {
 		return err
 	}
-	if err := interpolateOrderedMap(env, p.Env); err != nil {
+
+	// Recursively go through the rest of the pipeline and perform environment
+	// variable interpolation on strings. Interpolation is performed in-place.
+	if err := interpolateSlice(envMap, p.Steps); err != nil {
 		return err
 	}
-	return interpolateMap(env, p.RemainingFields)
+	return interpolateMap(envMap, p.RemainingFields)
+}
+
+// interpolateEnvBlock runs interpolate.Interpolate on each pair in p.Env,
+// interpolating with the variables defined in envMap, and then adding the
+// results back into both p.Env and envMap. Each environment variable can
+// be interpolated into later environment variables, making the input ordering
+// of p.Env potentially important.
+func (p *Pipeline) interpolateEnvBlock(envMap *env.Environment) error {
+	return p.Env.Range(func(k, v string) error {
+		// We interpolate both keys and values.
+		intk, err := interpolate.Interpolate(envMap, k)
+		if err != nil {
+			return err
+		}
+
+		// v is always a string in this case.
+		intv, err := interpolate.Interpolate(envMap, v)
+		if err != nil {
+			return err
+		}
+
+		p.Env.Replace(k, intk, intv)
+
+		// Bonus part for the env block!
+		// Add the results back into envMap.
+		envMap.Set(intk, intv)
+		return nil
+	})
 }

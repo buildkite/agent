@@ -249,9 +249,14 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Parse the pipeline
-		result, err := pipeline.Parse(input, environ)
+		result, err := pipeline.Parse(input)
 		if err != nil {
-			l.Fatal("Pipeline parsing of %q failed: %s", src, err)
+			l.Fatal("Pipeline parsing of %q failed: %v", src, err)
+		}
+		if !cfg.NoInterpolation {
+			if err := result.Interpolate(environ); err != nil {
+				l.Fatal("Pipeline interpolation of %q failed: %v", src, err)
+			}
 		}
 
 		if len(cfg.RedactedVars) > 0 {
