@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -147,28 +146,29 @@ var PipelineUploadCommand = cli.Command{
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
 
-		// Find the pipeline file either from STDIN or the first
-		// argument
-		var input []byte
+		// Find the pipeline either from STDIN or the first argument
+		var input *os.File
 		var filename string
 
-		if cfg.FilePath != "" {
-			l.Info("Reading pipeline config from \"%s\"", cfg.FilePath)
+		switch {
+		case cfg.FilePath != "":
+			l.Info("Reading pipeline config from %q", cfg.FilePath)
 
 			filename = filepath.Base(cfg.FilePath)
-			input, err = os.ReadFile(cfg.FilePath)
+			file, err := os.Open(cfg.FilePath)
 			if err != nil {
-				l.Fatal("Failed to read file: %s", err)
+				l.Fatal("Failed to read file: %v", err)
 			}
-		} else if stdin.IsReadable() {
+			defer file.Close()
+			input = file
+
+		case stdin.IsReadable():
 			l.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
-			input, err = io.ReadAll(os.Stdin)
-			if err != nil {
-				l.Fatal("Failed to read from STDIN: %s", err)
-			}
-		} else {
+			input = os.Stdin
+
+		default:
 			l.Info("Searching for pipeline config...")
 
 			paths := []string{
@@ -195,39 +195,51 @@ var PipelineUploadCommand = cli.Command{
 			// error. There can only be one!!
 			if len(exists) > 1 {
 				l.Fatal("Found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
-			} else if len(exists) == 0 {
+			}
+			if len(exists) == 0 {
 				l.Fatal("Could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
 			}
 
 			found := exists[0]
 
-			l.Info("Found config file \"%s\"", found)
+			l.Info("Found config file %q", found)
 
 			// Read the default file
 			filename = path.Base(found)
-			input, err = os.ReadFile(found)
+			file, err := os.Open(found)
 			if err != nil {
-				l.Fatal("Failed to read file \"%s\" (%s)", found, err)
+				l.Fatal("Failed to read file %q: %v", found, err)
 			}
+			defer file.Close()
+			input = file
 		}
 
 		// Make sure the file actually has something in it
-		if len(input) == 0 {
-			l.Fatal("Config file is empty")
+		if input != os.Stdin {
+			fi, err := input.Stat()
+			if err != nil {
+				l.Fatal("Couldn't stat pipeline configuration file %q: %v", input.Name(), err)
+			}
+			if fi.Size() == 0 {
+				l.Fatal("Pipeline file %q is empty", input.Name())
+			}
 		}
 
-		// Load environment to pass into parser
-		environ := env.FromSlice(os.Environ())
+		var environ *env.Environment
+		if !cfg.NoInterpolation {
+			// Load environment to pass into parser
+			environ = env.FromSlice(os.Environ())
 
-		// resolve BUILDKITE_COMMIT based on the local git repo
-		if commitRef, ok := environ.Get("BUILDKITE_COMMIT"); ok {
-			cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
-			if err != nil {
-				l.Warn("Error running git rev-parse %q: %v", commitRef, err)
-			} else {
-				trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-				l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
-				environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
+			// resolve BUILDKITE_COMMIT based on the local git repo
+			if commitRef, ok := environ.Get("BUILDKITE_COMMIT"); ok {
+				cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
+				if err != nil {
+					l.Warn("Error running git rev-parse %q: %v", commitRef, err)
+				} else {
+					trimmedCmdOut := strings.TrimSpace(string(cmdOut))
+					l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
+					environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
+				}
 			}
 		}
 
@@ -237,15 +249,9 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Parse the pipeline
-		parser := pipeline.Parser{
-			Env:             environ,
-			Filename:        filename,
-			Pipeline:        input,
-			NoInterpolation: cfg.NoInterpolation,
-		}
-		result, err := parser.Parse()
+		result, err := pipeline.Parse(input, environ)
 		if err != nil {
-			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", src, err)
+			l.Fatal("Pipeline parsing of %q failed: %s", src, err)
 		}
 
 		if len(cfg.RedactedVars) > 0 {

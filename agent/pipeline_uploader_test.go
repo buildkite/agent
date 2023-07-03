@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,8 +79,7 @@ steps:
     agents:
       queue: xxx`
 
-			parser := pipeline.Parser{Pipeline: []byte(pipelineStr), Env: nil}
-			pipeline, err := parser.Parse()
+			pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr), nil)
 			assert.NoError(t, err)
 
 			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -205,8 +205,7 @@ steps:
     agents:
       queue: xxx`
 
-			parser := pipeline.Parser{Pipeline: []byte(pipelineStr), Env: nil}
-			pipeline, err := parser.Parse()
+			pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr), nil)
 			assert.NoError(t, err)
 
 			countUploadCalls := 0
