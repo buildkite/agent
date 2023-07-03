@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/internal/yamltojson"
 	"github.com/google/go-cmp/cmp"
 	"gopkg.in/yaml.v3"
 )
@@ -323,7 +322,7 @@ func (m *Map[K, V]) UnmarshalYAML(n *yaml.Node) error {
 		return nil
 	}
 
-	return yamltojson.RangeMap(n, func(key string, val *yaml.Node) error {
+	return rangeYAMLMap(n, func(key string, val *yaml.Node) error {
 		// Try decode? (maybe V is a type like []any).
 		nv, err := decode(make(map[*yaml.Node]bool), val)
 		if err != nil {
@@ -377,8 +376,8 @@ func decode(seen map[*yaml.Node]bool, n *yaml.Node) (any, error) {
 
 	switch n.Kind {
 	case yaml.ScalarNode:
-		// If we need to parse more kinds of scalar, this is where we would
-		// do something like yamltojson.parseScalar.
+		// If we need to parse more kinds of scalar, e.g. !!bool NO, or base-60
+		// integers, this is where we would swap out n.Decode.
 		var v any
 		if err := n.Decode(&v); err != nil {
 			return nil, err
@@ -400,7 +399,7 @@ func decode(seen map[*yaml.Node]bool, n *yaml.Node) (any, error) {
 		m := NewMap[string, any](len(n.Content) / 2)
 		// Why not call m.UnmarshalYAML(n) ?
 		// Because we can't pass `seen` through that.
-		err := yamltojson.RangeMap(n, func(key string, val *yaml.Node) error {
+		err := rangeYAMLMap(n, func(key string, val *yaml.Node) error {
 			v, err := decode(seen, val)
 			if err != nil {
 				return err
@@ -415,7 +414,7 @@ func decode(seen map[*yaml.Node]bool, n *yaml.Node) (any, error) {
 
 	case yaml.AliasNode:
 		// This is one of the two ways this can blow up recursively.
-		// The other (map merges) is handled by yamltojson.RangeMap.
+		// The other (map merges) is handled by rangeMap.
 		return decode(seen, n.Alias)
 
 	case yaml.DocumentNode:

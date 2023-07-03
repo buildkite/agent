@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/yamltojson"
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/qri-io/jsonschema"
 	"gopkg.in/yaml.v3"
 )
@@ -34,23 +33,22 @@ type Definition struct {
 	Configuration *jsonschema.Schema `json:"configuration"`
 }
 
-// ParseDefinition parses either YA ML or JSON bytes into a Definition.
+// ParseDefinition parses either YAML or JSON bytes into a Definition.
 func ParseDefinition(b []byte) (*Definition, error) {
-	var parsed yaml.Node
-
-	if err := yaml.Unmarshal(b, &parsed); err != nil {
+	parsed := ordered.NewMap[string, any](0)
+	if err := yaml.Unmarshal(b, parsed); err != nil {
 		return nil, err
 	}
 
 	// Marshal the whole lot back into json which will let the jsonschema library
 	// parse the schema into and object tree 💃🏼
-	var buf bytes.Buffer
-	if err := yamltojson.Encode(&buf, &parsed); err != nil {
+	remarshaled, err := json.Marshal(parsed)
+	if err != nil {
 		return nil, err
 	}
 
 	var def Definition
-	if err := json.NewDecoder(&buf).Decode(&def); err != nil {
+	if err := json.Unmarshal(remarshaled, &def); err != nil {
 		return nil, err
 	}
 
