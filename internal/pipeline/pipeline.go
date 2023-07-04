@@ -36,13 +36,13 @@ type Pipeline struct {
 }
 
 // AddSignatures adds Signatures to command steps.
-func (p *Pipeline) AddSignatures(key string) error {
+func (p *Pipeline) AddSignatures(algName, secret string) error {
 	for _, step := range p.Steps {
 		cs, ok := step.(*CommandStep)
 		if !ok {
 			continue
 		}
-		sig, err := Sign(cs, "v1", []byte(key))
+		sig, err := Sign(cs, algName, []byte(secret))
 		if err != nil {
 			return err
 		}

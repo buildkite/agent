@@ -229,7 +229,7 @@ env:
 	}
 }
 
-func TestPipelineAddSignatures(t *testing.T) {
+func TestPipelineSignatures(t *testing.T) {
 	t.Parallel()
 
 	p := &Pipeline{
@@ -239,7 +239,7 @@ func TestPipelineAddSignatures(t *testing.T) {
 			},
 		},
 	}
-	if err := p.AddSignatures("llamas"); err != nil {
+	if err := p.AddSignatures("hmac-sha256", "llamas"); err != nil {
 		t.Errorf("(*Pipeline).AddSignatures(llamas) = %v", err)
 	}
 
@@ -248,8 +248,9 @@ func TestPipelineAddSignatures(t *testing.T) {
 			&CommandStep{
 				Command: "echo asd",
 				Signature: &Signature{
-					Version: "v1",
-					Value:   "r6PeyzKp8Af5cxsXB2VyPr4jiOqL/eBPZU2DbdxOoBU=",
+					Algorithm:    "hmac-sha256",
+					SignedFields: []string{"command"},
+					Value:        "Kopwnm+tcAgRq/U4TX40asi+ds02zwuEwjgmz8D3pzY=",
 				},
 			},
 		},
@@ -257,5 +258,10 @@ func TestPipelineAddSignatures(t *testing.T) {
 
 	if diff := cmp.Diff(p, want); diff != "" {
 		t.Errorf("post-AddSignatures pipeline diff (-got +want):\n%s", diff)
+	}
+
+	cs := p.Steps[0].(*CommandStep)
+	if err := cs.Signature.Verify(cs, []byte("llamas")); err != nil {
+		t.Errorf("cs.Signature.Verify(cs, llamas) = %v", err)
 	}
 }

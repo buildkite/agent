@@ -113,20 +113,30 @@ func (c *CommandStep) interpolate(pr *Parser) error {
 
 func (CommandStep) stepTag() {}
 
-// signedFields returns the contents of fields to sign.
-func (c *CommandStep) signedFields(version string) (map[string]string, error) {
-	switch version {
-	case "v1":
-		// These fields, all these fields, and only these fields.
-		// The map will be sorted by Sign.
-		// Do not change the contents of old versions.
-		return map[string]string{
-			"command": c.Command,
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported version %q", version)
+// signedFields returns the default fields for signing.
+func (c *CommandStep) signedFields() map[string]string {
+	return map[string]string{
+		"command": c.Command,
 	}
+}
+
+// valuesForFields returns the contents of fields to sign.
+func (c *CommandStep) valuesForFields(fields []string) (map[string]string, error) {
+	out := make(map[string]string, len(fields))
+	for _, f := range fields {
+		switch f {
+		case "command":
+			out["command"] = c.Command
+		default:
+			return nil, fmt.Errorf("unknown or unsupported field for signing %q", f)
+		}
+	}
+	for _, req := range []string{"command"} {
+		if _, ok := out[req]; !ok {
+			return nil, fmt.Errorf("%q is required", req)
+		}
+	}
+	return out, nil
 }
 
 // WaitStep models a wait step.
