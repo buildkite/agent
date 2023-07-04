@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/ordered"
@@ -19,6 +20,15 @@ func TestParserParsesYAML(t *testing.T) {
 	}
 	if err := got.Interpolate(envMap); err != nil {
 		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{Command: `hello "friend"`},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got, +want):\n%s", diff)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -43,6 +53,15 @@ func TestParserParsesYAMLWithNoInterpolation(t *testing.T) {
 	got, err := Parse(input)
 	if err != nil {
 		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{Command: `hello ${ENV_VAR_FRIEND}`},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -82,6 +101,31 @@ steps:
 		t.Fatalf("Parse(input) error = %v", err)
 	}
 
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "docker build .",
+				RemainingFields: map[string]any{
+					"agents": map[string]any{
+						"queue": "default",
+					},
+					"name":              ":docker: building image",
+					"type":              "script",
+					"agent_query_rules": []any{"queue=default"},
+				},
+			},
+		},
+		RemainingFields: map[string]any{
+			"base_step": map[string]any{
+				"type":              "script",
+				"agent_query_rules": []any{"queue=default"},
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
@@ -96,15 +140,15 @@ steps:
   },
   "steps": [
     {
-      "type": "script",
       "agent_query_rules": [
         "queue=default"
       ],
-      "name": ":docker: building image",
-      "command": "docker build .",
       "agents": {
         "queue": "default"
-      }
+      },
+      "command": "docker build .",
+      "name": ":docker: building image",
+      "type": "script"
     }
   ]
 }`
@@ -146,6 +190,15 @@ func TestParserParsesJSON(t *testing.T) {
 		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
 	}
 
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{Command: `bye "friend"`},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
@@ -174,6 +227,15 @@ func TestParserParsesJSONArrays(t *testing.T) {
 		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
 	}
 
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{Command: `bye "friend"`},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
@@ -197,6 +259,21 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 		t.Fatalf("Parse(input) error = %v", err)
 	}
 
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo hello world",
+				RemainingFields: map[string]any{
+					"name": "Build",
+				},
+			},
+			WaitStep{},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
@@ -204,8 +281,8 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
-      "name": "Build",
-      "command": "echo hello world"
+      "command": "echo hello world",
+      "name": "Build"
     },
     "wait"
   ]
@@ -222,6 +299,18 @@ func TestParserPreservesBools(t *testing.T) {
 		t.Fatalf("Parse(input) error = %v", err)
 	}
 
+	want := &Pipeline{
+		Steps: Steps{
+			TriggerStep{
+				"trigger": "hello",
+				"async":   true,
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
@@ -229,8 +318,8 @@ func TestParserPreservesBools(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
-      "trigger": "hello",
-      "async": true
+      "async": true,
+      "trigger": "hello"
     }
   ]
 }`
@@ -244,6 +333,20 @@ func TestParserPreservesInts(t *testing.T) {
 	got, err := Parse(input)
 	if err != nil {
 		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "hello",
+				RemainingFields: map[string]any{
+					"parallelism": 10,
+				},
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -264,10 +367,19 @@ func TestParserPreservesInts(t *testing.T) {
 }
 
 func TestParserPreservesNull(t *testing.T) {
-	input := strings.NewReader("steps:\n  - wait: ~")
+	input := strings.NewReader("steps:\n  - wait: ~\n    if: foo")
 	got, err := Parse(input)
 	if err != nil {
 		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			WaitStep{"wait": nil, "if": "foo"},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -277,6 +389,7 @@ func TestParserPreservesNull(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
+      "if": "foo",
       "wait": null
     }
   ]
@@ -293,6 +406,18 @@ func TestParserPreservesFloats(t *testing.T) {
 		t.Fatalf("Parse(input) error = %v", err)
 	}
 
+	want := &Pipeline{
+		Steps: Steps{
+			TriggerStep{
+				"trigger": "hello",
+				"llamas":  3.142,
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
@@ -300,8 +425,8 @@ func TestParserPreservesFloats(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
-      "trigger": "hello",
-      "llamas": 3.142
+      "llamas": 3.142,
+      "trigger": "hello"
     }
   ]
 }`
@@ -311,10 +436,27 @@ func TestParserPreservesFloats(t *testing.T) {
 }
 
 func TestParserHandlesDates(t *testing.T) {
-	input := strings.NewReader("steps:\n  - trigger: hello\n    llamas: 2002-08-15T17:18:23.18-06:00")
+	const timestamp = "2002-08-15T17:18:23.18-06:00"
+	input := strings.NewReader("steps:\n  - trigger: hello\n    llamas: " + timestamp)
 	got, err := Parse(input)
 	if err != nil {
 		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	llamatime, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		t.Fatalf("time.Parse(time.RFC3339, %q) errorr = %v", timestamp, err)
+	}
+	want := &Pipeline{
+		Steps: Steps{
+			TriggerStep{
+				"trigger": "hello",
+				"llamas":  llamatime,
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
@@ -324,8 +466,8 @@ func TestParserHandlesDates(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
-      "trigger": "hello",
-      "llamas": "2002-08-15T17:18:23.18-06:00"
+      "llamas": "2002-08-15T17:18:23.18-06:00",
+      "trigger": "hello"
     }
   ]
 }`
@@ -356,7 +498,9 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 			ordered.TupleSS{Key: "llamasTEST1", Value: "MyTest"},
 			ordered.TupleSS{Key: "TEST2", Value: "llamas"},
 		),
-		Steps: ordered.Slice{"wait"},
+		Steps: Steps{
+			WaitStep{},
+		},
 	}
 	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS), cmp.Comparer(ordered.EqualSA)); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
@@ -389,10 +533,10 @@ func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 			ordered.TupleSS{Key: "TEAM2", Value: "Australia"},
 			ordered.TupleSS{Key: "HEADLINE", Value: "England smashes Australia to win the ashes in 1912!!"},
 		),
-		Steps: ordered.Slice{
-			ordered.MapFromItems(
-				ordered.TupleSA{Key: "command", Value: "echo England smashes Australia to win the ashes in 1912!!"},
-			),
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo England smashes Australia to win the ashes in 1912!!",
+			},
 		},
 	}
 	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS), cmp.Comparer(ordered.EqualSA)); diff != "" {
@@ -427,6 +571,51 @@ steps:
 		t.Fatalf("Parse(input) error = %v", err)
 	}
 
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "script/buildkite/xxx.sh",
+				Plugins: Plugins{
+					{
+						Name: "xxx/aws-assume-role#v0.1.0",
+						Config: ordered.MapFromItems(
+							ordered.TupleSA{Key: "role", Value: "arn:aws:iam::xxx:role/xxx"},
+						),
+					},
+					{
+						Name: "ecr#v1.1.4",
+						Config: ordered.MapFromItems(
+							ordered.TupleSA{Key: "login", Value: true},
+							ordered.TupleSA{Key: "account_ids", Value: "xxx"},
+							ordered.TupleSA{Key: "registry_region", Value: "us-east-1"},
+						),
+					},
+					{
+						Name: "docker-compose#v2.5.1",
+						Config: ordered.MapFromItems(
+							ordered.TupleSA{Key: "run", Value: "xxx"},
+							ordered.TupleSA{Key: "config", Value: ".buildkite/docker/docker-compose.yml"},
+							ordered.TupleSA{Key: "env", Value: []any{
+								"AWS_ACCESS_KEY_ID",
+								"AWS_SECRET_ACCESS_KEY",
+								"AWS_SESSION_TOKEN",
+							}},
+						),
+					},
+				},
+				RemainingFields: map[string]any{
+					"name": ":s3: xxx",
+					"agents": map[string]any{
+						"queue": "xxx",
+					},
+				},
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
@@ -434,30 +623,36 @@ steps:
 	const wantJSON = `{
   "steps": [
     {
-      "name": ":s3: xxx",
-      "command": "script/buildkite/xxx.sh",
-      "plugins": {
-        "xxx/aws-assume-role#v0.1.0": {
-          "role": "arn:aws:iam::xxx:role/xxx"
-        },
-        "ecr#v1.1.4": {
-          "login": true,
-          "account_ids": "xxx",
-          "registry_region": "us-east-1"
-        },
-        "docker-compose#v2.5.1": {
-          "run": "xxx",
-          "config": ".buildkite/docker/docker-compose.yml",
-          "env": [
-            "AWS_ACCESS_KEY_ID",
-            "AWS_SECRET_ACCESS_KEY",
-            "AWS_SESSION_TOKEN"
-          ]
-        }
-      },
       "agents": {
         "queue": "xxx"
-      }
+      },
+      "command": "script/buildkite/xxx.sh",
+      "name": ":s3: xxx",
+      "plugins": [
+        {
+          "xxx/aws-assume-role#v0.1.0": {
+            "role": "arn:aws:iam::xxx:role/xxx"
+          }
+        },
+        {
+          "ecr#v1.1.4": {
+            "login": true,
+            "account_ids": "xxx",
+            "registry_region": "us-east-1"
+          }
+        },
+        {
+          "docker-compose#v2.5.1": {
+            "run": "xxx",
+            "config": ".buildkite/docker/docker-compose.yml",
+            "env": [
+              "AWS_ACCESS_KEY_ID",
+              "AWS_SECRET_ACCESS_KEY",
+              "AWS_SESSION_TOKEN"
+            ]
+          }
+        }
+      ]
     }
   ]
 }`
@@ -493,11 +688,20 @@ steps:
 		},
 	}
 
+	want := &Pipeline{
+		Steps: Steps{
+			WaitStep{
+				"wait": nil,
+				"if":   "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/",
+			},
+		},
+	}
+
 	const wantJSON = `{
   "steps": [
     {
-      "wait": null,
-      "if": "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/"
+      "if": "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/",
+      "wait": null
     }
   ]
 }`
@@ -515,6 +719,10 @@ steps:
 				}
 			}
 
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+			}
+
 			gotJSON, err := json.MarshalIndent(got, "", "  ")
 			if err != nil {
 				t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
@@ -530,6 +738,7 @@ func TestPipelinePropagatesTracingDataIfAvailable(t *testing.T) {
 	tests := []struct {
 		desc     string
 		pipeline string
+		want     *Pipeline
 		wantJSON string
 	}{
 		{
@@ -538,6 +747,14 @@ func TestPipelinePropagatesTracingDataIfAvailable(t *testing.T) {
 steps:
  - command: echo asd
 `,
+			want: &Pipeline{
+				Env: ordered.MapFromItems(
+					ordered.TupleSS{Key: "BUILDKITE_TRACE_CONTEXT", Value: "123"},
+				),
+				Steps: Steps{
+					&CommandStep{Command: "echo asd"},
+				},
+			},
 			wantJSON: `{
   "env": {
     "BUILDKITE_TRACE_CONTEXT": "123"
@@ -557,6 +774,15 @@ env:
 steps:
  - command: echo asd
 `,
+			want: &Pipeline{
+				Env: ordered.MapFromItems(
+					ordered.TupleSS{Key: "ASD", Value: "1"},
+					ordered.TupleSS{Key: "BUILDKITE_TRACE_CONTEXT", Value: "123"},
+				),
+				Steps: Steps{
+					&CommandStep{Command: "echo asd"},
+				},
+			},
 			wantJSON: `{
   "env": {
     "ASD": "1",

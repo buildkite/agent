@@ -19,7 +19,7 @@ var ErrNoSteps = errors.New("pipeline has no steps")
 //
 // Standard caveats apply - see the package comment.
 type Pipeline struct {
-	Steps ordered.Slice  `yaml:"steps"`
+	Steps Steps          `yaml:"steps"`
 	Env   *ordered.MapSS `yaml:"env,omitempty"`
 
 	// RemainingFields stores any other top-level mapping items so they at least
