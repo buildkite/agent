@@ -96,15 +96,15 @@ steps:
   },
   "steps": [
     {
-      "type": "script",
       "agent_query_rules": [
         "queue=default"
       ],
-      "name": ":docker: building image",
-      "command": "docker build .",
       "agents": {
         "queue": "default"
-      }
+      },
+      "command": "docker build .",
+      "name": ":docker: building image",
+      "type": "script"
     }
   ]
 }`
@@ -204,8 +204,8 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
-      "name": "Build",
-      "command": "echo hello world"
+      "command": "echo hello world",
+      "name": "Build"
     },
     "wait"
   ]
@@ -229,8 +229,8 @@ func TestParserPreservesBools(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
-      "trigger": "hello",
-      "async": true
+      "async": true,
+      "trigger": "hello"
     }
   ]
 }`
@@ -264,7 +264,7 @@ func TestParserPreservesInts(t *testing.T) {
 }
 
 func TestParserPreservesNull(t *testing.T) {
-	input := strings.NewReader("steps:\n  - wait: ~")
+	input := strings.NewReader("steps:\n  - wait: ~\n    if: foo")
 	got, err := Parse(input)
 	if err != nil {
 		t.Fatalf("Parse(input) error = %v", err)
@@ -277,6 +277,7 @@ func TestParserPreservesNull(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
+      "if": "foo",
       "wait": null
     }
   ]
@@ -300,8 +301,8 @@ func TestParserPreservesFloats(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
-      "trigger": "hello",
-      "llamas": 3.142
+      "llamas": 3.142,
+      "trigger": "hello"
     }
   ]
 }`
@@ -324,8 +325,8 @@ func TestParserHandlesDates(t *testing.T) {
 	const wantJSON = `{
   "steps": [
     {
-      "trigger": "hello",
-      "llamas": "2002-08-15T17:18:23.18-06:00"
+      "llamas": "2002-08-15T17:18:23.18-06:00",
+      "trigger": "hello"
     }
   ]
 }`
@@ -356,7 +357,9 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 			ordered.TupleSS{Key: "llamasTEST1", Value: "MyTest"},
 			ordered.TupleSS{Key: "TEST2", Value: "llamas"},
 		),
-		Steps: ordered.Slice{"wait"},
+		Steps: Steps{
+			WaitStep{},
+		},
 	}
 	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS), cmp.Comparer(ordered.EqualSA)); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
@@ -389,10 +392,10 @@ func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 			ordered.TupleSS{Key: "TEAM2", Value: "Australia"},
 			ordered.TupleSS{Key: "HEADLINE", Value: "England smashes Australia to win the ashes in 1912!!"},
 		),
-		Steps: ordered.Slice{
-			ordered.MapFromItems(
-				ordered.TupleSA{Key: "command", Value: "echo England smashes Australia to win the ashes in 1912!!"},
-			),
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo England smashes Australia to win the ashes in 1912!!",
+			},
 		},
 	}
 	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS), cmp.Comparer(ordered.EqualSA)); diff != "" {
@@ -434,30 +437,36 @@ steps:
 	const wantJSON = `{
   "steps": [
     {
-      "name": ":s3: xxx",
-      "command": "script/buildkite/xxx.sh",
-      "plugins": {
-        "xxx/aws-assume-role#v0.1.0": {
-          "role": "arn:aws:iam::xxx:role/xxx"
-        },
-        "ecr#v1.1.4": {
-          "login": true,
-          "account_ids": "xxx",
-          "registry_region": "us-east-1"
-        },
-        "docker-compose#v2.5.1": {
-          "run": "xxx",
-          "config": ".buildkite/docker/docker-compose.yml",
-          "env": [
-            "AWS_ACCESS_KEY_ID",
-            "AWS_SECRET_ACCESS_KEY",
-            "AWS_SESSION_TOKEN"
-          ]
-        }
-      },
       "agents": {
         "queue": "xxx"
-      }
+      },
+      "command": "script/buildkite/xxx.sh",
+      "name": ":s3: xxx",
+      "plugins": [
+        {
+          "xxx/aws-assume-role#v0.1.0": {
+            "role": "arn:aws:iam::xxx:role/xxx"
+          }
+        },
+        {
+          "ecr#v1.1.4": {
+            "login": true,
+            "account_ids": "xxx",
+            "registry_region": "us-east-1"
+          }
+        },
+        {
+          "docker-compose#v2.5.1": {
+            "run": "xxx",
+            "config": ".buildkite/docker/docker-compose.yml",
+            "env": [
+              "AWS_ACCESS_KEY_ID",
+              "AWS_SECRET_ACCESS_KEY",
+              "AWS_SESSION_TOKEN"
+            ]
+          }
+        }
+      ]
     }
   ]
 }`
@@ -496,8 +505,8 @@ steps:
 	const wantJSON = `{
   "steps": [
     {
-      "wait": null,
-      "if": "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/"
+      "if": "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/",
+      "wait": null
     }
   ]
 }`

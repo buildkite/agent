@@ -76,6 +76,15 @@ func (m *Map[K, V]) Get(k K) (V, bool) {
 	return m.items[idx].Value, true
 }
 
+// Contains reports if the map contains the key.
+func (m *Map[K, V]) Contains(k K) bool {
+	if m == nil {
+		return false
+	}
+	_, has := m.index[k]
+	return has
+}
+
 // Set sets the value for the given key. If the key exists, it remains in its
 // existing spot, otherwise it is added to the end of the map.
 func (m *Map[K, V]) Set(k K, v V) {
@@ -301,8 +310,10 @@ func (m *Map[K, V]) UnmarshalJSON(b []byte) error {
 // UnmarshalYAML unmarshals a YAML mapping node into this map. It only supports
 // K = string. Where yaml.v3 typically infers map[string]any for unmarshaling
 // mappings into any, this method chooses *Map[string, any] instead.
+// If V = *yaml.Node, then the value nodes are not decoded. This is useful for
+// a shallow unmarshaling step.
 func (m *Map[K, V]) UnmarshalYAML(n *yaml.Node) error {
-	om, ok := (any)(m).(*Map[string, V])
+	om, ok := any(m).(*Map[string, V])
 	if !ok {
 		var zk K
 		return fmt.Errorf("cannot unmarshal into ordered.Map with key type %T (want string)", zk)
@@ -312,32 +323,41 @@ func (m *Map[K, V]) UnmarshalYAML(n *yaml.Node) error {
 		return fmt.Errorf("line %d, col %d: wrong kind (got %x, want %x)", n.Line, n.Column, n.Kind, yaml.MappingNode)
 	}
 
-	if sam, ok := (any)(m).(*Map[string, any]); ok {
+	switch tm := any(m).(type) {
+	case *Map[string, any]:
 		// Use decode, then steal the contents.
-		sam2, err := decode(make(map[*yaml.Node]bool), n)
+		sm, err := decode(make(map[*yaml.Node]bool), n)
 		if err != nil {
 			return err
 		}
-		*sam = *(sam2.(*Map[string, any]))
+		*tm = *sm.(*Map[string, any])
 		return nil
-	}
 
-	return rangeYAMLMap(n, func(key string, val *yaml.Node) error {
-		// Try decode? (maybe V is a type like []any).
-		nv, err := decode(make(map[*yaml.Node]bool), val)
-		if err != nil {
-			return err
-		}
-		v, ok := nv.(V)
-		if !ok {
-			// Let yaml.v3 choose what to do with the specific type.
-			if err := val.Decode(&v); err != nil {
+	case *Map[string, *yaml.Node]:
+		// Load into the map without any value decoding.
+		return rangeYAMLMap(n, func(key string, val *yaml.Node) error {
+			tm.Set(key, val)
+			return nil
+		})
+
+	default:
+		return rangeYAMLMap(n, func(key string, val *yaml.Node) error {
+			// Try decode? (maybe V is a type like []any).
+			nv, err := decode(make(map[*yaml.Node]bool), val)
+			if err != nil {
 				return err
 			}
-		}
-		om.Set(key, v)
-		return nil
-	})
+			v, ok := nv.(V)
+			if !ok {
+				// Let yaml.v3 choose what to do with the specific type.
+				if err := val.Decode(&v); err != nil {
+					return err
+				}
+			}
+			om.Set(key, v)
+			return nil
+		})
+	}
 }
 
 // decode recursively unmarshals n into a generic type (any, []any, or
