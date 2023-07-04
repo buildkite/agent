@@ -127,10 +127,7 @@ func (p *Process) Run(ctx context.Context) error {
 	p.command = exec.Command(p.conf.Path, p.conf.Args...)
 
 	// Setup the process to create a process group if supported
-	// See https://github.com/kr/pty/issues/35 for context
-	if !p.conf.PTY {
-		p.setupProcessGroup()
-	}
+	p.setupProcessGroup()
 
 	// Configure working dir and fail if it doesn't exist, otherwise
 	// we get confusing errors about fork/exec failing because the file
