@@ -20,6 +20,9 @@ import (
 // See https://docs.microsoft.com/en-us/windows/console/generateconsolectrlevent
 
 func (p *Process) setupProcessGroup() {
+	if p.conf.PTY {
+		return
+	}
 	p.command.SysProcAttr = &windows.SysProcAttr{
 		CreationFlags: windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NEW_PROCESS_GROUP,
 	}
