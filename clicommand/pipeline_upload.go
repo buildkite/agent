@@ -13,12 +13,12 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/internal/redactor"
 	"github.com/buildkite/agent/v3/internal/stdin"
+	"github.com/buildkite/agent/v3/job/shell"
 	"github.com/urfave/cli"
 )
 

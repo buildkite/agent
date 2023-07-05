@@ -1,8 +1,8 @@
-// Package bootstrap provides management of the phases of execution of a
+// package job provides management of the phases of execution of a
 // Buildkite job.
 //
 // It is intended for internal use by buildkite-agent only.
-package bootstrap
+package job
 
 import (
 	"context"
@@ -19,13 +19,13 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/internal/redactor"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/utils"
+	"github.com/buildkite/agent/v3/job/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"

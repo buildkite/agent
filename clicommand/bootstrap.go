@@ -9,9 +9,9 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/buildkite/agent/v3/bootstrap"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/job"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
 )
@@ -411,7 +411,7 @@ var BootstrapCommand = cli.Command{
 		}
 
 		// Configure the bootstraper
-		bootstrap := bootstrap.New(bootstrap.Config{
+		bootstrap := job.New(job.Config{
 			AgentName:                    cfg.AgentName,
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,

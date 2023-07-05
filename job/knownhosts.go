@@ -1,4 +1,4 @@
-package bootstrap
+package job
 
 import (
 	"bufio"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/job/shell"
 	homedir "github.com/mitchellh/go-homedir"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
