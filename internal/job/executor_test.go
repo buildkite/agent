@@ -86,13 +86,13 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 	var err error
 
 	// When there's no tracing backend, the tracer should be a no-op.
-	b := New(Config{})
+	e := New(ExecutorConfig{})
 
 	oriCtx := context.Background()
-	b.shell, err = shell.New()
+	e.shell, err = shell.New()
 	assert.NoError(t, err)
 
-	span, _, stopper := b.startTracing(oriCtx)
+	span, _, stopper := e.startTracing(oriCtx)
 	assert.Equal(t, span, &tracetools.NoopSpan{})
 	span.FinishWithError(nil) // Finish the nil span, just for completeness' sake
 
@@ -106,14 +106,14 @@ func TestStartTracing_Datadog(t *testing.T) {
 	var err error
 
 	// With the Datadog tracing backend, the global tracer should be from Datadog.
-	cfg := Config{TracingBackend: "datadog"}
-	b := New(cfg)
+	cfg := ExecutorConfig{TracingBackend: "datadog"}
+	e := New(cfg)
 
 	oriCtx := context.Background()
-	b.shell, err = shell.New()
+	e.shell, err = shell.New()
 	assert.NoError(t, err)
 
-	span, ctx, stopper := b.startTracing(oriCtx)
+	span, ctx, stopper := e.startTracing(oriCtx)
 	span.FinishWithError(nil)
 
 	assert.IsType(t, opentracer.New(), opentracing.GlobalTracer())

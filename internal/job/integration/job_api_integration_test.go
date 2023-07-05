@@ -47,7 +47,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 			},
 		}
 
-		req, err := http.NewRequest(http.MethodGet, "http://bootstrap/api/current-job/v0/env", nil)
+		req, err := http.NewRequest(http.MethodGet, "http://job-executor/api/current-job/v0/env", nil)
 		if err != nil {
 			t.Errorf("creating request: %v", err)
 			c.Exit(1)
@@ -94,7 +94,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 			return
 		}
 
-		req, err = http.NewRequest(http.MethodPatch, "http://bootstrap/api/current-job/v0/env", bytes.NewBuffer(b))
+		req, err = http.NewRequest(http.MethodPatch, "http://job-executor/api/current-job/v0/env", bytes.NewBuffer(b))
 		if err != nil {
 			t.Errorf("creating patch request: %v", err)
 			c.Exit(1)

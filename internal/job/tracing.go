@@ -36,8 +36,8 @@ type stopper func()
 
 func noopStopper() {}
 
-func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	switch b.Config.TracingBackend {
+func (e *Executor) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+	switch e.ExecutorConfig.TracingBackend {
 	case tracetools.BackendDatadog:
 		// Newer versions of the tracing libs print out diagnostic info which spams the
 		// Buildkite agent logs. Disable it by default unless it's been explicitly set.
@@ -45,40 +45,40 @@ func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.
 			os.Setenv("DD_TRACE_STARTUP_LOGS", "false")
 		}
 
-		return b.startTracingDatadog(ctx)
+		return e.startTracingDatadog(ctx)
 
 	case tracetools.BackendOpenTelemetry:
-		return b.startTracingOpenTelemetry(ctx)
+		return e.startTracingOpenTelemetry(ctx)
 
 	case tracetools.BackendNone:
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 
 	default:
-		b.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", b.Config.TracingBackend)
-		b.Config.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the bootstrap's tracking backend
+		e.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", e.ExecutorConfig.TracingBackend)
+		e.ExecutorConfig.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the job's tracking backend
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 	}
 }
 
-func (b *Bootstrap) ddResourceName() string {
-	label, ok := b.shell.Env.Get("BUILDKITE_LABEL")
+func (e *Executor) ddResourceName() string {
+	label, ok := e.shell.Env.Get("BUILDKITE_LABEL")
 	if !ok {
 		label = "job"
 	}
 
-	return b.OrganizationSlug + "/" + b.PipelineSlug + "/" + label
+	return e.OrganizationSlug + "/" + e.PipelineSlug + "/" + label
 }
 
 // startTracingDatadog sets up tracing based on the config values. It uses opentracing as an
 // abstraction so the agent can support multiple libraries if needbe.
-func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+func (e *Executor) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	opts := []tracer.StartOption{
-		tracer.WithService(b.Config.TracingServiceName),
+		tracer.WithService(e.ExecutorConfig.TracingServiceName),
 		tracer.WithSampler(tracer.NewAllSampler()),
 		tracer.WithAnalytics(true),
 	}
 
-	tags := Merge(GenericTracingExtras(b, b.shell.Env), DDTracingExtras())
+	tags := Merge(GenericTracingExtras(e, e.shell.Env), DDTracingExtras())
 	opts = slices.Grow(opts, len(tags))
 	for k, v := range tags {
 		opts = append(opts, tracer.WithGlobalTag(k, v))
@@ -86,11 +86,11 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 
 	opentracing.SetGlobalTracer(opentracer.New(opts...))
 
-	wireContext := b.extractDDTraceCtx()
+	wireContext := e.extractDDTraceCtx()
 
 	span := opentracing.StartSpan("job.run",
 		opentracing.ChildOf(wireContext),
-		opentracing.Tag{Key: ddext.ResourceName, Value: b.ddResourceName()},
+		opentracing.Tag{Key: ddext.ResourceName, Value: e.ddResourceName()},
 	)
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
@@ -99,8 +99,8 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
-func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
-	sctx, err := tracetools.DecodeTraceContext(b.shell.Env.Dump())
+func (e *Executor) extractDDTraceCtx() opentracing.SpanContext {
+	sctx, err := tracetools.DecodeTraceContext(e.shell.Env.Dump())
 	if err != nil {
 		// Return nil so a new span will be created
 		return nil
@@ -108,14 +108,14 @@ func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
 	return sctx
 }
 
-func (b *Bootstrap) otRootSpanName() string {
-	base := b.OrganizationSlug + "/" + b.PipelineSlug + "/"
-	key, ok := b.shell.Env.Get("BUILDKITE_STEP_KEY")
+func (e *Executor) otRootSpanName() string {
+	base := e.OrganizationSlug + "/" + e.PipelineSlug + "/"
+	key, ok := e.shell.Env.Get("BUILDKITE_STEP_KEY")
 	if ok && key != "" {
 		return base + key
 	}
 
-	label, ok := b.shell.Env.Get("BUILDKITE_LABEL")
+	label, ok := e.shell.Env.Get("BUILDKITE_LABEL")
 	if ok && label != "" {
 		return base + label
 	}
@@ -123,24 +123,24 @@ func (b *Bootstrap) otRootSpanName() string {
 	return base + "job"
 }
 
-func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	client := otlptracegrpc.NewClient()
 	exporter, err := otlptrace.New(ctx, client)
 	if err != nil {
-		b.shell.Errorf("Error creating OTLP trace exporter %s. Disabling tracing.", err)
+		e.shell.Errorf("Error creating OTLP trace exporter %s. Disabling tracing.", err)
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 	}
 
 	attributes := []attribute.KeyValue{
-		semconv.ServiceNameKey.String(b.Config.TracingServiceName),
+		semconv.ServiceNameKey.String(e.ExecutorConfig.TracingServiceName),
 		semconv.ServiceVersionKey.String(version.Version()),
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
 
-	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(b, b.shell.Env))
+	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(e, e.shell.Env))
 	for k, v := range warnings {
-		b.shell.Warningf("Unknown attribute type (key: %v, value: %v (%T)) passed when initialising OpenTelemetry. This is a bug, submit this error message at https://github.com/buildkite/agent/issues", k, v, v)
-		b.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", v)
+		e.shell.Warningf("Unknown attribute type (key: %v, value: %v (%T)) passed when initialising OpenTelemetry. This is a bug, submit this error message at https://github.com/buildkite/agent/issues", k, v, v)
+		e.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", v)
 	}
 
 	attributes = append(attributes, extras...)
@@ -167,7 +167,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
-	ctx, span := tracer.Start(ctx, b.otRootSpanName(),
+	ctx, span := tracer.Start(ctx, e.otRootSpanName(),
 		trace.WithAttributes(
 			attribute.String("analytics.event", "true"),
 		),
@@ -182,11 +182,11 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
 }
 
-func GenericTracingExtras(b *Bootstrap, env *env.Environment) map[string]any {
+func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
 	buildID, _ := env.Get("BUILDKITE_BUILD_ID")
 	buildNumber, _ := env.Get("BUILDKITE_BUILD_NUMBER")
 	buildURL, _ := env.Get("BUILDKITE_BUILD_URL")
-	jobURL := fmt.Sprintf("%s#%s", buildURL, b.JobID)
+	jobURL := fmt.Sprintf("%s#%s", buildURL, e.JobID)
 	source, _ := env.Get("BUILDKITE_SOURCE")
 
 	retry := 0
@@ -224,15 +224,15 @@ func GenericTracingExtras(b *Bootstrap, env *env.Environment) map[string]any {
 	}
 
 	return map[string]any{
-		"buildkite.agent":             b.AgentName,
+		"buildkite.agent":             e.AgentName,
 		"buildkite.version":           version.Version(),
-		"buildkite.queue":             b.Queue,
-		"buildkite.org":               b.OrganizationSlug,
-		"buildkite.pipeline":          b.PipelineSlug,
-		"buildkite.branch":            b.Branch,
+		"buildkite.queue":             e.Queue,
+		"buildkite.org":               e.OrganizationSlug,
+		"buildkite.pipeline":          e.PipelineSlug,
+		"buildkite.branch":            e.Branch,
 		"buildkite.job_label":         jobLabel,
 		"buildkite.job_key":           jobKey,
-		"buildkite.job_id":            b.JobID,
+		"buildkite.job_id":            e.JobID,
 		"buildkite.job_url":           jobURL,
 		"buildkite.build_id":          buildID,
 		"buildkite.build_number":      buildNumber,
@@ -287,8 +287,8 @@ func toOpenTelemetryAttributes(extras map[string]any) ([]attribute.KeyValue, map
 	return attrs, unknownAttrTypes
 }
 
-func (b *Bootstrap) implementationSpecificSpanName(otelName, ddName string) string {
-	switch b.TracingBackend {
+func (e *Executor) implementationSpecificSpanName(otelName, ddName string) string {
+	switch e.TracingBackend {
 	case tracetools.BackendDatadog:
 		return ddName
 	case tracetools.BackendOpenTelemetry:

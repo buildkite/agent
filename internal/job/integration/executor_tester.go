@@ -23,8 +23,8 @@ import (
 	"github.com/buildkite/bintest/v3"
 )
 
-// BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
-type BootstrapTester struct {
+// ExecutorTester invokes a buildkite-agent bootstrap script with a temporary environment
+type ExecutorTester struct {
 	Name          string
 	Args          []string
 	Env           []string
@@ -43,7 +43,7 @@ type BootstrapTester struct {
 	mocks    []*bintest.Mock
 }
 
-func NewBootstrapTester() (*BootstrapTester, error) {
+func NewBootstrapTester() (*ExecutorTester, error) {
 	// The job API experiment adds a unix domain socket to a directory in the home directory
 	// UDS names are limited to 108 characters, so we need to use a shorter home directory
 	// Who knows what's going on in windowsland
@@ -82,7 +82,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, fmt.Errorf("creating test git repo: %w", err)
 	}
 
-	bt := &BootstrapTester{
+	bt := &ExecutorTester{
 		Name: os.Args[0],
 		Args: []string{"bootstrap"},
 		Repo: repo,
@@ -146,33 +146,33 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	return bt, nil
 }
 
-func (b *BootstrapTester) EnableGitMirrors() error {
+func (e *ExecutorTester) EnableGitMirrors() error {
 	gitMirrorsDir, err := os.MkdirTemp("", "bootstrap-git-mirrors")
 	if err != nil {
 		return fmt.Errorf("making bootstrap-git-mirrors directory: %w", err)
 	}
 
-	b.GitMirrorsDir = gitMirrorsDir
-	b.Env = append(b.Env, "BUILDKITE_GIT_MIRRORS_PATH="+gitMirrorsDir)
+	e.GitMirrorsDir = gitMirrorsDir
+	e.Env = append(e.Env, "BUILDKITE_GIT_MIRRORS_PATH="+gitMirrorsDir)
 
 	return nil
 }
 
 // Mock creates a mock for a binary using bintest
-func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
-	mock, err := bintest.NewMock(filepath.Join(b.PathDir, name))
+func (e *ExecutorTester) Mock(name string) (*bintest.Mock, error) {
+	mock, err := bintest.NewMock(filepath.Join(e.PathDir, name))
 	if err != nil {
 		return mock, err
 	}
 
-	b.mocks = append(b.mocks, mock)
+	e.mocks = append(e.mocks, mock)
 	return mock, nil
 }
 
 // MustMock will fail the test if creating the mock fails
-func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
+func (e *ExecutorTester) MustMock(t *testing.T, name string) *bintest.Mock {
 	t.Helper()
-	mock, err := b.Mock(name)
+	mock, err := e.Mock(name)
 	if err != nil {
 		t.Fatalf("BootstrapTester.Mock(%q) error = %v", name, err)
 	}
@@ -180,8 +180,8 @@ func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
 }
 
 // HasMock returns true if a mock has been created by that name
-func (b *BootstrapTester) HasMock(name string) bool {
-	for _, m := range b.mocks {
+func (e *ExecutorTester) HasMock(name string) bool {
+	for _, m := range e.mocks {
 		if strings.TrimSuffix(m.Name, filepath.Ext(m.Name)) == name {
 			return true
 		}
@@ -190,19 +190,19 @@ func (b *BootstrapTester) HasMock(name string) bool {
 }
 
 // MockAgent creates a mock for the buildkite-agent binary
-func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
+func (e *ExecutorTester) MockAgent(t *testing.T) *bintest.Mock {
 	t.Helper()
-	agent := b.MustMock(t, "buildkite-agent")
+	agent := e.MustMock(t, "buildkite-agent")
 	agent.Expect("env", "dump").
 		Min(0).
 		Max(bintest.InfiniteTimes).
-		AndCallFunc(mockEnvAsJSONOnStdout(b))
+		AndCallFunc(mockEnvAsJSONOnStdout(e))
 
 	return agent
 }
 
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
-func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
+func (e *ExecutorTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
 	hookScript := filepath.Join(dir, name)
 	body := ""
 
@@ -222,107 +222,107 @@ func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir stri
 
 // ExpectLocalHook creates a mock object and a script in the git repository's buildkite hooks dir
 // that proxies to the mock. This lets you set up expectations on a local  hook
-func (b *BootstrapTester) ExpectLocalHook(name string) *bintest.Expectation {
-	hooksDir := filepath.Join(b.Repo.Path, ".buildkite", "hooks")
+func (e *ExecutorTester) ExpectLocalHook(name string) *bintest.Expectation {
+	hooksDir := filepath.Join(e.Repo.Path, ".buildkite", "hooks")
 
 	if err := os.MkdirAll(hooksDir, 0o700); err != nil {
 		panic(err)
 	}
 
-	hookPath, err := b.writeHookScript(b.hookMock, name, hooksDir, "local", name)
+	hookPath, err := e.writeHookScript(e.hookMock, name, hooksDir, "local", name)
 	if err != nil {
 		panic(err)
 	}
 
-	if err = b.Repo.Add(hookPath); err != nil {
+	if err = e.Repo.Add(hookPath); err != nil {
 		panic(err)
 	}
-	if err = b.Repo.Commit("Added local hook file %s", name); err != nil {
+	if err = e.Repo.Commit("Added local hook file %s", name); err != nil {
 		panic(err)
 	}
 
-	return b.hookMock.Expect("local", name)
+	return e.hookMock.Expect("local", name)
 }
 
 // ExpectGlobalHook creates a mock object and a script in the global buildkite hooks dir
 // that proxies to the mock. This lets you set up expectations on a global hook
-func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
-	_, err := b.writeHookScript(b.hookMock, name, b.HooksDir, "global", name)
+func (e *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
+	_, err := e.writeHookScript(e.hookMock, name, e.HooksDir, "global", name)
 	if err != nil {
 		panic(err)
 	}
 
-	return b.hookMock.Expect("global", name)
+	return e.hookMock.Expect("global", name)
 }
 
 // Run the bootstrap and return any errors
-func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
+func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 	t.Helper()
 
 	// Mock out the meta-data calls to the agent after checkout
-	if !b.HasMock("buildkite-agent") {
-		agent := b.MockAgent(t)
+	if !e.HasMock("buildkite-agent") {
+		agent := e.MockAgent(t)
 		agent.
 			Expect("meta-data", "exists", "buildkite:git:commit").
 			Optionally().
 			AndExitWith(0)
 	}
 
-	path, err := exec.LookPath(b.Name)
+	path, err := exec.LookPath(e.Name)
 	if err != nil {
 		return err
 	}
 
-	b.cmdLock.Lock()
-	b.cmd = exec.Command(path, b.Args...)
+	e.cmdLock.Lock()
+	e.cmd = exec.Command(path, e.Args...)
 
 	buf := &buffer{}
 
 	if os.Getenv(`DEBUG_BOOTSTRAP`) == "1" {
 		w := newTestLogWriter(t)
-		b.cmd.Stdout = io.MultiWriter(buf, w)
-		b.cmd.Stderr = io.MultiWriter(buf, w)
+		e.cmd.Stdout = io.MultiWriter(buf, w)
+		e.cmd.Stderr = io.MultiWriter(buf, w)
 	} else {
-		b.cmd.Stdout = buf
-		b.cmd.Stderr = buf
+		e.cmd.Stdout = buf
+		e.cmd.Stderr = buf
 	}
 
-	b.cmd.Env = append(b.Env, env...)
+	e.cmd.Env = append(e.Env, env...)
 
-	err = b.cmd.Start()
+	err = e.cmd.Start()
 	if err != nil {
-		b.cmdLock.Unlock()
+		e.cmdLock.Unlock()
 		return err
 	}
 
-	b.cmdLock.Unlock()
+	e.cmdLock.Unlock()
 
-	err = b.cmd.Wait()
-	b.Output = buf.String()
+	err = e.cmd.Wait()
+	e.Output = buf.String()
 	return err
 }
 
-func (b *BootstrapTester) Cancel() error {
-	b.cmdLock.Lock()
-	defer b.cmdLock.Unlock()
-	log.Printf("Killing pid %d", b.cmd.Process.Pid)
-	return b.cmd.Process.Signal(syscall.SIGINT)
+func (e *ExecutorTester) Cancel() error {
+	e.cmdLock.Lock()
+	defer e.cmdLock.Unlock()
+	log.Printf("Killing pid %d", e.cmd.Process.Pid)
+	return e.cmd.Process.Signal(syscall.SIGINT)
 }
 
-func (b *BootstrapTester) CheckMocks(t *testing.T) {
+func (e *ExecutorTester) CheckMocks(t *testing.T) {
 	t.Helper()
-	for _, mock := range b.mocks {
+	for _, mock := range e.mocks {
 		mock.Check(t)
 	}
 }
 
-func (b *BootstrapTester) CheckoutDir() string {
-	return filepath.Join(b.BuildDir, "test-agent", "test", "test-project")
+func (e *ExecutorTester) CheckoutDir() string {
+	return filepath.Join(e.BuildDir, "test-agent", "test", "test-project")
 }
 
-func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
+func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 	re := regexp.MustCompile(key + "=(.+)\n")
-	matches := re.FindStringSubmatch(b.Output)
+	matches := re.FindStringSubmatch(e.Output)
 	if len(matches) == 0 {
 		return "", false
 	}
@@ -330,59 +330,59 @@ func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
 }
 
 // Run the bootstrap and then check the mocks
-func (b *BootstrapTester) RunAndCheck(t *testing.T, env ...string) {
+func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
-	err := b.Run(t, env...)
-	t.Logf("Bootstrap output:\n%s", b.Output)
+	err := e.Run(t, env...)
+	t.Logf("Bootstrap output:\n%s", e.Output)
 
 	if err != nil {
 		t.Fatalf("BootstrapTester.Run(%q) = %v", env, err)
 	}
 
-	b.CheckMocks(t)
+	e.CheckMocks(t)
 }
 
 // Close the tester, delete all the directories and mocks
-func (b *BootstrapTester) Close() error {
-	for _, mock := range b.mocks {
+func (e *ExecutorTester) Close() error {
+	for _, mock := range e.mocks {
 		if err := mock.Close(); err != nil {
 			return err
 		}
 	}
-	if b.Repo != nil {
-		if err := b.Repo.Close(); err != nil {
+	if e.Repo != nil {
+		if err := e.Repo.Close(); err != nil {
 			return err
 		}
 	}
-	if err := os.RemoveAll(b.HomeDir); err != nil {
+	if err := os.RemoveAll(e.HomeDir); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(b.BuildDir); err != nil {
+	if err := os.RemoveAll(e.BuildDir); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(b.HooksDir); err != nil {
+	if err := os.RemoveAll(e.HooksDir); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(b.PathDir); err != nil {
+	if err := os.RemoveAll(e.PathDir); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(b.PluginsDir); err != nil {
+	if err := os.RemoveAll(e.PluginsDir); err != nil {
 		return err
 	}
-	if b.GitMirrorsDir != "" {
-		if err := os.RemoveAll(b.GitMirrorsDir); err != nil {
+	if e.GitMirrorsDir != "" {
+		if err := os.RemoveAll(e.GitMirrorsDir); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func mockEnvAsJSONOnStdout(b *BootstrapTester) func(c *bintest.Call) {
+func mockEnvAsJSONOnStdout(e *ExecutorTester) func(c *bintest.Call) {
 	return func(c *bintest.Call) {
 		envMap := map[string]string{}
 
-		for _, e := range b.Env { // The env from the bootstrap tester
+		for _, e := range e.Env { // The env from the bootstrap tester
 			k, v, _ := env.Split(e)
 			envMap[k] = v
 		}
