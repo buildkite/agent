@@ -176,7 +176,7 @@ func TestGitCheckoutValidatesRef(t *testing.T) {
 }
 
 func TestGitCheckout(t *testing.T) {
-	sh := new(mockShellRunner).Expect("git", "checkout", "-f", "-q", "main")
+	sh := new(mockShellRunner).Expect("git", "-c", "advice.detachedHead=false", "checkout", "-f", "-q", "main")
 	defer sh.Check(t)
 	err := gitCheckout(context.Background(), sh, "-f -q", "main")
 	require.NoError(t, err)
