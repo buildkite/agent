@@ -8,16 +8,18 @@ steps:
     key: test-go-fmt
     command: ".buildkite/steps/test-go-fmt.sh"
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
 
   - name: ":robot_face: Check code generation"
     key: check-code-generation
     command: .buildkite/steps/check-code-generation.sh
     plugins:
-      docker-compose#v4.11.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
 
   - name: ":linux: Linux AMD64 Tests"
@@ -25,8 +27,9 @@ steps:
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
       test-collector#v1.2.0:
         files: "junit-*.xml"
@@ -39,8 +42,9 @@ steps:
     agents:
       queue: agent-runners-linux-arm64
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
       test-collector#v1.2.0:
         files: "junit-*.xml"
@@ -53,8 +57,9 @@ steps:
     agents:
       queue: agent-runners-linux-arm64
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
       test-collector#v1.2.0:
         files: "junit-*.xml"
@@ -92,8 +97,9 @@ steps:
         - test-linux-arm64
       artifact_paths: "pkg/*"
       plugins:
-        docker-compose#v3.0.0:
+        docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
+          cli-version: 2
           run: agent
       matrix:
         setup:
@@ -133,8 +139,9 @@ steps:
     depends_on: build-binary
     command: ".buildkite/steps/test-bk.sh"
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
         env:
           - BUILDKITE_AGENT_ACCESS_TOKEN
@@ -226,7 +233,7 @@ steps:
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
     plugins:
-      docker-compose#v1.8.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.release.yml
         run: github-release
 
