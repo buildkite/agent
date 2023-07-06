@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/job/shell"
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	homedir "github.com/mitchellh/go-homedir"
 	"golang.org/x/crypto/ssh/knownhosts"
 )

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/job/shell"
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
 )

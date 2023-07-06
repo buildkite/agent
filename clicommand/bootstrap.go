@@ -11,7 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
-	"github.com/buildkite/agent/v3/job"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
 )

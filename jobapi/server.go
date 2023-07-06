@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/socket"
-	"github.com/buildkite/agent/v3/job/shell"
 )
 
 // Server is a Job API server. It provides an HTTP API with which to interact with the job currently running in the buildkite agent

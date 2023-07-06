@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/utils"
-	"github.com/buildkite/agent/v3/job/shell"
 )
 
 // Find returns the absolute path to the best matching hook file in a path, or

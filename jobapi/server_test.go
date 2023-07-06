@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/job/shell"
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/google/go-cmp/cmp"
 )
