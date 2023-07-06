@@ -1,10 +1,10 @@
-package bootstrap
+package job
 
 import (
 	"context"
 	"testing"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redactor"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/google/go-cmp/cmp"

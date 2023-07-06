@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/socket"
 )
 
