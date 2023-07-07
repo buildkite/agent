@@ -820,3 +820,160 @@ steps:
 		})
 	}
 }
+
+func TestParserCommandVersusCommands(t *testing.T) {
+	t.Parallel()
+
+	want1Cmd := &Pipeline{
+		Steps: Steps{
+			&CommandStep{Command: "echo foo"},
+		},
+	}
+
+	want1CmdJSON := `{
+  "steps": [
+    {
+      "command": "echo foo"
+    }
+  ]
+}`
+
+	want2Cmd := &Pipeline{
+		Steps: Steps{
+			&CommandStep{Command: "echo foo\necho bar"},
+		},
+	}
+
+	want2CmdJSON := `{
+  "steps": [
+    {
+      "command": "echo foo\necho bar"
+    }
+  ]
+}`
+
+	want2CmdNewline := &Pipeline{
+		Steps: Steps{
+			&CommandStep{Command: "echo foo\necho bar\n"},
+		},
+	}
+
+	want2CmdNewlineJSON := `{
+  "steps": [
+    {
+      "command": "echo foo\necho bar\n"
+    }
+  ]
+}`
+
+	tests := []struct {
+		desc     string
+		input    string
+		want     *Pipeline
+		wantJSON string
+	}{
+		{
+			desc: "Step with one command (scalar)",
+			input: `---
+steps:
+  - command: echo foo
+`,
+			want:     want1Cmd,
+			wantJSON: want1CmdJSON,
+		},
+		{
+			desc: "Step with one command (sequence)",
+			input: `---
+steps:
+  - command:
+    - echo foo
+`,
+			want:     want1Cmd,
+			wantJSON: want1CmdJSON,
+		},
+		{
+			desc: "Step with two command (scalar)",
+			input: `---
+steps:
+  - command: |
+      echo foo
+      echo bar
+`,
+			want:     want2CmdNewline,
+			wantJSON: want2CmdNewlineJSON,
+		},
+		{
+			desc: "Step with two command (sequence)",
+			input: `---
+steps:
+  - command:
+    - echo foo
+    - echo bar
+`,
+			want:     want2Cmd,
+			wantJSON: want2CmdJSON,
+		},
+		{
+			desc: "Step with one commands (scalar)",
+			input: `---
+steps:
+  - commands: echo foo
+`,
+			want:     want1Cmd,
+			wantJSON: want1CmdJSON,
+		},
+		{
+			desc: "Step with one commands (sequence)",
+			input: `---
+steps:
+  - commands:
+    - echo foo
+`,
+			want:     want1Cmd,
+			wantJSON: want1CmdJSON,
+		},
+		{
+			desc: "Step with two commands (scalar)",
+			input: `---
+steps:
+  - commands: |
+      echo foo
+      echo bar
+`,
+			want:     want2CmdNewline,
+			wantJSON: want2CmdNewlineJSON,
+		},
+		{
+			desc: "Step with two commands (sequence)",
+			input: `---
+steps:
+  - commands:
+    - echo foo
+    - echo bar
+`,
+			want:     want2Cmd,
+			wantJSON: want2CmdJSON,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+			got, err := Parse(strings.NewReader(test.input))
+			if err != nil {
+				t.Fatalf("Parse(%q) error = %v", test.input, err)
+			}
+			if diff := cmp.Diff(got, test.want, cmp.Comparer(ordered.EqualSA)); err != nil {
+				t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+			}
+			gotJSON, err := json.MarshalIndent(got, "", "  ")
+			if err != nil {
+				t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+			}
+			if diff := cmp.Diff(string(gotJSON), test.wantJSON); diff != "" {
+				t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}

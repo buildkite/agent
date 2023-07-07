@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
@@ -56,9 +57,11 @@ func (c *CommandStep) MarshalJSON() ([]byte, error) {
 func (c *CommandStep) UnmarshalYAML(n *yaml.Node) error {
 	// Unmarshal into this secret type, then normalise.
 	var full struct {
-		Command  string   `yaml:"command,omitempty"`
-		Commands []string `yaml:"commands,omitempty"`
-		Plugins  Plugins  `yaml:"plugins,omitempty"`
+		// "command" and "commands" are two ways to spell the same thing.
+		// They can both be single strings, or sequences of strings.
+		Command  ordered.Strings `yaml:"command"`
+		Commands ordered.Strings `yaml:"commands"`
+		Plugins  Plugins         `yaml:"plugins"`
 
 		RemainingFields map[string]any `yaml:",inline"`
 	}
@@ -66,11 +69,11 @@ func (c *CommandStep) UnmarshalYAML(n *yaml.Node) error {
 		return err
 	}
 
-	// Normalise into Command.
-	c.Command = full.Command
-	if c.Command == "" {
-		c.Command = strings.Join(full.Commands, "\n")
-	}
+	// Normalise command and commands into one single command string.
+	// This makes signing easier later on - it's easier to hash one string
+	// consistently than it is to pick apart multiple strings in a consistent
+	// way in order to hash all of them consistently.
+	c.Command = strings.Join(append(full.Command, full.Commands...), "\n")
 
 	// Copy remaining fields.
 	c.Plugins = full.Plugins
