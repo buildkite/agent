@@ -117,11 +117,11 @@ func (c *CommandStep) interpolate(env interpolate.Env) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Plugins.interpolate(env); err != nil {
+	if err := interpolateSlice(env, c.Plugins); err != nil {
 		return err
 	}
 	// NB: Do not interpolate Signature.
-	if _, err := interpolateAny(env, c.RemainingFields); err != nil {
+	if err := interpolateMap(env, c.RemainingFields); err != nil {
 		return err
 	}
 	c.Command = cmd

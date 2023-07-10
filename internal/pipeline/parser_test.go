@@ -507,6 +507,55 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 	}
 }
 
+func TestParserInterpolatesPluginConfigs(t *testing.T) {
+	envMap := env.New()
+	input := strings.NewReader(`env:
+  ECR_PLUGIN_VER: "v2.0.0"
+  ECR_ACCOUNT: "0123456789"
+steps:
+- label: ":docker: Docker Build"
+  command: echo foo
+  plugins:
+  - ecr#$ECR_PLUGIN_VER:
+      login: true
+      account_ids: "$ECR_ACCOUNT"
+`)
+
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+	if err := got.Interpolate(envMap); err != nil {
+		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
+	}
+	want := &Pipeline{
+		Env: ordered.MapFromItems(
+			ordered.TupleSS{Key: "ECR_PLUGIN_VER", Value: "v2.0.0"},
+			ordered.TupleSS{Key: "ECR_ACCOUNT", Value: "0123456789"},
+		),
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo foo",
+				Plugins: Plugins{
+					{
+						Name: "ecr#v2.0.0",
+						Config: ordered.MapFromItems(
+							ordered.TupleSA{Key: "login", Value: true},
+							ordered.TupleSA{Key: "account_ids", Value: "0123456789"},
+						),
+					},
+				},
+				RemainingFields: map[string]any{
+					"label": string(":docker: Docker Build"),
+				},
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS), cmp.Comparer(ordered.EqualSA)); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 	envMap := env.FromSlice([]string{"YEAR_FROM_SHELL=1912"})
 	input := strings.NewReader(`

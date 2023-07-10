@@ -4,17 +4,13 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
-	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
 
-var _ interface {
-	yaml.Unmarshaler
-	selfInterpolater
-} = (*Plugins)(nil)
+var _ yaml.Unmarshaler = (*Plugins)(nil)
 
 // Plugins is a sequence of plugins. It is useful for unmarshaling.
-type Plugins []Plugin
+type Plugins []*Plugin
 
 // UnmarshalYAML unmarshals Plugins from either
 //   - a sequence of "one-item mappings" (normal form), or
@@ -33,7 +29,7 @@ func (p *Plugins) UnmarshalYAML(n *yaml.Node) error {
 			return err
 		}
 		return plugin.Range(func(name string, cfg *ordered.MapSA) error {
-			*p = append(*p, Plugin{
+			*p = append(*p, &Plugin{
 				Name:   name,
 				Config: cfg,
 			})
@@ -62,8 +58,4 @@ func (p *Plugins) UnmarshalYAML(n *yaml.Node) error {
 
 	}
 	return nil
-}
-
-func (p Plugins) interpolate(env interpolate.Env) error {
-	return interpolateSlice(env, p)
 }

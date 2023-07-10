@@ -15,44 +15,58 @@ type selfInterpolater interface {
 	interpolate(interpolate.Env) error
 }
 
-// interpolateAny interpolates (almost) anything in-place. It returns the same
-// type it is passed. When passed a string, it returns a new string. Anything
-// it doesn't know how to interpolate is returned unaltered.
-func interpolateAny(env interpolate.Env, o any) (any, error) {
-	switch o := any(o).(type) {
+// interpolateAny interpolates (almost) anything in-place. When passed a string,
+// it returns a new string. Anything it doesn't know how to interpolate is
+// returned unaltered.
+func interpolateAny[T any](env interpolate.Env, o T) (T, error) {
+	// The box-typeswitch-unbox dance is required because the Go compiler
+	// has no type switch for type parameters.
+	var err error
+	a := any(o)
+
+	switch t := a.(type) {
 	case selfInterpolater:
-		return o, o.interpolate(env)
+		err = t.interpolate(env)
 
 	case string:
-		return interpolate.Interpolate(env, o)
+		a, err = interpolate.Interpolate(env, t)
 
 	case []any:
-		return o, interpolateSlice(env, o)
+		err = interpolateSlice(env, t)
 
 	case []string:
-		return o, interpolateSlice(env, o)
+		err = interpolateSlice(env, t)
 
 	case ordered.Slice:
-		return o, interpolateSlice(env, o)
+		err = interpolateSlice(env, t)
 
 	case map[string]any:
-		return o, interpolateMap(env, o)
+		err = interpolateMap(env, t)
 
 	case map[string]string:
-		return o, interpolateMap(env, o)
+		err = interpolateMap(env, t)
 
 	case *ordered.Map[string, any]:
-		return o, interpolateOrderedMap(env, o)
+		err = interpolateOrderedMap(env, t)
 
 	case *ordered.Map[string, string]:
-		return o, interpolateOrderedMap(env, o)
+		err = interpolateOrderedMap(env, t)
 
 	default:
 		return o, nil
 	}
+
+	// This happens if T is an interface type and o was interface-nil to begin
+	// with. (You can't type assert interface-nil.)
+	if a == nil {
+		var zt T
+		return zt, err
+	}
+	return a.(T), err
 }
 
-// interpolateSlice applies interpolateAny over any type of slice.
+// interpolateSlice applies interpolateAny over any type of slice. Values in the
+// slice are updated in-place.
 func interpolateSlice[E any, S ~[]E](env interpolate.Env, s S) error {
 	for i, e := range s {
 		// It could be a string, so replace the old value with the new.
@@ -60,21 +74,17 @@ func interpolateSlice[E any, S ~[]E](env interpolate.Env, s S) error {
 		if err != nil {
 			return err
 		}
-		if inte == nil {
-			// Then e was nil to begin with. No need to update it.
-			// (Asserting nil interface to a type always panics.)
-			continue
-		}
-		s[i] = inte.(E)
+		s[i] = inte
 	}
 	return nil
 }
 
-// interpolateMap applies interpolateAny over any type of map with string keys.
-func interpolateMap[V any, M ~map[string]V](env interpolate.Env, m M) error {
+// interpolateMap applies interpolateAny over any type of map. The map is
+// altered in-place.
+func interpolateMap[K comparable, V any, M ~map[K]V](env interpolate.Env, m M) error {
 	for k, v := range m {
 		// We interpolate both keys and values.
-		intk, err := interpolate.Interpolate(env, k)
+		intk, err := interpolateAny(env, k)
 		if err != nil {
 			return err
 		}
@@ -89,21 +99,13 @@ func interpolateMap[V any, M ~map[string]V](env interpolate.Env, m M) error {
 		if k != intk {
 			delete(m, k)
 		}
-		if intv == nil {
-			// Then v was nil to begin with.
-			// In case we're changing keys, we should reassign.
-			// But we don't know the type, so can't assign nil.
-			// Fortunately, v itself must be the right type.
-			// (Asserting nil interface to a type always panics.)
-			m[intk] = v
-			continue
-		}
-		m[intk] = intv.(V)
+		m[intk] = intv
 	}
 	return nil
 }
 
 // interpolateOrderedMap applies interpolateAny over any type of ordered.Map.
+// The map is altered in-place.
 func interpolateOrderedMap[K comparable, V any](env interpolate.Env, m *ordered.Map[K, V]) error {
 	return m.Range(func(k K, v V) error {
 		// We interpolate both keys and values.
@@ -116,19 +118,7 @@ func interpolateOrderedMap[K comparable, V any](env interpolate.Env, m *ordered.
 			return err
 		}
 
-		if intk == nil {
-			// Then k was nil to begin with... weird.
-			return nil
-		}
-
-		if intv == nil {
-			// Then v was nil to begin with. See above.
-			m.Replace(k, intk.(K), v)
-			return nil
-		}
-
-		// interpolateAny preserves the type, so these assertions are safe.
-		m.Replace(k, intk.(K), intv.(V))
+		m.Replace(k, intk, intv)
 		return nil
 	})
 }
