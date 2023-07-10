@@ -72,6 +72,7 @@ func awsS3Session(region string, l logger.Logger) (*session.Session, error) {
 		[]credentials.Provider{
 			&buildkiteEnvProvider{},
 			&credentials.EnvProvider{},
+			sharedCredentialsProvider(),
 			webIdentityRoleProvider(sess),
 			// EC2 and ECS meta-data providers
 			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
@@ -100,6 +101,14 @@ func awsS3Session(region string, l logger.Logger) (*session.Session, error) {
 	}
 
 	return sess, nil
+}
+
+func sharedCredentialsProvider() credentials.Provider {
+	// If empty SDK will default to environment variable "AWS_PROFILE"
+	// or "default" if environment variable is also not set.
+	awsProfile := os.Getenv("BUILDKITE_S3_PROFILE")
+
+	return &credentials.SharedCredentialsProvider{Profile: awsProfile}
 }
 
 func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRoleProvider {
