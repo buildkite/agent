@@ -10,7 +10,7 @@ import (
 func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	t.Parallel()
 
-	config := &Config{
+	config := &ExecutorConfig{
 		Repository:                   "https://original.host/repo.git",
 		AutomaticArtifactUploadPaths: "llamas/",
 		GitCloneFlags:                "--prune",
@@ -61,7 +61,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 
 func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 	t.Parallel()
-	config := &Config{
+	config := &ExecutorConfig{
 		CleanCheckout:           true,
 		PluginsAlwaysCloneFresh: false,
 	}

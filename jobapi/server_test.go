@@ -198,7 +198,7 @@ func TestDeleteEnv(t *testing.T) {
 				t.Fatalf("JSON-encoding c.requestBody into buf: %v", err)
 			}
 
-			req, err := http.NewRequest(http.MethodDelete, "http://bootstrap/api/current-job/v0/env", buf)
+			req, err := http.NewRequest(http.MethodDelete, "http://job/api/current-job/v0/env", buf)
 			if err != nil {
 				t.Fatalf("creating request: %v", err)
 			}
@@ -295,7 +295,7 @@ func TestPatchEnv(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			req, err := http.NewRequest(http.MethodPatch, "http://bootstrap/api/current-job/v0/env", buf)
+			req, err := http.NewRequest(http.MethodPatch, "http://job/api/current-job/v0/env", buf)
 			if err != nil {
 				t.Fatalf("creating request: %v", err)
 			}
@@ -331,7 +331,7 @@ func TestGetEnv(t *testing.T) {
 		}
 	}()
 
-	req, err := http.NewRequest(http.MethodGet, "http://bootstrap/api/current-job/v0/env", nil)
+	req, err := http.NewRequest(http.MethodGet, "http://job/api/current-job/v0/env", nil)
 	if err != nil {
 		t.Fatalf("creating request: %v", err)
 	}

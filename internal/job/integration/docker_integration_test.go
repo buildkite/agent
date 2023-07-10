@@ -254,7 +254,7 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func expectCommandHooks(exitStatus string, t *testing.T, tester *BootstrapTester) {
+func expectCommandHooks(exitStatus string, t *testing.T, tester *ExecutorTester) {
 	tester.ExpectGlobalHook("pre-command").Once()
 	tester.ExpectLocalHook("pre-command").Once()
 	tester.ExpectGlobalHook("post-command").Once()
