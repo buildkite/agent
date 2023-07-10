@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -11,10 +12,10 @@ type HeaderTimes struct {
 }
 
 // SaveHeaderTimes saves the header times to the job
-func (c *Client) SaveHeaderTimes(jobId string, headerTimes *HeaderTimes) (*Response, error) {
+func (c *Client) SaveHeaderTimes(ctx context.Context, jobId string, headerTimes *HeaderTimes) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/header_times", jobId)
 
-	req, err := c.newRequest("POST", u, headerTimes)
+	req, err := c.newRequest(ctx, "POST", u, headerTimes)
 	if err != nil {
 		return nil, err
 	}

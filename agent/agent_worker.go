@@ -2,7 +2,10 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"sync"
@@ -12,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/roko"
 )
 
@@ -30,6 +34,9 @@ type AgentWorkerConfig struct {
 
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
+
+	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
+	AgentStdout io.Writer
 }
 
 type agentStats struct {
@@ -82,7 +89,39 @@ type AgentWorker struct {
 
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
-	jobRunner *JobRunner
+	jobRunner jobRunner
+
+	// retrySleepFunc is useful for testing retry loops fast
+	// Hopefully this can be replaced with a global setting for tests in future:
+	// https://github.com/buildkite/roko/issues/2
+	retrySleepFunc func(time.Duration)
+
+	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
+	agentStdout io.Writer
+}
+
+type errUnrecoverable struct {
+	action   string
+	response *api.Response
+	err      error
+}
+
+func (e *errUnrecoverable) Error() string {
+	status := "unknown"
+	if e.response != nil {
+		status = e.response.Status
+	}
+
+	return fmt.Sprintf("%s failed with unrecoverable status: %s, mesage: %q", e.action, status, e.err)
+}
+
+func (e *errUnrecoverable) Is(other error) bool {
+	_, ok := other.(*errUnrecoverable)
+	return ok
+}
+
+func (e *errUnrecoverable) Unwrap() error {
+	return e.err
 }
 
 // Creates the agent worker and initializes its API Client
@@ -98,24 +137,46 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 		stop:               make(chan struct{}),
 		cancelSig:          c.CancelSignal,
 		spawnIndex:         c.SpawnIndex,
+		retrySleepFunc:     time.Sleep, // https://github.com/buildkite/roko/issues/2
+		agentStdout:        c.AgentStdout,
 	}
 }
 
+const workerStatusPart = `{{if le .LastPing.Seconds 2.0}}✅{{else}}❌{{end}} Last ping: {{.LastPing}} ago <br/>
+{{if le .LastHeartbeat.Seconds 60.0}}✅{{else}}❌{{end}} Last heartbeat: {{.LastHeartbeat}} ago<br/>
+{{if .LastHeartbeatError}}❌{{else}}✅{{end}} Last heartbeat error: {{printf "%v" .LastHeartbeatError}}`
+
+func (a *AgentWorker) statusCallback(context.Context) (any, error) {
+	a.stats.Lock()
+	defer a.stats.Unlock()
+
+	return struct {
+		SpawnIndex         int
+		LastHeartbeat      time.Duration
+		LastHeartbeatError error
+		LastPing           time.Duration
+	}{
+		SpawnIndex:         a.spawnIndex,
+		LastHeartbeat:      time.Since(a.stats.lastHeartbeat),
+		LastHeartbeatError: a.stats.lastHeartbeatError,
+		LastPing:           time.Since(a.stats.lastPing),
+	}, nil
+}
+
 // Starts the agent worker
-func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
+func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error {
 	a.metrics = a.metricsCollector.Scope(metrics.Tags{
 		"agent_name": a.agent.Name,
 	})
+
+	ctx, done := status.AddItem(ctx, fmt.Sprintf("Worker %d", a.spawnIndex), workerStatusPart, a.statusCallback)
+	defer done()
 
 	// Start running our metrics collector
 	if err := a.metricsCollector.Start(); err != nil {
 		return err
 	}
 	defer a.metricsCollector.Stop()
-
-	// Use a context to run heartbeats for as long as the agent runs for
-	heartbeatCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// Register our worker specific health check handler
 	http.HandleFunc("/agent/"+strconv.Itoa(a.spawnIndex), func(w http.ResponseWriter, r *http.Request) {
@@ -134,32 +195,11 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 		}
 	})
 
-	// Setup and start the heartbeater
-	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
-	go func() {
-		for {
-			select {
-			case <-time.After(heartbeatInterval):
-				err := a.Heartbeat()
-				if err != nil {
-					// Get the last heartbeat time to the nearest microsecond
-					a.stats.Lock()
-					if a.stats.lastHeartbeat.IsZero() {
-						a.logger.Error("Failed to heartbeat %s. Will try again in %s. (No heartbeat yet)",
-							err, heartbeatInterval)
-					} else {
-						a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
-							err, heartbeatInterval, time.Since(a.stats.lastHeartbeat))
-					}
-					a.stats.Unlock()
-				}
+	// Use a context to run heartbeats for as long as the ping loop or job runs
+	heartbeatCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-			case <-heartbeatCtx.Done():
-				a.logger.Debug("Stopping heartbeats")
-				return
-			}
-		}
-	}()
+	go a.runHeartbeatLoop(heartbeatCtx)
 
 	// If the agent is booted in acquisition mode, then we don't need to
 	// bother about starting the ping loop.
@@ -170,13 +210,55 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 		// measure.
 		idleMonitor.MarkBusy(a.agent.UUID)
 
-		return a.AcquireAndRunJob(a.agentConfiguration.AcquireJob)
-	} else {
-		return a.startPingLoop(idleMonitor)
+		return a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob)
+	}
+
+	return a.runPingLoop(ctx, idleMonitor)
+}
+
+func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Heartbeat loop")
+	defer done()
+	setStat("🏃 Starting...")
+
+	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
+	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	defer heartbeatTicker.Stop()
+	for {
+		setStat("😴 Sleeping for a bit")
+		select {
+		case <-heartbeatTicker.C:
+			setStat("❤️ Sending heartbeat")
+			if err := a.Heartbeat(ctx); err != nil {
+				if errors.Is(err, &errUnrecoverable{}) {
+					a.logger.Error("%s", err)
+					return
+				}
+
+				// Get the last heartbeat time to the nearest microsecond
+				a.stats.Lock()
+				if a.stats.lastHeartbeat.IsZero() {
+					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (No heartbeat yet)",
+						err, heartbeatInterval)
+				} else {
+					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
+						err, heartbeatInterval, time.Since(a.stats.lastHeartbeat))
+				}
+				a.stats.Unlock()
+			}
+
+		case <-ctx.Done():
+			a.logger.Debug("Stopping heartbeats")
+			return
+		}
 	}
 }
 
-func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
+func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor) error {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Ping loop")
+	defer done()
+	setStat("🏃 Starting...")
+
 	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
 	pingTicker := time.NewTicker(pingInterval)
@@ -188,16 +270,22 @@ func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
 	// Continue this loop until the closing of the stop channel signals termination
 	for {
 		if !a.stopping {
-			job, err := a.Ping()
+			setStat("📡 Pinging Buildkite for work")
+			job, err := a.Ping(ctx)
 			if err != nil {
-				a.logger.Warn("%v", err)
+				if errors.Is(err, &errUnrecoverable{}) {
+					a.logger.Error("%v", err)
+				} else {
+					a.logger.Warn("%v", err)
+				}
 			} else if job != nil {
 				// Let other agents know this agent is now busy and
 				// not to idle terminate
 				idleMonitor.MarkBusy(a.agent.UUID)
+				setStat("💼 Accepting job")
 
 				// Runs the job, only errors if something goes wrong
-				if runErr := a.AcceptAndRunJob(job); runErr != nil {
+				if runErr := a.AcceptAndRunJob(ctx, job); runErr != nil {
 					a.logger.Error("%v", runErr)
 				} else {
 					if a.agentConfiguration.DisconnectAfterJob {
@@ -218,6 +306,7 @@ func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
 
 					continue
 				}
+				setStat("✅ Finished job")
 			}
 
 			// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout)
@@ -242,6 +331,8 @@ func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
 				}
 			}
 		}
+
+		setStat("😴 Sleeping for a bit")
 
 		select {
 		case <-pingTicker.C:
@@ -305,14 +396,14 @@ func (a *AgentWorker) Stop(graceful bool) {
 
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
 // fails.
-func (a *AgentWorker) Connect() error {
+func (a *AgentWorker) Connect(ctx context.Context) error {
 	a.logger.Info("Connecting to Buildkite...")
 
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(r *roko.Retrier) error {
-		_, err := a.apiClient.Connect()
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		_, err := a.apiClient.Connect(ctx)
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, r)
 		}
@@ -321,20 +412,27 @@ func (a *AgentWorker) Connect() error {
 }
 
 // Performs a heatbeat
-func (a *AgentWorker) Heartbeat() error {
+func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	var beat *api.Heartbeat
-	var err error
 
 	// Retry the heartbeat a few times
-	err = roko.NewRetrier(
+	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(r *roko.Retrier) error {
-		beat, _, err = a.apiClient.Heartbeat()
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		b, resp, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
+			if resp != nil && !api.IsRetryableStatus(resp) {
+				a.Stop(false)
+				r.Break()
+				return &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
+			}
+
 			a.logger.Warn("%s (%s)", err, r)
+			return err
 		}
-		return err
+		beat = b
+		return nil
 	})
 
 	a.stats.Lock()
@@ -355,9 +453,35 @@ func (a *AgentWorker) Heartbeat() error {
 
 // Performs a ping that checks Buildkite for a job or action to take
 // Returns a job, or nil if none is found
-func (a *AgentWorker) Ping() (*api.Job, error) {
-	ping, _, err := a.apiClient.Ping()
-	if err != nil {
+func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
+	ping, resp, pingErr := a.apiClient.Ping(ctx)
+	// wait a minute, where's my if err != nil block? TL;DR look for pingErr ~20 lines down
+	// the api client returns an error if the response code isn't a 2xx, but there's still information in resp and ping
+	// that we need to check out to do special handling for specific error codes or messages in the response body
+	// once we've done that, we can do the error handling for pingErr
+
+	if ping != nil {
+		// Is there a message that should be shown in the logs?
+		if ping.Message != "" {
+			a.logger.Info(ping.Message)
+		}
+
+		// Should the agent disconnect?
+		if ping.Action == "disconnect" {
+			a.Stop(false)
+			return nil, nil
+		}
+	}
+
+	if pingErr != nil {
+		// If the ping has a non-retryable status, we have to kill the agent, there's no way of recovering
+		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
+		// responses with non-retryable statuses
+		if resp != nil && !api.IsRetryableStatus(resp) {
+			a.Stop(false)
+			return nil, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
+		}
+
 		// Get the last ping time to the nearest microsecond
 		a.stats.Lock()
 		defer a.stats.Unlock()
@@ -365,9 +489,9 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		if a.stats.lastPing.IsZero() {
-			return nil, fmt.Errorf("Failed to ping: %v (No successful ping yet)", err)
+			return nil, fmt.Errorf("Failed to ping: %v (No successful ping yet)", pingErr)
 		} else {
-			return nil, fmt.Errorf("Failed to ping: %v (Last successful was %v ago)", err, time.Since(a.stats.lastPing))
+			return nil, fmt.Errorf("Failed to ping: %v (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
 		}
 	}
 
@@ -382,7 +506,7 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 
 		// Before switching to the new one, do a ping test to make sure it's
 		// valid. If it is, switch and carry on, otherwise ignore the switch
-		newPing, _, err := newAPIClient.Ping()
+		newPing, _, err := newAPIClient.Ping(ctx)
 		if err != nil {
 			a.logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
 		} else {
@@ -393,17 +517,6 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 		}
 	}
 
-	// Is there a message that should be shown in the logs?
-	if ping.Message != "" {
-		a.logger.Info(ping.Message)
-	}
-
-	// Should the agent disconnect?
-	if ping.Action == "disconnect" {
-		a.Stop(false)
-		return nil, nil
-	}
-
 	// If we don't have a job, there's nothing to do!
 	if ping.Job == nil {
 		return nil, nil
@@ -412,18 +525,33 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 	return ping.Job, nil
 }
 
-// Attempts to acquire a job and run it, only returns an error if something
-// goes wrong
-func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
+// AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
+// server determined interval (from the Retry-After response header) if the job is in the waiting
+// state. If the job is in an unassignable state, it will return an error immediately.
+// Otherwise, it will retry every 3s for 30 s. The whole operation will timeout after 5 min.
+func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
 	a.logger.Info("Attempting to acquire job %s...", jobId)
 
-	// Acquire the job using the ID we were provided. We'll retry as best
-	// we can on non 422 error.
+	// Timeout the context to prevent the exponentital backoff from growing too
+	// large if the job is in the waiting state.
+	//
+	// If there were no delays or jitter, the attempts would happen at t = 0, 1, 2, 4, ..., 128s
+	// after the initial one. Therefore, there are 9 attempts taking at least 255s. If the jitter
+	// always hit the max of 1s, then another 8s is added to that. This is still comfortably within
+	// the timeout of 270s, and the bound seems tight enough so that the agent is not wasting time
+	// waiting for a retry that will never happen.
+	timeoutCtx, cancel := context.WithTimeout(ctx, 270*time.Second)
+	defer cancel()
+
+	// Acquire the job using the ID we were provided. We'll retry as best we can on non 422 error.
+	// Except for 423 errors, in which we exponentially back off under the direction of the API
+	// setting the Retry-After header
 	var acquiredJob *api.Job
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(3*time.Second)),
-	).Do(func(r *roko.Retrier) error {
+		roko.WithSleepFunc(a.retrySleepFunc),
+	).DoWithContext(timeoutCtx, func(r *roko.Retrier) error {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
 		if a.stopping {
@@ -433,20 +561,36 @@ func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
 		var err error
 		var response *api.Response
 
-		acquiredJob, response, err = a.apiClient.AcquireJob(jobId)
+		acquiredJob, response, err = a.apiClient.AcquireJob(
+			timeoutCtx, jobId,
+			api.Header{Name: "X-Buildkite-Lock-Acquire-Job", Value: "1"},
+			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: fmt.Sprintf("%d", r.AttemptCount())},
+		)
 		if err != nil {
-			// If the API returns with a 422, that means that we
-			// succesfully *tried* to acquire the job, but
-			// Buildkite rejected the finish for some reason.
-			if response != nil && response.StatusCode == 422 {
-				a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
-				r.Break()
-			} else {
-				a.logger.Warn("%s (%s)", err, r)
+			if response != nil {
+				switch response.StatusCode {
+				case http.StatusUnprocessableEntity:
+					// If the API returns with a 422, that means that we
+					// successfully *tried* to acquire the job, but
+					// Buildkite rejected the finish for some reason.
+					a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
+					r.Break()
+				case http.StatusLocked:
+					// If the API returns with a 423, the job is in the waiting state
+					a.logger.Warn("The job is waiting for a dependency (%s)", err)
+					duration, errParseDuration := time.ParseDuration(response.Header.Get("Retry-After") + "s")
+					if errParseDuration != nil {
+						duration = time.Second + time.Duration(rand.Int63n(int64(time.Second)))
+					}
+					r.SetNextInterval(duration)
+					return err
+				}
 			}
+			a.logger.Warn("%s (%s)", err, r)
+			return err
 		}
 
-		return err
+		return nil
 	})
 
 	// If `acquiredJob` is nil, then the job was never acquired
@@ -454,12 +598,12 @@ func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
 		return fmt.Errorf("Failed to acquire job: %v", err)
 	}
 
-	// Now that we've acquired the job, lets' run it
-	return a.RunJob(acquiredJob)
+	// Now that we've acquired the job, let's run it
+	return a.RunJob(ctx, acquiredJob)
 }
 
 // Accepts a job and runs it, only returns an error if something goes wrong
-func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
+func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 	a.logger.Info("Assigned job %s. Accepting...", job.ID)
 
 	// Accept the job. We'll retry on connection related issues, but if
@@ -469,9 +613,9 @@ func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(30),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(r *roko.Retrier) error {
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
-		accepted, _, err = a.apiClient.AcceptJob(job)
+		accepted, _, err = a.apiClient.AcceptJob(ctx, job)
 		if err != nil {
 			if api.IsRetryableError(err) {
 				a.logger.Warn("%s (%s)", err, r)
@@ -489,56 +633,72 @@ func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
 		return fmt.Errorf("Failed to accept job: %v", err)
 	}
 
-	// Now that we've accepted the job, lets' run it
-	return a.RunJob(accepted)
+	// Now that we've accepted the job, let's run it
+	return a.RunJob(ctx, accepted)
 }
 
-func (a *AgentWorker) RunJob(acceptResponse *api.Job) error {
+func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error {
 	jobMetricsScope := a.metrics.With(metrics.Tags{
-		`pipeline`: acceptResponse.Env[`BUILDKITE_PIPELINE_SLUG`],
-		`org`:      acceptResponse.Env[`BUILDKITE_ORGANIZATION_SLUG`],
-		`branch`:   acceptResponse.Env[`BUILDKITE_BRANCH`],
-		`source`:   acceptResponse.Env[`BUILDKITE_SOURCE`],
+		"pipeline": acceptResponse.Env["BUILDKITE_PIPELINE_SLUG"],
+		"org":      acceptResponse.Env["BUILDKITE_ORGANIZATION_SLUG"],
+		"branch":   acceptResponse.Env["BUILDKITE_BRANCH"],
+		"source":   acceptResponse.Env["BUILDKITE_SOURCE"],
+		"queue":    acceptResponse.Env["BUILDKITE_AGENT_META_DATA_QUEUE"],
 	})
 
+	// Now that we've got a job to do, we can start it.
+	jr, err := NewJobRunner(a.logger, jobMetricsScope, a.agent, acceptResponse, a.apiClient, JobRunnerConfig{
+		Debug:              a.debug,
+		DebugHTTP:          a.debugHTTP,
+		CancelSignal:       a.cancelSig,
+		AgentConfiguration: a.agentConfiguration,
+		AgentStdout:        a.agentStdout,
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to initialize job: %v", err)
+	}
+	a.jobRunner = jr
 	defer func() {
 		// No more job, no more runner.
 		a.jobRunner = nil
 	}()
 
-	// Now that we've got a job to do, we can start it.
-	var err error
-	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, acceptResponse, a.apiClient, JobRunnerConfig{
-		Debug:              a.debug,
-		DebugHTTP:          a.debugHTTP,
-		CancelSignal:       a.cancelSig,
-		AgentConfiguration: a.agentConfiguration,
-	})
-
-	// Was there an error creating the job runner?
-	if err != nil {
-		return fmt.Errorf("Failed to initialize job: %v", err)
-	}
-
 	// Start running the job
-	if err = a.jobRunner.Run(); err != nil {
+	if err := jr.Run(ctx); err != nil {
 		return fmt.Errorf("Failed to run job: %v", err)
 	}
 
 	return nil
 }
 
-// Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
-// because we want to disconnect as fast as possible.
-func (a *AgentWorker) Disconnect() error {
+// Disconnect notifies the Buildkite API that this agent worker/session is
+// permanently disconnecting. Don't spend long retrying, because we want to
+// disconnect as fast as possible.
+func (a *AgentWorker) Disconnect(ctx context.Context) error {
 	a.logger.Info("Disconnecting...")
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(4),
+		roko.WithStrategy(roko.Constant(1*time.Second)),
+		roko.WithSleepFunc(a.retrySleepFunc),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		if _, err := a.apiClient.Disconnect(ctx); err != nil {
+			a.logger.Warn("%s (%s)", err, r) // e.g. POST https://...: 500 (Attempt 0/4 Retrying in ..)
+			return err
+		}
+		return nil
+	})
 
-	_, err := a.apiClient.Disconnect()
 	if err != nil {
-		a.logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
+		// none of the retries worked
+		a.logger.Warn(
+			"There was an error sending the disconnect API call to Buildkite. "+
+				"If this agent still appears online, you may have to manually stop it (%s)",
+			err,
+		)
+		return err
 	}
-
-	return err
+	a.logger.Info("Disconnected")
+	return nil
 }
 
 type IdleMonitor struct {

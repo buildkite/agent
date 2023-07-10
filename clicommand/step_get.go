@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var StepGetHelpDescription = `Usage:
+const stepGetHelpDescription = `Usage:
 
    buildkite-agent step get <attribute> [options...]
 
@@ -54,7 +55,7 @@ type StepGetConfig struct {
 var StepGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Get the value of an attribute",
-	Description: StepGetHelpDescription,
+	Description: stepGetHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "step",
@@ -89,6 +90,8 @@ var StepGetCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := StepGetConfig{}
 
@@ -111,7 +114,7 @@ var StepGetCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Create the request
 		stepExportRequest := &api.StepExportRequest{
@@ -126,18 +129,17 @@ var StepGetCommand = cli.Command{
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			stepExportResponse, resp, err = client.StepExport(cfg.StepOrKey, stepExportRequest)
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			stepExportResponse, resp, err = client.StepExport(ctx, cfg.StepOrKey, stepExportRequest)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				r.Break()
-				return err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		// Deal with the error if we got one

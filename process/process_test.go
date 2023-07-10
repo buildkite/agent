@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -31,23 +32,23 @@ func TestProcessOutput(t *testing.T) {
 	})
 
 	// wait for the process to finish
-	if err := p.Run(); err != nil {
-		t.Fatal(err)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("p.Run(ctx) = %v", err)
 	}
 
-	if s := stdout.String(); s != `llamas1llamas2` {
-		t.Fatalf("Bad stdout, %q", s)
+	if got, want := stdout.String(), "llamas1llamas2"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if s := stderr.String(); s != `alpacas1alpacas2` {
-		t.Fatalf("Bad stderr, %q", s)
+	if got, want := stderr.String(), "alpacas1alpacas2"; got != want {
+		t.Errorf("stderr.String() = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
 }
 
 func TestProcessOutputPTY(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("PTY not supported on windows")
 	}
 
@@ -61,12 +62,12 @@ func TestProcessOutputPTY(t *testing.T) {
 	})
 
 	// wait for the process to finish
-	if err := p.Run(); err != nil {
-		t.Fatal(err)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("p.Run() = %v", err)
 	}
 
-	if s := stdout.String(); s != `llamas1alpacas1llamas2alpacas2` {
-		t.Fatalf("Bad stdout, %q", s)
+	if got, want := stdout.String(), "llamas1alpacas1llamas2alpacas2"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -82,11 +83,11 @@ func TestProcessInput(t *testing.T) {
 		Stdout: stdout,
 	})
 	// wait for the process to finish
-	if err := p.Run(); err != nil {
-		t.Fatal(err)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("p.Run() = %v", err)
 	}
-	if expected, actual := "Hello World", stdout.String(); expected != actual {
-		t.Errorf("stdout expected %q, got %q", expected, actual)
+	if got, want := stdout.String(), "Hello World"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 	assertProcessDoesntExist(t, p)
 }
@@ -113,19 +114,18 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	}()
 
 	// wait for the process to finish
-	if err := p.Run(); err != nil {
-		t.Fatal(err)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("p.Run() = %v", err)
 	}
 
 	// wait for our go routine to finish
 	wg.Wait()
 
-	if startedVal := atomic.LoadInt32(&started); startedVal != 1 {
-		t.Fatalf("Expected started to be 1, got %d", startedVal)
+	if got, want := atomic.LoadInt32(&started), int32(1); got != want {
+		t.Errorf("started = %d, want %d", got, want)
 	}
-
-	if doneVal := atomic.LoadInt32(&done); doneVal != 1 {
-		t.Fatalf("Expected done to be 1, got %d", doneVal)
+	if got, want := atomic.LoadInt32(&done), int32(1); got != want {
+		t.Errorf("done = %d, want %d", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -135,122 +135,118 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	p := process.New(logger.Discard, process.Config{
-		Path:    os.Args[0],
-		Env:     []string{"TEST_MAIN=tester-signal"},
-		Context: ctx,
-	})
-
-	go func() {
-		<-p.Started()
-
-		time.Sleep(time.Millisecond * 50)
-		cancel()
-	}()
-
-	if err := p.Run(); err != nil {
-		t.Fatal(err)
-	}
-
-	if runtime.GOOS != `windows` {
-		if !p.WaitStatus().Signaled() {
-			t.Fatalf("Expected signaled")
-		}
-	}
-
-	<-p.Done()
-	assertProcessDoesntExist(t, p)
-}
-
-func TestProcessInterrupts(t *testing.T) {
-	if runtime.GOOS == `windows` {
-		t.Skip("Works in windows, but not in docker")
-	}
-
-	b := &bytes.Buffer{}
+	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=tester-signal"},
-		Stdout: b,
+		Stdout: stdoutw,
 	})
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
 	go func() {
-		defer wg.Done()
-		<-p.Started()
-
-		// give the signal handler some time to install
-		time.Sleep(time.Millisecond * 50)
-
-		err := p.Interrupt()
-		if err != nil {
-			t.Error(err)
+		defer stdoutw.Close()
+		if err := p.Run(ctx); err != nil {
+			t.Errorf("p.Run(ctx) = %v", err)
 		}
 	}()
 
-	if err := p.Run(); err != nil {
-		t.Fatal(err)
+	waitUntilReady(t, stdoutr)
+
+	cancel()
+
+	// wait until stdout is closed
+	io.ReadAll(stdoutr)
+
+	if runtime.GOOS != "windows" {
+		if got, want := p.WaitStatus().Signaled(), true; got != want {
+			t.Fatalf("p.WaitStatus().Signaled() = %t, want %t", got, want)
+		}
 	}
 
-	wg.Wait()
+	<-p.Done()
 
-	output := b.String()
-	if output != `SIG terminated` {
-		t.Fatalf("Bad output: %q", output)
+	assertProcessDoesntExist(t, p)
+}
+
+func TestProcessInterrupts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Works in windows, but not in docker")
+	}
+
+	stdoutr, stdoutw := io.Pipe()
+
+	p := process.New(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=tester-signal"},
+		Stdout: stdoutw,
+	})
+
+	go func() {
+		defer stdoutw.Close()
+		if err := p.Run(context.Background()); err != nil {
+			t.Errorf("p.Run(context.Background()) = %v", err)
+		}
+	}()
+
+	waitUntilReady(t, stdoutr)
+
+	if err := p.Interrupt(); err != nil {
+		t.Fatalf("p.Interrupt() = %v", err)
+	}
+
+	stdout, err := io.ReadAll(stdoutr)
+	if err != nil {
+		t.Fatalf("io.ReadAll(stdoutr) error = %v", err)
+	}
+
+	if got, want := string(stdout), "SIG terminated"; got != want {
+		t.Errorf("io.ReadAll(stdoutr) = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
 }
 
 func TestProcessInterruptsWithCustomSignal(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	b := &bytes.Buffer{}
+	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
 		Path:            os.Args[0],
 		Env:             []string{"TEST_MAIN=tester-signal"},
-		Stdout:          b,
+		Stdout:          stdoutw,
 		InterruptSignal: process.SIGINT,
 	})
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
 	go func() {
-		defer wg.Done()
-		<-p.Started()
-
-		// give the signal handler some time to install
-		time.Sleep(time.Millisecond * 50)
-
-		err := p.Interrupt()
-		if err != nil {
-			t.Error(err)
+		defer stdoutw.Close()
+		if err := p.Run(context.Background()); err != nil {
+			t.Errorf("p.Run(context.Background()) = %v", err)
 		}
 	}()
 
-	if err := p.Run(); err != nil {
-		t.Fatal(err)
+	waitUntilReady(t, stdoutr)
+
+	if err := p.Interrupt(); err != nil {
+		t.Fatalf("p.Interrupt() = %v", err)
 	}
 
-	wg.Wait()
+	stdout, err := io.ReadAll(stdoutr)
+	if err != nil {
+		t.Fatalf("io.ReadAll(stdoutr) error = %v", err)
+	}
 
-	output := b.String()
-	if output != `SIG interrupt` {
-		t.Fatalf("Bad output: %q", output)
+	if got, want := string(stdout), "SIG interrupt"; got != want {
+		t.Errorf("io.ReadAll(stdoutr) = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
 }
 
 func TestProcessSetsProcessGroupID(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Process groups not supported on windows")
 		return
 	}
@@ -260,8 +256,8 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
 
-	if err := p.Run(); err != nil {
-		t.Fatal(err)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("p.Run() = %v", err)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -274,8 +270,7 @@ func assertProcessDoesntExist(t *testing.T, p *process.Process) {
 	if err != nil {
 		return
 	}
-	signalErr := proc.Signal(syscall.Signal(0))
-	if signalErr == nil {
+	if err := proc.Signal(syscall.Signal(0)); err == nil {
 		t.Fatalf("Process %d exists and is running", p.Pid())
 	}
 }
@@ -286,9 +281,23 @@ func BenchmarkProcess(b *testing.B) {
 			Path: os.Args[0],
 			Env:  []string{"TEST_MAIN=output"},
 		})
-		if err := proc.Run(); err != nil {
-			b.Fatal(err)
+		if err := proc.Run(context.Background()); err != nil {
+			b.Fatalf("proc.Run() = %v", err)
 		}
+	}
+}
+
+// waitUntilReady reads "Ready\n" from the pipe reader, and fails the test if
+// it cannot or the string it reads is different.
+func waitUntilReady(t *testing.T, stdoutr *io.PipeReader) {
+	t.Helper()
+	wantReady := "Ready\n"
+	buf := make([]byte, len(wantReady))
+	if _, err := io.ReadFull(stdoutr, buf); err != nil {
+		t.Fatalf("io.ReadFull(stdoutr, buf) error = %v", err)
+	}
+	if got := string(buf); got != wantReady {
+		t.Fatalf("io.ReadFull(stdoutr, buf) read %q, want %q", got, wantReady)
 	}
 }
 
@@ -315,6 +324,7 @@ func TestMain(m *testing.M) {
 			syscall.SIGTERM,
 			syscall.SIGINT,
 		)
+		fmt.Println("Ready")
 		fmt.Printf("SIG %v", <-signals)
 		os.Exit(0)
 

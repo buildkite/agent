@@ -3,9 +3,12 @@ package api
 import (
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"syscall"
+
+	"golang.org/x/exp/slices"
 )
 
 var retrableErrorSuffixes = []string{
@@ -16,6 +19,19 @@ var retrableErrorSuffixes = []string{
 	"remote error: handshake failure",
 	io.ErrUnexpectedEOF.Error(),
 	io.EOF.Error(),
+}
+
+var retryableStatuses = []int{
+	http.StatusTooManyRequests,     // 429
+	http.StatusInternalServerError, // 500
+	http.StatusBadGateway,          // 502
+	http.StatusServiceUnavailable,  // 503
+	http.StatusGatewayTimeout,      // 504
+}
+
+// IsRetryableStatus returns true if the response's StatusCode is one that we should retry.
+func IsRetryableStatus(r *Response) bool {
+	return r.StatusCode >= 400 && slices.Contains(retryableStatuses, r.StatusCode)
 }
 
 // Looks at a bunch of connection related errors, and returns true if the error

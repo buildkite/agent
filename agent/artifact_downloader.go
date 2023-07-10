@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -54,7 +55,7 @@ func NewArtifactDownloader(l logger.Logger, ac APIClient, c ArtifactDownloaderCo
 	}
 }
 
-func (a *ArtifactDownloader) Download() error {
+func (a *ArtifactDownloader) Download(ctx context.Context) error {
 	// Turn the download destination into an absolute path and confirm it exists
 	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
@@ -67,7 +68,7 @@ func (a *ArtifactDownloader) Download() error {
 	}
 
 	artifacts, err := NewArtifactSearcher(a.logger, a.apiClient, a.conf.BuildID).
-		Search(a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs, false)
+		Search(ctx, a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs, false)
 	if err != nil {
 		return err
 	}
@@ -96,53 +97,55 @@ func (a *ArtifactDownloader) Download() error {
 			// Convert windows paths to slashes, otherwise we get a literal
 			// download of "dir/dir/file" vs sub-directories on non-windows agents
 			path := artifact.Path
-			if runtime.GOOS != `windows` {
+			if runtime.GOOS != "windows" {
 				path = strings.Replace(path, `\`, `/`, -1)
 			}
 
 			// Handle downloading from S3, GS, or RT
-			var err error
+			var dler interface {
+				Start(context.Context) error
+			}
 			switch {
 			case strings.HasPrefix(artifact.UploadDestination, "s3://"):
 				bucketName, _ := ParseS3Destination(artifact.UploadDestination)
-				err = NewS3Downloader(a.logger, S3DownloaderConfig{
+				dler = NewS3Downloader(a.logger, S3DownloaderConfig{
 					S3Client:    s3Clients[bucketName],
 					Path:        path,
 					S3Path:      artifact.UploadDestination,
 					Destination: downloadDestination,
 					Retries:     5,
 					DebugHTTP:   a.conf.DebugHTTP,
-				}).Start()
+				})
 			case strings.HasPrefix(artifact.UploadDestination, "gs://"):
-				err = NewGSDownloader(a.logger, GSDownloaderConfig{
+				dler = NewGSDownloader(a.logger, GSDownloaderConfig{
 					Path:        path,
 					Bucket:      artifact.UploadDestination,
 					Destination: downloadDestination,
 					Retries:     5,
 					DebugHTTP:   a.conf.DebugHTTP,
-				}).Start()
+				})
 			case strings.HasPrefix(artifact.UploadDestination, "rt://"):
-				err = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
+				dler = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
 					Path:        path,
 					Repository:  artifact.UploadDestination,
 					Destination: downloadDestination,
 					Retries:     5,
 					DebugHTTP:   a.conf.DebugHTTP,
-				}).Start()
+				})
 			default:
-				err = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
+				dler = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
 					URL:         artifact.URL,
 					Path:        path,
 					Destination: downloadDestination,
 					Retries:     5,
 					DebugHTTP:   a.conf.DebugHTTP,
-				}).Start()
+				})
 			}
 
 			// If the downloaded encountered an error, lock
 			// the pool, collect it, then unlock the pool
 			// again.
-			if err != nil {
+			if err := dler.Start(ctx); err != nil {
 				a.logger.Error("Failed to download artifact: %s", err)
 
 				p.Lock()

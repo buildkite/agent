@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -120,19 +119,19 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Add(`X-Checksum-MD5`, md5Checksum)
+	req.Header.Add("X-Checksum-MD5", md5Checksum)
 
 	sha1Checksum, err := checksumFile(sha1.New(), artifact.AbsolutePath)
 	if err != nil {
 		return err
 	}
-	req.Header.Add(`X-Checksum-SHA1`, sha1Checksum)
+	req.Header.Add("X-Checksum-SHA1", sha1Checksum)
 
 	sha256Checksum, err := checksumFile(sha256.New(), artifact.AbsolutePath)
 	if err != nil {
 		return err
 	}
-	req.Header.Add(`X-Checksum-SHA256`, sha256Checksum)
+	req.Header.Add("X-Checksum-SHA256", sha256Checksum)
 
 	res, err := u.client.Do(req)
 	if err != nil {
@@ -208,7 +207,7 @@ func checkResponse(r *http.Response) error {
 		return nil
 	}
 	errorResponse := &errorResponse{Response: r}
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := io.ReadAll(r.Body)
 	if err == nil && data != nil {
 		err := json.Unmarshal(data, errorResponse)
 		if err != nil {

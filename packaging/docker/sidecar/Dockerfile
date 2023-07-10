@@ -1,4 +1,7 @@
-FROM alpine:3.16.1
+FROM alpine:3.18.0
+
+ARG TARGETOS
+ARG TARGETARCH
 
 RUN mkdir /buildkite \
   /buildkite/builds \
@@ -7,7 +10,7 @@ RUN mkdir /buildkite \
   /buildkite/bin
 
 COPY buildkite-agent.cfg /buildkite/
-COPY buildkite-agent /buildkite/bin/
+COPY buildkite-agent-$TARGETOS-$TARGETARCH /buildkite/bin/buildkite-agent
 
 FROM busybox:musl
 COPY --from=0 /buildkite /buildkite

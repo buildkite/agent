@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -17,6 +18,10 @@ type ArtifactBatchCreatorConfig struct {
 
 	// Where the artifacts are being uploaded to on the command line
 	UploadDestination string
+
+	// CreateArtifactsTimeout, sets a context.WithTimeout around the CreateArtifacts API.
+	// If it's zero, there's no context timeout and the default HTTP timeout will prevail.
+	CreateArtifactsTimeout time.Duration
 }
 
 type ArtifactBatchCreator struct {
@@ -38,7 +43,7 @@ func NewArtifactBatchCreator(l logger.Logger, ac APIClient, c ArtifactBatchCreat
 	}
 }
 
-func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
+func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 	length := len(a.conf.Artifacts)
 	chunks := 30
 
@@ -69,17 +74,36 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		var resp *api.Response
 		var err error
 
+		timeout := a.conf.CreateArtifactsTimeout
+
 		// Retry the batch upload a couple of times
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
-			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			creation, resp, err = a.apiClient.CreateArtifacts(a.conf.JobID, batch)
+			roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+
+			ctxTimeout := ctx
+			if timeout != 0 {
+				var cancel func()
+				ctxTimeout, cancel = context.WithTimeout(ctx, a.conf.CreateArtifactsTimeout)
+				defer cancel()
+			}
+
+			creation, resp, err = a.apiClient.CreateArtifacts(ctxTimeout, a.conf.JobID, batch)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				a.logger.Warn("%s (%s)", err, r)
+			}
+
+			// after four attempts (0, 1, 2, 3)...
+			if r.AttemptCount() == 3 {
+				// The short timeout has given us fast feedback on the first couple of attempts,
+				// but perhaps the server needs more time to complete the request, so fall back to
+				// the default HTTP client timeout.
+				a.logger.Debug("CreateArtifacts timeout (%s) removed for subsequent attempts", timeout)
+				timeout = 0
 			}
 
 			return err

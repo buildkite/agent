@@ -1,6 +1,9 @@
 package api
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // Heartbeat represents a Buildkite Agent API Heartbeat
 type Heartbeat struct {
@@ -9,12 +12,12 @@ type Heartbeat struct {
 }
 
 // Heartbeat notifies Buildkite that an agent is still connected
-func (c *Client) Heartbeat() (*Heartbeat, *Response, error) {
+func (c *Client) Heartbeat(ctx context.Context) (*Heartbeat, *Response, error) {
 	// Include the current time in the heartbeat, and include the operating
 	// systems timezone.
 	heartbeat := &Heartbeat{SentAt: time.Now().Format(time.RFC3339Nano)}
 
-	req, err := c.newRequest("POST", "heartbeat", &heartbeat)
+	req, err := c.newRequest(ctx, "POST", "heartbeat", &heartbeat)
 	if err != nil {
 		return nil, nil, err
 	}

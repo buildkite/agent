@@ -7,10 +7,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
 )
@@ -88,12 +88,19 @@ var RedactedVars = cli.StringSliceFlag{
 	Name:   "redacted-vars",
 	Usage:  "Pattern of environment variable names containing sensitive values",
 	EnvVar: "BUILDKITE_REDACTED_VARS",
-	Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN", "*_ACCESS_KEY", "*_SECRET_KEY"},
+	Value: &cli.StringSlice{
+		"*_PASSWORD",
+		"*_SECRET",
+		"*_TOKEN",
+		"*_PRIVATE_KEY",
+		"*_ACCESS_KEY",
+		"*_SECRET_KEY",
+	},
 }
 
-func CreateLogger(cfg interface{}) logger.Logger {
+func CreateLogger(cfg any) logger.Logger {
 	var l logger.Logger
-	logFormat := `text`
+	logFormat := "text"
 
 	// Check the LogFormat config field
 	if logFormatCfg, err := reflections.GetField(cfg, "LogFormat"); err == nil {
@@ -104,7 +111,7 @@ func CreateLogger(cfg interface{}) logger.Logger {
 
 	// Create a logger based on the type
 	switch logFormat {
-	case `text`, ``:
+	case "text", "":
 		printer := logger.NewTextPrinter(os.Stderr)
 
 		// Show agent fields as a prefix
@@ -126,7 +133,7 @@ func CreateLogger(cfg interface{}) logger.Logger {
 		}
 
 		l = logger.NewConsoleLogger(printer, os.Exit)
-	case `json`:
+	case "json":
 		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
 	default:
 		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
@@ -149,7 +156,7 @@ func CreateLogger(cfg interface{}) logger.Logger {
 	return l
 }
 
-func HandleProfileFlag(l logger.Logger, cfg interface{}) func() {
+func HandleProfileFlag(l logger.Logger, cfg any) func() {
 	// Enable profiling a profiling mode if Profile is present
 	modeField, _ := reflections.GetField(cfg, "Profile")
 	if mode, ok := modeField.(string); ok && mode != "" {
@@ -158,15 +165,17 @@ func HandleProfileFlag(l logger.Logger, cfg interface{}) func() {
 	return func() {}
 }
 
-func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
+func HandleGlobalFlags(l logger.Logger, cfg any) func() {
 	// Enable experiments
 	experimentNames, err := reflections.GetField(cfg, "Experiments")
 	if err == nil {
 		experimentNamesSlice, ok := experimentNames.([]string)
 		if ok {
 			for _, name := range experimentNamesSlice {
-				experiments.Enable(name)
-				l.Debug("Enabled experiment `%s`", name)
+				state := experiments.EnableWithWarnings(l, name)
+				if state == experiments.StateKnown {
+					l.Debug("Enabled experiment %q", name)
+				}
 			}
 		}
 	}
@@ -175,7 +184,7 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
 	return HandleProfileFlag(l, cfg)
 }
 
-func handleLogLevelFlag(l logger.Logger, cfg interface{}) error {
+func handleLogLevelFlag(l logger.Logger, cfg any) error {
 	logLevel, err := reflections.GetField(cfg, "LogLevel")
 	if err != nil {
 		return err
@@ -200,12 +209,12 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 	for _, fl := range flags {
 		// use golang reflection to find EnvVar values on flags
 		r := reflect.ValueOf(fl)
-		f := reflect.Indirect(r).FieldByName(`EnvVar`)
+		f := reflect.Indirect(r).FieldByName("EnvVar")
 		if !f.IsValid() {
 			return errors.New("EnvVar field not found on flag")
 		}
 		// split comma delimited env
-		if envVars := f.String(); envVars != `` {
+		if envVars := f.String(); envVars != "" {
 			for _, env := range strings.Split(envVars, ",") {
 				os.Unsetenv(env)
 			}
@@ -214,9 +223,9 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 	return nil
 }
 
-func loadAPIClientConfig(cfg interface{}, tokenField string) api.Config {
+func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 	conf := api.Config{
-		UserAgent: agent.UserAgent(),
+		UserAgent: version.UserAgent(),
 	}
 
 	// Enable HTTP debugging

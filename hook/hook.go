@@ -1,3 +1,7 @@
+// Package hook provides management and execution of hook scripts, and the
+// ability to capture environment variable changes caused by scripts.
+//
+// It is intended for internal use by buildkite-agent only.
 package hook
 
 import (
@@ -5,8 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/agent/v3/utils"
+	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/utils"
 )
 
 // Find returns the absolute path to the best matching hook file in a path, or
@@ -14,7 +18,7 @@ import (
 func Find(hookDir string, name string) (string, error) {
 	if runtime.GOOS == "windows" {
 		// check for windows types first
-		if p, err := shell.LookPath(name, hookDir, ".BAT;.CMD;.PS1"); err == nil {
+		if p, err := shell.LookPath(name, hookDir, ".BAT;.CMD;.PS1;.EXE"); err == nil {
 			return p, nil
 		}
 	}

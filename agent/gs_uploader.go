@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -66,7 +65,7 @@ func NewGSUploader(l logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
 
 func ParseGSDestination(destination string) (name string, path string) {
 	parts := strings.Split(strings.TrimPrefix(string(destination), "gs://"), "/")
-	path = strings.Join(parts[1:len(parts)], "/")
+	path = strings.Join(parts[1:], "/")
 	name = parts[0]
 	return
 }
@@ -84,7 +83,7 @@ func newGoogleClient(scope string) (*http.Client, error) {
 		data := []byte(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON"))
 		return clientFromJSON(data, scope)
 	} else if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
-		data, err := ioutil.ReadFile(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS"))
+		data, err := os.ReadFile(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS"))
 		if err != nil {
 			return nil, err
 		}

@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,27 +11,72 @@ import (
 )
 
 func setupHooksPath(t *testing.T) (string, func()) {
-	hooksPath, err := ioutil.TempDir("", "")
+	hooksPath, err := os.MkdirTemp("", "")
 	if err != nil {
 		assert.FailNow(t, "failed to create temp file: %v", err)
 	}
 	return hooksPath, func() { os.RemoveAll(hooksPath) }
 }
 
-func writeAgentShutdownHook(t *testing.T, dir string) string {
+func writeAgentHook(t *testing.T, dir, hookName string) string {
 	var filename, script string
 	if runtime.GOOS == "windows" {
-		filename = "agent-shutdown.bat"
+		filename = hookName + ".bat"
 		script = "@echo off\necho hello world"
 	} else {
-		filename = "agent-shutdown"
+		filename = hookName
 		script = "echo hello world"
 	}
 	filepath := filepath.Join(dir, filename)
-	if err := ioutil.WriteFile(filepath, []byte(script), 0755); err != nil {
-		assert.FailNow(t, "failed to write agent-shutdown hook: %v", err)
+	if err := os.WriteFile(filepath, []byte(script), 0755); err != nil {
+		assert.FailNow(t, "failed to write %q hook: %v", hookName, err)
 	}
 	return filepath
+}
+
+func TestAgentStartupHook(t *testing.T) {
+	cfg := func(hooksPath string) AgentStartConfig {
+		return AgentStartConfig{
+			HooksPath: hooksPath,
+			NoColor:   true,
+		}
+	}
+	prompt := "$"
+	if runtime.GOOS == "windows" {
+		prompt = ">"
+	}
+	t.Run("with agent-startup hook", func(t *testing.T) {
+		hooksPath, closer := setupHooksPath(t)
+		defer closer()
+		filepath := writeAgentHook(t, hooksPath, "agent-startup")
+		log := logger.NewBuffer()
+		err := agentStartupHook(log, cfg(hooksPath))
+
+		if assert.NoError(t, err, log.Messages) {
+			assert.Equal(t, []string{
+				"[info] " + prompt + " " + filepath, // prompt
+				"[info] hello world",                // output
+			}, log.Messages)
+		}
+	})
+	t.Run("with no agent-startup hook", func(t *testing.T) {
+		hooksPath, closer := setupHooksPath(t)
+		defer closer()
+
+		log := logger.NewBuffer()
+		err := agentStartupHook(log, cfg(hooksPath))
+		if assert.NoError(t, err, log.Messages) {
+			assert.Equal(t, []string{}, log.Messages)
+		}
+	})
+	t.Run("with bad hooks path", func(t *testing.T) {
+		log := logger.NewBuffer()
+		err := agentStartupHook(log, cfg("zxczxczxc"))
+
+		if assert.NoError(t, err, log.Messages) {
+			assert.Equal(t, []string{}, log.Messages)
+		}
+	})
 }
 
 func TestAgentShutdownHook(t *testing.T) {
@@ -49,7 +93,7 @@ func TestAgentShutdownHook(t *testing.T) {
 	t.Run("with agent-shutdown hook", func(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
-		filepath := writeAgentShutdownHook(t, hooksPath)
+		filepath := writeAgentHook(t, hooksPath, "agent-shutdown")
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg(hooksPath))
 

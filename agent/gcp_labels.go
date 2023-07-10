@@ -7,12 +7,9 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-type GCPLabels struct {
-}
+type GCPLabels struct{}
 
-func (e GCPLabels) Get() (map[string]string, error) {
-
-	ctx := context.Background()
+func (e GCPLabels) Get(ctx context.Context) (map[string]string, error) {
 	client, err := google.DefaultClient(ctx, compute.CloudPlatformScope)
 	if err != nil {
 		return nil, err
@@ -25,17 +22,15 @@ func (e GCPLabels) Get() (map[string]string, error) {
 
 	// Grab the current instance's metadata as a convenience
 	// to obtain the projectId, zone, and instanceId.
-	metadata, err := GCPMetaData{}.Get()
+	meta, err := GCPMetaData{}.Get()
 	if err != nil {
 		return nil, err
 	}
 
-	projectID := metadata["gcp:project-id"]
-	zone := metadata["gcp:zone"]
-	instanceID := metadata["gcp:instance-id"]
-
 	instance, err := computeService.Instances.Get(
-		projectID, zone, instanceID,
+		meta["gcp:project-id"],
+		meta["gcp:zone"],
+		meta["gcp:instance-name"],
 	).Context(ctx).Do()
 
 	if err != nil {

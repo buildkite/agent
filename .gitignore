@@ -1,3 +1,5 @@
+*.DS_STORE
+
 /tmp
 /pkg
 /releases
@@ -14,4 +16,8 @@
 packaging/docker/*/buildkite-agent
 packaging/docker/*/hooks/
 
+# Generated at build time by scripts/generate-acknowledgements.sh
+/clicommand/ACKNOWLEDGEMENTS.md.gz
+
 .idea
+.vscode

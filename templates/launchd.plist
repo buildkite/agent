@@ -54,5 +54,14 @@
       <key>BUILDKITE_AGENT_CONFIG</key>
       <string>/Users/your-build-user/.buildkite-agent/buildkite-agent.cfg</string>
     </dict>
+    
+    <key>LimitLoadToSessionType</key>
+    <array>
+      <string>Aqua</string>
+      <string>LoginWindow</string>
+      <string>Background</string>
+      <string>StandardIO</string>
+      <string>System</string>
+    </array>
   </dict>
 </plist>

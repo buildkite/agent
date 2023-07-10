@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,7 +14,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var SearchHelpDescription = `Usage:
+const searchHelpDescription = `Usage:
 
    buildkite-agent artifact search [options] <query>
 
@@ -50,6 +51,7 @@ type ArtifactSearchConfig struct {
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
+	AllowEmptyResults  bool   `cli:"allow-empty-results"`
 	PrintFormat        string `cli:"format"`
 
 	// Global flags
@@ -69,7 +71,7 @@ type ArtifactSearchConfig struct {
 var ArtifactSearchCommand = cli.Command{
 	Name:        "search",
 	Usage:       "Searches artifacts in Buildkite",
-	Description: SearchHelpDescription,
+	Description: searchHelpDescription,
 	CustomHelpTemplate: `{{.Description}}
 
 Options:
@@ -110,10 +112,14 @@ Format specifiers:
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
 			Usage:  "Include artifacts from retried jobs in the search",
 		},
+		cli.BoolFlag{
+			Name:  "allow-empty-results",
+			Usage: "By default, searches exit 1 if there are no results. If this flag is set, searches will exit 0 with an empty set",
+		},
 		cli.StringFlag{
 			Name:  "format",
 			Value: "%j %p %c\n",
-			Usage: `Output formatting of results. See below for listing of available format specifiers.`,
+			Usage: "Output formatting of results. See below for listing of available format specifiers.",
 		},
 
 		// API Flags
@@ -130,6 +136,8 @@ Format specifiers:
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactSearchConfig{}
 
@@ -152,17 +160,21 @@ Format specifiers:
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the searcher and try get the artifacts
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
+		artifacts, err := searcher.Search(ctx, cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
 		if err != nil {
 			return err
 		}
 
 		if len(artifacts) == 0 {
-			l.Fatal(fmt.Sprintf("No matches found for %q", cfg.Query))
+			if cfg.AllowEmptyResults {
+				l.Info("No matches found for %q", cfg.Query)
+			} else {
+				l.Fatal("No matches found for %q", cfg.Query)
+			}
 		}
 
 		for _, artifact := range artifacts {

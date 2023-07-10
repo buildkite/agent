@@ -10,7 +10,7 @@ import (
 )
 
 func TestSignalStringUnix(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Unix signal names are not used on Windows")
 	}
 
@@ -28,7 +28,7 @@ func TestSignalStringUnix(t *testing.T) {
 }
 
 func TestSignalStringWindows(t *testing.T) {
-	if runtime.GOOS != `windows` {
+	if runtime.GOOS != "windows" {
 		t.Skip("Windows signal names are not used on Unix")
 	}
 

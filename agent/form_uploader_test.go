@@ -2,8 +2,9 @@ package agent
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,75 +18,68 @@ import (
 func TestFormUploading(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
-		case `/buildkiteartifacts.com`:
+		case "/buildkiteartifacts.com":
 			if req.ContentLength <= 0 {
-				t.Error("Expected a Content-Length header")
-				http.Error(rw, "Bad requests", http.StatusBadRequest)
+				http.Error(rw, "zero or unknown Content-Length", http.StatusBadRequest)
 				return
 			}
 
-			err := req.ParseMultipartForm(5 * 1024 * 1024)
-			if err != nil {
-				t.Error(err)
-				http.Error(rw, err.Error(), http.StatusInternalServerError)
+			if err := req.ParseMultipartForm(5 * 1024 * 1024); err != nil {
+				http.Error(rw, fmt.Sprintf("req.ParseMultipartForm() = %v", err), http.StatusBadRequest)
 				return
 			}
 
 			// Check the ${artifact:path} interpolation is working
 			path := req.FormValue("path")
-			if path != "llamas.txt" {
-				t.Errorf("Bad path content %q", path)
-				http.Error(rw, "Bad path content", http.StatusInternalServerError)
+			if got, want := path, "llamas.txt"; got != want {
+				http.Error(rw, fmt.Sprintf("path = %q, want %q", got, want), http.StatusBadRequest)
 				return
 			}
 
 			file, fh, err := req.FormFile("file")
 			if err != nil {
-				t.Error(err)
-				http.Error(rw, err.Error(), http.StatusInternalServerError)
+				http.Error(rw, fmt.Sprintf(`req.FormFile("file") error = %v`, err), http.StatusBadRequest)
 				return
 			}
 			defer file.Close()
 
 			b := &bytes.Buffer{}
-			_, _ = io.Copy(b, file)
-
-			// Check the file is attached correctly
-			if b.String() != "llamas" {
-				t.Errorf("Bad file content %q", b.String())
-				http.Error(rw, "Bad file content", http.StatusInternalServerError)
+			if _, err := io.Copy(b, file); err != nil {
+				http.Error(rw, fmt.Sprintf("io.Copy() error = %v", err), http.StatusInternalServerError)
 				return
 			}
 
-			if fh.Filename != "llamas.txt" {
-				t.Errorf("Bad filename content %q", fh.Filename)
-				http.Error(rw, "Bad filename content", http.StatusInternalServerError)
+			// Check the file is attached correctly
+			if got, want := b.String(), "llamas"; got != want {
+				http.Error(rw, fmt.Sprintf("uploaded file content = %q, want %q", got, want), http.StatusBadRequest)
+				return
+			}
+
+			if got, want := fh.Filename, "llamas.txt"; got != want {
+				http.Error(rw, fmt.Sprintf("uploaded file name = %q, want %q", got, want), http.StatusInternalServerError)
 				return
 			}
 
 		default:
-			t.Errorf("Unknown path %s %s", req.Method, req.URL.Path)
-			http.Error(rw, "Not found", http.StatusNotFound)
+			http.Error(rw, fmt.Sprintf("not found; method = %q, path = %q", req.Method, req.URL.Path), http.StatusNotFound)
 		}
 	}))
 	defer server.Close()
 
-	temp, err := ioutil.TempDir("", "agent")
+	temp, err := os.MkdirTemp("", "agent")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`os.MkdirTemp("", "agent") error = %v`, err)
 	}
 	defer os.Remove(temp)
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.Getwd() error = %v", err)
 	}
-
-	tc := []string{temp, cwd}
 
 	runtest := func(wd string) {
 		abspath := filepath.Join(wd, "llamas.txt")
-		err = ioutil.WriteFile(abspath, []byte("llamas"), 0700)
+		err = os.WriteFile(abspath, []byte("llamas"), 0700)
 		defer os.Remove(abspath)
 
 		uploader := NewFormUploader(logger.Discard, FormUploaderConfig{})
@@ -113,25 +107,24 @@ func TestFormUploading(t *testing.T) {
 		}
 
 		if err := uploader.Upload(artifact); err != nil {
-			t.Fatal(err)
+			t.Errorf("uploader.Upload(artifact) = %v", err)
 		}
 	}
 
-	for _, wd := range tc {
+	for _, wd := range []string{temp, cwd} {
 		runtest(wd)
 	}
 }
 
 func TestFormUploadFileMissing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		t.Errorf("Unknown path %s %s", req.Method, req.URL.Path)
 		http.Error(rw, "Not found", http.StatusNotFound)
 	}))
 	defer server.Close()
 
-	temp, err := ioutil.TempDir("", "agent")
+	temp, err := os.MkdirTemp("", "agent")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`os.MkdirTemp("", "agent") error = %v`, err)
 	}
 	defer os.Remove(temp)
 
@@ -162,27 +155,24 @@ func TestFormUploadFileMissing(t *testing.T) {
 	}
 
 	if err := uploader.Upload(artifact); !os.IsNotExist(err) {
-		t.Errorf("Expected error no such file or directory, got %q", err)
+		t.Errorf("uploader.Upload(artifact) = %v, want os.ErrNotExist", err)
 	}
 }
 
 func TestFormUploadTooBig(t *testing.T) {
 	uploader := NewFormUploader(logger.Discard, FormUploaderConfig{})
+	const size = int64(6442450944) // 6Gb
 	artifact := &api.Artifact{
 		ID:                 "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
 		Path:               "llamas.txt",
 		AbsolutePath:       "/llamas.txt",
 		GlobPath:           "llamas.txt",
 		ContentType:        "text/plain",
-		FileSize:           int64(6442450944), // 6Gb
+		FileSize:           size,
 		UploadInstructions: &api.ArtifactUploadInstructions{},
 	}
 
-	err := uploader.Upload(artifact)
-	if err == nil {
-		t.Errorf("Expected error when uploading a file over 5Gb")
-	}
-	if err.Error() != "File size (6442450944 bytes) exceeds the maximum supported by Buildkite's default artifact storage (5Gb). Alternative artifact storage options may support larger files." {
-		t.Errorf("Expected polite error message when uploading a file over 5Gb")
+	if err := uploader.Upload(artifact); !errors.Is(err, errArtifactTooLarge{Size: size}) {
+		t.Errorf("uploader.Upload(artifact) = %v, want errArtifactTooLarge", err)
 	}
 }

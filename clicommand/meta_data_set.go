@@ -1,9 +1,11 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -12,7 +14,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var MetaDataSetHelpDescription = `Usage:
+const metaDataSetHelpDescription = `Usage:
 
    buildkite-agent meta-data set <key> [value] [options...]
 
@@ -22,6 +24,9 @@ Description:
 
    You can supply the value as an argument to the command, or pipe in a file or
    script output.
+
+   The value must be a non-empty string, and strings containing only whitespace
+   characters are not allowed.
 
 Example:
 
@@ -51,7 +56,7 @@ type MetaDataSetConfig struct {
 var MetaDataSetCommand = cli.Command{
 	Name:        "set",
 	Usage:       "Set data on a build",
-	Description: MetaDataSetHelpDescription,
+	Description: metaDataSetHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
@@ -74,6 +79,8 @@ var MetaDataSetCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := MetaDataSetConfig{}
 
@@ -99,15 +106,23 @@ var MetaDataSetCommand = cli.Command{
 		if len(c.Args()) < 2 {
 			l.Info("Reading meta-data value from STDIN")
 
-			input, err := ioutil.ReadAll(os.Stdin)
+			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				l.Fatal("Failed to read from STDIN: %s", err)
 			}
 			cfg.Value = string(input)
 		}
 
+		if strings.TrimSpace(cfg.Key) == "" {
+			l.Fatal("Key cannot be empty, or composed of only whitespace characters")
+		}
+
+		if strings.TrimSpace(cfg.Value) == "" {
+			l.Fatal("Value cannot be empty, or composed of only whitespace characters")
+		}
+
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Create the meta data to set
 		metaData := &api.MetaData{
@@ -119,16 +134,16 @@ var MetaDataSetCommand = cli.Command{
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			resp, err := client.SetMetaData(cfg.Job, metaData)
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			resp, err := client.SetMetaData(ctx, cfg.Job, metaData)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		if err != nil {

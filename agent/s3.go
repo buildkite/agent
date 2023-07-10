@@ -17,7 +17,10 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 )
 
-const regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
+const (
+	regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
+	s3EndpointEnvVar = "BUILDKITE_S3_ENDPOINT"
+)
 
 type buildkiteEnvProvider struct {
 	retrieved bool
@@ -56,7 +59,7 @@ func (e *buildkiteEnvProvider) IsExpired() bool {
 	return !e.retrieved
 }
 
-func awsS3Session(region string) (*session.Session, error) {
+func awsS3Session(region string, l logger.Logger) (*session.Session, error) {
 	// Chicken and egg... but this is kinda how they do it in the sdk
 	sess, err := session.NewSession()
 	if err != nil {
@@ -73,7 +76,29 @@ func awsS3Session(region string) (*session.Session, error) {
 			webIdentityRoleProvider(sess),
 			// EC2 and ECS meta-data providers
 			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
-		})
+		},
+	)
+
+	// An optional endpoint URL (hostname only or fully qualified URI)
+	// that overrides the default generated endpoint for a client.
+	// This is useful for S3-compatible servers like MinIO.
+	if endpoint := os.Getenv(s3EndpointEnvVar); endpoint != "" {
+		l.Debug("S3 session Endpoint from %s: %q", s3EndpointEnvVar, endpoint)
+		sess.Config.Endpoint = aws.String(endpoint)
+
+		// Configure the S3 client to use path-style addressing instead of the
+		// default DNS-style “virtual hosted bucket addressing”. See:
+		// - https://docs.aws.amazon.com/sdk-for-go/api/aws/#Config.WithS3ForcePathStyle
+		// - https://github.com/aws/aws-sdk-go/blob/v1.44.181/aws/config.go#L118-L127
+		// This is useful for S3-compatible servers like MinIO when they're deployed
+		// without subdomain support.
+
+		// AWS CLI does this by default when a custom endpoint is specified [1] so
+		// we will too.
+		// [1]: https://github.com/aws/aws-cli/blob/2.9.18/awscli/botocore/args.py#L414-L417
+		l.Debug("S3 session S3ForcePathStyle=true because custom Endpoint specified")
+		sess.Config.S3ForcePathStyle = aws.Bool(true)
+	}
 
 	return sess, nil
 }
@@ -102,7 +127,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 	if regionHint != "" {
 		l.Debug("Using bucket region %q from environment variable %q", regionHint, regionHintEnvVar)
 		// If there is a region hint provided, we use it unconditionally
-		session, err := awsS3Session(regionHint)
+		session, err := awsS3Session(regionHint, l)
 		if err != nil {
 			return nil, fmt.Errorf("Could not load the AWS SDK config (%v)", err)
 		}
@@ -120,7 +145,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 
 		// Using the guess region, construct a session and ask that region where the
 		// bucket lives
-		session, err := awsS3Session(region)
+		session, err := awsS3Session(region, l)
 		if err != nil {
 			return nil, fmt.Errorf("Could not load the AWS SDK config (%v)", err)
 		}
@@ -130,7 +155,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 			l.Debug("Discovered %q bucket region as %q", bucket, bucketRegion)
 			session.Config.Region = &bucketRegion
 		} else {
-			l.Error("Could not discover region for bucket %q. Using the %q region as a fallback, if this is not correct configure a bucket region using the %q environment variable. (%v)", bucket, *sess.Config.Region, regionHintEnvVar, err)
+			l.Error("Could not discover region for bucket %q. Using the %q region as a fallback, if this is not correct configure a bucket region using the %q environment variable. (%v)", bucket, *session.Config.Region, regionHintEnvVar, err)
 		}
 
 		sess = session
@@ -146,7 +171,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 		MaxKeys: aws.Int64(0),
 	})
 	if err != nil {
-		if err == credentials.ErrNoValidProvidersFoundInChain {
+		if errors.Is(err, credentials.ErrNoValidProvidersFoundInChain) {
 			hasProxy := os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != ""
 			hasNoProxyIdmsException := strings.Contains(os.Getenv("NO_PROXY"), "169.254.169.254")
 

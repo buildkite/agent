@@ -3,10 +3,11 @@ package cliconfig
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
-	"github.com/buildkite/agent/v3/utils"
+	"github.com/buildkite/agent/v3/internal/utils"
 )
 
 type File struct {
@@ -24,13 +25,13 @@ func (f *File) Load() error {
 	// Figure out the absolute path
 	absolutePath, err := f.AbsolutePath()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting absolute path for %s: %w", f.Path, err)
 	}
 
 	// Open the file
 	file, err := os.Open(absolutePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("opening file %s: %w", f.Path, err)
 	}
 
 	// Make sure the config file is closed when this function finishes
@@ -44,11 +45,11 @@ func (f *File) Load() error {
 	}
 
 	// Parse each line
-	for _, fullLine := range lines {
+	for lineNum, fullLine := range lines {
 		if !isIgnoredLine(fullLine) {
 			key, value, err := parseLine(fullLine)
 			if err != nil {
-				return err
+				return fmt.Errorf("parsing config line %d: %w", lineNum+1, err)
 			}
 
 			f.Config[key] = value
@@ -82,10 +83,9 @@ func (f File) Exists() bool {
 //
 // The project is released under an MIT License, which can be seen here:
 // https://github.com/joho/godotenv/blob/master/LICENCE
-func parseLine(line string) (key string, value string, err error) {
+func parseLine(line string) (key, value string, err error) {
 	if len(line) == 0 {
-		err = errors.New("zero length string")
-		return
+		return "", "", errors.New("zero length string")
 	}
 
 	// ditch the comments (but keep quoted hashes)
@@ -120,21 +120,18 @@ func parseLine(line string) (key string, value string, err error) {
 	}
 
 	if len(splitString) != 2 {
-		err = errors.New("Can't separate key from value")
-		return
+		return "", "", fmt.Errorf("can't separate key from value in string %q, no valid separators (= or :) found", line)
 	}
 
 	// Parse the key
 	key = splitString[0]
-	if strings.HasPrefix(key, "export") {
-		key = strings.TrimPrefix(key, "export")
-	}
-	key = strings.Trim(key, " ")
+	key = strings.TrimPrefix(key, "export")
+	key = strings.TrimSpace(key)
 
 	// Parse the value
 	value = splitString[1]
 	// trim
-	value = strings.Trim(value, " ")
+	value = strings.TrimSpace(value)
 
 	// check if we've got quoted values
 	if strings.Count(value, "\"") == 2 || strings.Count(value, "'") == 2 {
@@ -147,7 +144,7 @@ func parseLine(line string) (key string, value string, err error) {
 		value = strings.Replace(value, "\\n", "\n", -1)
 	}
 
-	return
+	return key, value, nil
 }
 
 func isIgnoredLine(line string) bool {

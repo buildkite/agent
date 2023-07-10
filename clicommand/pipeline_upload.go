@@ -1,9 +1,9 @@
 package clicommand
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -13,16 +13,16 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/redaction"
-	"github.com/buildkite/agent/v3/stdin"
-	"github.com/buildkite/roko"
+	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/pipeline"
+	"github.com/buildkite/agent/v3/internal/redactor"
+	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/urfave/cli"
 )
 
-var PipelineUploadHelpDescription = `Usage:
+const pipelineUploadHelpDescription = `Usage:
 
    buildkite-agent pipeline upload [file] [options...]
 
@@ -43,7 +43,9 @@ Description:
    - buildkite/pipeline.json
 
    You can also pipe build pipelines to the command allowing you to create
-   scripts that generate dynamic pipelines.
+   scripts that generate dynamic pipelines. The configuration file has a
+   limit of 500 steps per file. Configuration files with over 500 steps
+   must be split into multiple files and uploaded in separate steps.
 
 Example:
 
@@ -77,7 +79,7 @@ type PipelineUploadConfig struct {
 var PipelineUploadCommand = cli.Command{
 	Name:        "upload",
 	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job",
-	Description: PipelineUploadHelpDescription,
+	Description: pipelineUploadHelpDescription,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:   "replace",
@@ -121,6 +123,8 @@ var PipelineUploadCommand = cli.Command{
 		RedactedVars,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := PipelineUploadConfig{}
 
@@ -142,28 +146,29 @@ var PipelineUploadCommand = cli.Command{
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
 
-		// Find the pipeline file either from STDIN or the first
-		// argument
-		var input []byte
+		// Find the pipeline either from STDIN or the first argument
+		var input *os.File
 		var filename string
 
-		if cfg.FilePath != "" {
-			l.Info("Reading pipeline config from \"%s\"", cfg.FilePath)
+		switch {
+		case cfg.FilePath != "":
+			l.Info("Reading pipeline config from %q", cfg.FilePath)
 
 			filename = filepath.Base(cfg.FilePath)
-			input, err = ioutil.ReadFile(cfg.FilePath)
+			file, err := os.Open(cfg.FilePath)
 			if err != nil {
-				l.Fatal("Failed to read file: %s", err)
+				l.Fatal("Failed to read file: %v", err)
 			}
-		} else if stdin.IsReadable() {
+			defer file.Close()
+			input = file
+
+		case stdin.IsReadable():
 			l.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
-			input, err = ioutil.ReadAll(os.Stdin)
-			if err != nil {
-				l.Fatal("Failed to read from STDIN: %s", err)
-			}
-		} else {
+			input = os.Stdin
+
+		default:
 			l.Info("Searching for pipeline config...")
 
 			paths := []string{
@@ -190,39 +195,51 @@ var PipelineUploadCommand = cli.Command{
 			// error. There can only be one!!
 			if len(exists) > 1 {
 				l.Fatal("Found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
-			} else if len(exists) == 0 {
+			}
+			if len(exists) == 0 {
 				l.Fatal("Could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
 			}
 
 			found := exists[0]
 
-			l.Info("Found config file \"%s\"", found)
+			l.Info("Found config file %q", found)
 
 			// Read the default file
 			filename = path.Base(found)
-			input, err = ioutil.ReadFile(found)
+			file, err := os.Open(found)
 			if err != nil {
-				l.Fatal("Failed to read file \"%s\" (%s)", found, err)
+				l.Fatal("Failed to read file %q: %v", found, err)
 			}
+			defer file.Close()
+			input = file
 		}
 
 		// Make sure the file actually has something in it
-		if len(input) == 0 {
-			l.Fatal("Config file is empty")
+		if input != os.Stdin {
+			fi, err := input.Stat()
+			if err != nil {
+				l.Fatal("Couldn't stat pipeline configuration file %q: %v", input.Name(), err)
+			}
+			if fi.Size() == 0 {
+				l.Fatal("Pipeline file %q is empty", input.Name())
+			}
 		}
 
-		// Load environment to pass into parser
-		environ := env.FromSlice(os.Environ())
+		var environ *env.Environment
+		if !cfg.NoInterpolation {
+			// Load environment to pass into parser
+			environ = env.FromSlice(os.Environ())
 
-		// resolve BUILDKITE_COMMIT based on the local git repo
-		if commitRef, ok := environ.Get(`BUILDKITE_COMMIT`); ok {
-			cmdOut, err := exec.Command(`git`, `rev-parse`, commitRef).Output()
-			if err != nil {
-				l.Warn("Error running git rev-parse %q: %v", commitRef, err)
-			} else {
-				trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-				l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
-				environ.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
+			// resolve BUILDKITE_COMMIT based on the local git repo
+			if commitRef, ok := environ.Get("BUILDKITE_COMMIT"); ok {
+				cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
+				if err != nil {
+					l.Warn("Error running git rev-parse %q: %v", commitRef, err)
+				} else {
+					trimmedCmdOut := strings.TrimSpace(string(cmdOut))
+					l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
+					environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
+				}
 			}
 		}
 
@@ -232,20 +249,20 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Parse the pipeline
-		result, err := agent.PipelineParser{
-			Env:             environ,
-			Filename:        filename,
-			Pipeline:        input,
-			NoInterpolation: cfg.NoInterpolation,
-		}.Parse()
+		result, err := pipeline.Parse(input)
 		if err != nil {
-			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", src, err)
+			l.Fatal("Pipeline parsing of %q failed: %v", src, err)
+		}
+		if !cfg.NoInterpolation {
+			if err := result.Interpolate(environ); err != nil {
+				l.Fatal("Pipeline interpolation of %q failed: %v", src, err)
+			}
 		}
 
 		if len(cfg.RedactedVars) > 0 {
-			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()))
-			serialisedPipeline, err := result.MarshalJSON()
+			needles := redactor.VarsToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).Dump())
 
+			serialisedPipeline, err := result.MarshalJSON()
 			if err != nil {
 				l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
 			}
@@ -294,37 +311,18 @@ var PipelineUploadCommand = cli.Command{
 			l.Fatal("Missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
 		}
 
-		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
-
-		// Generate a UUID that will identify this pipeline change. We
-		// do this outside of the retry loop because we want this UUID
-		// to be the same for each attempt at updating the pipeline.
-		uuid := api.NewUUID()
-
-		// Retry the pipeline upload a few times before giving up
-		err = roko.NewRetrier(
-			roko.WithMaxAttempts(60),
-			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			_, err = client.UploadPipeline(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
-			if err != nil {
-				l.Warn("%s (%s)", err, r)
-
-				// 422 responses will always fail no need to retry
-				if apierr, ok := err.(*api.ErrorResponse); ok && apierr.Response.StatusCode == 422 {
-					l.Error("Unrecoverable error, skipping retries")
-					r.Break()
-				}
-			}
-
-			return err
-			// On a server error, it means there is downtime or other problems, we
-			// need to retry. Let's retry every 5 seconds, for a total of 5 minutes.
-		})
-
-		if err != nil {
-			l.Fatal("Failed to upload and process pipeline: %s", err)
+		uploader := &agent.PipelineUploader{
+			Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
+			JobID:  cfg.Job,
+			Change: &api.PipelineChange{
+				UUID:     api.NewUUID(),
+				Replace:  cfg.Replace,
+				Pipeline: result,
+			},
+			RetrySleepFunc: time.Sleep,
+		}
+		if err := uploader.Upload(ctx, l); err != nil {
+			l.Fatal("%v", err)
 		}
 
 		l.Info("Successfully uploaded and parsed pipeline config")

@@ -1,6 +1,9 @@
 package api
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // Annotation represents a Buildkite Agent API Annotation
 type Annotation struct {
@@ -11,10 +14,10 @@ type Annotation struct {
 }
 
 // Annotate a build in the Buildkite UI
-func (c *Client) Annotate(jobId string, annotation *Annotation) (*Response, error) {
+func (c *Client) Annotate(ctx context.Context, jobId string, annotation *Annotation) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/annotations", jobId)
 
-	req, err := c.newRequest("POST", u, annotation)
+	req, err := c.newRequest(ctx, "POST", u, annotation)
 	if err != nil {
 		return nil, err
 	}
@@ -23,10 +26,10 @@ func (c *Client) Annotate(jobId string, annotation *Annotation) (*Response, erro
 }
 
 // Remove an annotation from a build
-func (c *Client) AnnotationRemove(jobId string, context string) (*Response, error) {
+func (c *Client) AnnotationRemove(ctx context.Context, jobId string, context string) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/annotations/%s", jobId, context)
 
-	req, err := c.newRequest("DELETE", u, nil)
+	req, err := c.newRequest(ctx, "DELETE", u, nil)
 	if err != nil {
 		return nil, err
 	}

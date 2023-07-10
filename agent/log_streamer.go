@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"context"
 	"errors"
-	"math"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/status"
 )
 
 type LogStreamerConfig struct {
@@ -28,7 +30,7 @@ type LogStreamer struct {
 	chunksFailedCount int32
 
 	// The callback called when a chunk is ready for upload
-	callback func(chunk *LogStreamerChunk) error
+	callback func(context.Context, *LogStreamerChunk) error
 
 	// The queue of chunks that are needing to be uploaded
 	queue chan *LogStreamerChunk
@@ -50,7 +52,7 @@ type LogStreamer struct {
 
 type LogStreamerChunk struct {
 	// The contents of the chunk
-	Data string
+	Data []byte
 
 	// The sequence number of this chunk
 	Order int
@@ -63,7 +65,7 @@ type LogStreamerChunk struct {
 }
 
 // Creates a new instance of the log streamer
-func NewLogStreamer(l logger.Logger, cb func(chunk *LogStreamerChunk) error, c LogStreamerConfig) *LogStreamer {
+func NewLogStreamer(l logger.Logger, cb func(context.Context, *LogStreamerChunk) error, c LogStreamerConfig) *LogStreamer {
 	return &LogStreamer{
 		logger:   l,
 		conf:     c,
@@ -73,13 +75,13 @@ func NewLogStreamer(l logger.Logger, cb func(chunk *LogStreamerChunk) error, c L
 }
 
 // Spins up x number of log streamer workers
-func (ls *LogStreamer) Start() error {
-	if ls.conf.MaxChunkSizeBytes == 0 {
+func (ls *LogStreamer) Start(ctx context.Context) error {
+	if ls.conf.MaxChunkSizeBytes <= 0 {
 		return errors.New("Maximum chunk size must be more than 0. No logs will be sent.")
 	}
 
 	for i := 0; i < ls.conf.Concurrency; i++ {
-		go Worker(i, ls)
+		go ls.worker(ctx, i)
 	}
 
 	return nil
@@ -89,54 +91,40 @@ func (ls *LogStreamer) FailedChunks() int {
 	return int(atomic.LoadInt32(&ls.chunksFailedCount))
 }
 
-// Takes the full process output, grabs the portion we don't have, and adds it
-// to the stream queue
-func (ls *LogStreamer) Process(output string) error {
-	bytes := len(output)
-
+// Process streams the output.
+func (ls *LogStreamer) Process(output []byte) error {
 	// Only allow one streamer process at a time
 	ls.processMutex.Lock()
+	defer ls.processMutex.Unlock()
 
-	if ls.bytes != bytes {
-		// Grab the part of the log that we haven't seen yet
-		blob := output[ls.bytes:bytes]
+	for len(output) > 0 {
+		// Add another chunk...
+		ls.chunkWaitGroup.Add(1)
 
-		// How many chunks do we have that fit within the MaxChunkSizeBytes?
-		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(ls.conf.MaxChunkSizeBytes)))
-
-		// Increase the wait group by the amount of chunks we're going
-		// to add
-		ls.chunkWaitGroup.Add(numberOfChunks)
-
-		for i := 0; i < numberOfChunks; i++ {
-			// Find the upper limit of the blob
-			upperLimit := (i + 1) * ls.conf.MaxChunkSizeBytes
-			if upperLimit > len(blob) {
-				upperLimit = len(blob)
-			}
-
-			// Grab the 100kb section of the blob
-			partialChunk := blob[i*ls.conf.MaxChunkSizeBytes : upperLimit]
-
-			// Increment the order
-			ls.order += 1
-
-			// Create the chunk and append it to our list
-			chunk := LogStreamerChunk{
-				Data:   partialChunk,
-				Order:  ls.order,
-				Offset: ls.bytes,
-				Size:   len(partialChunk),
-			}
-
-			ls.queue <- &chunk
-
-			// Save the new amount of bytes
-			ls.bytes += len(partialChunk)
+		// Find the upper limit of the blob
+		size := ls.conf.MaxChunkSizeBytes
+		if size > len(output) {
+			size = len(output)
 		}
-	}
 
-	ls.processMutex.Unlock()
+		// Grab the ≤100kb section of the blob.
+		// Leave the remainder for the next iteration.
+		chunk := output[:size]
+		output = output[size:]
+
+		ls.order++
+
+		// Create the chunk and append it to our list
+		ls.queue <- &LogStreamerChunk{
+			Data:   chunk,
+			Order:  ls.order,
+			Offset: ls.bytes,
+			Size:   size,
+		}
+
+		// Save the new amount of bytes
+		ls.bytes += size
+	}
 
 	return nil
 }
@@ -157,22 +145,29 @@ func (ls *LogStreamer) Stop() error {
 }
 
 // The actual log streamer worker
-func Worker(id int, ls *LogStreamer) {
+func (ls *LogStreamer) worker(ctx context.Context, id int) {
 	ls.logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
 
-	var chunk *LogStreamerChunk
+	ctx, setStat, done := status.AddSimpleItem(ctx, fmt.Sprintf("Log Streamer Worker %d", id))
+	defer done()
+	setStat("🏃 Starting...")
+
 	for {
+		setStat("⌚️ Waiting for chunk")
+
 		// Get the next chunk (pointer) from the queue. This will block
 		// until something is returned.
-		chunk = <-ls.queue
+		chunk := <-ls.queue
 
 		// If the next chunk is nil, then there is no more work to do
 		if chunk == nil {
 			break
 		}
 
+		setStat("📨 Passing chunk to callback")
+
 		// Upload the chunk
-		err := ls.callback(chunk)
+		err := ls.callback(ctx, chunk)
 		if err != nil {
 			atomic.AddInt32(&ls.chunksFailedCount, 1)
 

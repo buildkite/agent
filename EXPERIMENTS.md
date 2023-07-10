@@ -18,20 +18,6 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
-### `git-mirrors`
-
-Maintain a single bare git mirror for each repository on a host that is shared amongst multiple agents and pipelines. Checkouts reference the git mirror using `git clone --reference`, as do submodules.
-
-You must set a `git-mirrors-path` in your config for this to work.
-
-**Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
-
-### `ansi-timestamps`
-
-Outputs inline ANSI timestamps for each line of log output which enables toggle-able timestamps in the Buildkite UI.
-
-**Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
-
 ### `normalised-upload-paths`
 
 Artifacts found by `buildkite-agent artifact upload` will be uploaded using URI/Unix-style paths, even on Windows. This changes the URLs that artifacts uploaded from Windows agents are stored at, but to one which is URI-compatible.
@@ -51,10 +37,49 @@ After repository checkout, resolve `BUILDKITE_COMMIT` to a commit hash. This mak
 
 **Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
 
-### `flock-file-locks`
+### `kubernetes-exec`
+Modifies `start` and `bootstrap` in such a way that they can run in separate Kubernetes containers in the same pod.
 
-Changes the file lock implementation from github.com/nightlyone/lockfile to github.com/gofrs/flock to address an issue where file locks are never released by agents that don't shut down cleanly.
+Currently, this experiment is being used by [agent-stack-k8s](https://github.com/buildkite/agent-stack-k8s).
 
-When the experiment is enabled the agent will use different lock files from agents where the experiment is disabled, so agents with this experiment enabled should not be run on the same host as agents where the experiment is disabled.
+This will result in errors unless orchestrated in a similar manner to that project. Please see the [README](https://github.com/buildkite/agent-stack-k8s/blob/main/README.md) of that repository for more details.
 
-**Status**: Being tested, but it's looking good. We plan to switch lock implementations over the course of a couple of releases, switching over in such a way that nothing gets broken.
+**Status**: Being used in a preview release of agent-stack-k8s. As it has little applicability outside of Kubernetes, this will not be the default behaviour.
+
+### `job-api`
+
+Exposes a local API for the currently running job to introspect and mutate its state in the form of environment variables. This allows you to write scripts, hooks and plugins in languages other than bash, using them to interact with the agent.
+
+The API is exposed via a Unix Domain Socket, whose path is exposed to running jobs with the `BUILDKITE_AGENT_JOB_API_SOCKET` envar, and authenticated with a token exposed using the `BUILDKITE_AGENT_JOB_API_TOKEN` envar, using the `Bearer` HTTP Authorization scheme.
+
+The API exposes the following endpoints:
+- `GET /api/current-job/v0/env` - returns a JSON object of all environment variables for the current job
+- `PATCH /api/current-job/v0/env` - accepts a JSON object of environment variables to set for the current job
+- `DELETE /api/current-job/v0/env` - accepts a JSON array of environment variable names to unset for the current job
+
+See [jobapi/payloads.go](./jobapi/payloads.go) for the full API request/response definitions.
+
+The Job API is unavailable on windows agents running versions of windows prior to build 17063, as this was when windows added Unix Domain Socket support. Using this experiment on such agents will output a warning, and the API will be unavailable.
+
+**Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™️.
+
+### `polyglot-hooks`
+
+Allows the agent to run hooks written in languages other than bash. This enables the agent to run hooks written in any language, as long as the language has a runtime available on the agent. Polyglot hooks can be in interpreted languages, so long as they have a valid shebang, and the interpreter specified in the shebang is installed on the agent.
+
+This experiment also allows the agent to run compiled binaries (such as those produced by Go, Rust, Zig, C et al.) as hooks, so long as they are executable.
+
+Hooks are run in a subshell, so they can't modify the environment of the agent process. However, they can use the [job-api](#job-api) to modify the environment of the job.
+
+Binary hooks are available on all platforms, but interpreted hooks are unfortunately unavailable on Windows, as Windows does not support shebangs.
+
+**Status:** Experimental while we try to cover the various corner cases. We'll probably promote this to non-experiment soon™️.
+
+### `agent-api`
+
+Like `job-api`, this exposes a local API for interacting with the agent process.
+...with primitives that can be used to solve local concurrency problems (such as multiple agents handling some shared local resource).
+
+The API is exposed via a Unix Domain Socket. Unlike the `job-api`, the path to the socket is not available via a environment variable - rather, there is a single (configurable) path on the system.
+
+**Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™.

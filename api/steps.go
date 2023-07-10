@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -16,10 +17,10 @@ type StepExportResponse struct {
 }
 
 // StepExport gets an attribute from step
-func (c *Client) StepExport(stepIdOrKey string, stepGetRequest *StepExportRequest) (*StepExportResponse, *Response, error) {
+func (c *Client) StepExport(ctx context.Context, stepIdOrKey string, stepGetRequest *StepExportRequest) (*StepExportResponse, *Response, error) {
 	u := fmt.Sprintf("steps/%s/export", stepIdOrKey)
 
-	req, err := c.newRequest("POST", u, stepGetRequest)
+	req, err := c.newRequest(ctx, "POST", u, stepGetRequest)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -43,10 +44,10 @@ type StepUpdate struct {
 }
 
 // StepUpdate updates a step
-func (c *Client) StepUpdate(stepIdOrKey string, stepUpdate *StepUpdate) (*Response, error) {
+func (c *Client) StepUpdate(ctx context.Context, stepIdOrKey string, stepUpdate *StepUpdate) (*Response, error) {
 	u := fmt.Sprintf("steps/%s", stepIdOrKey)
 
-	req, err := c.newRequest("PUT", u, stepUpdate)
+	req, err := c.newRequest(ctx, "PUT", u, stepUpdate)
 	if err != nil {
 		return nil, err
 	}

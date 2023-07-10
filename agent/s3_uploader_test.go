@@ -7,31 +7,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseS3DestinationBucketPath(t *testing.T) {
+func TestParseS3Destination(t *testing.T) {
 	for _, tc := range []struct {
-		Destination, Path string
+		dest, bucket, path string
 	}{
-		{"s3://my-bucket-name/foo/bar", "foo/bar"},
-		{"s3://starts-with-an-s/and-this-is-its/folder", "and-this-is-its/folder"},
-		{"s3://custom-s3-domain/folder/ends-with-a-slash/", "folder/ends-with-a-slash"},
+		{
+			dest:   "s3://my-bucket-name/foo/bar",
+			bucket: "my-bucket-name",
+			path:   "foo/bar",
+		},
+		{
+			dest:   "s3://starts-with-an-s/and-this-is-its/folder",
+			bucket: "starts-with-an-s",
+			path:   "and-this-is-its/folder",
+		},
+		{
+			dest:   "s3://custom-s3-domain/folder/ends-with-a-slash/",
+			bucket: "custom-s3-domain",
+			path:   "folder/ends-with-a-slash",
+		},
 	} {
-		_, path := ParseS3Destination(tc.Destination)
-		if path != tc.Path {
-			t.Fatalf("Expected %q, got %q", tc.Path, path)
-		}
-	}
-}
-
-func TestParseS3DestinationBucketName(t *testing.T) {
-	for _, tc := range []struct {
-		Destination, Bucket string
-	}{
-		{"s3://my-bucket-name/foo/bar", "my-bucket-name"},
-		{"s3://starts-with-an-s", "starts-with-an-s"},
-	} {
-		bucket, _ := ParseS3Destination(tc.Destination)
-		if bucket != tc.Bucket {
-			t.Fatalf("Expected %q, got %q", tc.Bucket, bucket)
+		bucket, path := ParseS3Destination(tc.dest)
+		if bucket != tc.bucket || path != tc.path {
+			t.Errorf("ParseS3Destination(%q) = (%q, %q), want (%q, %q)", tc.dest, bucket, path, tc.bucket, tc.path)
 		}
 	}
 }

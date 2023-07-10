@@ -10,13 +10,20 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// setupProcessGroup causes the process to be run in its own process group
+// This is useful for sending signals to the process and all its children that
+// won't be sent to the bootstrap process.
 func (p *Process) setupProcessGroup() {
-	// See https://github.com/kr/pty/issues/35 for context
-	if !p.conf.PTY {
-		p.command.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
-			Pgid:    0,
-		}
+	// PTY mode already creates a process group, using setsid instead of setpgid
+	// Attempting to do so again will cause errors.
+	// See https://github.com/creack/pty/issues/35#issuecomment-147947212 for more details.
+	if p.conf.PTY {
+		return
+	}
+
+	p.command.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+		Pgid:    0,
 	}
 }
 

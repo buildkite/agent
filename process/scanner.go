@@ -2,9 +2,7 @@ package process
 
 import (
 	"bufio"
-	"bytes"
 	"io"
-	"sync"
 
 	"github.com/buildkite/agent/v3/logger"
 )
@@ -77,21 +75,4 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 
 	s.logger.Debug("[LineScanner] Finished")
 	return nil
-}
-
-type Buffer struct {
-	mu  sync.RWMutex
-	buf bytes.Buffer
-}
-
-func (l *Buffer) Write(b []byte) (int, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.buf.Write(b)
-}
-
-func (l *Buffer) String() string {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.buf.String()
 }

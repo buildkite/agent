@@ -18,21 +18,25 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/agent/v3/tracetools"
-	"github.com/buildkite/agent/v3/utils"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
+	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
 )
 
-var StartDescription = `Usage:
+const startDescription = `Usage:
 
    buildkite-agent start [options...]
 
@@ -65,21 +69,27 @@ type AgentStartConfig struct {
 	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
 	CancelGracePeriod           int      `cli:"cancel-grace-period"`
 	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
+	JobLogPath                  string   `cli:"job-log-path" normalize:"filepath"`
+	WriteJobLogsToStdout        bool     `cli:"write-job-logs-to-stdout"`
 	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
+	SocketsPath                 string   `cli:"sockets-path" normalize:"filepath"`
 	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
 	Shell                       string   `cli:"shell"`
 	Tags                        []string `cli:"tags" normalize:"list"`
 	TagsFromEC2MetaData         bool     `cli:"tags-from-ec2-meta-data"`
 	TagsFromEC2MetaDataPaths    []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
 	TagsFromEC2Tags             bool     `cli:"tags-from-ec2-tags"`
+	TagsFromECSMetaData         bool     `cli:"tags-from-ecs-meta-data"`
 	TagsFromGCPMetaData         bool     `cli:"tags-from-gcp-meta-data"`
 	TagsFromGCPMetaDataPaths    []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
 	TagsFromGCPLabels           bool     `cli:"tags-from-gcp-labels"`
 	TagsFromHost                bool     `cli:"tags-from-host"`
 	WaitForEC2TagsTimeout       string   `cli:"wait-for-ec2-tags-timeout"`
 	WaitForEC2MetaDataTimeout   string   `cli:"wait-for-ec2-meta-data-timeout"`
+	WaitForECSMetaDataTimeout   string   `cli:"wait-for-ecs-meta-data-timeout"`
 	WaitForGCPLabelsTimeout     string   `cli:"wait-for-gcp-labels-timeout"`
+	GitCheckoutFlags            string   `cli:"git-checkout-flags"`
 	GitCloneFlags               string   `cli:"git-clone-flags"`
 	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags               string   `cli:"git-clean-flags"`
@@ -95,12 +105,14 @@ type AgentStartConfig struct {
 	NoPluginValidation          bool     `cli:"no-plugin-validation"`
 	NoPTY                       bool     `cli:"no-pty"`
 	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
+	NoANSITimestamps            bool     `cli:"no-ansi-timestamps"`
 	TimestampLines              bool     `cli:"timestamp-lines"`
 	HealthCheckAddr             string   `cli:"health-check-addr"`
 	MetricsDatadog              bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost          string   `cli:"metrics-datadog-host"`
 	MetricsDatadogDistributions bool     `cli:"metrics-datadog-distributions"`
 	TracingBackend              string   `cli:"tracing-backend"`
+	TracingServiceName          string   `cli:"tracing-service-name"`
 	Spawn                       int      `cli:"spawn"`
 	SpawnWithPriority           bool     `cli:"spawn-with-priority"`
 	LogFormat                   string   `cli:"log-format"`
@@ -183,11 +195,11 @@ func DefaultShell() string {
 	case "windows":
 		return `C:\Windows\System32\CMD.exe /S /C`
 	case "freebsd", "openbsd":
-		return `/usr/local/bin/bash -e -c`
+		return "/usr/local/bin/bash -e -c"
 	case "netbsd":
-		return `/usr/pkg/bin/bash -e -c`
+		return "/usr/pkg/bin/bash -e -c"
 	default:
-		return `/bin/bash -e -c`
+		return "/bin/bash -e -c"
 	}
 }
 
@@ -229,7 +241,7 @@ func DefaultConfigFilePaths() (paths []string) {
 var AgentStartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Starts a Buildkite agent",
-	Description: StartDescription,
+	Description: startDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "config",
@@ -278,6 +290,16 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_ENABLE_JOB_LOG_TMPFILE",
 		},
 		cli.StringFlag{
+			Name:   "job-log-path",
+			Usage:  "Location to store job logs created by configuring ′enable-job-log-tmpfile`, by default job log will be stored in TempDir",
+			EnvVar: "BUILDKITE_JOB_LOG_PATH",
+		},
+		cli.BoolFlag{
+			Name:   "write-job-logs-to-stdout",
+			Usage:  "Writes job logs to the agent process' stdout. This simplifies log collection if running agents in Docker.",
+			EnvVar: "BUILDKITE_WRITE_JOB_LOGS_TO_STDOUT",
+		},
+		cli.StringFlag{
 			Name:   "shell",
 			Value:  DefaultShell(),
 			Usage:  "The shell command used to interpret build commands, e.g /bin/bash -e -c",
@@ -311,6 +333,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Include the host's EC2 tags as tags",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
 		},
+		cli.BoolFlag{
+			Name:   "tags-from-ecs-meta-data",
+			Usage:  "Include the host's ECS meta-data as tags (container-name, image, and task-arn)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_ECS_META_DATA",
+		},
 		cli.StringSliceFlag{
 			Name:   "tags-from-gcp-meta-data",
 			Value:  &cli.StringSlice{},
@@ -341,10 +368,22 @@ var AgentStartCommand = cli.Command{
 			Value:  time.Second * 10,
 		},
 		cli.DurationFlag{
+			Name:   "wait-for-ecs-meta-data-timeout",
+			Usage:  "The amount of time to wait for meta-data from ECS before proceeding",
+			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_ECS_META_DATA_TIMEOUT",
+			Value:  time.Second * 10,
+		},
+		cli.DurationFlag{
 			Name:   "wait-for-gcp-labels-timeout",
 			Usage:  "The amount of time to wait for labels from GCP before proceeding",
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
+		},
+		cli.StringFlag{
+			Name:   "git-checkout-flags",
+			Value:  "-f",
+			Usage:  "Flags to pass to \"git checkout\" command",
+			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "git-clone-flags",
@@ -410,14 +449,25 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
 		cli.StringFlag{
+			Name:   "sockets-path",
+			Value:  defaultSocketsPath(),
+			Usage:  "Directory where the agent will place sockets",
+			EnvVar: "BUILDKITE_SOCKETS_PATH",
+		},
+		cli.StringFlag{
 			Name:   "plugins-path",
 			Value:  "",
 			Usage:  "Directory where the plugins are saved to",
 			EnvVar: "BUILDKITE_PLUGINS_PATH",
 		},
 		cli.BoolFlag{
+			Name:   "no-ansi-timestamps",
+			Usage:  "Do not insert ANSI timestamp codes at the start of each line of job output",
+			EnvVar: "BUILDKITE_NO_ANSI_TIMESTAMPS",
+		},
+		cli.BoolFlag{
 			Name:   "timestamp-lines",
-			Usage:  "Prepend timestamps on each line of output.",
+			Usage:  "Prepend timestamps on each line of job output. Has no effect unless --no-ansi-timestamps is also used",
 			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
 		},
 		cli.StringFlag{
@@ -510,6 +560,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},
+		cli.StringFlag{
+			Name:   "tracing-service-name",
+			Usage:  "Service name to use when reporting traces.",
+			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
+			Value:  "buildkite-agent",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -570,6 +626,8 @@ var AgentStartCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := AgentStartConfig{}
 
@@ -584,11 +642,15 @@ var AgentStartCommand = cli.Command{
 		// Load the configuration
 		warnings, err := loader.Load()
 		if err != nil {
-			fmt.Printf("%s", err)
+			fmt.Fprintf(os.Stderr, "Error loading config: %s\n", err)
 			os.Exit(1)
 		}
 
 		l := CreateLogger(cfg)
+		// Add this when using JSON output to help differentiate agent vs job logs.
+		if cfg.LogFormat == "json" {
+			l = l.WithFields(logger.StringField("source", "agent"))
+		}
 
 		// Show warnings now we have a logger
 		for _, warning := range warnings {
@@ -604,13 +666,6 @@ var AgentStartCommand = cli.Command{
 		if err != nil {
 			fmt.Printf("%s", err)
 			os.Exit(1)
-		}
-
-		// Check if git-mirrors are enabled
-		if experiments.IsEnabled(`git-mirrors`) {
-			if cfg.GitMirrorsPath == `` {
-				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
-			}
 		}
 
 		// Force some settings if on Windows (these aren't supported yet)
@@ -635,17 +690,17 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Show a warning if plugins are enabled by no-command-eval or no-local-hooks is set
-		if isSetNoPlugins && cfg.NoPlugins == false {
-			msg := `Plugins have been specifically enabled, despite %s being enabled. ` +
-				`Plugins can execute arbitrary hooks and commands, make sure you are ` +
-				`whitelisting your plugins in ` +
-				`your environment hook.`
+		if isSetNoPlugins && !cfg.NoPlugins {
+			msg := "Plugins have been specifically enabled, despite %s being enabled. " +
+				"Plugins can execute arbitrary hooks and commands, make sure you are " +
+				"whitelisting your plugins in " +
+				"your environment hook."
 
 			switch {
 			case cfg.NoCommandEval:
-				l.Warn(msg, `no-command-eval`)
+				l.Warn(msg, "no-command-eval")
 			case cfg.NoLocalHooks:
-				l.Warn(msg, `no-local-hooks`)
+				l.Warn(msg, "no-local-hooks")
 			}
 		}
 
@@ -683,6 +738,15 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		var ecsMetaDataTimeout time.Duration
+		if t := cfg.WaitForECSMetaDataTimeout; t != "" {
+			var err error
+			ecsMetaDataTimeout, err = time.ParseDuration(t)
+			if err != nil {
+				l.Fatal("Failed to parse ecs meta-data timeout: %v", err)
+			}
+		}
+
 		var gcpLabelsTimeout time.Duration
 		if t := cfg.WaitForGCPLabelsTimeout; t != "" {
 			var err error
@@ -703,15 +767,22 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
+		if experiments.IsEnabled(experiments.AgentAPI) {
+			shutdown := runAgentAPI(ctx, l, cfg.SocketsPath)
+			defer shutdown()
+		}
+
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
 			BootstrapScript:            cfg.BootstrapScript,
 			BuildPath:                  cfg.BuildPath,
+			SocketsPath:                cfg.SocketsPath,
 			GitMirrorsPath:             cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:       cfg.GitMirrorsSkipUpdate,
 			HooksPath:                  cfg.HooksPath,
 			PluginsPath:                cfg.PluginsPath,
+			GitCheckoutFlags:           cfg.GitCheckoutFlags,
 			GitCloneFlags:              cfg.GitCloneFlags,
 			GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
 			GitCleanFlags:              cfg.GitCleanFlags,
@@ -723,22 +794,27 @@ var AgentStartCommand = cli.Command{
 			PluginValidation:           !cfg.NoPluginValidation,
 			LocalHooksEnabled:          !cfg.NoLocalHooks,
 			RunInPty:                   !cfg.NoPTY,
+			ANSITimestamps:             !cfg.NoANSITimestamps,
 			TimestampLines:             cfg.TimestampLines,
 			DisconnectAfterJob:         cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
 			CancelGracePeriod:          cfg.CancelGracePeriod,
 			EnableJobLogTmpfile:        cfg.EnableJobLogTmpfile,
+			JobLogPath:                 cfg.JobLogPath,
+			WriteJobLogsToStdout:       cfg.WriteJobLogsToStdout,
+			LogFormat:                  cfg.LogFormat,
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
 			TracingBackend:             cfg.TracingBackend,
+			TracingServiceName:         cfg.TracingServiceName,
 		}
 
 		if loader.File != nil {
 			agentConf.ConfigPath = loader.File.Path
 		}
 
-		if cfg.LogFormat == `text` {
+		if cfg.LogFormat == "text" {
 			welcomeMessage :=
 				"\n" +
 					"%s   _           _ _     _ _    _ _                                _\n" +
@@ -755,9 +831,12 @@ var AgentStartCommand = cli.Command{
 			} else {
 				fmt.Fprintf(os.Stderr, welcomeMessage, "", "")
 			}
+		} else if cfg.LogFormat != "json" {
+			// TODO If/when cli is upgraded to v2, choice validation can be done with per-argument Actions.
+			l.Fatal("Invalid log format %v. Only 'text' or 'json' are allowed.", cfg.LogFormat)
 		}
 
-		l.Notice("Starting buildkite-agent v%s with PID: %s", agent.Version(), fmt.Sprintf("%d", os.Getpid()))
+		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), fmt.Sprintf("%d", os.Getpid()))
 		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 		l.Notice("For questions and support, email us at: hello@buildkite.com")
 
@@ -810,24 +889,26 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `Token`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "Token"))
 
 		// The registration request for all agents
 		registerReq := api.AgentRegisterRequest{
 			Name:              cfg.Name,
 			Priority:          cfg.Priority,
 			ScriptEvalEnabled: !cfg.NoCommandEval,
-			Tags: agent.FetchTags(l, agent.FetchTagsConfig{
+			Tags: agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 				Tags:                      cfg.Tags,
 				TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
 				TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
 				TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
+				TagsFromECSMetaData:       cfg.TagsFromECSMetaData,
 				TagsFromGCPMetaData:       (cfg.TagsFromGCPMetaData || cfg.TagsFromGCP),
 				TagsFromGCPMetaDataPaths:  cfg.TagsFromGCPMetaDataPaths,
 				TagsFromGCPLabels:         cfg.TagsFromGCPLabels,
 				TagsFromHost:              cfg.TagsFromHost,
 				WaitForEC2TagsTimeout:     ec2TagTimeout,
 				WaitForEC2MetaDataTimeout: ec2MetaDataTimeout,
+				WaitForECSMetaDataTimeout: ecsMetaDataTimeout,
 				WaitForGCPLabelsTimeout:   gcpLabelsTimeout,
 			}),
 			// We only want this agent to be ingored in Buildkite
@@ -856,12 +937,18 @@ var AgentStartCommand = cli.Command{
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
 			if cfg.SpawnWithPriority {
-				l.Info("Assigning priority %s for agent %d", strconv.Itoa(i), i)
-				registerReq.Priority = strconv.Itoa(i)
+				p := i
+				if experiments.IsEnabled(experiments.DescendingSpawnPrioity) {
+					// This experiment helps jobs be assigned across all hosts
+					// in cases where the value of --spawn varies between hosts.
+					p = -i
+				}
+				l.Info("Assigning priority %d for agent %d", p, i)
+				registerReq.Priority = strconv.Itoa(p)
 			}
 
 			// Register the agent with the buildkite API
-			ag, err := agent.Register(l, client, registerReq)
+			ag, err := agent.Register(ctx, l, client, registerReq)
 			if err != nil {
 				l.Fatal("%s", err)
 			}
@@ -869,12 +956,13 @@ var AgentStartCommand = cli.Command{
 			// Create an agent worker to run the agent
 			workers = append(workers,
 				agent.NewAgentWorker(
-					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, client, agent.AgentWorkerConfig{
+					l.WithFields(logger.StringField("agent", ag.Name)), ag, mc, client, agent.AgentWorkerConfig{
 						AgentConfiguration: agentConf,
 						CancelSignal:       cancelSig,
 						Debug:              cfg.Debug,
 						DebugHTTP:          cfg.DebugHTTP,
 						SpawnIndex:         i,
+						AgentStdout:        os.Stdout,
 					}))
 		}
 
@@ -884,8 +972,13 @@ var AgentStartCommand = cli.Command{
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
 		defer agentShutdownHook(l, cfg)
 
+		// Once the shutdown hook has been setup, trigger the startup hook.
+		if err := agentStartupHook(l, cfg); err != nil {
+			l.Fatal("%s", err)
+		}
+
 		// Handle process signals
-		signals := handlePoolSignals(l, pool)
+		signals := handlePoolSignals(ctx, l, pool)
 		defer close(signals)
 
 		l.Info("Starting %d Agent(s)", cfg.Spawn)
@@ -894,6 +987,7 @@ var AgentStartCommand = cli.Command{
 		// Determine the health check listening address and port for this agent
 		if cfg.HealthCheckAddr != "" {
 			http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				l.Info("%s %s", r.Method, r.URL.Path)
 				if r.URL.Path != "/" {
 					http.NotFound(w, r)
 				} else {
@@ -901,7 +995,13 @@ var AgentStartCommand = cli.Command{
 				}
 			})
 
+			http.HandleFunc("/status", status.Handle)
+
 			go func() {
+				_, setStatus, done := status.AddSimpleItem(ctx, "Health check server")
+				defer done()
+				setStatus("👂 Listening")
+
 				l.Notice("Starting HTTP health check server on %v", cfg.HealthCheckAddr)
 				err := http.ListenAndServe(cfg.HealthCheckAddr, nil)
 				if err != nil {
@@ -911,13 +1011,13 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Start the agent pool
-		if err := pool.Start(); err != nil {
+		if err := pool.Start(ctx); err != nil {
 			l.Fatal("%s", err)
 		}
 	},
 }
 
-func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
+func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt,
 		syscall.SIGHUP,
@@ -926,10 +1026,15 @@ func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 		syscall.SIGQUIT)
 
 	go func() {
+		_, setStatus, done := status.AddSimpleItem(ctx, "Handle Pool Signals")
+		defer done()
+		setStatus("⏳ Waiting for a signal")
+
 		var interruptCount int
 
 		for sig := range signals {
 			l.Debug("Received signal `%v`", sig)
+			setStatus(fmt.Sprintf("Recieved signal `%v`", sig))
 
 			switch sig {
 			case syscall.SIGQUIT:
@@ -954,22 +1059,30 @@ func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 	return signals
 }
 
-// agentShutdownHook looks for an agent-shutdown hook script in the hooks path
-// and executes it if found. Output (stdout + stderr) is streamed into the main
-// agent logger. Exit status failure is logged but ignored.
+func agentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
+	return agentLifecycleHook("agent-startup", log, cfg)
+}
 func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
-	// search for agent-shutdown hook (including .bat & .ps1 files on Windows)
-	p, err := hook.Find(cfg.HooksPath, "agent-shutdown")
+	_ = agentLifecycleHook("agent-shutdown", log, cfg)
+}
+
+// agentLifecycleHook looks for a hook script in the hooks path
+// and executes it if found. Output (stdout + stderr) is streamed into the main
+// agent logger. Exit status failure is logged and returned for the caller to handle
+func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig) error {
+	// search for hook (including .bat & .ps1 files on Windows)
+	p, err := hook.Find(cfg.HooksPath, hookName)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Error("Error finding agent-shutdown hook: %v", err)
+			log.Error("Error finding %q hook: %v", hookName, err)
+			return err
 		}
-		return
+		return nil
 	}
 	sh, err := shell.New()
 	if err != nil {
-		log.Error("creating shell for agent-shutdown hook: %v", err)
-		return
+		log.Error("creating shell for %q hook: %v", hookName, err)
+		return err
 	}
 
 	// pipe from hook output to logger
@@ -981,19 +1094,98 @@ func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
 	go func() {
 		defer wg.Done()
 		scan := bufio.NewScanner(r) // log each line separately
-		log = log.WithFields(logger.StringField("hook", "agent-shutdown"))
+		log = log.WithFields(logger.StringField("hook", hookName))
 		for scan.Scan() {
 			log.Info(scan.Text())
 		}
 	}()
 
-	// run agent-shutdown hook
+	// run hook
 	sh.Promptf("%s", p)
 	if err = sh.RunScript(context.Background(), p, nil); err != nil {
-		log.Error("agent-shutdown hook: %v", err)
+		log.Error("%q hook: %v", hookName, err)
+		return err
 	}
 	w.Close() // goroutine scans until pipe is closed
 
 	// wait for hook to finish and output to flush to logger
 	wg.Wait()
+	return nil
+}
+
+func defaultSocketsPath() string {
+	home, err := homedir.Dir()
+	if err != nil {
+		return filepath.Join(os.TempDir(), "buildkite-sockets")
+	}
+
+	return filepath.Join(home, ".buildkite-agent", "sockets")
+}
+
+// runAgentAPI runs an API socket that can be used to interact with this
+// (top-level) agent. It returns a shutdown function.
+func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) func() {
+	path := agentapi.DefaultSocketPath(socketsPath)
+	// There should be only one Agent API socket per agent process.
+	// If a previous agent crashed and left behind a socket, we can
+	// remove it.
+	os.Remove(path)
+
+	svr, err := agentapi.NewServer(path, l)
+	if err != nil {
+		l.Fatal("Couldn't create Agent API server: %v", err)
+	}
+	if err := svr.Start(); err != nil {
+		l.Fatal("Couldn't start Agent API server: %v", err)
+	}
+
+	// Try to be the leader - no worries if this fails.
+	leaderPath := agentapi.LeaderPath(socketsPath)
+	if err := os.Symlink(path, leaderPath); err == nil {
+		l.Info("Agent API: This agent became leader")
+	}
+
+	// Whoever the leader is, ping them every so often as a health-check.
+	go leaderPinger(ctx, l, path, leaderPath)
+
+	return func() {
+		svr.Shutdown(ctx)
+		if d, err := os.Readlink(leaderPath); err == nil && d == path {
+			os.Remove(leaderPath)
+		}
+	}
+}
+
+// leaderPinger pings the leader socket for liveness, and takes over if it
+// fails.
+func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string) {
+	pingLeader := func() error {
+		d, err := os.Readlink(leaderPath)
+		if err != nil {
+			// Not a symlink?
+			return err
+		}
+		if d == path {
+			// It's me! Don't bother pinging.
+			return nil
+		}
+
+		ctx, canc := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer canc()
+
+		cl, err := agentapi.NewClient(ctx, leaderPath)
+		if err != nil {
+			return err
+		}
+		return cl.Ping(ctx)
+	}
+
+	for range time.Tick(100 * time.Millisecond) {
+		if err := pingLeader(); err != nil {
+			l.Warn("Agent API: Leader ping failed, staging coup: %v", err)
+			l.Warn("Agent API: Leader state (locks) has been lost!")
+			os.Remove(leaderPath)
+			os.Symlink(path, leaderPath)
+		}
+	}
 }

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -46,7 +47,7 @@ func NewArtifactoryDownloader(l logger.Logger, c ArtifactoryDownloaderConfig) *A
 	}
 }
 
-func (d ArtifactoryDownloader) Start() error {
+func (d ArtifactoryDownloader) Start(ctx context.Context) error {
 	// Pull environment variables
 	stringURL := os.Getenv("BUILDKITE_ARTIFACTORY_URL")
 	username := os.Getenv("BUILDKITE_ARTIFACTORY_USER")
@@ -75,7 +76,7 @@ func (d ArtifactoryDownloader) Start() error {
 		Retries:     d.conf.Retries,
 		Headers:     headers,
 		DebugHTTP:   d.conf.DebugHTTP,
-	}).Start()
+	}).Start(ctx)
 }
 
 func (d ArtifactoryDownloader) RepositoryFileLocation() string {

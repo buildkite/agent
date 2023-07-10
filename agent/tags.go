@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/denisbrodbeck/machineid"
@@ -20,18 +22,23 @@ type FetchTagsConfig struct {
 	TagsFromEC2MetaData       bool
 	TagsFromEC2MetaDataPaths  []string
 	TagsFromEC2Tags           bool
+	TagsFromECSMetaData       bool
 	TagsFromGCPMetaData       bool
 	TagsFromGCPMetaDataPaths  []string
 	TagsFromGCPLabels         bool
 	TagsFromHost              bool
 	WaitForEC2TagsTimeout     time.Duration
 	WaitForEC2MetaDataTimeout time.Duration
+	WaitForECSMetaDataTimeout time.Duration
 	WaitForGCPLabelsTimeout   time.Duration
 }
 
 // FetchTags loads tags from a variety of sources
-func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
+func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []string {
 	f := &tagFetcher{
+		k8s: func() (map[string]string, error) {
+			return K8sTagsFromEnv(os.Environ())
+		},
 		ec2MetaDataDefault: func() (map[string]string, error) {
 			return EC2MetaData{}.Get()
 		},
@@ -41,6 +48,9 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 		ec2Tags: func() (map[string]string, error) {
 			return EC2Tags{}.Get()
 		},
+		ecsMetaDataDefault: func() (map[string]string, error) {
+			return ECSMetadata{}.Get()
+		},
 		gcpMetaDataDefault: func() (map[string]string, error) {
 			return GCPMetaData{}.Get()
 		},
@@ -48,23 +58,35 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 			return GCPMetaData{}.GetPaths(paths)
 		},
 		gcpLabels: func() (map[string]string, error) {
-			return GCPLabels{}.Get()
+			return GCPLabels{}.Get(ctx)
 		},
 	}
-	return f.Fetch(l, conf)
+	return f.Fetch(ctx, l, conf)
 }
 
 type tagFetcher struct {
+	k8s                func() (map[string]string, error)
 	ec2MetaDataDefault func() (map[string]string, error)
 	ec2MetaDataPaths   func(map[string]string) (map[string]string, error)
 	ec2Tags            func() (map[string]string, error)
+	ecsMetaDataDefault func() (map[string]string, error)
 	gcpMetaDataDefault func() (map[string]string, error)
 	gcpMetaDataPaths   func(map[string]string) (map[string]string, error)
 	gcpLabels          func() (map[string]string, error)
 }
 
-func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
+func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []string {
 	tags := conf.Tags
+
+	if experiments.IsEnabled(experiments.KubernetesExec) {
+		k8sTags, err := t.k8s()
+		if err != nil {
+			l.Warn("Could not fetch tags from k8s: %s", err)
+		}
+		for tag, value := range k8sTags {
+			tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+		}
+	}
 
 	// Load tags from host
 	if conf.TagsFromHost {
@@ -93,7 +115,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(conf.WaitForEC2MetaDataTimeout/5)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			ec2Tags, err := t.ec2MetaDataDefault()
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
@@ -140,7 +162,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(conf.WaitForEC2TagsTimeout/5)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			ec2Tags, err := t.ec2Tags()
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
 			// to be applied to instances. This error will cause retries.
@@ -165,6 +187,35 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 		}
 	}
 
+	// Attempt to add the default ECS meta-data tags
+	if conf.TagsFromECSMetaData {
+		l.Info("Fetching ECS meta-data...")
+
+		err := roko.NewRetrier(
+			roko.WithMaxAttempts(5),
+			roko.WithStrategy(roko.Constant(conf.WaitForECSMetaDataTimeout/5)),
+			roko.WithJitter(),
+		).Do(func(r *roko.Retrier) error {
+			ecsTags, err := t.ecsMetaDataDefault()
+			if err != nil {
+				l.Warn("%s (%s)", err, r)
+			} else {
+				l.Info("Successfully fetched ECS meta-data")
+				for tag, value := range ecsTags {
+					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+				}
+				r.Break()
+			}
+
+			return err
+		})
+
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			l.Error(fmt.Sprintf("Failed to fetch ECS meta-data: %s", err.Error()))
+		}
+	}
+
 	// Attempt to add the default GCP meta-data tags
 	if conf.TagsFromGCPMetaData {
 		l.Info("Fetching GCP meta-data...")
@@ -173,7 +224,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(1*time.Second)),
 			roko.WithJitter(),
-		).Do(func(_ *roko.Retrier) error {
+		).DoWithContext(ctx, func(_ *roko.Retrier) error {
 			gcpTags, err := t.gcpMetaDataDefault()
 			if err != nil {
 				// Don't blow up if we can't find them, just show a nasty error.
@@ -219,7 +270,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(conf.WaitForGCPLabelsTimeout/5)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			labels, err := t.gcpLabels()
 			if err == nil && len(labels) == 0 {
 				err = errors.New("GCP instance labels are empty")

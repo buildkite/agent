@@ -1,8 +1,14 @@
 $installDir = "C:\buildkite-agent"
-$arch = "amd64"
 $beta = $env:buildkiteAgentBeta
 $token = $env:buildkiteAgentToken
 $tags = $env:buildkiteAgentTags
+
+if ($(Get-ComputerInfo -Property OsArchitecture).OsArchitecture -eq "ARM 64-bit Processor") {
+  $arch = "arm64"
+} else {
+  # The value is "64-bit" on my intel laptop with windows in a virtualbox VM
+  $arch = "amd64"
+}
 
 if ([string]::IsNullOrEmpty($token)) {
     throw "No token specified, set `$env:buildkiteAgentToken"

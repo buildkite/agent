@@ -1,20 +1,21 @@
 package api
 
-//go:generate interfacer -for github.com/buildkite/agent/v3/api.Client -as agent.APIClient -o ../agent/api.go
+//go:generate go run github.com/rjeczalik/interfaces/cmd/interfacer@v0.3.0 -for github.com/buildkite/agent/v3/api.Client -as agent.APIClient -o ../agent/api.go
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -139,12 +140,22 @@ func (c *Client) FromPing(resp *Ping) *Client {
 	return NewClient(c.logger, conf)
 }
 
+type Header struct {
+	Name  string
+	Value string
+}
+
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
 // in which case it is resolved relative to the BaseURL of the Client.
 // Relative URLs should always be specified without a preceding slash. If
 // specified, the value pointed to by body is JSON encoded and included as the
 // request body.
-func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Request, error) {
+func (c *Client) newRequest(
+	ctx context.Context,
+	method, urlStr string,
+	body any,
+	headers ...Header,
+) (*http.Request, error) {
 	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	buf := new(bytes.Buffer)
@@ -155,12 +166,25 @@ func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Requ
 		}
 	}
 
-	req, err := http.NewRequest(method, u, buf)
+	req, err := http.NewRequestWithContext(ctx, method, u, buf)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Add("User-Agent", c.conf.UserAgent)
+
+	// If our context has a timeout/deadline, tell the server how long is remaining.
+	// This may allow the server to configure its own timeouts accordingly.
+	if deadline, ok := ctx.Deadline(); ok {
+		ms := time.Until(deadline).Milliseconds()
+		if ms > 0 {
+			req.Header.Add("Buildkite-Timeout-Milliseconds", strconv.FormatInt(ms, 10))
+		}
+	}
+
+	for _, header := range headers {
+		req.Header.Add(header.Name, header.Value)
+	}
 
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
@@ -173,10 +197,10 @@ func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Requ
 // provided in urlStr, in which case it is resolved relative to the UploadURL
 // of the Client. Relative URLs should always be specified without a preceding
 // slash.
-func (c *Client) newFormRequest(method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
+func (c *Client) newFormRequest(ctx context.Context, method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
 	u := joinURLPath(c.conf.Endpoint, urlStr)
 
-	req, err := http.NewRequest(method, u, body)
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +229,7 @@ func newResponse(r *http.Response) *Response {
 // error if an API error has occurred.  If v implements the io.Writer
 // interface, the raw response body will be written to v, without attempting to
 // first decode it.
-func (c *Client) doRequest(req *http.Request, v interface{}) (*Response, error) {
+func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 	var err error
 
 	if c.conf.DebugHTTP {
@@ -237,13 +261,13 @@ func (c *Client) doRequest(req *http.Request, v interface{}) (*Response, error) 
 	}
 
 	c.logger.WithFields(
-		logger.StringField(`proto`, resp.Proto),
-		logger.IntField(`status`, resp.StatusCode),
-		logger.DurationField(`Δ`, time.Since(ts)),
+		logger.StringField("proto", resp.Proto),
+		logger.IntField("status", resp.StatusCode),
+		logger.DurationField("Δ", time.Since(ts)),
 	).Debug("↳ %s %s", req.Method, req.URL)
 
 	defer resp.Body.Close()
-	defer io.Copy(ioutil.Discard, resp.Body)
+	defer io.Copy(io.Discard, resp.Body)
 
 	response := newResponse(resp)
 
@@ -285,15 +309,20 @@ type ErrorResponse struct {
 }
 
 func (r *ErrorResponse) Error() string {
-	s := fmt.Sprintf("%v %v: %d",
+	s := fmt.Sprintf("%v %v: %s",
 		r.Response.Request.Method, r.Response.Request.URL,
-		r.Response.StatusCode)
+		r.Response.Status)
 
 	if r.Message != "" {
-		s = fmt.Sprintf("%s %v", s, r.Message)
+		s = fmt.Sprintf("%s: %v", s, r.Message)
 	}
 
 	return s
+}
+
+func IsErrHavingStatus(err error, code int) bool {
+	var apierr *ErrorResponse
+	return errors.As(err, &apierr) && apierr.Response.StatusCode == code
 }
 
 func checkResponse(r *http.Response) error {
@@ -302,7 +331,7 @@ func checkResponse(r *http.Response) error {
 	}
 
 	errorResponse := &ErrorResponse{Response: r}
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := io.ReadAll(r.Body)
 	if err == nil && data != nil {
 		json.Unmarshal(data, errorResponse)
 	}
@@ -312,7 +341,7 @@ func checkResponse(r *http.Response) error {
 
 // addOptions adds the parameters in opt as URL query parameters to s. opt must
 // be a struct whose fields may contain "url" tags.
-func addOptions(s string, opt interface{}) (string, error) {
+func addOptions(s string, opt any) (string, error) {
 	v := reflect.ValueOf(opt)
 	if v.Kind() == reflect.Ptr && v.IsNil() {
 		return s, nil

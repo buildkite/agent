@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var UploadHelpDescription = `Usage:
+const uploadHelpDescription = `Usage:
 
    buildkite-agent artifact upload [options] <pattern> [destination]
 
@@ -54,13 +55,18 @@ Example:
    $ export BUILDKITE_ARTIFACTORY_URL=http://my-artifactory-instance.com/artifactory
    $ export BUILDKITE_ARTIFACTORY_USER=carol-danvers
    $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
-   $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID`
+   $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID
 
-var FollowSymlinksFlag = cli.BoolFlag{
-	Name:   "follow-symlinks",
-	Usage:  "Follow symbolic links while resolving globs",
-	EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
-}
+   By default, symlinks to directories will not be explored when resolving the glob, but symlinks to files will be uploaded as the linked files.
+   To ignore symlinks to files use:
+
+   $ buildkite-agent artifact upload --upload-skip-symlinks "log/**/*.log"
+
+   Note: uploading symlinks to files without following them is not supported.
+   If you need to preserve them in a directory, we recommend creating a tar archive:
+
+   $ tar -cvf log.tar log/**/*
+   $ buildkite-agent upload log.tar`
 
 type ArtifactUploadConfig struct {
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
@@ -82,13 +88,17 @@ type ArtifactUploadConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 
 	// Uploader flags
-	FollowSymlinks bool `cli:"follow-symlinks"`
+	GlobResolveFollowSymlinks bool `cli:"glob-resolve-follow-symlinks"`
+	UploadSkipSymlinks        bool `cli:"upload-skip-symlinks"`
+
+	// deprecated
+	FollowSymlinks bool `cli:"follow-symlinks" deprecated-and-renamed-to:"GlobResolveFollowSymlinks"`
 }
 
 var ArtifactUploadCommand = cli.Command{
 	Name:        "upload",
 	Usage:       "Uploads files to a job as artifacts",
-	Description: UploadHelpDescription,
+	Description: uploadHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
@@ -101,6 +111,21 @@ var ArtifactUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
 			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
+		},
+		cli.BoolFlag{
+			Name:   "glob-resolve-follow-symlinks",
+			Usage:  "Follow symbolic links to directories while resolving globs. Note: this will not prevent symlinks to files from being uploaded. Use --upload-skip-symlinks to do that",
+			EnvVar: "BUILDKITE_AGENT_ARTIFACT_GLOB_RESOLVE_FOLLOW_SYMLINKS",
+		},
+		cli.BoolFlag{
+			Name:   "upload-skip-symlinks",
+			Usage:  "After the glob has been resolved to a list of files to upload, skip uploading those that are symlinks to files",
+			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_SKIP_SYMLINKS",
+		},
+		cli.BoolFlag{ // Deprecated
+			Name:   "follow-symlinks",
+			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead",
+			EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
 		},
 
 		// API Flags
@@ -115,9 +140,10 @@ var ArtifactUploadCommand = cli.Command{
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
-		FollowSymlinksFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactUploadConfig{}
 
@@ -140,20 +166,24 @@ var ArtifactUploadCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the uploader
 		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
-			JobID:          cfg.Job,
-			Paths:          cfg.UploadPaths,
-			Destination:    cfg.Destination,
-			ContentType:    cfg.ContentType,
-			DebugHTTP:      cfg.DebugHTTP,
-			FollowSymlinks: cfg.FollowSymlinks,
+			JobID:       cfg.Job,
+			Paths:       cfg.UploadPaths,
+			Destination: cfg.Destination,
+			ContentType: cfg.ContentType,
+			DebugHTTP:   cfg.DebugHTTP,
+
+			// If the deprecated flag was set to true, pretend its replacement was set to true too
+			// this works as long as the user only sets one of the two flags
+			GlobResolveFollowSymlinks: (cfg.GlobResolveFollowSymlinks || cfg.FollowSymlinks),
+			UploadSkipSymlinks:        cfg.UploadSkipSymlinks,
 		})
 
 		// Upload the artifacts
-		if err := uploader.Upload(); err != nil {
+		if err := uploader.Upload(ctx); err != nil {
 			l.Fatal("Failed to upload artifacts: %s", err)
 		}
 	},

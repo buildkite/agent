@@ -9,14 +9,14 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/buildkite/agent/v3/bootstrap"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
 )
 
-var BootstrapHelpDescription = `Usage:
+const bootstrapHelpDescription = `Usage:
 
    buildkite-agent bootstrap [options...]
 
@@ -62,6 +62,7 @@ type BootstrapConfig struct {
 	AutomaticArtifactUploadPaths string   `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
+	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
@@ -69,9 +70,11 @@ type BootstrapConfig struct {
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
+	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
+	SocketsPath                  string   `cli:"sockets-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool     `cli:"command-eval"`
 	PluginsEnabled               bool     `cli:"plugins-enabled"`
@@ -88,12 +91,13 @@ type BootstrapConfig struct {
 	CancelSignal                 string   `cli:"cancel-signal"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
+	TracingServiceName           string   `cli:"tracing-service-name"`
 }
 
 var BootstrapCommand = cli.Command{
 	Name:        "bootstrap",
 	Usage:       "Run a Buildkite job locally",
-	Description: BootstrapHelpDescription,
+	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "command",
@@ -197,6 +201,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
 		},
 		cli.StringFlag{
+			Name:   "git-checkout-flags",
+			Value:  "-f",
+			Usage:  "Flags to pass to \"git checkout\" command",
+			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
+		},
+		cli.StringFlag{
 			Name:   "git-clone-flags",
 			Value:  "-v",
 			Usage:  "Flags to pass to \"git clone\" command",
@@ -219,6 +229,12 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "Flags to pass to \"git fetch\" command",
 			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
+		},
+		cli.StringSliceFlag{
+			Name:   "git-submodule-clone-config",
+			Value:  &cli.StringSlice{},
+			Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands. For example, ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead.",
+			EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		},
 		cli.StringFlag{
 			Name:   "git-mirrors-path",
@@ -254,6 +270,12 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
+		},
+		cli.StringFlag{
+			Name:   "sockets-path",
+			Value:  defaultSocketsPath(),
+			Usage:  "Directory where the agent will place sockets",
+			EnvVar: "BUILDKITE_SOCKETS_PATH",
 		},
 		cli.StringFlag{
 			Name:   "plugins-path",
@@ -329,6 +351,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},
+		cli.StringFlag{
+			Name:   "tracing-service-name",
+			Usage:  "Service name to use when reporting traces.",
+			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
+			Value:  "buildkite-agent",
+		},
 		DebugFlag,
 		LogLevelFlag,
 		ExperimentsFlag,
@@ -354,7 +382,7 @@ var BootstrapCommand = cli.Command{
 
 		// Enable experiments
 		for _, name := range cfg.Experiments {
-			experiments.Enable(name)
+			experiments.EnableWithWarnings(l, name)
 		}
 
 		// Handle profiling flag
@@ -383,19 +411,21 @@ var BootstrapCommand = cli.Command{
 		}
 
 		// Configure the bootstraper
-		bootstrap := bootstrap.New(bootstrap.Config{
+		bootstrap := job.New(job.Config{
 			AgentName:                    cfg.AgentName,
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
 			BinPath:                      cfg.BinPath,
 			Branch:                       cfg.Branch,
 			BuildPath:                    cfg.BuildPath,
+			SocketsPath:                  cfg.SocketsPath,
 			CancelSignal:                 cancelSig,
 			CleanCheckout:                cfg.CleanCheckout,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,
 			Debug:                        cfg.Debug,
+			GitCheckoutFlags:             cfg.GitCheckoutFlags,
 			GitCleanFlags:                cfg.GitCleanFlags,
 			GitCloneFlags:                cfg.GitCloneFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
@@ -404,6 +434,7 @@ var BootstrapCommand = cli.Command{
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			GitSubmodules:                cfg.GitSubmodules,
+			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			HooksPath:                    cfg.HooksPath,
 			JobID:                        cfg.JobID,
 			LocalHooksEnabled:            cfg.LocalHooksEnabled,
@@ -426,6 +457,7 @@ var BootstrapCommand = cli.Command{
 			Shell:                        cfg.Shell,
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
+			TracingServiceName:           cfg.TracingServiceName,
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -470,7 +502,7 @@ var BootstrapCommand = cli.Command{
 
 		// If cancelled and our child process returns a non-zero, we should terminate
 		// ourselves with the same signal so that our caller can detect and handle appropriately
-		if cancelled && runtime.GOOS != `windows` {
+		if cancelled && runtime.GOOS != "windows" {
 			p, err := os.FindProcess(os.Getpid())
 			if err != nil {
 				l.Error("Failed to find current process: %v", err)

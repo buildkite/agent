@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"fmt"
 )
 
@@ -17,10 +19,10 @@ type MetaDataExists struct {
 }
 
 // Sets the meta data value
-func (c *Client) SetMetaData(jobId string, metaData *MetaData) (*Response, error) {
+func (c *Client) SetMetaData(ctx context.Context, jobId string, metaData *MetaData) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/set", jobId)
 
-	req, err := c.newRequest("POST", u, metaData)
+	req, err := c.newRequest(ctx, "POST", u, metaData)
 	if err != nil {
 		return nil, err
 	}
@@ -29,11 +31,15 @@ func (c *Client) SetMetaData(jobId string, metaData *MetaData) (*Response, error
 }
 
 // Gets the meta data value
-func (c *Client) GetMetaData(jobId string, key string) (*MetaData, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/data/get", jobId)
+func (c *Client) GetMetaData(ctx context.Context, scope, id, key string) (*MetaData, *Response, error) {
+	if scope != "job" && scope != "build" {
+		return nil, nil, errors.New("scope must either be job or build")
+	}
+
+	u := fmt.Sprintf("%ss/%s/data/get", scope, id)
 	m := &MetaData{Key: key}
 
-	req, err := c.newRequest("POST", u, m)
+	req, err := c.newRequest(ctx, "POST", u, m)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -47,11 +53,15 @@ func (c *Client) GetMetaData(jobId string, key string) (*MetaData, *Response, er
 }
 
 // Returns true if the meta data key has been set, false if it hasn't.
-func (c *Client) ExistsMetaData(jobId string, key string) (*MetaDataExists, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/data/exists", jobId)
+func (c *Client) ExistsMetaData(ctx context.Context, scope, id, key string) (*MetaDataExists, *Response, error) {
+	if scope != "job" && scope != "build" {
+		return nil, nil, errors.New("scope must either be job or build")
+	}
+
+	u := fmt.Sprintf("%ss/%s/data/exists", scope, id)
 	m := &MetaData{Key: key}
 
-	req, err := c.newRequest("POST", u, m)
+	req, err := c.newRequest(ctx, "POST", u, m)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -65,10 +75,14 @@ func (c *Client) ExistsMetaData(jobId string, key string) (*MetaDataExists, *Res
 	return e, resp, err
 }
 
-func (c *Client) MetaDataKeys(jobId string) ([]string, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/data/keys", jobId)
+func (c *Client) MetaDataKeys(ctx context.Context, scope, id string) ([]string, *Response, error) {
+	if scope != "job" && scope != "build" {
+		return nil, nil, errors.New("scope must either be job or build")
+	}
 
-	req, err := c.newRequest("POST", u, nil)
+	u := fmt.Sprintf("%ss/%s/data/keys", scope, id)
+
+	req, err := c.newRequest(ctx, "POST", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}

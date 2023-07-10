@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,12 +13,12 @@ import (
 type profilerMode string
 
 const (
-	cpuMode          profilerMode = `cpu`
-	memMode          profilerMode = `mem`
-	mutexMode        profilerMode = `mutex`
-	blockMode        profilerMode = `block`
-	traceMode        profilerMode = `trace`
-	threadCreateMode profilerMode = `thread`
+	cpuMode          profilerMode = "cpu"
+	memMode          profilerMode = "mem"
+	mutexMode        profilerMode = "mutex"
+	blockMode        profilerMode = "block"
+	traceMode        profilerMode = "trace"
+	threadCreateMode profilerMode = "thread"
 )
 
 type profiler struct {
@@ -33,17 +32,17 @@ func Profile(l logger.Logger, mode string) func() {
 	p := profiler{logger: l}
 
 	switch mode {
-	case `cpu`:
+	case "cpu":
 		p.mode = cpuMode
-	case `mem`, `memory`:
+	case "mem", "memory":
 		p.mode = memMode
-	case `mutex`:
+	case "mutex":
 		p.mode = mutexMode
-	case `block`:
+	case "block":
 		p.mode = blockMode
-	case `thread`:
+	case "thread":
 		p.mode = threadCreateMode
-	case `trace`:
+	case "trace":
 		p.mode = traceMode
 	default:
 		p.logger.Fatal("Unknown profile mode %q", mode)
@@ -60,7 +59,7 @@ func (p *profiler) Stop() {
 
 // Start starts a new profiling session.
 func (p *profiler) Start() {
-	path, err := ioutil.TempDir("", "profile")
+	path, err := os.MkdirTemp("", "profile")
 	if err != nil {
 		p.logger.Fatal("Could not create initial output directory: %v", err)
 	}

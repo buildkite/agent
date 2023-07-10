@@ -4,20 +4,22 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -42,6 +44,33 @@ const (
 	BuildkiteMessageName = "BUILDKITE_MESSAGE"
 )
 
+// Certain env can only be set by agent configuration.
+// We show the user a warning in the bootstrap if they use any of these at a job level.
+var ProtectedEnv = map[string]struct{}{
+	"BUILDKITE_AGENT_ENDPOINT":           {},
+	"BUILDKITE_AGENT_ACCESS_TOKEN":       {},
+	"BUILDKITE_AGENT_DEBUG":              {},
+	"BUILDKITE_AGENT_PID":                {},
+	"BUILDKITE_BIN_PATH":                 {},
+	"BUILDKITE_CONFIG_PATH":              {},
+	"BUILDKITE_BUILD_PATH":               {},
+	"BUILDKITE_GIT_MIRRORS_PATH":         {},
+	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":  {},
+	"BUILDKITE_HOOKS_PATH":               {},
+	"BUILDKITE_PLUGINS_PATH":             {},
+	"BUILDKITE_SSH_KEYSCAN":              {},
+	"BUILDKITE_GIT_SUBMODULES":           {},
+	"BUILDKITE_COMMAND_EVAL":             {},
+	"BUILDKITE_PLUGINS_ENABLED":          {},
+	"BUILDKITE_LOCAL_HOOKS_ENABLED":      {},
+	"BUILDKITE_GIT_CLONE_FLAGS":          {},
+	"BUILDKITE_GIT_FETCH_FLAGS":          {},
+	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
+	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
+	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
+	"BUILDKITE_SHELL":                    {},
+}
+
 type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
@@ -54,6 +83,14 @@ type JobRunnerConfig struct {
 
 	// Whether to set debug HTTP Requests in the job
 	DebugHTTP bool
+
+	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
+	AgentStdout io.Writer
+}
+
+type jobRunner interface {
+	Run(ctx context.Context) error
+	CancelAndStop() error
 }
 
 type JobRunner struct {
@@ -75,12 +112,8 @@ type JobRunner struct {
 	// A scope for metrics within a job
 	metrics *metrics.Scope
 
-	// Go context for goroutine supervision
-	context       context.Context
-	contextCancel context.CancelFunc
-
 	// The internal process of the job
-	process *process.Process
+	process jobAPI
 
 	// The internal buffer of the process output
 	output *process.Buffer
@@ -97,9 +130,6 @@ type JobRunner struct {
 	// If the agent is being stopped
 	stopped bool
 
-	// Used to wait on various routines that we spin up
-	routineWaitGroup sync.WaitGroup
-
 	// A lock to protect concurrent calls to cancel
 	cancelLock sync.Mutex
 
@@ -107,8 +137,19 @@ type JobRunner struct {
 	envFile *os.File
 }
 
+type jobAPI interface {
+	Done() <-chan struct{}
+	Started() <-chan struct{}
+	Interrupt() error
+	Terminate() error
+	Run(ctx context.Context) error
+	WaitStatus() process.WaitStatus
+}
+
+var _ jobRunner = (*JobRunner)(nil)
+
 // Initializes the job runner
-func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, job *api.Job, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, job *api.Job, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
 	runner := &JobRunner{
 		agent:     ag,
 		job:       job,
@@ -125,8 +166,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		clientConf.Token = job.Token
 		runner.apiClient = api.NewClient(l, clientConf)
 	}
-
-	runner.context, runner.contextCancel = context.WithCancel(context.Background())
 
 	// Create our header times struct
 	runner.headerTimesStreamer = newHeaderTimesStreamer(l, runner.onUploadHeaderTime)
@@ -147,8 +186,8 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}
 	}
 
-	// Prepare a file to recieve the given job environment
-	if file, err := ioutil.TempFile(tempDir, fmt.Sprintf("job-env-%s", job.ID)); err != nil {
+	// Prepare a file to receive the given job environment
+	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", job.ID)); err != nil {
 		return runner, err
 	} else {
 		l.Debug("[JobRunner] Created env file: %s", file.Name())
@@ -169,23 +208,49 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	// Our log streamer works off a buffer of output
 	runner.output = &process.Buffer{}
-
-	// The writer that output from the process goes into
-	var processWriter io.Writer
+	var outputWriter io.Writer = runner.output
 
 	pr, pw := io.Pipe()
 
-	if experiments.IsEnabled(`ansi-timestamps`) {
+	// {stdout, stderr} -> processWriter	// processWriter = io.MultiWriter(allWriters...)
+	var allWriters []io.Writer
+
+	// if agent config "EnableJobLogTmpfile" is set, we extend the outputWriter to write to a temporary file.
+	// By default, the tmp file will be created on os.TempDir unless config "JobLogPath" is specified.
+	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the full path to this temporary file.
+	var tmpFile *os.File
+	if conf.AgentConfiguration.EnableJobLogTmpfile {
+		jobLogDir := ""
+		if conf.AgentConfiguration.JobLogPath != "" {
+			jobLogDir = conf.AgentConfiguration.JobLogPath
+			l.Debug("[JobRunner] Job Log Path: %s", jobLogDir)
+		}
+		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
+		if err != nil {
+			return nil, err
+		}
+		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
+		outputWriter = io.MultiWriter(outputWriter, tmpFile)
+	}
+
+	switch {
+	case conf.AgentConfiguration.ANSITimestamps:
+		// processWriter -> prefixer -> outputWriter
+
 		// If we have ansi-timestamps, we can skip line timestamps AND header times
 		// this is the future of timestamping
-		processWriter = process.NewPrefixer(runner.output, func() string {
+		prefixer := process.NewPrefixer(outputWriter, func() string {
 			return fmt.Sprintf("\x1b_bk;t=%d\x07",
 				time.Now().UnixNano()/int64(time.Millisecond))
 		})
-	} else if conf.AgentConfiguration.TimestampLines {
+		allWriters = append(allWriters, prefixer)
+
+	case conf.AgentConfiguration.TimestampLines:
+		// processWriter -> pw -> pr -> process.Scanner -> {headerTimesStreamer, outputWriter}
+
 		// If we have timestamp lines on, we have to buffer lines before we flush them
 		// because we need to know if the line is a header or not. It's a bummer.
-		processWriter = pw
+		allWriters = append(allWriters, pw)
 
 		go func() {
 			// Use a scanner to process output line by line
@@ -199,15 +264,19 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 				}
 
 				// Write the log line to the buffer
-				_, _ = runner.output.Write([]byte(line + "\n"))
+				_, _ = outputWriter.Write([]byte(line + "\n"))
 			})
 			if err != nil {
 				l.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
-	} else {
-		// Write output directly to the line buffer so we
-		processWriter = io.MultiWriter(pw, runner.output)
+
+	default:
+		// processWriter -> {pw, outputWriter};
+		// pw -> pr -> process.Scanner -> headerTimesStreamer
+
+		// Write output directly to the line buffer
+		allWriters = append(allWriters, pw, outputWriter)
 
 		// Use a scanner to process output for headers only
 		go func() {
@@ -220,17 +289,23 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}()
 	}
 
-	// if agent config "EnableJobLogTmpfile" is set, we extend the processWriter to write to a temporary file.
-	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the path to this temporary file.
-	var tmpFile *os.File
-	if conf.AgentConfiguration.EnableJobLogTmpfile {
-		tmpFile, err = ioutil.TempFile("", "buildkite_job_log")
-		if err != nil {
-			return nil, err
+	if conf.AgentConfiguration.WriteJobLogsToStdout {
+		if conf.AgentConfiguration.LogFormat == "json" {
+			log := newJobLogger(
+				conf.AgentStdout, logger.StringField("org", job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
+				logger.StringField("pipeline", job.Env["BUILDKITE_PIPELINE_SLUG"]),
+				logger.StringField("branch", job.Env["BUILDKITE_BRANCH"]),
+				logger.StringField("queue", job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
+				logger.StringField("job_id", job.ID),
+			)
+			allWriters = append(allWriters, log)
+		} else {
+			allWriters = append(allWriters, conf.AgentStdout)
 		}
-		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
-		processWriter = io.MultiWriter(processWriter, tmpFile)
 	}
+
+	// The writer that output from the process goes into
+	processWriter := io.MultiWriter(allWriters...)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -239,16 +314,29 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	processEnv := append(os.Environ(), env...)
 
 	// The process that will run the bootstrap script
-	runner.process = process.New(l, process.Config{
-		Path:            cmd[0],
-		Args:            cmd[1:],
-		Dir:             conf.AgentConfiguration.BuildPath,
-		Env:             processEnv,
-		PTY:             conf.AgentConfiguration.RunInPty,
-		Stdout:          processWriter,
-		Stderr:          processWriter,
-		InterruptSignal: conf.CancelSignal,
-	})
+	if experiments.IsEnabled(experiments.KubernetesExec) {
+		containerCount, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_COUNT"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
+		}
+		runner.process = kubernetes.New(l, kubernetes.Config{
+			AccessToken: apiClient.Config().Token,
+			Stdout:      processWriter,
+			Stderr:      processWriter,
+			ClientCount: containerCount,
+		})
+	} else {
+		runner.process = process.New(l, process.Config{
+			Path:            cmd[0],
+			Args:            cmd[1:],
+			Dir:             conf.AgentConfiguration.BuildPath,
+			Env:             processEnv,
+			PTY:             conf.AgentConfiguration.RunInPty,
+			Stdout:          processWriter,
+			Stderr:          processWriter,
+			InterruptSignal: conf.CancelSignal,
+		})
+	}
 
 	// Close the writer end of the pipe when the process finishes
 	go func() {
@@ -263,25 +351,22 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}
 	}()
 
-	// Kick off our callback when the process starts
-	go func() {
-		<-runner.process.Started()
-		runner.onProcessStartCallback()
-	}()
-
 	return runner, nil
 }
 
 // Runs the job
-func (r *JobRunner) Run() error {
+func (r *JobRunner) Run(ctx context.Context) error {
 	r.logger.Info("Starting job %s", r.job.ID)
+
+	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
+	defer done()
 
 	startedAt := time.Now()
 
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
 	// up like started log streamer workers, and so on.
-	if err := r.startJob(startedAt); err != nil {
+	if err := r.startJob(ctx, startedAt); err != nil {
 		return err
 	}
 
@@ -297,12 +382,10 @@ func (r *JobRunner) Run() error {
 	}
 
 	// Start the header time streamer
-	if err := r.headerTimesStreamer.Start(); err != nil {
-		return err
-	}
+	go r.headerTimesStreamer.Run(ctx)
 
-	// Start the log streamer
-	if err := r.logStreamer.Start(); err != nil {
+	// Start the log streamer. Launches multiple goroutines.
+	if err := r.logStreamer.Start(ctx); err != nil {
 		return err
 	}
 
@@ -319,12 +402,12 @@ func (r *JobRunner) Run() error {
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
 		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true
 		// positive result from the hook
-		okay, err := r.executePreBootstrapHook(hook)
+		okay, err := r.executePreBootstrapHook(ctx, hook)
 		if !okay {
 			environmentCommandOkay = false
 
 			// Ensure the Job UI knows why this job resulted in failure
-			r.logStreamer.Process("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details")
+			r.logStreamer.Process([]byte("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details"))
 			// But disclose more information in the agent logs
 			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
@@ -333,18 +416,43 @@ func (r *JobRunner) Run() error {
 		}
 	}
 
+	// Used to wait on various routines that we spin up
+	var wg sync.WaitGroup
+
+	// Set up a child context for helper goroutines related to running the job.
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	if environmentCommandOkay {
+		// Kick off log streaming and job status checking when the process
+		// starts.
+		wg.Add(2)
+		go r.jobLogStreamer(cctx, &wg)
+		go r.jobCancellationChecker(cctx, &wg)
+
 		// Run the process. This will block until it finishes.
-		if err := r.process.Run(); err != nil {
+		if err := r.process.Run(cctx); err != nil {
 			// Send the error as output
-			r.logStreamer.Process(fmt.Sprintf("%s", err))
+			r.logStreamer.Process([]byte(err.Error()))
 
 			// The process did not run at all, so make sure it fails
 			exitStatus = "-1"
 			signalReason = "process_run_error"
 		} else {
+			// Intended to capture situations where the job-exec (aka bootstrap) container did not
+			// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
+			// to the user as they may be the caused by errors in the pipeline definition.
+			if r.cancelled && !r.stopped {
+				k8sProcess, ok := r.process.(*kubernetes.Runner)
+				if ok && k8sProcess.ClientStateUnknown() {
+					r.logStreamer.Process([]byte(
+						"Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.",
+					))
+				}
+			}
+
 			// Add the final output to the streamer
-			r.logStreamer.Process(r.output.String())
+			r.logStreamer.Process(r.output.ReadAndTruncate())
 
 			// Collect the finished process' exit status
 			exitStatus = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
@@ -354,10 +462,10 @@ func (r *JobRunner) Run() error {
 			if r.stopped {
 				// The agent is being gracefully stopped, and we signaled the job to end. Often due
 				// to pending host shutdown or EC2 spot instance termination
-				signalReason = `agent_stop`
+				signalReason = "agent_stop"
 			} else if r.cancelled {
 				// The job was signaled because it was cancelled via the buildkite web UI
-				signalReason = `cancel`
+				signalReason = "cancel"
 			}
 		}
 	}
@@ -378,10 +486,12 @@ func (r *JobRunner) Run() error {
 		r.logger.Warn("%d chunks failed to upload for this job", count)
 	}
 
+	// Ensure the additional goroutines are stopped.
+	cancel()
+
 	// Wait for the routines that we spun up to finish
 	r.logger.Debug("[JobRunner] Waiting for all other routines to finish")
-	r.contextCancel()
-	r.routineWaitGroup.Wait()
+	wg.Wait()
 
 	// Remove the env file, if any
 	if r.envFile != nil {
@@ -396,18 +506,18 @@ func (r *JobRunner) Run() error {
 		"exit_code": exitStatus,
 	})
 	if exitStatus == "0" {
-		jobMetrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
-		jobMetrics.Count(`jobs.success`, 1)
+		jobMetrics.Timing("jobs.duration.success", finishedAt.Sub(startedAt))
+		jobMetrics.Count("jobs.success", 1)
 	} else {
-		jobMetrics.Timing(`jobs.duration.error`, finishedAt.Sub(startedAt))
-		jobMetrics.Count(`jobs.failed`, 1)
+		jobMetrics.Timing("jobs.duration.error", finishedAt.Sub(startedAt))
+		jobMetrics.Count("jobs.failed", 1)
 	}
 
 	// Finish the build in the Buildkite Agent API
 	//
 	// Once we tell the API we're finished it might assign us new work, so make
 	// sure everything else is done first.
-	r.finishJob(finishedAt, exitStatus, signal, signalReason, r.logStreamer.FailedChunks())
+	r.finishJob(ctx, finishedAt, exitStatus, signal, signalReason, r.logStreamer.FailedChunks())
 
 	r.logger.Info("Finished job %s", r.job.ID)
 
@@ -454,11 +564,7 @@ func (r *JobRunner) Cancel() error {
 		r.logger.Info("Job %s hasn't stopped in time, terminating", r.job.ID)
 
 		// Terminate the process as we've exceeded our context
-		if err := r.process.Terminate(); err != nil {
-			return err
-		}
-
-		return nil
+		return r.process.Terminate()
 
 	// Process successfully terminated
 	case <-r.process.Done():
@@ -478,9 +584,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	// The agent registration token should never make it into the job environment
-	if _, exists := env[`BUILDKITE_AGENT_TOKEN`]; exists {
-		delete(env, `BUILDKITE_AGENT_TOKEN`)
-	}
+	delete(env, "BUILDKITE_AGENT_TOKEN")
 
 	// Write out the job environment to a file, in k="v" format, with newlines escaped
 	// We present only the clean environment - i.e only variables configured
@@ -497,40 +601,12 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
 	}
 
-	// Certain env can only be set by agent configuration.
-	// We show the user a warning in the bootstrap if they use any of these at a job level.
-
-	var protectedEnv = []string{
-		`BUILDKITE_AGENT_ENDPOINT`,
-		`BUILDKITE_AGENT_ACCESS_TOKEN`,
-		`BUILDKITE_AGENT_DEBUG`,
-		`BUILDKITE_AGENT_PID`,
-		`BUILDKITE_BIN_PATH`,
-		`BUILDKITE_CONFIG_PATH`,
-		`BUILDKITE_BUILD_PATH`,
-		`BUILDKITE_GIT_MIRRORS_PATH`,
-		`BUILDKITE_GIT_MIRRORS_SKIP_UPDATE`,
-		`BUILDKITE_HOOKS_PATH`,
-		`BUILDKITE_PLUGINS_PATH`,
-		`BUILDKITE_SSH_KEYSCAN`,
-		`BUILDKITE_GIT_SUBMODULES`,
-		`BUILDKITE_COMMAND_EVAL`,
-		`BUILDKITE_PLUGINS_ENABLED`,
-		`BUILDKITE_LOCAL_HOOKS_ENABLED`,
-		`BUILDKITE_GIT_CLONE_FLAGS`,
-		`BUILDKITE_GIT_FETCH_FLAGS`,
-		`BUILDKITE_GIT_CLONE_MIRROR_FLAGS`,
-		`BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT`,
-		`BUILDKITE_GIT_CLEAN_FLAGS`,
-		`BUILDKITE_SHELL`,
-	}
-
 	var ignoredEnv []string
 
 	// Check if the user has defined any protected env
-	for _, p := range protectedEnv {
-		if _, exists := r.job.Env[p]; exists {
-			ignoredEnv = append(ignoredEnv, p)
+	for k := range ProtectedEnv {
+		if _, exists := r.job.Env[k]; exists {
+			ignoredEnv = append(ignoredEnv, k)
 		}
 	}
 
@@ -564,6 +640,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	// Add options from the agent configuration
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
+	env["BUILDKITE_SOCKETS_PATH"] = r.conf.AgentConfiguration.SocketsPath
 	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
 	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
 	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
@@ -573,6 +650,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandEval)
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
+	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
 	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
 	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
@@ -611,6 +689,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 
 	if r.conf.AgentConfiguration.TracingBackend != "" {
 		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
+		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
 	}
 
 	// see documentation for BuildkiteMessageMax
@@ -657,7 +736,7 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 	return len(bytes), nil
 }
 
-func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
+func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
 	r.logger.Info("Running pre-bootstrap hook %q", hook)
 
 	sh, err := shell.New()
@@ -673,7 +752,7 @@ func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 		l: r.logger,
 	}
 
-	if err := sh.RunWithoutPrompt(hook); err != nil {
+	if err := sh.RunWithoutPrompt(ctx, hook); err != nil {
 		r.logger.Error("Finished pre-bootstrap hook %q: job rejected", hook)
 		return false, err
 	}
@@ -683,20 +762,22 @@ func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 }
 
 // Starts the job in the Buildkite Agent API. We'll retry on connection-related
-// issues, but if a connection succeeds and we get an error response back from
+// issues, but if a connection succeeds and we get an client error response back from
 // Buildkite, we won't bother retrying. For example, a "no such host" will
-// retry, but a 422 from Buildkite won't.
-func (r *JobRunner) startJob(startedAt time.Time) error {
+// retry, but an HTTP response from Buildkite that isn't retryable won't.
+func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 	r.job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 
 	return roko.NewRetrier(
-		roko.WithMaxAttempts(30),
-		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(rtr *roko.Retrier) error {
-		_, err := r.apiClient.StartJob(r.job)
+		roko.WithMaxAttempts(7),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+	).DoWithContext(ctx, func(rtr *roko.Retrier) error {
+		response, err := r.apiClient.StartJob(ctx, r.job)
 
 		if err != nil {
-			if api.IsRetryableError(err) {
+			if response != nil && api.IsRetryableStatus(response) {
+				r.logger.Warn("%s (%s)", err, rtr)
+			} else if api.IsRetryableError(err) {
 				r.logger.Warn("%s (%s)", err, rtr)
 			} else {
 				r.logger.Warn("Buildkite rejected the call to start the job (%s)", err)
@@ -708,9 +789,9 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 	})
 }
 
-// Finishes the job in the Buildkite Agent API. This call will keep on retrying
-// forever until it finally gets a successfull response from the API.
-func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal string, signalReason string, failedChunkCount int) error {
+// finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
+// cannot return successfully, this will retry for a long time.
+func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exitStatus, signal, signalReason string, failedChunkCount int) error {
 	r.job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.job.ExitStatus = exitStatus
 	r.job.Signal = signal
@@ -720,11 +801,15 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
 		r.job.ExitStatus, r.job.Signal, r.job.SignalReason)
 
+	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
+	defer cancel()
+
 	return roko.NewRetrier(
 		roko.TryForever(),
+		roko.WithJitter(),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
-	).Do(func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.FinishJob(r.job)
+	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		response, err := r.apiClient.FinishJob(ctx, r.job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
 			// succesfully tried to finish the job, but Buildkite
@@ -747,78 +832,101 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 	})
 }
 
-func (r *JobRunner) onProcessStartCallback() {
-	// Since we're spinning up 2 routines here, we might as well add them
-	// to the routine wait group here.
-	r.routineWaitGroup.Add(2)
+// jobLogStreamer waits for the process to start, then grabs the job output
+// every few seconds and sends it back to Buildkite.
+func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Log Streamer")
+	defer done()
+	setStat("🏃 Starting...")
 
-	// Start a routine that will grab the output every few seconds and send
-	// it back to Buildkite
-	go func() {
-		defer func() {
-			r.routineWaitGroup.Done()
-			r.logger.Debug("[JobRunner] Routine that processes the log has finished")
-		}()
-
-		for {
-			// Send the output of the process to the log streamer
-			// for processing
-			r.logStreamer.Process(r.output.String())
-
-			// Sleep for a bit, or until the job is finished
-			select {
-			case <-time.After(1 * time.Second):
-			case <-r.context.Done():
-				return
-			case <-r.process.Done():
-				return
-			}
-		}
-
-		// The final output after the process has finished is processed in Run()
+	defer func() {
+		wg.Done()
+		r.logger.Debug("[JobRunner] Routine that processes the log has finished")
 	}()
 
-	// Start a routine that will constantly ping Buildkite to see if the
-	// job has been canceled
-	go func() {
-		defer func() {
-			// Mark this routine as done in the wait group
-			r.routineWaitGroup.Done()
+	select {
+	case <-r.process.Started():
+	case <-ctx.Done():
+		return
+	}
 
-			r.logger.Debug("[JobRunner] Routine that refreshes the job has finished")
-		}()
-		for {
-			// Re-get the job and check its status to see if it's been cancelled
-			jobState, _, err := r.apiClient.GetJobState(r.job.ID)
-			if err != nil {
-				// We don't really care if it fails, we'll just
-				// try again soon anyway
-				r.logger.Warn("Problem with getting job state %s (%s)", r.job.ID, err)
-			} else if jobState.State == "canceling" || jobState.State == "canceled" {
-				err = r.Cancel()
-				if err != nil {
-					r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.job.ID, err)
-				}
-			}
+	for {
+		setStat("📨 Sending process output to log streamer")
 
-			// Sleep for a bit, or until the job is finished
-			select {
-			case <-time.After(time.Duration(r.agent.JobStatusInterval) * time.Second):
-			case <-r.context.Done():
-				return
-			case <-r.process.Done():
-				return
-			}
+		// Send the output of the process to the log streamer
+		// for processing
+		r.logStreamer.Process(r.output.ReadAndTruncate())
+
+		setStat("😴 Sleeping for a bit")
+
+		// Sleep for a bit, or until the job is finished
+		select {
+		case <-time.After(1 * time.Second):
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
 		}
-	}()
+	}
+
+	// The final output after the process has finished is processed in Run().
 }
 
-func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
+// jobCancellationChecker waits for the processs to start, then continuously
+// polls GetJobState to see if the job has been cancelled server-side. If so,
+// it calls r.Cancel.
+func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGroup) {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Cancellation Checker")
+	defer done()
+	setStat("Starting...")
+
+	defer func() {
+		// Mark this routine as done in the wait group
+		wg.Done()
+
+		r.logger.Debug("[JobRunner] Routine that refreshes the job has finished")
+	}()
+
+	select {
+	case <-r.process.Started():
+	case <-ctx.Done():
+		return
+	}
+
+	for {
+		setStat("📡 Fetching job state from Buildkite")
+
+		// Re-get the job and check its status to see if it's been cancelled
+		jobState, _, err := r.apiClient.GetJobState(ctx, r.job.ID)
+		if err != nil {
+			// We don't really care if it fails, we'll just
+			// try again soon anyway
+			r.logger.Warn("Problem with getting job state %s (%s)", r.job.ID, err)
+		} else if jobState.State == "canceling" || jobState.State == "canceled" {
+			if err := r.Cancel(); err != nil {
+				r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.job.ID, err)
+			}
+		}
+
+		setStat("😴 Sleeping for a bit")
+
+		// Sleep for a bit, or until the job is finished
+		select {
+		case <-time.After(time.Duration(r.agent.JobStatusInterval) * time.Second):
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+	}
+}
+
+func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, times map[string]string) {
 	roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.SaveHeaderTimes(r.job.ID, &api.HeaderTimes{Times: times})
+	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		response, err := r.apiClient.SaveHeaderTimes(ctx, r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.logger.Warn("Buildkite rejected the header times (%s)", err)
@@ -832,22 +940,26 @@ func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]s
 	})
 }
 
-// Call when a chunk is ready for upload.
-func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
+// onUploadChunk uploads a log streamer chunk. If a valid chunk cannot be
+// uploaded, it will retry for a long time.
+func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) error {
 	// We consider logs to be an important thing, and we shouldn't give up
 	// on sending the chunk data back to Buildkite. In the event Buildkite
 	// is having downtime or there are connection problems, we'll want to
 	// hold onto chunks until it's back online to upload them.
 	//
-	// This code will retry forever until we get back a successful response
-	// from Buildkite that it's considered the chunk (a 4xx will be
+	// This code will retry for a long time until we get back a successful
+	// response from Buildkite that it's considered the chunk (a 4xx will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
+	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
+	defer cancel()
+
 	return roko.NewRetrier(
 		roko.TryForever(),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 		roko.WithJitter(),
-	).Do(func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.UploadChunk(r.job.ID, &api.Chunk{
+	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		response, err := r.apiClient.UploadChunk(ctx, r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
 			Offset:   chunk.Offset,
@@ -864,4 +976,28 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 
 		return err
 	})
+}
+
+// jobLogger is just a simple wrapper around a JSON Logger that satisfies the
+// io.Writer interface so it can be seemlessly use with existing job logging code.
+type jobLogger struct {
+	log logger.Logger
+}
+
+func newJobLogger(stdout io.Writer, fields ...logger.Field) jobLogger {
+	l := logger.NewConsoleLogger(logger.NewJSONPrinter(stdout), os.Exit)
+	l = l.WithFields(logger.StringField("source", "job"))
+	l = l.WithFields(fields...)
+	return jobLogger{log: l}
+}
+
+// Write adapts the underlying JSON logger to match the io.Writer interface to
+// easier slotting into job logger code. This will write existing fields
+// attached to the logger, the message, and write out to the INFO level.
+func (l jobLogger) Write(data []byte) (int, error) {
+	// When writing as a structured log, trailing newlines and carriage returns
+	// generally don't make sense.
+	msg := strings.TrimRight(string(data), "\r\n")
+	l.log.Info(msg)
+	return len(data), nil
 }

@@ -1,7 +1,11 @@
+// Package process provides a helper for running and managing a subprocess.
+//
+// It is intended for internal use by buildkite-agent only.
 package process
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,11 +17,10 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/pkg/errors"
 )
 
 const (
-	termType = `xterm-256color`
+	termType = "xterm-256color"
 )
 
 type Signal int
@@ -32,12 +35,18 @@ const (
 )
 
 var signalMap = map[string]Signal{
-	`SIGHUP`:  SIGHUP,
-	`SIGINT`:  SIGINT,
-	`SIGQUIT`: SIGQUIT,
-	`SIGUSR1`: SIGUSR1,
-	`SIGUSR2`: SIGUSR2,
-	`SIGTERM`: SIGTERM,
+	"SIGHUP":  SIGHUP,
+	"SIGINT":  SIGINT,
+	"SIGQUIT": SIGQUIT,
+	"SIGUSR1": SIGUSR1,
+	"SIGUSR2": SIGUSR2,
+	"SIGTERM": SIGTERM,
+}
+
+type WaitStatus interface {
+	ExitStatus() int
+	Signaled() bool
+	Signal() syscall.Signal
 }
 
 func (s Signal) String() string {
@@ -68,7 +77,6 @@ type Config struct {
 	Stdout          io.Writer
 	Stderr          io.Writer
 	Dir             string
-	Context         context.Context
 	InterruptSignal Signal
 }
 
@@ -105,12 +113,12 @@ func (p *Process) WaitResult() error {
 }
 
 // WaitStatus returns the status of the Wait() call
-func (p *Process) WaitStatus() syscall.WaitStatus {
+func (p *Process) WaitStatus() WaitStatus {
 	return p.status
 }
 
 // Run the command and block until it finishes
-func (p *Process) Run() error {
+func (p *Process) Run(ctx context.Context) error {
 	if p.command != nil {
 		return fmt.Errorf("Process is already running")
 	}
@@ -119,10 +127,7 @@ func (p *Process) Run() error {
 	p.command = exec.Command(p.conf.Path, p.conf.Args...)
 
 	// Setup the process to create a process group if supported
-	// See https://github.com/kr/pty/issues/35 for context
-	if !p.conf.PTY {
-		p.setupProcessGroup()
-	}
+	p.setupProcessGroup()
 
 	// Configure working dir and fail if it doesn't exist, otherwise
 	// we get confusing errors about fork/exec failing because the file
@@ -156,7 +161,7 @@ func (p *Process) Run() error {
 	// Toggle between running in a pty
 	if p.conf.PTY {
 		// Commands like tput expect a TERM value for a PTY
-		p.command.Env = append(p.command.Env, `TERM=`+termType)
+		p.command.Env = append(p.command.Env, "TERM="+termType)
 
 		pty, err := StartPTY(p.command)
 		if err != nil {
@@ -214,10 +219,10 @@ func (p *Process) Run() error {
 	}
 
 	// When the context finishes, terminate the process
-	if p.conf.Context != nil {
+	if ctx != nil {
 		go func() {
 			select {
-			case <-p.conf.Context.Done():
+			case <-ctx.Done():
 				p.logger.Debug("[Process] Context done, terminating")
 				if err := p.Terminate(); err != nil {
 					p.logger.Debug("[Process] Failed terminate: %v", err)

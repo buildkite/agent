@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var MetaDataKeysHelpDescription = `Usage:
+const metaDataKeysHelpDescription = `Usage:
 
    buildkite-agent meta-data keys [options...]
 
@@ -25,7 +26,8 @@ Example:
    $ buildkite-agent meta-data keys`
 
 type MetaDataKeysConfig struct {
-	Job string `cli:"job" validate:"required"`
+	Job   string `cli:"job"`
+	Build string `cli:"build"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -44,13 +46,19 @@ type MetaDataKeysConfig struct {
 var MetaDataKeysCommand = cli.Command{
 	Name:        "keys",
 	Usage:       "Lists all meta-data keys that have been previously set",
-	Description: MetaDataKeysHelpDescription,
+	Description: metaDataKeysHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
 			Usage:  "Which job's build should the meta-data be checked for",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			Usage:  "Which build should the meta-data be retrieved from. --build will take precedence over --job",
+			EnvVar: "BUILDKITE_METADATA_BUILD_ID",
 		},
 
 		// API Flags
@@ -67,6 +75,8 @@ var MetaDataKeysCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := MetaDataKeysConfig{}
 
@@ -89,25 +99,33 @@ var MetaDataKeysCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data keys
 		var keys []string
 		var resp *api.Response
 
+		scope := "job"
+		id := cfg.Job
+
+		if cfg.Build != "" {
+			scope = "build"
+			id = cfg.Build
+		}
+
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			keys, resp, err = client.MetaDataKeys(cfg.Job)
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			keys, resp, err = client.MetaDataKeys(ctx, scope, id)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		if err != nil {

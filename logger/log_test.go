@@ -60,7 +60,7 @@ func TestTextPrinter(t *testing.T) {
 	printer := logger.NewTextPrinter(b)
 	printer.Colors = false
 
-	printer.Print(logger.INFO, "llamas rock", logger.Fields{logger.StringField(`key`, `val`)})
+	printer.Print(logger.INFO, "llamas rock", logger.Fields{logger.StringField("key", "val")})
 
 	if msg := b.String(); !strings.HasSuffix(msg, "llamas rock key=val\n") {
 		t.Fatalf("bad message, got %q", msg)
@@ -71,27 +71,27 @@ func TestJSONPrinter(t *testing.T) {
 	b := &bytes.Buffer{}
 
 	printer := logger.NewJSONPrinter(b)
-	printer.Print(logger.INFO, "llamas rock", logger.Fields{logger.StringField(`key`, `val`)})
+	printer.Print(logger.INFO, "llamas rock", logger.Fields{logger.StringField("key", "val")})
 
-	var results map[string]interface{}
+	var results map[string]any
 	err := json.Unmarshal(b.Bytes(), &results)
 	if err != nil {
 		t.Fatalf("bad json: %v", err)
 	}
 
-	if val, ok := results[`key`]; !ok || val != `val` {
+	if val, ok := results["key"]; !ok || val != "val" {
 		t.Fatalf("bad key, got %v", val)
 	}
 
-	if val, ok := results[`msg`]; !ok || val != `llamas rock` {
+	if val, ok := results["msg"]; !ok || val != "llamas rock" {
 		t.Fatalf("bad msg, got %v", val)
 	}
 
-	if val, ok := results[`ts`]; !ok || val == `` {
+	if val, ok := results["ts"]; !ok || val == "" {
 		t.Fatalf("bad ts, got %v", val)
 	}
 
-	if val, ok := results[`level`]; !ok || val != `INFO` {
+	if val, ok := results["level"]; !ok || val != "INFO" {
 		t.Fatalf("bad level, got %v", val)
 	}
 }

@@ -45,41 +45,18 @@ if [ ! -d /etc/buildkite-agent/hooks ]; then
   cp -r /usr/share/buildkite-agent/hooks /etc/buildkite-agent
 fi
 
-# Check if the system is Ubuntu 14.10. Systemd is broken on this release, so if
-# even if systemd exists on that system, skip using it.
-command -v lsb_release > /dev/null && lsb_release -d | grep -q "Ubuntu 14.10"
-BK_IS_UBUNTU_14_10=$?
-
 # Check if systemd exists
 command -v systemctl > /dev/null
 BK_SYSTEMD_EXISTS=$?
 
-# Check if upstart exists
-command -v initctl > /dev/null
-BK_UPSTART_EXISTS=$?
-
-# Check if upstart is version 0.6.5 as seen on Amazon linux, RHEL6 & CentOS-6
-BK_UPSTART_TOO_OLD=0
-if [ $BK_UPSTART_EXISTS -eq 0 ]; then
-  BK_UPSTART_VERSION="$(initctl --version | awk 'BEGIN{FS="[ ()]"} NR==1{print $4}')"
-  if [ "$BK_UPSTART_VERSION" = "0.6.5" ]; then
-    BK_UPSTART_TOO_OLD=1
-  fi
-fi
-
-# Install the relevant system process
-if [ $BK_SYSTEMD_EXISTS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
+# Try to install a systemd unit
+if [ $BK_SYSTEMD_EXISTS -eq 0 ]; then
   cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent.service
   cp /usr/share/buildkite-agent/systemd/buildkite-agent@.service /lib/systemd/system/buildkite-agent@.service
 
   START_COMMAND="sudo systemctl enable buildkite-agent && sudo systemctl start buildkite-agent"
-elif [ $BK_UPSTART_EXISTS -eq 0 ] && [ $BK_UPSTART_TOO_OLD -eq 0 ]; then
-  if [ ! -f /etc/init/buildkite-agent.conf ]; then
-    cp /usr/share/buildkite-agent/upstart/buildkite-agent.conf /etc/init/buildkite-agent.conf
-  fi
-
-  START_COMMAND="sudo service buildkite-agent start"
 elif [ -d /etc/init.d ]; then
+  # Fall back to system v init script
   if [ ! -f /etc/init.d/buildkite-agent ]; then
     cp /usr/share/buildkite-agent/lsb/buildkite-agent.sh /etc/init.d/buildkite-agent
     command -v chkconfig > /dev/null && chkconfig --add buildkite-agent
@@ -88,7 +65,7 @@ elif [ -d /etc/init.d ]; then
   START_COMMAND="sudo /etc/init.d/buildkite-agent start"
 else
   # If all the others fails, warn them and just let them run it the old
-  # fasioned way.
+  # fashioned way.
   echo "============================== WARNING ==================================="
   echo ""
   echo "The Buildkite Agent could not find a suitable system service to install."
@@ -118,17 +95,36 @@ TXT
   echo "and then you can start your agent by running \"$START_COMMAND\""
 fi
 
-# Crude method of causing all the agents to restart
+# Restart on upgrade, if we can
 if [ "$OPERATION" = "upgrade" ] ; then
-  # Restart agents that have a process name of "buildkite-agent v1.2.3.4"
-  for KILLPID in `ps ax | grep 'buildkite-agent v' | awk ' { print $1;}'`; do
-    kill $KILLPID > /dev/null 2>&1 || true
-  done
-
-  # Restart agents that have a process name of "buildkite-agent start"
-  for KILLPID in `ps ax | grep 'buildkite-agent start' | awk ' { print $1;}'`; do
-    kill $KILLPID > /dev/null 2>&1 || true
-  done
+  # Try restarting with systemd, if the unit is active.
+  #
+  # Why two patterns?
+  #
+  # The second pattern is for instantiations of the template.
+  # Trying to find one pattern that covers such instantiations and the base
+  # unit is possible, it is `buildkite-agent*`. However that would also cover
+  # other service names such as `buildkite-agentless`.
+  # It's safer to use two, more restrictive patterns.
+  #
+  # Does using two patterns in the same invocation work?
+  #
+  # `is-active` is used to check if any of the base or template instance
+  # services are running.
+  # `try-restart` will then restart any of them if they are running.
+  # See man systemctl for more details
+  #
+  # Thus if any of them are running, they will be restarted respectively.
+  if [ $BK_SYSTEMD_EXISTS -eq 0 ] && systemctl is-active buildkite-agent 'buildkite-agent@*' --quiet; then
+    systemctl try-restart buildkite-agent 'buildkite-agent@*'
+  elif [ -x /etc/init.d/buildkite-agent ] && /etc/init.d/buildkite-agent status > /dev/null 2>&1; then
+    # Fall back to systemv, if the process is running
+    /etc/init.d/buildkite-agent restart
+  else
+    # Kill agents and hope they restart, looking for command line containing
+    # "buildkite-agent v1.2.3.4" or "buildkite-agent start"
+    pkill -f 'buildkite-agent (v|start)' > /dev/null 2>&1 || true
+  fi
 fi
 
 # Make sure all the folders created are owned by the buildkite-agent user #

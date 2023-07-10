@@ -7,12 +7,14 @@ services:
       dockerfile: Dockerfile-compile
     volumes:
       - ../:/work:cached
+      - ~/gomodcache:/gomodcache
     working_dir: /work
     environment:
       - BUILDKITE_BUILD_NUMBER
       - BUILDKITE_JOB_ID
       - "BUILDKITE_AGENT_TAGS=queue=default"
       - "BUILDKITE_BUILD_PATH=/buildkite"
+      - GOMODCACHE=/gomodcache
 
   ruby:
     image: ruby:2.7.6

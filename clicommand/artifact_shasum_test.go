@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestServer(t *testing.T) *httptest.Server {
+func newArtifactTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
 		case "/builds/buildid/artifacts/search?query=foo.%2A&state=finished":
@@ -23,8 +24,10 @@ func newTestServer(t *testing.T) *httptest.Server {
 }
 
 func TestSearchAndPrintSha1Sum(t *testing.T) {
-	server := newTestServer(t)
+	server := newArtifactTestServer(t)
 	defer server.Close()
+
+	ctx := context.Background()
 
 	cfg := ArtifactShasumConfig{
 		Query:            "foo.*",
@@ -35,7 +38,7 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintShaSum(cfg, l, stdout)
+	searchAndPrintShaSum(ctx, cfg, l, stdout)
 
 	assert.Equal(t, "theshastring\n", stdout.String())
 
@@ -44,8 +47,10 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 }
 
 func TestSearchAndPrintSha256Sum(t *testing.T) {
-	server := newTestServer(t)
+	server := newArtifactTestServer(t)
 	defer server.Close()
+
+	ctx := context.Background()
 
 	cfg := ArtifactShasumConfig{
 		Query:            "foo.*",
@@ -57,7 +62,7 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintShaSum(cfg, l, stdout)
+	searchAndPrintShaSum(ctx, cfg, l, stdout)
 
 	assert.Equal(t, "thesha256string\n", stdout.String())
 

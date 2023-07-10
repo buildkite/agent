@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"crypto/sha1"
 	"crypto/sha256"
 	"errors"
@@ -15,10 +16,11 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/mime"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/mime"
 	"github.com/buildkite/agent/v3/pool"
 	"github.com/buildkite/roko"
+	"github.com/dustin/go-humanize"
 	zglob "github.com/mattn/go-zglob"
 )
 
@@ -44,7 +46,10 @@ type ArtifactUploaderConfig struct {
 	DebugHTTP bool
 
 	// Whether to follow symbolic links when resolving globs
-	FollowSymlinks bool
+	GlobResolveFollowSymlinks bool
+
+	// Whether to not upload symlinks
+	UploadSkipSymlinks bool
 }
 
 type ArtifactUploader struct {
@@ -66,25 +71,32 @@ func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig
 	}
 }
 
-func (a *ArtifactUploader) Upload() error {
+func (a *ArtifactUploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect()
 	if err != nil {
-		return err
+		return fmt.Errorf("collecting artifacts: %w", err)
 	}
 
 	if len(artifacts) == 0 {
 		a.logger.Info("No files matched paths: %s", a.conf.Paths)
-	} else {
-		a.logger.Info("Found %d files that match \"%s\"", len(artifacts), a.conf.Paths)
+		return nil
+	}
 
-		err := a.upload(artifacts)
-		if err != nil {
-			return err
-		}
+	a.logger.Info("Found %d files that match %q", len(artifacts), a.conf.Paths)
+	if err := a.upload(ctx, artifacts); err != nil {
+		return fmt.Errorf("uploading artifacts: %w", err)
 	}
 
 	return nil
+}
+
+func isSymlink(path string) bool {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeSymlink != 0
 }
 
 func isDir(path string) bool {
@@ -98,7 +110,7 @@ func isDir(path string) bool {
 func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting working directory: %w", err)
 	}
 
 	// file paths are deduplicated after resolving globs etc
@@ -115,23 +127,23 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 		// Resolve the globs (with * and ** in them), if it's a non-globbed path and doesn't exists
 		// then we will get the ErrNotExist that is handled below
 		globfunc := zglob.Glob
-		if a.conf.FollowSymlinks {
+		if a.conf.GlobResolveFollowSymlinks {
 			// Follow symbolic links for files & directories while expanding globs
 			globfunc = zglob.GlobFollowSymlinks
 		}
 		files, err := globfunc(globPath)
-		if err == os.ErrNotExist {
+		if errors.Is(err, os.ErrNotExist) {
 			a.logger.Info("File not found: %s", globPath)
 			continue
 		} else if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("resolving glob: %w", err)
 		}
 
 		// Process each glob match into an api.Artifact
 		for _, file := range files {
 			absolutePath, err := filepath.Abs(file)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("resolving absolute path for file %s: %w", file, err)
 			}
 
 			// dedupe based on resolved absolutePath
@@ -144,6 +156,11 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			// Ignore directories, we only want files
 			if isDir(absolutePath) {
 				a.logger.Debug("Skipping directory %s", file)
+				continue
+			}
+
+			if a.conf.UploadSkipSymlinks && isSymlink(absolutePath) {
+				a.logger.Debug("Skipping symlink %s", file)
 				continue
 			}
 
@@ -162,10 +179,10 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 
 			path, err := filepath.Rel(wd, absolutePath)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("resolving relative path for file %s: %w", file, err)
 			}
 
-			if experiments.IsEnabled(`normalised-upload-paths`) {
+			if experiments.IsEnabled(experiments.NormalisedUploadPaths) {
 				// Convert any Windows paths to Unix/URI form
 				path = filepath.ToSlash(path)
 			}
@@ -173,7 +190,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			// Build an artifact object using the paths we have.
 			artifact, err := a.build(path, absolutePath, globPath)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("building artifact: %w", err)
 			}
 
 			artifacts = append(artifacts, artifact)
@@ -187,14 +204,14 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	// Temporarily open the file to get its size
 	file, err := os.Open(absolutePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("opening file %s: %w", absolutePath, err)
 	}
 	defer file.Close()
 
 	// Grab its file info (which includes its file size)
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting file info for %s: %w", absolutePath, err)
 	}
 
 	// Generate a SHA-1 and SHA-256 checksums for the file
@@ -229,7 +246,7 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	return artifact, nil
 }
 
-func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
+func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
 	var uploader Uploader
 	var err error
 
@@ -251,7 +268,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				DebugHTTP:   a.conf.DebugHTTP,
 			})
 		} else {
-			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination))
+			return fmt.Errorf("invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload schemes are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination)
 		}
 
 		a.logger.Info("Uploading to %q, using your agent configuration", a.conf.Destination)
@@ -265,7 +282,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 	// Check if creation caused an error
 	if err != nil {
-		return fmt.Errorf("Error creating uploader: %v", err)
+		return fmt.Errorf("creating uploader: %v", err)
 	}
 
 	// Set the URLs of the artifacts based on the uploader
@@ -275,12 +292,13 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 	// Create the artifacts on Buildkite
 	batchCreator := NewArtifactBatchCreator(a.logger, a.apiClient, ArtifactBatchCreatorConfig{
-		JobID:             a.conf.JobID,
-		Artifacts:         artifacts,
-		UploadDestination: a.conf.Destination,
+		JobID:                  a.conf.JobID,
+		Artifacts:              artifacts,
+		UploadDestination:      a.conf.Destination,
+		CreateArtifactsTimeout: 10 * time.Second,
 	})
 
-	artifacts, err = batchCreator.Create()
+	artifacts, err = batchCreator.Create(ctx)
 	if err != nil {
 		return err
 	}
@@ -325,19 +343,37 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 					a.logger.Debug("Artifact `%s` has state `%s`", id, state)
 				}
 
+				timeout := 5 * time.Second
+
 				// Update the states of the artifacts in bulk.
-				err = roko.NewRetrier(
+				err := roko.NewRetrier(
 					roko.WithMaxAttempts(10),
-					roko.WithStrategy(roko.Constant(5*time.Second)),
-				).Do(func(r *roko.Retrier) error {
-					_, err = a.apiClient.UpdateArtifacts(a.conf.JobID, statesToUpload)
+					roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+				).DoWithContext(ctx, func(r *roko.Retrier) error {
+
+					ctxTimeout := ctx
+					if timeout != 0 {
+						var cancel func()
+						ctxTimeout, cancel = context.WithTimeout(ctx, timeout)
+						defer cancel()
+					}
+
+					_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, statesToUpload)
 					if err != nil {
 						a.logger.Warn("%s (%s)", err, r)
 					}
 
+					// after four attempts (0, 1, 2, 3)...
+					if r.AttemptCount() == 3 {
+						// The short timeout has given us fast feedback on the first couple of attempts,
+						// but perhaps the server needs more time to complete the request, so fall back to
+						// the default HTTP client timeout.
+						a.logger.Debug("UpdateArtifacts timeout (%s) removed for subsequent attempts", timeout)
+						timeout = 0
+					}
+
 					return err
 				})
-
 				if err != nil {
 					a.logger.Error("Error uploading artifact states: %s", err)
 
@@ -366,25 +402,23 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 		p.Spawn(func() {
 			// Show a nice message that we're starting to upload the file
-			a.logger.Info("Uploading artifact %s %s (%d bytes)", artifact.ID, artifact.Path, artifact.FileSize)
+			a.logger.Info("Uploading artifact %s %s (%s)", artifact.ID, artifact.Path, humanize.Bytes(uint64(artifact.FileSize)))
+
+			var state string
 
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
 			// a couple of times before giving up.
-			err = roko.NewRetrier(
+			err := roko.NewRetrier(
 				roko.WithMaxAttempts(10),
 				roko.WithStrategy(roko.Constant(5*time.Second)),
-			).Do(func(r *roko.Retrier) error {
-				err := uploader.Upload(artifact)
-				if err != nil {
+			).DoWithContext(ctx, func(r *roko.Retrier) error {
+				if err := uploader.Upload(artifact); err != nil {
 					a.logger.Warn("%s (%s)", err, r)
+					return err
 				}
-
-				return err
+				return nil
 			})
-
-			var state string
-
 			// Did the upload eventually fail?
 			if err != nil {
 				a.logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
@@ -422,7 +456,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	stateUploaderWaitGroup.Wait()
 
 	if len(errors) > 0 {
-		return fmt.Errorf("There were errors with uploading some of the artifacts")
+		return fmt.Errorf("errors uploading artifacts: %v", errors)
 	}
 
 	a.logger.Info("Artifact uploads completed successfully")

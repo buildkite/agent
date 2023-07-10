@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
+	"github.com/dustin/go-humanize"
 )
 
 type DownloadConfig struct {
@@ -53,16 +55,16 @@ func NewDownload(l logger.Logger, client *http.Client, c DownloadConfig) *Downlo
 	}
 }
 
-func (d Download) Start() error {
+func (d Download) Start(ctx context.Context) error {
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(d.conf.Retries),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(r *roko.Retrier) error {
-		err := d.try()
-		if err != nil {
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		if err := d.try(ctx); err != nil {
 			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, r)
+			return err
 		}
-		return err
+		return nil
 	})
 }
 
@@ -96,14 +98,14 @@ func getTargetPath(path string, destination string) string {
 	return targetFile
 }
 
-func (d Download) try() error {
+func (d Download) try(ctx context.Context) error {
 	targetFile := getTargetPath(d.conf.Path, d.conf.Destination)
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
 	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetFile)
 
-	request, err := http.NewRequest("GET", d.conf.URL, nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", d.conf.URL, nil)
 	if err != nil {
 		return err
 	}
@@ -134,8 +136,7 @@ func (d Download) try() error {
 
 	// Now make the folder for our file
 	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-	err = os.MkdirAll(targetDirectory, 0777)
-	if err != nil {
+	if err := os.MkdirAll(targetDirectory, 0777); err != nil {
 		return fmt.Errorf("Failed to create folder for %s (%T: %v)", targetFile, err, err)
 	}
 
@@ -152,7 +153,7 @@ func (d Download) try() error {
 		return fmt.Errorf("Error when copying data %s (%T: %v)", d.conf.URL, err, err)
 	}
 
-	d.logger.Info("Successfully downloaded \"%s\" %d bytes", d.conf.Path, bytes)
+	d.logger.Info("Successfully downloaded \"%s\" %s", d.conf.Path, humanize.Bytes(uint64(bytes)))
 
 	return nil
 }

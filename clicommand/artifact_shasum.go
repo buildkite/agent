@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +13,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var ShasumHelpDescription = `Usage:
+const shasumHelpDescription = `Usage:
 
    buildkite-agent artifact shasum [options...]
 
@@ -73,7 +74,7 @@ type ArtifactShasumConfig struct {
 var ArtifactShasumCommand = cli.Command{
 	Name:        "shasum",
 	Usage:       "Prints the SHA-1 hash for a single artifact specified by a search query",
-	Description: ShasumHelpDescription,
+	Description: shasumHelpDescription,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:  "sha256",
@@ -110,6 +111,8 @@ var ArtifactShasumCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactShasumConfig{}
 
@@ -131,19 +134,19 @@ var ArtifactShasumCommand = cli.Command{
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
 
-		if err := searchAndPrintShaSum(cfg, l, os.Stdout); err != nil {
+		if err := searchAndPrintShaSum(ctx, cfg, l, os.Stdout); err != nil {
 			l.Fatal(err.Error())
 		}
 	},
 }
 
-func searchAndPrintShaSum(cfg ArtifactShasumConfig, l logger.Logger, stdout io.Writer) error {
+func searchAndPrintShaSum(ctx context.Context, cfg ArtifactShasumConfig, l logger.Logger, stdout io.Writer) error {
 	// Create the API client
-	client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 	// Find the artifact we want to show the SHASUM for
 	searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-	artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
+	artifacts, err := searcher.Search(ctx, cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
 	if err != nil {
 		return fmt.Errorf("Error searching for artifacts: %s", err)
 	}

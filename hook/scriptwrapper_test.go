@@ -2,21 +2,23 @@ package hook
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	var script []string
 
@@ -36,24 +38,30 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		}
 	}
 
+	agent, cleanup, err := mockAgent()
+	require.NoError(t, err)
+
+	defer cleanup()
+
 	wrapper := newTestScriptWrapper(t, script)
 	defer os.Remove(wrapper.Path())
 
 	sh := shell.NewTestShell(t)
 
 	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
-		t.Fatal(err)
+		t.Fatalf("sh.RunScript(ctx, %q, nil) = %v", wrapper.Path(), err)
 	}
 
 	changes, err := wrapper.Changes()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("wrapper.Changes() error = %v", err)
 	}
 
 	// Windows’ batch 'SET >' normalises environment variables case so we apply
 	// the 'expected' and 'actual' diffs to a blank Environment which handles
 	// case normalisation for us
-	expected := (&env.Environment{}).Apply(env.Diff{
+	expected := env.New()
+	expected.Apply(env.Diff{
 		Added: map[string]string{
 			"LLAMAS":  "rock",
 			"Alpacas": "are ok",
@@ -62,12 +70,18 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		Removed: map[string]struct{}{},
 	})
 
-	actual := (&env.Environment{}).Apply(changes.Diff)
+	actual := env.New()
+	actual.Apply(changes.Diff)
 
 	// The strict equals check here also ensures we aren't bubbling up the
 	// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
 	// environment variables
-	assert.Equal(t, expected, actual)
+	assert.Equal(t, expected.Dump(), actual.Dump())
+
+	if runtime.GOOS != "windows" {
+		err = agent.CheckAndClose(t)
+		require.NoError(t, err)
+	}
 }
 
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
@@ -76,7 +90,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	hookFile, err := shell.TempFileWithExtension("hookName.bat")
 	assert.NoError(t, err)
 
-	_, err = fmt.Fprintln(hookFile, `echo Hello There!`)
+	_, err = fmt.Fprintln(hookFile, "echo Hello There!")
 	assert.NoError(t, err)
 
 	hookFile.Close()
@@ -93,11 +107,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	// See: https://pkg.go.dev/fmt > ctrl-f for "%%"
 	scriptTemplate := `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-SET > "%s"
+buildkite-agent env dump > "%s"
 CALL "%s"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%%CD%%
-SET > "%s"
+buildkite-agent env dump > "%s"
 EXIT %%BUILDKITE_HOOK_EXIT_STATUS%%`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -123,11 +137,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 	defer wrapper.Close()
 
 	scriptTemplate := `$ErrorActionPreference = "STOP"
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "%s"
+buildkite-agent env dump | Set-Content "%s"
 %s
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "%s"
+buildkite-agent env dump | Set-Content "%s"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -139,7 +153,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 	hookFile, err := shell.TempFileWithExtension("hookName")
 	assert.NoError(t, err)
 
-	_, err = fmt.Fprintln(hookFile, `echo "Hello There!"`)
+	_, err = fmt.Fprintln(hookFile, "#!/bin/dash\necho 'Hello There!'")
 	assert.NoError(t, err)
 
 	hookFile.Close()
@@ -152,22 +166,26 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 
 	defer wrapper.Close()
 
-	scriptTemplate := `export -p > "%s"
+	scriptTemplate := `#!/bin/dash
+buildkite-agent env dump > "%s"
 . "%s"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
-export BUILDKITE_HOOK_WORKING_DIR=$PWD
-export -p > "%s"
+export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
+buildkite-agent env dump > "%s"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
-	t.Parallel()
+	agent, cleanup, err := mockAgent()
+	require.NoError(t, err)
 
-	tempDir, err := ioutil.TempDir("", "hookwrapperdir")
+	defer cleanup()
+
+	tempDir, err := os.MkdirTemp("", "hookwrapperdir")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`os.MkdirTemp("", "hookwrapperdir") error = %v`, err)
 	}
 	defer os.RemoveAll(tempDir)
 
@@ -195,35 +213,39 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 
 	sh := shell.NewTestShell(t)
 	if err := sh.Chdir(tempDir); err != nil {
-		t.Fatal(err)
+		t.Fatalf("sh.Chdir(%q) = %v", tempDir, err)
 	}
 
 	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
-		t.Fatal(err)
+		t.Fatalf("sh.RunScript(ctx, %q, nil) = %v", wrapper.Path(), err)
 	}
 
 	changes, err := wrapper.Changes()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("wrapper.Changes() error = %v", err)
 	}
 
-	expected, err := filepath.EvalSymlinks(filepath.Join(tempDir, "mysubdir"))
+	wantChangesDir, err := filepath.EvalSymlinks(filepath.Join(tempDir, "mysubdir"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("filepath.EvalSymlinks(mysubdir) error = %v", err)
 	}
 
 	afterWd, err := changes.GetAfterWd()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("changes.GetAfterWd() error = %v", err)
 	}
 
 	changesDir, err := filepath.EvalSymlinks(afterWd)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("filepath.EvalSymlinks(%q) error = %v", afterWd, err)
 	}
 
-	if changesDir != expected {
-		t.Fatalf("Expected working dir of %q, got %q", expected, changesDir)
+	if changesDir != wantChangesDir {
+		t.Fatalf("changesDir = %q, want %q", changesDir, wantChangesDir)
+	}
+
+	if err := agent.CheckAndClose(t); err != nil {
+		t.Errorf("agent.CheckAndClose(t) = %v", err)
 	}
 }
 
@@ -255,10 +277,82 @@ func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper
 
 	defer file.Close()
 
-	wrapperScriptContents, err := ioutil.ReadAll(file)
+	wrapperScriptContents, err := io.ReadAll(file)
 	assert.NoError(t, err)
 
 	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvFile.Name(), hookFileName, wrapper.afterEnvFile.Name())
 
 	assert.Equal(t, expected, string(wrapperScriptContents))
+}
+
+func mockAgent() (*bintest.Mock, func(), error) {
+	tmpPathDir, err := os.MkdirTemp("", "scriptwrapper-path")
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	oldPath := os.Getenv("PATH")
+	os.Setenv("PATH", tmpPathDir+string(os.PathListSeparator)+oldPath)
+
+	cleanup := func() {
+		err := os.Setenv("PATH", oldPath)
+		if err != nil {
+			panic(err)
+		}
+
+		err = os.RemoveAll(tmpPathDir)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	agent, err := bintest.NewMock(filepath.Join(tmpPathDir, "buildkite-agent"))
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	agent.Expect("env", "dump").
+		Exactly(2).
+		AndCallFunc(func(c *bintest.Call) {
+			envMap := map[string]string{}
+
+			for _, e := range c.Env {
+				k, v, _ := env.Split(e)
+				envMap[k] = v
+			}
+
+			envJSON, err := json.Marshal(envMap)
+			if err != nil {
+				fmt.Println("Failed to marshal env map in mocked agent call:", err)
+				c.Exit(1)
+			}
+
+			c.Stdout.Write(envJSON)
+			c.Exit(0)
+		})
+
+	return agent, cleanup, nil
+}
+
+func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
+	t.Parallel()
+
+	hookFile, err := shell.TempFileWithExtension("hookName")
+	assert.NoError(t, err)
+
+	script := strings.Join([]string{
+		"#!/usr/bin/env ruby",
+		"puts 'Hello There!'",
+	}, "\n")
+
+	_, err = fmt.Fprintln(hookFile, script)
+	assert.NoError(t, err)
+
+	hookFile.Close()
+
+	_, err = NewScriptWrapper(
+		WithHookPath(hookFile.Name()),
+		WithOS("linux"),
+	)
+	assert.Error(t, err, `scriptwrapper tried to wrap hook with invalid shebang: "#!/usr/bin/env ruby"`)
 }

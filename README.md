@@ -1,6 +1,7 @@
-# Buildkite Agent ![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=main)
+# Buildkite Agent
 
-_Note: This is the development branch of the buildkite-agent, and may not contain files or code in the current stable release._
+[![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=main)]()
+[![Go Reference](https://pkg.go.dev/badge/github.com/buildkite/agent/v3.svg)](https://pkg.go.dev/github.com/buildkite/agent/v3)
 
 The buildkite-agent is a small, reliable, and cross-platform build runner that makes it easy to run automated builds on your own infrastructure. It’s main responsibilities are polling [buildkite.com](https://buildkite.com/) for work, running build jobs, reporting back the status code and output log of the job, and uploading the job's artifacts.
 
@@ -51,6 +52,7 @@ For example, agent version 3.30.0 is published as:
 - Alpine 3.12
 - Ubuntu 18.04 LTS (x86_64), supported to end of life for 18.04
 - Ubuntu 20.04 LTS (x86_64), supported to end of life for 20.04
+- Ubuntu 22.04 LTS (x86_64), supported to end of life for 22.04
 
 ## Starting
 
@@ -62,7 +64,7 @@ buildkite-agent start --token
 
 ### Telemetry
 
-By default, the agent sends some information back to the Buildkite mothership on what features are in use on that agent. Nothing sensitive or identifying is sent back to Buildkite, but if you want, you can disable this feature reporting by adding the `--no-feature-reporting` flag to your `buildkite-agent start` call. A full list of the features that we track can be found [here](https://github.com/buildkite/agent/blob/main/clicommand/agent_start.go#L808=).
+By default, the agent sends some information back to the Buildkite mothership on what features are in use on that agent. Nothing sensitive or identifying is sent back to Buildkite, but if you want, you can disable this feature reporting by adding the `--no-feature-reporting` flag to your `buildkite-agent start` call. A full list of the features that we track can be found [here](https://github.com/buildkite/agent/blob/03aec39f97fe7d20936e6af63cd793a87fac2c19/clicommand/agent_start.go#L135).
 
 ## Development
 
@@ -139,7 +141,7 @@ binary is fairly portable and should run out of the box on most UNIX like system
   - CentOS 7
   - CentOS 8
 - Amazon Linux 2
-- macOS [1]
+- macOS [^1]
   - 10.12
   - 10.13
   - 10.14
@@ -150,17 +152,13 @@ binary is fairly portable and should run out of the box on most UNIX like system
   - 2016
   - 2019
 
-[1] See https://github.com/golang/go/issues/23011 for macOS / golang support and
+[^1]: See https://github.com/golang/go/issues/23011 for macOS / golang support and
 [Supported macOS Versions](./docs/macos.md) for the last supported version of the
 Buildkite Agent for versions of macOS prior to those listed above.
 
 ## Contributing
 
-1. Fork it
-1. Create your feature branch (`git checkout -b my-new-feature`)
-1. Commit your changes (`git commit -am 'Add some feature'`)
-1. Push to the branch (`git push origin my-new-feature`)
-1. Create new Pull Request
+See [./CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ## Contributors
 

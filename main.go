@@ -1,19 +1,21 @@
+// Buildkite-agent is a small, reliable, cross-platform build runner that makes
+// it easy to run automated builds on your own infrastructure.
 package main
 
 // see https://blog.golang.org/generate
-//go:generate go run mime/generate.go
-//go:generate go fmt mime/mime.go
+//go:generate go run internal/mime/generate.go
+//go:generate go fmt internal/mime/mime.go
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/clicommand"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/urfave/cli"
 )
 
-var AppHelpTemplate = `Usage:
+const appHelpTemplate = `Usage:
 
   {{.Name}} <command> [options...]
 
@@ -25,7 +27,7 @@ Use "{{.Name}} <command> --help" for more information about a command.
 
 `
 
-var SubcommandHelpTemplate = `Usage:
+const subcommandHelpTemplate = `Usage:
 
   {{.Name}} {{if .VisibleFlags}}<command>{{end}} [options...]
 
@@ -39,7 +41,7 @@ Options:
    {{end}}{{end}}
 `
 
-var CommandHelpTemplate = `{{.Description}}
+const commandHelpTemplate = `{{.Description}}
 
 Options:
 
@@ -48,19 +50,20 @@ Options:
 `
 
 func printVersion(c *cli.Context) {
-	fmt.Printf("%v version %v, build %v\n", c.App.Name, c.App.Version, agent.BuildVersion())
+	fmt.Printf("%v version %v, build %v\n", c.App.Name, c.App.Version, version.BuildVersion())
 }
 
 func main() {
-	cli.AppHelpTemplate = AppHelpTemplate
-	cli.CommandHelpTemplate = CommandHelpTemplate
-	cli.SubcommandHelpTemplate = SubcommandHelpTemplate
+	cli.AppHelpTemplate = appHelpTemplate
+	cli.CommandHelpTemplate = commandHelpTemplate
+	cli.SubcommandHelpTemplate = subcommandHelpTemplate
 	cli.VersionPrinter = printVersion
 
 	app := cli.NewApp()
 	app.Name = "buildkite-agent"
-	app.Version = agent.Version()
+	app.Version = version.Version()
 	app.Commands = []cli.Command{
+		clicommand.AcknowledgementsCommand,
 		clicommand.AgentStartCommand,
 		clicommand.AnnotateCommand,
 		{
@@ -81,6 +84,27 @@ func main() {
 			},
 		},
 		{
+			Name:  "env",
+			Usage: "Process environment subcommands",
+			Subcommands: []cli.Command{
+				clicommand.EnvDumpCommand,
+				clicommand.EnvGetCommand,
+				clicommand.EnvSetCommand,
+				clicommand.EnvUnsetCommand,
+			},
+		},
+		{
+			Name:  "lock",
+			Usage: "Process lock subcommands",
+			Subcommands: []cli.Command{
+				clicommand.LockAcquireCommand,
+				clicommand.LockDoCommand,
+				clicommand.LockDoneCommand,
+				clicommand.LockGetCommand,
+				clicommand.LockReleaseCommand,
+			},
+		},
+		{
 			Name:  "meta-data",
 			Usage: "Get/set data from Buildkite jobs",
 			Subcommands: []cli.Command{
@@ -88,6 +112,13 @@ func main() {
 				clicommand.MetaDataGetCommand,
 				clicommand.MetaDataExistsCommand,
 				clicommand.MetaDataKeysCommand,
+			},
+		},
+		{
+			Name:  "oidc",
+			Usage: "Interact with Buildkite OpenID Connect (OIDC)",
+			Subcommands: []cli.Command{
+				clicommand.OIDCRequestTokenCommand,
 			},
 		},
 		{
@@ -107,6 +138,8 @@ func main() {
 		},
 		clicommand.BootstrapCommand,
 	}
+
+	app.ErrWriter = os.Stderr
 
 	// When no sub command is used
 	app.Action = func(c *cli.Context) {

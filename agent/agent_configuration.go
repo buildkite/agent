@@ -7,10 +7,12 @@ type AgentConfiguration struct {
 	BootstrapScript            string
 	BuildPath                  string
 	HooksPath                  string
+	SocketsPath                string
 	GitMirrorsPath             string
 	GitMirrorsLockTimeout      int
 	GitMirrorsSkipUpdate       bool
 	PluginsPath                string
+	GitCheckoutFlags           string
 	GitCloneFlags              string
 	GitCloneMirrorFlags        string
 	GitCleanFlags              string
@@ -22,15 +24,20 @@ type AgentConfiguration struct {
 	PluginValidation           bool
 	LocalHooksEnabled          bool
 	RunInPty                   bool
+	ANSITimestamps             bool
 	TimestampLines             bool
 	HealthCheckAddr            string
 	DisconnectAfterJob         bool
 	DisconnectAfterIdleTimeout int
 	CancelGracePeriod          int
 	EnableJobLogTmpfile        bool
+	JobLogPath                 string
+	WriteJobLogsToStdout       bool
+	LogFormat                  string
 	Shell                      string
 	Profile                    string
 	RedactedVars               []string
 	AcquireJob                 string
 	TracingBackend             string
+	TracingServiceName         string
 }

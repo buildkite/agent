@@ -3,7 +3,7 @@ package process
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 )
 
@@ -18,7 +18,7 @@ func Cat(path string) (string, error) {
 	var buffer bytes.Buffer
 
 	for _, file := range files {
-		data, err := ioutil.ReadFile(file)
+		data, err := os.ReadFile(file)
 		if err != nil {
 			return "", fmt.Errorf("Could not read file: %s (%T: %v)", file, err, err)
 		}

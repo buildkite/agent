@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var MetaDataGetHelpDescription = `Usage:
+const metaDataGetHelpDescription = `Usage:
 
    buildkite-agent meta-data get <key> [options...]
 
@@ -26,7 +27,8 @@ Example:
 type MetaDataGetConfig struct {
 	Key     string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Default string `cli:"default"`
-	Job     string `cli:"job" validate:"required"`
+	Job     string `cli:"job"`
+	Build   string `cli:"build"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -45,7 +47,7 @@ type MetaDataGetConfig struct {
 var MetaDataGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Get data from a build",
-	Description: MetaDataGetHelpDescription,
+	Description: metaDataGetHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "default",
@@ -57,6 +59,12 @@ var MetaDataGetCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job's build should the meta-data be retrieved from",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			Usage:  "Which build should the meta-data be retrieved from. --build will take precedence over --job",
+			EnvVar: "BUILDKITE_METADATA_BUILD_ID",
 		},
 
 		// API Flags
@@ -73,6 +81,8 @@ var MetaDataGetCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := MetaDataGetConfig{}
 
@@ -95,17 +105,25 @@ var MetaDataGetCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data value
 		var metaData *api.MetaData
 		var resp *api.Response
 
+		scope := "job"
+		id := cfg.Job
+
+		if cfg.Build != "" {
+			scope = "build"
+			id = cfg.Build
+		}
+
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			metaData, resp, err = client.GetMetaData(cfg.Job, cfg.Key)
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			metaData, resp, err = client.GetMetaData(ctx, scope, id, cfg.Key)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				r.Break()
@@ -113,9 +131,9 @@ var MetaDataGetCommand = cli.Command{
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		// Deal with the error if we got one

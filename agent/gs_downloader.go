@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -42,7 +43,7 @@ func NewGSDownloader(l logger.Logger, c GSDownloaderConfig) *GSDownloader {
 	}
 }
 
-func (d GSDownloader) Start() error {
+func (d GSDownloader) Start(ctx context.Context) error {
 	client, err := newGoogleClient(storage.DevstorageReadOnlyScope)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
@@ -57,7 +58,7 @@ func (d GSDownloader) Start() error {
 		Destination: d.conf.Destination,
 		Retries:     d.conf.Retries,
 		DebugHTTP:   d.conf.DebugHTTP,
-	}).Start()
+	}).Start(ctx)
 }
 
 func (d GSDownloader) BucketFileLocation() string {

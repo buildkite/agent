@@ -8,8 +8,18 @@ steps:
     key: test-go-fmt
     command: ".buildkite/steps/test-go-fmt.sh"
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
+        run: agent
+
+  - name: ":robot_face: Check code generation"
+    key: check-code-generation
+    command: .buildkite/steps/check-code-generation.sh
+    plugins:
+      docker-compose#v4.14.0:
+        config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
 
   - name: ":linux: Linux AMD64 Tests"
@@ -17,9 +27,13 @@ steps:
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
+      test-collector#v1.2.0:
+        files: "junit-*.xml"
+        format: "junit"
 
   - name: ":linux: Linux ARM64 Tests"
     key: test-linux-arm64
@@ -28,9 +42,13 @@ steps:
     agents:
       queue: agent-runners-linux-arm64
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
+      test-collector#v1.2.0:
+        files: "junit-*.xml"
+        format: "junit"
 
   - name: ":satellite: Detect Data Races"
     key: test-race-linux-arm64
@@ -39,9 +57,13 @@ steps:
     agents:
       queue: agent-runners-linux-arm64
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
+      test-collector#v1.2.0:
+        files: "junit-*.xml"
+        format: "junit"
 
   - name: ":windows: Windows AMD64 Tests"
     key: test-windows
@@ -49,6 +71,10 @@ steps:
     artifact_paths: junit-*.xml
     agents:
       queue: agent-runners-windows-amd64
+    plugins:
+      test-collector#v1.2.0:
+        files: "junit-*.xml"
+        format: "junit"
 
   - label: ":writing_hand: Annotate with Test Failures"
     depends_on:
@@ -71,8 +97,9 @@ steps:
         - test-linux-arm64
       artifact_paths: "pkg/*"
       plugins:
-        docker-compose#v3.0.0:
+        docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
+          cli-version: 2
           run: agent
       matrix:
         setup:
@@ -107,16 +134,14 @@ steps:
           - with: { os: openbsd, arch: arm64 }
             skip: "arm64 OpenBSD is not currently supported"
 
-          - with: { os: windows, arch: arm64 }
-            skip: "arm64 Windows is not currently supported"
-
   - name: ":technologist: Test bk cli + Agent cli"
     key: test-bk-cli
     depends_on: build-binary
     command: ".buildkite/steps/test-bk.sh"
     plugins:
-      docker-compose#v3.0.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.yml
+        cli-version: 2
         run: agent
         env:
           - BUILDKITE_AGENT_ACCESS_TOKEN
@@ -129,9 +154,9 @@ steps:
     key: set-metadata
     command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
-  - group: ":docker: Docker Container Builds"
+  - group: ":docker: Docker Image Builds"
     steps:
-      - name: ":docker: {{matrix}} container build"
+      - name: ":docker: {{matrix}} image build"
         key: build-docker
         agents:
           queue: elastic-builders
@@ -142,9 +167,47 @@ steps:
         matrix:
           setup:
             - "alpine"
+            - "alpine-k8s"
             - "ubuntu-18.04"
             - "ubuntu-20.04"
+            - "ubuntu-22.04"
             - "sidecar"
+
+  - group: ":docker: Docker Image Tests"
+    steps:
+      - name: ":docker: {{matrix.variant}} amd64 image test"
+        key: test-docker-amd64
+        agents:
+          queue: elastic-builders
+        depends_on:
+          - build-docker
+        command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+        matrix:
+          setup:
+            variant:
+              - alpine
+              - alpine-k8s
+              - ubuntu-18.04
+              - ubuntu-20.04
+              - ubuntu-22.04
+              - sidecar
+
+      - name: ":docker: {{matrix.variant}} arm64 image test"
+        key: test-docker-arm64
+        agents:
+          queue: elastic-builders-arm64
+        depends_on:
+          - build-docker
+        command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+        matrix:
+          setup:
+            variant:
+              - alpine
+              - alpine-k8s
+              - ubuntu-18.04
+              - ubuntu-20.04
+              - ubuntu-22.04
+              - sidecar
 
   - name: ":debian: Debian package build"
     key: build-debian-packages
@@ -170,7 +233,7 @@ steps:
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
     plugins:
-      docker-compose#v1.8.0:
+      docker-compose#v4.14.0:
         config: .buildkite/docker-compose.release.yml
         run: github-release
 
@@ -181,6 +244,7 @@ steps:
       - test-bk-cli
       - build-rpm-packages
       - build-debian-packages
-      - build-docker
       - build-github-release
+      - test-docker-amd64
+      - test-docker-arm64
     command: ".buildkite/steps/upload-release-steps.sh"

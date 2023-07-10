@@ -100,7 +100,7 @@ func TestCollect(t *testing.T) {
 	// path.Join function instead (which uses Unix/URI-style path separators,
 	// regardless of platform)
 
-	experimentKey := "normalised-upload-paths"
+	experimentKey := experiments.NormalisedUploadPaths
 	experimentPrev := experiments.IsEnabled(experimentKey)
 	defer func() {
 		if experimentPrev {
@@ -109,17 +109,17 @@ func TestCollect(t *testing.T) {
 			experiments.Disable(experimentKey)
 		}
 	}()
-	experiments.Disable(`normalised-upload-paths`)
+	experiments.Disable(experimentKey)
 	artifactsWithoutExperimentEnabled, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
 
-	experiments.Enable(`normalised-upload-paths`)
+	experiments.Enable(experimentKey)
 	artifactsWithExperimentEnabled, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithExperimentEnabled))
 
@@ -129,7 +129,7 @@ func TestCollect(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			a := findArtifact(artifactsWithoutExperimentEnabled, tc.Name)
 			if a == nil {
-				t.Fatalf("Failed to find artifact %q", tc.Name)
+				t.Fatalf("findArtifact(%q) == nil", tc.Name)
 			}
 
 			assert.Equal(t, filepath.Join(tc.Path...), a.Path)
@@ -147,7 +147,7 @@ func TestCollect(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			a := findArtifact(artifactsWithExperimentEnabled, tc.Name)
 			if a == nil {
-				t.Fatalf("Failed to find artifact %q", tc.Name)
+				t.Fatalf("findArtifact(%q) == nil", tc.Name)
 			}
 
 			// Note that the rootWithoutVolume component of some tc.Path values
@@ -183,7 +183,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	assert.Equal(t, len(artifacts), 0)
@@ -205,13 +205,12 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	if len(artifacts) != 4 {
-		t.Fatalf("Expected to match 4 artifacts, found %d", len(artifacts))
+		t.Errorf("len(artifacts) = %d, want 4", len(artifacts))
 	}
-
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T) {
@@ -227,16 +226,16 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 		}, ";"),
-		FollowSymlinks: true,
+		GlobResolveFollowSymlinks: true,
 	})
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	if len(artifacts) != 5 {
-		t.Fatalf("Expected to match 5 artifacts, found %d", len(artifacts))
+		t.Errorf("len(artifacts) = %d, want 5", len(artifacts))
 	}
 }
 
@@ -255,7 +254,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	paths := []string{}
@@ -285,12 +284,12 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
 		}, ";"),
-		FollowSymlinks: true,
+		GlobResolveFollowSymlinks: true,
 	})
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	paths := []string{}
@@ -305,6 +304,39 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "links", "terminator", "terminator2.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "terminator2.jpg"),
+		},
+		paths,
+	)
+}
+
+func TestCollectMatchesUploadSymlinks(t *testing.T) {
+	wd, _ := os.Getwd()
+	root := filepath.Join(wd, "..")
+	os.Chdir(root)
+	defer os.Chdir(wd)
+
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+		Paths: strings.Join([]string{
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+		}, ";"),
+		UploadSkipSymlinks: true,
+	})
+
+	artifacts, err := uploader.Collect()
+	if err != nil {
+		t.Fatalf("uploader.Collect() error = %v", err)
+	}
+
+	paths := []string{}
+	for _, a := range artifacts {
+		paths = append(paths, a.Path)
+	}
+	assert.ElementsMatch(
+		t,
+		[]string{
+			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
 		},
 		paths,
 	)

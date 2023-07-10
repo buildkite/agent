@@ -1,17 +1,19 @@
 package hook
 
 import (
-	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/template"
 
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/utils"
+	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shellscript"
+	"github.com/buildkite/agent/v3/internal/utils"
 )
 
 const (
@@ -20,36 +22,39 @@ const (
 
 	batchScript = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-SET > "{{.BeforeEnvFileName}}"
+buildkite-agent env dump > "{{.BeforeEnvFileName}}"
 CALL "{{.PathToHook}}"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%CD%
-SET > "{{.AfterEnvFileName}}"
+buildkite-agent env dump > "{{.AfterEnvFileName}}"
 EXIT %BUILDKITE_HOOK_EXIT_STATUS%`
 
 	powershellScript = `$ErrorActionPreference = "STOP"
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.BeforeEnvFileName}}"
+buildkite-agent env dump | Set-Content "{{.BeforeEnvFileName}}"
 {{.PathToHook}}
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.AfterEnvFileName}}"
+buildkite-agent env dump | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
-	bashScript = `export -p > "{{.BeforeEnvFileName}}"
+	posixShellScript = `{{if .ShebangLine}}{{.ShebangLine}}
+{{end -}}
+buildkite-agent env dump > "{{.BeforeEnvFileName}}"
 . "{{.PathToHook}}"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
-export BUILDKITE_HOOK_WORKING_DIR=$PWD
-export -p > "{{.AfterEnvFileName}}"
+export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
+buildkite-agent env dump > "{{.AfterEnvFileName}}"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 
 var (
 	batchScriptTmpl      = template.Must(template.New("batch").Parse(batchScript))
 	powershellScriptTmpl = template.Must(template.New("pwsh").Parse(powershellScript))
-	bashScriptTmpl       = template.Must(template.New("bash").Parse(bashScript))
+	posixShellScriptTmpl = template.Must(template.New("bash").Parse(posixShellScript))
 )
 
 type scriptTemplateInput struct {
+	ShebangLine       string
 	BeforeEnvFileName string
 	AfterEnvFileName  string
 	PathToHook        string
@@ -123,24 +128,44 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	}
 
 	if wrap.hookPath == "" {
-		return nil, fmt.Errorf("Hook path was not provided")
+		return nil, errors.New("hook path was not provided")
 	}
 
-	var err error
-	var isBashHook bool
-	var isPwshHook bool
+	// Extract any shebang line from the hook to copy into the wrapper.
+	shebang, err := shellscript.ShebangLine(wrap.hookPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading hook path: %w", err)
+	}
 
-	scriptFileName := `buildkite-agent-bootstrap-hook-runner`
+	// Previously we assumed Bash, because the wrapper relied on a Bash-ism.
+	// By using `bk-agent env dump`, the wrapper is compatible with /bin/sh.
+	//
+	// If there is no shebang line, the decision on what shell to use is the
+	// responsibility of the job executor.
+	//
+	// But if the shebang specifies something weird like Ruby 🤪
+	// the wrapper won't work. We do support ruby (and other interpreted) hooks via polyglot hooks (see: https://github.com/buildkite/agent/pull/2040),
+	// but they should never be wrapped, and if they have been, something has gone wrong.
+	if shebang != "" && !shellscript.IsPOSIXShell(shebang) {
+		return nil, fmt.Errorf("scriptwrapper tried to wrap hook with invalid shebang: %q", shebang)
+	}
+
+	var isPOSIXHook, isPwshHook bool
+
+	scriptFileName := "buildkite-agent-bootstrap-hook-runner"
 	isWindows := wrap.os == "windows"
 
 	// we use bash hooks for scripts with no extension, otherwise on windows
 	// we probably need a .bat extension
-	if filepath.Ext(wrap.hookPath) == ".ps1" {
+	switch {
+	case filepath.Ext(wrap.hookPath) == ".ps1":
 		isPwshHook = true
 		scriptFileName += ".ps1"
-	} else if filepath.Ext(wrap.hookPath) == "" {
-		isBashHook = true
-	} else if isWindows {
+
+	case filepath.Ext(wrap.hookPath) == "":
+		isPOSIXHook = true
+
+	case isWindows:
 		scriptFileName += ".bat"
 	}
 
@@ -153,7 +178,7 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 
 	// We'll pump the ENV before the hook into this temp file
 	wrap.beforeEnvFile, err = shell.TempFileWithExtension(
-		`buildkite-agent-bootstrap-hook-env-before`,
+		"buildkite-agent-bootstrap-hook-env-before",
 	)
 	if err != nil {
 		return nil, err
@@ -162,7 +187,7 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 
 	// We'll then pump the ENV _after_ the hook into this temp file
 	wrap.afterEnvFile, err = shell.TempFileWithExtension(
-		`buildkite-agent-bootstrap-hook-env-after`,
+		"buildkite-agent-bootstrap-hook-env-after",
 	)
 	if err != nil {
 		return nil, err
@@ -171,23 +196,27 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 
 	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", wrap.hookPath, err)
+		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
 	tmplInput := scriptTemplateInput{
+		ShebangLine:       shebang,
 		BeforeEnvFileName: wrap.beforeEnvFile.Name(),
 		AfterEnvFileName:  wrap.afterEnvFile.Name(),
 		PathToHook:        absolutePathToHook,
 	}
 
 	// Create the hook runner code
-	buf := &bytes.Buffer{}
-	if isWindows && !isBashHook && !isPwshHook {
+	buf := &strings.Builder{}
+	switch {
+	case isWindows && !isPOSIXHook && !isPwshHook:
 		batchScriptTmpl.Execute(buf, tmplInput)
-	} else if isWindows && isPwshHook {
+
+	case isWindows && isPwshHook:
 		powershellScriptTmpl.Execute(buf, tmplInput)
-	} else {
-		bashScriptTmpl.Execute(buf, tmplInput)
+
+	default:
+		posixShellScriptTmpl.Execute(buf, tmplInput)
 	}
 	script := buf.String()
 
@@ -220,30 +249,42 @@ func (wrap *ScriptWrapper) Close() {
 
 // Changes returns the changes in the environment and working dir after the hook script runs
 func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
-	beforeEnvContents, err := ioutil.ReadFile(wrap.beforeEnvFile.Name())
+	beforeEnvContents, err := os.ReadFile(wrap.beforeEnvFile.Name())
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.beforeEnvFile.Name(), err)
+		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.beforeEnvFile.Name(), err)
 	}
 
-	afterEnvContents, err := ioutil.ReadFile(wrap.afterEnvFile.Name())
+	afterEnvContents, err := os.ReadFile(wrap.afterEnvFile.Name())
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.afterEnvFile.Name(), err)
+		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.afterEnvFile.Name(), err)
 	}
 
-	beforeEnv := env.FromExport(string(beforeEnvContents))
-	afterEnv := env.FromExport(string(afterEnvContents))
-
-	if afterEnv.Length() == 0 {
+	// An empty afterEnvFile indicates that the hook early-exited from within the
+	// ScriptWrapper, so the working directory and environment changes weren't
+	// captured.
+	if len(afterEnvContents) == 0 {
 		return HookScriptChanges{}, &HookExitError{hookPath: wrap.hookPath}
+	}
+
+	var (
+		beforeEnv *env.Environment
+		afterEnv  *env.Environment
+	)
+
+	err = json.Unmarshal(beforeEnvContents, &beforeEnv)
+	if err != nil {
+		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %s", err, string(beforeEnvContents))
+	}
+
+	err = json.Unmarshal(afterEnvContents, &afterEnv)
+	if err != nil {
+		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %s", err, string(afterEnvContents))
 	}
 
 	diff := afterEnv.Diff(beforeEnv)
 
 	// Pluck the after wd from the diff before removing the key from the diff
-	afterWd := ""
-	if afterWd == "" {
-		afterWd, _ = diff.Added[hookWorkingDirEnv]
-	}
+	afterWd := diff.Added[hookWorkingDirEnv]
 	if afterWd == "" {
 		if change, ok := diff.Changed[hookWorkingDirEnv]; ok {
 			afterWd = change.New

@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var AnnotationRemoveHelpDescription = `Usage:
+const annotationRemoveHelpDescription = `Usage:
 
    buildkite-agent annotation remove [arguments...]
 
@@ -48,7 +49,7 @@ type AnnotationRemoveConfig struct {
 var AnnotationRemoveCommand = cli.Command{
 	Name:        "remove",
 	Usage:       "Remove an existing annotation from a Buildkite build",
-	Description: AnnotationRemoveHelpDescription,
+	Description: annotationRemoveHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "context",
@@ -77,6 +78,8 @@ var AnnotationRemoveCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := AnnotationRemoveConfig{}
 
@@ -99,16 +102,16 @@ var AnnotationRemoveCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Retry the removal a few times before giving up
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(1*time.Second)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			// Attempt to remove the annotation
-			resp, err := client.AnnotationRemove(cfg.Job, cfg.Context)
+			resp, err := client.AnnotationRemove(ctx, cfg.Job, cfg.Context)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400 || resp.StatusCode == 410) {
@@ -119,9 +122,9 @@ var AnnotationRemoveCommand = cli.Command{
 			// Show the unexpected error
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		// Show a fatal error if we gave up trying to create the annotation

@@ -1,8 +1,9 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var StepUpdateHelpDescription = `Usage:
+const stepUpdateHelpDescription = `Usage:
 
    buildkite-agent step update <attribute> <value> [options...]
 
@@ -61,7 +62,7 @@ type StepUpdateConfig struct {
 var StepUpdateCommand = cli.Command{
 	Name:        "update",
 	Usage:       "Change the value of an attribute",
-	Description: StepUpdateHelpDescription,
+	Description: stepUpdateHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "step",
@@ -95,6 +96,8 @@ var StepUpdateCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := StepUpdateConfig{}
 
@@ -120,7 +123,7 @@ var StepUpdateCommand = cli.Command{
 		if len(c.Args()) < 2 {
 			l.Info("Reading value from STDIN")
 
-			input, err := ioutil.ReadAll(os.Stdin)
+			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				l.Fatal("Failed to read from STDIN: %s", err)
 			}
@@ -128,7 +131,7 @@ var StepUpdateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Generate a UUID that will identify this change. We do this
 		// outside of the retry loop because we want this UUID to be
@@ -148,16 +151,16 @@ var StepUpdateCommand = cli.Command{
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			resp, err := client.StepUpdate(cfg.StepOrKey, update)
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			resp, err := client.StepUpdate(ctx, cfg.StepOrKey, update)
 			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		if err != nil {

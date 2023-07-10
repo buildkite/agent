@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -22,20 +23,19 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	}
 
 	j := &api.Job{
-		ID:                 `my-job-id`,
+		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
 		Token:              jobToken,
 		Env: map[string]string{
-			`BUILDKITE_COMMAND`: `echo hello world`,
+			"BUILDKITE_COMMAND": "echo hello world",
 		},
 	}
 
 	cfg := agent.AgentConfiguration{}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
-		if c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN") != jobToken {
-			t.Errorf("Expected access token to be %q, got %q\n",
-				jobToken, c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), jobToken; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_AGENT_ACCESS_TOKEN) = %q, want %q", got, want)
 		}
 		c.Exit(0)
 	})
@@ -47,19 +47,18 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	}
 
 	j := &api.Job{
-		ID:                 `my-job-id`,
+		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
 		Env: map[string]string{
-			`BUILDKITE_COMMAND`: `echo hello world`,
+			"BUILDKITE_COMMAND": "echo hello world",
 		},
 	}
 
 	cfg := agent.AgentConfiguration{}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
-		if c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN") != `llamasrock` {
-			t.Errorf("Expected access token to be %q, got %q\n",
-				`llamasrock`, c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), "llamasrock"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_AGENT_ACCESS_TOKEN) = %q, want %q", got, want)
 		}
 		c.Exit(0)
 	})
@@ -71,11 +70,11 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	}
 
 	j := &api.Job{
-		ID:                 `my-job-id`,
+		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
 		Env: map[string]string{
-			`BUILDKITE_COMMAND`:      `echo hello world`,
-			`BUILDKITE_COMMAND_EVAL`: `false`,
+			"BUILDKITE_COMMAND":      "echo hello world",
+			"BUILDKITE_COMMAND_EVAL": "false",
 		},
 	}
 
@@ -84,9 +83,8 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
-		if c.GetEnv("BUILDKITE_COMMAND_EVAL") != `true` {
-			t.Errorf("Expected BUILDKITE_COMMAND_EVAL to be %q, got %q\n",
-				`true`, c.GetEnv("BUILDKITE_COMMAND_EVAL"))
+		if got, want := c.GetEnv("BUILDKITE_COMMAND_EVAL"), "true"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_COMMAND_EVAL) = %q, want %q", got, want)
 		}
 		c.Exit(0)
 	})
@@ -95,13 +93,13 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 
 func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.AgentConfiguration, bootstrap func(c *bintest.Call)) {
 	// create a mock agent API
-	server := createTestAgentEndpoint(t, `my-job-id`)
+	server := createTestAgentEndpoint(t, "my-job-id")
 	defer server.Close()
 
 	// set up a mock bootstrap that the runner will call
 	bs, err := bintest.NewMock("buildkite-agent-bootstrap")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.NewMock() error = %v", err)
 	}
 	defer bs.CheckAndClose(t)
 
@@ -126,29 +124,28 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 		AgentConfiguration: cfg,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("agent.NewJobRunner() error = %v", err)
 	}
 
-	if err = jr.Run(); err != nil {
-		t.Fatal(err)
+	if err := jr.Run(context.Background()); err != nil {
+		t.Errorf("jr.Run() = %v", err)
 	}
 }
 
 func createTestAgentEndpoint(t *testing.T, jobID string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
-		case `/jobs/` + jobID:
+		case "/jobs/" + jobID:
 			rw.WriteHeader(http.StatusOK)
 			fmt.Fprintf(rw, `{"state":"running"}`)
-		case `/jobs/` + jobID + `/start`:
+		case "/jobs/" + jobID + "/start":
 			rw.WriteHeader(http.StatusOK)
-		case `/jobs/` + jobID + `/chunks`:
+		case "/jobs/" + jobID + "/chunks":
 			rw.WriteHeader(http.StatusCreated)
-		case `/jobs/` + jobID + `/finish`:
+		case "/jobs/" + jobID + "/finish":
 			rw.WriteHeader(http.StatusOK)
 		default:
-			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
-			http.Error(rw, "Not found", http.StatusNotFound)
+			http.Error(rw, fmt.Sprintf("not found; method = %q, path = %q", req.Method, req.URL.Path), http.StatusNotFound)
 		}
 	}))
 }

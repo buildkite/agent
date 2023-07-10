@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var DownloadHelpDescription = `Usage:
+const downloadHelpDescription = `Usage:
 
    buildkite-agent artifact download [options] <query> <destination>
 
@@ -71,7 +72,7 @@ type ArtifactDownloadConfig struct {
 var ArtifactDownloadCommand = cli.Command{
 	Name:        "download",
 	Usage:       "Downloads artifacts from Buildkite to the local machine",
-	Description: DownloadHelpDescription,
+	Description: downloadHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "step",
@@ -104,6 +105,8 @@ var ArtifactDownloadCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactDownloadConfig{}
 
@@ -126,7 +129,7 @@ var ArtifactDownloadCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the downloader
 		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{
@@ -139,7 +142,7 @@ var ArtifactDownloadCommand = cli.Command{
 		})
 
 		// Download the artifacts
-		if err := downloader.Download(); err != nil {
+		if err := downloader.Download(ctx); err != nil {
 			l.Fatal("Failed to download artifacts: %s", err)
 		}
 	},
