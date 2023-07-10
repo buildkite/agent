@@ -47,7 +47,7 @@ func (p *Plugin) interpolate(env interpolate.Env) error {
 		return err
 	}
 	p.Name = name
-	if _, err := interpolateAny(env, p.Config); err != nil {
+	if err := interpolateOrderedMap(env, p.Config); err != nil {
 		return err
 	}
 	return nil
