@@ -2,12 +2,16 @@ package pipeline
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
+
+var _ SignedFielder = (*CommandStep)(nil)
 
 // Step models a step in the pipeline. It will be a pointer to one of:
 // - CommandStep
@@ -25,8 +29,9 @@ type Step interface {
 //
 // Standard caveats apply - see the package comment.
 type CommandStep struct {
-	Command string  `yaml:"command"`
-	Plugins Plugins `yaml:"plugins,omitempty"`
+	Command   string     `yaml:"command"`
+	Plugins   Plugins    `yaml:"plugins,omitempty"`
+	Signature *Signature `yaml:"signature,omitempty"`
 
 	// RemainingFields stores any other top-level mapping items so they at least
 	// survive an unmarshal-marshal round-trip.
@@ -59,9 +64,10 @@ func (c *CommandStep) UnmarshalYAML(n *yaml.Node) error {
 	var full struct {
 		// "command" and "commands" are two ways to spell the same thing.
 		// They can both be single strings, or sequences of strings.
-		Command  ordered.Strings `yaml:"command"`
-		Commands ordered.Strings `yaml:"commands"`
-		Plugins  Plugins         `yaml:"plugins"`
+		Command   ordered.Strings `yaml:"command"`
+		Commands  ordered.Strings `yaml:"commands"`
+		Plugins   Plugins         `yaml:"plugins"`
+		Signature *Signature      `yaml:"signature"`
 
 		RemainingFields map[string]any `yaml:",inline"`
 	}
@@ -77,8 +83,33 @@ func (c *CommandStep) UnmarshalYAML(n *yaml.Node) error {
 
 	// Copy remaining fields.
 	c.Plugins = full.Plugins
+	c.Signature = full.Signature
 	c.RemainingFields = full.RemainingFields
 	return nil
+}
+
+// SignedFields returns the default fields for signing.
+func (c *CommandStep) SignedFields() map[string]string {
+	return map[string]string{
+		"command": c.Command,
+	}
+}
+
+// ValuesForFields returns the contents of fields to sign.
+func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error) {
+	out := make(map[string]string, len(fields))
+	for _, f := range fields {
+		switch f {
+		case "command":
+			out["command"] = c.Command
+		default:
+			return nil, fmt.Errorf("unknown or unsupported field for signing %q", f)
+		}
+	}
+	if _, ok := out["command"]; !ok {
+		return nil, errors.New("command is required for signature verification")
+	}
+	return out, nil
 }
 
 func (c *CommandStep) interpolate(env interpolate.Env) error {
@@ -89,6 +120,7 @@ func (c *CommandStep) interpolate(env interpolate.Env) error {
 	if err := c.Plugins.interpolate(env); err != nil {
 		return err
 	}
+	// NB: Do not interpolate Signature.
 	if _, err := interpolateAny(env, c.RemainingFields); err != nil {
 		return err
 	}
