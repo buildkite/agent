@@ -411,7 +411,7 @@ var BootstrapCommand = cli.Command{
 		}
 
 		// Configure the bootstraper
-		bootstrap := job.New(job.Config{
+		bootstrap := job.New(job.ExecutorConfig{
 			AgentName:                    cfg.AgentName,
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,

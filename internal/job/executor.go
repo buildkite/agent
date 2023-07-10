@@ -33,16 +33,16 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
-// Bootstrap represents the phases of execution in a Buildkite Job. It's run as
+// Executor represents the phases of execution in a Buildkite Job. It's run as
 // a sub-process of the buildkite-agent and finishes at the conclusion of a job.
 //
-// Historically (prior to v3) the bootstrap was a shell script, but was ported
+// Historically (prior to v3) the job executor was a shell script, but was ported
 // to Go for portability and testability.
-type Bootstrap struct {
-	// Config provides the bootstrap configuration
-	Config
+type Executor struct {
+	// ExecutorConfig provides the executor configuration
+	ExecutorConfig
 
-	// Shell is the shell environment for the bootstrap
+	// Shell is the shell environment for the executor
 	shell *shell.Shell
 
 	// Plugins to use
@@ -51,40 +51,40 @@ type Bootstrap struct {
 	// Plugin checkouts from the plugin phases
 	pluginCheckouts []*pluginCheckout
 
-	// Directories to clean up at end of bootstrap
+	// Directories to clean up at end of job execution
 	cleanupDirs []string
 
 	// A channel to track cancellation
 	cancelCh chan struct{}
 }
 
-// New returns a new Bootstrap instance
-func New(conf Config) *Bootstrap {
-	return &Bootstrap{
-		Config:   conf,
-		cancelCh: make(chan struct{}),
+// New returns a new executor instance
+func New(conf ExecutorConfig) *Executor {
+	return &Executor{
+		ExecutorConfig: conf,
+		cancelCh:       make(chan struct{}),
 	}
 }
 
-// Run the bootstrap and return the exit code
-func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
+// Run the job and return the exit code
+func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
-	if b.shell == nil {
+	if e.shell == nil {
 		var err error
-		b.shell, err = shell.New()
+		e.shell, err = shell.New()
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
 		}
 
-		b.shell.PTY = b.Config.RunInPty
-		b.shell.Debug = b.Config.Debug
-		b.shell.InterruptSignal = b.Config.CancelSignal
+		e.shell.PTY = e.ExecutorConfig.RunInPty
+		e.shell.Debug = e.ExecutorConfig.Debug
+		e.shell.InterruptSignal = e.ExecutorConfig.CancelSignal
 	}
 	if experiments.IsEnabled(experiments.KubernetesExec) {
 		kubernetesClient := &kubernetes.Client{}
-		if err := b.startKubernetesClient(ctx, kubernetesClient); err != nil {
-			b.shell.Errorf("Failed to start kubernetes client: %v", err)
+		if err := e.startKubernetesClient(ctx, kubernetesClient); err != nil {
+			e.shell.Errorf("Failed to start kubernetes client: %v", err)
 			return 1
 		}
 		defer func() {
@@ -93,7 +93,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	var err error
-	span, ctx, stopper := b.startTracing(ctx)
+	span, ctx, stopper := e.startTracing(ctx)
 	defer stopper()
 	defer func() { span.FinishWithError(err) }()
 
@@ -107,20 +107,20 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		case <-ctx.Done():
 			return
 
-		case <-b.cancelCh:
-			b.shell.Commentf("Received cancellation signal, interrupting")
-			b.shell.Interrupt()
+		case <-e.cancelCh:
+			e.shell.Commentf("Received cancellation signal, interrupting")
+			e.shell.Interrupt()
 			cancel()
 		}
 	}()
 
 	// Create an empty env for us to keep track of our env changes in
-	b.shell.Env = env.FromSlice(os.Environ())
+	e.shell.Env = env.FromSlice(os.Environ())
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
-	cleanup, err := b.startJobAPI()
+	cleanup, err := e.startJobAPI()
 	if err != nil {
-		b.shell.Errorf("Error setting up job API: %v", err)
+		e.shell.Errorf("Error setting up job API: %v", err)
 		return 1
 	}
 
@@ -128,8 +128,8 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
-		if err = b.tearDown(ctx); err != nil {
-			b.shell.Errorf("Error tearing down bootstrap: %v", err)
+		if err = e.tearDown(ctx); err != nil {
+			e.shell.Errorf("Error tearing down job executor: %v", err)
 
 			// this gets passed back via the named return
 			exitCode = shell.GetExitCode(err)
@@ -137,16 +137,16 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}()
 
 	// Initialize the environment, a failure here will still call the tearDown
-	if err = b.setUp(ctx); err != nil {
-		b.shell.Errorf("Error setting up bootstrap: %v", err)
+	if err = e.setUp(ctx); err != nil {
+		e.shell.Errorf("Error setting up job executor: %v", err)
 		return shell.GetExitCode(err)
 	}
 
 	var includePhase = func(phase string) bool {
-		if len(b.Phases) == 0 {
+		if len(e.Phases) == 0 {
 			return true
 		}
-		for _, include := range b.Phases {
+		for _, include := range e.Phases {
 			if include == phase {
 				return true
 			}
@@ -154,33 +154,33 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		return false
 	}
 
-	// Execute the bootstrap phases in order
+	// Execute the job phases in order
 	var phaseErr error
 
 	if includePhase("plugin") {
-		phaseErr = b.preparePlugins()
+		phaseErr = e.preparePlugins()
 
 		if phaseErr == nil {
-			phaseErr = b.PluginPhase(ctx)
+			phaseErr = e.PluginPhase(ctx)
 		}
 	}
 
 	if phaseErr == nil && includePhase("checkout") {
-		phaseErr = b.CheckoutPhase(cancelCtx)
+		phaseErr = e.CheckoutPhase(cancelCtx)
 	} else {
-		checkoutDir, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+		checkoutDir, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 		if exists {
-			_ = b.shell.Chdir(checkoutDir)
+			_ = e.shell.Chdir(checkoutDir)
 		}
 	}
 
 	if phaseErr == nil && includePhase("plugin") {
-		phaseErr = b.VendoredPluginPhase(ctx)
+		phaseErr = e.VendoredPluginPhase(ctx)
 	}
 
 	if phaseErr == nil && includePhase("command") {
 		var commandErr error
-		phaseErr, commandErr = b.CommandPhase(ctx)
+		phaseErr, commandErr = e.CommandPhase(ctx)
 		/*
 			Five possible states at this point:
 
@@ -201,13 +201,13 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		// an error from the hook/job logic. These are both good to report but
 		// shouldn't override each other in reporting.
 		if commandErr != nil {
-			b.shell.Printf("user command error: %v", commandErr)
+			e.shell.Printf("user command error: %v", commandErr)
 			span.RecordError(commandErr)
 		}
 
 		// Only upload artifacts as part of the command phase
-		if err = b.artifactPhase(ctx); err != nil {
-			b.shell.Errorf("%v", err)
+		if err = e.artifactPhase(ctx); err != nil {
+			e.shell.Errorf("%v", err)
 
 			if commandErr != nil {
 				// Both command, and upload have errored.
@@ -225,20 +225,20 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// this won't include command failures, as we view that as more in the user space
 	if phaseErr != nil {
 		err = phaseErr
-		b.shell.Errorf("%v", phaseErr)
+		e.shell.Errorf("%v", phaseErr)
 		return shell.GetExitCode(phaseErr)
 	}
 
 	// Use the exit code from the command phase
-	exitStatus, _ := b.shell.Env.Get("BUILDKITE_COMMAND_EXIT_STATUS")
+	exitStatus, _ := e.shell.Env.Get("BUILDKITE_COMMAND_EXIT_STATUS")
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
 }
 
-// Cancel interrupts any running shell processes and causes the bootstrap to stop
-func (b *Bootstrap) Cancel() error {
-	b.cancelCh <- struct{}{}
+// Cancel interrupts any running shell processes and causes the job to stop
+func (e *Executor) Cancel() error {
+	e.cancelCh <- struct{}{}
 	return nil
 }
 
@@ -251,8 +251,8 @@ type HookConfig struct {
 	PluginName     string
 }
 
-func (b *Bootstrap) tracingImplementationSpecificHookScope(scope string) string {
-	if b.TracingBackend != tracetools.BackendOpenTelemetry {
+func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
+	if e.TracingBackend != tracetools.BackendOpenTelemetry {
 		return scope
 	}
 
@@ -270,10 +270,10 @@ func (b *Bootstrap) tracingImplementationSpecificHookScope(scope string) string 
 }
 
 // executeHook runs a hook script with the hookRunner
-func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
-	scopeName := b.tracingImplementationSpecificHookScope(hookCfg.Scope)
-	spanName := b.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
+func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
+	scopeName := e.tracingImplementationSpecificHookScope(hookCfg.Scope)
+	spanName := e.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -290,16 +290,16 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	hookName += " " + hookCfg.Name
 
 	if !utils.FileExists(hookCfg.Path) {
-		if b.Debug {
-			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
+		if e.Debug {
+			e.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
 		}
 		return nil
 	}
 
-	b.shell.Headerf("Running %s hook", hookName)
+	e.shell.Headerf("Running %s hook", hookName)
 
 	if !experiments.IsEnabled(experiments.PolyglotHooks) {
-		return b.runWrappedShellScriptHook(ctx, hookName, hookCfg)
+		return e.runWrappedShellScriptHook(ctx, hookName, hookCfg)
 	}
 
 	hookType, err := hook.Type(hookCfg.Path)
@@ -328,21 +328,21 @@ Hooks of this kind are unfortunately not supported on Windows, as we have no way
 
 		// It's a script, and we can rely on the OS to figure out how to run it (because we're not on windows), so run it
 		// directly without wrapping
-		if err := b.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
+		if err := e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q script hook: %w", hookName, err)
 		}
 
 		return nil
 	case hook.TypeBinary:
 		// It's a binary, so we'll just run it directly, no wrapping needed or possible
-		if err := b.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
+		if err := e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q binary hook: %w", hookName, err)
 		}
 
 		return nil
 	case hook.TypeShell:
 		// It's definitely a shell script, wrap it so that we can snaffle the changed environment variables
-		if err := b.runWrappedShellScriptHook(ctx, hookName, hookCfg); err != nil {
+		if err := e.runWrappedShellScriptHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q shell hook: %w", hookName, err)
 		}
 
@@ -352,23 +352,23 @@ Hooks of this kind are unfortunately not supported on Windows, as we have no way
 	}
 }
 
-func (b *Bootstrap) runUnwrappedHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
+func (e *Executor) runUnwrappedHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	environ := hookCfg.Env.Copy()
 
 	environ.Set("BUILDKITE_HOOK_PHASE", hookCfg.Name)
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	return b.shell.RunWithEnv(ctx, environ, hookCfg.Path)
+	return e.shell.RunWithEnv(ctx, environ, hookCfg.Path)
 }
 
-func (b *Bootstrap) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
-	redactors := b.setupRedactors()
+func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
+	redactors := e.setupRedactors()
 	defer redactors.Flush()
 
 	script, err := hook.NewScriptWrapper(hook.WithHookPath(hookCfg.Path))
 	if err != nil {
-		b.shell.Errorf("Error creating hook script: %v", err)
+		e.shell.Errorf("Error creating hook script: %v", err)
 		return err
 	}
 	defer script.Close()
@@ -376,25 +376,25 @@ func (b *Bootstrap) runWrappedShellScriptHook(ctx context.Context, hookName stri
 	cleanHookPath := hookCfg.Path
 
 	// Show a relative path if we can
-	if strings.HasPrefix(hookCfg.Path, b.shell.Getwd()) {
+	if strings.HasPrefix(hookCfg.Path, e.shell.Getwd()) {
 		var err error
-		if cleanHookPath, err = filepath.Rel(b.shell.Getwd(), hookCfg.Path); err != nil {
+		if cleanHookPath, err = filepath.Rel(e.shell.Getwd(), hookCfg.Path); err != nil {
 			cleanHookPath = hookCfg.Path
 		}
 	}
 
 	// Show the hook runner in debug, but the thing being run otherwise 💅🏻
-	if b.Debug {
-		b.shell.Commentf("A hook runner was written to \"%s\" with the following:", script.Path())
-		b.shell.Promptf("%s", process.FormatCommand(script.Path(), nil))
+	if e.Debug {
+		e.shell.Commentf("A hook runner was written to \"%s\" with the following:", script.Path())
+		e.shell.Promptf("%s", process.FormatCommand(script.Path(), nil))
 	} else {
-		b.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
+		e.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
 	}
 
 	// Run the wrapper script
-	if err = b.shell.RunScript(ctx, script.Path(), hookCfg.Env); err != nil {
+	if err = e.shell.RunScript(ctx, script.Path(), hookCfg.Env); err != nil {
 		exitCode := shell.GetExitCode(err)
-		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
+		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
 
 		// Give a simpler error if it's just a shell exit error
 		if shell.IsExitError(err) {
@@ -407,7 +407,7 @@ func (b *Bootstrap) runWrappedShellScriptHook(ctx context.Context, hookName stri
 	}
 
 	// Store the last hook exit code for subsequent steps
-	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", "0")
+	e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", "0")
 
 	// Get changed environment
 	changes, err := script.Changes()
@@ -427,16 +427,16 @@ func (b *Bootstrap) runWrappedShellScriptHook(ctx context.Context, hookName stri
 	} else {
 		// Hook exited successfully (and not early!) We have an environment and
 		// wd change we can apply to our subsequent phases
-		b.applyEnvironmentChanges(changes, redactors)
+		e.applyEnvironmentChanges(changes, redactors)
 	}
 
 	return nil
 }
 
-func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors redactor.Mux) {
+func (e *Executor) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors redactor.Mux) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
-		if afterWd != b.shell.Getwd() {
-			_ = b.shell.Chdir(afterWd)
+		if afterWd != e.shell.Getwd() {
+			_ = e.shell.Chdir(afterWd)
 		}
 	}
 
@@ -445,19 +445,18 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 		return
 	}
 
-	b.shell.Env.Apply(changes.Diff)
+	e.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	redactors.Reset(redactor.ValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump()))
+	redactors.Reset(redactor.ValuesToRedact(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump()))
 
 	// First, let see any of the environment variables are supposed
-	// to change the bootstrap configuration at run time.
-	bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(b.shell.Env)
+	// to change the job configuration at run time.
+	executorConfigEnvChanges := e.ExecutorConfig.ReadFromEnvironment(e.shell.Env)
 
 	// Print out the env vars that changed. As we go through each
-	// one, we'll determine if it was a special "bootstrap"
-	// environment variable that has changed the bootstrap
-	// configuration at runtime.
+	// one, we'll determine if it was a special environment variable
+	// that has changed the executor configuration at runtime.
 	//
 	// If it's "special", we'll show the value it was changed to -
 	// otherwise we'll hide it. Since we don't know if an
@@ -465,48 +464,48 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 	// THIRD_PARTY_API_KEY) we'll just not show any values for
 	// anything not controlled by us.
 	for k, v := range changes.Diff.Added {
-		if _, ok := bootstrapConfigEnvChanges[k]; ok {
-			b.shell.Commentf("%s is now %q", k, v)
+		if _, ok := executorConfigEnvChanges[k]; ok {
+			e.shell.Commentf("%s is now %q", k, v)
 		} else {
-			b.shell.Commentf("%s added", k)
+			e.shell.Commentf("%s added", k)
 		}
 	}
 	for k, v := range changes.Diff.Changed {
-		if _, ok := bootstrapConfigEnvChanges[k]; ok {
-			b.shell.Commentf("%s is now %q", k, v)
+		if _, ok := executorConfigEnvChanges[k]; ok {
+			e.shell.Commentf("%s is now %q", k, v)
 		} else {
-			b.shell.Commentf("%s changed", k)
+			e.shell.Commentf("%s changed", k)
 		}
 	}
 	for k, v := range changes.Diff.Removed {
-		if _, ok := bootstrapConfigEnvChanges[k]; ok {
-			b.shell.Commentf("%s is now %q", k, v)
+		if _, ok := executorConfigEnvChanges[k]; ok {
+			e.shell.Commentf("%s is now %q", k, v)
 		} else {
-			b.shell.Commentf("%s removed", k)
+			e.shell.Commentf("%s removed", k)
 		}
 	}
 }
 
-func (b *Bootstrap) hasGlobalHook(name string) bool {
-	_, err := b.globalHookPath(name)
+func (e *Executor) hasGlobalHook(name string) bool {
+	_, err := e.globalHookPath(name)
 	return err == nil
 }
 
 // Returns the absolute path to a global hook, or os.ErrNotExist if none is found
-func (b *Bootstrap) globalHookPath(name string) (string, error) {
-	return hook.Find(b.HooksPath, name)
+func (e *Executor) globalHookPath(name string) (string, error) {
+	return hook.Find(e.HooksPath, name)
 }
 
 // Executes a global hook if one exists
-func (b *Bootstrap) executeGlobalHook(ctx context.Context, name string) error {
-	if !b.hasGlobalHook(name) {
+func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
+	if !e.hasGlobalHook(name) {
 		return nil
 	}
-	p, err := b.globalHookPath(name)
+	p, err := e.globalHookPath(name)
 	if err != nil {
 		return err
 	}
-	return b.executeHook(ctx, HookConfig{
+	return e.executeHook(ctx, HookConfig{
 		Scope: "global",
 		Name:  name,
 		Path:  p,
@@ -514,32 +513,32 @@ func (b *Bootstrap) executeGlobalHook(ctx context.Context, name string) error {
 }
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
-func (b *Bootstrap) localHookPath(name string) (string, error) {
-	dir := filepath.Join(b.shell.Getwd(), ".buildkite", "hooks")
+func (e *Executor) localHookPath(name string) (string, error) {
+	dir := filepath.Join(e.shell.Getwd(), ".buildkite", "hooks")
 	return hook.Find(dir, name)
 }
 
-func (b *Bootstrap) hasLocalHook(name string) bool {
-	_, err := b.localHookPath(name)
+func (e *Executor) hasLocalHook(name string) bool {
+	_, err := e.localHookPath(name)
 	return err == nil
 }
 
 // Executes a local hook
-func (b *Bootstrap) executeLocalHook(ctx context.Context, name string) error {
-	if !b.hasLocalHook(name) {
+func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
+	if !e.hasLocalHook(name) {
 		return nil
 	}
 
-	localHookPath, err := b.localHookPath(name)
+	localHookPath, err := e.localHookPath(name)
 	if err != nil {
 		return nil
 	}
 
 	// For high-security configs, we allow the disabling of local hooks.
-	localHooksEnabled := b.Config.LocalHooksEnabled
+	localHooksEnabled := e.ExecutorConfig.LocalHooksEnabled
 
 	// Allow hooks to disable local hooks by setting BUILDKITE_NO_LOCAL_HOOKS=true
-	noLocalHooks, _ := b.shell.Env.Get("BUILDKITE_NO_LOCAL_HOOKS")
+	noLocalHooks, _ := e.shell.Env.Get("BUILDKITE_NO_LOCAL_HOOKS")
 	if noLocalHooks == "true" || noLocalHooks == "1" {
 		localHooksEnabled = false
 	}
@@ -548,7 +547,7 @@ func (b *Bootstrap) executeLocalHook(ctx context.Context, name string) error {
 		return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
 	}
 
-	return b.executeHook(ctx, HookConfig{
+	return e.executeHook(ctx, HookConfig{
 		Scope: "local",
 		Name:  name,
 		Path:  localHookPath,
@@ -584,117 +583,117 @@ func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repo
 }
 
 // setUp is run before all the phases run. It's responsible for initializing the
-// bootstrap environment
-func (b *Bootstrap) setUp(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", b.Config.TracingBackend)
+// job environment
+func (e *Executor) setUp(ctx context.Context) error {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
-	if b.BinPath != "" {
-		path, _ := b.shell.Env.Get("PATH")
+	if e.BinPath != "" {
+		path, _ := e.shell.Env.Get("PATH")
 		// BinPath goes last so we don't disturb other tools
-		b.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", path, string(os.PathListSeparator), b.BinPath))
+		e.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", path, string(os.PathListSeparator), e.BinPath))
 	}
 
 	// Set a BUILDKITE_BUILD_CHECKOUT_PATH unless one exists already. We do this here
 	// so that the environment will have a checkout path to work with
-	if _, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"); !exists {
-		if b.BuildPath == "" {
+	if _, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"); !exists {
+		if e.BuildPath == "" {
 			return fmt.Errorf("Must set either a BUILDKITE_BUILD_PATH or a BUILDKITE_BUILD_CHECKOUT_PATH")
 		}
-		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
-			filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+		e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
+			filepath.Join(e.BuildPath, dirForAgentName(e.AgentName), e.OrganizationSlug, e.PipelineSlug))
 	}
 
 	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored
 	// or overwritten. This shows a warning to the user so they don't get confused
 	// when their environment changes don't seem to do anything
-	if ignored, exists := b.shell.Env.Get("BUILDKITE_IGNORED_ENV"); exists {
-		b.shell.Headerf("Detected protected environment variables")
-		b.shell.Commentf("Your pipeline environment has protected environment variables set. " +
+	if ignored, exists := e.shell.Env.Get("BUILDKITE_IGNORED_ENV"); exists {
+		e.shell.Headerf("Detected protected environment variables")
+		e.shell.Commentf("Your pipeline environment has protected environment variables set. " +
 			"These can only be set via hooks, plugins or the agent configuration.")
 
 		for _, env := range strings.Split(ignored, ",") {
-			b.shell.Warningf("Ignored %s", env)
+			e.shell.Warningf("Ignored %s", env)
 		}
 
-		b.shell.Printf("^^^ +++")
+		e.shell.Printf("^^^ +++")
 	}
 
-	if b.Debug {
-		b.shell.Headerf("Buildkite environment variables")
-		for _, e := range b.shell.Env.ToSlice() {
-			if strings.HasPrefix(e, "BUILDKITE_AGENT_ACCESS_TOKEN=") {
-				b.shell.Printf("BUILDKITE_AGENT_ACCESS_TOKEN=******************")
-			} else if strings.HasPrefix(e, "BUILDKITE") || strings.HasPrefix(e, "CI") || strings.HasPrefix(e, "PATH") {
-				b.shell.Printf("%s", strings.Replace(e, "\n", "\\n", -1))
+	if e.Debug {
+		e.shell.Headerf("Buildkite environment variables")
+		for _, envar := range e.shell.Env.ToSlice() {
+			if strings.HasPrefix(envar, "BUILDKITE_AGENT_ACCESS_TOKEN=") {
+				e.shell.Printf("BUILDKITE_AGENT_ACCESS_TOKEN=******************")
+			} else if strings.HasPrefix(envar, "BUILDKITE") || strings.HasPrefix(envar, "CI") || strings.HasPrefix(envar, "PATH") {
+				e.shell.Printf("%s", strings.Replace(envar, "\n", "\\n", -1))
 			}
 		}
 	}
 
 	// Disable any interactive Git/SSH prompting
-	b.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
+	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
-	err = b.executeGlobalHook(ctx, "environment")
+	err = e.executeGlobalHook(ctx, "environment")
 	return err
 }
 
-// tearDown is called before the bootstrap exits, even on error
-func (b *Bootstrap) tearDown(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", b.Config.TracingBackend)
+// tearDown is called before the executor exits, even on error
+func (e *Executor) tearDown(ctx context.Context) error {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = b.executeGlobalHook(ctx, "pre-exit"); err != nil {
+	if err = e.executeGlobalHook(ctx, "pre-exit"); err != nil {
 		return err
 	}
 
-	if err = b.executeLocalHook(ctx, "pre-exit"); err != nil {
+	if err = e.executeLocalHook(ctx, "pre-exit"); err != nil {
 		return err
 	}
 
-	if err = b.executePluginHook(ctx, "pre-exit", b.pluginCheckouts); err != nil {
+	if err = e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts); err != nil {
 		return err
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDeprecatedDockerIntegration(b.shell) {
-		return tearDownDeprecatedDockerIntegration(ctx, b.shell)
+	if hasDeprecatedDockerIntegration(e.shell) {
+		return tearDownDeprecatedDockerIntegration(ctx, e.shell)
 	}
 
-	for _, dir := range b.cleanupDirs {
+	for _, dir := range e.cleanupDirs {
 		if err = os.RemoveAll(dir); err != nil {
-			b.shell.Warningf("Failed to remove dir %s: %v", dir, err)
+			e.shell.Warningf("Failed to remove dir %s: %v", dir, err)
 		}
 	}
 
 	return nil
 }
 
-func (b *Bootstrap) hasPlugins() bool {
-	return b.Config.Plugins != ""
+func (e *Executor) hasPlugins() bool {
+	return e.ExecutorConfig.Plugins != ""
 }
 
-func (b *Bootstrap) preparePlugins() error {
-	if !b.hasPlugins() {
+func (e *Executor) preparePlugins() error {
+	if !e.hasPlugins() {
 		return nil
 	}
 
-	b.shell.Headerf("Preparing plugins")
+	e.shell.Headerf("Preparing plugins")
 
-	if b.Debug {
-		b.shell.Commentf("Plugin JSON is %s", b.Plugins)
+	if e.Debug {
+		e.shell.Commentf("Plugin JSON is %s", e.Plugins)
 	}
 
 	// Check if we can run plugins (disabled via --no-plugins)
-	if !b.Config.PluginsEnabled {
-		if !b.Config.LocalHooksEnabled {
+	if !e.ExecutorConfig.PluginsEnabled {
+		if !e.ExecutorConfig.LocalHooksEnabled {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
-		} else if !b.Config.CommandEval {
+		} else if !e.ExecutorConfig.CommandEval {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
 		} else {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
@@ -702,26 +701,26 @@ func (b *Bootstrap) preparePlugins() error {
 	}
 
 	var err error
-	b.plugins, err = plugin.CreateFromJSON(b.Config.Plugins)
+	e.plugins, err = plugin.CreateFromJSON(e.ExecutorConfig.Plugins)
 	if err != nil {
 		return fmt.Errorf("Failed to parse a plugin definition: %w", err)
 	}
 
-	if b.Debug {
-		b.shell.Commentf("Parsed %d plugins", len(b.plugins))
+	if e.Debug {
+		e.shell.Commentf("Parsed %d plugins", len(e.plugins))
 	}
 
 	return nil
 }
 
-func (b *Bootstrap) validatePluginCheckout(ctx context.Context, checkout *pluginCheckout) error {
-	if !b.Config.PluginValidation {
+func (e *Executor) validatePluginCheckout(ctx context.Context, checkout *pluginCheckout) error {
+	if !e.ExecutorConfig.PluginValidation {
 		return nil
 	}
 
 	if checkout.Definition == nil {
-		if b.Debug {
-			b.shell.Commentf("Parsing plugin definition for %s from %s", checkout.Plugin.Name(), checkout.CheckoutDir)
+		if e.Debug {
+			e.shell.Commentf("Parsing plugin definition for %s from %s", checkout.Plugin.Name(), checkout.CheckoutDir)
 		}
 
 		// parse the plugin definition from the plugin checkout dir
@@ -729,7 +728,7 @@ func (b *Bootstrap) validatePluginCheckout(ctx context.Context, checkout *plugin
 		checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
 
 		if errors.Is(err, plugin.ErrDefinitionNotFound) {
-			b.shell.Warningf("Failed to find plugin definition for plugin %s", checkout.Plugin.Name())
+			e.shell.Warningf("Failed to find plugin definition for plugin %s", checkout.Plugin.Name())
 			return nil
 		} else if err != nil {
 			return err
@@ -740,22 +739,22 @@ func (b *Bootstrap) validatePluginCheckout(ctx context.Context, checkout *plugin
 	result := val.Validate(ctx, checkout.Definition, checkout.Plugin.Configuration)
 
 	if !result.Valid() {
-		b.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
+		e.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
 		json, _ := json.Marshal(checkout.Plugin.Configuration)
-		b.shell.Commentf("Plugin configuration JSON is %s", json)
+		e.shell.Commentf("Plugin configuration JSON is %s", json)
 		return result
 	}
 
-	b.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
+	e.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
 	return nil
 }
 
 // PluginPhase is where plugins that weren't filtered in the Environment phase are
 // checked out and made available to later phases
-func (b *Bootstrap) PluginPhase(ctx context.Context) error {
-	if len(b.plugins) == 0 {
-		if b.Debug {
-			b.shell.Commentf("Skipping plugin phase")
+func (e *Executor) PluginPhase(ctx context.Context) error {
+	if len(e.plugins) == 0 {
+		if e.Debug {
+			e.shell.Commentf("Skipping plugin phase")
 		}
 		return nil
 	}
@@ -763,20 +762,20 @@ func (b *Bootstrap) PluginPhase(ctx context.Context) error {
 	checkouts := []*pluginCheckout{}
 
 	// Checkout and validate plugins that aren't vendored
-	for _, p := range b.plugins {
+	for _, p := range e.plugins {
 		if p.Vendored {
-			if b.Debug {
-				b.shell.Commentf("Skipping vendored plugin %s", p.Name())
+			if e.Debug {
+				e.shell.Commentf("Skipping vendored plugin %s", p.Name())
 			}
 			continue
 		}
 
-		checkout, err := b.checkoutPlugin(ctx, p)
+		checkout, err := e.checkoutPlugin(ctx, p)
 		if err != nil {
 			return fmt.Errorf("Failed to checkout plugin %s: %w", p.Name(), err)
 		}
 
-		err = b.validatePluginCheckout(ctx, checkout)
+		err = e.validatePluginCheckout(ctx, checkout)
 		if err != nil {
 			return err
 		}
@@ -785,28 +784,28 @@ func (b *Bootstrap) PluginPhase(ctx context.Context) error {
 	}
 
 	// Store the checkouts for future use
-	b.pluginCheckouts = checkouts
+	e.pluginCheckouts = checkouts
 
 	// Now we can run plugin environment hooks too
-	return b.executePluginHook(ctx, "environment", checkouts)
+	return e.executePluginHook(ctx, "environment", checkouts)
 }
 
 // VendoredPluginPhase is where plugins that are included in the
 // checked out code are added
-func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
-	if !b.hasPlugins() {
+func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
+	if !e.hasPlugins() {
 		return nil
 	}
 
 	vendoredCheckouts := []*pluginCheckout{}
 
 	// Validate vendored plugins
-	for _, p := range b.plugins {
+	for _, p := range e.plugins {
 		if !p.Vendored {
 			continue
 		}
 
-		checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+		checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 		pluginLocation, err := filepath.Abs(filepath.Join(checkoutPath, p.Location))
 		if err != nil {
@@ -829,7 +828,7 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 			return fmt.Errorf("Vendored plugin paths must be within the checked-out repository")
 		}
 
-		err = b.validatePluginCheckout(ctx, checkout)
+		err = e.validatePluginCheckout(ctx, checkout)
 		if err != nil {
 			return err
 		}
@@ -838,14 +837,14 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 	}
 
 	// Finally append our vendored checkouts to the rest for subsequent hooks
-	b.pluginCheckouts = append(b.pluginCheckouts, vendoredCheckouts...)
+	e.pluginCheckouts = append(e.pluginCheckouts, vendoredCheckouts...)
 
 	// Now we can run plugin environment hooks too
-	return b.executePluginHook(ctx, "environment", vendoredCheckouts)
+	return e.executePluginHook(ctx, "environment", vendoredCheckouts)
 }
 
 // Executes a named hook on plugins that have it
-func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkouts []*pluginCheckout) error {
+func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts []*pluginCheckout) error {
 	for _, p := range checkouts {
 		hookPath, err := hook.Find(p.HooksDir, name)
 		if errors.Is(err, os.ErrNotExist) {
@@ -856,21 +855,21 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 
 		envMap, err := p.ConfigurationToEnvironment()
 		if dnerr := (&plugin.DeprecatedNameErrors{}); err != nil && errors.As(err, &dnerr) {
-			b.shell.Logger.Headerf("Deprecated environment variables for plugin %s", p.Plugin.Name())
-			b.shell.Logger.Printf("%s", strings.Join([]string{
+			e.shell.Logger.Headerf("Deprecated environment variables for plugin %s", p.Plugin.Name())
+			e.shell.Logger.Printf("%s", strings.Join([]string{
 				"The way that environment variables are derived from the plugin configuration is changing.",
 				"We'll export both the deprecated and the replacement names for now,",
 				"You may be able to avoid this by removing consecutive underscore, hyphen, or whitespace",
 				"characters in your plugin configuration.",
 			}, " "))
 			for _, err := range dnerr.Errors() {
-				b.shell.Logger.Printf("%s", err.Error())
+				e.shell.Logger.Printf("%s", err.Error())
 			}
 		} else if err != nil {
-			b.shell.Logger.Warningf("Error configuring plugin environment: %s", err)
+			e.shell.Logger.Warningf("Error configuring plugin environment: %s", err)
 		}
 
-		if err := b.executeHook(ctx, HookConfig{
+		if err := e.executeHook(ctx, HookConfig{
 			Scope:      "plugin",
 			Name:       name,
 			Path:       hookPath,
@@ -891,8 +890,8 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 }
 
 // If any plugin has a hook by this name
-func (b *Bootstrap) hasPluginHook(name string) bool {
-	for _, p := range b.pluginCheckouts {
+func (e *Executor) hasPluginHook(name string) bool {
+	for _, p := range e.pluginCheckouts {
 		if _, err := hook.Find(p.HooksDir, name); err == nil {
 			return true
 		}
@@ -901,9 +900,9 @@ func (b *Bootstrap) hasPluginHook(name string) bool {
 }
 
 // Checkout a given plugin to the plugins directory and return that directory
-func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*pluginCheckout, error) {
+func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*pluginCheckout, error) {
 	// Make sure we have a plugin path before trying to do anything
-	if b.PluginsPath == "" {
+	if e.PluginsPath == "" {
 		return nil, fmt.Errorf("Can't checkout plugin without a `plugins-path`")
 	}
 
@@ -915,12 +914,12 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 
 	// Ensure the plugin directory exists, otherwise we can't create the lock
 	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-	if err := os.MkdirAll(b.PluginsPath, 0777); err != nil {
+	if err := os.MkdirAll(e.PluginsPath, 0777); err != nil {
 		return nil, err
 	}
 
 	// Create a path to the plugin
-	pluginDirectory := filepath.Join(b.PluginsPath, id)
+	pluginDirectory := filepath.Join(e.PluginsPath, id)
 	pluginGitDirectory := filepath.Join(pluginDirectory, ".git")
 	checkout := &pluginCheckout{
 		Plugin:      p,
@@ -931,7 +930,7 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 	// Try and lock this particular plugin while we check it out (we create
 	// the file outside of the plugin directory so git clone doesn't have
 	// a cry about the directory not being empty)
-	pluginCheckoutLock, err := b.shell.LockFile(ctx, filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
+	pluginCheckoutLock, err := e.shell.LockFile(ctx, filepath.Join(e.PluginsPath, id+".lock"), time.Minute*5)
 	if err != nil {
 		return nil, err
 	}
@@ -950,11 +949,11 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
 	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
 	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
-	if b.Config.PluginsAlwaysCloneFresh && utils.FileExists(pluginDirectory) {
-		b.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
+	if e.ExecutorConfig.PluginsAlwaysCloneFresh && utils.FileExists(pluginDirectory) {
+		e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
 		err = os.RemoveAll(pluginDirectory)
 		if err != nil {
-			b.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
+			e.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
 			return nil, err
 		}
 	}
@@ -962,44 +961,44 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 	if utils.FileExists(pluginGitDirectory) {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
-		headCommit, err := gitRevParseInWorkingDirectory(ctx, b.shell, pluginDirectory, "--short=7", "HEAD")
+		headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, pluginDirectory, "--short=7", "HEAD")
 		if err != nil {
-			b.shell.Commentf("Plugin %q already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
+			e.shell.Commentf("Plugin %q already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
 		} else {
-			b.shell.Commentf("Plugin %q already checked out (%s)", p.Label(), strings.TrimSpace(headCommit))
+			e.shell.Commentf("Plugin %q already checked out (%s)", p.Label(), strings.TrimSpace(headCommit))
 		}
 
 		return checkout, nil
 	}
 
-	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, pluginDirectory)
+	e.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, pluginDirectory)
 
 	repo, err := p.Repository()
 	if err != nil {
 		return nil, err
 	}
 
-	if b.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, b.shell, repo)
+	if e.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(ctx, e.shell, repo)
 	}
 
 	// Make the directory
-	tempDir, err := os.MkdirTemp(b.PluginsPath, id)
+	tempDir, err := os.MkdirTemp(e.PluginsPath, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// Switch to the plugin directory
-	b.shell.Commentf("Switching to the temporary plugin directory")
-	previousWd := b.shell.Getwd()
-	if err := b.shell.Chdir(tempDir); err != nil {
+	e.shell.Commentf("Switching to the temporary plugin directory")
+	previousWd := e.shell.Getwd()
+	if err := e.shell.Chdir(tempDir); err != nil {
 		return nil, err
 	}
 	// Switch back to the previous working directory
-	defer b.shell.Chdir(previousWd)
+	defer e.shell.Chdir(previousWd)
 
 	args := []string{"clone", "-v"}
-	if b.GitSubmodules {
+	if e.GitSubmodules {
 		// "--recursive" was added in Git 1.6.5, and is an alias to
 		// "--recurse-submodules" from Git 2.13.
 		args = append(args, "--recursive")
@@ -1011,7 +1010,7 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(2*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		return b.shell.Run(ctx, "git", args...)
+		return e.shell.Run(ctx, "git", args...)
 	})
 	if err != nil {
 		return nil, err
@@ -1019,13 +1018,13 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 
 	// Switch to the version if we need to
 	if p.Version != "" {
-		b.shell.Commentf("Checking out `%s`", p.Version)
-		if err = b.shell.Run(ctx, "git", "checkout", "-f", p.Version); err != nil {
+		e.shell.Commentf("Checking out `%s`", p.Version)
+		if err = e.shell.Run(ctx, "git", "checkout", "-f", p.Version); err != nil {
 			return nil, err
 		}
 	}
 
-	b.shell.Commentf("Moving temporary plugin directory to final location")
+	e.shell.Commentf("Moving temporary plugin directory to final location")
 	err = os.Rename(tempDir, pluginDirectory)
 	if err != nil {
 		return nil, err
@@ -1034,43 +1033,43 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 	return checkout, nil
 }
 
-func (b *Bootstrap) removeCheckoutDir() error {
-	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+func (e *Executor) removeCheckoutDir() error {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// on windows, sometimes removing large dirs can fail for various reasons
 	// for instance having files open
 	// see https://github.com/golang/go/issues/20841
 	for i := 0; i < 10; i++ {
-		b.shell.Commentf("Removing %s", checkoutPath)
+		e.shell.Commentf("Removing %s", checkoutPath)
 		if err := os.RemoveAll(checkoutPath); err != nil {
-			b.shell.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
+			e.shell.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
 		} else {
 			if _, err := os.Stat(checkoutPath); os.IsNotExist(err) {
 				return nil
 			} else {
-				b.shell.Errorf("Failed to remove %s", checkoutPath)
+				e.shell.Errorf("Failed to remove %s", checkoutPath)
 			}
 		}
-		b.shell.Commentf("Waiting 10 seconds")
+		e.shell.Commentf("Waiting 10 seconds")
 		<-time.After(time.Second * 10)
 	}
 
 	return fmt.Errorf("Failed to remove %s", checkoutPath)
 }
 
-func (b *Bootstrap) createCheckoutDir() error {
-	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+func (e *Executor) createCheckoutDir() error {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	if !utils.FileExists(checkoutPath) {
-		b.shell.Commentf("Creating \"%s\"", checkoutPath)
+		e.shell.Commentf("Creating \"%s\"", checkoutPath)
 		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
 			return err
 		}
 	}
 
-	if b.shell.Getwd() != checkoutPath {
-		if err := b.shell.Chdir(checkoutPath); err != nil {
+	if e.shell.Getwd() != checkoutPath {
+		if err := e.shell.Chdir(checkoutPath); err != nil {
 			return err
 		}
 	}
@@ -1080,60 +1079,60 @@ func (b *Bootstrap) createCheckoutDir() error {
 
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
-func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", b.Config.TracingBackend)
+func (e *Executor) CheckoutPhase(ctx context.Context) error {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = b.executeGlobalHook(ctx, "pre-checkout"); err != nil {
+	if err = e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
 	}
 
-	if err = b.executePluginHook(ctx, "pre-checkout", b.pluginCheckouts); err != nil {
+	if err = e.executePluginHook(ctx, "pre-checkout", e.pluginCheckouts); err != nil {
 		return err
 	}
 
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
-	if b.CleanCheckout {
-		b.shell.Headerf("Cleaning pipeline checkout")
-		if err = b.removeCheckoutDir(); err != nil {
+	if e.CleanCheckout {
+		e.shell.Headerf("Cleaning pipeline checkout")
+		if err = e.removeCheckoutDir(); err != nil {
 			return err
 		}
 	}
 
-	b.shell.Headerf("Preparing working directory")
+	e.shell.Headerf("Preparing working directory")
 
 	// If we have a blank repository then use a temp dir for builds
-	if b.Config.Repository == "" {
+	if e.ExecutorConfig.Repository == "" {
 		var buildDir string
-		buildDir, err = os.MkdirTemp("", "buildkite-job-"+b.Config.JobID)
+		buildDir, err = os.MkdirTemp("", "buildkite-job-"+e.ExecutorConfig.JobID)
 		if err != nil {
 			return err
 		}
-		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", buildDir)
+		e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", buildDir)
 
-		// Track the directory so we can remove it at the end of the bootstrap
-		b.cleanupDirs = append(b.cleanupDirs, buildDir)
+		// Track the directory so we can remove it at the end of the job
+		e.cleanupDirs = append(e.cleanupDirs, buildDir)
 	}
 
 	// Make sure the build directory exists
-	if err := b.createCheckoutDir(); err != nil {
+	if err := e.createCheckoutDir(); err != nil {
 		return err
 	}
 
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
-	case b.hasPluginHook("checkout"):
-		if err := b.executePluginHook(ctx, "checkout", b.pluginCheckouts); err != nil {
+	case e.hasPluginHook("checkout"):
+		if err := e.executePluginHook(ctx, "checkout", e.pluginCheckouts); err != nil {
 			return err
 		}
-	case b.hasGlobalHook("checkout"):
-		if err := b.executeGlobalHook(ctx, "checkout"); err != nil {
+	case e.hasGlobalHook("checkout"):
+		if err := e.executeGlobalHook(ctx, "checkout"); err != nil {
 			return err
 		}
 	default:
-		if b.Config.Repository == "" {
-			b.shell.Commentf("Skipping checkout, BUILDKITE_REPO is empty")
+		if e.ExecutorConfig.Repository == "" {
+			e.shell.Commentf("Skipping checkout, BUILDKITE_REPO is empty")
 			break
 		}
 
@@ -1141,26 +1140,26 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 			roko.WithMaxAttempts(3),
 			roko.WithStrategy(roko.Constant(2*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			err := b.defaultCheckoutPhase(ctx)
+			err := e.defaultCheckoutPhase(ctx)
 			if err == nil {
 				return nil
 			}
 
 			switch {
 			case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
-				b.shell.Warningf("Checkout was interrupted by a signal")
+				e.shell.Warningf("Checkout was interrupted by a signal")
 				r.Break()
 
 			case errors.Is(err, context.Canceled):
-				b.shell.Warningf("Checkout was cancelled")
+				e.shell.Warningf("Checkout was cancelled")
 				r.Break()
 
 			case errors.Is(ctx.Err(), context.Canceled):
-				b.shell.Warningf("Checkout was cancelled due to context cancellation")
+				e.shell.Warningf("Checkout was cancelled due to context cancellation")
 				r.Break()
 
 			default:
-				b.shell.Warningf("Checkout failed! %s (%s)", err, r)
+				e.shell.Warningf("Checkout failed! %s (%s)", err, r)
 
 				// Specifically handle git errors
 				if ge := new(gitError); errors.As(err, &ge) {
@@ -1179,14 +1178,14 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 				// This removes the checkout dir, which means the next checkout
 				// will be a lot slower (clone vs fetch), but hopefully will
 				// allow the agent to self-heal
-				if err := b.removeCheckoutDir(); err != nil {
-					b.shell.Printf("Failed to remove checkout dir while cleaning up after a checkout error.")
+				if err := e.removeCheckoutDir(); err != nil {
+					e.shell.Printf("Failed to remove checkout dir while cleaning up after a checkout error.")
 				}
 
 				// Now make sure the build directory exists again before we try
 				// to checkout again, or proceed and run hooks which presume the
 				// checkout dir exists
-				if err := b.createCheckoutDir(); err != nil {
+				if err := e.createCheckoutDir(); err != nil {
 					return err
 				}
 			}
@@ -1199,32 +1198,32 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
-	previousCheckoutPath, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	previousCheckoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 	if !exists {
-		b.shell.Printf("Could not determine previous checkout path from BUILDKITE_BUILD_CHECKOUT_PATH")
+		e.shell.Printf("Could not determine previous checkout path from BUILDKITE_BUILD_CHECKOUT_PATH")
 	}
 
 	// Run post-checkout hooks
-	if err := b.executeGlobalHook(ctx, "post-checkout"); err != nil {
+	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err := b.executeLocalHook(ctx, "post-checkout"); err != nil {
+	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err := b.executePluginHook(ctx, "post-checkout", b.pluginCheckouts); err != nil {
+	if err := e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
 		return err
 	}
 
 	// Capture the new checkout path so we can see if it's changed.
-	newCheckoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	newCheckoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// If the working directory has been changed by a hook, log and switch to it
 	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
-		b.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
+		e.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
-		if err := b.shell.Chdir(newCheckoutPath); err != nil {
+		if err := e.shell.Chdir(newCheckoutPath); err != nil {
 			return err
 		}
 	}
@@ -1252,30 +1251,30 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit st
 	return true
 }
 
-func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (string, error) {
+func (e *Executor) updateGitMirror(ctx context.Context, repository string) (string, error) {
 	// Create a unique directory for the repository mirror
-	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(repository))
-	isMainRepository := repository == b.Repository
+	mirrorDir := filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+	isMainRepository := repository == e.Repository
 
 	// Create the mirrors path if it doesn't exist
 	if baseDir := filepath.Dir(mirrorDir); !utils.FileExists(baseDir) {
-		b.shell.Commentf("Creating \"%s\"", baseDir)
+		e.shell.Commentf("Creating \"%s\"", baseDir)
 		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(baseDir, 0777); err != nil {
 			return "", err
 		}
 	}
 
-	b.shell.Chdir(b.Config.GitMirrorsPath)
+	e.shell.Chdir(e.ExecutorConfig.GitMirrorsPath)
 
-	lockTimeout := time.Second * time.Duration(b.GitMirrorsLockTimeout)
+	lockTimeout := time.Second * time.Duration(e.GitMirrorsLockTimeout)
 
-	if b.Debug {
-		b.shell.Commentf("Acquiring mirror repository clone lock")
+	if e.Debug {
+		e.shell.Commentf("Acquiring mirror repository clone lock")
 	}
 
 	// Lock the mirror dir to prevent concurrent clones
-	mirrorCloneLock, err := b.shell.LockFile(ctx, mirrorDir+".clonelock", lockTimeout)
+	mirrorCloneLock, err := e.shell.LockFile(ctx, mirrorDir+".clonelock", lockTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -1283,12 +1282,12 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 
 	// If we don't have a mirror, we need to clone it
 	if !utils.FileExists(mirrorDir) {
-		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-		flags := "--mirror " + b.GitCloneMirrorFlags
-		if err := gitClone(ctx, b.shell, flags, repository, mirrorDir); err != nil {
-			b.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
+		e.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
+		flags := "--mirror " + e.GitCloneMirrorFlags
+		if err := gitClone(ctx, e.shell, flags, repository, mirrorDir); err != nil {
+			e.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
 			if err := os.RemoveAll(mirrorDir); err != nil {
-				b.shell.Errorf("Failed to remove \"%s\" (%s)", mirrorDir, err)
+				e.shell.Errorf("Failed to remove \"%s\" (%s)", mirrorDir, err)
 			}
 			return "", err
 		}
@@ -1301,18 +1300,18 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 
 	// Check if the mirror has a commit, this is atomic so should be safe to do
 	if isMainRepository {
-		if hasGitCommit(ctx, b.shell, mirrorDir, b.Commit) {
-			b.shell.Commentf("Commit %q exists in mirror", b.Commit)
+		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
+			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
 			return mirrorDir, nil
 		}
 	}
 
-	if b.Debug {
-		b.shell.Commentf("Acquiring mirror repository update lock")
+	if e.Debug {
+		e.shell.Commentf("Acquiring mirror repository update lock")
 	}
 
 	// Lock the mirror dir to prevent concurrent updates
-	mirrorUpdateLock, err := b.shell.LockFile(ctx, mirrorDir+".updatelock", lockTimeout)
+	mirrorUpdateLock, err := e.shell.LockFile(ctx, mirrorDir+".updatelock", lockTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -1320,30 +1319,30 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
-		if hasGitCommit(ctx, b.shell, mirrorDir, b.Commit) {
-			b.shell.Commentf("Commit %q exists in mirror", b.Commit)
+		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
+			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
 			return mirrorDir, nil
 		}
 	}
 
-	b.shell.Commentf("Updating existing repository mirror to find commit %s", b.Commit)
+	e.shell.Commentf("Updating existing repository mirror to find commit %s", e.Commit)
 
 	// Update the origin of the repository so we can gracefully handle repository renames
-	if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "set-url", "origin", repository); err != nil {
+	if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "set-url", "origin", repository); err != nil {
 		return "", err
 	}
 
 	if isMainRepository {
-		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
-			b.shell.Commentf("Fetch and mirror pull request head from GitHub")
-			refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
+		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
+			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
+			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 			// Fetch the PR head from the upstream repository into the mirror.
-			if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
+			if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
 				return "", err
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
-			if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
+			if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", e.Branch); err != nil {
 				return "", err
 			}
 		}
@@ -1352,22 +1351,22 @@ func (b *Bootstrap) updateGitMirror(ctx context.Context, repository string) (str
 	return mirrorDir, nil
 }
 
-func (b *Bootstrap) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
+func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
 	var mirrorDir string
 	var err error
 	// Skip updating the Git mirror before using it?
-	if b.Config.GitMirrorsSkipUpdate {
-		mirrorDir = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(repository))
-		b.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
+	if e.ExecutorConfig.GitMirrorsSkipUpdate {
+		mirrorDir = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
 
 		// Check if specified mirrorDir exists, otherwise the clone will fail.
 		if !utils.FileExists(mirrorDir) {
 			// Fall back to a clean clone, rather than failing the clone and therefore the build
-			b.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
+			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
 			mirrorDir = ""
 		}
 	} else {
-		mirrorDir, err = b.updateGitMirror(ctx, repository)
+		mirrorDir, err = e.updateGitMirror(ctx, repository)
 		if err != nil {
 			return "", err
 		}
@@ -1377,134 +1376,134 @@ func (b *Bootstrap) getOrUpdateMirrorDir(ctx context.Context, repository string)
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
-func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", b.Config.TracingBackend)
+func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.ExecutorConfig.TracingBackend)
 	span.AddAttributes(map[string]string{
-		"checkout.repo_name": b.Repository,
-		"checkout.refspec":   b.RefSpec,
-		"checkout.commit":    b.Commit,
+		"checkout.repo_name": e.Repository,
+		"checkout.refspec":   e.RefSpec,
+		"checkout.commit":    e.Commit,
 	})
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if b.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, b.shell, b.Repository)
+	if e.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
 	}
 
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
-	if b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
+	if e.ExecutorConfig.GitMirrorsPath != "" && e.ExecutorConfig.Repository != "" {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
-		mirrorDir, err = b.getOrUpdateMirrorDir(ctx, b.Repository)
+		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
 		}
 
-		b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
+		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 	}
 
 	// Make sure the build directory exists and that we change directory into it
-	if err := b.createCheckoutDir(); err != nil {
+	if err := e.createCheckoutDir(); err != nil {
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
-	gitCloneFlags := b.GitCloneFlags
+	gitCloneFlags := e.GitCloneFlags
 	if mirrorDir != "" {
 		gitCloneFlags += fmt.Sprintf(" --reference %q", mirrorDir)
 	}
 
 	// Does the git directory exist?
-	existingGitDir := filepath.Join(b.shell.Getwd(), ".git")
+	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
 	if utils.FileExists(existingGitDir) {
 		// Update the origin of the repository so we can gracefully handle repository renames
-		if err := b.shell.Run(ctx, "git", "remote", "set-url", "origin", b.Repository); err != nil {
+		if err := e.shell.Run(ctx, "git", "remote", "set-url", "origin", e.Repository); err != nil {
 			return fmt.Errorf("setting origin: %w", err)
 		}
 	} else {
-		if err := gitClone(ctx, b.shell, gitCloneFlags, b.Repository, "."); err != nil {
+		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
 			return fmt.Errorf("cloning git repository: %w", err)
 		}
 	}
 
 	// Git clean prior to checkout, we do this even if submodules have been
 	// disabled to ensure previous submodules are cleaned up
-	if hasGitSubmodules(b.shell) {
-		if err := gitCleanSubmodules(ctx, b.shell, b.GitCleanFlags); err != nil {
+	if hasGitSubmodules(e.shell) {
+		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
 			return fmt.Errorf("cleaning git submodules: %w", err)
 		}
 	}
 
-	if err := gitClean(ctx, b.shell, b.GitCleanFlags); err != nil {
+	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
 		return fmt.Errorf("cleaning git repository: %w", err)
 	}
 
-	gitFetchFlags := b.GitFetchFlags
+	gitFetchFlags := e.GitFetchFlags
 
 	// If a refspec is provided then use it instead.
 	// For example, `refs/not/a/head`
-	if b.RefSpec != "" {
-		b.shell.Commentf("Fetch and checkout custom refspec")
-		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", b.RefSpec); err != nil {
-			return fmt.Errorf("fetching refspec %q: %w", b.RefSpec, err)
+	if e.RefSpec != "" {
+		e.shell.Commentf("Fetch and checkout custom refspec")
+		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.RefSpec); err != nil {
+			return fmt.Errorf("fetching refspec %q: %w", e.RefSpec, err)
 		}
 
 		// GitHub has a special ref which lets us fetch a pull request head, whether
 		// or not there is a current head in this repository or another which
 		// references the commit. We presume a commit sha is provided. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-	} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
-		b.shell.Commentf("Fetch and checkout pull request head from GitHub")
-		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
+	} else if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
+		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
+		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 
-		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", refspec); err != nil {
+		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", refspec); err != nil {
 			return fmt.Errorf("fetching PR refspec %q: %w", refspec, err)
 		}
 
-		gitFetchHead, _ := b.shell.RunAndCapture(ctx, "git", "rev-parse", "FETCH_HEAD")
-		b.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
+		gitFetchHead, _ := e.shell.RunAndCapture(ctx, "git", "rev-parse", "FETCH_HEAD")
+		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
-	} else if b.Commit == "HEAD" {
-		b.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", b.Branch); err != nil {
-			return fmt.Errorf("fetching branch %q: %w", b.Branch, err)
+	} else if e.Commit == "HEAD" {
+		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
+		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Branch); err != nil {
+			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
 
 		// Otherwise fetch and checkout the commit directly. Some repositories don't
 		// support fetching a specific commit so we fall back to fetching all heads
 		// and tags, hoping that the commit is included.
 	} else {
-		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", b.Commit); err != nil {
+		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Commit); err != nil {
 			// By default `git fetch origin` will only fetch tags which are
 			// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
 			// fetch all tags in addition to the default refspec, but pre 1.9.0 it
 			// excludes the default refspec.
-			gitFetchRefspec, _ := b.shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
-			if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
-				return fmt.Errorf("fetching commit %q: %w", b.Commit, err)
+			gitFetchRefspec, _ := e.shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
+			if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
+				return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
 			}
 		}
 	}
 
-	gitCheckoutFlags := b.GitCheckoutFlags
+	gitCheckoutFlags := e.GitCheckoutFlags
 
-	if b.Commit == "HEAD" {
-		if err := gitCheckout(ctx, b.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
+	if e.Commit == "HEAD" {
+		if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
 			return fmt.Errorf("checking out FETCH_HEAD: %w", err)
 		}
 	} else {
-		if err := gitCheckout(ctx, b.shell, gitCheckoutFlags, b.Commit); err != nil {
-			return fmt.Errorf("checking out commit %q: %w", b.Commit, err)
+		if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
+			return fmt.Errorf("checking out commit %q: %w", e.Commit, err)
 		}
 	}
 
 	var gitSubmodules bool
-	if !b.GitSubmodules && hasGitSubmodules(b.shell) {
-		b.shell.Warningf("This repository has submodules, but submodules are disabled at an agent level")
-	} else if b.GitSubmodules && hasGitSubmodules(b.shell) {
-		b.shell.Commentf("Git submodules detected")
+	if !e.GitSubmodules && hasGitSubmodules(e.shell) {
+		e.shell.Warningf("This repository has submodules, but submodules are disabled at an agent level")
+	} else if e.GitSubmodules && hasGitSubmodules(e.shell) {
+		e.shell.Commentf("Git submodules detected")
 		gitSubmodules = true
 	}
 
@@ -1512,46 +1511,46 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		// `submodule sync` will ensure the .git/config
 		// matches the .gitmodules file.  The command
 		// is only available in git version 1.8.1, so
-		// if the call fails, continue the bootstrap
+		// if the call fails, continue the job
 		// script, and show an informative error.
-		if err := b.shell.Run(ctx, "git", "submodule", "sync", "--recursive"); err != nil {
-			gitVersionOutput, _ := b.shell.RunAndCapture(ctx, "git", "--version")
-			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
+		if err := e.shell.Run(ctx, "git", "submodule", "sync", "--recursive"); err != nil {
+			gitVersionOutput, _ := e.shell.RunAndCapture(ctx, "git", "--version")
+			e.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
 
 		args := []string{}
-		for _, config := range b.GitSubmoduleCloneConfig {
+		for _, config := range e.GitSubmoduleCloneConfig {
 			args = append(args, "-c", config)
 		}
 
 		// Checking for submodule repositories
-		submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, b.shell)
+		submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, e.shell)
 		if err != nil {
-			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
+			e.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
-			mirrorSubmodules := b.Config.GitMirrorsPath != ""
+			mirrorSubmodules := e.ExecutorConfig.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
 				submoduleArgs := append([]string(nil), args...)
 				// submodules might need their fingerprints verified too
-				if b.SSHKeyscan {
-					addRepositoryHostToSSHKnownHosts(ctx, b.shell, repository)
+				if e.SSHKeyscan {
+					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
 				}
 
 				if mirrorSubmodules {
-					mirrorDir, err := b.getOrUpdateMirrorDir(ctx, repository)
+					mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
 					if err != nil {
 						return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 					}
 
 					// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-					if err := b.createCheckoutDir(); err != nil {
+					if err := e.createCheckoutDir(); err != nil {
 						return fmt.Errorf("creating checkout dir: %w", err)
 					}
 
 					// Tests use a local temp path for the repository, real repositories don't. Handle both.
 					var repositoryPath string
 					if !utils.FileExists(repository) {
-						repositoryPath = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(repository))
+						repositoryPath = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
 					} else {
 						repositoryPath = repository
 					}
@@ -1563,7 +1562,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
 					}
 
-					if err := b.shell.Run(ctx, "git", submoduleArgs...); err != nil {
+					if err := e.shell.Run(ctx, "git", submoduleArgs...); err != nil {
 						return fmt.Errorf("updating submodules: %w", err)
 					}
 				}
@@ -1571,12 +1570,12 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 
 			if !mirrorSubmodules {
 				args = append(args, "submodule", "update", "--init", "--recursive", "--force")
-				if err := b.shell.Run(ctx, "git", args...); err != nil {
+				if err := e.shell.Run(ctx, "git", args...); err != nil {
 					return fmt.Errorf("updating submodules: %w", err)
 				}
 			}
 
-			if err := b.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
+			if err := e.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
 				return fmt.Errorf("resetting submodules: %w", err)
 			}
 		}
@@ -1585,34 +1584,34 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	// Git clean after checkout. We need to do this because submodules could have
 	// changed in between the last checkout and this one. A double clean is the only
 	// good solution to this problem that we've found
-	b.shell.Commentf("Cleaning again to catch any post-checkout changes")
+	e.shell.Commentf("Cleaning again to catch any post-checkout changes")
 
-	if err := gitClean(ctx, b.shell, b.GitCleanFlags); err != nil {
+	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
 		return fmt.Errorf("cleaning repository post-checkout: %w", err)
 	}
 
 	if gitSubmodules {
-		if err := gitCleanSubmodules(ctx, b.shell, b.GitCleanFlags); err != nil {
+		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
 			return fmt.Errorf("cleaning submodules post-checkout: %w", err)
 		}
 	}
 
-	if _, hasToken := b.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN"); !hasToken {
-		b.shell.Warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
+	if _, hasToken := e.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN"); !hasToken {
+		e.shell.Warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
 		return nil
 	}
 
 	// resolve BUILDKITE_COMMIT based on the local git repo
 	if experiments.IsEnabled(experiments.ResolveCommitAfterCheckout) {
-		b.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
-		b.resolveCommit(ctx)
+		e.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
+		e.resolveCommit(ctx)
 	}
 
 	// Grab author and commit information and send it back to Buildkite. But before we do, we'll check
 	// to see if someone else has done it first.
-	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if err := b.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
-		b.shell.Commentf("Sending Git commit information back to Buildkite")
+	e.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
+	if err := e.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
+		e.shell.Commentf("Sending Git commit information back to Buildkite")
 		// Format:
 		//
 		// commit 0123456789abcdef0123456789abcdef01234567
@@ -1631,12 +1630,12 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 			"--no-color",
 			"--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B",
 		}
-		out, err := b.shell.RunAndCapture(ctx, "git", gitArgs...)
+		out, err := e.shell.RunAndCapture(ctx, "git", gitArgs...)
 		if err != nil {
 			return fmt.Errorf("getting git commit information: %w", err)
 		}
 		stdin := strings.NewReader(out)
-		if err := b.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", "buildkite:git:commit"); err != nil {
+		if err := e.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", "buildkite:git:commit"); err != nil {
 			return fmt.Errorf("sending git commit information to Buildkite: %w", err)
 		}
 	}
@@ -1644,91 +1643,91 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bootstrap) resolveCommit(ctx context.Context) {
-	commitRef, _ := b.shell.Env.Get("BUILDKITE_COMMIT")
+func (e *Executor) resolveCommit(ctx context.Context) {
+	commitRef, _ := e.shell.Env.Get("BUILDKITE_COMMIT")
 	if commitRef == "" {
-		b.shell.Warningf("BUILDKITE_COMMIT was empty")
+		e.shell.Warningf("BUILDKITE_COMMIT was empty")
 		return
 	}
-	cmdOut, err := b.shell.RunAndCapture(ctx, "git", "rev-parse", commitRef)
+	cmdOut, err := e.shell.RunAndCapture(ctx, "git", "rev-parse", commitRef)
 	if err != nil {
-		b.shell.Warningf("Error running git rev-parse %q: %v", commitRef, err)
+		e.shell.Warningf("Error running git rev-parse %q: %v", commitRef, err)
 		return
 	}
 	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
 	if trimmedCmdOut != commitRef {
-		b.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
-		b.shell.Env.Set("BUILDKITE_COMMIT", trimmedCmdOut)
+		e.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
+		e.shell.Env.Set("BUILDKITE_COMMIT", trimmedCmdOut)
 	}
 }
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
-func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
-	spanName := b.implementationSpecificSpanName("pre-command", "pre-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
+func (e *Executor) runPreCommandHooks(ctx context.Context) error {
+	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = b.executeGlobalHook(ctx, "pre-command"); err != nil {
+	if err = e.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = b.executeLocalHook(ctx, "pre-command"); err != nil {
+	if err = e.executeLocalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = b.executePluginHook(ctx, "pre-command", b.pluginCheckouts); err != nil {
+	if err = e.executePluginHook(ctx, "pre-command", e.pluginCheckouts); err != nil {
 		return err
 	}
 	return nil
 }
 
 // runCommand runs the command and adds tracing spans.
-func (b *Bootstrap) runCommand(ctx context.Context) error {
+func (e *Executor) runCommand(ctx context.Context) error {
 	var err error
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
-	case b.hasPluginHook("command"):
-		err = b.executePluginHook(ctx, "command", b.pluginCheckouts)
-	case b.hasLocalHook("command"):
-		err = b.executeLocalHook(ctx, "command")
-	case b.hasGlobalHook("command"):
-		err = b.executeGlobalHook(ctx, "command")
+	case e.hasPluginHook("command"):
+		err = e.executePluginHook(ctx, "command", e.pluginCheckouts)
+	case e.hasLocalHook("command"):
+		err = e.executeLocalHook(ctx, "command")
+	case e.hasGlobalHook("command"):
+		err = e.executeGlobalHook(ctx, "command")
 	default:
-		err = b.defaultCommandPhase(ctx)
+		err = e.defaultCommandPhase(ctx)
 	}
 	return err
 }
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
-func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
-	spanName := b.implementationSpecificSpanName("post-command", "post-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
+func (e *Executor) runPostCommandHooks(ctx context.Context) error {
+	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = b.executeGlobalHook(ctx, "post-command"); err != nil {
+	if err = e.executeGlobalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = b.executeLocalHook(ctx, "post-command"); err != nil {
+	if err = e.executeLocalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = b.executePluginHook(ctx, "post-command", b.pluginCheckouts); err != nil {
+	if err = e.executePluginHook(ctx, "post-command", e.pluginCheckouts); err != nil {
 		return err
 	}
 	return nil
 }
 
 // CommandPhase determines how to run the build, and then runs it
-func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "command", b.Config.TracingBackend)
+func (e *Executor) CommandPhase(ctx context.Context) (error, error) {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	// Run pre-command hooks
-	if err := b.runPreCommandHooks(ctx); err != nil {
+	if err := e.runPreCommandHooks(ctx); err != nil {
 		return err, nil
 	}
 
 	// Run the actual command
-	commandExitError := b.runCommand(ctx)
+	commandExitError := e.runCommand(ctx)
 	var realCommandError error
 
 	// If the command returned an exit that wasn't a `exec.ExitError`
@@ -1736,26 +1735,26 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 	// then we'll show it in the log.
 	if shell.IsExitError(commandExitError) {
 		if shell.IsExitSignaled(commandExitError) {
-			b.shell.Errorf("The command was interrupted by a signal")
+			e.shell.Errorf("The command was interrupted by a signal")
 		} else {
 			realCommandError = commandExitError
-			b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+			e.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
 		}
 	} else if commandExitError != nil {
-		b.shell.Errorf(commandExitError.Error())
+		e.shell.Errorf(commandExitError.Error())
 	}
 
 	// Expand the command header if the command fails for any reason
 	if commandExitError != nil {
-		b.shell.Printf("^^^ +++")
+		e.shell.Printf("^^^ +++")
 	}
 
 	// Save the command exit status to the env so hooks + plugins can access it. If there is no error
 	// this will be zero. It's used to set the exit code later, so it's important
-	b.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(commandExitError)))
+	e.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(commandExitError)))
 
 	// Run post-command hooks
-	if err := b.runPostCommandHooks(ctx); err != nil {
+	if err := e.runPostCommandHooks(ctx); err != nil {
 		return err, realCommandError
 	}
 
@@ -1763,9 +1762,9 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
-func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
-	spanName := b.implementationSpecificSpanName("default command hook", "hook.execute")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
+func (e *Executor) defaultCommandPhase(ctx context.Context) error {
+	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -1774,58 +1773,58 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 	})
 
 	// Make sure we actually have a command to run
-	if strings.TrimSpace(b.Command) == "" {
+	if strings.TrimSpace(e.Command) == "" {
 		return fmt.Errorf("The command phase has no `command` to execute. Provide a `command` field in your step configuration, or define a `command` hook in a step plug-in, your repository `.buildkite/hooks`, or agent `hooks-path`.")
 	}
 
-	scriptFileName := strings.Replace(b.Command, "\n", "", -1)
-	pathToCommand, err := filepath.Abs(filepath.Join(b.shell.Getwd(), scriptFileName))
+	scriptFileName := strings.Replace(e.Command, "\n", "", -1)
+	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && utils.FileExists(pathToCommand)
 	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
 
 	// If the command isn't a script, then it's something we need
 	// to eval. But before we even try running it, we should double
 	// check that the agent is allowed to eval commands.
-	if !commandIsScript && !b.CommandEval {
-		b.shell.Commentf("No such file: \"%s\"", scriptFileName)
+	if !commandIsScript && !e.CommandEval {
+		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
 		return fmt.Errorf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 	}
 
 	// Also make sure that the script we've resolved is definitely within this
 	// repository checkout and isn't elsewhere on the system.
-	if commandIsScript && !b.CommandEval && !strings.HasPrefix(pathToCommand, b.shell.Getwd()+string(os.PathSeparator)) {
-		b.shell.Commentf("No such file: \"%s\"", scriptFileName)
+	if commandIsScript && !e.CommandEval && !strings.HasPrefix(pathToCommand, e.shell.Getwd()+string(os.PathSeparator)) {
+		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
 		return fmt.Errorf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 	}
 
 	var cmdToExec string
 
 	// The shell gets parsed based on the operating system
-	shell, err := shellwords.Split(b.Shell)
+	shell, err := shellwords.Split(e.Shell)
 	if err != nil {
-		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
+		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", e.Shell, err)
 	}
 
 	if len(shell) == 0 {
-		return fmt.Errorf("No shell set for bootstrap")
+		return fmt.Errorf("No shell set for job")
 	}
 
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
 	// a batch script so that it works, but we don't like it
 	if strings.ToUpper(filepath.Base(shell[0])) == "CMD.EXE" {
-		batchScript, err := b.writeBatchScript(b.Command)
+		batchScript, err := e.writeBatchScript(e.Command)
 		if err != nil {
 			return err
 		}
 		defer os.Remove(batchScript)
 
-		b.shell.Headerf("Running batch script")
-		if b.Debug {
+		e.shell.Headerf("Running batch script")
+		if e.Debug {
 			contents, err := os.ReadFile(batchScript)
 			if err != nil {
 				return err
 			}
-			b.shell.Commentf("Wrote batch script %s\n%s", batchScript, contents)
+			e.shell.Commentf("Wrote batch script %s\n%s", batchScript, contents)
 		}
 
 		cmdToExec = batchScript
@@ -1852,57 +1851,57 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 		// command-eval agents, such risks are everpresent since the master
 		// can tell the agent to do anything anyway, but no-command-eval agents
 		// shouldn't be vulnerable to this!
-		if b.Config.CommandEval {
+		if e.ExecutorConfig.CommandEval {
 			// Make script executable
 			if err = utils.ChmodExecutable(pathToCommand); err != nil {
-				b.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
+				e.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
 				return err
 			}
 		}
 
 		// Make the path relative to the shell working dir
-		scriptPath, err := filepath.Rel(b.shell.Getwd(), pathToCommand)
+		scriptPath, err := filepath.Rel(e.shell.Getwd(), pathToCommand)
 		if err != nil {
 			return err
 		}
 
-		b.shell.Headerf("Running script")
+		e.shell.Headerf("Running script")
 		cmdToExec = fmt.Sprintf(".%c%s", os.PathSeparator, scriptPath)
 	} else {
-		b.shell.Headerf("Running commands")
-		cmdToExec = b.Command
+		e.shell.Headerf("Running commands")
+		cmdToExec = e.Command
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDeprecatedDockerIntegration(b.shell) {
-		if b.Debug {
-			b.shell.Commentf("Detected deprecated docker environment variables")
+	if hasDeprecatedDockerIntegration(e.shell) {
+		if e.Debug {
+			e.shell.Commentf("Detected deprecated docker environment variables")
 		}
-		err = runDeprecatedDockerIntegration(ctx, b.shell, []string{cmdToExec})
+		err = runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
 		return err
 	}
 
 	// If we aren't running a script, try and detect if we are using a posix shell
 	// and if so add a trap so that the intermediate shell doesn't swallow signals
 	// from cancellation
-	if !commandIsScript && shellscript.IsPOSIXShell(b.Shell) {
+	if !commandIsScript && shellscript.IsPOSIXShell(e.Shell) {
 		cmdToExec = fmt.Sprintf("trap 'kill -- $$' INT TERM QUIT; %s", cmdToExec)
 	}
 
-	redactors := b.setupRedactors()
+	redactors := e.setupRedactors()
 	defer redactors.Flush()
 
 	var cmd []string
 	cmd = append(cmd, shell...)
 	cmd = append(cmd, cmdToExec)
 
-	if b.Debug {
-		b.shell.Promptf("%s", process.FormatCommand(cmd[0], cmd[1:]))
+	if e.Debug {
+		e.shell.Promptf("%s", process.FormatCommand(cmd[0], cmd[1:]))
 	} else {
-		b.shell.Promptf("%s", cmdToExec)
+		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = b.shell.RunWithoutPrompt(ctx, cmd[0], cmd[1:]...)
+	err = e.shell.RunWithoutPrompt(ctx, cmd[0], cmd[1:]...)
 	return err
 }
 
@@ -1936,7 +1935,7 @@ func shouldCallBatchLine(line string) bool {
 	return (strings.HasSuffix(first, ".bat") || strings.HasSuffix(first, ".cmd"))
 }
 
-func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
+func (e *Executor) writeBatchScript(cmd string) (string, error) {
 	scriptFile, err := shell.TempFileWithExtension(
 		"buildkite-script.bat",
 	)
@@ -1967,27 +1966,27 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 
 }
 
-func (b *Bootstrap) artifactPhase(ctx context.Context) error {
-	if b.AutomaticArtifactUploadPaths == "" {
+func (e *Executor) artifactPhase(ctx context.Context) error {
+	if e.AutomaticArtifactUploadPaths == "" {
 		return nil
 	}
 
-	spanName := b.implementationSpecificSpanName("artifacts", "artifact upload")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
+	spanName := e.implementationSpecificSpanName("artifacts", "artifact upload")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	err = b.preArtifactHooks(ctx)
+	err = e.preArtifactHooks(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = b.uploadArtifacts(ctx)
+	err = e.uploadArtifacts(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = b.postArtifactHooks(ctx)
+	err = e.postArtifactHooks(ctx)
 	if err != nil {
 		return err
 	}
@@ -1996,20 +1995,20 @@ func (b *Bootstrap) artifactPhase(ctx context.Context) error {
 }
 
 // Run the pre-artifact hooks
-func (b *Bootstrap) preArtifactHooks(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-artifact", b.Config.TracingBackend)
+func (e *Executor) preArtifactHooks(ctx context.Context) error {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-artifact", e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = b.executeGlobalHook(ctx, "pre-artifact"); err != nil {
+	if err = e.executeGlobalHook(ctx, "pre-artifact"); err != nil {
 		return err
 	}
 
-	if err = b.executeLocalHook(ctx, "pre-artifact"); err != nil {
+	if err = e.executeLocalHook(ctx, "pre-artifact"); err != nil {
 		return err
 	}
 
-	if err = b.executePluginHook(ctx, "pre-artifact", b.pluginCheckouts); err != nil {
+	if err = e.executePluginHook(ctx, "pre-artifact", e.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -2017,20 +2016,20 @@ func (b *Bootstrap) preArtifactHooks(ctx context.Context) error {
 }
 
 // Run the artifact upload command
-func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "artifact-upload", b.Config.TracingBackend)
+func (e *Executor) uploadArtifacts(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "artifact-upload", e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	b.shell.Headerf("Uploading artifacts")
-	args := []string{"artifact", "upload", b.AutomaticArtifactUploadPaths}
+	e.shell.Headerf("Uploading artifacts")
+	args := []string{"artifact", "upload", e.AutomaticArtifactUploadPaths}
 
 	// If blank, the upload destination is buildkite
-	if b.ArtifactUploadDestination != "" {
-		args = append(args, b.ArtifactUploadDestination)
+	if e.ArtifactUploadDestination != "" {
+		args = append(args, e.ArtifactUploadDestination)
 	}
 
-	if err = b.shell.Run(ctx, "buildkite-agent", args...); err != nil {
+	if err = e.shell.Run(ctx, "buildkite-agent", args...); err != nil {
 		return err
 	}
 
@@ -2038,20 +2037,20 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 }
 
 // Run the post-artifact hooks
-func (b *Bootstrap) postArtifactHooks(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "post-artifact", b.Config.TracingBackend)
+func (e *Executor) postArtifactHooks(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "post-artifact", e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = b.executeGlobalHook(ctx, "post-artifact"); err != nil {
+	if err = e.executeGlobalHook(ctx, "post-artifact"); err != nil {
 		return err
 	}
 
-	if err = b.executeLocalHook(ctx, "post-artifact"); err != nil {
+	if err = e.executeLocalHook(ctx, "post-artifact"); err != nil {
 		return err
 	}
 
-	if err = b.executePluginHook(ctx, "post-artifact", b.pluginCheckouts); err != nil {
+	if err = e.executePluginHook(ctx, "post-artifact", e.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -2062,7 +2061,7 @@ func (b *Bootstrap) postArtifactHooks(ctx context.Context) error {
 // env (for example, BUILDKITE_BUILD_PATH) can only be set from config or by hooks.
 // If these env are set at a pipeline level, we rewrite them to BUILDKITE_X_BUILD_PATH
 // and warn on them here so that users know what is going on
-func (b *Bootstrap) ignoredEnv() []string {
+func (e *Executor) ignoredEnv() []string {
 	var ignored []string
 	for _, env := range os.Environ() {
 		if strings.HasPrefix(env, "BUILDKITE_X_") {
@@ -2077,25 +2076,25 @@ func (b *Bootstrap) ignoredEnv() []string {
 // is necessary based on RedactedVars configuration and the existence of
 // matching environment vars.
 // redactor.Mux (possibly empty) is returned so the caller can `defer redactor.Flush()`
-func (b *Bootstrap) setupRedactors() redactor.Mux {
-	valuesToRedact := redactor.ValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.Dump())
+func (e *Executor) setupRedactors() redactor.Mux {
+	valuesToRedact := redactor.ValuesToRedact(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())
 	if len(valuesToRedact) == 0 {
 		return nil
 	}
 
-	if b.Debug {
-		b.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", b.Config.RedactedVars)
+	if e.Debug {
+		e.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
 	}
 
 	var mux redactor.Mux
 
 	// If the shell Writer is already a Redactor, reset the values to redact.
-	if rdc, ok := b.shell.Writer.(*redactor.Redactor); ok {
+	if rdc, ok := e.shell.Writer.(*redactor.Redactor); ok {
 		rdc.Reset(valuesToRedact)
 		mux = append(mux, rdc)
 	} else {
-		rdc := redactor.New(b.shell.Writer, "[REDACTED]", valuesToRedact)
-		b.shell.Writer = rdc
+		rdc := redactor.New(e.shell.Writer, "[REDACTED]", valuesToRedact)
+		e.shell.Writer = rdc
 		mux = append(mux, rdc)
 	}
 
@@ -2104,7 +2103,7 @@ func (b *Bootstrap) setupRedactors() redactor.Mux {
 	// shell.Logger may be a WriterLogger, and its Writer may be a Redactor)
 	var shellWriterLogger *shell.WriterLogger
 	var shellLoggerRedactor *redactor.Redactor
-	if logger, ok := b.shell.Logger.(*shell.WriterLogger); ok {
+	if logger, ok := e.shell.Logger.(*shell.WriterLogger); ok {
 		shellWriterLogger = logger
 		if redactor, ok := logger.Writer.(*redactor.Redactor); ok {
 			shellLoggerRedactor = redactor
@@ -2114,7 +2113,7 @@ func (b *Bootstrap) setupRedactors() redactor.Mux {
 		rdc.Reset(valuesToRedact)
 		mux = append(mux, rdc)
 	} else if shellWriterLogger != nil {
-		rdc := redactor.New(b.shell.Writer, "[REDACTED]", valuesToRedact)
+		rdc := redactor.New(e.shell.Writer, "[REDACTED]", valuesToRedact)
 		shellWriterLogger.Writer = rdc
 		mux = append(mux, rdc)
 	}
@@ -2129,8 +2128,8 @@ type pluginCheckout struct {
 	HooksDir    string
 }
 
-func (b *Bootstrap) startKubernetesClient(ctx context.Context, kubernetesClient *kubernetes.Client) error {
-	b.shell.Commentf("Using experimental Kubernetes support")
+func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *kubernetes.Client) error {
+	e.shell.Commentf("Using experimental Kubernetes support")
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(7),
 		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
@@ -2145,10 +2144,10 @@ func (b *Bootstrap) startKubernetesClient(ctx context.Context, kubernetesClient 
 			return err
 		}
 		os.Setenv("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
-		b.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
+		e.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
 		writer := io.MultiWriter(os.Stdout, kubernetesClient)
-		b.shell.Writer = writer
-		b.shell.Logger = &shell.WriterLogger{
+		e.shell.Writer = writer
+		e.shell.Logger = &shell.WriterLogger{
 			Writer: writer,
 			Ansi:   true,
 		}
@@ -2162,9 +2161,9 @@ func (b *Bootstrap) startKubernetesClient(ctx context.Context, kubernetesClient 
 	}
 	go func() {
 		if err := kubernetesClient.Await(ctx, kubernetes.RunStateInterrupt); err != nil {
-			b.shell.Errorf("Error waiting for client interrupt: %v", err)
+			e.shell.Errorf("Error waiting for client interrupt: %v", err)
 		}
-		b.cancelCh <- struct{}{}
+		e.cancelCh <- struct{}{}
 	}()
 	return nil
 }
