@@ -48,17 +48,17 @@ var (
 	}
 
 	Promoted = map[string]string{
-		ANSITimestamps:    standardPromotionMsg(ANSITimestamps),
-		FlockFileLocks:    standardPromotionMsg(FlockFileLocks),
-		GitMirrors:        standardPromotionMsg(GitMirrors),
-		InbuiltStatusPage: standardPromotionMsg(InbuiltStatusPage),
+		ANSITimestamps:    standardPromotionMsg(ANSITimestamps, "v3.48.0"),
+		FlockFileLocks:    standardPromotionMsg(FlockFileLocks, "v3.48.0"),
+		GitMirrors:        standardPromotionMsg(GitMirrors, "v3.47.0"),
+		InbuiltStatusPage: standardPromotionMsg(InbuiltStatusPage, "v3.48.0"),
 	}
 
 	experiments = make(map[string]bool, len(Available))
 )
 
-func standardPromotionMsg(key string) string {
-	return fmt.Sprintf("The %s experiment has been promoted to a stable feature. You can safely remove the `--experiment %s` flag to silence this message and continue using the feature", key, key)
+func standardPromotionMsg(key, version string) string {
+	return fmt.Sprintf("The %s experiment has been promoted to a stable feature in agent version %s. You can safely remove the `--experiment %s` flag to silence this message and continue using the feature", key, version, key)
 }
 
 func EnableWithUndo(key string) func() {
