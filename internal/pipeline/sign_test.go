@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"fmt"
+	"hash"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -60,6 +61,7 @@ func (m testFields) ValuesForFields(fields []string) (map[string]string, error) 
 // Do not use this type outside of tests!
 type plainTextSigner struct {
 	*bytes.Buffer
+	hash.Hash
 }
 
 func (plainTextSigner) AlgorithmName() string { return "plaintext" }
@@ -68,24 +70,30 @@ func (p plainTextSigner) Sign() ([]byte, error) {
 	return p.Buffer.Bytes(), nil
 }
 
+func (p plainTextSigner) Write(b []byte) (int, error) {
+	return p.Buffer.Write(b)
+}
+
+func (p plainTextSigner) Reset() { p.Buffer.Reset() }
+
 func TestSignConcatenatedFields(t *testing.T) {
 	// Tests that Sign is resilient to concatenation.
 	// Specifically, these maps should all have distinct "content". (If you
 	// simply wrote the strings one after the other, they could be equal.)
 
 	maps := []testFields{
-		testFields{
+		{
 			"foo": "bar",
 			"qux": "zap",
 		},
-		testFields{
+		{
 			"foob": "ar",
 			"qu":   "xzap",
 		},
-		testFields{
+		{
 			"foo": "barquxzap",
 		},
-		testFields{
+		{
 			// Try really hard to fake matching content
 			"foo": string([]byte{'b', 'a', 'r', 3, 0, 0, 0, 'q', 'u', 'x', 3, 0, 0, 0, 'z', 'a', 'p'}),
 		},

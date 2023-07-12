@@ -21,7 +21,7 @@ type Signature struct {
 }
 
 // Sign computes a new signature for an object containing values using a given
-// signer.
+// signer. Sign resets the signer after use.
 func Sign(sf SignedFielder, signer Signer) (*Signature, error) {
 	values := sf.SignedFields()
 	if len(values) == 0 {
@@ -29,6 +29,7 @@ func Sign(sf SignedFielder, signer Signer) (*Signature, error) {
 	}
 
 	// Ensure this part is the same as in Verify...
+	defer signer.Reset()
 	writeLengthPrefixed(signer, signer.AlgorithmName())
 	fields, err := writeFields(signer, values)
 	if err != nil {
@@ -40,6 +41,7 @@ func Sign(sf SignedFielder, signer Signer) (*Signature, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &Signature{
 		Algorithm:    signer.AlgorithmName(),
 		SignedFields: fields,
@@ -48,7 +50,7 @@ func Sign(sf SignedFielder, signer Signer) (*Signature, error) {
 }
 
 // Verify verifies an existing signature against an object containing values
-// using the verifier.
+// using the verifier. Verify resets the verifier after use.
 // (Verify does not create a new verifier based on the Algorithm field, in case
 // you want to use a non-standard algorithm, but it must match the verifier's
 // AlgorithmName).
@@ -72,6 +74,7 @@ func (s *Signature) Verify(sf SignedFielder, verifier Verifier) error {
 	}
 
 	// Ensure this part is the same as in Sign...
+	defer verifier.Reset()
 	writeLengthPrefixed(verifier, verifier.AlgorithmName())
 	if _, err := writeFields(verifier, values); err != nil {
 		return err
@@ -125,7 +128,7 @@ func NewVerifier(algorithm string, key any) (Verifier, error) {
 type Signer interface {
 	// Data written here is hashed into a digest. The signature is (at least
 	// nominally) computed from the digest.
-	io.Writer
+	hash.Hash
 
 	// AlgorithmName returns the name of the algorithm (which should match the
 	// argument to NewSigner).
@@ -137,9 +140,10 @@ type Signer interface {
 
 // Verifier describes operations that support the Signature.Verify method.
 type Verifier interface {
-	// Data written here is hashed into a digest. The signature is (at least
-	// nominally) computed from the digest.
-	io.Writer
+	// Data written here is hashed into a digest. The verifier must check (at
+	// least nominally) that the digest matches the data, and the signature is
+	// a valid signature for the digest.
+	hash.Hash
 
 	// AlgorithmName returns the name of the algorithm (which should match the
 	// argument to NewVerifier).
