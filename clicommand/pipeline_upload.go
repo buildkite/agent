@@ -55,16 +55,15 @@ Example:
    $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
-	FilePath         string   `cli:"arg:0" label:"upload paths"`
-	Replace          bool     `cli:"replace"`
-	Job              string   `cli:"job"` // required, but not in dry-run mode
-	DryRun           bool     `cli:"dry-run"`
-	DryRunFormat     string   `cli:"format"`
-	NoInterpolation  bool     `cli:"no-interpolation"`
-	RedactedVars     []string `cli:"redacted-vars" normalize:"list"`
-	RejectSecrets    bool     `cli:"reject-secrets"`
-	SigningKeyFile   string   `cli:"signing-key"`
-	SigningAlgorithm string   `cli:"signing-algorithm"`
+	FilePath        string   `cli:"arg:0" label:"upload paths"`
+	Replace         bool     `cli:"replace"`
+	Job             string   `cli:"job"` // required, but not in dry-run mode
+	DryRun          bool     `cli:"dry-run"`
+	DryRunFormat    string   `cli:"format"`
+	NoInterpolation bool     `cli:"no-interpolation"`
+	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
+	RejectSecrets   bool     `cli:"reject-secrets"`
+	SigningKeyPath  string   `cli:"signing-key-path"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -118,15 +117,9 @@ var PipelineUploadCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
 		cli.StringFlag{
-			Name:   "signing-key",
-			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing. The format of the file depends on the chosen signing algorithm",
-			EnvVar: "BUILDKITE_PIPELINE_SIGNING_KEY_FILE",
-		},
-		cli.StringFlag{
-			Name:   "signing-algorithm",
-			Usage:  "Signing algorithm to use when signing parts of the pipeline. Available algorithms are: hmac-sha256",
-			Value:  "hmac-sha256",
-			EnvVar: "BUILDKITE_PIPELINE_SIGNING_ALGORITHM",
+			Name:   "signing-key-path",
+			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing. For hmac-sha256, the raw file content is used as the shared key",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_PATH",
 		},
 
 		// API Flags
@@ -308,23 +301,26 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
-		if cfg.SigningKeyFile != "" {
-			key, err := os.ReadFile(cfg.SigningKeyFile)
+		if cfg.SigningKeyPath != "" {
+			l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
+
+			key, err := os.ReadFile(cfg.SigningKeyPath)
 			if err != nil {
 				l.Fatal("Couldn't read the signing key file: %v", err)
 			}
 
-			// TODO: Parse the key based on the algorithm, or put key parsing
-			// into pipeline.New{Signer,Verifier}.
-			// For now it must be hmac-sha256, which takes []byte.
+			// TODO: Let the user choose an algorithm, then parse the key based
+			// on the algorithm, or put key parsing into
+			// pipeline.New{Signer,Verifier}.
+			// For now we only offer hmac-sha256, which takes []byte.
 
-			signer, err := pipeline.NewSigner(cfg.SigningAlgorithm, key)
+			signer, err := pipeline.NewSigner("hmac-sha256", key)
 			if err != nil {
-				l.Fatal("Couldn't create a pipeline signer for the chosen algorithm or key: %v", err)
+				l.Fatal("Couldn't create a pipeline signer: %v", err)
 			}
 
 			if err := result.Sign(signer); err != nil {
-				l.Fatal("Couldn't sign pipeline with the chosen algorithm or key: %v", err)
+				l.Fatal("Couldn't sign pipeline: %v", err)
 			}
 		}
 
