@@ -13,7 +13,7 @@ var awsSess *session.Session
 // The aws sdk relies on being given a region, which is a breaking change for us
 // This applies a heuristic that detects where the agent might be based on the env
 // but also the local isntance metadata if available
-func awsRegion() (string, error) {
+func AWSRegion() (string, error) {
 	if r := os.Getenv("AWS_REGION"); r != "" {
 		return r, nil
 	}
@@ -39,7 +39,7 @@ func awsRegion() (string, error) {
 }
 
 func awsSession() (*session.Session, error) {
-	region, err := awsRegion()
+	region, err := AWSRegion()
 	if err != nil {
 		return nil, err
 	}

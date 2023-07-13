@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/internal/mime"
@@ -59,11 +60,11 @@ type ArtifactUploader struct {
 	// The logger instance to use
 	logger logger.Logger
 
-	// The APIClient that will be used when uploading jobs
-	apiClient APIClient
+	// The agent.APIClient that will be used when uploading jobs
+	apiClient agent.APIClient
 }
 
-func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig) *ArtifactUploader {
+func NewArtifactUploader(l logger.Logger, ac agent.APIClient, c ArtifactUploaderConfig) *ArtifactUploader {
 	return &ArtifactUploader{
 		logger:    l,
 		apiClient: ac,

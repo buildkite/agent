@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"fmt"
@@ -27,7 +27,7 @@ func TestCollect(t *testing.T) {
 	// t.Parallel() cannot be used with experiments.Enable
 
 	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
+	root := filepath.Join(wd, "..", "..")
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
@@ -168,7 +168,7 @@ func TestCollect(t *testing.T) {
 
 func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
+	root := filepath.Join(wd, "..", "..")
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
@@ -191,7 +191,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 
 func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
+	root := filepath.Join(wd, "..", "..")
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
@@ -215,7 +215,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 
 func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T) {
 	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
+	root := filepath.Join(wd, "..", "..")
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
@@ -241,7 +241,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 
 func TestCollectWithDuplicateMatches(t *testing.T) {
 	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
+	root := filepath.Join(wd, "..", "..")
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
@@ -275,7 +275,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 
 func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
+	root := filepath.Join(wd, "..", "..")
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
@@ -311,7 +311,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 
 func TestCollectMatchesUploadSymlinks(t *testing.T) {
 	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
+	root := filepath.Join(wd, "..", "..")
 	os.Chdir(root)
 	defer os.Chdir(wd)
 

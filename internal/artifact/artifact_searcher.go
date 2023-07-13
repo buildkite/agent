@@ -1,9 +1,10 @@
-package agent
+package artifact
 
 import (
 	"context"
 	"time"
 
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
@@ -13,14 +14,14 @@ type ArtifactSearcher struct {
 	// The logger instance to use
 	logger logger.Logger
 
-	// The APIClient that will be used when uploading jobs
-	apiClient APIClient
+	// The agent.APIClient that will be used when uploading jobs
+	apiClient agent.APIClient
 
 	// The ID of the Build that these artifacts belong to
 	buildID string
 }
 
-func NewArtifactSearcher(l logger.Logger, ac APIClient, buildID string) *ArtifactSearcher {
+func NewArtifactSearcher(l logger.Logger, ac agent.APIClient, buildID string) *ArtifactSearcher {
 	return &ArtifactSearcher{
 		logger:    l,
 		apiClient: ac,

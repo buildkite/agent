@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
 )
 
@@ -132,7 +132,7 @@ var ArtifactDownloadCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the downloader
-		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{
+		downloader := artifact.NewArtifactDownloader(l, client, artifact.ArtifactDownloaderConfig{
 			Query:              cfg.Query,
 			Destination:        cfg.Destination,
 			BuildID:            cfg.Build,

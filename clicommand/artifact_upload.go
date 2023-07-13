@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
 )
 
@@ -169,7 +169,7 @@ var ArtifactUploadCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the uploader
-		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
+		uploader := artifact.NewArtifactUploader(l, client, artifact.ArtifactUploaderConfig{
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,

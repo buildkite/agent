@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 )
 
-var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
+var ArtifactPathVariableRegex = regexp.MustCompile(`\$\{artifact\:path\}`)
 
 // FormUploader uploads to S3 as a single signed POST, which have a hard limit of 5Gb.
 var maxFormUploadedArtifactSize = int64(5368709120)

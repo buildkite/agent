@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"errors"
@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -136,7 +137,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 	} else {
 		// Otherwise, use the current region (or a guess) to dynamically find
 		// where the bucket lives.
-		region, err := awsRegion()
+		region, err := agent.AWSRegion()
 		if err != nil {
 			region = "us-east-1"
 		}

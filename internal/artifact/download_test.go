@@ -1,11 +1,12 @@
 //go:build !windows
 // +build !windows
 
-package agent
+package artifact
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetTargetPath(t *testing.T) {

@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/pool"
@@ -43,11 +44,11 @@ type ArtifactDownloader struct {
 	// The logger instance to use
 	logger logger.Logger
 
-	// The APIClient that will be used when uploading jobs
-	apiClient APIClient
+	// The agent.APIClient that will be used when uploading jobs
+	apiClient agent.APIClient
 }
 
-func NewArtifactDownloader(l logger.Logger, ac APIClient, c ArtifactDownloaderConfig) ArtifactDownloader {
+func NewArtifactDownloader(l logger.Logger, ac agent.APIClient, c ArtifactDownloaderConfig) ArtifactDownloader {
 	return ArtifactDownloader{
 		logger:    l,
 		apiClient: ac,

@@ -1,9 +1,10 @@
-package agent
+package artifact
 
 import (
 	"context"
 	"time"
 
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
@@ -31,11 +32,11 @@ type ArtifactBatchCreator struct {
 	// The logger instance to use
 	logger logger.Logger
 
-	// The APIClient that will be used when uploading jobs
-	apiClient APIClient
+	// The agent.APIClient that will be used when uploading jobs
+	apiClient agent.APIClient
 }
 
-func NewArtifactBatchCreator(l logger.Logger, ac APIClient, c ArtifactBatchCreatorConfig) *ArtifactBatchCreator {
+func NewArtifactBatchCreator(l logger.Logger, ac agent.APIClient, c ArtifactBatchCreatorConfig) *ArtifactBatchCreator {
 	return &ArtifactBatchCreator{
 		logger:    l,
 		conf:      c,

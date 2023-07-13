@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"github.com/buildkite/agent/v3/api"
