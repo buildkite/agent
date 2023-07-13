@@ -1377,9 +1377,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 
 	gd := gitDir
 	if gd == "" {
-		// This is for logging a diagnostic (best effort), so ignore any
-		// inability to get the working directory.
-		gd, _ = os.Getwd()
+		gd = e.shell.Getwd()
 	}
 
 	e.shell.Commentf("Remote URL for git directory %s has changed (%s -> %s)!", gd, gotURL, repository)
