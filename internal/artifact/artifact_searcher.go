@@ -10,7 +10,7 @@ import (
 	"github.com/buildkite/roko"
 )
 
-type ArtifactSearcher struct {
+type Searcher struct {
 	// The logger instance to use
 	logger logger.Logger
 
@@ -21,15 +21,15 @@ type ArtifactSearcher struct {
 	buildID string
 }
 
-func NewArtifactSearcher(l logger.Logger, ac agent.APIClient, buildID string) *ArtifactSearcher {
-	return &ArtifactSearcher{
+func NewSearcher(l logger.Logger, ac agent.APIClient, buildID string) *Searcher {
+	return &Searcher{
 		logger:    l,
 		apiClient: ac,
 		buildID:   buildID,
 	}
 }
 
-func (a *ArtifactSearcher) Search(ctx context.Context, query, scope string, includeRetriedJobs, includeDuplicates bool) ([]*api.Artifact, error) {
+func (a *Searcher) Search(ctx context.Context, query, scope string, includeRetriedJobs, includeDuplicates bool) ([]*api.Artifact, error) {
 	if scope == "" {
 		a.logger.Info("Searching for artifacts: \"%s\"", query)
 	} else {

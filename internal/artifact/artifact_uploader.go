@@ -30,7 +30,7 @@ const (
 	ArtifactFallbackMimeType = "binary/octet-stream"
 )
 
-type ArtifactUploaderConfig struct {
+type UploaderConfig struct {
 	// The ID of the Job
 	JobID string
 
@@ -53,9 +53,9 @@ type ArtifactUploaderConfig struct {
 	UploadSkipSymlinks bool
 }
 
-type ArtifactUploader struct {
+type Uploader struct {
 	// The upload config
-	conf ArtifactUploaderConfig
+	conf UploaderConfig
 
 	// The logger instance to use
 	logger logger.Logger
@@ -64,15 +64,15 @@ type ArtifactUploader struct {
 	apiClient agent.APIClient
 }
 
-func NewArtifactUploader(l logger.Logger, ac agent.APIClient, c ArtifactUploaderConfig) *ArtifactUploader {
-	return &ArtifactUploader{
+func NewUploader(l logger.Logger, ac agent.APIClient, c UploaderConfig) *Uploader {
+	return &Uploader{
 		logger:    l,
 		apiClient: ac,
 		conf:      c,
 	}
 }
 
-func (a *ArtifactUploader) Upload(ctx context.Context) error {
+func (a *Uploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect()
 	if err != nil {
@@ -108,7 +108,7 @@ func isDir(path string) bool {
 	return fi.IsDir()
 }
 
-func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
+func (a *Uploader) Collect() (artifacts []*api.Artifact, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
@@ -201,7 +201,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 	return artifacts, nil
 }
 
-func (a *ArtifactUploader) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
+func (a *Uploader) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
 	// Temporarily open the file to get its size
 	file, err := os.Open(absolutePath)
 	if err != nil {
@@ -247,8 +247,8 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	return artifact, nil
 }
 
-func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
-	var uploader Uploader
+func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
+	var uploader UploadDoer
 	var err error
 
 	// Determine what uploader to use
@@ -292,7 +292,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 	}
 
 	// Create the artifacts on Buildkite
-	batchCreator := NewArtifactBatchCreator(a.logger, a.apiClient, ArtifactBatchCreatorConfig{
+	batchCreator := NewBatchCreator(a.logger, a.apiClient, BatchCreatorConfig{
 		JobID:                  a.conf.JobID,
 		Artifacts:              artifacts,
 		UploadDestination:      a.conf.Destination,

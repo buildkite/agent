@@ -17,7 +17,7 @@ import (
 	"github.com/buildkite/agent/v3/pool"
 )
 
-type ArtifactDownloaderConfig struct {
+type DownloaderConfig struct {
 	// The ID of the Build
 	BuildID string
 
@@ -37,9 +37,9 @@ type ArtifactDownloaderConfig struct {
 	DebugHTTP bool
 }
 
-type ArtifactDownloader struct {
+type Downloader struct {
 	// The config for downloading
-	conf ArtifactDownloaderConfig
+	conf DownloaderConfig
 
 	// The logger instance to use
 	logger logger.Logger
@@ -48,15 +48,15 @@ type ArtifactDownloader struct {
 	apiClient agent.APIClient
 }
 
-func NewArtifactDownloader(l logger.Logger, ac agent.APIClient, c ArtifactDownloaderConfig) ArtifactDownloader {
-	return ArtifactDownloader{
+func NewDownloader(l logger.Logger, ac agent.APIClient, c DownloaderConfig) Downloader {
+	return Downloader{
 		logger:    l,
 		apiClient: ac,
 		conf:      c,
 	}
 }
 
-func (a *ArtifactDownloader) Download(ctx context.Context) error {
+func (a *Downloader) Download(ctx context.Context) error {
 	// Turn the download destination into an absolute path and confirm it exists
 	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
@@ -68,7 +68,7 @@ func (a *ArtifactDownloader) Download(ctx context.Context) error {
 		return fmt.Errorf("%s is not a directory", downloadDestination)
 	}
 
-	artifacts, err := NewArtifactSearcher(a.logger, a.apiClient, a.conf.BuildID).
+	artifacts, err := NewSearcher(a.logger, a.apiClient, a.conf.BuildID).
 		Search(ctx, a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs, false)
 	if err != nil {
 		return err
@@ -168,7 +168,7 @@ func (a *ArtifactDownloader) Download(ctx context.Context) error {
 // We want to have as few S3 clients as possible, as creating them is kind of an expensive operation
 // But it's also theoretically possible that we'll have multiple artifacts with different S3 buckets, and each
 // S3Client only applies to one bucket, so we need to store the S3 clients in a map, one for each bucket
-func (a *ArtifactDownloader) generateS3Clients(artifacts []*api.Artifact) (map[string]*s3.S3, error) {
+func (a *Downloader) generateS3Clients(artifacts []*api.Artifact) (map[string]*s3.S3, error) {
 	s3Clients := map[string]*s3.S3{}
 
 	for _, artifact := range artifacts {
