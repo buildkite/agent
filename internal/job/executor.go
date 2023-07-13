@@ -1329,7 +1329,8 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 
 	// Update the origin of the repository so we can gracefully handle
 	// repository renames.
-	if err := e.updateRemoteURL(ctx, mirrorDir, repository); err != nil {
+	urlChanged, err := e.updateRemoteURL(ctx, mirrorDir, repository)
+	if err != nil {
 		return "", fmt.Errorf("setting remote URL: %w", err)
 	}
 
@@ -1347,6 +1348,15 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 				return "", err
 			}
 		}
+	} else {
+		if urlChanged {
+			// Fetch the whole thing, in case of remote URL confusion (bug
+			// introduced in #1959). A repository rename often corresponds with
+			// changes.
+			if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin"); err != nil {
+				return "", err
+			}
+		}
 	}
 
 	return mirrorDir, nil
@@ -1354,8 +1364,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 
 // updateRemoteURL updates the URL for 'origin'. If gitDir == "", it assumes the
 // local repo is in the current directory, otherwise it includes --git-dir.
-// If the remote has changed, it logs some extra information.
-func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository string) error {
+// If the remote has changed, it logs some extra information. updateRemoteURL
+// reports if the remote URL changed.
+func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository string) (bool, error) {
 	// Update the origin of the repository so we can gracefully handle
 	// repository renames.
 
@@ -1367,12 +1378,12 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 	}
 	gotURL, err := e.shell.RunAndCapture(ctx, "git", args...)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if gotURL == repository {
 		// No need to update anything
-		return nil
+		return false, nil
 	}
 
 	gd := gitDir
@@ -1388,12 +1399,11 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 	if gitDir != "" {
 		args = append([]string{"--git-dir", gitDir}, args...)
 	}
-	return e.shell.Run(ctx, "git", args...)
+	return true, e.shell.Run(ctx, "git", args...)
 }
 
 func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
 	var mirrorDir string
-	var err error
 	// Skip updating the Git mirror before using it?
 	if e.ExecutorConfig.GitMirrorsSkipUpdate {
 		mirrorDir = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
@@ -1405,13 +1415,10 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
 			mirrorDir = ""
 		}
-	} else {
-		mirrorDir, err = e.updateGitMirror(ctx, repository)
-		if err != nil {
-			return "", err
-		}
+		return mirrorDir, nil
 	}
-	return mirrorDir, nil
+
+	return e.updateGitMirror(ctx, repository)
 }
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
@@ -1458,7 +1465,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	if utils.FileExists(existingGitDir) {
 		// Update the origin of the repository so we can gracefully handle
 		// repository renames
-		if err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
+		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
 			return fmt.Errorf("setting origin: %w", err)
 		}
 	} else {
