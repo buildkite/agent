@@ -317,7 +317,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"remote", "set-url", "origin", tester.Repo.Path},
+		{"remote", "get-url", "origin"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -380,7 +380,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"remote", "set-url", "origin", tester.Repo.Path},
+		{"remote", "get-url", "origin"},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
 		{"clone", "-v", "--depth=1", "--", tester.Repo.Path, "."},
