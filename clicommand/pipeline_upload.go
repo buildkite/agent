@@ -55,16 +55,17 @@ Example:
    $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
-	FilePath         string   `cli:"arg:0" label:"upload paths"`
-	Replace          bool     `cli:"replace"`
-	Job              string   `cli:"job"` // required, but not in dry-run mode
-	DryRun           bool     `cli:"dry-run"`
-	DryRunFormat     string   `cli:"format"`
-	NoInterpolation  bool     `cli:"no-interpolation"`
-	RedactedVars     []string `cli:"redacted-vars" normalize:"list"`
-	RejectSecrets    bool     `cli:"reject-secrets"`
-	SigningKeyFile   string   `cli:"signing-key"`
-	SigningAlgorithm string   `cli:"signing-algorithm"`
+	FilePath          string   `cli:"arg:0" label:"upload paths"`
+	Replace           bool     `cli:"replace"`
+	Job               string   `cli:"job"` // required, but not in dry-run mode
+	DryRun            bool     `cli:"dry-run"`
+	DryRunFormat      string   `cli:"format"`
+	NoInterpolation   bool     `cli:"no-interpolation"`
+	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
+	RejectSecrets     bool     `cli:"reject-secrets"`
+	SigningKeyFile    string   `cli:"signing-key"`
+	SigningAlgorithm  string   `cli:"signing-algorithm"`
+	GenerateAIPrompts bool     `cli:"generate-ai-prompts"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -127,6 +128,11 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "Signing algorithm to use when signing parts of the pipeline. Available algorithms are: hmac-sha256",
 			Value:  "hmac-sha256",
 			EnvVar: "BUILDKITE_PIPELINE_SIGNING_ALGORITHM",
+		},
+		cli.BoolFlag{
+			Name:   "generate-ai-prompts",
+			Usage:  "When used with signing, includes generative AI prompts in the output based on the signature value",
+			EnvVar: "BUILDKITE_PIPELINE_SIGNING_GENERATE_AI_PROMPTS",
 		},
 
 		// API Flags
@@ -323,7 +329,7 @@ var PipelineUploadCommand = cli.Command{
 				l.Fatal("Couldn't create a pipeline signer for the chosen algorithm or key: %v", err)
 			}
 
-			if err := result.Sign(signer); err != nil {
+			if err := result.Sign(signer, cfg.GenerateAIPrompts); err != nil {
 				l.Fatal("Couldn't sign pipeline with the chosen algorithm or key: %v", err)
 			}
 		}

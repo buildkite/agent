@@ -151,7 +151,7 @@ func (p *Pipeline) interpolateEnvBlock(envMap *env.Environment) error {
 
 // Sign signs each signable part of the pipeline. Currently this is limited to
 // command steps. The Signer is reset before starting, and after each part.
-func (p *Pipeline) Sign(signer Signer) error {
+func (p *Pipeline) Sign(signer Signer, ai bool) error {
 	signer.Reset()
 	for _, step := range p.Steps {
 		cmd, ok := step.(*CommandStep)
@@ -164,6 +164,18 @@ func (p *Pipeline) Sign(signer Signer) error {
 			return err
 		}
 		cmd.Signature = sig
+
+		if ai {
+			prompt, err := sig.GenerativeAIPrompt()
+			if err != nil {
+				// Oh well
+				continue
+			}
+			if cmd.RemainingFields == nil {
+				cmd.RemainingFields = make(map[string]any, 1)
+			}
+			cmd.RemainingFields["generative-ai-prompt"] = prompt
+		}
 	}
 	return nil
 }
