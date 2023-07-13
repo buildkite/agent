@@ -103,3 +103,25 @@ func unmarshalStep(seen map[*yaml.Node]bool, n *yaml.Node) (Step, error) {
 		return nil, fmt.Errorf("line %d, col %d: unsupported YAML node kind %x for Step", n.Line, n.Column, n.Kind)
 	}
 }
+
+// sign adds signatures to each command step (and recursively to any command
+// steps that are within group steps. The steps are mutated directly, so an
+// error part-way through may leave some steps un-signed.
+func (s Steps) sign(signer Signer) error {
+	for _, step := range s {
+		switch step := step.(type) {
+		case *CommandStep:
+			sig, err := Sign(step, signer)
+			if err != nil {
+				return fmt.Errorf("signing step with command %q: %w", step.Command, err)
+			}
+			step.Signature = sig
+
+		case *GroupStep:
+			if err := step.Steps.sign(signer); err != nil {
+				return fmt.Errorf("signing group step: %w", err)
+			}
+		}
+	}
+	return nil
+}
