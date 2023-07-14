@@ -30,7 +30,7 @@ const (
 	ArtifactFallbackMimeType = "binary/octet-stream"
 )
 
-type UploaderConfig struct {
+type UploadConfig struct {
 	// The ID of the Job
 	JobID string
 
@@ -53,9 +53,9 @@ type UploaderConfig struct {
 	UploadSkipSymlinks bool
 }
 
-type Uploader struct {
+type Upload struct {
 	// The upload config
-	conf UploaderConfig
+	conf UploadConfig
 
 	// The logger instance to use
 	logger logger.Logger
@@ -64,15 +64,15 @@ type Uploader struct {
 	apiClient agent.APIClient
 }
 
-func NewUploader(l logger.Logger, ac agent.APIClient, c UploaderConfig) *Uploader {
-	return &Uploader{
+func NewUpload(l logger.Logger, ac agent.APIClient, c UploadConfig) *Upload {
+	return &Upload{
 		logger:    l,
 		apiClient: ac,
 		conf:      c,
 	}
 }
 
-func (a *Uploader) Upload(ctx context.Context) error {
+func (a *Upload) Do(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect()
 	if err != nil {
@@ -108,7 +108,7 @@ func isDir(path string) bool {
 	return fi.IsDir()
 }
 
-func (a *Uploader) Collect() (artifacts []*api.Artifact, err error) {
+func (a *Upload) Collect() (artifacts []*api.Artifact, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
@@ -201,7 +201,7 @@ func (a *Uploader) Collect() (artifacts []*api.Artifact, err error) {
 	return artifacts, nil
 }
 
-func (a *Uploader) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
+func (a *Upload) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
 	// Temporarily open the file to get its size
 	file, err := os.Open(absolutePath)
 	if err != nil {
@@ -247,7 +247,7 @@ func (a *Uploader) build(path string, absolutePath string, globPath string) (*ap
 	return artifact, nil
 }
 
-func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
+func (a *Upload) upload(ctx context.Context, artifacts []*api.Artifact) error {
 	var uploader UploadDoer
 	var err error
 
@@ -292,14 +292,14 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact) error 
 	}
 
 	// Create the artifacts on Buildkite
-	batchCreator := NewBatchCreator(a.logger, a.apiClient, BatchCreatorConfig{
+	batchCreator := NewBatchCreate(a.logger, a.apiClient, BatchCreateConfig{
 		JobID:                  a.conf.JobID,
 		Artifacts:              artifacts,
 		UploadDestination:      a.conf.Destination,
 		CreateArtifactsTimeout: 10 * time.Second,
 	})
 
-	artifacts, err = batchCreator.Create(ctx)
+	artifacts, err = batchCreator.Do(ctx)
 	if err != nil {
 		return err
 	}

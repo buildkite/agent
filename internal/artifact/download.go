@@ -17,7 +17,7 @@ import (
 	"github.com/buildkite/agent/v3/pool"
 )
 
-type DownloaderConfig struct {
+type DownloadConfig struct {
 	// The ID of the Build
 	BuildID string
 
@@ -37,9 +37,9 @@ type DownloaderConfig struct {
 	DebugHTTP bool
 }
 
-type Downloader struct {
+type Download struct {
 	// The config for downloading
-	conf DownloaderConfig
+	conf DownloadConfig
 
 	// The logger instance to use
 	logger logger.Logger
@@ -48,15 +48,15 @@ type Downloader struct {
 	apiClient agent.APIClient
 }
 
-func NewDownloader(l logger.Logger, ac agent.APIClient, c DownloaderConfig) Downloader {
-	return Downloader{
+func NewDownload(l logger.Logger, ac agent.APIClient, c DownloadConfig) Download {
+	return Download{
 		logger:    l,
 		apiClient: ac,
 		conf:      c,
 	}
 }
 
-func (a *Downloader) Download(ctx context.Context) error {
+func (a *Download) Do(ctx context.Context) error {
 	// Turn the download destination into an absolute path and confirm it exists
 	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
@@ -68,8 +68,14 @@ func (a *Downloader) Download(ctx context.Context) error {
 		return fmt.Errorf("%s is not a directory", downloadDestination)
 	}
 
-	artifacts, err := NewSearcher(a.logger, a.apiClient, a.conf.BuildID).
-		Search(ctx, a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs, false)
+	sc := SearchConfig{
+		BuildID:            a.conf.BuildID,
+		Query:              a.conf.Query,
+		Scope:              a.conf.Step,
+		IncludeRetriedJobs: a.conf.IncludeRetriedJobs,
+		IncludeDuplicates:  false,
+	}
+	artifacts, err := NewSearch(a.logger, a.apiClient, sc).Do(ctx)
 	if err != nil {
 		return err
 	}
@@ -134,7 +140,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 					DebugHTTP:   a.conf.DebugHTTP,
 				})
 			default:
-				dler = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
+				dler = NewHTTPDownloader(a.logger, http.DefaultClient, HTTPDownloaderConfig{
 					URL:         artifact.URL,
 					Path:        path,
 					Destination: downloadDestination,
@@ -168,7 +174,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 // We want to have as few S3 clients as possible, as creating them is kind of an expensive operation
 // But it's also theoretically possible that we'll have multiple artifacts with different S3 buckets, and each
 // S3Client only applies to one bucket, so we need to store the S3 clients in a map, one for each bucket
-func (a *Downloader) generateS3Clients(artifacts []*api.Artifact) (map[string]*s3.S3, error) {
+func (a *Download) generateS3Clients(artifacts []*api.Artifact) (map[string]*s3.S3, error) {
 	s3Clients := map[string]*s3.S3{}
 
 	for _, artifact := range artifacts {

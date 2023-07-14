@@ -145,8 +145,13 @@ func searchAndPrintShaSum(ctx context.Context, cfg ArtifactShasumConfig, l logge
 	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 	// Find the artifact we want to show the SHASUM for
-	searcher := artifact.NewSearcher(l, client, cfg.Build)
-	artifacts, err := searcher.Search(ctx, cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
+	artifacts, err := artifact.NewSearch(l, client, artifact.SearchConfig{
+		BuildID:            cfg.Build,
+		Query:              cfg.Query,
+		Scope:              cfg.Step,
+		IncludeRetriedJobs: cfg.IncludeRetriedJobs,
+		IncludeDuplicates:  false,
+	}).Do(ctx)
 	if err != nil {
 		return fmt.Errorf("Error searching for artifacts: %s", err)
 	}

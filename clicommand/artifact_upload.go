@@ -169,7 +169,7 @@ var ArtifactUploadCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the uploader
-		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
+		uploader := artifact.NewUpload(l, client, artifact.UploadConfig{
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,
@@ -183,7 +183,7 @@ var ArtifactUploadCommand = cli.Command{
 		})
 
 		// Upload the artifacts
-		if err := uploader.Upload(ctx); err != nil {
+		if err := uploader.Do(ctx); err != nil {
 			l.Fatal("Failed to upload artifacts: %s", err)
 		}
 	},

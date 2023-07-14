@@ -40,11 +40,11 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 		Token:    "llamasforever",
 	})
 
-	d := NewDownloader(logger.Discard, ac, DownloaderConfig{
+	d := NewDownload(logger.Discard, ac, DownloadConfig{
 		BuildID: "my-build",
 	})
 
-	if err := d.Download(ctx); err != nil {
+	if err := d.Do(ctx); err != nil {
 		t.Errorf("d.Download() = %v", err)
 	}
 }

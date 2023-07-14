@@ -132,7 +132,7 @@ var ArtifactDownloadCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the downloader
-		downloader := artifact.NewDownloader(l, client, artifact.DownloaderConfig{
+		downloader := artifact.NewDownload(l, client, artifact.DownloadConfig{
 			Query:              cfg.Query,
 			Destination:        cfg.Destination,
 			BuildID:            cfg.Build,
@@ -142,7 +142,7 @@ var ArtifactDownloadCommand = cli.Command{
 		})
 
 		// Download the artifacts
-		if err := downloader.Download(ctx); err != nil {
+		if err := downloader.Do(ctx); err != nil {
 			l.Fatal("Failed to download artifacts: %s", err)
 		}
 	},

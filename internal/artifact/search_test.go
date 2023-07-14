@@ -40,9 +40,14 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 		Token:    "llamasforever",
 	})
 
-	s := NewSearcher(logger.Discard, ac, "my-build")
+	config := SearchConfig{
+		Query:   "llamas.txt",
+		BuildID: "my-build",
+		Scope:   "my-build",
+	}
+	s := NewSearch(logger.Discard, ac, config)
 
-	artifacts, err := s.Search(ctx, "llamas.txt", "my-build", false, false)
+	artifacts, err := s.Do(ctx)
 	if err != nil {
 		t.Fatalf(`s.Search("llamas.txt", "my-build", false, false) error = %v`, err)
 	}
