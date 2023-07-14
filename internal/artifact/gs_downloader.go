@@ -52,7 +52,7 @@ func (d GSDownloader) Start(ctx context.Context) error {
 	url := "https://www.googleapis.com/storage/v1/b/" + d.BucketName() + "/o/" + escape(d.BucketFileLocation()) + "?alt=media"
 
 	// We can now cheat and pass the URL onto our regular downloader
-	return NewDownload(d.logger, client, DownloadConfig{
+	return NewHTTPDownloader(d.logger, client, HTTPDownloaderConfig{
 		URL:         url,
 		Path:        d.conf.Path,
 		Destination: d.conf.Destination,

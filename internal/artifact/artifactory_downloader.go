@@ -69,7 +69,7 @@ func (d ArtifactoryDownloader) Start(ctx context.Context) error {
 	}
 
 	// We can now cheat and pass the URL onto our regular downloader
-	return NewDownload(d.logger, http.DefaultClient, DownloadConfig{
+	return NewHTTPDownloader(d.logger, http.DefaultClient, HTTPDownloaderConfig{
 		URL:         fullURL,
 		Path:        d.conf.Path,
 		Destination: d.conf.Destination,

@@ -16,7 +16,7 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-type DownloadConfig struct {
+type HTTPDownloaderConfig struct {
 	// The actual URL to get the file from
 	URL string
 
@@ -36,9 +36,9 @@ type DownloadConfig struct {
 	DebugHTTP bool
 }
 
-type Download struct {
+type HTTPDownloader struct {
 	// The download config
-	conf DownloadConfig
+	conf HTTPDownloaderConfig
 
 	// The logger instance to use
 	logger logger.Logger
@@ -47,15 +47,15 @@ type Download struct {
 	client *http.Client
 }
 
-func NewDownload(l logger.Logger, client *http.Client, c DownloadConfig) *Download {
-	return &Download{
+func NewHTTPDownloader(l logger.Logger, client *http.Client, c HTTPDownloaderConfig) *HTTPDownloader {
+	return &HTTPDownloader{
 		logger: l,
 		client: client,
 		conf:   c,
 	}
 }
 
-func (d Download) Start(ctx context.Context) error {
+func (d HTTPDownloader) Start(ctx context.Context) error {
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(d.conf.Retries),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
@@ -98,7 +98,7 @@ func getTargetPath(path string, destination string) string {
 	return targetFile
 }
 
-func (d Download) try(ctx context.Context) error {
+func (d HTTPDownloader) try(ctx context.Context) error {
 	targetFile := getTargetPath(d.conf.Path, d.conf.Destination)
 	targetDirectory, _ := filepath.Split(targetFile)
 
