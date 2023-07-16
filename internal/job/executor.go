@@ -1740,39 +1740,41 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 	}
 
 	// Run the command
-	runCommandErr := e.runCommand(ctx)
+	commandErr = e.runCommand(ctx)
 
 	// Save the command exit status to the env so hooks + plugins can access it. If there is no
 	// error this will be zero. It's used to set the exit code later, so it's important
 	e.shell.Env.Set(
 		"BUILDKITE_COMMAND_EXIT_STATUS",
-		fmt.Sprintf("%d", shell.GetExitCode(runCommandErr)),
+		fmt.Sprintf("%d", shell.GetExitCode(commandErr)),
 	)
 
 	// Exit early if there was no error
-	if runCommandErr == nil {
+	if commandErr == nil {
 		return nil, nil
-	}
-
-	isExitError := shell.IsExitError(runCommandErr)
-	isExitSignaled := shell.IsExitSignaled(runCommandErr)
-
-	switch {
-	case isExitError && isExitSignaled:
-		// although error is an exit error, it's not returned. (seems like a bug)
-		e.shell.Errorf("The command was interrupted by a signal")
-	case isExitError && !isExitSignaled:
-		commandErr = runCommandErr
-		e.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandErr))
-	default:
-		// error is not an exit error, we don't want to return it
-		e.shell.Errorf("%s", runCommandErr)
 	}
 
 	// Expand the job log header from the command to surface the error
 	e.shell.Printf("^^^ +++")
 
-	return nil, commandErr
+	isExitError := shell.IsExitError(commandErr)
+	isExitSignaled := shell.IsExitSignaled(commandErr)
+
+	switch {
+	case isExitError && isExitSignaled:
+		e.shell.Errorf("The command was interrupted by a signal")
+
+		// although error is an exit error, it's not returned. (seems like a bug)
+		return nil, nil
+	case isExitError && !isExitSignaled:
+		e.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandErr))
+		return nil, commandErr
+	default:
+		e.shell.Errorf("%s", commandErr)
+
+		// error is not an exit error, we don't want to return it
+		return nil, nil
+	}
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
