@@ -1966,10 +1966,19 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		return err
 	}
 
+	// Update: The comment below is of dubious validity, because:
+	//         1. The trap is recursive and leads to an infinite loop of signals and a segfault.
+	//         2. It just signals the intermediate shell again. If the intermediate shell swallowed
+	//            signals in the first place then signaling it again won't change that.
+	//         3. Propogating signals to child processes is handled by signalling their process
+	//            group.
+	// Therefore, we are phasing it out under an experiment.
+	//
+	//
 	// If we aren't running a script, try and detect if we are using a posix shell
 	// and if so add a trap so that the intermediate shell doesn't swallow signals
 	// from cancellation
-	if !commandIsScript && shellscript.IsPOSIXShell(e.Shell) {
+	if !experiments.IsEnabled(experiments.AvoidRecursiveTrap) && !commandIsScript && shellscript.IsPOSIXShell(e.Shell) {
 		cmdToExec = fmt.Sprintf("trap 'kill -- $$' INT TERM QUIT; %s", cmdToExec)
 	}
 

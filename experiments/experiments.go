@@ -28,6 +28,7 @@ const (
 	NormalisedUploadPaths      = "normalised-upload-paths"
 	PolyglotHooks              = "polyglot-hooks"
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
+	AvoidRecursiveTrap         = "avoid-recursive-trap"
 
 	// Promoted experiments
 	ANSITimestamps    = "ansi-timestamps"
