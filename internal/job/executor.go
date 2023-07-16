@@ -1828,9 +1828,19 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 
 	isExitError := shell.IsExitError(commandErr)
 	isExitSignaled := shell.IsExitSignaled(commandErr)
+	avoidRecursiveTrap := experiments.IsEnabled(experiments.AvoidRecursiveTrap)
 
 	switch {
-	case isExitError && isExitSignaled:
+	case isExitError && isExitSignaled && avoidRecursiveTrap:
+		// The recursive trap created a segfault that we were previously inadvertently suppressing
+		// in the next branch. Once the experiment is promoted, we should keep this branch in case
+		// to show the error to users.
+		e.shell.Errorf("The command was interrupted by a signal: %v", commandErr)
+
+		// although error is an exit error, it's not returned. (seems like a bug)
+		return nil, nil
+	case isExitError && isExitSignaled && !avoidRecursiveTrap:
+		// TODO: remove this branch when the experiment is promoted
 		e.shell.Errorf("The command was interrupted by a signal")
 
 		// although error is an exit error, it's not returned. (seems like a bug)
