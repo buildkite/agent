@@ -1717,48 +1717,62 @@ func (e *Executor) runPostCommandHooks(ctx context.Context) error {
 }
 
 // CommandPhase determines how to run the build, and then runs it
-func (e *Executor) CommandPhase(ctx context.Context) (error, error) {
+func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr error) {
+	var preCommandErr error
+
 	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.ExecutorConfig.TracingBackend)
-	var err error
-	defer func() { span.FinishWithError(err) }()
-	// Run pre-command hooks
-	if err := e.runPreCommandHooks(ctx); err != nil {
-		return err, nil
-	}
+	defer func() {
+		span.FinishWithError(hookErr)
+	}()
 
-	// Run the actual command
-	commandExitError := e.runCommand(ctx)
-	var realCommandError error
-
-	// If the command returned an exit that wasn't a `exec.ExitError`
-	// (which is returned when the command is actually run, but fails),
-	// then we'll show it in the log.
-	if shell.IsExitError(commandExitError) {
-		if shell.IsExitSignaled(commandExitError) {
-			e.shell.Errorf("The command was interrupted by a signal")
-		} else {
-			realCommandError = commandExitError
-			e.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+	// Run postCommandHooks, even if there is an error from the command, but not if there is an
+	// error from the pre-command hooks. Note: any post-command hook error will be returned.
+	defer func() {
+		if preCommandErr != nil {
+			return
 		}
-	} else if commandExitError != nil {
-		e.shell.Errorf(commandExitError.Error())
+		hookErr = e.runPostCommandHooks(ctx)
+	}()
+
+	// Run pre-command hooks
+	if preCommandErr = e.runPreCommandHooks(ctx); preCommandErr != nil {
+		return preCommandErr, nil
 	}
 
-	// Expand the command header if the command fails for any reason
-	if commandExitError != nil {
-		e.shell.Printf("^^^ +++")
+	// Run the command
+	runCommandErr := e.runCommand(ctx)
+
+	// Save the command exit status to the env so hooks + plugins can access it. If there is no
+	// error this will be zero. It's used to set the exit code later, so it's important
+	e.shell.Env.Set(
+		"BUILDKITE_COMMAND_EXIT_STATUS",
+		fmt.Sprintf("%d", shell.GetExitCode(runCommandErr)),
+	)
+
+	// Exit early if there was no error
+	if runCommandErr == nil {
+		return nil, nil
 	}
 
-	// Save the command exit status to the env so hooks + plugins can access it. If there is no error
-	// this will be zero. It's used to set the exit code later, so it's important
-	e.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(commandExitError)))
+	isExitError := shell.IsExitError(runCommandErr)
+	isExitSignaled := shell.IsExitSignaled(runCommandErr)
 
-	// Run post-command hooks
-	if err := e.runPostCommandHooks(ctx); err != nil {
-		return err, realCommandError
+	switch {
+	case isExitError && isExitSignaled:
+		// although error is an exit error, it's not returned. (seems like a bug)
+		e.shell.Errorf("The command was interrupted by a signal")
+	case isExitError && !isExitSignaled:
+		commandErr = runCommandErr
+		e.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandErr))
+	default:
+		// error is not an exit error, we don't want to return it
+		e.shell.Errorf("%s", runCommandErr)
 	}
 
-	return nil, realCommandError
+	// Expand the job log header from the command to surface the error
+	e.shell.Printf("^^^ +++")
+
+	return nil, commandErr
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
