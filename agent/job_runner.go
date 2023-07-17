@@ -75,9 +75,6 @@ type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
 
-	// The logger to use
-	Logger logger.Logger
-
 	// How often to check if the job has been cancelled
 	JobStatusInterval time.Duration
 
@@ -86,9 +83,6 @@ type JobRunnerConfig struct {
 
 	// The job to run
 	Job *api.Job
-
-	// The APIClient that will be used when updating the job
-	APIClient APIClient
 
 	// What signal to use for worker cancellation
 	CancelSignal process.Signal
@@ -115,14 +109,8 @@ type JobRunner struct {
 	// The logger to use
 	logger logger.Logger
 
-	// The job being run
-	job *api.Job
-
 	// The APIClient that will be used when updating the job
 	apiClient APIClient
-
-	// A scope for metrics within a job
-	metrics *metrics.Scope
 
 	// The internal process of the job
 	process jobAPI
@@ -161,13 +149,11 @@ type jobAPI interface {
 var _ jobRunner = (*JobRunner)(nil)
 
 // Initializes the job runner
-func NewJobRunner(conf JobRunnerConfig) (jobRunner, error) {
+func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
 	r := &JobRunner{
-		job:       conf.Job,
-		logger:    conf.Logger,
+		logger:    l,
 		conf:      conf,
-		metrics:   conf.MetricsScope,
-		apiClient: conf.APIClient,
+		apiClient: apiClient,
 	}
 
 	if conf.JobStatusInterval == 0 {
@@ -176,9 +162,9 @@ func NewJobRunner(conf JobRunnerConfig) (jobRunner, error) {
 
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
-	if r.job.Token != "" {
+	if r.conf.Job.Token != "" {
 		clientConf := r.apiClient.Config()
-		clientConf.Token = r.job.Token
+		clientConf.Token = r.conf.Job.Token
 		r.apiClient = api.NewClient(r.logger, clientConf)
 	}
 
@@ -189,7 +175,7 @@ func NewJobRunner(conf JobRunnerConfig) (jobRunner, error) {
 	// the Buildkite Agent API
 	r.logStreamer = NewLogStreamer(r.logger, r.onUploadChunk, LogStreamerConfig{
 		Concurrency:       3,
-		MaxChunkSizeBytes: r.job.ChunksMaxSizeBytes,
+		MaxChunkSizeBytes: r.conf.Job.ChunksMaxSizeBytes,
 	})
 
 	// TempDir is not guaranteed to exist
@@ -202,7 +188,7 @@ func NewJobRunner(conf JobRunnerConfig) (jobRunner, error) {
 	}
 
 	// Prepare a file to receive the given job environment
-	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.job.ID)); err != nil {
+	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.conf.Job.ID)); err != nil {
 		return r, err
 	} else {
 		r.logger.Debug("[JobRunner] Created env file: %s", file.Name())
@@ -300,11 +286,11 @@ func NewJobRunner(conf JobRunnerConfig) (jobRunner, error) {
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
 		if conf.AgentConfiguration.LogFormat == "json" {
 			log := newJobLogger(
-				conf.AgentStdout, logger.StringField("org", r.job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
-				logger.StringField("pipeline", r.job.Env["BUILDKITE_PIPELINE_SLUG"]),
-				logger.StringField("branch", r.job.Env["BUILDKITE_BRANCH"]),
-				logger.StringField("queue", r.job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
-				logger.StringField("job_id", r.job.ID),
+				conf.AgentStdout, logger.StringField("org", r.conf.Job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
+				logger.StringField("pipeline", r.conf.Job.Env["BUILDKITE_PIPELINE_SLUG"]),
+				logger.StringField("branch", r.conf.Job.Env["BUILDKITE_BRANCH"]),
+				logger.StringField("queue", r.conf.Job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
+				logger.StringField("job_id", r.conf.Job.ID),
 			)
 			allWriters = append(allWriters, log)
 		} else {
@@ -370,7 +356,7 @@ func NewJobRunner(conf JobRunnerConfig) (jobRunner, error) {
 
 // Runs the job
 func (r *JobRunner) Run(ctx context.Context) error {
-	r.logger.Info("Starting job %s", r.job.ID)
+	r.logger.Info("Starting job %s", r.conf.Job.ID)
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
 	defer done()
@@ -386,12 +372,12 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	// If this agent successfully grabs the job from the API, publish metric for
 	// how long this job was in the queue for, if we can calculate that
-	if r.job.RunnableAt != "" {
-		runnableAt, err := time.Parse(time.RFC3339Nano, r.job.RunnableAt)
+	if r.conf.Job.RunnableAt != "" {
+		runnableAt, err := time.Parse(time.RFC3339Nano, r.conf.Job.RunnableAt)
 		if err != nil {
-			r.logger.Error("Metric submission failed to parse %s", r.job.RunnableAt)
+			r.logger.Error("Metric submission failed to parse %s", r.conf.Job.RunnableAt)
 		} else {
-			r.metrics.Timing("queue.duration", startedAt.Sub(runnableAt))
+			r.conf.MetricsScope.Timing("queue.duration", startedAt.Sub(runnableAt))
 		}
 	}
 
@@ -473,7 +459,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Write some metrics about the job run
-	jobMetrics := r.metrics.With(metrics.Tags{"exit_code": exit.Status})
+	jobMetrics := r.conf.MetricsScope.With(metrics.Tags{"exit_code": exit.Status})
 
 	if exit.Status == "0" {
 		jobMetrics.Timing("jobs.duration.success", finishedAt.Sub(startedAt))
@@ -487,7 +473,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
 	r.finishJob(ctx, finishedAt, exit, r.logStreamer.FailedChunks())
 
-	r.logger.Info("Finished job %s", r.job.ID)
+	r.logger.Info("Finished job %s", r.conf.Job.ID)
 
 	return nil
 }
@@ -569,7 +555,7 @@ func (r *JobRunner) Cancel() error {
 		reason = " (agent stopping)"
 	}
 	r.logger.Info("Canceling job %s with a grace period of %ds%s",
-		r.job.ID, r.conf.AgentConfiguration.CancelGracePeriod, reason)
+		r.conf.Job.ID, r.conf.AgentConfiguration.CancelGracePeriod, reason)
 
 	r.cancelled = true
 
@@ -581,7 +567,7 @@ func (r *JobRunner) Cancel() error {
 	select {
 	// Grace period for cancelling
 	case <-time.After(time.Second * time.Duration(r.conf.AgentConfiguration.CancelGracePeriod)):
-		r.logger.Info("Job %s hasn't stopped in time, terminating", r.job.ID)
+		r.logger.Info("Job %s hasn't stopped in time, terminating", r.conf.Job.ID)
 
 		// Terminate the process as we've exceeded our context
 		return r.process.Terminate()
@@ -599,7 +585,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	// sent by Buildkite. The variables below should always take
 	// precedence.
 	env := make(map[string]string)
-	for key, value := range r.job.Env {
+	for key, value := range r.conf.Job.Env {
 		env[key] = value
 	}
 
@@ -625,7 +611,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 
 	// Check if the user has defined any protected env
 	for k := range ProtectedEnv {
-		if _, exists := r.job.Env[k]; exists {
+		if _, exists := r.conf.Job.Env[k]; exists {
 			ignoredEnv = append(ignoredEnv, k)
 		}
 	}
@@ -786,13 +772,13 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 // Buildkite, we won't bother retrying. For example, a "no such host" will
 // retry, but an HTTP response from Buildkite that isn't retryable won't.
 func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
-	r.job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
+	r.conf.Job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(7),
 		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 	).DoWithContext(ctx, func(rtr *roko.Retrier) error {
-		response, err := r.apiClient.StartJob(ctx, r.job)
+		response, err := r.apiClient.StartJob(ctx, r.conf.Job)
 
 		if err != nil {
 			if response != nil && api.IsRetryableStatus(response) {
@@ -812,14 +798,14 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 // finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
 // cannot return successfully, this will retry for a long time.
 func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit processExit, failedChunkCount int) error {
-	r.job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
-	r.job.ExitStatus = exit.Status
-	r.job.Signal = exit.Signal
-	r.job.SignalReason = exit.SignalReason
-	r.job.ChunksFailedCount = failedChunkCount
+	r.conf.Job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
+	r.conf.Job.ExitStatus = exit.Status
+	r.conf.Job.Signal = exit.Signal
+	r.conf.Job.SignalReason = exit.SignalReason
+	r.conf.Job.ChunksFailedCount = failedChunkCount
 
 	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
-		r.job.ExitStatus, r.job.Signal, r.job.SignalReason)
+		r.conf.Job.ExitStatus, r.conf.Job.Signal, r.conf.Job.SignalReason)
 
 	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
 	defer cancel()
@@ -829,7 +815,7 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit pr
 		roko.WithJitter(),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.FinishJob(ctx, r.job)
+		response, err := r.apiClient.FinishJob(ctx, r.conf.Job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
 			// succesfully tried to finish the job, but Buildkite
@@ -917,14 +903,14 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		setStat("📡 Fetching job state from Buildkite")
 
 		// Re-get the job and check its status to see if it's been cancelled
-		jobState, _, err := r.apiClient.GetJobState(ctx, r.job.ID)
+		jobState, _, err := r.apiClient.GetJobState(ctx, r.conf.Job.ID)
 		if err != nil {
 			// We don't really care if it fails, we'll just
 			// try again soon anyway
-			r.logger.Warn("Problem with getting job state %s (%s)", r.job.ID, err)
+			r.logger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
 		} else if jobState.State == "canceling" || jobState.State == "canceled" {
 			if err := r.Cancel(); err != nil {
-				r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.job.ID, err)
+				r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}
 
@@ -946,7 +932,7 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.SaveHeaderTimes(ctx, r.job.ID, &api.HeaderTimes{Times: times})
+		response, err := r.apiClient.SaveHeaderTimes(ctx, r.conf.Job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.logger.Warn("Buildkite rejected the header times (%s)", err)
@@ -979,7 +965,7 @@ func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) 
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.UploadChunk(ctx, r.job.ID, &api.Chunk{
+		response, err := r.apiClient.UploadChunk(ctx, r.conf.Job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
 			Offset:   chunk.Offset,

@@ -647,10 +647,8 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 	})
 
 	// Now that we've got a job to do, we can start it.
-	jr, err := NewJobRunner(JobRunnerConfig{
+	jr, err := NewJobRunner(a.logger, a.apiClient, JobRunnerConfig{
 		Job:                acceptResponse,
-		APIClient:          a.apiClient,
-		Logger:             a.logger,
 		Debug:              a.debug,
 		DebugHTTP:          a.debugHTTP,
 		CancelSignal:       a.cancelSig,

@@ -103,10 +103,8 @@ func runJob(t *testing.T, j *api.Job, cfg agent.AgentConfiguration, bootstrap fu
 		Token:    "llamasrock",
 	})
 
-	jr, err := agent.NewJobRunner(agent.JobRunnerConfig{
+	jr, err := agent.NewJobRunner(l, client, agent.JobRunnerConfig{
 		Job:                j,
-		APIClient:          client,
-		Logger:             l,
 		AgentConfiguration: cfg,
 		MetricsScope:       scope,
 	})
