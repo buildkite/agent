@@ -43,6 +43,10 @@ var signalMap = map[string]Signal{
 	"SIGTERM": SIGTERM,
 }
 
+var ErrNotWaitStatus = errors.New(
+	"unimplemented for systems where exec.ExitError.Sys() is not syscall.WaitStatus",
+)
+
 type WaitStatus interface {
 	ExitStatus() int
 	Signaled() bool
@@ -205,8 +209,7 @@ func (p *Process) Run(ctx context.Context) error {
 		p.command.Stdout = p.conf.Stdout
 		p.command.Stderr = p.conf.Stderr
 
-		err := p.command.Start()
-		if err != nil {
+		if err := p.command.Start(); err != nil {
 			return err
 		}
 		if err := p.postStart(); err != nil {
@@ -247,14 +250,16 @@ func (p *Process) Run(ctx context.Context) error {
 
 	// Convert the wait result into a native WaitStatus
 	if p.waitResult != nil {
-		if err, ok := p.waitResult.(*exec.ExitError); ok {
-			if s, ok := err.Sys().(syscall.WaitStatus); ok {
-				p.status = s
-			} else {
-				return fmt.Errorf("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
-			}
-		} else {
-			return fmt.Errorf("Unexpected error type %T", p.waitResult)
+		exitErr := new(exec.ExitError)
+		if !errors.As(p.waitResult, &exitErr) {
+			return fmt.Errorf("unexpected error type %T: %w", p.waitResult, p.waitResult)
+		}
+
+		switch ws := exitErr.Sys().(type) {
+		case syscall.WaitStatus: // posix
+			p.status = ws
+		default: // not-posix
+			return ErrNotWaitStatus
 		}
 	}
 
