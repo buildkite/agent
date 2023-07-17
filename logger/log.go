@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/buildkite/agent/v3/version"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -80,7 +81,11 @@ func (l *ConsoleLogger) SetLevel(level Level) {
 
 func (l *ConsoleLogger) Debug(format string, v ...any) {
 	if l.level == DEBUG {
-		l.printer.Print(DEBUG, fmt.Sprintf(format, v...), l.fields)
+		debugFields := make(Fields, 0, len(l.fields)+2)
+		copy(debugFields, l.fields)
+		debugFields.Add(StringField("agent_version", version.Version()))
+		debugFields.Add(StringField("agent_build", version.BuildVersion()))
+		l.printer.Print(DEBUG, fmt.Sprintf(format, v...), debugFields)
 	}
 }
 
