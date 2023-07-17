@@ -212,6 +212,7 @@ func (p *Process) Run(ctx context.Context) error {
 		if err := p.command.Start(); err != nil {
 			return err
 		}
+
 		if err := p.postStart(); err != nil {
 			p.logger.Error("[Process] postStart failed: %v", err)
 		}
@@ -230,11 +231,24 @@ func (p *Process) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			p.logger.Debug("[Process] Context done, terminating")
-			if err := p.Terminate(); err != nil {
-				p.logger.Debug("[Process] Failed terminate: %v", err)
+			if err := p.Interrupt(); err != nil {
+				p.logger.Warn("[Process] Failed termination: %v", err)
 			}
-			return
 
+			select {
+			// Grace period for termination
+			case <-time.After(5 * time.Second):
+				p.logger.Info("[Process] Process %s hasn't terminated in time, killing", p.pid)
+				if err := p.Terminate(); err != nil {
+					p.logger.Error("[Process] error sending SIGKILL: %s", err)
+					return
+				}
+			// Process successfully terminated
+			case <-p.Done():
+				return
+			}
+
+		// context was not canceled before the process terminated
 		case <-p.Done():
 			return
 		}

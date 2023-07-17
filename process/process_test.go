@@ -3,18 +3,14 @@ package process_test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
-	"log"
 	"os"
-	"os/signal"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
@@ -139,7 +135,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	assertProcessDoesntExist(t, p)
 }
 
-func TestProcessTerminatesWhenContextDoes(t *testing.T) {
+func TestProcessTerminatesWhenContextDone(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -149,7 +145,7 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 
 	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=tester-signal"},
+		Env:    []string{"TEST_MAIN=tester-no-handler"},
 		Stdout: stdoutw,
 	})
 
@@ -165,7 +161,50 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 	cancel()
 
 	// wait until stdout is closed
-	io.ReadAll(stdoutr)
+	if _, err := io.ReadAll(stdoutr); err != nil {
+		t.Errorf("error reading stdout: %s", err)
+	}
+
+	if runtime.GOOS != "windows" {
+		if got, want := p.WaitStatus().Signaled(), true; got != want {
+			t.Fatalf("p.WaitStatus().Signaled() = %t, want %t", got, want)
+		}
+	}
+
+	<-p.Done()
+
+	assertProcessDoesntExist(t, p)
+}
+
+func TestProcessWithSlowHandlerKilledWhenContextDone(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stdoutr, stdoutw := io.Pipe()
+
+	p := process.New(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=tester-slow-handler"},
+		Stdout: stdoutw,
+	})
+
+	go func() {
+		defer stdoutw.Close()
+		if err := p.Run(ctx); err != nil {
+			t.Errorf("p.Run(ctx) = %v", err)
+		}
+	}()
+
+	waitUntilReady(t, stdoutr)
+
+	cancel()
+
+	// wait until stdout is closed
+	if _, err := io.ReadAll(stdoutr); err != nil {
+		t.Errorf("error reading stdout: %s", err)
+	}
 
 	if runtime.GOOS != "windows" {
 		if got, want := p.WaitStatus().Signaled(), true; got != want {
@@ -314,49 +353,5 @@ func waitUntilReady(t *testing.T, stdoutr *io.PipeReader) {
 	}
 	if got := string(buf); got != wantReady {
 		t.Fatalf("io.ReadFull(stdoutr, buf) read %q, want %q", got, wantReady)
-	}
-}
-
-// Invoked by `go test`, switch between helper and running tests based on env
-func TestMain(m *testing.M) {
-	switch os.Getenv("TEST_MAIN") {
-	case "tester":
-		for _, line := range strings.Split(strings.TrimSuffix(longTestOutput, "\n"), "\n") {
-			fmt.Printf("%s\n", line)
-			time.Sleep(time.Millisecond * 20)
-		}
-		os.Exit(0)
-
-	case "output":
-		fmt.Fprintf(os.Stdout, "llamas1")
-		fmt.Fprintf(os.Stderr, "alpacas1")
-		fmt.Fprintf(os.Stdout, "llamas2")
-		fmt.Fprintf(os.Stderr, "alpacas2")
-		os.Exit(0)
-
-	case "tester-signal":
-		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, os.Interrupt,
-			syscall.SIGTERM,
-			syscall.SIGINT,
-		)
-		fmt.Println("Ready")
-		fmt.Printf("SIG %v", <-signals)
-		os.Exit(0)
-
-	case "tester-pgid":
-		pid := syscall.Getpid()
-		pgid, err := process.GetPgid(pid)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if pgid != pid {
-			log.Fatalf("Bad pgid, expected %d, got %d", pid, pgid)
-		}
-		fmt.Printf("pid %d == pgid %d", pid, pgid)
-		os.Exit(0)
-
-	default:
-		os.Exit(m.Run())
 	}
 }
