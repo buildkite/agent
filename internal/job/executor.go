@@ -1838,6 +1838,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 		e.shell.Errorf("The command was interrupted by a signal: %v", commandErr)
 
 		// although error is an exit error, it's not returned. (seems like a bug)
+		// TODO: investigate phasing this out under a experiment
 		return nil, nil
 	case isExitError && isExitSignaled && !avoidRecursiveTrap:
 		// TODO: remove this branch when the experiment is promoted
