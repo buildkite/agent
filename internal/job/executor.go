@@ -1408,7 +1408,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 
 	e.shell.Commentf("Remote URL for git directory %s has changed (%s -> %s)!", gd, gotURL, repository)
 	e.shell.Commentf("This is usually because the repository has been renamed.")
-	e.shell.Commentf("If this is unexpected, you may see failures (e.g. 'bad object', 'did not send all necessary objects').")
+	e.shell.Commentf("If this is unexpected, you may see failures.")
 
 	args = []string{"remote", "set-url", "origin", repository}
 	if gitDir != "" {
