@@ -1327,9 +1327,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 
 	e.shell.Commentf("Updating existing repository mirror to find commit %s", e.Commit)
 
-	// Update the origin of the repository so we can gracefully handle repository renames
-	if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "set-url", "origin", repository); err != nil {
-		return "", err
+	// Update the origin of the repository so we can gracefully handle
+	// repository renames.
+	urlChanged, err := e.updateRemoteURL(ctx, mirrorDir, repository)
+	if err != nil {
+		return "", fmt.Errorf("setting remote URL: %w", err)
 	}
 
 	if isMainRepository {
@@ -1346,14 +1348,77 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 				return "", err
 			}
 		}
+	} else { // not the main repo.
+
+		// This is a mirror of a submodule.
+		// Update without specifying particular ref, since we don't know which
+		// ref is needed for the main build.
+		// (If it doesn't contain the needed ref, then the build would fail on
+		// a clean host or with a clean checkout.)
+		// TODO: Investigate getting the ref from the main repo and passing
+		// that in here.
+		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin"); err != nil {
+			return "", err
+		}
+	}
+
+	if urlChanged {
+		// Let's opportunistically fsck and gc.
+		// 1. In case of remote URL confusion (bug introduced in #1959), and
+		// 2. There's possibly some object churn when remotes are renamed.
+		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fsck"); err != nil {
+			e.shell.Logger.Warningf("Couldn't run git fsck: %v", err)
+		}
+		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "gc"); err != nil {
+			e.shell.Logger.Warningf("Couldn't run git gc: %v", err)
+		}
 	}
 
 	return mirrorDir, nil
 }
 
+// updateRemoteURL updates the URL for 'origin'. If gitDir == "", it assumes the
+// local repo is in the current directory, otherwise it includes --git-dir.
+// If the remote has changed, it logs some extra information. updateRemoteURL
+// reports if the remote URL changed.
+func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository string) (bool, error) {
+	// Update the origin of the repository so we can gracefully handle
+	// repository renames.
+
+	// First check what the existing remote is, for both logging and debugging
+	// purposes.
+	args := []string{"remote", "get-url", "origin"}
+	if gitDir != "" {
+		args = append([]string{"--git-dir", gitDir}, args...)
+	}
+	gotURL, err := e.shell.RunAndCapture(ctx, "git", args...)
+	if err != nil {
+		return false, err
+	}
+
+	if gotURL == repository {
+		// No need to update anything
+		return false, nil
+	}
+
+	gd := gitDir
+	if gd == "" {
+		gd = e.shell.Getwd()
+	}
+
+	e.shell.Commentf("Remote URL for git directory %s has changed (%s -> %s)!", gd, gotURL, repository)
+	e.shell.Commentf("This is usually because the repository has been renamed.")
+	e.shell.Commentf("If this is unexpected, you may see failures.")
+
+	args = []string{"remote", "set-url", "origin", repository}
+	if gitDir != "" {
+		args = append([]string{"--git-dir", gitDir}, args...)
+	}
+	return true, e.shell.Run(ctx, "git", args...)
+}
+
 func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
 	var mirrorDir string
-	var err error
 	// Skip updating the Git mirror before using it?
 	if e.ExecutorConfig.GitMirrorsSkipUpdate {
 		mirrorDir = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
@@ -1365,13 +1430,10 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
 			mirrorDir = ""
 		}
-	} else {
-		mirrorDir, err = e.updateGitMirror(ctx, repository)
-		if err != nil {
-			return "", err
-		}
+		return mirrorDir, nil
 	}
-	return mirrorDir, nil
+
+	return e.updateGitMirror(ctx, repository)
 }
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
@@ -1416,8 +1478,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	// Does the git directory exist?
 	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
 	if utils.FileExists(existingGitDir) {
-		// Update the origin of the repository so we can gracefully handle repository renames
-		if err := e.shell.Run(ctx, "git", "remote", "set-url", "origin", e.Repository); err != nil {
+		// Update the origin of the repository so we can gracefully handle
+		// repository renames
+		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
 			return fmt.Errorf("setting origin: %w", err)
 		}
 	} else {
@@ -1440,19 +1503,20 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	gitFetchFlags := e.GitFetchFlags
 
-	// If a refspec is provided then use it instead.
-	// For example, `refs/not/a/head`
-	if e.RefSpec != "" {
+	switch {
+	case e.RefSpec != "":
+		// If a refspec is provided then use it instead.
+		// For example, `refs/not/a/head`
 		e.shell.Commentf("Fetch and checkout custom refspec")
 		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.RefSpec); err != nil {
 			return fmt.Errorf("fetching refspec %q: %w", e.RefSpec, err)
 		}
 
+	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 		// GitHub has a special ref which lets us fetch a pull request head, whether
 		// or not there is a current head in this repository or another which
 		// references the commit. We presume a commit sha is provided. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-	} else if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
 		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 
@@ -1463,18 +1527,18 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		gitFetchHead, _ := e.shell.RunAndCapture(ctx, "git", "rev-parse", "FETCH_HEAD")
 		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
+	case e.Commit == "HEAD":
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
-	} else if e.Commit == "HEAD" {
 		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
 		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Branch); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
 
+	default:
 		// Otherwise fetch and checkout the commit directly. Some repositories don't
 		// support fetching a specific commit so we fall back to fetching all heads
 		// and tags, hoping that the commit is included.
-	} else {
 		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Commit); err != nil {
 			// By default `git fetch origin` will only fetch tags which are
 			// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
@@ -1499,12 +1563,14 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 	}
 
-	var gitSubmodules bool
-	if !e.GitSubmodules && hasGitSubmodules(e.shell) {
-		e.shell.Warningf("This repository has submodules, but submodules are disabled at an agent level")
-	} else if e.GitSubmodules && hasGitSubmodules(e.shell) {
-		e.shell.Commentf("Git submodules detected")
-		gitSubmodules = true
+	gitSubmodules := false
+	if hasGitSubmodules(e.shell) {
+		if e.GitSubmodules {
+			e.shell.Commentf("Git submodules detected")
+			gitSubmodules = true
+		} else {
+			e.shell.Warningf("This repository has submodules, but submodules are disabled at an agent level")
+		}
 	}
 
 	if gitSubmodules {
@@ -1536,35 +1602,38 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
 				}
 
-				if mirrorSubmodules {
-					mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
-					if err != nil {
-						return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
-					}
+				if !mirrorSubmodules {
+					continue
+				}
+				// It's all mirrored submodules for the rest of the loop.
 
-					// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-					if err := e.createCheckoutDir(); err != nil {
-						return fmt.Errorf("creating checkout dir: %w", err)
-					}
+				mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
+				if err != nil {
+					return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
+				}
 
-					// Tests use a local temp path for the repository, real repositories don't. Handle both.
-					var repositoryPath string
-					if !utils.FileExists(repository) {
-						repositoryPath = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
-					} else {
-						repositoryPath = repository
-					}
+				// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
+				if err := e.createCheckoutDir(); err != nil {
+					return fmt.Errorf("creating checkout dir: %w", err)
+				}
 
-					if mirrorDir != "" {
-						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
-					} else {
-						// Fall back to a clean update, rather than failing the checkout and therefore the build
-						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
-					}
+				// Tests use a local temp path for the repository, real repositories don't. Handle both.
+				var repositoryPath string
+				if !utils.FileExists(repository) {
+					repositoryPath = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+				} else {
+					repositoryPath = repository
+				}
 
-					if err := e.shell.Run(ctx, "git", submoduleArgs...); err != nil {
-						return fmt.Errorf("updating submodules: %w", err)
-					}
+				if mirrorDir != "" {
+					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
+				} else {
+					// Fall back to a clean update, rather than failing the checkout and therefore the build
+					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
+				}
+
+				if err := e.shell.Run(ctx, "git", submoduleArgs...); err != nil {
+					return fmt.Errorf("updating submodules: %w", err)
 				}
 			}
 
