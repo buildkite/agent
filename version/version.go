@@ -24,11 +24,10 @@ func Version() string {
 }
 
 func BuildVersion() string {
-	if buildVersion != "" {
-		return buildVersion
-	} else {
+	if buildVersion == "" {
 		return "x"
 	}
+	return buildVersion
 }
 
 func UserAgent() string {
