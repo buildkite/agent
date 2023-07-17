@@ -1348,14 +1348,29 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 				return "", err
 			}
 		}
-	} else {
-		if urlChanged {
-			// Fetch the whole thing, in case of remote URL confusion (bug
-			// introduced in #1959). A repository rename often corresponds with
-			// changes.
-			if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin"); err != nil {
-				return "", err
-			}
+	} else { // not the main repo.
+
+		// This is a mirror of a submodule.
+		// Update without specifying particular ref, since we don't know which
+		// ref is needed for the main build.
+		// (If it doesn't contain the needed ref, then the build would fail on
+		// a clean host or with a clean checkout.)
+		// TODO: Investigate getting the ref from the main repo and passing
+		// that in here.
+		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin"); err != nil {
+			return "", err
+		}
+	}
+
+	if urlChanged {
+		// Let's opportunistically fsck and gc.
+		// 1. In case of remote URL confusion (bug introduced in #1959), and
+		// 2. There's possibly some object churn when remotes are renamed.
+		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fsck"); err != nil {
+			e.shell.Logger.Warningf("Couldn't run git fsck: %v", err)
+		}
+		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "gc"); err != nil {
+			e.shell.Logger.Warningf("Couldn't run git gc: %v", err)
 		}
 	}
 
@@ -1548,7 +1563,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 	}
 
-	var gitSubmodules bool
+	gitSubmodules := false
 	if hasGitSubmodules(e.shell) {
 		if e.GitSubmodules {
 			e.shell.Commentf("Git submodules detected")
