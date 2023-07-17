@@ -75,6 +75,21 @@ type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
 
+	// The logger to use
+	Logger logger.Logger
+
+	// How often to check if the job has been cancelled
+	JobStatusInterval time.Duration
+
+	// A scope for metrics within a job
+	MetricsScope *metrics.Scope
+
+	// The job to run
+	Job *api.Job
+
+	// The APIClient that will be used when updating the job
+	APIClient APIClient
+
 	// What signal to use for worker cancellation
 	CancelSignal process.Signal
 
@@ -99,9 +114,6 @@ type JobRunner struct {
 
 	// The logger to use
 	logger logger.Logger
-
-	// The registered agent API record running this job
-	agent *api.AgentRegisterResponse
 
 	// The job being run
 	job *api.Job
@@ -149,32 +161,35 @@ type jobAPI interface {
 var _ jobRunner = (*JobRunner)(nil)
 
 // Initializes the job runner
-func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, job *api.Job, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
-	runner := &JobRunner{
-		agent:     ag,
-		job:       job,
-		logger:    l,
+func NewJobRunner(conf JobRunnerConfig) (jobRunner, error) {
+	r := &JobRunner{
+		job:       conf.Job,
+		logger:    conf.Logger,
 		conf:      conf,
-		metrics:   scope,
-		apiClient: apiClient,
+		metrics:   conf.MetricsScope,
+		apiClient: conf.APIClient,
+	}
+
+	if conf.JobStatusInterval == 0 {
+		conf.JobStatusInterval = 1 * time.Second
 	}
 
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
-	if job.Token != "" {
-		clientConf := apiClient.Config()
-		clientConf.Token = job.Token
-		runner.apiClient = api.NewClient(l, clientConf)
+	if r.job.Token != "" {
+		clientConf := r.apiClient.Config()
+		clientConf.Token = r.job.Token
+		r.apiClient = api.NewClient(r.logger, clientConf)
 	}
 
 	// Create our header times struct
-	runner.headerTimesStreamer = newHeaderTimesStreamer(l, runner.onUploadHeaderTime)
+	r.headerTimesStreamer = newHeaderTimesStreamer(r.logger, r.onUploadHeaderTime)
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
-	runner.logStreamer = NewLogStreamer(l, runner.onUploadChunk, LogStreamerConfig{
+	r.logStreamer = NewLogStreamer(r.logger, r.onUploadChunk, LogStreamerConfig{
 		Concurrency:       3,
-		MaxChunkSizeBytes: job.ChunksMaxSizeBytes,
+		MaxChunkSizeBytes: r.job.ChunksMaxSizeBytes,
 	})
 
 	// TempDir is not guaranteed to exist
@@ -187,21 +202,21 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	}
 
 	// Prepare a file to receive the given job environment
-	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", job.ID)); err != nil {
-		return runner, err
+	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.job.ID)); err != nil {
+		return r, err
 	} else {
-		l.Debug("[JobRunner] Created env file: %s", file.Name())
-		runner.envFile = file
+		r.logger.Debug("[JobRunner] Created env file: %s", file.Name())
+		r.envFile = file
 	}
 
-	env, err := runner.createEnvironment()
+	env, err := r.createEnvironment()
 	if err != nil {
 		return nil, err
 	}
 
 	// Our log streamer works off a buffer of output
-	runner.output = &process.Buffer{}
-	var outputWriter io.Writer = runner.output
+	r.output = &process.Buffer{}
+	var outputWriter io.Writer = r.output
 
 	// {stdout, stderr} -> processWriter	// processWriter = io.MultiWriter(allWriters...)
 	var allWriters []io.Writer
@@ -214,7 +229,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		jobLogDir := ""
 		if conf.AgentConfiguration.JobLogPath != "" {
 			jobLogDir = conf.AgentConfiguration.JobLogPath
-			l.Debug("[JobRunner] Job Log Path: %s", jobLogDir)
+			r.logger.Debug("[JobRunner] Job Log Path: %s", jobLogDir)
 		}
 		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
@@ -247,9 +262,9 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 		go func() {
 			// Use a scanner to process output line by line
-			err := process.NewScanner(l).ScanLines(pr, func(line string) {
+			err := process.NewScanner(r.logger).ScanLines(pr, func(line string) {
 				// Send to our header streamer and determine if it's a header
-				isHeader := runner.headerTimesStreamer.Scan(line)
+				isHeader := r.headerTimesStreamer.Scan(line)
 
 				// Prefix non-header log lines with timestamps
 				if !(isHeaderExpansion(line) || isHeader) {
@@ -260,7 +275,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 				_, _ = outputWriter.Write([]byte(line + "\n"))
 			})
 			if err != nil {
-				l.Error("[JobRunner] Encountered error %v", err)
+				r.logger.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
 
@@ -273,11 +288,11 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 		// Use a scanner to process output for headers only
 		go func() {
-			err := process.NewScanner(l).ScanLines(pr, func(line string) {
-				runner.headerTimesStreamer.Scan(line)
+			err := process.NewScanner(r.logger).ScanLines(pr, func(line string) {
+				r.headerTimesStreamer.Scan(line)
 			})
 			if err != nil {
-				l.Error("[JobRunner] Encountered error %v", err)
+				r.logger.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
 	}
@@ -285,11 +300,11 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
 		if conf.AgentConfiguration.LogFormat == "json" {
 			log := newJobLogger(
-				conf.AgentStdout, logger.StringField("org", job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
-				logger.StringField("pipeline", job.Env["BUILDKITE_PIPELINE_SLUG"]),
-				logger.StringField("branch", job.Env["BUILDKITE_BRANCH"]),
-				logger.StringField("queue", job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
-				logger.StringField("job_id", job.ID),
+				conf.AgentStdout, logger.StringField("org", r.job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
+				logger.StringField("pipeline", r.job.Env["BUILDKITE_PIPELINE_SLUG"]),
+				logger.StringField("branch", r.job.Env["BUILDKITE_BRANCH"]),
+				logger.StringField("queue", r.job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
+				logger.StringField("job_id", r.job.ID),
 			)
 			allWriters = append(allWriters, log)
 		} else {
@@ -312,8 +327,8 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
 		}
-		runner.process = kubernetes.New(l, kubernetes.Config{
-			AccessToken: apiClient.Config().Token,
+		r.process = kubernetes.New(r.logger, kubernetes.Config{
+			AccessToken: r.apiClient.Config().Token,
 			Stdout:      processWriter,
 			Stderr:      processWriter,
 			ClientCount: containerCount,
@@ -325,7 +340,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 			return nil, fmt.Errorf("splitting bootstrap-script (%q) into tokens: %w", conf.AgentConfiguration.BootstrapScript, err)
 		}
 
-		runner.process = process.New(l, process.Config{
+		r.process = process.New(r.logger, process.Config{
 			Path:            cmd[0],
 			Args:            cmd[1:],
 			Dir:             conf.AgentConfiguration.BuildPath,
@@ -339,18 +354,18 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	// Close the writer end of the pipe when the process finishes
 	go func() {
-		<-runner.process.Done()
+		<-r.process.Done()
 		if err := pw.Close(); err != nil {
-			l.Error("%v", err)
+			r.logger.Error("%v", err)
 		}
 		if tmpFile != nil {
 			if err := os.Remove(tmpFile.Name()); err != nil {
-				l.Error("%v", err)
+				r.logger.Error("%v", err)
 			}
 		}
 	}()
 
-	return runner, nil
+	return r, nil
 }
 
 // Runs the job
@@ -917,7 +932,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 
 		// Sleep for a bit, or until the job is finished
 		select {
-		case <-time.After(time.Duration(r.agent.JobStatusInterval) * time.Second):
+		case <-time.After(time.Duration(r.conf.JobStatusInterval) * time.Second):
 		case <-ctx.Done():
 			return
 		case <-r.process.Done():
