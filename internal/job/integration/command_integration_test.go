@@ -42,6 +42,8 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
