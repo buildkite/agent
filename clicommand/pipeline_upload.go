@@ -20,6 +20,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/redactor"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/urfave/cli"
+	"gopkg.in/yaml.v3"
 )
 
 const pipelineUploadHelpDescription = `Usage:
@@ -56,11 +57,13 @@ Example:
 type PipelineUploadConfig struct {
 	FilePath        string   `cli:"arg:0" label:"upload paths"`
 	Replace         bool     `cli:"replace"`
-	Job             string   `cli:"job"`
+	Job             string   `cli:"job"` // required, but not in dry-run mode
 	DryRun          bool     `cli:"dry-run"`
+	DryRunFormat    string   `cli:"format"`
 	NoInterpolation bool     `cli:"no-interpolation"`
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 	RejectSecrets   bool     `cli:"reject-secrets"`
+	SigningKeyPath  string   `cli:"signing-key-path"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -71,7 +74,7 @@ type PipelineUploadConfig struct {
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	AgentAccessToken string `cli:"agent-access-token"` // required, but not in dry-run mode
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
 }
@@ -97,6 +100,12 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "Rather than uploading the pipeline, it will be echoed to stdout",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN",
 		},
+		cli.StringFlag{
+			Name:   "format",
+			Usage:  "In dry-run mode, specifies the form to output the pipeline in. Must be one of: json,yaml",
+			Value:  "json",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN_FORMAT",
+		},
 		cli.BoolFlag{
 			Name:   "no-interpolation",
 			Usage:  "Skip variable interpolation the pipeline when uploaded",
@@ -106,6 +115,11 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "reject-secrets",
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+		},
+		cli.StringFlag{
+			Name:   "signing-key-path",
+			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing. For hmac-sha256, the raw file content is used as the shared key",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_PATH",
 		},
 
 		// API Flags
@@ -287,14 +301,50 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
-		// In dry-run mode we just output the generated pipeline to stdout
-		if cfg.DryRun {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
+		if cfg.SigningKeyPath != "" {
+			l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
 
-			// Dump json indented to stdout. All logging happens to stderr
-			// this can be used with other tools to get interpolated json
-			if err := enc.Encode(result); err != nil {
+			key, err := os.ReadFile(cfg.SigningKeyPath)
+			if err != nil {
+				l.Fatal("Couldn't read the signing key file: %v", err)
+			}
+
+			// TODO: Let the user choose an algorithm, then parse the key based
+			// on the algorithm, or put key parsing into
+			// pipeline.New{Signer,Verifier}.
+			// For now we only offer hmac-sha256, which takes []byte.
+
+			signer, err := pipeline.NewSigner("hmac-sha256", key)
+			if err != nil {
+				l.Fatal("Couldn't create a pipeline signer: %v", err)
+			}
+
+			if err := result.Sign(signer); err != nil {
+				l.Fatal("Couldn't sign pipeline: %v", err)
+			}
+		}
+
+		// In dry-run mode we just output the generated pipeline to stdout.
+		if cfg.DryRun {
+			var encode func(any) error
+
+			switch cfg.DryRunFormat {
+			case "json":
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				encode = enc.Encode
+
+			case "yaml":
+				encode = yaml.NewEncoder(os.Stdout).Encode
+
+			default:
+				l.Fatal("Unknown output format %q", cfg.DryRunFormat)
+			}
+
+			// All logging happens to stderr.
+			// So this can be used with other tools to get interpolated, signed
+			// JSON or YAML.
+			if err := encode(result); err != nil {
 				l.Fatal("%#v", err)
 			}
 

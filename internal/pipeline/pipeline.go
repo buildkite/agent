@@ -148,3 +148,12 @@ func (p *Pipeline) interpolateEnvBlock(envMap *env.Environment) error {
 		return nil
 	})
 }
+
+// Sign signs each signable part of the pipeline. Currently this is limited to
+// command steps (including command steps within group steps). The Signer is
+// reset before starting, and after each part. Parts are mutated directly, so an
+// error part-way through may leave some steps un-signed.
+func (p *Pipeline) Sign(signer Signer) error {
+	signer.Reset()
+	return p.Steps.sign(signer)
+}
