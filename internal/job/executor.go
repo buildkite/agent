@@ -1602,35 +1602,38 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
 				}
 
-				if mirrorSubmodules {
-					mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
-					if err != nil {
-						return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
-					}
+				if !mirrorSubmodules {
+					continue
+				}
+				// It's all mirrored submodules for the rest of the loop.
 
-					// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-					if err := e.createCheckoutDir(); err != nil {
-						return fmt.Errorf("creating checkout dir: %w", err)
-					}
+				mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
+				if err != nil {
+					return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
+				}
 
-					// Tests use a local temp path for the repository, real repositories don't. Handle both.
-					var repositoryPath string
-					if !utils.FileExists(repository) {
-						repositoryPath = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
-					} else {
-						repositoryPath = repository
-					}
+				// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
+				if err := e.createCheckoutDir(); err != nil {
+					return fmt.Errorf("creating checkout dir: %w", err)
+				}
 
-					if mirrorDir != "" {
-						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
-					} else {
-						// Fall back to a clean update, rather than failing the checkout and therefore the build
-						submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
-					}
+				// Tests use a local temp path for the repository, real repositories don't. Handle both.
+				var repositoryPath string
+				if !utils.FileExists(repository) {
+					repositoryPath = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+				} else {
+					repositoryPath = repository
+				}
 
-					if err := e.shell.Run(ctx, "git", submoduleArgs...); err != nil {
-						return fmt.Errorf("updating submodules: %w", err)
-					}
+				if mirrorDir != "" {
+					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
+				} else {
+					// Fall back to a clean update, rather than failing the checkout and therefore the build
+					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
+				}
+
+				if err := e.shell.Run(ctx, "git", submoduleArgs...); err != nil {
+					return fmt.Errorf("updating submodules: %w", err)
 				}
 			}
 
