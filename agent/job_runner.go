@@ -397,7 +397,10 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	// whether it is happy to proceed.
 	shouldRunJob := true
 
+	fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+	fmt.Println(r.conf.AgentConfiguration.HooksPath)
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
+		fmt.Println("found pre-bootstrap hook")
 		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true positive result from the hook
 		ok, err := r.executePreBootstrapHook(ctx, hook)
 		if !ok {
@@ -759,6 +762,7 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	}
 
 	if err := sh.RunWithoutPrompt(ctx, hook); err != nil {
+		fmt.Printf("err: %s\n", err)
 		r.logger.Error("Finished pre-bootstrap hook %q: job rejected", hook)
 		return false, err
 	}
