@@ -199,18 +199,9 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		return nil, err
 	}
 
-	// The bootstrap-script gets parsed based on the operating system
-	cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to split bootstrap-script (%q) into tokens: %v",
-			conf.AgentConfiguration.BootstrapScript, err)
-	}
-
 	// Our log streamer works off a buffer of output
 	runner.output = &process.Buffer{}
 	var outputWriter io.Writer = runner.output
-
-	pr, pw := io.Pipe()
 
 	// {stdout, stderr} -> processWriter	// processWriter = io.MultiWriter(allWriters...)
 	var allWriters []io.Writer
@@ -232,6 +223,8 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
 		outputWriter = io.MultiWriter(outputWriter, tmpFile)
 	}
+
+	pr, pw := io.Pipe()
 
 	switch {
 	case conf.AgentConfiguration.ANSITimestamps:
@@ -326,6 +319,12 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 			ClientCount: containerCount,
 		})
 	} else {
+		// The bootstrap-script gets parsed based on the operating system
+		cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
+		if err != nil {
+			return nil, fmt.Errorf("splitting bootstrap-script (%q) into tokens: %w", conf.AgentConfiguration.BootstrapScript, err)
+		}
+
 		runner.process = process.New(l, process.Config{
 			Path:            cmd[0],
 			Args:            cmd[1:],
@@ -390,29 +389,26 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Default exit status is no exit status
-	exitStatus := ""
-	signal := ""
-	signalReason := ""
+	exit := processExit{}
 
 	// Before executing the bootstrap process with the received Job env,
 	// execute the pre-bootstrap hook (if present) for it to tell us
 	// whether it is happy to proceed.
-	environmentCommandOkay := true
+	shouldRunJob := true
 
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
-		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true
-		// positive result from the hook
-		okay, err := r.executePreBootstrapHook(ctx, hook)
-		if !okay {
-			environmentCommandOkay = false
+		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true positive result from the hook
+		ok, err := r.executePreBootstrapHook(ctx, hook)
+		if !ok {
+			shouldRunJob = false
 
 			// Ensure the Job UI knows why this job resulted in failure
 			r.logStreamer.Process([]byte("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details"))
 			// But disclose more information in the agent logs
 			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
-			exitStatus = "-1"
-			signalReason = "agent_refused"
+			exit.Status = "-1"
+			exit.SignalReason = "agent_refused"
 		}
 	}
 
@@ -423,62 +419,22 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if environmentCommandOkay {
-		// Kick off log streaming and job status checking when the process
-		// starts.
+	if shouldRunJob {
+		// Kick off log streaming and job status checking when the process starts.
 		wg.Add(2)
 		go r.jobLogStreamer(cctx, &wg)
 		go r.jobCancellationChecker(cctx, &wg)
 
-		// Run the process. This will block until it finishes.
-		if err := r.process.Run(cctx); err != nil {
-			// Send the error as output
-			r.logStreamer.Process([]byte(err.Error()))
-
-			// The process did not run at all, so make sure it fails
-			exitStatus = "-1"
-			signalReason = "process_run_error"
-		} else {
-			// Intended to capture situations where the job-exec (aka bootstrap) container did not
-			// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
-			// to the user as they may be the caused by errors in the pipeline definition.
-			if r.cancelled && !r.stopped {
-				k8sProcess, ok := r.process.(*kubernetes.Runner)
-				if ok && k8sProcess.ClientStateUnknown() {
-					r.logStreamer.Process([]byte(
-						"Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.",
-					))
-				}
-			}
-
-			// Add the final output to the streamer
-			r.logStreamer.Process(r.output.ReadAndTruncate())
-
-			// Collect the finished process' exit status
-			exitStatus = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
-			if ws := r.process.WaitStatus(); ws.Signaled() {
-				signal = process.SignalString(ws.Signal())
-			}
-			if r.stopped {
-				// The agent is being gracefully stopped, and we signaled the job to end. Often due
-				// to pending host shutdown or EC2 spot instance termination
-				signalReason = "agent_stop"
-			} else if r.cancelled {
-				// The job was signaled because it was cancelled via the buildkite web UI
-				signalReason = "cancel"
-			}
-		}
+		exit = r.runJob(cctx)
 	}
 
 	// Store the finished at time
 	finishedAt := time.Now()
 
-	// Stop the header time streamer. This will block until all the chunks
-	// have been uploaded
+	// Stop the header time streamer. This will block until all the chunks have been uploaded
 	r.headerTimesStreamer.Stop()
 
-	// Stop the log streamer. This will block until all the chunks have
-	// been uploaded
+	// Stop the log streamer. This will block until all the chunks have been uploaded
 	r.logStreamer.Stop()
 
 	// Warn about failed chunks
@@ -502,10 +458,9 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Write some metrics about the job run
-	jobMetrics := r.metrics.With(metrics.Tags{
-		"exit_code": exitStatus,
-	})
-	if exitStatus == "0" {
+	jobMetrics := r.metrics.With(metrics.Tags{"exit_code": exit.Status})
+
+	if exit.Status == "0" {
 		jobMetrics.Timing("jobs.duration.success", finishedAt.Sub(startedAt))
 		jobMetrics.Count("jobs.success", 1)
 	} else {
@@ -514,14 +469,64 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Finish the build in the Buildkite Agent API
-	//
-	// Once we tell the API we're finished it might assign us new work, so make
-	// sure everything else is done first.
-	r.finishJob(ctx, finishedAt, exitStatus, signal, signalReason, r.logStreamer.FailedChunks())
+	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
+	r.finishJob(ctx, finishedAt, exit, r.logStreamer.FailedChunks())
 
 	r.logger.Info("Finished job %s", r.job.ID)
 
 	return nil
+}
+
+type processExit struct {
+	Status       string
+	Signal       string
+	SignalReason string
+}
+
+func (r *JobRunner) runJob(ctx context.Context) (exit processExit) {
+	// Run the process. This will block until it finishes.
+	if err := r.process.Run(ctx); err != nil {
+		// Send the error as output
+		r.logStreamer.Process([]byte(err.Error()))
+
+		// The process did not run at all, so make sure it fails
+		return processExit{
+			Status:       "-1",
+			SignalReason: "process_run_error",
+		}
+	}
+	// Intended to capture situations where the job-exec (aka bootstrap) container did not
+	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
+	// to the user as they may be the caused by errors in the pipeline definition.
+	if r.cancelled && !r.stopped {
+		k8sProcess, ok := r.process.(*kubernetes.Runner)
+		if ok && k8sProcess.ClientStateUnknown() {
+			r.logStreamer.Process([]byte(
+				"Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.",
+			))
+		}
+	}
+
+	// Add the final output to the streamer
+	r.logStreamer.Process(r.output.ReadAndTruncate())
+
+	// Collect the finished process' exit status
+	exit.Status = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+
+	if ws := r.process.WaitStatus(); ws.Signaled() {
+		exit.Signal = process.SignalString(ws.Signal())
+	}
+
+	if r.stopped {
+		// The agent is being gracefully stopped, and we signaled the job to end. Often due
+		// to pending host shutdown or EC2 spot instance termination
+		exit.SignalReason = "agent_stop"
+	} else if r.cancelled {
+		// The job was signaled because it was cancelled via the buildkite web UI
+		exit.SignalReason = "cancel"
+	}
+
+	return exit
 }
 
 func (r *JobRunner) CancelAndStop() error {
@@ -672,7 +677,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 
 	// PTY-mode is enabled by default in `start` and `bootstrap`, so we only need
 	// to propagate it if it's explicitly disabled.
-	if r.conf.AgentConfiguration.RunInPty == false {
+	if !r.conf.AgentConfiguration.RunInPty {
 		env["BUILDKITE_PTY"] = "false"
 	}
 
@@ -791,11 +796,11 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 
 // finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
 // cannot return successfully, this will retry for a long time.
-func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exitStatus, signal, signalReason string, failedChunkCount int) error {
+func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit processExit, failedChunkCount int) error {
 	r.job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
-	r.job.ExitStatus = exitStatus
-	r.job.Signal = signal
-	r.job.SignalReason = signalReason
+	r.job.ExitStatus = exit.Status
+	r.job.Signal = exit.Signal
+	r.job.SignalReason = exit.SignalReason
 	r.job.ChunksFailedCount = failedChunkCount
 
 	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
