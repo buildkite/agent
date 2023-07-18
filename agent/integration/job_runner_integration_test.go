@@ -15,12 +15,7 @@ import (
 )
 
 func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
-	agentAccessToken := "llamasrock"
 	jobToken := "actually-llamas-are-only-okay"
-
-	ag := &api.AgentRegisterResponse{
-		AccessToken: agentAccessToken,
-	}
 
 	j := &api.Job{
 		ID:                 "my-job-id",
@@ -32,8 +27,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	}
 
 	cfg := agent.AgentConfiguration{}
-
-	runJob(t, ag, j, cfg, func(c *bintest.Call) {
+	runJob(t, j, cfg, func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), jobToken; got != want {
 			t.Errorf("c.GetEnv(BUILDKITE_AGENT_ACCESS_TOKEN) = %q, want %q", got, want)
 		}
@@ -41,11 +35,9 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	})
 }
 
+// TODO 2023-07-17: What is this testing? How is it testing it?
+// Maybe that the job runner pulls the access token from the API client? but that's all handled in the `runJob` helper...
 func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
-	ag := &api.AgentRegisterResponse{
-		AccessToken: "llamasrock",
-	}
-
 	j := &api.Job{
 		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
@@ -55,8 +47,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	}
 
 	cfg := agent.AgentConfiguration{}
-
-	runJob(t, ag, j, cfg, func(c *bintest.Call) {
+	runJob(t, j, cfg, func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), "llamasrock"; got != want {
 			t.Errorf("c.GetEnv(BUILDKITE_AGENT_ACCESS_TOKEN) = %q, want %q", got, want)
 		}
@@ -65,10 +56,6 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 }
 
 func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
-	ag := &api.AgentRegisterResponse{
-		AccessToken: "llamasrock",
-	}
-
 	j := &api.Job{
 		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
@@ -78,20 +65,16 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 		},
 	}
 
-	cfg := agent.AgentConfiguration{
-		CommandEval: true,
-	}
-
-	runJob(t, ag, j, cfg, func(c *bintest.Call) {
+	cfg := agent.AgentConfiguration{CommandEval: true}
+	runJob(t, j, cfg, func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_COMMAND_EVAL"), "true"; got != want {
 			t.Errorf("c.GetEnv(BUILDKITE_COMMAND_EVAL) = %q, want %q", got, want)
 		}
 		c.Exit(0)
 	})
-
 }
 
-func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.AgentConfiguration, bootstrap func(c *bintest.Call)) {
+func runJob(t *testing.T, j *api.Job, cfg agent.AgentConfiguration, bootstrap func(c *bintest.Call)) {
 	// create a mock agent API
 	server := createTestAgentEndpoint(t, "my-job-id")
 	defer server.Close()
@@ -117,11 +100,13 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 
 	client := api.NewClient(l, api.Config{
 		Endpoint: server.URL,
-		Token:    ag.AccessToken,
+		Token:    "llamasrock",
 	})
 
-	jr, err := agent.NewJobRunner(l, scope, ag, j, client, agent.JobRunnerConfig{
+	jr, err := agent.NewJobRunner(l, client, agent.JobRunnerConfig{
+		Job:                j,
 		AgentConfiguration: cfg,
+		MetricsScope:       scope,
 	})
 	if err != nil {
 		t.Fatalf("agent.NewJobRunner() error = %v", err)
