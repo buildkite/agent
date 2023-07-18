@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -30,20 +29,7 @@ type Pipeline struct {
 // MarshalJSON marshals a pipeline to JSON. Special handling is needed because
 // yaml.v3 has "inline" but encoding/json has no concept of it.
 func (p *Pipeline) MarshalJSON() ([]byte, error) {
-	// Steps and Env have precedence over anything in RemainingFields.
-	out := make(map[string]any, len(p.RemainingFields)+2)
-	for k, v := range p.RemainingFields {
-		if v != nil {
-			out[k] = v
-		}
-	}
-
-	out["steps"] = p.Steps
-	if !p.Env.IsZero() {
-		out["env"] = p.Env
-	}
-
-	return json.Marshal(out)
+	return inlineFriendlyMarshalJSON(p)
 }
 
 // UnmarshalYAML unmarshals a pipeline from YAML. A custom unmarshaler is
