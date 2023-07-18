@@ -1166,7 +1166,8 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 					switch ge.Type {
 					// These types can fail because of corrupted checkouts
 					case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone,
-						gitErrorCheckoutRetryClean, gitErrorFetchRetryClean:
+						gitErrorCheckoutRetryClean, gitErrorFetchRetryClean,
+						gitErrorFetchBadObject:
 					// Otherwise, don't clean the checkout dir
 					default:
 						return err

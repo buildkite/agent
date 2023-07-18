@@ -23,6 +23,7 @@ const (
 	gitErrorClone
 	gitErrorFetch
 	gitErrorFetchRetryClean
+	gitErrorFetchBadObject
 	gitErrorClean
 	gitErrorCleanSubmodules
 )
@@ -139,6 +140,16 @@ func gitFetch(ctx context.Context, sh shellRunner, gitFetchFlags, repository str
 	}
 
 	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
+		// "fatal: bad object" can happen when the local repo in the checkout
+		// directory is corrupted, not just the remote or the mirror.
+		// When using git mirrors, the existing checkout directory might have a
+		// reference to an object that it expects in the mirror, but the mirror
+		// no longer contains it (for whatever reason).
+		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
+		if strings.HasPrefix(err.Error(), "fatal: bad object") {
+			return &gitError{error: err, Type: gitErrorFetchBadObject}
+		}
+
 		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorFetchRetryClean}
