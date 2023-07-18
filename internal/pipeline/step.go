@@ -27,6 +27,7 @@ type Step interface {
 
 // CommandStep models a command step.
 //
+// If you add a field to this struct, ensure you add a corresponding block to the `MarshallJSON` method! It won't happen automatically.
 // Standard caveats apply - see the package comment.
 type CommandStep struct {
 	Command   string     `yaml:"command"`
@@ -47,11 +48,17 @@ func (c *CommandStep) MarshalJSON() ([]byte, error) {
 			out[k] = v
 		}
 	}
+
 	if c.Command != "" {
 		out["command"] = c.Command
 	}
+
 	if len(c.Plugins) > 0 {
 		out["plugins"] = c.Plugins
+	}
+
+	if c.Signature != nil {
+		out["signature"] = c.Signature
 	}
 
 	return json.Marshal(out)
