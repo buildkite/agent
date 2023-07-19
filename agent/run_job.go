@@ -111,13 +111,11 @@ func (r *JobRunner) runJob(ctx context.Context) *processExit {
 	// Intended to capture situations where the job-exec (aka bootstrap) container did not
 	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
 	// to the user as they may be the caused by errors in the pipeline definition.
-	if r.cancelled && !r.stopped {
-		k8sProcess, ok := r.process.(*kubernetes.Runner)
-		if ok && k8sProcess.ClientStateUnknown() {
-			r.logStreamer.Process([]byte(
-				"Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.",
-			))
-		}
+	k8sProcess, ok := r.process.(*kubernetes.Runner)
+	if ok && r.cancelled && !r.stopped && k8sProcess.ClientStateUnknown() {
+		r.logStreamer.Process([]byte(
+			"Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.",
+		))
 	}
 
 	// Add the final output to the streamer
@@ -184,7 +182,6 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit *proce
 	r.finishJob(ctx, finishedAt, exit, r.logStreamer.FailedChunks())
 
 	r.logger.Info("Finished job %s", r.conf.Job.ID)
-
 }
 
 func (r *JobRunner) CancelAndStop() error {
@@ -209,10 +206,10 @@ func (r *JobRunner) Cancel() error {
 
 	reason := ""
 	if r.stopped {
-		reason = " (agent stopping)"
+		reason = "(agent stopping)"
 	}
-	r.logger.Info("Canceling job %s with a grace period of %ds%s",
-		r.conf.Job.ID, r.conf.AgentConfiguration.CancelGracePeriod, reason)
+
+	r.logger.Info("Canceling job %s with a grace period of %ds %s", r.conf.Job.ID, r.conf.AgentConfiguration.CancelGracePeriod, reason)
 
 	r.cancelled = true
 
