@@ -127,6 +127,9 @@ type JobRunner struct {
 	// If the job is being cancelled
 	cancelled bool
 
+	// When the job was started
+	startedAt time.Time
+
 	// If the agent is being stopped
 	stopped bool
 
@@ -361,12 +364,12 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
 	defer done()
 
-	startedAt := time.Now()
+	r.startedAt = time.Now()
 
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
 	// up like started log streamer workers, and so on.
-	if err := r.startJob(ctx, startedAt); err != nil {
+	if err := r.startJob(ctx, r.startedAt); err != nil {
 		return err
 	}
 
@@ -377,7 +380,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		if err != nil {
 			r.logger.Error("Metric submission failed to parse %s", r.conf.Job.RunnableAt)
 		} else {
-			r.conf.MetricsScope.Timing("queue.duration", startedAt.Sub(runnableAt))
+			r.conf.MetricsScope.Timing("queue.duration", r.startedAt.Sub(runnableAt))
 		}
 	}
 
@@ -390,31 +393,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Default exit status is no exit status
-	exit := processExit{}
-
-	// Before executing the bootstrap process with the received Job env,
-	// execute the pre-bootstrap hook (if present) for it to tell us
-	// whether it is happy to proceed.
-	shouldRunJob := true
-
-	fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-	fmt.Println(r.conf.AgentConfiguration.HooksPath)
-	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
-		fmt.Println("found pre-bootstrap hook")
-		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true positive result from the hook
-		ok, err := r.executePreBootstrapHook(ctx, hook)
-		if !ok {
-			shouldRunJob = false
-
-			// Ensure the Job UI knows why this job resulted in failure
-			r.logStreamer.Process([]byte("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details"))
-			// But disclose more information in the agent logs
-			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
-
-			exit.Status = "-1"
-			exit.SignalReason = "agent_refused"
-		}
-	}
+	exit := &processExit{}
 
 	// Used to wait on various routines that we spin up
 	var wg sync.WaitGroup
@@ -423,17 +402,39 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if shouldRunJob {
-		// Kick off log streaming and job status checking when the process starts.
-		wg.Add(2)
-		go r.jobLogStreamer(cctx, &wg)
-		go r.jobCancellationChecker(cctx, &wg)
+	defer r.cleanup(cctx, &wg, exit)
 
-		exit = r.runJob(cctx)
+	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for
+	// it to tell us whether it is happy to proceed.
+	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
+		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true positive result from the hook
+		ok, err := r.executePreBootstrapHook(ctx, hook)
+		if !ok {
+			// Ensure the Job UI knows why this job resulted in failure
+			r.logStreamer.Process([]byte("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details"))
+			// But disclose more information in the agent logs
+			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
+
+			exit.Status = "-1"
+			exit.SignalReason = "agent_refused"
+
+			return nil
+		}
 	}
 
-	// Store the finished at time
+	// Kick off log streaming and job status checking when the process starts.
+	wg.Add(2)
+	go r.jobLogStreamer(cctx, &wg)
+	go r.jobCancellationChecker(cctx, &wg)
+
+	*exit = r.runJob(cctx)
+
+	return nil
+}
+
+func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit *processExit) {
 	finishedAt := time.Now()
+	fmt.Println(exit)
 
 	// Stop the header time streamer. This will block until all the chunks have been uploaded
 	r.headerTimesStreamer.Stop()
@@ -445,9 +446,6 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	if count := r.logStreamer.FailedChunks(); count > 0 {
 		r.logger.Warn("%d chunks failed to upload for this job", count)
 	}
-
-	// Ensure the additional goroutines are stopped.
-	cancel()
 
 	// Wait for the routines that we spun up to finish
 	r.logger.Debug("[JobRunner] Waiting for all other routines to finish")
@@ -465,10 +463,10 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	jobMetrics := r.conf.MetricsScope.With(metrics.Tags{"exit_code": exit.Status})
 
 	if exit.Status == "0" {
-		jobMetrics.Timing("jobs.duration.success", finishedAt.Sub(startedAt))
+		jobMetrics.Timing("jobs.duration.success", finishedAt.Sub(r.startedAt))
 		jobMetrics.Count("jobs.success", 1)
 	} else {
-		jobMetrics.Timing("jobs.duration.error", finishedAt.Sub(startedAt))
+		jobMetrics.Timing("jobs.duration.error", finishedAt.Sub(r.startedAt))
 		jobMetrics.Count("jobs.failed", 1)
 	}
 
@@ -478,8 +476,34 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	r.logger.Info("Finished job %s", r.conf.Job.ID)
 
-	return nil
 }
+
+// type verificationResult struct {
+// 	couldVerify bool
+// 	didVerify   bool
+// }
+
+// func (r *JobRunner) verifySignature() verificationResult {
+// 	result := verificationResult{couldVerify: false, didVerify: false}
+// 	step := r.conf.Job.Step
+// 	if step == nil {
+// 		// There's no step to pull a signature from, so we can't verify it
+// 		return result
+// 	}
+
+// 	sig := step.Signature
+// 	if sig == nil {
+// 		// There's no signature to verify
+// 		return verificationResult{couldVerify: false, didVerify: false}
+// 	}
+
+// 	if sig.Algorithm == "" || sig.Value == "" || len(sig.SignedFields) == 0 {
+// 		// There's not enough information to verify the signature
+// 		return verificationResult{couldVerify: false, didVerify: false}
+// 	}
+
+// 	return verificationResult{couldVerify: true, didVerify: true}
+// }
 
 type processExit struct {
 	Status       string
@@ -516,7 +540,6 @@ func (r *JobRunner) runJob(ctx context.Context) (exit processExit) {
 
 	// Collect the finished process' exit status
 	exit.Status = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
-
 	if ws := r.process.WaitStatus(); ws.Signaled() {
 		exit.Signal = process.SignalString(ws.Signal())
 	}
@@ -801,7 +824,7 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 
 // finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
 // cannot return successfully, this will retry for a long time.
-func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit processExit, failedChunkCount int) error {
+func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit *processExit, failedChunkCount int) error {
 	r.conf.Job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.conf.Job.ExitStatus = exit.Status
 	r.conf.Job.Signal = exit.Signal
