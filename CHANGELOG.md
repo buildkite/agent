@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.50.0](https://github.com/buildkite/agent/tree/v3.50.0) (2023-07-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.49.0...v3.50.0)
+
+### Added
+- We're working on making pipeline signing a feature of the agent! But it's definitely not ready for primetime yet... [#2216](https://github.com/buildkite/agent/pull/2216), [#2200](https://github.com/buildkite/agent/pull/2200), [#2191](https://github.com/buildkite/agent/pull/2191), [#2186](https://github.com/buildkite/agent/pull/2186), [#2190](https://github.com/buildkite/agent/pull/2190), [#2181](https://github.com/buildkite/agent/pull/2181), [#2184](https://github.com/buildkite/agent/pull/2184), [#2173](https://github.com/buildkite/agent/pull/2173), [#2180](https://github.com/buildkite/agent/pull/2180) (@moskyb, @DrJosh9000)
+- Add option to configure location of Job Log tmp file [#2174](https://github.com/buildkite/agent/pull/2174) (@yhartanto)
+- Add `avoid-recursive-trap` experiment to avoid a recursive trap [#2209](https://github.com/buildkite/agent/pull/2209) (@triarius)
+- Load the AWS Shared Credentials for s3 operations [#1730](https://github.com/buildkite/agent/pull/1730) (@lox)
+
+### Fixed
+- Add workaround for `fatal: bad object` errors when fetching from a git mirror [#2218](https://github.com/buildkite/agent/pull/2218) (@DrJosh9000)
+- Fix missing fetch when updating git mirrors of submodules (https://github.com/buildkite/agent/pull/2203) (@DrJosh9000)
+- Use a unique name for each agent started using the systemd template unit file [#2205](https://github.com/buildkite/agent/pull/2205) (@DavidGregory084)
+- Polyglot hooks wasn't documented in EXPERIMENTS.md, so we fixed that [#2169](https://github.com/buildkite/agent/pull/2169) (@moskyb)
+- De-experimentify wording on the status page [#2172](https://github.com/buildkite/agent/pull/2172) (@DrJosh9000)
+- The secrets redactor now properly redacts multi-line secrets and overlapping secrets [#2154](https://github.com/buildkite/agent/pull/2154) (@DrJosh9000)
+
+### Changed
+- Print agent version and build in debug logs [#2211](https://github.com/buildkite/agent/pull/2211) (@triarius)
+- Include the version each experiment was promoted [#2199](https://github.com/buildkite/agent/pull/2199) (@DrJosh9000)
+
+### Various code cleanups and meta-fixes
+- Fix docker builds for Ubuntu 22.04 [#2217](https://github.com/buildkite/agent/pull/2217) (@moskyb)
+- JobRunner cleanup [#2207](https://github.com/buildkite/agent/pull/2207) (@moskyb)
+- Simplify command phase [#2206](https://github.com/buildkite/agent/pull/2206) (@triarius)
+- Rename `Bootstrap` struct (and friends) to `Executor` [#2188](https://github.com/buildkite/agent/pull/2188) (@moskyb)
+- Upgrade docker compose plugin to v4.14, use docker compose v2 [#2189](https://github.com/buildkite/agent/pull/2189) (@moskyb)
+- Rename package bootstrap -> job [#2187](https://github.com/buildkite/agent/pull/2187) (@moskyb)
+- Clarify code around creating a process group [#2185](https://github.com/buildkite/agent/pull/2185) (@triarius)
+- Fix docker builds for Ubuntu 22.04 [#2217](https://github.com/buildkite/agent/pull/2217) (@moskyb)
+
+And the usual amount of @dependabot[bot] updates!
+
 ## [v3.49.0](https://github.com/buildkite/agent/tree/v3.49.0) (2023-06-21)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.48.0...v3.49.0)
 
