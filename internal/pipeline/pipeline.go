@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/buildkite/agent/v3/env"
@@ -10,9 +9,6 @@ import (
 	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
-
-// Returned when a pipeline has no steps.
-var ErrNoSteps = errors.New("pipeline has no steps")
 
 // Pipeline models a pipeline.
 //
@@ -56,9 +52,6 @@ func (p *Pipeline) UnmarshalYAML(n *yaml.Node) error {
 		var q pipelineWrapper
 		if err := n.Decode(&q); err != nil {
 			return err
-		}
-		if len(q.Steps) == 0 {
-			return ErrNoSteps
 		}
 		*p = Pipeline(q)
 
