@@ -128,11 +128,13 @@ func (r *JobRunner) runJob(ctx context.Context) *processExit {
 		exit.Signal = process.SignalString(ws.Signal())
 	}
 
-	if r.stopped {
+	switch {
+	case r.stopped:
 		// The agent is being gracefully stopped, and we signaled the job to end. Often due
 		// to pending host shutdown or EC2 spot instance termination
 		exit.SignalReason = "agent_stop"
-	} else if r.cancelled {
+
+	case r.cancelled:
 		// The job was signaled because it was cancelled via the buildkite web UI
 		exit.SignalReason = "cancel"
 	}
