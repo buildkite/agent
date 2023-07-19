@@ -83,3 +83,17 @@ Like `job-api`, this exposes a local API for interacting with the agent process.
 The API is exposed via a Unix Domain Socket. Unlike the `job-api`, the path to the socket is not available via a environment variable - rather, there is a single (configurable) path on the system.
 
 **Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™.
+
+### `avoid-recursive-trap`
+
+Some jobs are run as a bash script of the form:
+
+```shell
+trap "kill -- $$" INT TERM QUIT; <command>
+```
+
+We now understand this causes a bug, and we want to avoid it. Enabling this experiment removes the `trap` that surrounds non-script commands.
+
+https://github.com/buildkite/agent/blob/40b8a5f3794b04bd64da6e2527857add849a35bd/internal/job/executor.go#L1980-L1993
+
+**Status:** Since the default behaviour is buggy, we will be promoting this to non-experiment soon™️.
