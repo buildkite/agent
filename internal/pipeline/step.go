@@ -170,7 +170,27 @@ type GroupStep struct {
 	RemainingFields map[string]any `yaml:",inline"`
 }
 
-func (s GroupStep) interpolate(env interpolate.Env) error {
+// UnmarshalYAML unmarshals n into a group step. This is needed because yaml.v3
+// likes to normalise empty slices into nil, but we want Steps to be Steps{}
+// when empty.
+func (s *GroupStep) UnmarshalYAML(n *yaml.Node) error {
+	// Decode into this secret wrapper (to avoid infinite recursion), then copy
+	// the contents
+	type groupStepWrapper GroupStep
+	var t groupStepWrapper
+	if err := n.Decode(&t); err != nil {
+		return err
+	}
+	*s = GroupStep(t)
+
+	// Ensure Steps is never nil. Server side expects a sequence.
+	if s.Steps == nil {
+		s.Steps = Steps{}
+	}
+	return nil
+}
+
+func (s *GroupStep) interpolate(env interpolate.Env) error {
 	if err := s.Steps.interpolate(env); err != nil {
 		return err
 	}

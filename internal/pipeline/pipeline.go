@@ -64,6 +64,11 @@ func (p *Pipeline) UnmarshalYAML(n *yaml.Node) error {
 		return fmt.Errorf("line %d, col %d: unsupported YAML node kind %x for Pipeline document contents", n.Line, n.Column, n.Kind)
 	}
 
+	// Ensure Steps is never nil. Server side expects a sequence.
+	if p.Steps == nil {
+		p.Steps = Steps{}
+	}
+
 	return nil
 }
 
