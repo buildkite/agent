@@ -2,8 +2,8 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -72,7 +72,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			// But disclose more information in the agent logs
 			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
-			exit.Status = "-1"
+			exit.Status = -1
 			exit.SignalReason = "agent_refused"
 
 			return nil
@@ -90,7 +90,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 }
 
 type processExit struct {
-	Status       string
+	Status       int
 	Signal       string
 	SignalReason string
 }
@@ -104,7 +104,7 @@ func (r *JobRunner) runJob(ctx context.Context) *processExit {
 
 		// The process did not run at all, so make sure it fails
 		return &processExit{
-			Status:       "-1",
+			Status:       -1,
 			SignalReason: "process_run_error",
 		}
 	}
@@ -122,7 +122,7 @@ func (r *JobRunner) runJob(ctx context.Context) *processExit {
 	r.logStreamer.Process(r.output.ReadAndTruncate())
 
 	// Collect the finished process' exit status
-	exit.Status = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+	exit.Status = r.process.WaitStatus().ExitStatus()
 
 	if ws := r.process.WaitStatus(); ws.Signaled() {
 		exit.Signal = process.SignalString(ws.Signal())
@@ -169,9 +169,9 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit *proce
 	}
 
 	// Write some metrics about the job run
-	jobMetrics := r.conf.MetricsScope.With(metrics.Tags{"exit_code": exit.Status})
+	jobMetrics := r.conf.MetricsScope.With(metrics.Tags{"exit_code": strconv.Itoa(exit.Status)})
 
-	if exit.Status == "0" {
+	if exit.Status == 0 {
 		jobMetrics.Timing("jobs.duration.success", finishedAt.Sub(r.startedAt))
 		jobMetrics.Count("jobs.success", 1)
 	} else {
