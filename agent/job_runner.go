@@ -697,7 +697,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 
 		// Sleep for a bit, or until the job is finished
 		select {
-		case <-time.After(time.Duration(r.conf.JobStatusInterval) * time.Second):
+		case <-time.After(r.conf.JobStatusInterval):
 		case <-ctx.Done():
 			return
 		case <-r.process.Done():
