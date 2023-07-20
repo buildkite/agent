@@ -158,29 +158,37 @@ steps:
 }
 
 func TestParserParsesNoSteps(t *testing.T) {
-	input := strings.NewReader("steps:\n\n")
-	got, err := Parse(input)
-	if err != nil {
-		t.Fatalf("Parse(input) error = %v", err)
+	tests := []string{
+		"steps: null\n",
+		"steps:\n\n",
+		"steps: []\n",
 	}
 
-	want := &Pipeline{
-		Steps: nil,
-	}
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
-	}
+	for _, test := range tests {
+		input := strings.NewReader(test)
+		got, err := Parse(input)
+		if err != nil {
+			t.Fatalf("Parse(input) error = %v", err)
+		}
 
-	gotJSON, err := json.MarshalIndent(got, "", "  ")
-	if err != nil {
-		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
-	}
+		want := &Pipeline{
+			Steps: Steps{},
+		}
+		if diff := cmp.Diff(got, want); diff != "" {
+			t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+		}
 
-	const wantJSON = `{
-  "steps": null
+		gotJSON, err := json.MarshalIndent(got, "", "  ")
+		if err != nil {
+			t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+		}
+
+		const wantJSON = `{
+  "steps": []
 }`
-	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
-		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+			t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+		}
 	}
 }
 
@@ -194,6 +202,8 @@ steps:
       - command: hello ${ENV_VAR_FRIEND}
       - wait
       - block: goodbye
+  - group:
+    steps: null
 `)
 	got, err := Parse(input)
 	if err != nil {
@@ -211,6 +221,12 @@ steps:
 					WaitStep{},
 					InputStep{"block": "goodbye"},
 				},
+				RemainingFields: map[string]any{
+					"group": nil,
+				},
+			},
+			&GroupStep{
+				Steps: Steps{},
 				RemainingFields: map[string]any{
 					"group": nil,
 				},
@@ -239,6 +255,10 @@ steps:
           "block": "goodbye"
         }
       ]
+    },
+    {
+      "group": null,
+      "steps": []
     }
   ]
 }`

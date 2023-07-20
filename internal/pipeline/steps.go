@@ -12,14 +12,13 @@ import (
 // since it has custom logic for determining the correct step type.
 type Steps []Step
 
-// UnmarshalYAML unmarshals a sequence (of steps). An error wrapping ErrNoSteps
-// is returned if given an empty sequence.
+// UnmarshalYAML unmarshals a sequence (of steps).
 func (s *Steps) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind != yaml.SequenceNode {
 		return fmt.Errorf("line %d, col %d: wrong node kind %v for step sequence", n.Line, n.Column, n.Kind)
 	}
 	// Preallocate slice
-	if len(*s) == 0 && len(n.Content) > 0 {
+	if len(*s) == 0 {
 		*s = make(Steps, 0, len(n.Content))
 	}
 	seen := make(map[*yaml.Node]bool)
