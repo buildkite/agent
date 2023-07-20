@@ -182,13 +182,5 @@ func (GroupStep) stepTag() {}
 // MarshalJSON marshals the step to JSON. Special handling is needed because
 // yaml.v3 has "inline" but encoding/json has no concept of it.
 func (g *GroupStep) MarshalJSON() ([]byte, error) {
-	out := map[string]any{
-		"steps": g.Steps,
-	}
-	for k, v := range g.RemainingFields {
-		if v != nil {
-			out[k] = v
-		}
-	}
-	return json.Marshal(out)
+	return inlineFriendlyMarshalJSON(g)
 }

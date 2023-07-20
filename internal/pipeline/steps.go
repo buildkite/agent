@@ -18,7 +18,10 @@ func (s *Steps) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind != yaml.SequenceNode {
 		return fmt.Errorf("line %d, col %d: wrong node kind %v for step sequence", n.Line, n.Column, n.Kind)
 	}
-
+	// Preallocate slice
+	if len(*s) == 0 && len(n.Content) > 0 {
+		*s = make(Steps, 0, len(n.Content))
+	}
 	seen := make(map[*yaml.Node]bool)
 	for _, c := range n.Content {
 		step, err := unmarshalStep(seen, c)

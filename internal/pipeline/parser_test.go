@@ -157,6 +157,86 @@ steps:
 	}
 }
 
+func TestParserParsesNoSteps(t *testing.T) {
+	input := strings.NewReader("steps:\n\n")
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: nil,
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "steps": null
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestParserParsesGroups(t *testing.T) {
+	input := strings.NewReader(`---
+steps:
+  - group:
+    steps:
+      - command: echo foo
+      - wait
+`)
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&GroupStep{
+				Steps: Steps{
+					&CommandStep{Command: "echo foo"},
+					WaitStep{},
+				},
+				RemainingFields: map[string]any{
+					"group": nil,
+				},
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "steps": [
+    {
+      "group": null,
+      "steps": [
+        {
+          "command": "echo foo"
+        },
+        "wait"
+      ]
+    }
+  ]
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserReturnsYAMLParsingErrors(t *testing.T) {
 	input := strings.NewReader("steps: %blah%")
 	_, err := Parse(input)
