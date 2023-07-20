@@ -5,8 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.50.1](https://github.com/buildkite/agent/tree/v3.50.1) (2023-07-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.49.0...v3.50.1)
+
+### Fixed
+- Empty or zero-length `steps` is no longer a parser error, and is normalised to \[\] instead [#2225](https://github.com/buildkite/agent/pull/2225), [#2229](https://github.com/buildkite/agent/pull/2229) (@DrJosh9000)
+- Group steps now correctly include the `group` key [#2226](https://github.com/buildkite/agent/pull/2226) (@DrJosh9000)
+- Increases to test coverage for the new parser [#2227](https://github.com/buildkite/agent/pull/2227) (@DrJosh9000)
+
 ## [v3.50.0](https://github.com/buildkite/agent/tree/v3.50.0) (2023-07-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.49.0...v3.50.0)
+
+⚠️ This release contains bugs in the (new) pipeline parser. Please use the next release instead. ⚠️
 
 ### Added
 - We're working on making pipeline signing a feature of the agent! But it's definitely not ready for primetime yet... [#2216](https://github.com/buildkite/agent/pull/2216), [#2200](https://github.com/buildkite/agent/pull/2200), [#2191](https://github.com/buildkite/agent/pull/2191), [#2186](https://github.com/buildkite/agent/pull/2186), [#2190](https://github.com/buildkite/agent/pull/2190), [#2181](https://github.com/buildkite/agent/pull/2181), [#2184](https://github.com/buildkite/agent/pull/2184), [#2173](https://github.com/buildkite/agent/pull/2173), [#2180](https://github.com/buildkite/agent/pull/2180) (@moskyb, @DrJosh9000)
