@@ -185,24 +185,31 @@ func TestParserParsesNoSteps(t *testing.T) {
 }
 
 func TestParserParsesGroups(t *testing.T) {
+	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
+
 	input := strings.NewReader(`---
 steps:
   - group:
     steps:
-      - command: echo foo
+      - command: hello ${ENV_VAR_FRIEND}
       - wait
+      - block: goodbye
 `)
 	got, err := Parse(input)
 	if err != nil {
 		t.Fatalf("Parse(input) error = %v", err)
+	}
+	if err := got.Interpolate(envMap); err != nil {
+		t.Fatalf("p.Interpolate(%v) error = %v", envMap, err)
 	}
 
 	want := &Pipeline{
 		Steps: Steps{
 			&GroupStep{
 				Steps: Steps{
-					&CommandStep{Command: "echo foo"},
+					&CommandStep{Command: `hello "friend"`},
 					WaitStep{},
+					InputStep{"block": "goodbye"},
 				},
 				RemainingFields: map[string]any{
 					"group": nil,
@@ -225,9 +232,12 @@ steps:
       "group": null,
       "steps": [
         {
-          "command": "echo foo"
+          "command": "hello \"friend\""
         },
-        "wait"
+        "wait",
+        {
+          "block": "goodbye"
+        }
       ]
     }
   ]
