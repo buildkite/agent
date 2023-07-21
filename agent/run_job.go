@@ -50,16 +50,17 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Default exit status is no exit status
-	exit := &processExit{}
+	exit := processExit{}
 
 	// Used to wait on various routines that we spin up
 	var wg sync.WaitGroup
 
 	// Set up a child context for helper goroutines related to running the job.
 	cctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	defer r.cleanup(cctx, &wg, exit)
+	defer func(ctx context.Context, wg *sync.WaitGroup) {
+		cancel()
+		r.cleanup(ctx, wg, exit)
+	}(ctx, &wg) // Note the non-cancellable context (ctx rather than cctx) here - we don't want to be interrupted during cleanup
 
 	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for
 	// it to tell us whether it is happy to proceed.
@@ -95,15 +96,15 @@ type processExit struct {
 	SignalReason string
 }
 
-func (r *JobRunner) runJob(ctx context.Context) *processExit {
-	exit := &processExit{}
+func (r *JobRunner) runJob(ctx context.Context) processExit {
+	exit := processExit{}
 	// Run the process. This will block until it finishes.
 	if err := r.process.Run(ctx); err != nil {
 		// Send the error as output
 		r.logStreamer.Process([]byte(err.Error()))
 
 		// The process did not run at all, so make sure it fails
-		return &processExit{
+		return processExit{
 			Status:       -1,
 			SignalReason: "process_run_error",
 		}
@@ -142,7 +143,7 @@ func (r *JobRunner) runJob(ctx context.Context) *processExit {
 	return exit
 }
 
-func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit *processExit) {
+func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit processExit) {
 	finishedAt := time.Now()
 
 	// Stop the header time streamer. This will block until all the chunks have been uploaded

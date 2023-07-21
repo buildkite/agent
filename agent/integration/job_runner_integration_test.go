@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/agent"
@@ -56,13 +57,7 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 
 	runJob(t, j, server, agent.AgentConfiguration{HooksPath: hooksDir}, mb)
 
-	finishRequestBody := bytes.NewBuffer(e.calls["/jobs/my-job-id/finish"][0])
-
-	var job api.Job
-	err = json.NewDecoder(finishRequestBody).Decode(&job)
-	if err != nil {
-		t.Fatalf("decoding accept request body: %v", err)
-	}
+	job := e.finishesFor(t, jobID)[0]
 
 	if got, want := job.ExitStatus, "-1"; got != want {
 		t.Errorf("job.ExitStatus = %q, want %q", got, want)
@@ -70,6 +65,42 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 
 	if got, want := job.SignalReason, "agent_refused"; got != want {
 		t.Errorf("job.SignalReason = %q, want %q", got, want)
+	}
+}
+
+func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T) {
+	t.Parallel()
+
+	exits := []int{0, 1, 2, 3}
+	for _, exit := range exits {
+		exit := exit
+		t.Run(fmt.Sprintf("exit-%d", exit), func(t *testing.T) {
+			t.Parallel()
+
+			j := &api.Job{
+				ID:                 "my-job-id",
+				ChunksMaxSizeBytes: 1024,
+				Env: map[string]string{
+					"BUILDKITE_COMMAND": "echo hello world",
+				},
+			}
+
+			mb := mockBootstrap(t)
+			defer mb.CheckAndClose(t)
+
+			mb.Expect().Once().AndExitWith(exit)
+
+			e := createTestAgentEndpoint()
+			server := e.server("my-job-id")
+			defer server.Close()
+
+			runJob(t, j, server, agent.AgentConfiguration{}, mb)
+			finish := e.finishesFor(t, "my-job-id")[0]
+
+			if got, want := finish.ExitStatus, strconv.Itoa(exit); got != want {
+				t.Errorf("finish.ExitStatus = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -167,7 +198,11 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 }
 
 func mockBootstrap(t *testing.T) *bintest.Mock {
-	bs, err := bintest.NewMock(fmt.Sprintf("buildkite-agent-bootstrap-%s", t.Name()))
+	t.Helper()
+
+	// tests run using t.Run() will have a slash in their name, which will mess with paths to bintest binaries
+	name := strings.ReplaceAll(t.Name(), "/", "-")
+	bs, err := bintest.NewMock(fmt.Sprintf("buildkite-agent-bootstrap-%s", name))
 	if err != nil {
 		t.Fatalf("bintest.NewMock() error = %v", err)
 	}
@@ -214,6 +249,24 @@ func createTestAgentEndpoint() *testAgentEndpoint {
 	}
 }
 
+func (tae *testAgentEndpoint) finishesFor(t *testing.T, jobID string) []api.Job {
+	t.Helper()
+
+	endpoint := fmt.Sprintf("/jobs/%s/finish", jobID)
+	finishes := make([]api.Job, 0, len(tae.calls))
+
+	for _, b := range tae.calls[endpoint] {
+		var job api.Job
+		err := json.Unmarshal(b, &job)
+		if err != nil {
+			t.Fatalf("decoding accept request body: %v", err)
+		}
+		finishes = append(finishes, job)
+	}
+
+	return finishes
+}
+
 func (t *testAgentEndpoint) server(jobID string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		b, _ := io.ReadAll(req.Body)
@@ -236,6 +289,8 @@ func (t *testAgentEndpoint) server(jobID string) *httptest.Server {
 }
 
 func mockPreBootstrap(t *testing.T, hooksDir string) *bintest.Mock {
+	t.Helper()
+
 	mock, err := bintest.NewMock(fmt.Sprintf("buildkite-agent-pre-bootstrap-hook-%s", t.Name()))
 	if err != nil {
 		t.Fatalf("bintest.NewMock() error = %v", err)

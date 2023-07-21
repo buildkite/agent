@@ -576,7 +576,7 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 
 // finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
 // cannot return successfully, this will retry for a long time.
-func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit *processExit, failedChunkCount int) error {
+func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit processExit, failedChunkCount int) error {
 	r.conf.Job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.conf.Job.ExitStatus = strconv.Itoa(exit.Status)
 	r.conf.Job.Signal = exit.Signal
