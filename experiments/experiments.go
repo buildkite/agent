@@ -46,6 +46,7 @@ var (
 		NormalisedUploadPaths:      {},
 		PolyglotHooks:              {},
 		ResolveCommitAfterCheckout: {},
+		AvoidRecursiveTrap:         {},
 	}
 
 	Promoted = map[string]string{
