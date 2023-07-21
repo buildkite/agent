@@ -5,8 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.50.2](https://github.com/buildkite/agent/tree/v3.50.2) (2023-07-21)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.50.1...v3.50.2)
+
+This release contains a known issue:
+|Severity|Description|Fixed in|
+|---|---|---|
+| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **⏳ Fix incoming, stay tuned** |
+
+### Fixed
+- Fix an issue introduced in [#2207](https://github.com/buildkite/agent/pull/2207) where jobs wouldn't check if they'd been cancelled [#2231](https://github.com/buildkite/agent/pull/2231) (@triarius)
+- Fix avoid-recursive-trap experiment not recognised [#2235](https://github.com/buildkite/agent/pull/2235) (@triarius)
+- Further refactor to `agent.JobRunner` [#2222](https://github.com/buildkite/agent/pull/2222) [#2230](https://github.com/buildkite/agent/pull/2230) (@moskyb)
+
+
 ## [v3.50.1](https://github.com/buildkite/agent/tree/v3.50.1) (2023-07-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.49.0...v3.50.1)
+
+This release contains multiple issues:
+
+|Severity|Description|Fixed in|
+|---|---|---|
+| ⚠️ Very High | Jobs running on this version of the agent are not cancellable from the UI/API | **✅ Fixed in [v3.50.2](#v3.50.2)** |
+| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **⏳ Fix incoming, stay tuned** |
 
 ### Fixed
 - Empty or zero-length `steps` is no longer a parser error, and is normalised to \[\] instead [#2225](https://github.com/buildkite/agent/pull/2225), [#2229](https://github.com/buildkite/agent/pull/2229) (@DrJosh9000)
@@ -16,7 +37,55 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [v3.50.0](https://github.com/buildkite/agent/tree/v3.50.0) (2023-07-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.49.0...v3.50.0)
 
-⚠️ This release contains bugs in the (new) pipeline parser. Please use the next release instead. ⚠️
+This release contains multiple issues:
+
+|Severity|Description|Fixed in|
+|---|---|---|
+| Medium | When uploading pipelines, some group steps are not correctly parsed, and were ignored. | **✅ Fixed in [v3.50.1](#v3.50.1)** |
+| Low | Uploading pipelines with empty or zero-length `steps` failed, where they should've been a no-op. | **✅ Fixed in [v3.50.1](#v3.50.1)** |
+| ⚠️ Very High | Jobs running on this version of the agent are not cancellable from the UI/API | **✅ Fixed in [v3.50.2](#v3.50.2)** |
+| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **⏳ Fix incoming, stay tuned** |
+
+
+<details>
+<summary>Workaround for yaml merge key issue</summary>
+For example, this pipeline would fail to parse:
+
+```yaml
+default_plugins: &default_plugins
+  plugins:
+    - docker#4.0.0:
+        image: alpine:3.14
+
+default_retry: &default_retry
+  retry:
+    automatic:
+      - exit_status: 42
+
+steps:
+  - <<: *default_plugins
+    <<: *default_retry
+    command: "echo 'hello, world!'"
+```
+
+As a workaround for this, you can use yaml array merge syntax instead:
+
+```yaml
+default_plugins: &default_plugins
+  plugins:
+    - docker#4.0.0:
+        image: alpine:3.14
+
+default_retry: &default_retry
+  retry:
+    automatic:
+      - exit_status: 42
+
+steps:
+  - <<: [*default_plugins, *default_retry]
+    command: "echo 'hello, world!'"
+```
+</details>
 
 ### Added
 - We're working on making pipeline signing a feature of the agent! But it's definitely not ready for primetime yet... [#2216](https://github.com/buildkite/agent/pull/2216), [#2200](https://github.com/buildkite/agent/pull/2200), [#2191](https://github.com/buildkite/agent/pull/2191), [#2186](https://github.com/buildkite/agent/pull/2186), [#2190](https://github.com/buildkite/agent/pull/2190), [#2181](https://github.com/buildkite/agent/pull/2181), [#2184](https://github.com/buildkite/agent/pull/2184), [#2173](https://github.com/buildkite/agent/pull/2173), [#2180](https://github.com/buildkite/agent/pull/2180) (@moskyb, @DrJosh9000)
@@ -78,7 +147,7 @@ The de-experimentification release!
   running the agent with `--health-check-addr`, go to `/status` to see a
   human-friendly status page.
 
-And whatever happened to `git-mirrors`? It graduated from experiment-hood in 
+And whatever happened to `git-mirrors`? It graduated from experiment-hood in
 v3.47.0!
 
 ### Changed
@@ -100,11 +169,11 @@ Two new and very noteworthy experiments!
 
 1. Have you ever wanted to write hooks in a compiled language? Or in Python or
    Ruby? Well now you can! With `--experiment=polyglot-hooks` the agent can run
-   all sorts of hooks and plugins directly. Combined with 
+   all sorts of hooks and plugins directly. Combined with
    `--experiment=job-api`, your hooks-of-a-different-language can alter
     environment variables through the local Job API!
 2. Concurrency groups are great, but have you ever wanted to manage multiple
-   agents running on the same host concurrently accessing a shared resource? 
+   agents running on the same host concurrently accessing a shared resource?
    Well now you can! With `--experiment=agent-api`, the agent now has an inbuilt
    locking service, accessible through new `lock` subcommands and also via a
    Unix socket (like the `job-api`).
