@@ -20,7 +20,7 @@ func (s *Slice) UnmarshalYAML(n *yaml.Node) error {
 	}
 	seen := make(map[*yaml.Node]bool)
 	for _, c := range n.Content {
-		cv, err := decode(seen, c)
+		cv, err := decodeYAML(seen, c)
 		if err != nil {
 			return err
 		}

@@ -3,7 +3,6 @@ package pipeline
 import (
 	"encoding/json"
 
-	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
@@ -20,11 +19,8 @@ var (
 //
 // Standard caveats apply - see the package comment.
 type Plugin struct {
-	Name string
-
-	// Config is stored in an ordered map in case any plugins are accidentally
-	// relying on ordering.
-	Config *ordered.MapSA
+	Name   string
+	Config any
 }
 
 // MarshalJSON returns the plugin in "one-key object" form.
@@ -36,7 +32,7 @@ func (p *Plugin) MarshalJSON() ([]byte, error) {
 
 // MarshalYAML returns the plugin in "one-item map" form.
 func (p *Plugin) MarshalYAML() (any, error) {
-	return map[string]*ordered.MapSA{
+	return map[string]any{
 		p.Name: p.Config,
 	}, nil
 }
@@ -46,9 +42,11 @@ func (p *Plugin) interpolate(env interpolate.Env) error {
 	if err != nil {
 		return err
 	}
-	p.Name = name
-	if err := interpolateOrderedMap(env, p.Config); err != nil {
+	cfg, err := interpolateAny(env, p.Config)
+	if err != nil {
 		return err
 	}
+	p.Name = name
+	p.Config = cfg
 	return nil
 }

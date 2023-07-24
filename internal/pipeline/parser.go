@@ -5,16 +5,32 @@ import (
 	"io"
 	"strings"
 
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"gopkg.in/yaml.v3"
 )
 
 // Parse parses a pipeline. It does not apply interpolation.
 func Parse(src io.Reader) (*Pipeline, error) {
-	pipeline := new(Pipeline)
-	if err := yaml.NewDecoder(src).Decode(pipeline); err != nil {
+	// First get yaml.v3 to give us a raw document (*yaml.Node).
+	n := new(yaml.Node)
+	if err := yaml.NewDecoder(src).Decode(n); err != nil {
 		return nil, formatYAMLError(err)
 	}
-	return pipeline, nil
+
+	// Instead of unmarshalling into structs, which is easy-ish to use but
+	// doesn't work with some non YAML 1.2 features (merges), decode the
+	// *yaml.Node into *ordered.Map, []any, or any (recursively).
+	// This resolves aliases and merges and gives a more convenient form to work
+	// with when handling different structural representations of the same
+	// configuration.
+	o, err := ordered.DecodeYAML(n)
+	if err != nil {
+		return nil, err
+	}
+
+	// Then decode _that_ into a pipeline.
+	p := new(Pipeline)
+	return p, p.unmarshalAny(o)
 }
 
 func formatYAMLError(err error) error {
