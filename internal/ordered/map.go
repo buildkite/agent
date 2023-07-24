@@ -325,8 +325,8 @@ func (m *Map[K, V]) UnmarshalYAML(n *yaml.Node) error {
 
 	switch tm := any(m).(type) {
 	case *Map[string, any]:
-		// Use decode, then steal the contents.
-		sm, err := decode(make(map[*yaml.Node]bool), n)
+		// Use DecodeYAML, then steal the contents.
+		sm, err := DecodeYAML(n)
 		if err != nil {
 			return err
 		}
@@ -342,8 +342,8 @@ func (m *Map[K, V]) UnmarshalYAML(n *yaml.Node) error {
 
 	default:
 		return rangeYAMLMap(n, func(key string, val *yaml.Node) error {
-			// Try decode? (maybe V is a type like []any).
-			nv, err := decode(make(map[*yaml.Node]bool), val)
+			// Try DecodeYAML? (maybe V is a type like []any).
+			nv, err := DecodeYAML(val)
 			if err != nil {
 				return err
 			}
@@ -360,94 +360,28 @@ func (m *Map[K, V]) UnmarshalYAML(n *yaml.Node) error {
 	}
 }
 
-// decode recursively unmarshals n into a generic type (any, []any, or
-// *Map[string, any]) depending on the kind of n.
-func decode(seen map[*yaml.Node]bool, n *yaml.Node) (any, error) {
-	// nil decodes to nil.
-	if n == nil {
-		return nil, nil
-	}
-
-	// If n has been seen already while processing the parents of n, it's an
-	// infinite recursion.
-	// Simple example:
-	// ---
-	// a: &a  // seen is empty on encoding a
-	//   b: *a   // seen contains a while encoding b
-	if seen[n] {
-		return nil, fmt.Errorf("line %d, col %d: infinite recursion", n.Line, n.Column)
-	}
-	seen[n] = true
-
-	// n needs to be "un-seen" when this layer of recursion is done:
-	defer delete(seen, n)
-	// Why? seen is a map, which is used by reference, so it will be shared
-	// between calls to decode, which is recursive. And unlike a merge, the
-	// same alias can be validly used for different subtrees:
-	// ---
-	// a: &a
-	//   b: c
-	// d:
-	//   da: *a
-	//   db: *a
-	// ...
-	// (d contains two copies of a).
-	// So *a needs to be "unseen" between encoding "da" and "db".
-
-	switch n.Kind {
-	case yaml.ScalarNode:
-		// If we need to parse more kinds of scalar, e.g. !!bool NO, or base-60
-		// integers, this is where we would swap out n.Decode.
-		var v any
-		if err := n.Decode(&v); err != nil {
-			return nil, err
+// AssertValues converts a map with "any" values into a map with V values by
+// type-asserting each value. It returns an error if any value is not
+// assertable to V.
+func AssertValues[V any](m *MapSA) (*Map[string, V], error) {
+	msv := NewMap[string, V](m.Len())
+	return msv, m.Range(func(k string, v any) error {
+		t, ok := v.(V)
+		if !ok {
+			return fmt.Errorf("value for key %q (type %T) is not assertable to %T", k, v, t)
 		}
-		return v, nil
+		msv.Set(k, t)
+		return nil
+	})
+}
 
-	case yaml.SequenceNode:
-		v := make([]any, 0, len(n.Content))
-		for _, c := range n.Content {
-			cv, err := decode(seen, c)
-			if err != nil {
-				return nil, err
-			}
-			v = append(v, cv)
-		}
-		return v, nil
-
-	case yaml.MappingNode:
-		m := NewMap[string, any](len(n.Content) / 2)
-		// Why not call m.UnmarshalYAML(n) ?
-		// Because we can't pass `seen` through that.
-		err := rangeYAMLMap(n, func(key string, val *yaml.Node) error {
-			v, err := decode(seen, val)
-			if err != nil {
-				return err
-			}
-			m.Set(key, v)
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-		return m, nil
-
-	case yaml.AliasNode:
-		// This is one of the two ways this can blow up recursively.
-		// The other (map merges) is handled by rangeMap.
-		return decode(seen, n.Alias)
-
-	case yaml.DocumentNode:
-		switch len(n.Content) {
-		case 0:
-			return nil, nil
-		case 1:
-			return decode(seen, n.Content[0])
-		default:
-			return nil, fmt.Errorf("line %d, col %d: document contains more than 1 content item (%d)", n.Line, n.Column, len(n.Content))
-		}
-
-	default:
-		return nil, fmt.Errorf("line %d, col %d: unsupported kind %x", n.Line, n.Column, n.Kind)
-	}
+// TransformValues converts a map with V1 values into a map with V2 values by
+// running each value through a function.
+func TransformValues[K comparable, V1, V2 any](m *Map[K, V1], f func(V1) V2) *Map[K, V2] {
+	m2 := NewMap[K, V2](m.Len())
+	m.Range(func(k K, v V1) error {
+		m2.Set(k, f(v))
+		return nil
+	})
+	return m2
 }

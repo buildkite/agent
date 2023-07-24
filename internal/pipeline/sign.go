@@ -11,6 +11,8 @@ import (
 	"hash"
 	"io"
 	"sort"
+
+	"github.com/buildkite/agent/v3/internal/ordered"
 )
 
 // Signature models a signature (on a step, etc).
@@ -82,6 +84,50 @@ func (s *Signature) Verify(sf SignedFielder, verifier Verifier) error {
 	// ...end
 
 	return verifier.Verify(sig)
+}
+
+// unmarshalAny unmarshals an *ordered.Map[string, any] into this Signature.
+// Any other type is an error.
+func (s *Signature) unmarshalAny(o any) error {
+	m, ok := o.(*ordered.MapSA)
+	if !ok {
+		return fmt.Errorf("unmarshaling signature: got %T, want *ordered.Map[string, any]", o)
+	}
+
+	return m.Range(func(k string, v any) error {
+		switch k {
+		case "algorithm":
+			a, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("unmarshaling signature: algorithm has type %T, want string", v)
+			}
+			s.Algorithm = a
+
+		case "signed_fields":
+			os, ok := v.([]any)
+			if !ok {
+				return fmt.Errorf("unmarshaling signature: signed_fields has type %T, want []any", v)
+			}
+			for _, of := range os {
+				f, ok := of.(string)
+				if !ok {
+					return fmt.Errorf("unmarshaling signature: item in signed_fields has type %T, want string", of)
+				}
+				s.SignedFields = append(s.SignedFields, f)
+			}
+
+		case "value":
+			a, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("unmarshaling signature: value has type %T, want string", v)
+			}
+			s.Value = a
+
+		default:
+			return fmt.Errorf("unmarshaling signature: unsupported key %q", k)
+		}
+		return nil
+	})
 }
 
 // SignedFielder describes types that can be signed and have signatures

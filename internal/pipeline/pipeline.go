@@ -7,7 +7,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/interpolate"
-	"gopkg.in/yaml.v3"
 )
 
 // Pipeline models a pipeline.
@@ -28,47 +27,57 @@ func (p *Pipeline) MarshalJSON() ([]byte, error) {
 	return inlineFriendlyMarshalJSON(p)
 }
 
-// UnmarshalYAML unmarshals a pipeline from YAML. A custom unmarshaler is
-// needed since a pipeline document can either contain
-//   - a sequence of steps (legacy compatibility), or
-//   - a mapping with "steps" as a top-level key, that contains the steps.
-func (p *Pipeline) UnmarshalYAML(n *yaml.Node) error {
-	// If given a document, unwrap it first.
-	if n.Kind == yaml.DocumentNode {
-		if len(n.Content) != 1 {
-			return fmt.Errorf("line %d, col %d: empty document", n.Line, n.Column)
-		}
+// unmarshalAny unmarshals the pipeline from either []any (a legacy sequence of
+// steps) or *ordered.MapSA (a modern pipeline configuration).
+func (p *Pipeline) unmarshalAny(o any) error {
+	switch o := o.(type) {
+	case *ordered.MapSA:
+		// A pipeline can be a mapping.
+		err := o.Range(func(k string, v any) error {
+			switch k {
+			case "steps":
+				if err := p.Steps.unmarshalAny(v); err != nil {
+					fmt.Errorf("unmarshaling steps: %w", err)
+				}
 
-		// n is now the content of the document.
-		n = n.Content[0]
-	}
+			case "env":
+				// v must be *ordered.MapSA. We want *ordered.MapSS.
+				msa, ok := v.(*ordered.MapSA)
+				if !ok {
+					return fmt.Errorf("unmarshaling env: got %T, want *ordered.Map[string, any]", v)
+				}
+				// Anything that is a string will fmt.Sprint as itself.
+				// Anything not a string will be converted to a string.
+				sprint := func(x any) string { return fmt.Sprint(x) }
+				p.Env = ordered.TransformValues(msa, sprint)
 
-	switch n.Kind {
-	case yaml.MappingNode:
-		// Hack: we want to unmarshal into Pipeline, but have it not call the
-		// UnmarshalYAML method, because that would recurse infinitely...
-		// Answer: Wrap Pipeline in another type.
-		type pipelineWrapper Pipeline
-		var q pipelineWrapper
-		if err := n.Decode(&q); err != nil {
+			default:
+				// Preserve any other key.
+				if p.RemainingFields == nil {
+					p.RemainingFields = make(map[string]any)
+				}
+				p.RemainingFields[k] = v
+			}
+			return nil
+		})
+		if err != nil {
 			return err
 		}
-		*p = Pipeline(q)
 
-	case yaml.SequenceNode:
-		// This sequence should be a sequence of steps.
-		// No other bits (e.g. env) are present in the pipeline.
-		return n.Decode(&p.Steps)
+	case []any:
+		// A pipeline can be a sequence of steps.
+		if err := p.Steps.unmarshalAny(o); err != nil {
+			fmt.Errorf("unmarshaling steps: %w", err)
+		}
 
 	default:
-		return fmt.Errorf("line %d, col %d: unsupported YAML node kind %x for Pipeline document contents", n.Line, n.Column, n.Kind)
+		return fmt.Errorf("unmarshaling Pipeline: unsupported type %T, want either *ordered.Map[string, any] or []any", o)
 	}
 
 	// Ensure Steps is never nil. Server side expects a sequence.
 	if p.Steps == nil {
 		p.Steps = Steps{}
 	}
-
 	return nil
 }
 

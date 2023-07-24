@@ -6,6 +6,106 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DecodeYAML recursively unmarshals n into a generic type (any, []any, or
+// *Map[string, any]) depending on the kind of n. Where yaml.v3 typically infer
+// map[string]any for unmarshaling mappings into any, DecodeYAML chooses
+// *Map[string, any] instead.
+func DecodeYAML(n *yaml.Node) (any, error) {
+	return decodeYAML(make(map[*yaml.Node]bool), n)
+}
+
+// decode recursively unmarshals n into a generic type (any, []any, or
+// *Map[string, any]) depending on the kind of n.
+func decodeYAML(seen map[*yaml.Node]bool, n *yaml.Node) (any, error) {
+	// nil decodes to nil.
+	if n == nil {
+		return nil, nil
+	}
+
+	// If n has been seen already while processing the parents of n, it's an
+	// infinite recursion.
+	// Simple example:
+	// ---
+	// a: &a  // seen is empty on encoding a
+	//   b: *a   // seen contains a while encoding b
+	if seen[n] {
+		return nil, fmt.Errorf("line %d, col %d: infinite recursion", n.Line, n.Column)
+	}
+	seen[n] = true
+
+	// n needs to be "un-seen" when this layer of recursion is done:
+	defer delete(seen, n)
+	// Why? seen is a map, which is used by reference, so it will be shared
+	// between calls to decode, which is recursive. And unlike a merge, the
+	// same alias can be validly used for different subtrees:
+	// ---
+	// a: &a
+	//   b: c
+	// d:
+	//   da: *a
+	//   db: *a
+	// ...
+	// (d contains two copies of a).
+	// So *a needs to be "unseen" between encoding "da" and "db".
+
+	switch n.Kind {
+	case yaml.ScalarNode:
+		// If we need to parse more kinds of scalar, e.g. !!bool NO, or base-60
+		// integers, this is where we would swap out n.Decode.
+		var v any
+		if err := n.Decode(&v); err != nil {
+			return nil, err
+		}
+		return v, nil
+
+	case yaml.SequenceNode:
+		v := make([]any, 0, len(n.Content))
+		for _, c := range n.Content {
+			cv, err := decodeYAML(seen, c)
+			if err != nil {
+				return nil, err
+			}
+			v = append(v, cv)
+		}
+		return v, nil
+
+	case yaml.MappingNode:
+		m := NewMap[string, any](len(n.Content) / 2)
+		// Why not call m.UnmarshalYAML(n) ?
+		// Because we can't pass `seen` through that.
+		err := rangeYAMLMap(n, func(key string, val *yaml.Node) error {
+			v, err := decodeYAML(seen, val)
+			if err != nil {
+				return err
+			}
+			m.Set(key, v)
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		return m, nil
+
+	case yaml.AliasNode:
+		// This is one of the two ways this can blow up recursively.
+		// The other (map merges) is handled by rangeMap.
+		return decodeYAML(seen, n.Alias)
+
+	case yaml.DocumentNode:
+		switch len(n.Content) {
+		case 0:
+			return nil, nil
+		case 1:
+			return decodeYAML(seen, n.Content[0])
+		default:
+			return nil, fmt.Errorf("line %d, col %d: document contains more than 1 content item (%d)", n.Line, n.Column, len(n.Content))
+		}
+
+	default:
+		return nil, fmt.Errorf("line %d, col %d: unsupported kind %x", n.Line, n.Column, n.Kind)
+	}
+}
+
 // rangeYAMLMap calls f with each key/value pair in a mapping node.
 // It only supports scalar keys, and converts them to canonical string values.
 // Non-scalar and non-stringable keys result in an error.

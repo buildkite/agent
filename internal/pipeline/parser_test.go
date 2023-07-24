@@ -106,9 +106,9 @@ steps:
 			&CommandStep{
 				Command: "docker build .",
 				RemainingFields: map[string]any{
-					"agents": map[string]any{
-						"queue": "default",
-					},
+					"agents": ordered.MapFromItems(
+						ordered.TupleSA{Key: "queue", Value: "default"},
+					),
 					"name":              ":docker: building image",
 					"type":              "script",
 					"agent_query_rules": []any{"queue=default"},
@@ -116,13 +116,13 @@ steps:
 			},
 		},
 		RemainingFields: map[string]any{
-			"base_step": map[string]any{
-				"type":              "script",
-				"agent_query_rules": []any{"queue=default"},
-			},
+			"base_step": ordered.MapFromItems(
+				ordered.TupleSA{Key: "type", Value: "script"},
+				ordered.TupleSA{Key: "agent_query_rules", Value: []any{"queue=default"}},
+			),
 		},
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
 		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 	}
 
@@ -133,10 +133,104 @@ steps:
 
 	const wantJSON = `{
   "base_step": {
+    "type": "script",
     "agent_query_rules": [
       "queue=default"
-    ],
-    "type": "script"
+    ]
+  },
+  "steps": [
+    {
+      "agent_query_rules": [
+        "queue=default"
+      ],
+      "agents": {
+        "queue": "default"
+      },
+      "command": "docker build .",
+      "name": ":docker: building image",
+      "type": "script"
+    }
+  ]
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestParserSupportsDoubleMerge(t *testing.T) {
+	const complexYAML = `---
+base_step: &base_step
+  type: script
+  agent_query_rules:
+    - queue=default
+
+remainder: &remainder
+  name: ':docker: building image'
+  command: docker build .
+  agents:
+    queue: default
+
+steps:
+  - <<: *base_step
+    <<: *remainder
+`
+
+	input := strings.NewReader(complexYAML)
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "docker build .",
+				RemainingFields: map[string]any{
+					"agents": ordered.MapFromItems(
+						ordered.TupleSA{Key: "queue", Value: "default"},
+					),
+					"name":              ":docker: building image",
+					"type":              "script",
+					"agent_query_rules": []any{"queue=default"},
+				},
+			},
+		},
+		RemainingFields: map[string]any{
+			"base_step": ordered.MapFromItems(
+				ordered.TupleSA{Key: "type", Value: "script"},
+				ordered.TupleSA{Key: "agent_query_rules", Value: []any{"queue=default"}},
+			),
+			"remainder": ordered.MapFromItems(
+				ordered.TupleSA{Key: "name", Value: ":docker: building image"},
+				ordered.TupleSA{Key: "command", Value: "docker build ."},
+				ordered.TupleSA{Key: "agents", Value: ordered.MapFromItems(
+					ordered.TupleSA{Key: "queue", Value: "default"},
+				)},
+			),
+		},
+	}
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "base_step": {
+    "type": "script",
+    "agent_query_rules": [
+      "queue=default"
+    ]
+  },
+  "remainder": {
+    "name": ":docker: building image",
+    "command": "docker build .",
+    "agents": {
+      "queue": "default"
+    }
   },
   "steps": [
     {
@@ -221,15 +315,9 @@ steps:
 					WaitStep{},
 					InputStep{"block": "goodbye"},
 				},
-				RemainingFields: map[string]any{
-					"group": nil,
-				},
 			},
 			&GroupStep{
 				Steps: Steps{},
-				RemainingFields: map[string]any{
-					"group": nil,
-				},
 			},
 		},
 	}
@@ -764,9 +852,9 @@ steps:
 				},
 				RemainingFields: map[string]any{
 					"name": ":s3: xxx",
-					"agents": map[string]any{
-						"queue": "xxx",
-					},
+					"agents": ordered.MapFromItems(
+						ordered.TupleSA{Key: "queue", Value: "xxx"},
+					),
 				},
 			},
 		},
