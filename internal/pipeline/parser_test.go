@@ -158,6 +158,7 @@ steps:
 }
 
 func TestParserSupportsDoubleMerge(t *testing.T) {
+	t.Parallel()
 	const complexYAML = `---
 base_step: &base_step
   type: script
