@@ -5,13 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.50.3](https://github.com/buildkite/agent/tree/v3.50.3) (2023-07-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.50.2...v3.50.3)
+
+### Changed
+- Two-phase pipeline parsing [#2238](https://github.com/buildkite/agent/pull/2238) (@DrJosh9000)
+- Remove installing qemu-binfmt from agent pipeline [#2236](https://github.com/buildkite/agent/pull/2236) (@triarius)
+
 ## [v3.50.2](https://github.com/buildkite/agent/tree/v3.50.2) (2023-07-21)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.50.1...v3.50.2)
 
 This release contains a known issue:
 |Severity|Description|Fixed in|
 |---|---|---|
-| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **⏳ Fix incoming, stay tuned** |
+| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **✅ Fixed in [v3.50.3](#v3.50.3)** |
 
 ### Fixed
 - Fix an issue introduced in [#2207](https://github.com/buildkite/agent/pull/2207) where jobs wouldn't check if they'd been cancelled [#2231](https://github.com/buildkite/agent/pull/2231) (@triarius)
@@ -27,7 +34,7 @@ This release contains multiple issues:
 |Severity|Description|Fixed in|
 |---|---|---|
 | ⚠️ Very High | Jobs running on this version of the agent are not cancellable from the UI/API | **✅ Fixed in [v3.50.2](#v3.50.2)** |
-| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **⏳ Fix incoming, stay tuned** |
+| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **✅ Fixed in [v3.50.3](#v3.50.3)** |
 
 ### Fixed
 - Empty or zero-length `steps` is no longer a parser error, and is normalised to \[\] instead [#2225](https://github.com/buildkite/agent/pull/2225), [#2229](https://github.com/buildkite/agent/pull/2229) (@DrJosh9000)
@@ -44,7 +51,7 @@ This release contains multiple issues:
 | Medium | When uploading pipelines, some group steps are not correctly parsed, and were ignored. | **✅ Fixed in [v3.50.1](#v3.50.1)** |
 | Low | Uploading pipelines with empty or zero-length `steps` failed, where they should've been a no-op. | **✅ Fixed in [v3.50.1](#v3.50.1)** |
 | ⚠️ Very High | Jobs running on this version of the agent are not cancellable from the UI/API | **✅ Fixed in [v3.50.2](#v3.50.2)** |
-| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **⏳ Fix incoming, stay tuned** |
+| Medium | When uploading pipelines, if any object in the pipeline YAML contained multiple merge keys, the pipeline would fail to parse. See below for a workaround | **✅ Fixed in [v3.50.3](#v3.50.3)** |
 
 
 <details>
