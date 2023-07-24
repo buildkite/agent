@@ -159,7 +159,14 @@ steps:
 
 func TestParserSupportsDoubleMerge(t *testing.T) {
 	t.Parallel()
-	const complexYAML = `---
+
+	// These should parse identically.
+	tests := []struct {
+		desc, input string
+	}{
+		{
+			desc: "two merges",
+			input: `---
 base_step: &base_step
   type: script
   agent_query_rules:
@@ -174,12 +181,26 @@ remainder: &remainder
 steps:
   - <<: *base_step
     <<: *remainder
-`
+`,
+		},
+		{
+			desc: "two merges in sequence",
+			input: `---
+base_step: &base_step
+  type: script
+  agent_query_rules:
+    - queue=default
 
-	input := strings.NewReader(complexYAML)
-	got, err := Parse(input)
-	if err != nil {
-		t.Fatalf("Parse(input) error = %v", err)
+remainder: &remainder
+  name: ':docker: building image'
+  command: docker build .
+  agents:
+    queue: default
+
+steps:
+  - <<: [*base_step, *remainder]
+`,
+		},
 	}
 
 	want := &Pipeline{
@@ -210,14 +231,6 @@ steps:
 			),
 		},
 	}
-	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
-		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
-	}
-
-	gotJSON, err := json.MarshalIndent(got, "", "  ")
-	if err != nil {
-		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
-	}
 
 	const wantJSON = `{
   "base_step": {
@@ -247,8 +260,31 @@ steps:
     }
   ]
 }`
-	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
-		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			input := strings.NewReader(test.input)
+			got, err := Parse(input)
+			if err != nil {
+				t.Fatalf("Parse(input) error = %v", err)
+			}
+
+			if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
+				t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+			}
+
+			gotJSON, err := json.MarshalIndent(got, "", "  ")
+			if err != nil {
+				t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+			}
+
+			if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+				t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+			}
+		})
 	}
 }
 
