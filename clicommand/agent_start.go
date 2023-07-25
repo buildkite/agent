@@ -60,65 +60,77 @@ Example:
 // - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
 
 type AgentStartConfig struct {
-	Config                      string   `cli:"config"`
-	Name                        string   `cli:"name"`
-	Priority                    string   `cli:"priority"`
-	AcquireJob                  string   `cli:"acquire-job"`
-	DisconnectAfterJob          bool     `cli:"disconnect-after-job"`
-	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
-	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
-	CancelGracePeriod           int      `cli:"cancel-grace-period"`
-	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
-	JobLogPath                  string   `cli:"job-log-path" normalize:"filepath"`
-	WriteJobLogsToStdout        bool     `cli:"write-job-logs-to-stdout"`
-	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
-	SocketsPath                 string   `cli:"sockets-path" normalize:"filepath"`
-	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
-	Shell                       string   `cli:"shell"`
-	Tags                        []string `cli:"tags" normalize:"list"`
-	TagsFromEC2MetaData         bool     `cli:"tags-from-ec2-meta-data"`
-	TagsFromEC2MetaDataPaths    []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
-	TagsFromEC2Tags             bool     `cli:"tags-from-ec2-tags"`
-	TagsFromECSMetaData         bool     `cli:"tags-from-ecs-meta-data"`
-	TagsFromGCPMetaData         bool     `cli:"tags-from-gcp-meta-data"`
-	TagsFromGCPMetaDataPaths    []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
-	TagsFromGCPLabels           bool     `cli:"tags-from-gcp-labels"`
-	TagsFromHost                bool     `cli:"tags-from-host"`
-	WaitForEC2TagsTimeout       string   `cli:"wait-for-ec2-tags-timeout"`
-	WaitForEC2MetaDataTimeout   string   `cli:"wait-for-ec2-meta-data-timeout"`
-	WaitForECSMetaDataTimeout   string   `cli:"wait-for-ecs-meta-data-timeout"`
-	WaitForGCPLabelsTimeout     string   `cli:"wait-for-gcp-labels-timeout"`
-	GitCheckoutFlags            string   `cli:"git-checkout-flags"`
-	GitCloneFlags               string   `cli:"git-clone-flags"`
-	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
-	GitCleanFlags               string   `cli:"git-clean-flags"`
-	GitFetchFlags               string   `cli:"git-fetch-flags"`
-	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules             bool     `cli:"no-git-submodules"`
-	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval               bool     `cli:"no-command-eval"`
-	NoLocalHooks                bool     `cli:"no-local-hooks"`
-	NoPlugins                   bool     `cli:"no-plugins"`
-	NoPluginValidation          bool     `cli:"no-plugin-validation"`
-	NoPTY                       bool     `cli:"no-pty"`
-	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
-	NoANSITimestamps            bool     `cli:"no-ansi-timestamps"`
-	TimestampLines              bool     `cli:"timestamp-lines"`
-	HealthCheckAddr             string   `cli:"health-check-addr"`
-	MetricsDatadog              bool     `cli:"metrics-datadog"`
-	MetricsDatadogHost          string   `cli:"metrics-datadog-host"`
-	MetricsDatadogDistributions bool     `cli:"metrics-datadog-distributions"`
-	TracingBackend              string   `cli:"tracing-backend"`
-	TracingServiceName          string   `cli:"tracing-service-name"`
-	Spawn                       int      `cli:"spawn"`
-	SpawnWithPriority           bool     `cli:"spawn-with-priority"`
-	LogFormat                   string   `cli:"log-format"`
-	CancelSignal                string   `cli:"cancel-signal"`
-	SignalGracePeriodSeconds    int      `cli:"signal-grace-period-seconds"`
-	RedactedVars                []string `cli:"redacted-vars" normalize:"list"`
+	Config string `cli:"config"`
+
+	Name              string   `cli:"name"`
+	Priority          string   `cli:"priority"`
+	Spawn             int      `cli:"spawn"`
+	SpawnWithPriority bool     `cli:"spawn-with-priority"`
+	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
+	CancelSignal      string   `cli:"cancel-signal"`
+
+	AcquireJob                 string `cli:"acquire-job"`
+	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
+	DisconnectAfterIdleTimeout int    `cli:"disconnect-after-idle-timeout"`
+	CancelGracePeriod          int    `cli:"cancel-grace-period"`
+	SignalGracePeriodSeconds   int    `cli:"signal-grace-period-seconds"`
+
+	EnableJobLogTmpfile bool   `cli:"enable-job-log-tmpfile"`
+	JobLogPath          string `cli:"job-log-path" normalize:"filepath"`
+
+	LogFormat            string `cli:"log-format"`
+	WriteJobLogsToStdout bool   `cli:"write-job-logs-to-stdout"`
+
+	BuildPath   string `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath   string `cli:"hooks-path" normalize:"filepath"`
+	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
+	PluginsPath string `cli:"plugins-path" normalize:"filepath"`
+
+	Shell           string `cli:"shell"`
+	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
+	NoPTY           bool   `cli:"no-pty"`
+
+	NoANSITimestamps bool `cli:"no-ansi-timestamps"`
+	TimestampLines   bool `cli:"timestamp-lines"`
+
+	Tags                      []string `cli:"tags" normalize:"list"`
+	TagsFromEC2MetaData       bool     `cli:"tags-from-ec2-meta-data"`
+	TagsFromEC2MetaDataPaths  []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
+	TagsFromEC2Tags           bool     `cli:"tags-from-ec2-tags"`
+	TagsFromECSMetaData       bool     `cli:"tags-from-ecs-meta-data"`
+	TagsFromGCPMetaData       bool     `cli:"tags-from-gcp-meta-data"`
+	TagsFromGCPMetaDataPaths  []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
+	TagsFromGCPLabels         bool     `cli:"tags-from-gcp-labels"`
+	TagsFromHost              bool     `cli:"tags-from-host"`
+	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
+	WaitForEC2MetaDataTimeout string   `cli:"wait-for-ec2-meta-data-timeout"`
+	WaitForECSMetaDataTimeout string   `cli:"wait-for-ecs-meta-data-timeout"`
+	WaitForGCPLabelsTimeout   string   `cli:"wait-for-gcp-labels-timeout"`
+
+	GitCheckoutFlags      string `cli:"git-checkout-flags"`
+	GitCloneFlags         string `cli:"git-clone-flags"`
+	GitCloneMirrorFlags   string `cli:"git-clone-mirror-flags"`
+	GitCleanFlags         string `cli:"git-clean-flags"`
+	GitFetchFlags         string `cli:"git-fetch-flags"`
+	GitMirrorsPath        string `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout int    `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
+	NoGitSubmodules       bool   `cli:"no-git-submodules"`
+
+	NoSSHKeyscan       bool `cli:"no-ssh-keyscan"`
+	NoCommandEval      bool `cli:"no-command-eval"`
+	NoLocalHooks       bool `cli:"no-local-hooks"`
+	NoPlugins          bool `cli:"no-plugins"`
+	NoPluginValidation bool `cli:"no-plugin-validation"`
+	NoFeatureReporting bool `cli:"no-feature-reporting"`
+
+	HealthCheckAddr string `cli:"health-check-addr"`
+
+	MetricsDatadog              bool   `cli:"metrics-datadog"`
+	MetricsDatadogHost          string `cli:"metrics-datadog-host"`
+	MetricsDatadogDistributions bool   `cli:"metrics-datadog-distributions"`
+	TracingBackend              string `cli:"tracing-backend"`
+	TracingServiceName          string `cli:"tracing-service-name"`
 
 	// Global flags
 	Debug             bool     `cli:"debug"`
