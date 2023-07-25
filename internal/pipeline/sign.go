@@ -229,7 +229,7 @@ func (h hmacSHA256) Sign() ([]byte, error) {
 func (h hmacSHA256) Verify(sig []byte) error {
 	c := h.Hash.Sum(nil)
 	if !bytes.Equal(c, sig) {
-		return fmt.Errorf("message digest mismatch (%x != %x)", c, sig)
+		return errors.New("signature mismatch")
 	}
 	return nil
 }
