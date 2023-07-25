@@ -37,7 +37,7 @@ func (p *Pipeline) unmarshalAny(o any) error {
 			switch k {
 			case "steps":
 				if err := p.Steps.unmarshalAny(v); err != nil {
-					fmt.Errorf("unmarshaling steps: %w", err)
+					return fmt.Errorf("unmarshaling steps: %w", err)
 				}
 
 			case "env":
