@@ -34,6 +34,7 @@ import (
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const startDescription = `Usage:
@@ -53,6 +54,8 @@ Example:
 
    $ buildkite-agent start --token xxx`
 
+var noSignatureBehaviors = []string{"warn", "block"}
+
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
 // - As a flag in the AgentStartCommand (with matching env)
@@ -68,6 +71,10 @@ type AgentStartConfig struct {
 	SpawnWithPriority bool     `cli:"spawn-with-priority"`
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
+
+	JobVerificationKeyPath                  string `cli:"job-verification-key-path" normalize:"filepath"`
+	JobVerificationNoSignatureBehavior      string `cli:"job-verification-no-signature-behavior"`
+	JobVerificationInvalidSignatureBehavior string `cli:"job-verification-invalid-signature-behavior"`
 
 	AcquireJob                 string `cli:"acquire-job"`
 	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
@@ -571,6 +578,21 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
 			Value:  "buildkite-agent",
 		},
+		cli.StringFlag{
+			Name:   "job-verification-key-path",
+			Usage:  "Path to a file containing a verification key. Passing this flag enables job verification. For hmac-sha256, the raw file content is used as the shared key",
+			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_KEY_PATH",
+		},
+		cli.StringFlag{
+			Name:   "job-verification-no-signature-behavior",
+			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: % #v", noSignatureBehaviors),
+			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
+		},
+		cli.StringFlag{
+			Name:   "job-verification-invalid-signature-behavior",
+			Usage:  fmt.Sprintf("The behavior when a job is received, and the signature calculated is different from the one specified. One of: % #v", noSignatureBehaviors),
+			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_INVALID_SIGNATURE_BEHAVIOR",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -672,6 +694,16 @@ var AgentStartCommand = cli.Command{
 		if err != nil {
 			fmt.Printf("%s", err)
 			os.Exit(1)
+		}
+
+		if cfg.JobVerificationKeyPath != "" {
+			if !slices.Contains(noSignatureBehaviors, cfg.JobVerificationNoSignatureBehavior) {
+				l.Fatal("Invalid job verification no signature behavior %q. Must be one of: %v", cfg.JobVerificationNoSignatureBehavior, noSignatureBehaviors)
+			}
+
+			if !slices.Contains(noSignatureBehaviors, cfg.JobVerificationInvalidSignatureBehavior) {
+				l.Fatal("Invalid job verification invalid signature behavior %q. Must be one of: %v", cfg.JobVerificationInvalidSignatureBehavior, noSignatureBehaviors)
+			}
 		}
 
 		// Force some settings if on Windows (these aren't supported yet)
@@ -822,6 +854,7 @@ var AgentStartCommand = cli.Command{
 			AcquireJob:                 cfg.AcquireJob,
 			TracingBackend:             cfg.TracingBackend,
 			TracingServiceName:         cfg.TracingServiceName,
+			JobVerificationKeyPath:     cfg.JobVerificationKeyPath,
 		}
 
 		if loader.File != nil {

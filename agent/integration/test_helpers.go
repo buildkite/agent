@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +29,7 @@ func mockBootstrap(t *testing.T) *bintest.Mock {
 
 	// tests run using t.Run() will have a slash in their name, which will mess with paths to bintest binaries
 	name := strings.ReplaceAll(t.Name(), "/", "-")
+	name = strings.ReplaceAll(name, "'", "") // we also don"t like single quotes
 	bs, err := bintest.NewMock(fmt.Sprintf("buildkite-agent-bootstrap-%s", name))
 	if err != nil {
 		t.Fatalf("bintest.NewMock() error = %v", err)
@@ -64,13 +68,15 @@ func runJob(t *testing.T, j *api.Job, server *httptest.Server, cfg agent.AgentCo
 }
 
 type testAgentEndpoint struct {
-	calls map[string][][]byte
-	mtx   sync.Mutex
+	calls     map[string][][]byte
+	logChunks map[int]string
+	mtx       sync.Mutex
 }
 
 func createTestAgentEndpoint() *testAgentEndpoint {
 	return &testAgentEndpoint{
-		calls: make(map[string][][]byte, 4),
+		calls:     make(map[string][][]byte, 4),
+		logChunks: make(map[int]string),
 	}
 }
 
@@ -94,24 +100,17 @@ func (tae *testAgentEndpoint) finishesFor(t *testing.T, jobID string) []api.Job 
 	return finishes
 }
 
-func (tae *testAgentEndpoint) chunksFor(t *testing.T, jobID string) []api.Chunk {
+func (tae *testAgentEndpoint) logsFor(t *testing.T, jobID string) string {
 	t.Helper()
 	tae.mtx.Lock()
 	defer tae.mtx.Unlock()
 
-	endpoint := fmt.Sprintf("/jobs/%s/chunks", jobID)
-	chunks := make([]api.Chunk, 0, len(tae.calls))
-
-	for _, b := range tae.calls[endpoint] {
-		var chunk api.Chunk
-		err := json.Unmarshal(b, &chunk)
-		if err != nil {
-			t.Fatalf("decoding accept request body: %v", err)
-		}
-		chunks = append(chunks, chunk)
+	logChunks := make([]string, len(tae.logChunks))
+	for seq, chunk := range tae.logChunks {
+		logChunks[seq-1] = chunk
 	}
 
-	return chunks
+	return strings.Join(logChunks, "")
 }
 
 func (t *testAgentEndpoint) server(jobID string) *httptest.Server {
@@ -129,6 +128,11 @@ func (t *testAgentEndpoint) server(jobID string) *httptest.Server {
 		case "/jobs/" + jobID + "/start":
 			rw.WriteHeader(http.StatusOK)
 		case "/jobs/" + jobID + "/chunks":
+			sequence := req.URL.Query().Get("sequence")
+			seqNo, _ := strconv.Atoi(sequence)
+			r, _ := gzip.NewReader(bytes.NewBuffer(b))
+			uz, _ := io.ReadAll(r)
+			t.logChunks[seqNo] = string(uz)
 			rw.WriteHeader(http.StatusCreated)
 		case "/jobs/" + jobID + "/finish":
 			rw.WriteHeader(http.StatusOK)
