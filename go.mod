@@ -19,7 +19,6 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-querystring v1.1.0
-	github.com/kr/pretty v0.2.1
 	github.com/mattn/go-zglob v0.0.4
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/oleiade/reflections v1.0.1
@@ -71,7 +70,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.12.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/outcaste-io/ristretto v0.2.1 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/philhofer/fwd v1.1.1 // indirect
