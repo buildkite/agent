@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+
+# Prepends the --compatibility flag to arguments to docker compose if not present
+
+set -eu
+
+has_compatibility_flag=false
+
+for arg in "$@"; do
+  if [ "$arg" = "--compatibility" ]; then
+    has_compatibility_flag=true
+    break
+  fi
+done
+
+if ! $has_compatibility_flag; then
+  set -- "--compatibility" "$@"
+fi
+
+exec docker compose "$@"
