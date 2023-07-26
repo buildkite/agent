@@ -1,1 +1,3 @@
 buildkite-agent-*
+docker-compose
+!common/**/*
