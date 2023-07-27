@@ -20,7 +20,7 @@ RUN apk update && apk add --no-cache \
     tini \
     tzdata
 
-RUN ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/bin/docker-compose
+COPY docker-compose /usr/local/bin/docker-compose
 
 FROM alpine:3.18.2 AS kubectl-downloader
 ARG TARGETOS
