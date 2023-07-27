@@ -63,6 +63,7 @@ trap "docker buildx rm $builder_name || true" EXIT
 echo --- Copying files into build context
 cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
 cp pkg/buildkite-agent-linux-{amd64,arm64} "$packaging_dir"
+cp packaging/docker/common/docker-compose "$packaging_dir"
 
 echo "--- Building :docker: $image_tag for all architectures"
 docker buildx build --progress plain --builder "$builder_name" --platform linux/amd64,linux/arm64 "$packaging_dir"
