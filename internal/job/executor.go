@@ -525,13 +525,20 @@ func (e *Executor) hasLocalHook(name string) bool {
 
 // Executes a local hook
 func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
-	if !e.hasLocalHook(name) {
-		return nil
-	}
-
 	localHookPath, err := e.localHookPath(name)
 	if err != nil {
-		return nil
+		if errors.Is(err, os.ErrNotExist) {
+			// If the hook doesn't exist, that's fine, we'll just skip it
+			if e.ExecutorConfig.Debug {
+				e.shell.Logger.Commentf("Local hook %s doesn't exist: %s, skipping", name, err)
+			}
+			return nil
+		}
+
+		// This should not be possible under the current state of the code base
+		// as hook.Find only returns os.ErrNotExist but that assumes implementation
+		// details that could change in the future
+		return err
 	}
 
 	// For high-security configs, we allow the disabling of local hooks.
