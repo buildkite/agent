@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
@@ -101,8 +102,9 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var done int32
 
 	p := process.New(logger.Discard, process.Config{
-		Path: os.Args[0],
-		Env:  []string{"TEST_MAIN=tester"},
+		Path:              os.Args[0],
+		Env:               []string{"TEST_MAIN=tester"},
+		SignalGracePeriod: time.Millisecond,
 	})
 
 	var wg sync.WaitGroup
@@ -144,9 +146,10 @@ func TestProcessTerminatesWhenContextDone(t *testing.T) {
 	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
-		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=tester-no-handler"},
-		Stdout: stdoutw,
+		Path:              os.Args[0],
+		Env:               []string{"TEST_MAIN=tester-no-handler"},
+		Stdout:            stdoutw,
+		SignalGracePeriod: time.Second,
 	})
 
 	go func() {
@@ -185,9 +188,10 @@ func TestProcessWithSlowHandlerKilledWhenContextDone(t *testing.T) {
 	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
-		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=tester-slow-handler"},
-		Stdout: stdoutw,
+		Path:              os.Args[0],
+		Env:               []string{"TEST_MAIN=tester-slow-handler"},
+		Stdout:            stdoutw,
+		SignalGracePeriod: time.Millisecond,
 	})
 
 	go func() {
@@ -227,9 +231,10 @@ func TestProcessInterrupts(t *testing.T) {
 	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
-		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=tester-signal"},
-		Stdout: stdoutw,
+		Path:              os.Args[0],
+		Env:               []string{"TEST_MAIN=tester-signal"},
+		Stdout:            stdoutw,
+		SignalGracePeriod: time.Millisecond,
 	})
 
 	go func() {
@@ -267,10 +272,11 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
-		Path:            os.Args[0],
-		Env:             []string{"TEST_MAIN=tester-signal"},
-		Stdout:          stdoutw,
-		InterruptSignal: process.SIGINT,
+		Path:              os.Args[0],
+		Env:               []string{"TEST_MAIN=tester-signal"},
+		Stdout:            stdoutw,
+		InterruptSignal:   process.SIGINT,
+		SignalGracePeriod: time.Millisecond,
 	})
 
 	go func() {

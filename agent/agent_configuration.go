@@ -1,5 +1,7 @@
 package agent
 
+import "time"
+
 // AgentConfiguration is the run-time configuration for an agent that
 // has been loaded from the config file and command-line params
 type AgentConfiguration struct {
@@ -30,6 +32,7 @@ type AgentConfiguration struct {
 	DisconnectAfterJob         bool
 	DisconnectAfterIdleTimeout int
 	CancelGracePeriod          int
+	SignalGracePeriod          time.Duration
 	EnableJobLogTmpfile        bool
 	JobLogPath                 string
 	WriteJobLogsToStdout       bool

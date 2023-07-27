@@ -69,6 +69,9 @@ type Shell struct {
 
 	// The signal to use to interrupt the command
 	InterruptSignal process.Signal
+
+	// Amount of time to wait between sending the InterruptSignal and SIGKILL
+	SignalGracePeriod time.Duration
 }
 
 // New returns a new Shell
@@ -95,12 +98,13 @@ func (s *Shell) WithStdin(r io.Reader) *Shell {
 	defer s.cmdLock.Unlock()
 	// Can't copy struct like `newsh := *s` because sync.Mutex can't be copied.
 	return &Shell{
-		Logger:          s.Logger,
-		Env:             s.Env,
-		stdin:           r, // our new stdin
-		Writer:          s.Writer,
-		wd:              s.wd,
-		InterruptSignal: s.InterruptSignal,
+		Logger:            s.Logger,
+		Env:               s.Env,
+		stdin:             r, // our new stdin
+		Writer:            s.Writer,
+		wd:                s.wd,
+		InterruptSignal:   s.InterruptSignal,
+		SignalGracePeriod: s.SignalGracePeriod,
 	}
 }
 
@@ -427,12 +431,13 @@ func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 	}
 
 	cfg := process.Config{
-		Path:            absPath,
-		Args:            arg,
-		Env:             s.Env.ToSlice(),
-		Stdin:           s.stdin,
-		Dir:             s.wd,
-		InterruptSignal: s.InterruptSignal,
+		Path:              absPath,
+		Args:              arg,
+		Env:               s.Env.ToSlice(),
+		Stdin:             s.stdin,
+		Dir:               s.wd,
+		InterruptSignal:   s.InterruptSignal,
+		SignalGracePeriod: s.SignalGracePeriod,
 	}
 
 	// Add env that commands expect a shell to set

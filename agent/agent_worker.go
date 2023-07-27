@@ -29,6 +29,10 @@ type AgentWorkerConfig struct {
 	// What signal to use for worker cancellation
 	CancelSignal process.Signal
 
+	// Time wait between sending the CancelSignal and SIGKILL to the process
+	// groups that the executor starts
+	SignalGracePeriod time.Duration
+
 	// The index of this agent worker
 	SpawnIndex int
 

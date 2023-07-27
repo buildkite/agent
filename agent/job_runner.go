@@ -329,14 +329,15 @@ func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (j
 		}
 
 		r.process = process.New(r.logger, process.Config{
-			Path:            cmd[0],
-			Args:            cmd[1:],
-			Dir:             conf.AgentConfiguration.BuildPath,
-			Env:             processEnv,
-			PTY:             conf.AgentConfiguration.RunInPty,
-			Stdout:          processWriter,
-			Stderr:          processWriter,
-			InterruptSignal: conf.CancelSignal,
+			Path:              cmd[0],
+			Args:              cmd[1:],
+			Dir:               conf.AgentConfiguration.BuildPath,
+			Env:               processEnv,
+			PTY:               conf.AgentConfiguration.RunInPty,
+			Stdout:            processWriter,
+			Stderr:            processWriter,
+			InterruptSignal:   conf.CancelSignal,
+			SignalGracePeriod: conf.AgentConfiguration.SignalGracePeriod,
 		})
 	}
 

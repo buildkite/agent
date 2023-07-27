@@ -72,16 +72,17 @@ func ParseSignal(sig string) (Signal, error) {
 
 // Configuration for a Process
 type Config struct {
-	PTY             bool
-	Timestamp       bool
-	Path            string
-	Args            []string
-	Env             []string
-	Stdin           io.Reader
-	Stdout          io.Writer
-	Stderr          io.Writer
-	Dir             string
-	InterruptSignal Signal
+	PTY               bool
+	Timestamp         bool
+	Path              string
+	Args              []string
+	Env               []string
+	Stdin             io.Reader
+	Stdout            io.Writer
+	Stderr            io.Writer
+	Dir               string
+	InterruptSignal   Signal
+	SignalGracePeriod time.Duration
 }
 
 // Process is an operating system level process
@@ -229,28 +230,24 @@ func (p *Process) Run(ctx context.Context) error {
 		}
 
 		select {
+		case <-p.Done(): // process exited of it's own accord
+			return
 		case <-ctx.Done():
-			p.logger.Debug("[Process] Context done, terminating")
+			p.logger.Debug("[Process] Context done, terminating. pid=%d", p.pid)
 			if err := p.Interrupt(); err != nil {
 				p.logger.Warn("[Process] Failed termination: %v", err)
 			}
 
 			select {
-			// Grace period for termination
-			case <-time.After(5 * time.Second):
-				p.logger.Info("[Process] Process %s hasn't terminated in time, killing", p.pid)
+			case <-p.Done(): // process exited after being interrupted
+				return
+			case <-time.After(p.conf.SignalGracePeriod):
+				p.logger.Warn("[Process] Has not terminated in time, killing. pid=%d", p.pid)
 				if err := p.Terminate(); err != nil {
 					p.logger.Error("[Process] error sending SIGKILL: %s", err)
 					return
 				}
-			// Process successfully terminated
-			case <-p.Done():
-				return
 			}
-
-		// context was not canceled before the process terminated
-		case <-p.Done():
-			return
 		}
 	}()
 
