@@ -222,21 +222,23 @@ func (p *Process) Run(ctx context.Context) error {
 	}
 
 	// When the context finishes, terminate the process
-	if ctx != nil {
-		go func() {
-			select {
-			case <-ctx.Done():
-				p.logger.Debug("[Process] Context done, terminating")
-				if err := p.Terminate(); err != nil {
-					p.logger.Debug("[Process] Failed terminate: %v", err)
-				}
-				return
+	go func() {
+		if ctx == nil {
+			return
+		}
 
-			case <-p.Done():
-				return
+		select {
+		case <-ctx.Done():
+			p.logger.Debug("[Process] Context done, terminating")
+			if err := p.Terminate(); err != nil {
+				p.logger.Debug("[Process] Failed terminate: %v", err)
 			}
-		}()
-	}
+			return
+
+		case <-p.Done():
+			return
+		}
+	}()
 
 	p.logger.Info("[Process] Process is running with PID: %d", p.pid)
 
