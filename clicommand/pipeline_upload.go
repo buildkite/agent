@@ -22,7 +22,10 @@ import (
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/urfave/cli"
+	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
 
@@ -66,7 +69,10 @@ type PipelineUploadConfig struct {
 	NoInterpolation bool     `cli:"no-interpolation"`
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 	RejectSecrets   bool     `cli:"reject-secrets"`
-	SigningKeyPath  string   `cli:"signing-key-path"`
+
+	JWKSFilePath     string `cli:"jwks-file-path"`
+	SigningKeyID     string `cli:"signing-key-id"`
+	SigningAlgorithm string `cli:"signing-algorithm"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -123,6 +129,21 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "signing-key-path",
 			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing. For hmac-sha256, the raw file content is used as the shared key",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_PATH",
+		},
+		cli.StringFlag{
+			Name:   "jwks-file-path",
+			Usage:  "Path to a file containing a JWKS. Passing this flag enables pipeline signing",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
+		},
+		cli.StringFlag{
+			Name:   "signing-key-id",
+			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
+		},
+		cli.StringFlag{
+			Name:   "signing-algorithm",
+			Usage:  "The algorithm to use when signing the pipeline. Must be a valid RF7518 JWA algorithm. Required when using a JWKS, and the given key doesn't have an alg parameter",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
 		},
 
 		// API Flags
@@ -283,25 +304,68 @@ var PipelineUploadCommand = cli.Command{
 			searchForSecrets(l, &cfg, envMap, result, src)
 		}
 
-		if cfg.SigningKeyPath != "" {
+		if cfg.JWKSFilePath != "" {
 			l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
 
-			key, err := os.ReadFile(cfg.SigningKeyPath)
+			jwksFile, err := os.Open(cfg.JWKSFilePath)
 			if err != nil {
-				l.Fatal("Couldn't read the signing key file: %v", err)
+				l.Fatal("Couldn't open JWKS file: %v", err)
+			}
+			defer jwksFile.Close()
+
+			jwksBody, err := io.ReadAll(jwksFile)
+			if err != nil {
+				l.Fatal("Couldn't read JWKS file: %v", err)
 			}
 
-			// TODO: Let the user choose an algorithm, then parse the key based
-			// on the algorithm, or put key parsing into
-			// pipeline.New{Signer,Verifier}.
-			// For now we only offer hmac-sha256, which takes []byte.
-
-			signer, err := pipeline.NewSigner("hmac-sha256", key)
+			jwks, err := jwk.Parse(jwksBody)
 			if err != nil {
-				l.Fatal("Couldn't create a pipeline signer: %v", err)
+				l.Fatal("Couldn't parse JWKS file: %v", err)
 			}
 
-			if err := result.Sign(signer); err != nil {
+			if cfg.SigningKeyID == "" {
+				l.Fatal("Signing key ID is required when using JWKS")
+			}
+
+			key, found := jwks.LookupKeyID(cfg.SigningKeyID)
+			if !found {
+				l.Fatal("Couldn't find signing key ID %q in JWKS", cfg.SigningKeyID)
+			}
+
+			var alg jwa.KeyAlgorithm
+
+			if key.Algorithm().String() == "" {
+				if cfg.SigningAlgorithm == "" {
+					l.Fatal("Signing algorithm is required if JWKS key doesn't have an alg parameter")
+				}
+				alg = jwa.KeyAlgorithmFrom(cfg.SigningAlgorithm)
+			} else {
+				alg = key.Algorithm()
+			}
+
+			if _, ok := alg.(jwa.InvalidKeyAlgorithm); ok {
+				l.Fatal("Signing algorithm %s is not a valid signing algorithm", alg)
+			}
+
+			signingAlg, ok := alg.(jwa.SignatureAlgorithm)
+			if !ok {
+				var from string
+				if key.Algorithm().String() != "" {
+					from = fmt.Sprintf("from JWKS, key ID %s", cfg.SigningKeyID)
+				} else {
+					from = "from --signing-algorithm flag"
+				}
+
+				l.Fatal("Algorithm %s (%s) cannot be used for signing/verification", signingAlg, from)
+			}
+
+			if err := validateJWK(key, signingAlg); err != nil {
+				l.Fatal("Signing key ID %s is invalid: %v", cfg.SigningKeyID, err)
+			}
+
+			key.Set(jwk.AlgorithmKey, signingAlg)
+
+			if err := result.Sign(key); err != nil {
 				l.Fatal("Couldn't sign pipeline: %v", err)
 			}
 		}
@@ -397,4 +461,23 @@ func searchForSecrets(l logger.Logger, cfg *PipelineUploadConfig, environ map[st
 			l.Warn("The behaviour in the above flags will become default in Buildkite Agent v4")
 		}
 	}
+}
+
+func validateJWK(key jwk.Key, alg jwa.SignatureAlgorithm) error {
+	validKeyTypes := []jwa.KeyType{jwa.RSA, jwa.EC, jwa.OctetSeq}
+	if !slices.Contains(validKeyTypes, key.KeyType()) {
+		return fmt.Errorf("unsupported key type %s. Key type must be one of %v", key.KeyType(), validKeyTypes)
+	}
+
+	validAlgsForType := map[jwa.KeyType][]jwa.SignatureAlgorithm{
+		jwa.RSA:      {jwa.RS256, jwa.RS384, jwa.RS512, jwa.PS256, jwa.PS384, jwa.PS512},
+		jwa.EC:       {jwa.ES256, jwa.ES384, jwa.ES512},
+		jwa.OctetSeq: {jwa.HS256, jwa.HS384, jwa.HS512},
+	}
+
+	if !slices.Contains(validAlgsForType[key.KeyType()], alg) {
+		return fmt.Errorf("unsupported signing algorithm %s for key type %s. With key type %s, key algorithm must be one of %v", alg, key.KeyType(), key.KeyType(), validAlgsForType[key.KeyType()])
+	}
+
+	return nil
 }

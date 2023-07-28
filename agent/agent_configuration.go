@@ -1,6 +1,10 @@
 package agent
 
-import "time"
+import (
+	"time"
+
+	"github.com/lestrrat-go/jwx/v2/jwk"
+)
 
 // AgentConfiguration is the run-time configuration for an agent that
 // has been loaded from the config file and command-line params
@@ -28,10 +32,10 @@ type AgentConfiguration struct {
 	StrictSingleHooks     bool
 	RunInPty              bool
 
-	JobSigningKeyPath                       string
-	JobVerificationKeyPath                  string
-	JobVerificationNoSignatureBehavior      string
-	JobVerificationInvalidSignatureBehavior string
+	JobSigningJWKSPath                      string  // Where to find the key to sign jobs with (passed through to jobs, they might be uploading pipelines)
+	JobVerificationJWKS                     jwk.Set // The set of keys to verify jobs with
+	JobVerificationNoSignatureBehavior      string  // What to do if a job has no signature (either block or warn)
+	JobVerificationInvalidSignatureBehavior string  // What to do if a job has an invalid signature (either block or warn)
 
 	ANSITimestamps             bool
 	TimestampLines             bool

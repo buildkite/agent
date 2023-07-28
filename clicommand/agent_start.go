@@ -31,6 +31,7 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
@@ -72,8 +73,8 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
-	JobSigningKeyPath                       string `cli:"job-signing-key-path" normalize:"filepath"`
-	JobVerificationKeyPath                  string `cli:"job-verification-key-path" normalize:"filepath"`
+	JobSigningJWKSPath                      string `cli:"job-signing-jwks-path" normalize:"filepath"`
+	JobVerificationJWKSPath                 string `cli:"job-verification-jwks-path" normalize:"filepath"`
 	JobVerificationNoSignatureBehavior      string `cli:"job-verification-no-signature-behavior"`
 	JobVerificationInvalidSignatureBehavior string `cli:"job-verification-invalid-signature-behavior"`
 
@@ -585,7 +586,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_KEY_PATH",
 		},
 		cli.StringFlag{
-			Name:   "job-signing-key-path",
+			Name:   "job-verification-jwks-path",
+			Usage:  "Path to a file containing a JSON Web Key Set (JWKS), used to verify job signatures. ",
+			EnvVar: "BUILDKITE_AGENT_JWKS_FILE_PATH",
+		},
+		cli.StringFlag{
+			Name:   "job-signing-jwks-path",
 			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
 			EnvVar: "BUILDKITE_PIPELINE_JOB_SIGNING_KEY_PATH",
 		},
@@ -702,7 +708,7 @@ var AgentStartCommand = cli.Command{
 			os.Exit(1)
 		}
 
-		if cfg.JobVerificationKeyPath != "" {
+		if cfg.JobVerificationJWKSPath != "" {
 			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationNoSignatureBehavior) {
 				l.Fatal("Invalid job verification no signature behavior %q. Must be one of: %v", cfg.JobVerificationNoSignatureBehavior, verificationFailureBehaviors)
 			}
@@ -822,6 +828,23 @@ var AgentStartCommand = cli.Command{
 			defer shutdown()
 		}
 
+		var jwks jwk.Set
+		if cfg.JobVerificationJWKSPath != "" {
+			jwksBytes, err := os.ReadFile(cfg.JobVerificationJWKSPath)
+			if err != nil {
+				l.Fatal("Failed to read job verification key: %w", err)
+			}
+
+			jwks, err = jwk.Parse(jwksBytes)
+			if err != nil {
+				l.Fatal("Failed to parse job verification key set: %w", err)
+			}
+
+			if jwks.Len() == 0 {
+				l.Fatal("Job verification key set is empty")
+			}
+		}
+
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
 			BootstrapScript:                         cfg.BootstrapScript,
@@ -860,10 +883,10 @@ var AgentStartCommand = cli.Command{
 			AcquireJob:                              cfg.AcquireJob,
 			TracingBackend:                          cfg.TracingBackend,
 			TracingServiceName:                      cfg.TracingServiceName,
-			JobSigningKeyPath:                       cfg.JobSigningKeyPath,
-			JobVerificationKeyPath:                  cfg.JobVerificationKeyPath,
 			JobVerificationNoSignatureBehavior:      cfg.JobVerificationNoSignatureBehavior,
 			JobVerificationInvalidSignatureBehavior: cfg.JobVerificationInvalidSignatureBehavior,
+			JobSigningJWKSPath:                      cfg.JobSigningJWKSPath,
+			JobVerificationJWKS:                     jwks,
 		}
 
 		if loader.File != nil {
