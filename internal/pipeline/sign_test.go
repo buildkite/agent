@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"hash"
 	"testing"
@@ -146,5 +147,23 @@ func TestVerifyBadSignature(t *testing.T) {
 
 	if err := sig.Verify(cs, verifier); err == nil {
 		t.Errorf("sig.Verify(CommandStep, alpacas) = %v, want non-nil error", err)
+	}
+}
+
+func TestSignUnknownStep(t *testing.T) {
+	steps := Steps{
+		&UnknownStep{
+			Contents: "secret third thing",
+		},
+	}
+
+	const key = "alpacas"
+	signer, err := NewSigner("hmac-sha256", key)
+	if err != nil {
+		t.Errorf("NewSigner(hmac-sha256, alpacas) error = %v", err)
+	}
+
+	if err := steps.sign(signer); !errors.Is(err, errSigningRefusedUnknownStepType) {
+		t.Errorf("steps.sign(signer) = %v, want %v", err, errSigningRefusedUnknownStepType)
 	}
 }
