@@ -41,6 +41,12 @@ func (p *Pipeline) unmarshalAny(o any) error {
 				}
 
 			case "env":
+				// If they wrote `env: null` or similar, then they mean it.
+				if v == nil {
+					p.Env = nil
+					return nil
+				}
+
 				// v must be *ordered.MapSA. We want *ordered.MapSS.
 				msa, ok := v.(*ordered.MapSA)
 				if !ok {
