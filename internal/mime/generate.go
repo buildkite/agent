@@ -21,7 +21,7 @@ var _, sourcePath, _, _ = runtime.Caller(0)
 var targetFile = path.Join(path.Dir(sourcePath), "mime.go")
 var urls = map[string]string{
 	"nginx":  "https://hg.nginx.org/nginx/raw-file/default/conf/mime.types",
-	"apache": "https://svn.apache.org/repos/asf/httpd/httpd/trunk/docs/conf/mime.types",
+	"apache": "https://raw.githubusercontent.com/apache/httpd/trunk/docs/conf/mime.types",
 }
 
 var mimeFileTemplate = template.Must(template.New("").Parse(
