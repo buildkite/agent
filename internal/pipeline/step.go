@@ -1,14 +1,12 @@
 package pipeline
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
-	"golang.org/x/exp/slices"
 )
 
 var _ SignedFielder = (*CommandStep)(nil)
@@ -29,29 +27,6 @@ type Step interface {
 
 	selfInterpolater
 }
-
-type ScalarStep string
-
-var validStepScalars = []string{"wait", "waiter", "block", "input", "manual"}
-
-func NewScalarStep(s string) (Step, error) {
-	if !slices.Contains(validStepScalars, s) {
-		return nil, fmt.Errorf("invalid step: %q is not a valid scalar step type", s)
-	}
-
-	return ScalarStep(s), nil
-}
-
-func (s ScalarStep) interpolate(env interpolate.Env) error {
-	// Scalar steps are not interpolable, just return nil
-	return nil
-}
-
-func (s ScalarStep) unmarshalMap(m *ordered.MapSA) error {
-	return errors.New("scalar step cannot be unmarshaled from map")
-}
-
-func (s ScalarStep) stepTag() {}
 
 // CommandStep models a command step.
 //
@@ -167,51 +142,6 @@ func (c *CommandStep) interpolate(env interpolate.Env) error {
 }
 
 func (CommandStep) stepTag() {}
-
-// WaitStep models a wait step.
-//
-// Standard caveats apply - see the package comment.
-type WaitStep map[string]any
-
-// MarshalJSON marshals a wait step as "wait" if w is empty, or the only key is
-// "wait" and it has nil value. Otherwise it marshals as a standard map.
-func (s WaitStep) MarshalJSON() ([]byte, error) {
-	if len(s) <= 1 && s["wait"] == nil && s["waiter"] == nil {
-		return json.Marshal("wait")
-	}
-	return json.Marshal(map[string]any(s))
-}
-
-func (s WaitStep) interpolate(env interpolate.Env) error {
-	return interpolateMap(env, s)
-}
-
-func (s WaitStep) unmarshalMap(m *ordered.MapSA) error {
-	return m.Range(func(k string, v any) error {
-		s[k] = v
-		return nil
-	})
-}
-
-func (WaitStep) stepTag() {}
-
-// InputStep models a block or input step.
-//
-// Standard caveats apply - see the package comment.
-type InputStep map[string]any
-
-func (s InputStep) interpolate(env interpolate.Env) error {
-	return interpolateMap(env, s)
-}
-
-func (s InputStep) unmarshalMap(m *ordered.MapSA) error {
-	return m.Range(func(k string, v any) error {
-		s[k] = v
-		return nil
-	})
-}
-
-func (InputStep) stepTag() {}
 
 // TriggerStep models a trigger step.
 //

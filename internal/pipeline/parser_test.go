@@ -306,14 +306,18 @@ steps:
 
 	want := &Pipeline{
 		Steps: Steps{
-			InputStep{
-				"key":   "hello there",
-				"label": "🤖",
-				"type":  "block",
+			&InputStep{
+				Contents: map[string]any{
+					"key":   "hello there",
+					"label": "🤖",
+					"type":  "block",
+				},
 			},
-			WaitStep{
-				"continue_on_failure": true,
-				"type":                "wait",
+			&WaitStep{
+				Contents: map[string]any{
+					"continue_on_failure": true,
+					"type":                "wait",
+				},
 			},
 		},
 	}
@@ -384,8 +388,8 @@ steps:
 			&GroupStep{
 				Steps: Steps{
 					&CommandStep{Command: `hello "friend"`},
-					ScalarStep("wait"),
-					InputStep{"block": "goodbye"},
+					&WaitStep{Scalar: "wait"},
+					&InputStep{Contents: map[string]any{"block": "goodbye"}},
 				},
 			},
 			&GroupStep{
@@ -444,11 +448,11 @@ steps:
 
 	want := &Pipeline{
 		Steps: Steps{
-			ScalarStep("wait"),
-			ScalarStep("block"),
-			ScalarStep("waiter"),
-			ScalarStep("block"),
-			ScalarStep("input"),
+			&WaitStep{Scalar: "wait"},
+			&InputStep{Scalar: "block"},
+			&WaitStep{Scalar: "waiter"},
+			&InputStep{Scalar: "block"},
+			&InputStep{Scalar: "input"},
 		},
 	}
 
@@ -586,7 +590,7 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 					"name": "Build",
 				},
 			},
-			ScalarStep("wait"),
+			&WaitStep{Scalar: "wait"},
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -694,7 +698,7 @@ func TestParserPreservesNull(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{
-			WaitStep{"wait": nil, "if": "foo"},
+			&WaitStep{Contents: map[string]any{"wait": nil, "if": "foo"}},
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -818,7 +822,7 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 			ordered.TupleSS{Key: "TEST2", Value: "llamas"},
 		),
 		Steps: Steps{
-			ScalarStep("wait"),
+			&WaitStep{Scalar: "wait"},
 		},
 	}
 	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS), cmp.Comparer(ordered.EqualSA)); diff != "" {
@@ -1058,9 +1062,11 @@ steps:
 
 	want := &Pipeline{
 		Steps: Steps{
-			WaitStep{
-				"wait": nil,
-				"if":   "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/",
+			&WaitStep{
+				Contents: map[string]any{
+					"wait": nil,
+					"if":   "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/",
+				},
 			},
 		},
 	}

@@ -88,9 +88,9 @@ func stepByType(sType string) (Step, error) {
 	case "command", "script":
 		return new(CommandStep), nil
 	case "wait", "waiter":
-		return make(WaitStep), nil
+		return &WaitStep{Contents: map[string]any{}}, nil
 	case "block", "input", "manual":
-		return make(InputStep), nil
+		return &InputStep{Contents: map[string]any{}}, nil
 	case "trigger":
 		return make(TriggerStep), nil
 	case "group": // as far as i know this doesn't happen, but it's here for completeness
@@ -108,10 +108,10 @@ func stepByKeyInference(o *ordered.MapSA) (Step, error) {
 		return new(CommandStep), nil
 
 	case o.Contains("wait") || o.Contains("waiter"):
-		return make(WaitStep), nil
+		return new(WaitStep), nil
 
 	case o.Contains("block") || o.Contains("input") || o.Contains("manual"):
-		return make(InputStep), nil
+		return new(InputStep), nil
 
 	case o.Contains("trigger"):
 		return make(TriggerStep), nil
