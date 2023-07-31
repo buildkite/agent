@@ -21,6 +21,8 @@ import (
 )
 
 func TestProcessOutput(t *testing.T) {
+	t.Parallel()
+
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
@@ -48,6 +50,8 @@ func TestProcessOutput(t *testing.T) {
 }
 
 func TestProcessOutputPTY(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("PTY not supported on windows")
 	}
@@ -74,6 +78,8 @@ func TestProcessOutputPTY(t *testing.T) {
 }
 
 func TestProcessInput(t *testing.T) {
+	t.Parallel()
+
 	stdout := &bytes.Buffer{}
 
 	p := process.New(logger.Discard, process.Config{
@@ -93,6 +99,8 @@ func TestProcessInput(t *testing.T) {
 }
 
 func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
+	t.Parallel()
+
 	var started int32
 	var done int32
 
@@ -132,6 +140,8 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 }
 
 func TestProcessTerminatesWhenContextDoes(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -169,6 +179,8 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 }
 
 func TestProcessInterrupts(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Works in windows, but not in docker")
 	}
@@ -207,6 +219,8 @@ func TestProcessInterrupts(t *testing.T) {
 }
 
 func TestProcessInterruptsWithCustomSignal(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Works in windows, but not in docker")
 	}
@@ -246,6 +260,8 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 }
 
 func TestProcessSetsProcessGroupID(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Process groups not supported on windows")
 		return

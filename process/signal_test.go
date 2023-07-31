@@ -10,6 +10,8 @@ import (
 )
 
 func TestSignalStringUnix(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix signal names are not used on Windows")
 	}
@@ -28,6 +30,8 @@ func TestSignalStringUnix(t *testing.T) {
 }
 
 func TestSignalStringWindows(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS != "windows" {
 		t.Skip("Windows signal names are not used on Unix")
 	}
