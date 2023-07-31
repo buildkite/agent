@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -143,51 +142,6 @@ func (c *CommandStep) interpolate(env interpolate.Env) error {
 }
 
 func (CommandStep) stepTag() {}
-
-// WaitStep models a wait step.
-//
-// Standard caveats apply - see the package comment.
-type WaitStep map[string]any
-
-// MarshalJSON marshals a wait step as "wait" if w is empty, or the only key is
-// "wait" and it has nil value. Otherwise it marshals as a standard map.
-func (s WaitStep) MarshalJSON() ([]byte, error) {
-	if len(s) <= 1 && s["wait"] == nil {
-		return json.Marshal("wait")
-	}
-	return json.Marshal(map[string]any(s))
-}
-
-func (s WaitStep) interpolate(env interpolate.Env) error {
-	return interpolateMap(env, s)
-}
-
-func (s WaitStep) unmarshalMap(m *ordered.MapSA) error {
-	return m.Range(func(k string, v any) error {
-		s[k] = v
-		return nil
-	})
-}
-
-func (WaitStep) stepTag() {}
-
-// InputStep models a block or input step.
-//
-// Standard caveats apply - see the package comment.
-type InputStep map[string]any
-
-func (s InputStep) interpolate(env interpolate.Env) error {
-	return interpolateMap(env, s)
-}
-
-func (s InputStep) unmarshalMap(m *ordered.MapSA) error {
-	return m.Range(func(k string, v any) error {
-		s[k] = v
-		return nil
-	})
-}
-
-func (InputStep) stepTag() {}
 
 // TriggerStep models a trigger step.
 //

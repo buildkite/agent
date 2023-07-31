@@ -288,6 +288,45 @@ steps:
 	}
 }
 
+func TestParserCanDetermineStepTypeFromTypeKey(t *testing.T) {
+	const yaml = `---
+steps:
+  - type: "block"
+    key: "hello there"
+    label: "🤖"
+  - type: "wait"
+    continue_on_failure: true
+`
+
+	input := strings.NewReader(yaml)
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&InputStep{
+				Contents: map[string]any{
+					"key":   "hello there",
+					"label": "🤖",
+					"type":  "block",
+				},
+			},
+			&WaitStep{
+				Contents: map[string]any{
+					"continue_on_failure": true,
+					"type":                "wait",
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserParsesNoSteps(t *testing.T) {
 	tests := []string{
 		"steps: null\n",
@@ -349,8 +388,8 @@ steps:
 			&GroupStep{
 				Steps: Steps{
 					&CommandStep{Command: `hello "friend"`},
-					WaitStep{},
-					InputStep{"block": "goodbye"},
+					&WaitStep{Scalar: "wait"},
+					&InputStep{Contents: map[string]any{"block": "goodbye"}},
 				},
 			},
 			&GroupStep{
@@ -389,6 +428,55 @@ steps:
 }`
 	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
 		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestParserParsesScalarSteps(t *testing.T) {
+	input := strings.NewReader(`---
+steps:
+  - wait
+  - block
+  - waiter
+  - block
+  - input
+`)
+
+	pipeline, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&WaitStep{Scalar: "wait"},
+			&InputStep{Scalar: "block"},
+			&WaitStep{Scalar: "waiter"},
+			&InputStep{Scalar: "block"},
+			&InputStep{Scalar: "input"},
+		},
+	}
+
+	if diff := cmp.Diff(pipeline, want); diff != "" {
+		t.Fatalf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(pipeline, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(pipeline, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "steps": [
+    "wait",
+    "block",
+    "waiter",
+    "block",
+    "input"
+  ]
+}`
+
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Fatalf("marshalled JSON diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -502,7 +590,7 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 					"name": "Build",
 				},
 			},
-			WaitStep{},
+			&WaitStep{Scalar: "wait"},
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -610,7 +698,7 @@ func TestParserPreservesNull(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{
-			WaitStep{"wait": nil, "if": "foo"},
+			&WaitStep{Contents: map[string]any{"wait": nil, "if": "foo"}},
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -734,7 +822,7 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 			ordered.TupleSS{Key: "TEST2", Value: "llamas"},
 		),
 		Steps: Steps{
-			WaitStep{},
+			&WaitStep{Scalar: "wait"},
 		},
 	}
 	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS), cmp.Comparer(ordered.EqualSA)); diff != "" {
@@ -974,9 +1062,11 @@ steps:
 
 	want := &Pipeline{
 		Steps: Steps{
-			WaitStep{
-				"wait": nil,
-				"if":   "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/",
+			&WaitStep{
+				Contents: map[string]any{
+					"wait": nil,
+					"if":   "build.env(\"ACCOUNT\") =~ /^(foo|bar)$/",
+				},
 			},
 		},
 	}

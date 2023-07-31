@@ -43,45 +43,84 @@ func (s Steps) interpolate(env interpolate.Env) error {
 func unmarshalStep(o any) (Step, error) {
 	switch o := o.(type) {
 	case string:
-		// It's just "wait".
-		switch o {
-		case "wait":
-			return WaitStep{}, nil
-
-		default:
-			// ????
-			return nil, fmt.Errorf("invalid step (value = %q)", o)
+		step, err := NewScalarStep(o)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshaling step: %w", err)
 		}
+		return step, nil
 
 	case *ordered.MapSA:
-		var step Step
-		switch {
-		case o.Contains("command") || o.Contains("commands") || o.Contains("plugins"):
-			// NB: Some "command" step are commandless containers that exist
-			// just to run plugins!
-			step = new(CommandStep)
-
-		case o.Contains("wait") || o.Contains("waiter"):
-			step = make(WaitStep)
-
-		case o.Contains("block") || o.Contains("input") || o.Contains("manual"):
-			step = make(InputStep)
-
-		case o.Contains("trigger"):
-			step = make(TriggerStep)
-
-		case o.Contains("group"):
-			step = new(GroupStep)
-
-		default:
-			return nil, fmt.Errorf("unknown step type")
-		}
-
-		// Decode the step (into the right step type).
-		return step, step.unmarshalMap(o)
+		return stepFromMap(o)
 
 	default:
 		return nil, fmt.Errorf("unmarshaling step: unsupported type %T", o)
+	}
+}
+
+func stepFromMap(o *ordered.MapSA) (Step, error) {
+	sType, hasType := o.Get("type")
+
+	var step Step
+	var err error
+	if hasType {
+		sTypeStr, ok := sType.(string)
+		if !ok {
+			return nil, fmt.Errorf("unmarshaling step: step's `type` key was %T (value %v), want string", sType, sType)
+		}
+
+		step, err = stepByType(sTypeStr)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshaling step: %w", err)
+		}
+	} else {
+		step, err = stepByKeyInference(o)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshaling step: %w", err)
+		}
+	}
+
+	// Decode the step (into the right step type).
+	return step, step.unmarshalMap(o)
+}
+
+func stepByType(sType string) (Step, error) {
+	switch sType {
+	case "command", "script":
+		return new(CommandStep), nil
+	case "wait", "waiter":
+		return &WaitStep{Contents: map[string]any{}}, nil
+	case "block", "input", "manual":
+		return &InputStep{Contents: map[string]any{}}, nil
+	case "trigger":
+		return make(TriggerStep), nil
+	case "group": // as far as i know this doesn't happen, but it's here for completeness
+		return new(GroupStep), nil
+	default:
+		return nil, fmt.Errorf("unknown step type %q", sType)
+	}
+}
+
+func stepByKeyInference(o *ordered.MapSA) (Step, error) {
+	switch {
+	case o.Contains("command") || o.Contains("commands") || o.Contains("plugins"):
+		// NB: Some "command" step are commandless containers that exist
+		// just to run plugins!
+		return new(CommandStep), nil
+
+	case o.Contains("wait") || o.Contains("waiter"):
+		return new(WaitStep), nil
+
+	case o.Contains("block") || o.Contains("input") || o.Contains("manual"):
+		return new(InputStep), nil
+
+	case o.Contains("trigger"):
+		return make(TriggerStep), nil
+
+	case o.Contains("group"):
+		return new(GroupStep), nil
+
+	default:
+		return nil, fmt.Errorf("unknown step type")
 	}
 }
 
