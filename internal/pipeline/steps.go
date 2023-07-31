@@ -1,11 +1,14 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
 )
+
+var errSigningRefusedUnknownStepType = errors.New("refusing to sign pipeline containing a step of unknown type, because the pipeline could be incorrectly parsed - please contact support")
 
 // Steps contains multiple steps. It is useful for unmarshaling step sequences,
 // since it has custom logic for determining the correct step type.
@@ -45,7 +48,7 @@ func unmarshalStep(o any) (Step, error) {
 	case string:
 		step, err := NewScalarStep(o)
 		if err != nil {
-			return nil, fmt.Errorf("unmarshaling step: %w", err)
+			return &UnknownStep{Contents: o}, nil
 		}
 		return step, nil
 
@@ -80,7 +83,11 @@ func stepFromMap(o *ordered.MapSA) (Step, error) {
 	}
 
 	// Decode the step (into the right step type).
-	return step, step.unmarshalMap(o)
+	if err := step.unmarshalMap(o); err != nil {
+		// Hmm, maybe we picked the wrong kind of step?
+		return &UnknownStep{Contents: o}, nil
+	}
+	return step, nil
 }
 
 func stepByType(sType string) (Step, error) {
@@ -120,7 +127,7 @@ func stepByKeyInference(o *ordered.MapSA) (Step, error) {
 		return new(GroupStep), nil
 
 	default:
-		return nil, fmt.Errorf("unknown step type")
+		return new(UnknownStep), nil
 	}
 }
 
@@ -141,6 +148,14 @@ func (s Steps) sign(signer Signer) error {
 			if err := step.Steps.sign(signer); err != nil {
 				return fmt.Errorf("signing group step: %w", err)
 			}
+
+		case *UnknownStep:
+			// Presence of an unknown step means we're missing some semantic
+			// information about the pipeline. We could be not signing something
+			// that needs signing. Rather than deferring the problem (so that
+			// signature verification fails when an agent runs jobs) we return
+			// an error now.
+			return errSigningRefusedUnknownStepType
 		}
 	}
 	return nil

@@ -615,6 +615,46 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 	}
 }
 
+func TestParserPreservesUnknownStepTypes(t *testing.T) {
+	input := strings.NewReader(`---
+steps:
+  - catawumpus
+  - llama: Kuzco
+`)
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&UnknownStep{Contents: "catawumpus"},
+			&UnknownStep{Contents: ordered.MapFromItems(
+				ordered.TupleSA{Key: "llama", Value: "Kuzco"},
+			)},
+		},
+	}
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+	const wantJSON = `{
+  "steps": [
+    "catawumpus",
+    {
+      "llama": "Kuzco"
+    }
+  ]
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserPreservesBools(t *testing.T) {
 	input := strings.NewReader("steps:\n  - trigger: hello\n    async: true")
 	got, err := Parse(input)
