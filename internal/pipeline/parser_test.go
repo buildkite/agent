@@ -349,7 +349,7 @@ steps:
 			&GroupStep{
 				Steps: Steps{
 					&CommandStep{Command: `hello "friend"`},
-					WaitStep{},
+					ScalarStep("wait"),
 					InputStep{"block": "goodbye"},
 				},
 			},
@@ -389,6 +389,55 @@ steps:
 }`
 	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
 		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestParserParsesScalarSteps(t *testing.T) {
+	input := strings.NewReader(`---
+steps:
+  - wait
+  - block
+  - waiter
+  - block
+  - input
+`)
+
+	pipeline, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			ScalarStep("wait"),
+			ScalarStep("block"),
+			ScalarStep("waiter"),
+			ScalarStep("block"),
+			ScalarStep("input"),
+		},
+	}
+
+	if diff := cmp.Diff(pipeline, want); diff != "" {
+		t.Fatalf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(pipeline, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(pipeline, "", "  ") error = %v`, err)
+	}
+
+	const wantJSON = `{
+  "steps": [
+    "wait",
+    "block",
+    "waiter",
+    "block",
+    "input"
+  ]
+}`
+
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Fatalf("marshalled JSON diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -502,7 +551,7 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 					"name": "Build",
 				},
 			},
-			WaitStep{},
+			ScalarStep("wait"),
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -734,7 +783,7 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 			ordered.TupleSS{Key: "TEST2", Value: "llamas"},
 		),
 		Steps: Steps{
-			WaitStep{},
+			ScalarStep("wait"),
 		},
 	}
 	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSS), cmp.Comparer(ordered.EqualSA)); diff != "" {

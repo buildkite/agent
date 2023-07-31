@@ -43,15 +43,11 @@ func (s Steps) interpolate(env interpolate.Env) error {
 func unmarshalStep(o any) (Step, error) {
 	switch o := o.(type) {
 	case string:
-		// It's just "wait".
-		switch o {
-		case "wait":
-			return WaitStep{}, nil
-
-		default:
-			// ????
-			return nil, fmt.Errorf("invalid step (value = %q)", o)
+		step, err := NewScalarStep(o)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshaling step: %w", err)
 		}
+		return step, nil
 
 	case *ordered.MapSA:
 		var step Step
