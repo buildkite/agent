@@ -288,6 +288,41 @@ steps:
 	}
 }
 
+func TestParserCanDetermineStepTypeFromTypeKey(t *testing.T) {
+	const yaml = `---
+steps:
+  - type: "block"
+    key: "hello there"
+    label: "🤖"
+  - type: "wait"
+    continue_on_failure: true
+`
+
+	input := strings.NewReader(yaml)
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			InputStep{
+				"key":   "hello there",
+				"label": "🤖",
+				"type":  "block",
+			},
+			WaitStep{
+				"continue_on_failure": true,
+				"type":                "wait",
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserParsesNoSteps(t *testing.T) {
 	tests := []string{
 		"steps: null\n",
