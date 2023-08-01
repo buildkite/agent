@@ -1092,6 +1092,77 @@ steps:
 	}
 }
 
+func TestParserParsesScalarPlugins(t *testing.T) {
+	input := strings.NewReader(`---
+  steps:
+    - name: ":s3: xxx"
+      command: "script/buildkite/xxx.sh"
+      plugins:
+        - example-plugin#v1.0.0
+        - another-plugin#v0.0.1-beta43
+        - docker-compose#v2.5.1:
+            config: .buildkite/docker/docker-compose.yml
+`)
+
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "script/buildkite/xxx.sh",
+				Plugins: Plugins{
+					{
+						Name: "example-plugin#v1.0.0",
+					},
+					{
+						Name: "another-plugin#v0.0.1-beta43",
+					},
+					{
+						Name: "docker-compose#v2.5.1",
+						Config: ordered.MapFromItems(
+							ordered.TupleSA{Key: "config", Value: ".buildkite/docker/docker-compose.yml"},
+						),
+					},
+				},
+				RemainingFields: map[string]any{
+					"name": ":s3: xxx",
+				},
+			},
+		},
+	}
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+
+	gotJSON, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		t.Fatalf(`json.MarshalIndent(got, "", "  ") error = %v`, err)
+	}
+	const wantJSON = `{
+  "steps": [
+    {
+      "command": "script/buildkite/xxx.sh",
+      "name": ":s3: xxx",
+      "plugins": [
+        "example-plugin#v1.0.0",
+        "another-plugin#v0.0.1-beta43",
+        {
+          "docker-compose#v2.5.1": {
+            "config": ".buildkite/docker/docker-compose.yml"
+          }
+        }
+      ]
+    }
+  ]
+}`
+	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
+		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserParsesConditionalWithEndOfLineAnchorDollarSign(t *testing.T) {
 	tests := []struct {
 		desc        string
