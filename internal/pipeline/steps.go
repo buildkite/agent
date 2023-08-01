@@ -16,8 +16,11 @@ type Steps []Step
 
 // unmarshalAny unmarshals a slice ([]any) into a slice of steps.
 func (s *Steps) unmarshalAny(o any) error {
-	if o == nil && *s == nil {
-		*s = Steps{}
+	if o == nil {
+		if *s == nil {
+			// `steps: null` is normalised to an empty slice.
+			*s = Steps{}
+		}
 		return nil
 	}
 	sl, ok := o.([]any)

@@ -356,6 +356,45 @@ func TestMarshalJSON(t *testing.T) {
 	}
 }
 
+func TestToMap(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc  string
+		input *Map[string, any]
+		want  map[string]any
+	}{
+		{
+			desc:  "nil input",
+			input: nil,
+			want:  nil,
+		},
+		{
+			desc:  "empty input",
+			input: NewMap[string, any](0),
+			want:  map[string]any{},
+		},
+		{
+			desc: "basic input",
+			input: MapFromItems(
+				TupleSA{Key: "llama", Value: "drama"},
+			),
+			want: map[string]any{"llama": "drama"},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+			got := test.input.ToMap()
+			if diff := cmp.Diff(got, test.want); diff != "" {
+				t.Errorf("test.input.ToMap() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestMarshalYAML(t *testing.T) {
 	t.Parallel()
 

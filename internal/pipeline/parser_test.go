@@ -655,6 +655,25 @@ steps:
 	}
 }
 
+func TestParserParsesEnvAndStepsNull(t *testing.T) {
+	input := strings.NewReader(`---
+env: null
+steps: null
+`)
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Env:   nil,
+		Steps: Steps{},
+	}
+	if diff := cmp.Diff(got, want, cmp.Comparer(ordered.EqualSA)); diff != "" {
+		t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserPreservesBools(t *testing.T) {
 	input := strings.NewReader("steps:\n  - trigger: hello\n    async: true")
 	got, err := Parse(input)

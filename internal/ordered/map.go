@@ -170,8 +170,12 @@ func (m *Map[K, V]) Delete(k K) {
 	}
 }
 
-// ToMap creates a regular (un-ordered) map containing the same data.
+// ToMap creates a regular (un-ordered) map containing the same data. If m is
+// nil, ToMap returns nil.
 func (m *Map[K, V]) ToMap() map[K]V {
+	if m == nil {
+		return nil
+	}
 	um := make(map[K]V, len(m.index))
 	m.Range(func(k K, v V) error {
 		um[k] = v
