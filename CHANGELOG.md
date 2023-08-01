@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.50.4](https://github.com/buildkite/agent/tree/v3.50.4) (2023-07-31)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.50.3...v3.50.4)
+
+### Fixed
+- Even More Pipeline Parsing Fixes [#2253](https://github.com/buildkite/agent/pull/2253) (@moskyb)
+- Fix missing `return` statements when unmarshalling fails [#2245](https://github.com/buildkite/agent/pull/2245) (@moskyb), [#2257](https://github.com/buildkite/agent/pull/2257) (@DrJosh9000)
+- Add future-proofing `UnknownStep` type [#2254](https://github.com/buildkite/agent/pull/2254) (@DrJosh9000)
+- Nil handling fixes, particularly parsing `env: null` [#2260](https://github.com/buildkite/agent/pull/2260) (@DrJosh9000)
+
+## Changed
+- Remove docker-compose v1 from ubuntu 22.04 and replace with compatibility script [#2248](https://github.com/buildkite/agent/pull/2248) (@triarius)
+- Authentication failure errors when using S3 now mention `BUILDKITE_S3_PROFILE` and `AWS_PROFILE` [#2247](https://github.com/buildkite/agent/pull/2247) (@DrJosh9000)
+
+## Internal
+- Remove a double check for the existence of a local hook and log when it is missing in debug [#2249](https://github.com/buildkite/agent/pull/2249) (@triarius)
+- Refactor some code in process.go [#2251](https://github.com/buildkite/agent/pull/2251) (@triarius)
+- Store `GOCACHE` outside container [#2256](https://github.com/buildkite/agent/pull/2256) (@DrJosh9000)
+- Get mime types from github, rather than Apache's SVN Server [#2255](https://github.com/buildkite/agent/pull/2255) (@moskyb)
+- Check that go.mod is tidy in CI [#2246](https://github.com/buildkite/agent/pull/2246) (@moskyb) and fix flakiness of this check [#2261](https://github.com/buildkite/agent/pull/2261) (@triarius)
+
 ## [v3.50.3](https://github.com/buildkite/agent/tree/v3.50.3) (2023-07-24)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.50.2...v3.50.3)
 
