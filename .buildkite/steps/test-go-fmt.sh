@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
+echo --- :go: Checking go formatting
 if [[ $(gofmt -l ./ | head -c 1 | wc -c) != 0 ]]; then
   echo "The following files haven't been formatted with \`go fmt\`:"
   gofmt -l ./
@@ -8,14 +11,13 @@ if [[ $(gofmt -l ./ | head -c 1 | wc -c) != 0 ]]; then
   exit 1
 fi
 
-tidy_output=$(go mod tidy -v 2>&1)
+echo --- :go: Checking go mod tidyness
+go mod tidy
 
-if [[ "${#tidy_output}" -gt 0 ]]; then # go mod tidy -v outputs to stderr for some reason
-  echo "The go.mod file is out of sync with the source code"
-  echo "Output of \`go mod tidy -v\`:"
-  echo "$tidy_output"
+if ! git diff --no-ext-diff --exit-code go.mod go.sum; then
+  echo "The go.mod or go.sum files are out of sync with the source code"
   echo "Please run \`go mod tidy\` locally, and commit the result."
   exit 1
 fi
 
-echo "Everything is formatted! 🎉"
+echo +++ Everything is clean and tidy! 🎉
