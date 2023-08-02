@@ -54,7 +54,7 @@ Example:
 
    $ buildkite-agent start --token xxx`
 
-var noSignatureBehaviors = []string{"warn", "block"}
+var noSignatureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
@@ -72,6 +72,7 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
+	JobSigningKeyPath                       string `cli:"job-signing-key-path" normalize:"filepath"`
 	JobVerificationKeyPath                  string `cli:"job-verification-key-path" normalize:"filepath"`
 	JobVerificationNoSignatureBehavior      string `cli:"job-verification-no-signature-behavior"`
 	JobVerificationInvalidSignatureBehavior string `cli:"job-verification-invalid-signature-behavior"`
@@ -584,13 +585,18 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_KEY_PATH",
 		},
 		cli.StringFlag{
+			Name:   "job-signing-key-path",
+			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
+			EnvVar: "BUILDKITE_PIPELINE_JOB_SIGNING_KEY_PATH",
+		},
+		cli.StringFlag{
 			Name:   "job-verification-no-signature-behavior",
-			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: % #v", noSignatureBehaviors),
+			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v", noSignatureBehaviors),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
 		cli.StringFlag{
 			Name:   "job-verification-invalid-signature-behavior",
-			Usage:  fmt.Sprintf("The behavior when a job is received, and the signature calculated is different from the one specified. One of: % #v", noSignatureBehaviors),
+			Usage:  fmt.Sprintf("The behavior when a job is received, and the signature calculated is different from the one specified. One of: %v", noSignatureBehaviors),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_INVALID_SIGNATURE_BEHAVIOR",
 		},
 
@@ -818,43 +824,46 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:            cfg.BootstrapScript,
-			BuildPath:                  cfg.BuildPath,
-			SocketsPath:                cfg.SocketsPath,
-			GitMirrorsPath:             cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:       cfg.GitMirrorsSkipUpdate,
-			HooksPath:                  cfg.HooksPath,
-			PluginsPath:                cfg.PluginsPath,
-			GitCheckoutFlags:           cfg.GitCheckoutFlags,
-			GitCloneFlags:              cfg.GitCloneFlags,
-			GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
-			GitCleanFlags:              cfg.GitCleanFlags,
-			GitFetchFlags:              cfg.GitFetchFlags,
-			GitSubmodules:              !cfg.NoGitSubmodules,
-			SSHKeyscan:                 !cfg.NoSSHKeyscan,
-			CommandEval:                !cfg.NoCommandEval,
-			PluginsEnabled:             !cfg.NoPlugins,
-			PluginValidation:           !cfg.NoPluginValidation,
-			LocalHooksEnabled:          !cfg.NoLocalHooks,
-			StrictSingleHooks:          cfg.StrictSingleHooks,
-			RunInPty:                   !cfg.NoPTY,
-			ANSITimestamps:             !cfg.NoANSITimestamps,
-			TimestampLines:             cfg.TimestampLines,
-			DisconnectAfterJob:         cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
-			CancelGracePeriod:          cfg.CancelGracePeriod,
-			SignalGracePeriod:          signalGracePeriod,
-			EnableJobLogTmpfile:        cfg.EnableJobLogTmpfile,
-			JobLogPath:                 cfg.JobLogPath,
-			WriteJobLogsToStdout:       cfg.WriteJobLogsToStdout,
-			LogFormat:                  cfg.LogFormat,
-			Shell:                      cfg.Shell,
-			RedactedVars:               cfg.RedactedVars,
-			AcquireJob:                 cfg.AcquireJob,
-			TracingBackend:             cfg.TracingBackend,
-			TracingServiceName:         cfg.TracingServiceName,
-			JobVerificationKeyPath:     cfg.JobVerificationKeyPath,
+			BootstrapScript:                         cfg.BootstrapScript,
+			BuildPath:                               cfg.BuildPath,
+			SocketsPath:                             cfg.SocketsPath,
+			GitMirrorsPath:                          cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:                   cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:                    cfg.GitMirrorsSkipUpdate,
+			HooksPath:                               cfg.HooksPath,
+			PluginsPath:                             cfg.PluginsPath,
+			GitCheckoutFlags:                        cfg.GitCheckoutFlags,
+			GitCloneFlags:                           cfg.GitCloneFlags,
+			GitCloneMirrorFlags:                     cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                           cfg.GitCleanFlags,
+			GitFetchFlags:                           cfg.GitFetchFlags,
+			GitSubmodules:                           !cfg.NoGitSubmodules,
+			SSHKeyscan:                              !cfg.NoSSHKeyscan,
+			CommandEval:                             !cfg.NoCommandEval,
+			PluginsEnabled:                          !cfg.NoPlugins,
+			PluginValidation:                        !cfg.NoPluginValidation,
+			LocalHooksEnabled:                       !cfg.NoLocalHooks,
+			StrictSingleHooks:                       cfg.StrictSingleHooks,
+			RunInPty:                                !cfg.NoPTY,
+			ANSITimestamps:                          !cfg.NoANSITimestamps,
+			TimestampLines:                          cfg.TimestampLines,
+			DisconnectAfterJob:                      cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:              cfg.DisconnectAfterIdleTimeout,
+			CancelGracePeriod:                       cfg.CancelGracePeriod,
+			SignalGracePeriod:                       signalGracePeriod,
+			EnableJobLogTmpfile:                     cfg.EnableJobLogTmpfile,
+			JobLogPath:                              cfg.JobLogPath,
+			WriteJobLogsToStdout:                    cfg.WriteJobLogsToStdout,
+			LogFormat:                               cfg.LogFormat,
+			Shell:                                   cfg.Shell,
+			RedactedVars:                            cfg.RedactedVars,
+			AcquireJob:                              cfg.AcquireJob,
+			TracingBackend:                          cfg.TracingBackend,
+			TracingServiceName:                      cfg.TracingServiceName,
+			JobSigningKeyPath:                       cfg.JobSigningKeyPath,
+			JobVerificationKeyPath:                  cfg.JobVerificationKeyPath,
+			JobVerificationNoSignatureBehavior:      cfg.JobVerificationNoSignatureBehavior,
+			JobVerificationInvalidSignatureBehavior: cfg.JobVerificationInvalidSignatureBehavior,
 		}
 
 		if loader.File != nil {

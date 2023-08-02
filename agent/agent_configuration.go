@@ -28,6 +28,7 @@ type AgentConfiguration struct {
 	StrictSingleHooks     bool
 	RunInPty              bool
 
+	JobSigningKeyPath                       string
 	JobVerificationKeyPath                  string
 	JobVerificationNoSignatureBehavior      string
 	JobVerificationInvalidSignatureBehavior string

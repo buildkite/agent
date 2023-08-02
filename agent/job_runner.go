@@ -497,6 +497,11 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_PTY"] = "false"
 	}
 
+	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
+	if r.conf.AgentConfiguration.JobSigningKeyPath != "" {
+		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_PATH"] = r.conf.AgentConfiguration.JobSigningKeyPath
+	}
+
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing

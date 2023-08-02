@@ -80,13 +80,13 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}(ctx, &wg) // Note the non-cancellable context (ctx rather than cctx) here - we don't want to be interrupted during cleanup
 
 	ise := &invalidSignatureError{}
-	err := r.verifyJob(verifier)
-	switch {
+	switch err := r.verifyJob(verifier); {
 	case err == nil: // no error, all good, keep going
 		if verifier != nil {
 			r.logger.Info("Successfully verified job %s with signature %s", r.conf.Job.ID, r.conf.Job.Step.Signature.Value)
 			r.logStreamer.Process([]byte(fmt.Sprintf("✅ Verified job with signature %s\n", r.conf.Job.Step.Signature.Value)))
 		}
+
 	case errors.Is(err, ErrNoSignature):
 		r.verificationFailureLogs(err, r.NoSignatureBehavior)
 		if r.NoSignatureBehavior == VerificationBehaviourBlock {
