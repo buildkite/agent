@@ -141,7 +141,7 @@ func (s Steps) sign(signer Signer) error {
 	for _, step := range s {
 		switch step := step.(type) {
 		case *CommandStep:
-			if _, ok := step.RemainingFields["matrix"]; ok {
+			if step.Matrix != nil {
 				// Don't sign matrix steps... yet
 				continue
 			}

@@ -74,6 +74,10 @@ func inlineFriendlyMarshalJSON(q any) ([]byte, error) {
 
 // stolen from encoding/json
 func isEmptyValue(q any) bool {
+	if q == nil { // not stolen from encoding/json, but oddly missing from it?
+		return true
+	}
+
 	v := reflect.ValueOf(q)
 
 	switch v.Kind() {

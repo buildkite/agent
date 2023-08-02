@@ -56,7 +56,7 @@ func (r *JobRunner) verifyJob(verifier pipeline.Verifier) error {
 		return nil // no signature, no verifier, no problem
 	}
 
-	if _, ok := step.RemainingFields["matrix"]; ok {
+	if step.Matrix != nil {
 		r.logger.Warn("Signing/Verification of matrix jobs is not currently supported")
 		r.logger.Warn("Watch this space 👀")
 
