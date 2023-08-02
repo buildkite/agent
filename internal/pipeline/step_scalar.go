@@ -1,13 +1,6 @@
 package pipeline
 
-import (
-	"encoding/json"
-	"errors"
-	"fmt"
-
-	"github.com/buildkite/agent/v3/internal/ordered"
-	"github.com/buildkite/interpolate"
-)
+import "fmt"
 
 // In the buildkite pipeline yaml, some step types (broadly, wait steps, input steps and block steps) can be represented
 // either by a scalar string (ie "wait") or by a mapping with keys and values and such
@@ -46,67 +39,3 @@ func NewScalarStep(s string) (Step, error) {
 		return nil, fmt.Errorf("unmarshaling step: unsupported scalar step type %q, want one of %v", s, validStepScalars)
 	}
 }
-
-// WaitStep models a wait step.
-//
-// Standard caveats apply - see the package comment.
-type WaitStep struct {
-	Scalar   string         `yaml:"-"`
-	Contents map[string]any `yaml:",inline"`
-}
-
-// MarshalJSON marshals a wait step as "wait" if w is empty, or as the step's scalar if it's set.
-// If scalar is empty, it marshals as the remaining fields
-func (s *WaitStep) MarshalJSON() ([]byte, error) {
-	if s.Scalar != "" {
-		return json.Marshal(s.Scalar)
-	}
-
-	if len(s.Contents) == 0 {
-		return json.Marshal("wait")
-	}
-
-	return json.Marshal(s.Contents)
-}
-
-func (s *WaitStep) interpolate(env interpolate.Env) error {
-	return interpolateMap(env, s.Contents)
-}
-
-func (s *WaitStep) unmarshalMap(m *ordered.MapSA) error {
-	s.Contents = m.ToMap()
-	return nil
-}
-
-func (*WaitStep) stepTag() {}
-
-// InputStep models a block or input step.
-//
-// Standard caveats apply - see the package comment.
-type InputStep struct {
-	Scalar   string         `yaml:"-"`
-	Contents map[string]any `yaml:",inline"`
-}
-
-func (s *InputStep) MarshalJSON() ([]byte, error) {
-	if s.Scalar != "" {
-		return json.Marshal(s.Scalar)
-	}
-
-	if len(s.Contents) == 0 {
-		return []byte{}, errors.New("empty input step")
-	}
-
-	return json.Marshal(s.Contents)
-}
-
-func (s InputStep) interpolate(env interpolate.Env) error {
-	return interpolateMap(env, s.Contents)
-}
-
-func (s *InputStep) unmarshalMap(m *ordered.MapSA) error {
-	s.Contents = m.ToMap()
-	return nil
-}
-
-func (*InputStep) stepTag() {}
