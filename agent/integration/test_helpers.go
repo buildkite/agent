@@ -39,6 +39,8 @@ func mockBootstrap(t *testing.T) *bintest.Mock {
 }
 
 func runJob(t *testing.T, j *api.Job, server *httptest.Server, cfg agent.AgentConfiguration, bs *bintest.Mock) {
+	t.Helper()
+
 	l := logger.Discard
 
 	// minimal metrics, this could be cleaner
