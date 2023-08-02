@@ -33,16 +33,41 @@ func (p *Plugins) unmarshalAny(o any) error {
 	switch o := o.(type) {
 	case []any:
 		for _, c := range o {
-			m, ok := c.(*ordered.MapSA)
-			if !ok {
-				return fmt.Errorf("unmarshaling plugins: plugin type %T, want *ordered.Map[string, any]", c)
-			}
-			if err := unmarshalMap(m); err != nil {
-				return err
+			switch ct := c.(type) {
+			case *ordered.MapSA:
+				// Typical case:
+				//
+				// plugins:
+				//   - plugin#1.0.0:
+				//       config: config, etc
+				if err := unmarshalMap(ct); err != nil {
+					return err
+				}
+
+			case string:
+				// Less typical, but supported:
+				//
+				// plugins:
+				//   - plugin#1.0.0
+				// (no config, only plugin)
+				*p = append(*p, &Plugin{
+					Name:   ct,
+					Config: nil,
+				})
+
+			default:
+				return fmt.Errorf("unmarshaling plugins: plugin type %T, want *ordered.Map[string, any] or string", c)
 			}
 		}
 
 	case *ordered.MapSA:
+		// Legacy form:
+		//
+		// plugins:
+		//   plugin#1.0.0:
+		//     config: config, etc
+		//   otherplugin#2.0.0:
+		//     etc
 		if err := unmarshalMap(o); err != nil {
 			return err
 		}
