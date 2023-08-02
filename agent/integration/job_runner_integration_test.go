@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/buildkite/agent/v3/agent"
@@ -240,6 +241,7 @@ func runJob(t *testing.T, j *api.Job, server *httptest.Server, cfg agent.AgentCo
 }
 
 type testAgentEndpoint struct {
+	mu    sync.RWMutex
 	calls map[string][][]byte
 }
 
@@ -251,6 +253,9 @@ func createTestAgentEndpoint() *testAgentEndpoint {
 
 func (tae *testAgentEndpoint) finishesFor(t *testing.T, jobID string) []api.Job {
 	t.Helper()
+
+	tae.mu.RLock()
+	defer tae.mu.RUnlock()
 
 	endpoint := fmt.Sprintf("/jobs/%s/finish", jobID)
 	finishes := make([]api.Job, 0, len(tae.calls))
@@ -270,7 +275,9 @@ func (tae *testAgentEndpoint) finishesFor(t *testing.T, jobID string) []api.Job 
 func (t *testAgentEndpoint) server(jobID string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		b, _ := io.ReadAll(req.Body)
+		t.mu.Lock()
 		t.calls[req.URL.Path] = append(t.calls[req.URL.Path], b)
+		t.mu.Unlock()
 
 		switch req.URL.Path {
 		case "/jobs/" + jobID:
