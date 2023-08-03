@@ -953,8 +953,8 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Create an agent worker to run the agent
-			workers = append(workers, agent.NewAgentWorker(l.WithFields(
-				logger.StringField("agent", ag.Name)),
+			workers = append(workers, agent.NewAgentWorker(
+				l.WithFields(logger.StringField("agent", ag.Name)),
 				ag,
 				mc,
 				client,
