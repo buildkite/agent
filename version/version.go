@@ -3,7 +3,9 @@ package version
 
 import (
 	_ "embed"
+	"fmt"
 	"runtime"
+	"runtime/debug"
 	"strings"
 )
 
@@ -28,6 +30,32 @@ func BuildVersion() string {
 		return "x"
 	}
 	return buildVersion
+}
+
+func commitInfo() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "x"
+	}
+
+	dirty := ".dirty"
+	var commit string
+	for _, setting := range info.Settings {
+		if setting.Key == "vcs.revision" {
+			commit = setting.Value
+		} else if setting.Key == "vcs.modified" && setting.Value == "false" {
+			dirty = ""
+		}
+	}
+
+	return commit + dirty
+}
+
+// FullVersion is a SemVer 2.0 compliant version string that includes
+// [build metadata](https://semver.org/#spec-item-10) consisting of the build
+// number (if any), the commit hash, and whether the build was dirty.
+func FullVersion() string {
+	return fmt.Sprintf("%s+%s.%s", Version(), BuildVersion(), commitInfo())
 }
 
 func UserAgent() string {
