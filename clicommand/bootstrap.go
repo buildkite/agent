@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
@@ -89,6 +90,7 @@ type BootstrapConfig struct {
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
 	CancelSignal                 string   `cli:"cancel-signal"`
+	SignalGracePeriodSeconds     int      `cli:"signal-grace-period-seconds"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
@@ -334,12 +336,8 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
-		cli.StringFlag{
-			Name:   "cancel-signal",
-			Usage:  "The signal to use for cancellation",
-			EnvVar: "BUILDKITE_CANCEL_SIGNAL",
-			Value:  "SIGTERM",
-		},
+		cancelSignalFlag,
+		signalGracePeriodSecondsFlag,
 		cli.StringSliceFlag{
 			Name:   "redacted-vars",
 			Usage:  "Pattern of environment variable names containing sensitive values",
@@ -410,6 +408,8 @@ var BootstrapCommand = cli.Command{
 			l.Fatal("Failed to parse cancel-signal: %v", err)
 		}
 
+		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
 			AgentName:                    cfg.AgentName,
@@ -420,6 +420,7 @@ var BootstrapCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			SocketsPath:                  cfg.SocketsPath,
 			CancelSignal:                 cancelSig,
+			SignalGracePeriod:            signalGracePeriod,
 			CleanCheckout:                cfg.CleanCheckout,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,

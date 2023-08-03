@@ -1,10 +1,10 @@
 package job
 
 import (
+	"log"
 	"reflect"
 	"strconv"
-
-	"log"
+	"time"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/process"
@@ -148,6 +148,10 @@ type ExecutorConfig struct {
 
 	// What signal to use for command cancellation
 	CancelSignal process.Signal
+
+	// Amount of time to wait between sending the CancelSignal and SIGKILL to the process groups
+	// that the executor starts. The subprocesses should use this time to clean up after themselves.
+	SignalGracePeriod time.Duration
 
 	// List of environment variable globs to redact from job output
 	RedactedVars []string

@@ -117,6 +117,7 @@ type AgentStartConfig struct {
 	SpawnWithPriority           bool     `cli:"spawn-with-priority"`
 	LogFormat                   string   `cli:"log-format"`
 	CancelSignal                string   `cli:"cancel-signal"`
+	SignalGracePeriodSeconds    int      `cli:"signal-grace-period-seconds"`
 	RedactedVars                []string `cli:"redacted-vars" normalize:"list"`
 
 	// Global flags
@@ -278,12 +279,7 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The maximum idle time in seconds to wait for a job before disconnecting. The default of 0 means no timeout",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_IDLE_TIMEOUT",
 		},
-		cli.IntFlag{
-			Name:   "cancel-grace-period",
-			Value:  10,
-			Usage:  "The number of seconds a canceled or timed out job is given to gracefully terminate and upload its artifacts",
-			EnvVar: "BUILDKITE_CANCEL_GRACE_PERIOD",
-		},
+		cancelGracePeriodFlag,
 		cli.BoolFlag{
 			Name:   "enable-job-log-tmpfile",
 			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job",
@@ -548,12 +544,8 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Assign priorities to every spawned agent (when using --spawn) equal to the agent's index",
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
 		},
-		cli.StringFlag{
-			Name:   "cancel-signal",
-			Usage:  "The signal to use for cancellation",
-			EnvVar: "BUILDKITE_CANCEL_SIGNAL",
-			Value:  "SIGTERM",
-		},
+		cancelSignalFlag,
+		signalGracePeriodSecondsFlag,
 		cli.StringFlag{
 			Name:   "tracing-backend",
 			Usage:  `Enable tracing for build jobs by specifying a backend, "datadog" or "opentelemetry"`,
@@ -756,6 +748,12 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		if cfg.CancelGracePeriod <= cfg.SignalGracePeriodSeconds {
+			l.Fatal("cancel-grace-period must be greater than signal-grace-period-seconds")
+		}
+
+		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
+
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
 			Datadog:              cfg.MetricsDatadog,
 			DatadogHost:          cfg.MetricsDatadogHost,
@@ -799,6 +797,7 @@ var AgentStartCommand = cli.Command{
 			DisconnectAfterJob:         cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
 			CancelGracePeriod:          cfg.CancelGracePeriod,
+			SignalGracePeriod:          signalGracePeriod,
 			EnableJobLogTmpfile:        cfg.EnableJobLogTmpfile,
 			JobLogPath:                 cfg.JobLogPath,
 			WriteJobLogsToStdout:       cfg.WriteJobLogsToStdout,
@@ -954,16 +953,21 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Create an agent worker to run the agent
-			workers = append(workers,
-				agent.NewAgentWorker(
-					l.WithFields(logger.StringField("agent", ag.Name)), ag, mc, client, agent.AgentWorkerConfig{
-						AgentConfiguration: agentConf,
-						CancelSignal:       cancelSig,
-						Debug:              cfg.Debug,
-						DebugHTTP:          cfg.DebugHTTP,
-						SpawnIndex:         i,
-						AgentStdout:        os.Stdout,
-					}))
+			workers = append(workers, agent.NewAgentWorker(
+				l.WithFields(logger.StringField("agent", ag.Name)),
+				ag,
+				mc,
+				client,
+				agent.AgentWorkerConfig{
+					AgentConfiguration: agentConf,
+					CancelSignal:       cancelSig,
+					SignalGracePeriod:  signalGracePeriod,
+					Debug:              cfg.Debug,
+					DebugHTTP:          cfg.DebugHTTP,
+					SpawnIndex:         i,
+					AgentStdout:        os.Stdout,
+				},
+			))
 		}
 
 		// Setup the agent pool that spawns agent workers
@@ -1034,7 +1038,7 @@ func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPo
 
 		for sig := range signals {
 			l.Debug("Received signal `%v`", sig)
-			setStatus(fmt.Sprintf("Recieved signal `%v`", sig))
+			setStatus(fmt.Sprintf("Received signal `%v`", sig))
 
 			switch sig {
 			case syscall.SIGQUIT:
@@ -1062,6 +1066,7 @@ func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPo
 func agentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
 	return agentLifecycleHook("agent-startup", log, cfg)
 }
+
 func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
 	_ = agentLifecycleHook("agent-shutdown", log, cfg)
 }
