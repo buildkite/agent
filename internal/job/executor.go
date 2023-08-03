@@ -869,7 +869,7 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 				"You may be able to avoid this by removing consecutive underscore, hyphen, or whitespace",
 				"characters in your plugin configuration.",
 			}, " "))
-			for _, err := range dnerr.Errors() {
+			for _, err := range dnerr.Unwrap() {
 				e.shell.Logger.Printf("%s", err.Error())
 			}
 		} else if err != nil {
