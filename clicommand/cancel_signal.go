@@ -10,7 +10,7 @@ const (
 )
 
 var (
-	// cancel grace period must be stricly longer than signal grace period
+	// cancel grace period must be strictly longer than signal grace period
 	_ uint = defaultCancelGracePeriod - defaultSignalGracePeriod - 1
 
 	cancelGracePeriodFlag = cli.IntFlag{
