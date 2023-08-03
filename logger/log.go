@@ -81,7 +81,7 @@ func (l *ConsoleLogger) SetLevel(level Level) {
 
 func (l *ConsoleLogger) Debug(format string, v ...any) {
 	if l.level == DEBUG {
-		debugFields := make(Fields, 0, len(l.fields)+1)
+		debugFields := make(Fields, len(l.fields))
 		copy(debugFields, l.fields)
 		debugFields.Add(StringField("agent_version", version.FullVersion()))
 		l.printer.Print(DEBUG, fmt.Sprintf(format, v...), debugFields)
