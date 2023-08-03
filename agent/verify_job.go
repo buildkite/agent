@@ -25,11 +25,6 @@ func (e *invalidSignatureError) Unwrap() error {
 	return e.underlying
 }
 
-func (e *invalidSignatureError) As(target any) bool {
-	_, ok := target.(*invalidSignatureError)
-	return ok
-}
-
 func (r *JobRunner) verificationFailureLogs(err error, behavior string) {
 	label := "WARNING"
 	if behavior == VerificationBehaviourBlock {
@@ -47,14 +42,6 @@ func (r *JobRunner) verificationFailureLogs(err error, behavior string) {
 
 func (r *JobRunner) verifyJob(verifier pipeline.Verifier) error {
 	step := r.conf.Job.Step
-
-	if verifier == nil {
-		if step.Signature != nil {
-			return fmt.Errorf("job %q was signed with signature %q, but no verification key was provided, so the job can't be verified", r.conf.Job.ID, step.Signature.Value)
-		}
-
-		return nil // no signature, no verifier, no problem
-	}
 
 	if step.Matrix != nil {
 		r.logger.Warn("Signing/Verification of matrix jobs is not currently supported")

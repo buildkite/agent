@@ -79,35 +79,47 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		r.cleanup(ctx, wg, exit)
 	}(ctx, &wg) // Note the non-cancellable context (ctx rather than cctx) here - we don't want to be interrupted during cleanup
 
-	ise := &invalidSignatureError{}
-	switch err := r.verifyJob(verifier); {
-	case err == nil: // no error, all good, keep going
-		if verifier != nil {
-			r.logger.Info("Successfully verified job %s with signature %s", r.conf.Job.ID, r.conf.Job.Step.Signature.Value)
-			r.logStreamer.Process([]byte(fmt.Sprintf("✅ Verified job with signature %s\n", r.conf.Job.Step.Signature.Value)))
-		}
+	job := r.conf.Job
 
-	case errors.Is(err, ErrNoSignature):
-		r.verificationFailureLogs(err, r.NoSignatureBehavior)
-		if r.NoSignatureBehavior == VerificationBehaviourBlock {
-			exit.Status = -1
-			exit.SignalReason = "job_verification_failed_no_signature"
-			return nil
-		}
-
-	case errors.As(err, &ise):
-		r.verificationFailureLogs(err, r.InvalidSignatureBehavior)
-		if r.InvalidSignatureBehavior == VerificationBehaviourBlock {
-			exit.Status = -1
-			exit.SignalReason = "job_verification_failed_invalid_signature"
-			return nil
-		}
-
-	default: // some other error
-		r.verificationFailureLogs(err, VerificationBehaviourBlock) // errors in verification are always fatal
+	if verifier == nil && job.Step.Signature != nil {
+		r.verificationFailureLogs(
+			fmt.Errorf("job %q was signed with signature %q, but no verification key was provided, so the job can't be verified", job.ID, job.Step.Signature.Value),
+			VerificationBehaviourBlock,
+		)
 		exit.Status = -1
 		exit.SignalReason = "job_verification_failed_with_error"
 		return nil
+	}
+
+	if verifier != nil {
+		ise := &invalidSignatureError{}
+		switch err := r.verifyJob(verifier); {
+		case errors.Is(err, ErrNoSignature):
+			r.verificationFailureLogs(err, r.NoSignatureBehavior)
+			if r.NoSignatureBehavior == VerificationBehaviourBlock {
+				exit.Status = -1
+				exit.SignalReason = "job_verification_failed_no_signature"
+				return nil
+			}
+
+		case errors.As(err, &ise):
+			r.verificationFailureLogs(err, r.InvalidSignatureBehavior)
+			if r.InvalidSignatureBehavior == VerificationBehaviourBlock {
+				exit.Status = -1
+				exit.SignalReason = "job_verification_failed_invalid_signature"
+				return nil
+			}
+
+		case err != nil: // some other error
+			r.verificationFailureLogs(err, VerificationBehaviourBlock) // errors in verification are always fatal
+			exit.Status = -1
+			exit.SignalReason = "job_verification_failed_with_error"
+			return nil
+
+		default: // no error, all good, keep going
+			r.logger.Info("Successfully verified job %s with signature %s", job.ID, job.Step.Signature.Value)
+			r.logStreamer.Process([]byte(fmt.Sprintf("✅ Verified job with signature %s\n", job.Step.Signature.Value)))
+		}
 	}
 
 	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for
