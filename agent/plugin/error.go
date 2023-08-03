@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -19,14 +18,14 @@ func (e *DeprecatedNameErrors) IsEmpty() bool {
 	return e == nil || len(e.errs) == 0
 }
 
-// Errors returns the contained set of errors in sorted order
-func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
+// Unwrap returns the a slice of errors in a stable order
+func (e *DeprecatedNameErrors) Unwrap() []error {
 	if e == nil {
 		return nil
 	}
 
-	if e.errs == nil {
-		return []DeprecatedNameError{}
+	if len(e.errs) == 0 {
+		return []error{}
 	}
 
 	errs := make([]DeprecatedNameError, 0, len(e.errs))
@@ -41,13 +40,18 @@ func (e *DeprecatedNameErrors) Errors() []DeprecatedNameError {
 		return errs[i].old < errs[j].old
 	})
 
-	return errs
+	out := make([]error, 0, len(errs))
+	for i := range errs {
+		out = append(out, &errs[i])
+	}
+
+	return out
 }
 
 // Error returns each contained error on a new line
 func (e *DeprecatedNameErrors) Error() string {
 	builder := strings.Builder{}
-	for i, err := range e.Errors() {
+	for i, err := range e.Unwrap() {
 		_, _ = builder.WriteString(err.Error())
 		if i < len(e.errs)-1 {
 			_, _ = builder.WriteRune('\n')
@@ -73,15 +77,11 @@ func (e *DeprecatedNameErrors) Append(errs ...DeprecatedNameError) *DeprecatedNa
 	return e
 }
 
-// Is returns true if and only if a error that is wrapped in target
-// contains the same set of DeprecatedNameError as the receiver.
+// Is returns true if and only if a target contains the same set of
+// DeprecatedNameError as the receiver.
 func (e *DeprecatedNameErrors) Is(target error) bool {
-	if e == nil {
-		return target == nil
-	}
-
-	var targetErr *DeprecatedNameErrors
-	if !errors.As(target, &targetErr) {
+	targetErr, ok := target.(*DeprecatedNameErrors)
+	if !ok {
 		return false
 	}
 
@@ -110,18 +110,10 @@ func NewDeprecatedNameError(oldName, newName string) DeprecatedNameError {
 }
 
 func (e *DeprecatedNameError) Error() string {
-	return fmt.Sprintf(" deprecated: %q\nreplacement: %q\n", e.old, e.new)
+	return fmt.Sprintf("deprecated: %q\nreplacement: %q\n", e.old, e.new)
 }
 
 func (e *DeprecatedNameError) Is(target error) bool {
-	if e == nil {
-		return target == nil
-	}
-
-	var targetErr *DeprecatedNameError
-	if !errors.As(target, &targetErr) {
-		return false
-	}
-
-	return e.old == targetErr.old && e.new == targetErr.new
+	terr, ok := target.(*DeprecatedNameError)
+	return ok && *e == *terr
 }
