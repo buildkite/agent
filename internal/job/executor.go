@@ -850,18 +850,40 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 	return e.executePluginHook(ctx, "environment", vendoredCheckouts)
 }
 
+var singleHooks = map[string]bool{
+	"command":  true,
+	"checkout": true,
+}
+
 // Executes a named hook on plugins that have it
 func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts []*pluginCheckout) error {
-	for _, p := range checkouts {
+	// Command and checkout hooks are a little different, in that we only execute
+	// the first one we see. We run the first one, and output a warning for all
+	// the subsequent ones.
+	hookTypeSeen := make(map[string]bool)
+
+	for i, p := range checkouts {
 		hookPath, err := hook.Find(p.HooksDir, name)
 		if errors.Is(err, os.ErrNotExist) {
 			continue // this plugin does not implement this hook
-		} else if err != nil {
+		}
+		if err != nil {
 			return err
 		}
 
+		if singleHooks[name] && hookTypeSeen[name] {
+			if experiments.IsEnabled(experiments.StrictSingleHooks) {
+				e.shell.Warningf("Ignoring additional %s hook (%s plugin, position %d)", name, p.Plugin.Name(), i+1)
+				continue
+			} else {
+				e.shell.Warningf("The additional %s hook (%s plugin, position %d) will be ignored in a future version of the agent. "+
+					"To enforce single %s hooks now, enable the %q experiment", name, p.Plugin.Name(), i+1, name, experiments.StrictSingleHooks)
+			}
+		}
+		hookTypeSeen[name] = true
+
 		envMap, err := p.ConfigurationToEnvironment()
-		if dnerr := (&plugin.DeprecatedNameErrors{}); err != nil && errors.As(err, &dnerr) {
+		if dnerr := (&plugin.DeprecatedNameErrors{}); errors.As(err, &dnerr) {
 			e.shell.Logger.Headerf("Deprecated environment variables for plugin %s", p.Plugin.Name())
 			e.shell.Logger.Printf("%s", strings.Join([]string{
 				"The way that environment variables are derived from the plugin configuration is changing.",

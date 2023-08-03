@@ -29,6 +29,7 @@ const (
 	PolyglotHooks              = "polyglot-hooks"
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
 	AvoidRecursiveTrap         = "avoid-recursive-trap"
+	StrictSingleHooks          = "strict-single-hooks"
 
 	// Promoted experiments
 	ANSITimestamps    = "ansi-timestamps"
@@ -47,6 +48,7 @@ var (
 		PolyglotHooks:              {},
 		ResolveCommitAfterCheckout: {},
 		AvoidRecursiveTrap:         {},
+		StrictSingleHooks:          {},
 	}
 
 	Promoted = map[string]string{

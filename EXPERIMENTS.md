@@ -97,3 +97,11 @@ We now understand this causes a bug, and we want to avoid it. Enabling this expe
 https://github.com/buildkite/agent/blob/40b8a5f3794b04bd64da6e2527857add849a35bd/internal/job/executor.go#L1980-L1993
 
 **Status:** Since the default behaviour is buggy, we will be promoting this to non-experiment soon™️.
+
+### `strict-single-hooks`
+
+We document that multiple checkout and command hooks will not run, only the first encountered will. A long-standing bug means this is not true for checkout and command hooks provided by plugins.
+
+This experiment enforces only running one checkout or command hook, even if multiple plugins define them. 
+
+**Status:** This experiment fixes a long-standing bug, so we intend to promote this to non-experiment when most pipelines and plugins have been updated.
