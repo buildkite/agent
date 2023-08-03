@@ -60,7 +60,8 @@ func (r *JobRunner) verifyJob(verifier pipeline.Verifier) error {
 	}
 
 	// Now that the signature of the job's step is verified, we need to check if the fields on the job match those on the
-	// step. If they don't, we need to fail the job
+	// step. If they don't, we need to fail the job - more or less the only reason that the job and the step would have
+	// different fields would be if someone had modified the job on the backend after it was signed (aka crimes)
 	signedFields := step.Signature.SignedFields
 	jobFields, err := r.conf.Job.ValuesForFields(signedFields)
 	if err != nil {

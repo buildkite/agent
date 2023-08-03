@@ -73,6 +73,9 @@ func (c *CommandStep) unmarshalMap(m *ordered.MapSA) error {
 			}
 			c.Signature = sig
 
+		case "matrix":
+			c.Matrix = v
+
 		default:
 			// Preserve any other key.
 			if c.RemainingFields == nil {
@@ -114,13 +117,20 @@ func (c *CommandStep) interpolate(env interpolate.Env) error {
 	if err != nil {
 		return err
 	}
+
 	if err := interpolateSlice(env, c.Plugins); err != nil {
 		return err
 	}
+
+	if c.Matrix, err = interpolateAny(env, c.Matrix); err != nil {
+		return err
+	}
+
 	// NB: Do not interpolate Signature.
 	if err := interpolateMap(env, c.RemainingFields); err != nil {
 		return err
 	}
+
 	c.Command = cmd
 	return nil
 }

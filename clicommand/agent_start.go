@@ -54,7 +54,7 @@ Example:
 
    $ buildkite-agent start --token xxx`
 
-var noSignatureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
@@ -591,12 +591,12 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "job-verification-no-signature-behavior",
-			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v", noSignatureBehaviors),
+			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v", verificationFailureBehaviors),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
 		cli.StringFlag{
 			Name:   "job-verification-invalid-signature-behavior",
-			Usage:  fmt.Sprintf("The behavior when a job is received, and the signature calculated is different from the one specified. One of: %v", noSignatureBehaviors),
+			Usage:  fmt.Sprintf("The behavior when a job is received, and the signature calculated is different from the one specified. One of: %v", verificationFailureBehaviors),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_INVALID_SIGNATURE_BEHAVIOR",
 		},
 
@@ -703,12 +703,12 @@ var AgentStartCommand = cli.Command{
 		}
 
 		if cfg.JobVerificationKeyPath != "" {
-			if !slices.Contains(noSignatureBehaviors, cfg.JobVerificationNoSignatureBehavior) {
-				l.Fatal("Invalid job verification no signature behavior %q. Must be one of: %v", cfg.JobVerificationNoSignatureBehavior, noSignatureBehaviors)
+			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationNoSignatureBehavior) {
+				l.Fatal("Invalid job verification no signature behavior %q. Must be one of: %v", cfg.JobVerificationNoSignatureBehavior, verificationFailureBehaviors)
 			}
 
-			if !slices.Contains(noSignatureBehaviors, cfg.JobVerificationInvalidSignatureBehavior) {
-				l.Fatal("Invalid job verification invalid signature behavior %q. Must be one of: %v", cfg.JobVerificationInvalidSignatureBehavior, noSignatureBehaviors)
+			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationInvalidSignatureBehavior) {
+				l.Fatal("Invalid job verification invalid signature behavior %q. Must be one of: %v", cfg.JobVerificationInvalidSignatureBehavior, verificationFailureBehaviors)
 			}
 		}
 

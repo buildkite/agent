@@ -26,7 +26,7 @@ type Job struct {
 	ChunksFailedCount  int                  `json:"chunks_failed_count,omitempty"`
 }
 
-func (j Job) ValuesForFields(fields []string) (map[string]string, error) {
+func (j *Job) ValuesForFields(fields []string) (map[string]string, error) {
 	o := make(map[string]string, len(fields))
 	for _, f := range fields {
 		switch f {
