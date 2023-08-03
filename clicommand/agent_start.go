@@ -120,11 +120,12 @@ type AgentStartConfig struct {
 	RedactedVars                []string `cli:"redacted-vars" normalize:"list"`
 
 	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	Debug             bool     `cli:"debug"`
+	LogLevel          string   `cli:"log-level"`
+	NoColor           bool     `cli:"no-color"`
+	Experiments       []string `cli:"experiment" normalize:"list"`
+	Profile           string   `cli:"profile"`
+	StrictSingleHooks bool     `cli:"strict-single-hooks"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -580,6 +581,7 @@ var AgentStartCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 		RedactedVars,
+		StrictSingleHooksFlag,
 
 		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
@@ -793,6 +795,7 @@ var AgentStartCommand = cli.Command{
 			PluginsEnabled:             !cfg.NoPlugins,
 			PluginValidation:           !cfg.NoPluginValidation,
 			LocalHooksEnabled:          !cfg.NoLocalHooks,
+			StrictSingleHooks:          cfg.StrictSingleHooks,
 			RunInPty:                   !cfg.NoPTY,
 			ANSITimestamps:             !cfg.NoANSITimestamps,
 			TimestampLines:             cfg.TimestampLines,

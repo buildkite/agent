@@ -443,6 +443,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
 	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
+	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.StrictSingleHooks)
 
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
 	if r.conf.CancelSignal != process.SIGTERM {

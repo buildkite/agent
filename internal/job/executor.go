@@ -850,7 +850,9 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 	return e.executePluginHook(ctx, "environment", vendoredCheckouts)
 }
 
-var singleHooks = map[string]bool{
+// Hook types that we should only run one of, but a long-standing bug means that
+// we allowed more than one to run (for plugins).
+var strictSingleHookTypes = map[string]bool{
 	"command":  true,
 	"checkout": true,
 }
@@ -871,13 +873,18 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 			return err
 		}
 
-		if singleHooks[name] && hookTypeSeen[name] {
-			if experiments.IsEnabled(experiments.StrictSingleHooks) {
-				e.shell.Warningf("Ignoring additional %s hook (%s plugin, position %d)", name, p.Plugin.Name(), i+1)
+		if strictSingleHookTypes[name] && hookTypeSeen[name] {
+			if e.ExecutorConfig.StrictSingleHooks {
+				e.shell.Logger.Warningf("Ignoring additional %s hook (%s plugin, position %d)",
+					name, p.Plugin.Name(), i+1)
 				continue
 			} else {
-				e.shell.Warningf("The additional %s hook (%s plugin, position %d) will be ignored in a future version of the agent. "+
-					"To enforce single %s hooks now, enable the %q experiment", name, p.Plugin.Name(), i+1, name, experiments.StrictSingleHooks)
+				e.shell.Logger.Warningf("The additional %s hook (%s plugin, position %d) "+
+					"will be ignored in a future version of the agent. To enforce "+
+					"single %s hooks now, pass the --strict-single-hooks flag, set "+
+					"the environment variable BUILDKITE_STRICT_SINGLE_HOOKS=true, "+
+					"or set strict-single-hooks=true in your agent configuration",
+					name, p.Plugin.Name(), i+1, name)
 			}
 		}
 		hookTypeSeen[name] = true

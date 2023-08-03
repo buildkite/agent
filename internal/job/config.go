@@ -107,6 +107,9 @@ type ExecutorConfig struct {
 	// Are local hooks enabled?
 	LocalHooksEnabled bool
 
+	// Should we enforce that only one checkout and one command hook are run?
+	StrictSingleHooks bool
+
 	// Path where the builds will be run
 	BuildPath string
 

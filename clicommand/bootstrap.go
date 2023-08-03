@@ -81,6 +81,7 @@ type BootstrapConfig struct {
 	PluginValidation             bool     `cli:"plugin-validation"`
 	PluginsAlwaysCloneFresh      bool     `cli:"plugins-always-clone-fresh"`
 	LocalHooksEnabled            bool     `cli:"local-hooks-enabled"`
+	StrictSingleHooks            bool     `cli:"strict-single-hooks"`
 	PTY                          bool     `cli:"pty"`
 	LogLevel                     string   `cli:"log-level"`
 	Debug                        bool     `cli:"debug"`
@@ -361,6 +362,7 @@ var BootstrapCommand = cli.Command{
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		StrictSingleHooksFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -455,6 +457,7 @@ var BootstrapCommand = cli.Command{
 			RunInPty:                     runInPty,
 			SSHKeyscan:                   cfg.SSHKeyscan,
 			Shell:                        cfg.Shell,
+			StrictSingleHooks:            cfg.StrictSingleHooks,
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
