@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -73,15 +72,11 @@ func (e *DeprecatedNameErrors) Append(errs ...DeprecatedNameError) *DeprecatedNa
 	return e
 }
 
-// Is returns true if and only if a error that is wrapped in target
-// contains the same set of DeprecatedNameError as the receiver.
+// Is returns true if and only if a target contains the same set of
+// DeprecatedNameError as the receiver.
 func (e *DeprecatedNameErrors) Is(target error) bool {
-	if e == nil {
-		return target == nil
-	}
-
-	var targetErr *DeprecatedNameErrors
-	if !errors.As(target, &targetErr) {
+	targetErr, ok := target.(*DeprecatedNameErrors)
+	if !ok {
 		return false
 	}
 
@@ -110,18 +105,10 @@ func NewDeprecatedNameError(oldName, newName string) DeprecatedNameError {
 }
 
 func (e *DeprecatedNameError) Error() string {
-	return fmt.Sprintf(" deprecated: %q\nreplacement: %q\n", e.old, e.new)
+	return fmt.Sprintf("deprecated: %q\nreplacement: %q\n", e.old, e.new)
 }
 
 func (e *DeprecatedNameError) Is(target error) bool {
-	if e == nil {
-		return target == nil
-	}
-
-	var targetErr *DeprecatedNameError
-	if !errors.As(target, &targetErr) {
-		return false
-	}
-
-	return e.old == targetErr.old && e.new == targetErr.new
+	terr, ok := target.(*DeprecatedNameError)
+	return ok && *e == *terr
 }
