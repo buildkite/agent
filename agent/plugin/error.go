@@ -24,7 +24,7 @@ func (e *DeprecatedNameErrors) Unwrap() []error {
 		return nil
 	}
 
-	if e.errs == nil {
+	if len(e.errs) == 0 {
 		return []error{}
 	}
 
