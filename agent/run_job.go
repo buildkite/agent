@@ -18,6 +18,14 @@ import (
 	"github.com/buildkite/roko"
 )
 
+const (
+	SignalReasonAgentRefused      = "agent_refused"
+	SignalReasonAgentStop         = "agent_stop"
+	SignalReasonCancel            = "cancel"
+	SignalReasonSignatureRejected = "signature_rejected"
+	SignalReasonProcessRunError   = "process_run_error"
+)
+
 // Runs the job
 func (r *JobRunner) Run(ctx context.Context) error {
 	r.logger.Info("Starting job %s", r.conf.Job.ID)
@@ -87,7 +95,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			VerificationBehaviourBlock,
 		)
 		exit.Status = -1
-		exit.SignalReason = "job_verification_failed_with_error"
+		exit.SignalReason = SignalReasonSignatureRejected
 		return nil
 	}
 
@@ -98,7 +106,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			r.verificationFailureLogs(err, r.NoSignatureBehavior)
 			if r.NoSignatureBehavior == VerificationBehaviourBlock {
 				exit.Status = -1
-				exit.SignalReason = "job_verification_failed_no_signature"
+				exit.SignalReason = SignalReasonSignatureRejected
 				return nil
 			}
 
@@ -106,14 +114,14 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			r.verificationFailureLogs(err, r.InvalidSignatureBehavior)
 			if r.InvalidSignatureBehavior == VerificationBehaviourBlock {
 				exit.Status = -1
-				exit.SignalReason = "job_verification_failed_invalid_signature"
+				exit.SignalReason = SignalReasonSignatureRejected
 				return nil
 			}
 
 		case err != nil: // some other error
 			r.verificationFailureLogs(err, VerificationBehaviourBlock) // errors in verification are always fatal
 			exit.Status = -1
-			exit.SignalReason = "job_verification_failed_with_error"
+			exit.SignalReason = SignalReasonSignatureRejected
 			return nil
 
 		default: // no error, all good, keep going
@@ -134,7 +142,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
 			exit.Status = -1
-			exit.SignalReason = "agent_refused"
+			exit.SignalReason = SignalReasonAgentRefused
 
 			return nil
 		}
@@ -166,7 +174,7 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 		// The process did not run at all, so make sure it fails
 		return processExit{
 			Status:       -1,
-			SignalReason: "process_run_error",
+			SignalReason: SignalReasonProcessRunError,
 		}
 	}
 	// Intended to capture situations where the job-exec (aka bootstrap) container did not
@@ -193,11 +201,11 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	case r.stopped:
 		// The agent is being gracefully stopped, and we signaled the job to end. Often due
 		// to pending host shutdown or EC2 spot instance termination
-		exit.SignalReason = "agent_stop"
+		exit.SignalReason = SignalReasonAgentStop
 
 	case r.cancelled:
 		// The job was signaled because it was cancelled via the buildkite web UI
-		exit.SignalReason = "cancel"
+		exit.SignalReason = SignalReasonCancel
 	}
 
 	return exit

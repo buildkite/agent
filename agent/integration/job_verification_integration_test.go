@@ -102,7 +102,7 @@ func TestJobVerification(t *testing.T) {
 			job:                      jobWithInvalidSignature,
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
-			expectedSignalReason:     "job_verification_failed_invalid_signature",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain:        []string{"⚠️ ERROR"},
 		},
 		{
@@ -127,7 +127,7 @@ func TestJobVerification(t *testing.T) {
 			job:                      jobWithNoSignature,
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
-			expectedSignalReason:     "job_verification_failed_no_signature",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain:        []string{"⚠️ ERROR"},
 		},
 		{
@@ -144,7 +144,7 @@ func TestJobVerification(t *testing.T) {
 			job:                      jobWithMismatchedStepAndJob,
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
-			expectedSignalReason:     "job_verification_failed_invalid_signature",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
 				fmt.Sprintf(`the value of field "command" on the job (%q) does not match the value of the field on the step (%q)`,
@@ -238,7 +238,7 @@ func TestWhenTheJobHasASignature_ButTheJobRunnerCantVerify_ItRefusesTheJob(t *te
 		}
 	}
 
-	if got, want := finish.SignalReason, "job_verification_failed_with_error"; got != want {
+	if got, want := finish.SignalReason, agent.SignalReasonSignatureRejected; got != want {
 		t.Errorf("job.SignalReason = %q, want %q", got, want)
 	}
 }
