@@ -115,7 +115,7 @@ var ArtifactShasumCommand = cli.Command{
 		defer done()
 
 		if err := searchAndPrintShaSum(ctx, cfg, l, os.Stdout); err != nil {
-			l.Fatal(err.Error())
+			l.Panic("%s", err)
 		}
 	},
 }

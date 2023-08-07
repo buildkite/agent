@@ -667,7 +667,7 @@ var AgentStartCommand = cli.Command{
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
-			l.Fatal("Failed to unset config from environment: %v", err)
+			l.Panic("Failed to unset config from environment: %v", err)
 		}
 
 		if cfg.JobVerificationKeyPath != "" {
@@ -689,7 +689,7 @@ var AgentStartCommand = cli.Command{
 		if cfg.BootstrapScript == "" {
 			exePath, err := os.Executable()
 			if err != nil {
-				l.Fatal("Unable to find executable path for bootstrap")
+				l.Panic("Unable to find executable path for bootstrap")
 			}
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
 		}
@@ -737,7 +737,7 @@ var AgentStartCommand = cli.Command{
 			var err error
 			ec2TagTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse ec2 tag timeout: %v", err)
+				l.Panic("Failed to parse ec2 tag timeout: %v", err)
 			}
 		}
 
@@ -746,7 +746,7 @@ var AgentStartCommand = cli.Command{
 			var err error
 			ec2MetaDataTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse ec2 meta-data timeout: %v", err)
+				l.Panic("Failed to parse ec2 meta-data timeout: %v", err)
 			}
 		}
 
@@ -755,7 +755,7 @@ var AgentStartCommand = cli.Command{
 			var err error
 			ecsMetaDataTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse ecs meta-data timeout: %v", err)
+				l.Panic("Failed to parse ecs meta-data timeout: %v", err)
 			}
 		}
 
@@ -764,12 +764,12 @@ var AgentStartCommand = cli.Command{
 			var err error
 			gcpLabelsTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse gcp labels timeout: %v", err)
+				l.Panic("Failed to parse gcp labels timeout: %v", err)
 			}
 		}
 
 		if cfg.CancelGracePeriod <= cfg.SignalGracePeriodSeconds {
-			l.Fatal("cancel-grace-period must be greater than signal-grace-period-seconds")
+			l.Panic("cancel-grace-period must be greater than signal-grace-period-seconds")
 		}
 
 		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
@@ -782,7 +782,7 @@ var AgentStartCommand = cli.Command{
 
 		// Sense check supported tracing backends, we don't want bootstrapped jobs to silently have no tracing
 		if _, has := tracetools.ValidTracingBackends[cfg.TracingBackend]; !has {
-			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
+			l.Panic("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
 		if experiments.IsEnabled(experiments.AgentAPI) {
@@ -857,7 +857,7 @@ var AgentStartCommand = cli.Command{
 			}
 		} else if cfg.LogFormat != "json" {
 			// TODO If/when cli is upgraded to v2, choice validation can be done with per-argument Actions.
-			l.Fatal("Invalid log format %v. Only 'text' or 'json' are allowed.", cfg.LogFormat)
+			l.Panic("Invalid log format %v. Only 'text' or 'json' are allowed.", cfg.LogFormat)
 		}
 
 		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), fmt.Sprintf("%d", os.Getpid()))
@@ -899,7 +899,7 @@ var AgentStartCommand = cli.Command{
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
-			l.Fatal("Failed to parse cancel-signal: %v", err)
+			l.Panic("Failed to parse cancel-signal: %v", err)
 		}
 
 		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
@@ -908,7 +908,7 @@ var AgentStartCommand = cli.Command{
 			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
 			// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 			if err := os.MkdirAll(agentConf.BuildPath, 0777); err != nil {
-				l.Fatal("Failed to create builds path: %v", err)
+				l.Panic("Failed to create builds path: %v", err)
 			}
 		}
 
@@ -945,7 +945,7 @@ var AgentStartCommand = cli.Command{
 		// Spawning multiple agents doesn't work if the agent is being
 		// booted in acquisition mode
 		if cfg.Spawn > 1 && cfg.AcquireJob != "" {
-			l.Fatal("You can't spawn multiple agents and acquire a job at the same time")
+			l.Panic("You can't spawn multiple agents and acquire a job at the same time")
 		}
 
 		var workers []*agent.AgentWorker
@@ -974,7 +974,7 @@ var AgentStartCommand = cli.Command{
 			// Register the agent with the buildkite API
 			ag, err := agent.Register(ctx, l, client, registerReq)
 			if err != nil {
-				l.Fatal("%s", err)
+				l.Panic("%s", err)
 			}
 
 			// Create an agent worker to run the agent
@@ -1003,7 +1003,7 @@ var AgentStartCommand = cli.Command{
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
 		if err := agentStartupHook(l, cfg); err != nil {
-			l.Fatal("%s", err)
+			l.Panic("%s", err)
 		}
 
 		// Handle process signals
@@ -1041,7 +1041,7 @@ var AgentStartCommand = cli.Command{
 
 		// Start the agent pool
 		if err := pool.Start(ctx); err != nil {
-			l.Fatal("%s", err)
+			l.Panic("%s", err)
 		}
 	},
 }
@@ -1163,10 +1163,11 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) func(
 
 	svr, err := agentapi.NewServer(path, l)
 	if err != nil {
-		l.Fatal("Couldn't create Agent API server: %v", err)
+		l.Panic("Couldn't create Agent API server: %v", err)
 	}
+
 	if err := svr.Start(); err != nil {
-		l.Fatal("Couldn't start Agent API server: %v", err)
+		l.Panic("Couldn't start Agent API server: %v", err)
 	}
 
 	// Try to be the leader - no worries if this fails.

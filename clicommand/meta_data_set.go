@@ -87,17 +87,17 @@ var MetaDataSetCommand = cli.Command{
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				l.Fatal("Failed to read from STDIN: %s", err)
+				l.Panic("Failed to read from STDIN: %s", err)
 			}
 			cfg.Value = string(input)
 		}
 
 		if strings.TrimSpace(cfg.Key) == "" {
-			l.Fatal("Key cannot be empty, or composed of only whitespace characters")
+			l.Panic("Key cannot be empty, or composed of only whitespace characters")
 		}
 
 		if strings.TrimSpace(cfg.Value) == "" {
-			l.Fatal("Value cannot be empty, or composed of only whitespace characters")
+			l.Panic("Value cannot be empty, or composed of only whitespace characters")
 		}
 
 		// Create the API client
@@ -124,7 +124,7 @@ var MetaDataSetCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to set meta-data: %s", err)
+			l.Panic("Failed to set meta-data: %s", err)
 		}
 	},
 }

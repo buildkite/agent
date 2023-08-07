@@ -85,7 +85,7 @@ func envUnsetAction(c *cli.Context) error {
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		l.Fatal(envClientErrMessage, err)
+		l.Panic(envClientErrMessage, err)
 	}
 
 	var del []string
@@ -116,21 +116,18 @@ func envUnsetAction(c *cli.Context) error {
 			line := 1
 			for sc.Scan() {
 				if err := parse(sc.Text()); err != nil {
-					fmt.Fprintf(c.App.ErrWriter, "Couldn't parse input line %d: %v\n", line, err)
-					os.Exit(1)
+					l.Panic("Couldn't parse input line %d: %v", line, err)
 				}
 				line++
 			}
 			if err := sc.Err(); err != nil {
-				fmt.Fprintf(c.App.ErrWriter, "Couldn't scan the input buffer: %v\n", err)
-				os.Exit(1)
+				l.Panic("Couldn't scan the input buffer: %v", err)
 			}
 			continue
 		}
 		// Parse args directly
 		if err := parse(arg); err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Couldn't parse the command-line argument %q: %v\n", arg, err)
-			os.Exit(1)
+			l.Panic("Couldn't parse the command-line argument %q: %v", arg, err)
 		}
 	}
 
@@ -159,8 +156,7 @@ func envUnsetAction(c *cli.Context) error {
 			enc.SetIndent("", "  ")
 		}
 		if err := enc.Encode(unset); err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Error marshalling JSON: %v\n", err)
-			os.Exit(1)
+			l.Panic("Error marshalling JSON: %v", err)
 		}
 
 	default:

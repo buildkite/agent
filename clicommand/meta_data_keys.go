@@ -107,7 +107,7 @@ var MetaDataKeysCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to find meta-data keys: %s", err)
+			l.Panic("Failed to find meta-data keys: %s", err)
 		}
 
 		for _, key := range keys {

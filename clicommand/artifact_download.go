@@ -121,7 +121,7 @@ var ArtifactDownloadCommand = cli.Command{
 
 		// Download the artifacts
 		if err := downloader.Download(ctx); err != nil {
-			l.Fatal("Failed to download artifacts: %s", err)
+			l.Panic("Failed to download artifacts: %s", err)
 		}
 	},
 }

@@ -360,6 +360,9 @@ var BootstrapCommand = cli.Command{
 		StrictSingleHooksFlag,
 	},
 	Action: func(c *cli.Context) {
+		var exitCode int
+		defer func() { os.Exit(exitCode) }()
+
 		ctx := context.Background()
 		cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](c)
 		defer done()
@@ -376,13 +379,13 @@ var BootstrapCommand = cli.Command{
 			case "plugin", "checkout", "command":
 				// Valid phase
 			default:
-				l.Fatal("Invalid phase %q", phase)
+				l.Panic("Invalid phase %q", phase)
 			}
 		}
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
-			l.Fatal("Failed to parse cancel-signal: %v", err)
+			l.Panic("Failed to parse cancel-signal: %v", err)
 		}
 
 		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
@@ -474,7 +477,7 @@ var BootstrapCommand = cli.Command{
 		}()
 
 		// Run the bootstrap and get the exit code
-		exitCode := bootstrap.Run(cctx)
+		exitCode = bootstrap.Run(cctx)
 
 		signalMu.Lock()
 		defer signalMu.Unlock()
@@ -493,7 +496,5 @@ var BootstrapCommand = cli.Command{
 				l.Error("Failed to signal self: %v", err)
 			}
 		}
-
-		os.Exit(exitCode)
 	},
 }

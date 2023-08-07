@@ -83,7 +83,7 @@ func lockAcquireAction(c *cli.Context) error {
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		l.Panic("Only 'machine' scope for locks is supported in this version.")
 	}
 
 	if cfg.LockWaitTimeout != 0 {
@@ -94,12 +94,12 @@ func lockAcquireAction(c *cli.Context) error {
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		l.Panic(lockClientErrMessage, err)
 	}
 
 	token, err := client.Lock(ctx, key)
 	if err != nil {
-		l.Fatal("Could not acquire lock: %v\n", err)
+		l.Panic("Could not acquire lock: %v\n", err)
 	}
 
 	fmt.Fprintln(c.App.Writer, token)

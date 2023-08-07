@@ -104,7 +104,7 @@ var StepUpdateCommand = cli.Command{
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				l.Fatal("Failed to read from STDIN: %s", err)
+				l.Panic("Failed to read from STDIN: %s", err)
 			}
 			cfg.Value = string(input)
 		}
@@ -141,7 +141,7 @@ var StepUpdateCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to change step: %s", err)
+			l.Panic("Failed to change step: %s", err)
 		}
 	},
 }

@@ -127,7 +127,7 @@ var MetaDataGetCommand = cli.Command{
 				return
 			}
 
-			l.Fatal("Failed to get meta-data: %s", err)
+			l.Panic("Failed to get meta-data: %s", err)
 		}
 
 		// Output the value to STDOUT

@@ -162,7 +162,7 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Upload the artifacts
 		if err := uploader.Upload(ctx); err != nil {
-			l.Fatal("Failed to upload artifacts: %s", err)
+			l.Panic("Failed to upload artifacts: %s", err)
 		}
 	},
 }

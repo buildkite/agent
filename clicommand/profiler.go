@@ -45,7 +45,7 @@ func Profile(l logger.Logger, mode string) func() {
 	case "trace":
 		p.mode = traceMode
 	default:
-		p.logger.Fatal("Unknown profile mode %q", mode)
+		p.logger.Panic("Unknown profile mode %q", mode)
 	}
 
 	p.Start()
@@ -61,27 +61,27 @@ func (p *profiler) Stop() {
 func (p *profiler) Start() {
 	path, err := os.MkdirTemp("", "profile")
 	if err != nil {
-		p.logger.Fatal("Could not create initial output directory: %v", err)
+		p.logger.Panic("Could not create initial output directory: %v", err)
 	}
 
 	// create a pprof file for the mode
 	fn := filepath.Join(path, string(p.mode)+".pprof")
 	f, err := os.Create(fn)
 	if err != nil {
-		p.logger.Fatal("Could not create %s profile %q: %v", p.mode, fn, err)
+		p.logger.Panic("Could not create %s profile %q: %v", p.mode, fn, err)
 	}
 
 	// called after mode specific closers
 	closer := func() {
 		if err := f.Close(); err != nil {
-			p.logger.Fatal("Failed to close %s: %v", fn, err)
+			p.logger.Panic("Failed to close %s: %v", fn, err)
 		}
 		p.logger.Info("Finished %s profiling finished, %s", p.mode, fn)
 	}
 
 	must := func(err error) {
 		if err != nil {
-			p.logger.Fatal("Profiler mode %s failed: %v", p.mode, err)
+			p.logger.Panic("Profiler mode %s failed: %v", p.mode, err)
 		}
 	}
 
@@ -132,7 +132,7 @@ func (p *profiler) Start() {
 
 	case traceMode:
 		if err := trace.Start(f); err != nil {
-			p.logger.Fatal("Could not start profiling trace: %v", err)
+			p.logger.Panic("Could not start profiling trace: %v", err)
 		}
 		p.logger.Info("Trace enabled, %s", fn)
 		p.closer = func() {

@@ -96,21 +96,26 @@ var EnvGetCommand = cli.Command{
 }
 
 func envGetAction(c *cli.Context) error {
+	notFound := false
+	defer func() {
+		if notFound {
+			os.Exit(1)
+		}
+	}()
+
 	ctx := context.Background()
 	cfg, l, _, done := setupLoggerAndConfig[EnvGetConfig](c)
 	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		l.Fatal(envClientErrMessage, err)
+		l.Panic(envClientErrMessage, err)
 	}
 
 	envMap, err := client.EnvGet(ctx)
 	if err != nil {
-		l.Fatal("Couldn't fetch the job executor environment variables: %v\n", err)
+		l.Panic("Couldn't fetch the job executor environment variables: %v\n", err)
 	}
-
-	notFound := false
 
 	// Filter envMap by any remaining args.
 	if len(c.Args()) > 0 {
@@ -148,16 +153,11 @@ func envGetAction(c *cli.Context) error {
 			enc.SetIndent("", "  ")
 		}
 		if err := enc.Encode(envMap); err != nil {
-			l.Fatal("Error marshalling JSON: %v\n", err)
+			l.Panic("Error marshalling JSON: %v\n", err)
 		}
 
 	default:
 		l.Error("Invalid output format %q\n", cfg.Format)
-	}
-
-	if notFound {
-		done()
-		os.Exit(1)
 	}
 
 	return nil

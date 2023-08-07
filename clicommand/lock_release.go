@@ -63,16 +63,16 @@ func lockReleaseAction(c *cli.Context) error {
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		l.Panic("Only 'machine' scope for locks is supported in this version.")
 	}
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		l.Panic(lockClientErrMessage, err)
 	}
 
 	if err := client.Unlock(ctx, key, token); err != nil {
-		l.Fatal("Could not release lock: %v", err)
+		l.Panic("Could not release lock: %v", err)
 	}
 
 	return nil

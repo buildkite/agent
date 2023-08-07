@@ -74,6 +74,14 @@ var MetaDataExistsCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		var exists *api.MetaDataExists
+		defer func() {
+			// If the meta data didn't exist, exit with an error.
+			if exists != nil && !exists.Exists {
+				os.Exit(100)
+			}
+		}()
+
 		ctx := context.Background()
 		cfg, l, _, done := setupLoggerAndConfig[MetaDataExistsConfig](c)
 		defer done()
@@ -82,7 +90,6 @@ var MetaDataExistsCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data value
-		var exists *api.MetaDataExists
 		var resp *api.Response
 
 		scope := "job"
@@ -108,12 +115,7 @@ var MetaDataExistsCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to see if meta-data exists: %s", err)
-		}
-
-		// If the meta data didn't exist, exit with an error.
-		if !exists.Exists {
-			os.Exit(100)
+			l.Panic("Failed to see if meta-data exists: %s", err)
 		}
 	},
 }

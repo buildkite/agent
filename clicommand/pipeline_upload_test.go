@@ -16,7 +16,7 @@ func TestSearchForSecrets(t *testing.T) {
 		RejectSecrets: true,
 	}
 
-	pipeline := &pipeline.Pipeline{
+	p := &pipeline.Pipeline{
 		Steps: pipeline.Steps{
 			&pipeline.CommandStep{
 				Command: "secret squirrels and alpacas",
@@ -38,14 +38,14 @@ func TestSearchForSecrets(t *testing.T) {
 			desc:    "one secret",
 			environ: map[string]string{"SEKRET": "squirrel", "PYTHON": "not a chance"},
 			wantLog: []string{
-				`[fatal] Pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET], and cannot be uploaded to Buildkite`,
+				`[panic] Pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET], and cannot be uploaded to Buildkite`,
 			},
 		},
 		{
 			desc:    "two secrets",
 			environ: map[string]string{"SEKRET": "squirrel", "SSH_KEY": "alpacas", "SPECIES": "Felix sylvestris"},
 			wantLog: []string{
-				`[fatal] Pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET SSH_KEY], and cannot be uploaded to Buildkite`,
+				`[panic] Pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET SSH_KEY], and cannot be uploaded to Buildkite`,
 			},
 		},
 	}
@@ -56,7 +56,7 @@ func TestSearchForSecrets(t *testing.T) {
 			t.Parallel()
 			l := logger.NewBuffer()
 
-			searchForSecrets(l, cfg, test.environ, pipeline, "cat-o-matic.yaml")
+			searchForSecrets(l, cfg, test.environ, p, "cat-o-matic.yaml")
 
 			if diff := cmp.Diff(l.Messages, test.wantLog); diff != "" {
 				t.Errorf("searchForSecrets log output diff (-got +want):\n%s", diff)

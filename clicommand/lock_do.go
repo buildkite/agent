@@ -89,7 +89,7 @@ func lockDoAction(c *cli.Context) error {
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		l.Panic("Only 'machine' scope for locks is supported in this version.")
 	}
 
 	if cfg.LockWaitTimeout != 0 {
@@ -100,12 +100,12 @@ func lockDoAction(c *cli.Context) error {
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		l.Panic(lockClientErrMessage, err)
 	}
 
 	do, err := client.DoOnceStart(ctx, key)
 	if err != nil {
-		l.Fatal("Couldn't start do-once lock: %v\n", err)
+		l.Panic("Couldn't start do-once lock: %v\n", err)
 	}
 
 	if do {

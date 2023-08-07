@@ -121,7 +121,7 @@ var StepGetCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to get step: %s", err)
+			l.Panic("Failed to get step: %s", err)
 		}
 
 		// Output the value to STDOUT

@@ -120,7 +120,7 @@ var AnnotateCommand = cli.Command{
 		defer done()
 
 		if err := annotate(ctx, cfg, l); err != nil {
-			l.Fatal(err.Error())
+			l.Panic("%s", err)
 		}
 	},
 }

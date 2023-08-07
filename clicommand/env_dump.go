@@ -70,7 +70,7 @@ var EnvDumpCommand = cli.Command{
 		}
 
 		if err := enc.Encode(envMap); err != nil {
-			l.Fatal("Error marshalling JSON: %v", err)
+			l.Panic("Error marshalling JSON: %v", err)
 		}
 
 		return nil

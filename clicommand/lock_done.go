@@ -63,16 +63,16 @@ func lockDoneAction(c *cli.Context) error {
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		l.Panic("Only 'machine' scope for locks is supported in this version.")
 	}
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		l.Panic(lockClientErrMessage, err)
 	}
 
 	if err := client.DoOnceEnd(ctx, key); err != nil {
-		l.Fatal("Couldn't complete do-once lock: %v", err)
+		l.Panic("Couldn't complete do-once lock: %v", err)
 	}
 
 	return nil

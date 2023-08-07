@@ -152,7 +152,7 @@ Format specifiers:
 			if cfg.AllowEmptyResults {
 				l.Info("No matches found for %q", cfg.Query)
 			} else {
-				l.Fatal("No matches found for %q", cfg.Query)
+				l.Panic("No matches found for %q", cfg.Query)
 			}
 		}
 

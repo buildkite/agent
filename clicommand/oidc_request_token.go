@@ -98,7 +98,7 @@ var OIDCRequestTokenCommand = cli.Command{
 
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
 		if cfg.Lifetime < 0 {
-			l.Fatal("Lifetime %d must be a non-negative integer.", cfg.Lifetime)
+			l.Panic("Lifetime %d must be a non-negative integer.", cfg.Lifetime)
 		}
 
 		// Create the API client

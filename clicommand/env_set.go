@@ -86,7 +86,7 @@ func envSetAction(c *cli.Context) error {
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		l.Fatal(envClientErrMessage, err)
+		l.Panic(envClientErrMessage, err)
 	}
 
 	req := &jobapi.EnvUpdateRequest{
@@ -113,7 +113,7 @@ func envSetAction(c *cli.Context) error {
 		}
 
 	default:
-		l.Fatal("Invalid input format %q\n", c.String("input-format"))
+		l.Panic("Invalid input format %q\n", c.String("input-format"))
 	}
 
 	// Inspect each arg, which could either be "-" for stdin, or "KEY=value"
@@ -124,18 +124,18 @@ func envSetAction(c *cli.Context) error {
 			line := 1
 			for sc.Scan() {
 				if err := parse(sc.Text()); err != nil {
-					l.Fatal("Couldn't parse input line %d: %v\n", line, err)
+					l.Panic("Couldn't parse input line %d: %v\n", line, err)
 				}
 				line++
 			}
 			if err := sc.Err(); err != nil {
-				l.Fatal("Couldn't scan the input buffer: %v\n", err)
+				l.Panic("Couldn't scan the input buffer: %v\n", err)
 			}
 			continue
 		}
 		// Parse args directly
 		if err := parse(arg); err != nil {
-			l.Fatal("Couldn't parse the command-line argument %q: %v\n", arg, err)
+			l.Panic("Couldn't parse the command-line argument %q: %v\n", arg, err)
 		}
 	}
 
@@ -171,11 +171,11 @@ func envSetAction(c *cli.Context) error {
 			enc.SetIndent("", "  ")
 		}
 		if err := enc.Encode(resp); err != nil {
-			l.Fatal("Error marshalling JSON: %v\n", err)
+			l.Panic("Error marshalling JSON: %v\n", err)
 		}
 
 	default:
-		l.Fatal("Invalid output format %q\n", c.String("output-format"))
+		l.Panic("Invalid output format %q\n", c.String("output-format"))
 	}
 
 	return nil

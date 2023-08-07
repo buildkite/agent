@@ -104,7 +104,7 @@ var AnnotationRemoveCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to remove annotation: %s", err)
+			l.Panic("Failed to remove annotation: %s", err)
 		}
 
 		l.Debug("Successfully removed annotation")
