@@ -77,6 +77,12 @@ var NoColorFlag = cli.BoolFlag{
 	EnvVar: "BUILDKITE_AGENT_NO_COLOR",
 }
 
+var StrictSingleHooksFlag = cli.BoolFlag{
+	Name:   "strict-single-hooks",
+	Usage:  "Enforces that only one checkout hook, and only one command hook, can be run",
+	EnvVar: "BUILDKITE_STRICT_SINGLE_HOOKS",
+}
+
 var ExperimentsFlag = cli.StringSliceFlag{
 	Name:   "experiment",
 	Value:  &cli.StringSlice{},

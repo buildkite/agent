@@ -25,6 +25,7 @@ type AgentConfiguration struct {
 	PluginsEnabled             bool
 	PluginValidation           bool
 	LocalHooksEnabled          bool
+	StrictSingleHooks          bool
 	RunInPty                   bool
 	ANSITimestamps             bool
 	TimestampLines             bool
