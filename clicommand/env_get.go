@@ -62,7 +62,16 @@ Examples:
    }
 `
 
-type EnvGetConfig struct{}
+type EnvGetConfig struct {
+	Format string `cli:"format"`
+
+	// Global flags
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
+}
 
 var EnvGetCommand = cli.Command{
 	Name:        "get",
@@ -75,23 +84,30 @@ var EnvGetCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_ENV_GET_FORMAT",
 			Value:  "plain",
 		},
+
+		// Global flags
+		NoColorFlag,
+		DebugFlag,
+		LogLevelFlag,
+		ExperimentsFlag,
+		ProfileFlag,
 	},
 	Action: envGetAction,
 }
 
 func envGetAction(c *cli.Context) error {
 	ctx := context.Background()
+	cfg, l, _, done := setupLoggerAndConfig[EnvGetConfig](c)
+	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
-		os.Exit(1)
+		l.Fatal(envClientErrMessage, err)
 	}
 
 	envMap, err := client.EnvGet(ctx)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Couldn't fetch the job executor environment variables: %v\n", err)
-		os.Exit(1)
+		l.Fatal("Couldn't fetch the job executor environment variables: %v\n", err)
 	}
 
 	notFound := false
@@ -103,7 +119,7 @@ func envGetAction(c *cli.Context) error {
 			v, ok := envMap[arg]
 			if !ok {
 				notFound = true
-				fmt.Fprintf(c.App.ErrWriter, "%q is not set\n", arg)
+				l.Warn("%q is not set", arg)
 				continue
 			}
 			em[arg] = v
@@ -111,7 +127,7 @@ func envGetAction(c *cli.Context) error {
 		envMap = em
 	}
 
-	switch c.String("format") {
+	switch cfg.Format {
 	case "plain":
 		if len(c.Args()) == 1 {
 			// Just print the value.
@@ -132,16 +148,17 @@ func envGetAction(c *cli.Context) error {
 			enc.SetIndent("", "  ")
 		}
 		if err := enc.Encode(envMap); err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Error marshalling JSON: %v\n", err)
-			os.Exit(1)
+			l.Fatal("Error marshalling JSON: %v\n", err)
 		}
 
 	default:
-		fmt.Fprintf(c.App.ErrWriter, "Invalid output format %q\n", c.String("format"))
+		l.Error("Invalid output format %q\n", cfg.Format)
 	}
 
 	if notFound {
+		done()
 		os.Exit(1)
 	}
+
 	return nil
 }

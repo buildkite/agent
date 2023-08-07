@@ -2,12 +2,9 @@ package clicommand
 
 import (
 	"context"
-	"fmt"
-	"os"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/urfave/cli"
 )
 
@@ -143,26 +140,7 @@ var ArtifactUploadCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-
-		// The configuration will be loaded into this struct
-		cfg := ArtifactUploadConfig{}
-
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(&cfg)
-
-		// Now that we have a logger, log out the warnings that loading config generated
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Setup any global configuration options
-		done := HandleGlobalFlags(l, cfg)
+		cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](c)
 		defer done()
 
 		// Create the API client

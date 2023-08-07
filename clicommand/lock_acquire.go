@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
 )
@@ -20,10 +19,10 @@ Description:
    forever) until it can acquire the lock, if the lock is already held by
    another process. If multiple processes are waiting for the same lock, there
    is no ordering guarantee of which one will be given the lock next.
-   
+
    To prevent separate processes unlocking each other, the output from ′lock
    acquire′ should be stored, and passed to ′lock release′.
-   
+
    Note that this subcommand is only available when an agent has been started
    with the ′agent-api′ experiment enabled.
 
@@ -41,21 +40,35 @@ type LockAcquireConfig struct {
 	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
 
 	LockWaitTimeout time.Duration `cli:"lock-wait-timeout"`
+
+	// Global flags
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
+}
+
+func lockAcquireFlags() []cli.Flag {
+	flags := append(
+		[]cli.Flag{
+			cli.DurationFlag{
+				Name:   "lock-wait-timeout",
+				Usage:  "If specified, sets a maximum duration to wait for a lock before giving up",
+				EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
+			},
+		},
+		lockCommonFlags...,
+	)
+	return append(flags, globalFlags()...)
 }
 
 var LockAcquireCommand = cli.Command{
 	Name:        "acquire",
 	Usage:       "Acquires a lock from the agent leader",
 	Description: lockAcquireHelpDescription,
-	Flags: append(
-		lockCommonFlags,
-		cli.DurationFlag{
-			Name:   "lock-wait-timeout",
-			Usage:  "If specified, sets a maximum duration to wait for a lock before giving up",
-			EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
-		},
-	),
-	Action: lockAcquireAction,
+	Flags:       lockAcquireFlags(),
+	Action:      lockAcquireAction,
 }
 
 func lockAcquireAction(c *cli.Context) error {
@@ -65,44 +78,28 @@ func lockAcquireAction(c *cli.Context) error {
 	}
 	key := c.Args()[0]
 
-	// Load the configuration
-	cfg := LockAcquireConfig{}
-	loader := cliconfig.Loader{
-		CLI:                    c,
-		Config:                 &cfg,
-		DefaultConfigFilePaths: DefaultConfigFilePaths(),
-	}
-	warnings, err := loader.Load()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %s\n", err)
-		os.Exit(1)
-	}
-	for _, warning := range warnings {
-		fmt.Fprintln(c.App.ErrWriter, warning)
-	}
+	ctx := context.Background()
+	cfg, l, _, done := setupLoggerAndConfig[LockAcquireConfig](c)
+	defer done()
 
 	if cfg.LockScope != "machine" {
-		fmt.Fprintln(c.App.Writer, "Only 'machine' scope for locks is supported in this version.")
-		os.Exit(1)
+		l.Fatal("Only 'machine' scope for locks is supported in this version.")
 	}
 
-	ctx := context.Background()
 	if cfg.LockWaitTimeout != 0 {
 		cctx, canc := context.WithTimeout(ctx, cfg.LockWaitTimeout)
 		defer canc()
 		ctx = cctx
 	}
 
-	cli, err := lock.NewClient(ctx, cfg.SocketsPath)
+	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
-		os.Exit(1)
+		l.Fatal(lockClientErrMessage, err)
 	}
 
-	token, err := cli.Lock(ctx, key)
+	token, err := client.Lock(ctx, key)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Could not acquire lock: %v\n", err)
-		os.Exit(1)
+		l.Fatal("Could not acquire lock: %v\n", err)
 	}
 
 	fmt.Fprintln(c.App.Writer, token)

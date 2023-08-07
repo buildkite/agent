@@ -2,12 +2,10 @@ package clicommand
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -77,26 +75,7 @@ var MetaDataExistsCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-
-		// The configuration will be loaded into this struct
-		cfg := MetaDataExistsConfig{}
-
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(&cfg)
-
-		// Now that we have a logger, log out the warnings that loading config generated
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Setup any global configuration options
-		done := HandleGlobalFlags(l, cfg)
+		cfg, l, _, done := setupLoggerAndConfig[MetaDataExistsConfig](c)
 		defer done()
 
 		// Create the API client
@@ -114,10 +93,11 @@ var MetaDataExistsCommand = cli.Command{
 			id = cfg.Build
 		}
 
-		err = roko.NewRetrier(
+		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			var err error
 			exists, resp, err = client.ExistsMetaData(ctx, scope, id, cfg.Key)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
@@ -127,9 +107,7 @@ var MetaDataExistsCommand = cli.Command{
 				return err
 			}
 			return nil
-		})
-
-		if err != nil {
+		}); err != nil {
 			l.Fatal("Failed to see if meta-data exists: %s", err)
 		}
 

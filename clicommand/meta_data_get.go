@@ -3,11 +3,9 @@ package clicommand
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -82,26 +80,7 @@ var MetaDataGetCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-
-		// The configuration will be loaded into this struct
-		cfg := MetaDataGetConfig{}
-
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(&cfg)
-
-		// Now that we have a logger, log out the warnings that loading config generated
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Setup any global configuration options
-		done := HandleGlobalFlags(l, cfg)
+		cfg, l, _, done := setupLoggerAndConfig[MetaDataGetConfig](c)
 		defer done()
 
 		// Create the API client
@@ -119,10 +98,11 @@ var MetaDataGetCommand = cli.Command{
 			id = cfg.Build
 		}
 
-		err = roko.NewRetrier(
+		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			var err error
 			metaData, resp, err = client.GetMetaData(ctx, scope, id, cfg.Key)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
@@ -134,10 +114,7 @@ var MetaDataGetCommand = cli.Command{
 				return err
 			}
 			return nil
-		})
-
-		// Deal with the error if we got one
-		if err != nil {
+		}); err != nil {
 			// Buildkite returns a 404 if the key doesn't exist. If
 			// we get this status, and we've got a default - return
 			// that instead and bail early.
@@ -146,15 +123,14 @@ var MetaDataGetCommand = cli.Command{
 			// to allow people to use a default of a blank string.
 			if resp.StatusCode == 404 && c.IsSet("default") {
 				l.Warn("No meta-data value exists with key `%s`, returning the supplied default \"%s\"", cfg.Key, cfg.Default)
-
-				fmt.Print(cfg.Default)
+				fmt.Fprint(c.App.Writer, cfg.Default)
 				return
-			} else {
-				l.Fatal("Failed to get meta-data: %s", err)
 			}
+
+			l.Fatal("Failed to get meta-data: %s", err)
 		}
 
 		// Output the value to STDOUT
-		fmt.Print(metaData.Value)
+		fmt.Fprint(c.App.Writer, metaData.Value)
 	},
 }

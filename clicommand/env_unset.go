@@ -38,7 +38,17 @@ Examples:
    $ echo '["LLAMA","ALPACA"]' | buildkite-agent env unset --input-format=json --output-format=quiet -
 `
 
-type EnvUnsetConfig struct{}
+type EnvUnsetConfig struct {
+	InputFormat  string `cli:"input-format"`
+	OutputFormat string `cli:"output-format"`
+
+	// Global flags
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
+}
 
 var EnvUnsetCommand = cli.Command{
 	Name:        "unset",
@@ -57,24 +67,32 @@ var EnvUnsetCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_ENV_UNSET_OUTPUT_FORMAT",
 			Value:  "plain",
 		},
+
+		// Global flags
+		NoColorFlag,
+		DebugFlag,
+		LogLevelFlag,
+		ExperimentsFlag,
+		ProfileFlag,
 	},
 	Action: envUnsetAction,
 }
 
 func envUnsetAction(c *cli.Context) error {
 	ctx := context.Background()
+	cfg, l, _, done := setupLoggerAndConfig[EnvUnsetConfig](c)
+	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
-		os.Exit(1)
+		l.Fatal(envClientErrMessage, err)
 	}
 
 	var del []string
 
 	var parse func(string) error
 
-	switch c.String("input-format") {
+	switch cfg.InputFormat {
 	case "plain":
 		parse = func(input string) error {
 			del = append(del, input)
@@ -121,7 +139,7 @@ func envUnsetAction(c *cli.Context) error {
 		fmt.Fprintf(c.App.ErrWriter, "Couldn't unset the job executor environment variables: %v\n", err)
 	}
 
-	switch c.String("output-format") {
+	switch cfg.OutputFormat {
 	case "quiet":
 		return nil
 

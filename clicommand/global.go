@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
@@ -102,6 +103,16 @@ var RedactedVars = cli.StringSliceFlag{
 		"*_ACCESS_KEY",
 		"*_SECRET_KEY",
 	},
+}
+
+func globalFlags() []cli.Flag {
+	return []cli.Flag{
+		NoColorFlag,
+		DebugFlag,
+		LogLevelFlag,
+		ExperimentsFlag,
+		ProfileFlag,
+	}
 }
 
 func CreateLogger(cfg any) logger.Logger {
@@ -256,4 +267,57 @@ func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 	}
 
 	return conf
+}
+
+type configOpts func(*cliconfig.Loader)
+
+func withConfigFilePaths(paths []string) func(*cliconfig.Loader) {
+	return func(loader *cliconfig.Loader) {
+		loader.DefaultConfigFilePaths = paths
+	}
+}
+
+// setupLoggerAndConfig populates the given config struct with values from the
+// CLI flags and environment variables. It returns the config struct, a logger
+// based on the resulting config, a reference to the config file (if any), and
+// a function, which must be deferred.
+//
+// Presently, the returned function will wind down the profiler, which is only
+// optionally started, based on the config. However, it may be extended in the
+// future to clean up other resources. Importantly, the calling code does not
+// need to know or care about what the returned function does, only that it
+// must defer it.
+func setupLoggerAndConfig[T any](c *cli.Context, opts ...configOpts) (
+	cfg T,
+	l logger.Logger,
+	f *cliconfig.File,
+	done func(),
+) {
+	loader := cliconfig.Loader{CLI: c, Config: &cfg}
+
+	for _, opt := range opts {
+		opt(&loader)
+	}
+
+	warnings, err := loader.Load()
+	if err != nil {
+		fmt.Fprintf(c.App.ErrWriter, "%s", err)
+		os.Exit(1)
+	}
+
+	l = CreateLogger(&cfg)
+
+	if debug, err := reflections.GetField(cfg, "Debug"); err == nil && debug.(bool) {
+		l = l.WithFields(logger.StringField("command", c.Command.FullName()))
+	}
+
+	l.Debug("Loaded config")
+
+	// Now that we have a logger, log out the warnings that loading config generated
+	for _, warning := range warnings {
+		l.Warn("%s", warning)
+	}
+
+	// Setup any global configuration options
+	return cfg, l, loader.File, HandleGlobalFlags(l, cfg)
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
 )
@@ -16,19 +15,19 @@ const lockDoHelpDescription = `Usage:
    buildkite-agent lock do [key]
 
 Description:
-   Begins a do-once lock. Do-once can be used by multiple processes to 
+   Begins a do-once lock. Do-once can be used by multiple processes to
    wait for completion of some shared work, where only one process should do
-   the work. 
-   
+   the work.
+
    Note that this subcommand is only available when an agent has been started
    with the ′agent-api′ experiment enabled.
-   
+
    ′lock do′ will do one of two things:
-   
+
    - Print 'do'. The calling process should proceed to do the work and then
      call ′lock done′.
    - Wait until the work is marked as done (with ′lock done′) and print 'done'.
-   
+
    If ′lock do′ prints 'done' immediately, the work was already done.
 
 Examples:
@@ -47,21 +46,35 @@ type LockDoConfig struct {
 	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
 
 	LockWaitTimeout time.Duration `cli:"lock-wait-timeout"`
+
+	// Global flags
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
+}
+
+func lockDoFlags() []cli.Flag {
+	flags := append(
+		[]cli.Flag{
+			cli.DurationFlag{
+				Name:   "lock-wait-timeout",
+				Usage:  "If specified, sets a maximum duration to wait for a lock before giving up",
+				EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
+			},
+		},
+		lockCommonFlags...,
+	)
+	return append(flags, globalFlags()...)
 }
 
 var LockDoCommand = cli.Command{
 	Name:        "do",
 	Usage:       "Begins a do-once lock",
 	Description: lockDoHelpDescription,
-	Flags: append(
-		lockCommonFlags,
-		cli.DurationFlag{
-			Name:   "lock-wait-timeout",
-			Usage:  "If specified, sets a maximum duration to wait for a lock before giving up",
-			EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
-		},
-	),
-	Action: lockDoAction,
+	Flags:       lockDoFlags(),
+	Action:      lockDoAction,
 }
 
 func lockDoAction(c *cli.Context) error {
@@ -71,44 +84,28 @@ func lockDoAction(c *cli.Context) error {
 	}
 	key := c.Args()[0]
 
-	// Load the configuration
-	cfg := LockDoConfig{}
-	loader := cliconfig.Loader{
-		CLI:                    c,
-		Config:                 &cfg,
-		DefaultConfigFilePaths: DefaultConfigFilePaths(),
-	}
-	warnings, err := loader.Load()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %s\n", err)
-		os.Exit(1)
-	}
-	for _, warning := range warnings {
-		fmt.Fprintln(c.App.ErrWriter, warning)
-	}
+	ctx := context.Background()
+	cfg, l, _, done := setupLoggerAndConfig[LockDoConfig](c)
+	defer done()
 
 	if cfg.LockScope != "machine" {
-		fmt.Fprintln(c.App.Writer, "Only 'machine' scope for locks is supported in this version.")
-		os.Exit(1)
+		l.Fatal("Only 'machine' scope for locks is supported in this version.")
 	}
 
-	ctx := context.Background()
 	if cfg.LockWaitTimeout != 0 {
 		cctx, canc := context.WithTimeout(ctx, cfg.LockWaitTimeout)
 		defer canc()
 		ctx = cctx
 	}
 
-	cli, err := lock.NewClient(ctx, cfg.SocketsPath)
+	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
-		os.Exit(1)
+		l.Fatal(lockClientErrMessage, err)
 	}
 
-	do, err := cli.DoOnceStart(ctx, key)
+	do, err := client.DoOnceStart(ctx, key)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Couldn't start do-once lock: %v\n", err)
-		os.Exit(1)
+		l.Fatal("Couldn't start do-once lock: %v\n", err)
 	}
 
 	if do {

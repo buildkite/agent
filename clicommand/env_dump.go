@@ -2,7 +2,6 @@ package clicommand
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/buildkite/agent/v3/env"
@@ -23,6 +22,14 @@ Example:
     $ buildkite-agent env dump --format json-pretty`
 
 type EnvDumpConfig struct {
+	Format string `cli:"format"`
+
+	// Global flags
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
 }
 
 var EnvDumpCommand = cli.Command{
@@ -36,8 +43,18 @@ var EnvDumpCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_ENV_DUMP_FORMAT",
 			Value:  "json",
 		},
+
+		// Global flags
+		NoColorFlag,
+		DebugFlag,
+		LogLevelFlag,
+		ExperimentsFlag,
+		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
+		cfg, l, _, done := setupLoggerAndConfig[EnvDumpConfig](c)
+		defer done()
+
 		envn := os.Environ()
 		envMap := make(map[string]string, len(envn))
 
@@ -48,14 +65,14 @@ var EnvDumpCommand = cli.Command{
 		}
 
 		enc := json.NewEncoder(c.App.Writer)
-		if c.String("format") == "json-pretty" {
+		if cfg.Format == "json-pretty" {
 			enc.SetIndent("", "  ")
 		}
 
 		if err := enc.Encode(envMap); err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Error marshalling JSON: %v\n", err)
-			os.Exit(1)
+			l.Fatal("Error marshalling JSON: %v", err)
 		}
+
 		return nil
 	},
 }
