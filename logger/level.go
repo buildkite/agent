@@ -13,6 +13,7 @@ const (
 	INFO
 	WARN
 	ERROR
+	PANIC
 	FATAL
 )
 
@@ -22,6 +23,7 @@ var levelNames = []string{
 	"INFO",
 	"WARN",
 	"ERROR",
+	"PANIC",
 	"FATAL",
 }
 
@@ -37,6 +39,8 @@ func LevelFromString(s string) (Level, error) {
 		return WARN, nil
 	case "error":
 		return ERROR, nil
+	case "panic":
+		return PANIC, nil
 	case "fatal":
 		return FATAL, nil
 	default:

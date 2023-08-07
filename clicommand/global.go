@@ -3,6 +3,7 @@ package clicommand
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"strings"
@@ -115,7 +116,7 @@ func globalFlags() []cli.Flag {
 	}
 }
 
-func CreateLogger(cfg any) logger.Logger {
+func CreateLogger(w io.Writer, cfg any) logger.Logger {
 	var l logger.Logger
 	logFormat := "text"
 
@@ -129,7 +130,7 @@ func CreateLogger(cfg any) logger.Logger {
 	// Create a logger based on the type
 	switch logFormat {
 	case "text", "":
-		printer := logger.NewTextPrinter(os.Stderr)
+		printer := logger.NewTextPrinter(w)
 
 		// Show agent fields as a prefix
 		printer.IsPrefixFn = func(field logger.Field) bool {
@@ -151,7 +152,7 @@ func CreateLogger(cfg any) logger.Logger {
 
 		l = logger.NewConsoleLogger(printer, os.Exit)
 	case "json":
-		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
+		l = logger.NewConsoleLogger(logger.NewJSONPrinter(w), os.Exit)
 	default:
 		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
 		os.Exit(1)
@@ -283,10 +284,10 @@ func withConfigFilePaths(paths []string) func(*cliconfig.Loader) {
 // a function, which must be deferred.
 //
 // Presently, the returned function will wind down the profiler, which is only
-// optionally started, based on the config. However, it may be extended in the
-// future to clean up other resources. Importantly, the calling code does not
-// need to know or care about what the returned function does, only that it
-// must defer it.
+// optionally started, based on the config, and handle the panics called from
+// Panic and Fatal log levels. However, it may be extended in the future to do
+// other things. Importantly, the calling code does not need to know or care
+// about what the returned function does, only that it must defer it.
 func setupLoggerAndConfig[T any](c *cli.Context, opts ...configOpts) (
 	cfg T,
 	l logger.Logger,
@@ -305,7 +306,7 @@ func setupLoggerAndConfig[T any](c *cli.Context, opts ...configOpts) (
 		os.Exit(1)
 	}
 
-	l = CreateLogger(&cfg)
+	l = CreateLogger(c.App.ErrWriter, &cfg)
 
 	if debug, err := reflections.GetField(cfg, "Debug"); err == nil && debug.(bool) {
 		l = l.WithFields(logger.StringField("command", c.Command.FullName()))
@@ -318,6 +319,17 @@ func setupLoggerAndConfig[T any](c *cli.Context, opts ...configOpts) (
 		l.Warn("%s", warning)
 	}
 
+	cleanup := HandleGlobalFlags(l, cfg)
+
 	// Setup any global configuration options
-	return cfg, l, loader.File, HandleGlobalFlags(l, cfg)
+	return cfg, l, loader.File, func() {
+		cleanup()
+
+		switch r := recover(); r {
+		case logger.Panic{}:
+			os.Exit(1)
+		default:
+			panic(r)
+		}
+	}
 }

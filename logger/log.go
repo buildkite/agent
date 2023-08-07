@@ -18,6 +18,9 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+// Panic is used as a sentinel value for panics issued by the PANIC log level
+type Panic struct{}
+
 const (
 	nocolor   = "0"
 	red       = "31"
@@ -27,9 +30,7 @@ const (
 	graybold  = "1;38;5;251"
 	lightgray = "38;5;243"
 	cyan      = "1;36"
-)
 
-const (
 	DateFormat = "2006-01-02 15:04:05"
 )
 
@@ -42,6 +43,7 @@ type Logger interface {
 	Debug(format string, v ...any)
 	Error(format string, v ...any)
 	Fatal(format string, v ...any)
+	Panic(format string, v ...any)
 	Notice(format string, v ...any)
 	Warn(format string, v ...any)
 	Info(format string, v ...any)
@@ -96,6 +98,11 @@ func (l *ConsoleLogger) Error(format string, v ...any) {
 func (l *ConsoleLogger) Fatal(format string, v ...any) {
 	l.printer.Print(FATAL, fmt.Sprintf(format, v...), l.fields)
 	l.exitFn(1)
+}
+
+func (l *ConsoleLogger) Panic(format string, v ...any) {
+	l.printer.Print(PANIC, fmt.Sprintf(format, v...), l.fields)
+	panic(Panic{})
 }
 
 func (l *ConsoleLogger) Notice(format string, v ...any) {
@@ -165,6 +172,7 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 		fieldColor := graybold
 
 		switch level {
+		case INFO: // use default colors
 		case DEBUG:
 			levelColor = gray
 			messageColor = gray
@@ -174,6 +182,9 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 			levelColor = yellow
 		case ERROR:
 			levelColor = red
+		case PANIC:
+			levelColor = red
+			messageColor = red
 		case FATAL:
 			levelColor = red
 			messageColor = red

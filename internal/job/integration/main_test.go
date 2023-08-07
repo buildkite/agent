@@ -22,6 +22,9 @@ func TestMain(m *testing.M) {
 			clicommand.BootstrapCommand,
 		}
 
+		app.Writer = os.Stdout
+		app.ErrWriter = os.Stderr
+
 		if err := app.Run(os.Args); err != nil {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)

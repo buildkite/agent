@@ -1709,6 +1709,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		return nil
 	}
 
+	e.shell.Commentf("############### exp: %t", experiments.IsEnabled(experiments.ResolveCommitAfterCheckout))
+
 	// resolve BUILDKITE_COMMIT based on the local git repo
 	if experiments.IsEnabled(experiments.ResolveCommitAfterCheckout) {
 		e.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")

@@ -31,6 +31,9 @@ func (b *Buffer) Error(format string, v ...any) {
 	defer b.mu.Unlock()
 	b.Messages = append(b.Messages, "[error] "+fmt.Sprintf(format, v...))
 }
+func (b *Buffer) Panic(format string, v ...any) {
+	b.Messages = append(b.Messages, "[panic] "+fmt.Sprintf(format, v...))
+}
 func (b *Buffer) Fatal(format string, v ...any) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
