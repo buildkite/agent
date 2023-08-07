@@ -43,10 +43,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	}
 
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
-		if err := bintest.ExpectEnv(t, i.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
-			return err
-		}
-		return nil
+		return bintest.ExpectEnv(t, i.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely")
 	})
 
 	git.Expect().AtLeastOnce().WithAnyArguments()
