@@ -2,12 +2,9 @@ package pipeline
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"sort"
 
@@ -24,7 +21,7 @@ type Signature struct {
 }
 
 // Sign computes a new signature for an object containing values using a given
-// signer. Sign resets the signer after use.
+// key.
 func Sign(sf SignedFielder, key jwk.Key) (*Signature, error) {
 	payload := &bytes.Buffer{}
 
@@ -83,10 +80,6 @@ func (s *Signature) Verify(sf SignedFielder, keySet jwk.Set) error {
 		jws.WithKeySet(keySet),
 		jws.WithDetachedPayload(payload.Bytes()),
 	)
-	if err != nil {
-		return err
-	}
-
 	return err
 }
 
@@ -150,92 +143,6 @@ type SignedFielder interface {
 	// values if "mandatory" fields are missing (e.g. signing a command step
 	// should always sign the command).
 	ValuesForFields([]string) (map[string]string, error)
-}
-
-// NewSigner returns a new Signer for the given algorithm,
-// provided with a signing/verification key.
-func NewSigner(algorithm string, key any) (Signer, error) {
-	switch algorithm {
-	case "hmac-sha256":
-		return newHMACSHA256(key)
-	default:
-		return nil, fmt.Errorf("unknown signing algorithm %q", algorithm)
-	}
-}
-
-// NewSigner returns a new Verifier for the given algorithm,
-// provided with a signing/verification key.
-func NewVerifier(algorithm string, key any) (Verifier, error) {
-	switch algorithm {
-	case "hmac-sha256":
-		return newHMACSHA256(key)
-	default:
-		return nil, fmt.Errorf("unknown signing algorithm %q", algorithm)
-	}
-}
-
-// Signer describes operations that support the Sign func.
-type Signer interface {
-	// Data written here is hashed into a digest. The signature is (at least
-	// nominally) computed from the digest.
-	hash.Hash
-
-	// AlgorithmName returns the name of the algorithm (which should match the
-	// argument to NewSigner).
-	AlgorithmName() string
-
-	// Sign returns a signature for the data written so far.
-	Sign() ([]byte, error)
-}
-
-// Verifier describes operations that support the Signature.Verify method.
-type Verifier interface {
-	// Data written here is hashed into a digest. The verifier must check (at
-	// least nominally) that the digest matches the data, and the signature is
-	// a valid signature for the digest.
-	hash.Hash
-
-	// AlgorithmName returns the name of the algorithm (which should match the
-	// argument to NewVerifier).
-	AlgorithmName() string
-
-	// Verify checks a given signature is valid for the data written so far.
-	Verify([]byte) error
-}
-
-type hmacSHA256 struct {
-	hash.Hash
-}
-
-func newHMACSHA256(key any) (hmacSHA256, error) {
-	var bkey []byte
-	switch tkey := key.(type) {
-	case []byte:
-		bkey = tkey
-
-	case string:
-		bkey = []byte(tkey)
-
-	default:
-		return hmacSHA256{}, fmt.Errorf("wrong key type (got %T, want []byte or string)", key)
-	}
-	return hmacSHA256{
-		Hash: hmac.New(sha256.New, bkey),
-	}, nil
-}
-
-func (h hmacSHA256) AlgorithmName() string { return "hmac-sha256" }
-
-func (h hmacSHA256) Sign() ([]byte, error) {
-	return h.Hash.Sum(nil), nil
-}
-
-func (h hmacSHA256) Verify(sig []byte) error {
-	c := h.Hash.Sum(nil)
-	if !bytes.Equal(c, sig) {
-		return errors.New("signature mismatch")
-	}
-	return nil
 }
 
 // writeFields writes the values (length-prefixed) into h. It also returns the

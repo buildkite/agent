@@ -45,7 +45,12 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	mb.Expect().NotCalled() // The bootstrap won't be called, as the pre-bootstrap hook failed
 	defer mb.CheckAndClose(t)
 
-	runJob(t, j, server, agent.AgentConfiguration{HooksPath: hooksDir}, mb)
+	runJob(t, testRunJobConfig{
+		job:           j,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{HooksPath: hooksDir},
+		mockBootstrap: mb,
+	})
 
 	job := e.finishesFor(t, jobID)[0]
 
@@ -84,7 +89,12 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 			server := e.server("my-job-id")
 			defer server.Close()
 
-			runJob(t, j, server, agent.AgentConfiguration{}, mb)
+			runJob(t, testRunJobConfig{
+				job:           j,
+				server:        server,
+				agentCfg:      agent.AgentConfiguration{},
+				mockBootstrap: mb,
+			})
 			finish := e.finishesFor(t, "my-job-id")[0]
 
 			if got, want := finish.ExitStatus, strconv.Itoa(exit); got != want {
@@ -123,7 +133,12 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	server := e.server("my-job-id")
 	defer server.Close()
 
-	runJob(t, j, server, agent.AgentConfiguration{}, mb)
+	runJob(t, testRunJobConfig{
+		job:           j,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
 }
 
 // TODO 2023-07-17: What is this testing? How is it testing it?
@@ -154,7 +169,12 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	server := e.server("my-job-id")
 	defer server.Close()
 
-	runJob(t, j, server, agent.AgentConfiguration{}, mb)
+	runJob(t, testRunJobConfig{
+		job:           j,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
 }
 
 func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
@@ -184,5 +204,10 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	server := e.server("my-job-id")
 	defer server.Close()
 
-	runJob(t, j, server, agent.AgentConfiguration{CommandEval: true}, mb)
+	runJob(t, testRunJobConfig{
+		job:           j,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{CommandEval: true},
+		mockBootstrap: mb,
+	})
 }
