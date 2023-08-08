@@ -10,9 +10,9 @@ import (
 // Chunk represents a Buildkite Agent API Chunk
 type Chunk struct {
 	Data     []byte
-	Sequence int
-	Offset   int
-	Size     int
+	Sequence uint64
+	Offset   uint64
+	Size     uint64
 }
 
 // Uploads the chunk to the Buildkite Agent API. This request sends the

@@ -11,12 +11,17 @@ import (
 	"github.com/buildkite/agent/v3/status"
 )
 
+const defaultLogMaxSize = 1024 * 1024 * 1024 // 1 GiB
+
 type LogStreamerConfig struct {
 	// How many log streamer workers are running at any one time
 	Concurrency int
 
-	// The maximum size of chunks
-	MaxChunkSizeBytes int
+	// The maximum size of each chunk
+	MaxChunkSizeBytes uint64
+
+	// The maximum size of the log
+	MaxSizeBytes uint64
 }
 
 type LogStreamer struct {
@@ -36,10 +41,10 @@ type LogStreamer struct {
 	queue chan *LogStreamerChunk
 
 	// Total size in bytes of the log
-	bytes int
+	bytes uint64
 
 	// Each chunk is assigned an order
-	order int
+	order uint64
 
 	// Every time we add a job to the queue, we increase the wait group
 	// queue so when the streamer shuts down, we can block until all work
@@ -55,13 +60,13 @@ type LogStreamerChunk struct {
 	Data []byte
 
 	// The sequence number of this chunk
-	Order int
+	Order uint64
 
 	// The byte offset of this chunk
-	Offset int
+	Offset uint64
 
 	// The byte size of this chunk
-	Size int
+	Size uint64
 }
 
 // Creates a new instance of the log streamer
@@ -78,6 +83,10 @@ func NewLogStreamer(l logger.Logger, cb func(context.Context, *LogStreamerChunk)
 func (ls *LogStreamer) Start(ctx context.Context) error {
 	if ls.conf.MaxChunkSizeBytes <= 0 {
 		return errors.New("Maximum chunk size must be more than 0. No logs will be sent.")
+	}
+
+	if ls.conf.MaxSizeBytes <= 0 {
+		ls.conf.MaxSizeBytes = defaultLogMaxSize
 	}
 
 	for i := 0; i < ls.conf.Concurrency; i++ {
@@ -98,13 +107,19 @@ func (ls *LogStreamer) Process(output []byte) error {
 	defer ls.processMutex.Unlock()
 
 	for len(output) > 0 {
+		// Have we exceeded the max size?
+		// (This check is also performed on the server side.)
+		if ls.bytes > ls.conf.MaxSizeBytes {
+			return fmt.Errorf("job log has exceeded max job log size (%d > %d)", ls.bytes, ls.conf.MaxSizeBytes)
+		}
+
 		// Add another chunk...
 		ls.chunkWaitGroup.Add(1)
 
 		// Find the upper limit of the blob
 		size := ls.conf.MaxChunkSizeBytes
-		if size > len(output) {
-			size = len(output)
+		if lenout := uint64(len(output)); size > lenout {
+			size = lenout
 		}
 
 		// Grab the ≤100kb section of the blob.
