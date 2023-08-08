@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -17,8 +18,10 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/pipeline"
-	"github.com/buildkite/agent/v3/internal/redactor"
+	"github.com/buildkite/agent/v3/internal/redact"
+	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/stdin"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
 )
@@ -274,31 +277,10 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if len(cfg.RedactedVars) > 0 {
-			needles := redactor.VarsToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).Dump())
-
-			serialisedPipeline, err := result.MarshalJSON()
-			if err != nil {
-				l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
-			}
-
-			stringifiedserialisedPipeline := string(serialisedPipeline)
-
-			secretsFound := make([]string, 0, len(needles))
-			for needleKey, needle := range needles {
-				if strings.Contains(stringifiedserialisedPipeline, needle) {
-					secretsFound = append(secretsFound, needleKey)
-				}
-			}
-
-			if len(secretsFound) > 0 {
-				if cfg.RejectSecrets {
-					l.Fatal("Pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
-				} else {
-					l.Warn("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
-					l.Warn("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
-					l.Warn("The behaviour in the above flags will become default in Buildkite Agent v4")
-				}
-			}
+			// Secret detection uses the original environment, since
+			// Interpolate merges the pipeline's env block into `environ`.
+			envMap := env.FromSlice(os.Environ()).Dump()
+			searchForSecrets(l, &cfg, envMap, result, src)
 		}
 
 		if cfg.SigningKeyPath != "" {
@@ -377,4 +359,42 @@ var PipelineUploadCommand = cli.Command{
 
 		l.Info("Successfully uploaded and parsed pipeline config")
 	},
+}
+
+func searchForSecrets(l logger.Logger, cfg *PipelineUploadConfig, environ map[string]string, result *pipeline.Pipeline, src string) {
+	// Get vars to redact, as both a map and a slice.
+	vars := redact.Vars(shell.StderrLogger, cfg.RedactedVars, environ)
+	needles := make([]string, 0, len(vars))
+	for _, needle := range vars {
+		needles = append(needles, needle)
+	}
+
+	// Use a streaming replacer as a string searcher.
+	secretsFound := make([]string, 0, len(needles))
+	searcher := replacer.New(io.Discard, needles, func(found []byte) []byte {
+		// It matched some of the needles, but which ones?
+		// (This information could be plumbed through the replacer, if
+		// we wanted to make it even more complicated.)
+		for needleKey, needle := range vars {
+			if strings.Contains(string(found), needle) {
+				secretsFound = append(secretsFound, needleKey)
+			}
+		}
+		return nil
+	})
+
+	// Encode the pipeline as JSON into the searcher.
+	if err := json.NewEncoder(searcher).Encode(result); err != nil {
+		l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
+	}
+
+	if len(secretsFound) > 0 {
+		if cfg.RejectSecrets {
+			l.Fatal("Pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
+		} else {
+			l.Warn("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
+			l.Warn("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
+			l.Warn("The behaviour in the above flags will become default in Buildkite Agent v4")
+		}
+	}
 }

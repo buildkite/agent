@@ -1,4 +1,4 @@
-package redactor
+package replacer
 
 import (
 	"bytes"
@@ -7,12 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/google/go-cmp/cmp"
 )
 
 const lipsum = "Lorem ipsum dolor sit amet"
 
-func TestRedactorLoremIpsum(t *testing.T) {
+func TestReplacerLoremIpsum(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -97,9 +98,9 @@ func TestRedactorLoremIpsum(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			redactor := New(&buf, "[REDACTED]", test.needles)
-			fmt.Fprint(redactor, lipsum)
-			redactor.Flush()
+			replacer := New(&buf, test.needles, redact.Redact)
+			fmt.Fprint(replacer, lipsum)
+			replacer.Flush()
 
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
@@ -111,11 +112,11 @@ func TestRedactorLoremIpsum(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			redactor := New(&buf, "[REDACTED]", test.needles)
+			replacer := New(&buf, test.needles, redact.Redact)
 			for _, c := range []byte(lipsum) {
-				redactor.Write([]byte{c})
+				replacer.Write([]byte{c})
 			}
-			redactor.Flush()
+			replacer.Flush()
 
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
@@ -124,7 +125,7 @@ func TestRedactorLoremIpsum(t *testing.T) {
 	}
 }
 
-func TestRedactorWriteBoundaries(t *testing.T) {
+func TestReplacerWriteBoundaries(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -162,12 +163,12 @@ func TestRedactorWriteBoundaries(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			var buf strings.Builder
 
-			redactor := New(&buf, "[REDACTED]", test.needles)
+			replacer := New(&buf, test.needles, redact.Redact)
 
 			for _, input := range test.inputs {
-				fmt.Fprint(redactor, input)
+				fmt.Fprint(replacer, input)
 			}
-			redactor.Flush()
+			replacer.Flush()
 
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
@@ -176,55 +177,55 @@ func TestRedactorWriteBoundaries(t *testing.T) {
 	}
 }
 
-func TestRedactorResetMidStream(t *testing.T) {
+func TestReplacerResetMidStream(t *testing.T) {
 	t.Parallel()
 
 	var buf strings.Builder
-	redactor := New(&buf, "[REDACTED]", []string{"secret1111"})
+	replacer := New(&buf, []string{"secret1111"}, redact.Redact)
 
 	// start writing to the stream (no trailing newline, to be extra tricky)
-	redactor.Write([]byte("redact secret1111 but don't redact secret2222 until"))
+	replacer.Write([]byte("redact secret1111 but don't redact secret2222 until"))
 
-	// update the redactor with a new secret
-	//redactor.Flush() // manual flush is NOT necessary before Reset
-	redactor.Reset([]string{"secret1111", "secret2222"})
+	// update the replacer with a new secret
+	//replacer.Flush() // manual flush is NOT necessary before Reset
+	replacer.Reset([]string{"secret1111", "secret2222"})
 
 	// finish writing
-	redactor.Write([]byte(" after secret2222 is added\n"))
-	redactor.Flush()
+	replacer.Write([]byte(" after secret2222 is added\n"))
+	replacer.Flush()
 
 	if got, want := buf.String(), "redact [REDACTED] but don't redact secret2222 until after [REDACTED] is added\n"; got != want {
 		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
 
-func TestRedactorMultibyte(t *testing.T) {
+func TestReplacerMultibyte(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	redactor := New(&buf, "[REDACTED]", []string{"ÿ"})
+	replacer := New(&buf, []string{"ÿ"}, redact.Redact)
 
-	redactor.Write([]byte("fooÿbar"))
-	redactor.Flush()
+	replacer.Write([]byte("fooÿbar"))
+	replacer.Flush()
 
 	if got, want := buf.String(), "foo[REDACTED]bar"; got != want {
 		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
 
-func TestRedactorMultiLine(t *testing.T) {
+func TestReplacerMultiLine(t *testing.T) {
 	t.Parallel()
 
 	var buf strings.Builder
 
-	redactor := New(&buf, "[REDACTED]", []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"})
+	replacer := New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
 
-	fmt.Fprintln(redactor, "lalalala")
-	fmt.Fprintln(redactor, "-----BEGIN OPENSSH PRIVATE KEY-----")
-	fmt.Fprintln(redactor, "asdf")
-	fmt.Fprintln(redactor, "-----END OPENSSH PRIVATE KEY-----")
-	fmt.Fprintln(redactor, "lalalala")
-	redactor.Flush()
+	fmt.Fprintln(replacer, "lalalala")
+	fmt.Fprintln(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----")
+	fmt.Fprintln(replacer, "asdf")
+	fmt.Fprintln(replacer, "-----END OPENSSH PRIVATE KEY-----")
+	fmt.Fprintln(replacer, "lalalala")
+	replacer.Flush()
 
 	want := "lalalala\n[REDACTED]lalalala\n"
 
@@ -233,16 +234,16 @@ func TestRedactorMultiLine(t *testing.T) {
 	}
 }
 
-func BenchmarkRedactor(b *testing.B) {
+func BenchmarkReplacer(b *testing.B) {
 	b.ResetTimer()
-	r := New(io.Discard, "[REDACTED]", bigLipsumSecrets)
+	r := New(io.Discard, bigLipsumSecrets, redact.Redact)
 	for n := 0; n < b.N; n++ {
 		fmt.Fprintln(r, bigLipsum)
 	}
 	r.Flush()
 }
 
-func FuzzRedactor(f *testing.F) {
+func FuzzReplacer(f *testing.F) {
 	f.Add(lipsum, 10, "", "", "", "")
 	f.Add(lipsum, 10, "ipsum", "", "", "")
 	f.Add(lipsum, 10, "ipsum", "sit", "", "")
@@ -267,19 +268,19 @@ func FuzzRedactor(f *testing.F) {
 		}
 
 		var sb strings.Builder
-		redactor := New(&sb, "[REDACTED]", secrets)
+		replacer := New(&sb, secrets, redact.Redact)
 		if split < 0 || split >= len(plaintext) {
-			fmt.Fprint(redactor, plaintext)
+			fmt.Fprint(replacer, plaintext)
 		} else {
-			fmt.Fprint(redactor, plaintext[:split])
-			fmt.Fprint(redactor, plaintext[split:])
+			fmt.Fprint(replacer, plaintext[:split])
+			fmt.Fprint(replacer, plaintext[split:])
 		}
-		redactor.Flush()
+		replacer.Flush()
 		got := sb.String()
 
 		for _, s := range secrets {
 			if strings.Contains(got, s) {
-				t.Errorf("redactor output %q contains secret %q", got, s)
+				t.Errorf("replacer output %q contains secret %q", got, s)
 			}
 		}
 	})
