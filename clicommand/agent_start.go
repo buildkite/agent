@@ -73,7 +73,10 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
-	JobSigningJWKSPath                      string `cli:"job-signing-jwks-path" normalize:"filepath"`
+	JobSigningJWKSPath  string `cli:"job-signing-jwks-path" normalize:"filepath"`
+	JobSigningAlgorithm string `cli:"job-signing-algorithm"`
+	JobSigningKeyID     string `cli:"job-signing-key-id"`
+
 	JobVerificationJWKSPath                 string `cli:"job-verification-jwks-path" normalize:"filepath"`
 	JobVerificationNoSignatureBehavior      string `cli:"job-verification-no-signature-behavior"`
 	JobVerificationInvalidSignatureBehavior string `cli:"job-verification-invalid-signature-behavior"`
@@ -593,7 +596,17 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "job-signing-jwks-path",
 			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
-			EnvVar: "BUILDKITE_PIPELINE_JOB_SIGNING_KEY_PATH",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
+		},
+		cli.StringFlag{
+			Name:   "job-signing-algorithm",
+			Usage:  "The algorithm to use when signing pipelines. Must be a valid RF7518 JWA algorithm. Required when using a JWKS, and the given key doesn't have an alg parameter",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
+		},
+		cli.StringFlag{
+			Name:   "job-signing-key-id",
+			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
 		},
 		cli.StringFlag{
 			Name:   "job-verification-no-signature-behavior",
@@ -885,8 +898,12 @@ var AgentStartCommand = cli.Command{
 			TracingServiceName:                      cfg.TracingServiceName,
 			JobVerificationNoSignatureBehavior:      cfg.JobVerificationNoSignatureBehavior,
 			JobVerificationInvalidSignatureBehavior: cfg.JobVerificationInvalidSignatureBehavior,
-			JobSigningJWKSPath:                      cfg.JobSigningJWKSPath,
-			JobVerificationJWKS:                     jwks,
+
+			JobSigningJWKSPath:  cfg.JobSigningJWKSPath,
+			JobSigningAlgorithm: cfg.JobSigningAlgorithm,
+			JobSigningKeyID:     cfg.JobSigningKeyID,
+
+			JobVerificationJWKS: jwks,
 		}
 
 		if loader.File != nil {

@@ -506,6 +506,14 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH"] = r.conf.AgentConfiguration.JobSigningJWKSPath
 	}
 
+	if r.conf.AgentConfiguration.JobSigningKeyID != "" {
+		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID"] = r.conf.AgentConfiguration.JobSigningKeyID
+	}
+
+	if r.conf.AgentConfiguration.JobSigningAlgorithm != "" {
+		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM"] = r.conf.AgentConfiguration.JobSigningAlgorithm
+	}
+
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing
