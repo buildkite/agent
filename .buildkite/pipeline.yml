@@ -27,13 +27,15 @@ steps:
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
-      test-collector#v1.2.0:
-        files: "junit-*.xml"
-        format: "junit"
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+      - test-collector#v1.2.0:
+          files: "junit-*.xml"
+          format: "junit"
+      - artifacts#v1.9.0:
+          upload: "cover.{html,out}"
 
   - name: ":linux: Linux ARM64 Tests"
     key: test-linux-arm64
@@ -42,13 +44,15 @@ steps:
     agents:
       queue: agent-runners-linux-arm64
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
-      test-collector#v1.2.0:
-        files: "junit-*.xml"
-        format: "junit"
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+      - test-collector#v1.2.0:
+          files: "junit-*.xml"
+          format: "junit"
+      - artifacts#v1.9.0:
+          upload: "cover.{html,out}"
 
   - name: ":satellite: Detect Data Races"
     key: test-race-linux-arm64
@@ -57,13 +61,15 @@ steps:
     agents:
       queue: agent-runners-linux-arm64
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
-      test-collector#v1.2.0:
-        files: "junit-*.xml"
-        format: "junit"
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+      - test-collector#v1.2.0:
+          files: "junit-*.xml"
+          format: "junit"
+      - artifacts#v1.9.0:
+          upload: "cover.{html,out}"
 
   - name: ":windows: Windows AMD64 Tests"
     key: test-windows
@@ -72,9 +78,11 @@ steps:
     agents:
       queue: agent-runners-windows-amd64
     plugins:
-      test-collector#v1.2.0:
-        files: "junit-*.xml"
-        format: "junit"
+      - test-collector#v1.2.0:
+          files: "junit-*.xml"
+          format: "junit"
+      - artifacts#v1.9.0:
+          upload: "cover.{html,out}"
 
   - label: ":writing_hand: Annotate with Test Failures"
     depends_on:
