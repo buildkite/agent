@@ -178,6 +178,7 @@ func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (j
 	r.logStreamer = NewLogStreamer(r.logger, r.onUploadChunk, LogStreamerConfig{
 		Concurrency:       3,
 		MaxChunkSizeBytes: r.conf.Job.ChunksMaxSizeBytes,
+		MaxSizeBytes:      r.conf.Job.LogMaxSizeBytes,
 	})
 
 	// TempDir is not guaranteed to exist
@@ -642,7 +643,15 @@ func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
 
 		// Send the output of the process to the log streamer
 		// for processing
-		r.logStreamer.Process(r.output.ReadAndTruncate())
+		chunk := r.output.ReadAndTruncate()
+		if err := r.logStreamer.Process(chunk); err != nil {
+			r.logger.Error("Could not stream the log output: %v", err)
+			// So far, the only error from logStreamer.Process is if the log has
+			// reached the limit.
+			// Since we're not writing any more, close the buffer, which will
+			// cause future Writes to return an error.
+			r.output.Close()
+		}
 
 		setStat("😴 Sleeping for a bit")
 

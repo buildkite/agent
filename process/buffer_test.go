@@ -1,6 +1,7 @@
 package process
 
 import (
+	"io"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -31,5 +32,23 @@ func TestBuffer(t *testing.T) {
 	// Buffer should now be empty
 	if got, want := b.ReadAndTruncate(), []byte(nil); !cmp.Equal(got, want) {
 		t.Errorf("b.ReadAndTruncate() = %v, want %v", got, want)
+	}
+}
+
+func TestBufferClose(t *testing.T) {
+	var b Buffer
+
+	if err := b.Close(); err != nil {
+		t.Errorf("initial b.Close() = %v", err)
+	}
+
+	gotN, gotErr := b.Write([]byte("This shouldn't work"))
+	wantN, wantErr := 0, io.ErrClosedPipe
+	if gotN != wantN || gotErr != wantErr {
+		t.Errorf("after b.Close(): b.Write() = (%d, %v), want (%d, %v)", gotN, gotErr, wantN, wantErr)
+	}
+
+	if err := b.Close(); err != errAlreadyClosed {
+		t.Errorf("double b.Close() = %v, want %v", err, errAlreadyClosed)
 	}
 }

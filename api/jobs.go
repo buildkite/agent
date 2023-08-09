@@ -14,7 +14,8 @@ type Job struct {
 	State              string                `json:"state,omitempty"`
 	Env                map[string]string     `json:"env,omitempty"`
 	Step               *pipeline.CommandStep `json:"step,omitempty"`
-	ChunksMaxSizeBytes int                   `json:"chunks_max_size_bytes,omitempty"`
+	ChunksMaxSizeBytes uint64                `json:"chunks_max_size_bytes,omitempty"`
+	LogMaxSizeBytes    uint64                `json:"log_max_size_bytes,omitempty"`
 	Token              string                `json:"token,omitempty"`
 	ExitStatus         string                `json:"exit_status,omitempty"`
 	Signal             string                `json:"signal,omitempty"`
