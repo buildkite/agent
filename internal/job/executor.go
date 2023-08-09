@@ -23,7 +23,8 @@ import (
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/redactor"
+	"github.com/buildkite/agent/v3/internal/redact"
+	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/kubernetes"
@@ -434,7 +435,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	return nil
 }
 
-func (e *Executor) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors redactor.Mux) {
+func (e *Executor) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors replacer.Mux) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != e.shell.Getwd() {
 			_ = e.shell.Chdir(afterWd)
@@ -449,7 +450,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.HookScriptChanges, redac
 	e.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	redactors.Reset(redactor.ValuesToRedact(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump()))
+	redactors.Reset(redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump()))
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
@@ -2221,8 +2222,8 @@ func (e *Executor) ignoredEnv() []string {
 // is necessary based on RedactedVars configuration and the existence of
 // matching environment vars.
 // redactor.Mux (possibly empty) is returned so the caller can `defer redactor.Flush()`
-func (e *Executor) setupRedactors() redactor.Mux {
-	valuesToRedact := redactor.ValuesToRedact(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())
+func (e *Executor) setupRedactors() replacer.Mux {
+	valuesToRedact := redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())
 	if len(valuesToRedact) == 0 {
 		return nil
 	}
@@ -2231,14 +2232,14 @@ func (e *Executor) setupRedactors() redactor.Mux {
 		e.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
 	}
 
-	var mux redactor.Mux
+	var mux replacer.Mux
 
-	// If the shell Writer is already a Redactor, reset the values to redact.
-	if rdc, ok := e.shell.Writer.(*redactor.Redactor); ok {
+	// If the shell Writer is already a Replacer, reset the values to redact.
+	if rdc, ok := e.shell.Writer.(*replacer.Replacer); ok {
 		rdc.Reset(valuesToRedact)
 		mux = append(mux, rdc)
 	} else {
-		rdc := redactor.New(e.shell.Writer, "[REDACTED]", valuesToRedact)
+		rdc := replacer.New(e.shell.Writer, valuesToRedact, redact.Redact)
 		e.shell.Writer = rdc
 		mux = append(mux, rdc)
 	}
@@ -2247,10 +2248,10 @@ func (e *Executor) setupRedactors() redactor.Mux {
 	// (maybe there's a better way to do two levels of type assertion? ...
 	// shell.Logger may be a WriterLogger, and its Writer may be a Redactor)
 	var shellWriterLogger *shell.WriterLogger
-	var shellLoggerRedactor *redactor.Redactor
+	var shellLoggerRedactor *replacer.Replacer
 	if logger, ok := e.shell.Logger.(*shell.WriterLogger); ok {
 		shellWriterLogger = logger
-		if redactor, ok := logger.Writer.(*redactor.Redactor); ok {
+		if redactor, ok := logger.Writer.(*replacer.Replacer); ok {
 			shellLoggerRedactor = redactor
 		}
 	}
@@ -2258,7 +2259,7 @@ func (e *Executor) setupRedactors() redactor.Mux {
 		rdc.Reset(valuesToRedact)
 		mux = append(mux, rdc)
 	} else if shellWriterLogger != nil {
-		rdc := redactor.New(e.shell.Writer, "[REDACTED]", valuesToRedact)
+		rdc := replacer.New(e.shell.Writer, valuesToRedact, redact.Redact)
 		shellWriterLogger.Writer = rdc
 		mux = append(mux, rdc)
 	}

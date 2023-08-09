@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/redactor"
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
@@ -59,11 +59,11 @@ func TestValuesToRedact(t *testing.T) {
 		"DATABASE_PASSWORD":  "hunter2",
 	}
 
-	got := redactor.ValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+	got := redact.Values(shell.DiscardLogger, redactConfig, environment)
 	want := []string{"hunter2"}
 
 	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("redactor.ValuesToRedact(%q, %q) diff (-got +want)\n%s", redactConfig, environment, diff)
+		t.Errorf("redact.Values(%q, %q) diff (-got +want)\n%s", redactConfig, environment, diff)
 	}
 }
 
@@ -76,9 +76,9 @@ func TestValuesToRedactEmpty(t *testing.T) {
 		"BUILDKITE_PIPELINE": "unit-test",
 	}
 
-	got := redactor.ValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+	got := redact.Values(shell.DiscardLogger, redactConfig, environment)
 	if len(got) != 0 {
-		t.Errorf("redactor.ValuesToRedact(%q, %q) = %q, want empty slice", redactConfig, environment, got)
+		t.Errorf("redact.Values(%q, %q) = %q, want empty slice", redactConfig, environment, got)
 	}
 }
 

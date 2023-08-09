@@ -1,33 +1,25 @@
-// Package redactor provides an efficient configurable string redactor.
-package redactor
+// Package replacer provides an efficient configurable string replacer.
+package replacer
 
 import (
 	"errors"
+	"fmt"
 	"io"
-	"path"
 	"sync"
-
-	"github.com/buildkite/agent/v3/internal/job/shell"
 )
 
-// RedactLengthMin is the shortest string length that will be considered a
-// potential secret by the environment redactor. e.g. if the redactor is
-// configured to filter out environment variables matching *_TOKEN, and
-// API_TOKEN is set to "none", this minimum length will prevent the word "none"
-// from being redacted from useful log output.
-const RedactLengthMin = 6
-
-// Redactor is a straightforward secret redactor.
+// Replacer is a straightforward streaming string replacer and replacer,
+// suitable for detecting or redacting secrets in a stream.
 //
 // The algorithm is intended to be easier to maintain than certain
-// high-performance multi-string replacement algorithms, and also geared towards
+// high-performance multi-string search algorithms, and also geared towards
 // ensuring secrets don't escape (for instance, by matching overlaps), at the
 // expense of ultimate efficiency.
-type Redactor struct {
-	// Replacement string (e.g. "[REDACTED]")
-	subst []byte
+type Replacer struct {
+	// The replacement callback.
+	replacement func([]byte) []byte
 
-	// Secrets to redact (looking for these needles in the haystack),
+	// Strings to search for (looking for these needles in the haystack),
 	// organised by first byte.
 	// Why first byte? Because looking up needles by the first byte is a lot
 	// faster than _filtering_ all the needles by first byte.
@@ -36,12 +28,10 @@ type Redactor struct {
 	// For synchronising writes. Each write can touch everything below.
 	mu sync.Mutex
 
-	// Redacted output written to this writer.
+	// Output re-streamed to this writer.
 	dst io.Writer
 
-	// Intermediate buffer to account for partially-written non-secrets.
-	// (i.e. we began redacting in case we're in the middle of a secret, but
-	// we might not be).
+	// Intermediate buffer to account for partially-written data.
 	buf []byte
 
 	// Current redaction partialMatches - if we have begun redacting a potential
@@ -51,15 +41,33 @@ type Redactor struct {
 	// hold the next set of matches for every byte of the input.
 	partialMatches, nextMatches []partialMatch
 
-	// The ranges in buf we must redact on flush.
+	// The ranges in buf we must replace on flush.
 	completedMatches []subrange
 }
 
-// New returns a new Redactor.
-func New(dst io.Writer, subst string, needles []string) *Redactor {
-	r := &Redactor{
-		dst:   dst,
-		subst: []byte(subst),
+// New returns a new Replacer.
+//
+// dst is the writer to which output is forwarded.
+// needles is the list of strings to search for.
+//
+// replacement is called when one or more _overlapping_ needles are found.
+// Non-overlapping matches (including adjacent matches) cause more callbacks.
+// replacement is given the subslice of the internal buffer that matched one or
+// more overlapping needles.
+// The return value from replacement is used as a replacement for the range
+// it was given. To forward the stream unaltered, simply return the argument.
+// replacement can also scribble over the contents of the slice it gets (and
+// return it), or return an entirely different slice of bytes to use for
+// replacing the original in the forwarded stream.
+// Because the callback semantics are "zero copy", replacement should _not_
+// keep a reference to the argument after it returns, since that will prevent
+// garbage-collecting old buffers. replacement should also avoid calling
+// append on its input, or otherwise extend the slice, as this can overwrite
+// more of the buffer than intended.
+func New(dst io.Writer, needles []string, replacement func([]byte) []byte) *Replacer {
+	r := &Replacer{
+		replacement: replacement,
+		dst:         dst,
 
 		// Preallocate a few things.
 		buf:              make([]byte, 0, 65536),
@@ -71,9 +79,10 @@ func New(dst io.Writer, subst string, needles []string) *Redactor {
 	return r
 }
 
-// Write redacts any secrets from the stream, and forwards the redacted stream
-// to the destination writer.
-func (r *Redactor) Write(b []byte) (int, error) {
+// Write searches the stream for needles (strings, secrets, ...), calls the
+// replacement callback to obtain any replacements, and forwards the output to
+// the destination writer.
+func (r *Replacer) Write(b []byte) (int, error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
@@ -83,20 +92,21 @@ func (r *Redactor) Write(b []byte) (int, error) {
 
 	// The high level:
 	// 1. Append b to the buffer.
-	// 2. Search through b to find instances of strings to redact. Store the
-	//    ranges of redactions in r.redact.
-	// 3. Merge overlapping redaction ranges.
+	// 2. Search through b to find needles. Store the ranges of complete matches
+	//    in r.completedMatches.
+	// 3. Merge overlapping ranges into one single range.
 	// 4. Write as much of the buffer as we can without spilling incomplete
 	//    matches.
 	//
 	// Step 2 is complicated by the fact that each Write could contain a partial
 	// secret at the start or the end. So a buffer is needed to hold onto any
 	// incomplete matches (in case they _don't_ match), as well as some extra
-	// state (r.states) for tracking where we are in each incomplete match.
+	// state (r.partialMatches) for tracking where we are in each incomplete
+	// match.
 	//
 	// Step 4 (mostly in flushUpTo) only looks complicated because it has to
-	// alternate between unredacted and redacted ranges, *and* handle the case
-	// where we've chosen to flush to inside a redacted range.
+	// alternate between unmatched and matched ranges, *and* handle the case
+	// where we've chosen to flush to inside a matched range.
 
 	prevBufLen := len(r.buf)
 
@@ -179,7 +189,7 @@ func (r *Redactor) Write(b []byte) (int, error) {
 
 // Flush writes all buffered data to the destination. It assumes there is no
 // more data in the stream, and so any incomplete matches are non-matches.
-func (r *Redactor) Flush() error {
+func (r *Replacer) Flush() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -190,7 +200,7 @@ func (r *Redactor) Flush() error {
 }
 
 // flush writes out the buffer up to an index. limit is an upper limit.
-func (r *Redactor) flushUpTo(limit int) error {
+func (r *Replacer) flushUpTo(limit int) error {
 	if limit == 0 || len(r.buf) == 0 {
 		return nil
 	}
@@ -198,43 +208,48 @@ func (r *Redactor) flushUpTo(limit int) error {
 	bufidx := 0 // where we are up to in the buffer
 	done := -1  // the index of the last match processed
 
-	// Stop when we're out of redactions, or the next one is after limit.
+	// Stop when we're out of completed matches, or the next one is after limit.
 
 	for ri, match := range r.completedMatches {
 		if match.from >= limit {
 			// This range is after the cutoff point.
 			break
 		}
-		done = ri
 
-		switch {
-		case bufidx < match.from:
-			// A non-redacted range (followed by a redacted range).
+		if match.to > limit {
+			// This range overlaps the cutoff point. Adjust the limit in order
+			// to be able to give the complete start-to-end []byte of all
+			// overlaps of the range to the callback (but in the next flush).
+			limit = match.from
+			break
+		}
+
+		if bufidx > match.from {
+			// This should never happen. It would mean that we wrote some of
+			// the buffer up to inside this match range. Maybe there's a bug
+			// in mergeOverlaps?
+			return fmt.Errorf("bufidx > match.from [%d > %d]", bufidx, match.from)
+		}
+
+		if bufidx < match.from {
+			// This is the non-matching part of the buffer before this match.
 			if _, err := r.dst.Write(r.buf[bufidx:match.from]); err != nil {
 				return err
 			}
-			fallthrough
+		}
 
-		case bufidx == match.from:
-			// A redacted range.
-			// Write a r.subst instead of the redacted range.
-			if _, err := r.dst.Write(r.subst); err != nil {
+		// Now handle the match itself.
+		// Call the replacement callback to get a replacement.
+		if repl := r.replacement(r.buf[match.from:match.to]); len(repl) > 0 {
+			if _, err := r.dst.Write(repl); err != nil {
 				return err
 			}
-			bufidx = match.to
-			// bufidx could now be after limit, but that's OK.
-			// We were going to write r.subst anyway. It just might be continued
-			// by an overlap.
-
-		default:
-			// This should only happen if bufidx = 0 and a previous flush
-			// moved earlier ranges before the start of the buffer.
-			// r.subst should have been written in the earlier flush.
-			bufidx = match.to
 		}
+		bufidx = match.to
+		done = ri
 	}
 
-	// Anything between here and limit?
+	// Anything non-matching between here and limit?
 	if bufidx < limit {
 		if _, err := r.dst.Write(r.buf[bufidx:limit]); err != nil {
 			return err
@@ -278,7 +293,7 @@ func (r *Redactor) flushUpTo(limit int) error {
 //     (until they reach a terminal state), and
 //   - any new secrets will not be compared against existing buffer content,
 //     only data passed to Write calls after Reset.
-func (r *Redactor) Reset(needles []string) {
+func (r *Replacer) Reset(needles []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -358,59 +373,10 @@ func mergeOverlaps(rs []subrange) []subrange {
 	return rs[:rem]
 }
 
-// ValuesToRedact returns the variable values to be redacted, given a
-// redaction config string and an environment map.
-func ValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) []string {
-	vars := VarsToRedact(logger, patterns, environment)
-	if len(vars) == 0 {
-		return nil
-	}
+// Mux contains multiple replacers
+type Mux []*Replacer
 
-	vals := make([]string, 0, len(vars))
-	for _, val := range vars {
-		vals = append(vals, val)
-	}
-
-	return vals
-}
-
-// VarsToRedact returns the variable names and values to be redacted, given a
-// redaction config string and an environment map.
-func VarsToRedact(logger shell.Logger, patterns []string, environment map[string]string) map[string]string {
-	// Lifted out of Bootstrap.setupRedactors to facilitate testing
-	vars := make(map[string]string)
-
-	for name, val := range environment {
-		for _, pattern := range patterns {
-			matched, err := path.Match(pattern, name)
-			if err != nil {
-				// path.ErrBadPattern is the only error returned by path.Match
-				logger.Warningf("Bad redacted vars pattern: %s", pattern)
-				continue
-			}
-
-			if !matched {
-				continue
-			}
-			if len(val) < RedactLengthMin {
-				if len(val) > 0 {
-					logger.Warningf("Value of %s below minimum length (%d bytes) and will not be redacted", name, RedactLengthMin)
-				}
-				continue
-			}
-
-			vars[name] = val
-			break // Break pattern loop, continue to next env var
-		}
-	}
-
-	return vars
-}
-
-// Mux contains multiple redactors
-type Mux []*Redactor
-
-// Flush flushes all redactors.
+// Flush flushes all replacers.
 func (mux Mux) Flush() error {
 	var errs []error
 	for _, r := range mux {
@@ -424,7 +390,7 @@ func (mux Mux) Flush() error {
 	return nil
 }
 
-// Reset resets all redactors with new needles (secrets).
+// Reset resets all replacers with new needles (secrets).
 func (mux Mux) Reset(needles []string) {
 	for _, r := range mux {
 		r.Reset(needles)
