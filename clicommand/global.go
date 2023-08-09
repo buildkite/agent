@@ -326,6 +326,8 @@ func setupLoggerAndConfig[T any](c *cli.Context, opts ...configOpts) (
 		cleanup()
 
 		switch r := recover(); r {
+		case nil:
+			// there was no panic
 		case logger.Panic{}:
 			os.Exit(1)
 		default:
