@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/status"
+	"github.com/dustin/go-humanize"
 )
 
 const defaultLogMaxSize = 1024 * 1024 * 1024 // 1 GiB
@@ -106,11 +107,20 @@ func (ls *LogStreamer) Process(output []byte) error {
 	ls.processMutex.Lock()
 	defer ls.processMutex.Unlock()
 
+	warnedAboutSize := false
+
 	for len(output) > 0 {
 		// Have we exceeded the max size?
 		// (This check is also performed on the server side.)
-		if ls.bytes > ls.conf.MaxSizeBytes {
-			return fmt.Errorf("job log has exceeded max job log size (%d > %d)", ls.bytes, ls.conf.MaxSizeBytes)
+		if ls.bytes > ls.conf.MaxSizeBytes && !warnedAboutSize {
+			ls.logger.Warn("The job log has reached %s in size, which has "+
+				"exceeded the maximum size (%s). Further logs may be dropped "+
+				"by the server, and a future version of the agent will stop "+
+				"sending logs at this point.",
+				humanize.Bytes(ls.bytes), humanize.Bytes(ls.conf.MaxSizeBytes))
+			warnedAboutSize = true
+			// In a future version, this will error out, e.g.:
+			//return fmt.Errorf("job log has exceeded max job log size (%d > %d)", ls.bytes, ls.conf.MaxSizeBytes)
 		}
 
 		// Add another chunk...
