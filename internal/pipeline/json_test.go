@@ -4,7 +4,7 @@ import "testing"
 
 type strukt struct {
 	Foo string         `yaml:"foo"`
-	Bar string         `yaml:"bar,omitempty"`
+	Bar any            `yaml:"bar,omitempty"`
 	Baz string         `yaml:"-"`
 	Qux map[string]any `yaml:",inline"`
 }
@@ -32,7 +32,7 @@ func TestInlineFriendlyMarshalJSON(t *testing.T) {
 			want: `{"foo":""}`,
 			strukt: strukt{
 				Foo: "", // doesn't have omitempty, should show up in the result object
-				Bar: "",
+				Bar: nil,
 			},
 		},
 		{

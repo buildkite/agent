@@ -2,16 +2,28 @@ package agent
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/roko"
+)
+
+const (
+	SignalReasonAgentRefused      = "agent_refused"
+	SignalReasonAgentStop         = "agent_stop"
+	SignalReasonCancel            = "cancel"
+	SignalReasonSignatureRejected = "signature_rejected"
+	SignalReasonProcessRunError   = "process_run_error"
 )
 
 // Runs the job
@@ -22,6 +34,19 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	defer done()
 
 	r.startedAt = time.Now()
+
+	var verifier pipeline.Verifier
+	if r.conf.AgentConfiguration.JobVerificationKeyPath != "" {
+		verificationKey, err := os.ReadFile(r.conf.AgentConfiguration.JobVerificationKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read job verification key: %w", err)
+		}
+
+		verifier, err = pipeline.NewVerifier("hmac-sha256", verificationKey)
+		if err != nil {
+			return fmt.Errorf("failed to create job verifier: %w", err)
+		}
+	}
 
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
@@ -62,6 +87,49 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		r.cleanup(ctx, wg, exit)
 	}(ctx, &wg) // Note the non-cancellable context (ctx rather than cctx) here - we don't want to be interrupted during cleanup
 
+	job := r.conf.Job
+
+	if verifier == nil && job.Step.Signature != nil {
+		r.verificationFailureLogs(
+			fmt.Errorf("job %q was signed with signature %q, but no verification key was provided, so the job can't be verified", job.ID, job.Step.Signature.Value),
+			VerificationBehaviourBlock,
+		)
+		exit.Status = -1
+		exit.SignalReason = SignalReasonSignatureRejected
+		return nil
+	}
+
+	if verifier != nil {
+		ise := &invalidSignatureError{}
+		switch err := r.verifyJob(verifier); {
+		case errors.Is(err, ErrNoSignature):
+			r.verificationFailureLogs(err, r.NoSignatureBehavior)
+			if r.NoSignatureBehavior == VerificationBehaviourBlock {
+				exit.Status = -1
+				exit.SignalReason = SignalReasonSignatureRejected
+				return nil
+			}
+
+		case errors.As(err, &ise):
+			r.verificationFailureLogs(err, r.InvalidSignatureBehavior)
+			if r.InvalidSignatureBehavior == VerificationBehaviourBlock {
+				exit.Status = -1
+				exit.SignalReason = SignalReasonSignatureRejected
+				return nil
+			}
+
+		case err != nil: // some other error
+			r.verificationFailureLogs(err, VerificationBehaviourBlock) // errors in verification are always fatal
+			exit.Status = -1
+			exit.SignalReason = SignalReasonSignatureRejected
+			return nil
+
+		default: // no error, all good, keep going
+			r.logger.Info("Successfully verified job %s with signature %s", job.ID, job.Step.Signature.Value)
+			r.logStreamer.Process([]byte(fmt.Sprintf("✅ Verified job with signature %s\n", job.Step.Signature.Value)))
+		}
+	}
+
 	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for
 	// it to tell us whether it is happy to proceed.
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
@@ -74,7 +142,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
 			exit.Status = -1
-			exit.SignalReason = "agent_refused"
+			exit.SignalReason = SignalReasonAgentRefused
 
 			return nil
 		}
@@ -85,7 +153,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	go r.jobLogStreamer(cctx, &wg)
 	go r.jobCancellationChecker(cctx, &wg)
 
-	exit = r.runJob(cctx) // Ignore gostaticcheck here, the value of exit is captured by the deferred cleanup function above
+	exit = r.runJob(cctx)
 
 	return nil
 }
@@ -106,7 +174,7 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 		// The process did not run at all, so make sure it fails
 		return processExit{
 			Status:       -1,
-			SignalReason: "process_run_error",
+			SignalReason: SignalReasonProcessRunError,
 		}
 	}
 	// Intended to capture situations where the job-exec (aka bootstrap) container did not
@@ -133,11 +201,11 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	case r.stopped:
 		// The agent is being gracefully stopped, and we signaled the job to end. Often due
 		// to pending host shutdown or EC2 spot instance termination
-		exit.SignalReason = "agent_stop"
+		exit.SignalReason = SignalReasonAgentStop
 
 	case r.cancelled:
 		// The job was signaled because it was cancelled via the buildkite web UI
-		exit.SignalReason = "cancel"
+		exit.SignalReason = SignalReasonCancel
 	}
 
 	return exit
@@ -187,6 +255,96 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit proces
 	r.logger.Info("Finished job %s", r.conf.Job.ID)
 }
 
+// finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
+// cannot return successfully, this will retry for a long time.
+func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit processExit, failedChunkCount int) error {
+	r.conf.Job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
+	r.conf.Job.ExitStatus = strconv.Itoa(exit.Status)
+	r.conf.Job.Signal = exit.Signal
+	r.conf.Job.SignalReason = exit.SignalReason
+	r.conf.Job.ChunksFailedCount = failedChunkCount
+
+	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
+		r.conf.Job.ExitStatus, r.conf.Job.Signal, r.conf.Job.SignalReason)
+
+	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
+	defer cancel()
+
+	return roko.NewRetrier(
+		roko.TryForever(),
+		roko.WithJitter(),
+		roko.WithStrategy(roko.Constant(1*time.Second)),
+	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		response, err := r.apiClient.FinishJob(ctx, r.conf.Job)
+		if err != nil {
+			// If the API returns with a 422, that means that we
+			// succesfully tried to finish the job, but Buildkite
+			// rejected the finish for some reason. This can
+			// sometimes mean that Buildkite has cancelled the job
+			// before we get a chance to send the final API call
+			// (maybe this agent took too long to kill the
+			// process). In that case, we don't want to keep trying
+			// to finish the job forever so we'll just bail out and
+			// go find some more work to do.
+			if response != nil && response.StatusCode == 422 {
+				r.logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
+				retrier.Break()
+			} else {
+				r.logger.Warn("%s (%s)", err, retrier)
+			}
+		}
+
+		return err
+	})
+}
+
+// jobLogStreamer waits for the process to start, then grabs the job output
+// every few seconds and sends it back to Buildkite.
+func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Log Streamer")
+	defer done()
+	setStat("🏃 Starting...")
+
+	defer func() {
+		wg.Done()
+		r.logger.Debug("[JobRunner] Routine that processes the log has finished")
+	}()
+
+	select {
+	case <-r.process.Started():
+	case <-ctx.Done():
+		return
+	}
+
+	for {
+		setStat("📨 Sending process output to log streamer")
+
+		// Send the output of the process to the log streamer
+		// for processing
+		chunk := r.output.ReadAndTruncate()
+		if err := r.logStreamer.Process(chunk); err != nil {
+			r.logger.Error("Could not stream the log output: %v", err)
+			// So far, the only error from logStreamer.Process is if the log has
+			// reached the limit.
+			// Since we're not writing any more, close the buffer, which will
+			// cause future Writes to return an error.
+			r.output.Close()
+		}
+
+		setStat("😴 Sleeping for a bit")
+
+		// Sleep for a bit, or until the job is finished
+		select {
+		case <-time.After(1 * time.Second):
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+	}
+
+	// The final output after the process has finished is processed in Run().
+}
 func (r *JobRunner) CancelAndStop() error {
 	r.cancelLock.Lock()
 	r.stopped = true

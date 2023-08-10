@@ -141,6 +141,11 @@ func (s Steps) sign(signer Signer) error {
 	for _, step := range s {
 		switch step := step.(type) {
 		case *CommandStep:
+			if step.Matrix != nil {
+				// Don't sign matrix steps... yet
+				continue
+			}
+
 			sig, err := Sign(step, signer)
 			if err != nil {
 				return fmt.Errorf("signing step with command %q: %w", step.Command, err)

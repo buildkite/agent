@@ -34,6 +34,7 @@ import (
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const startDescription = `Usage:
@@ -53,6 +54,8 @@ Example:
 
    $ buildkite-agent start --token xxx`
 
+var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
 // - As a flag in the AgentStartCommand (with matching env)
@@ -60,65 +63,82 @@ Example:
 // - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
 
 type AgentStartConfig struct {
-	Config                      string   `cli:"config"`
-	Name                        string   `cli:"name"`
-	Priority                    string   `cli:"priority"`
-	AcquireJob                  string   `cli:"acquire-job"`
-	DisconnectAfterJob          bool     `cli:"disconnect-after-job"`
-	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
-	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
-	CancelGracePeriod           int      `cli:"cancel-grace-period"`
-	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
-	JobLogPath                  string   `cli:"job-log-path" normalize:"filepath"`
-	WriteJobLogsToStdout        bool     `cli:"write-job-logs-to-stdout"`
-	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
-	SocketsPath                 string   `cli:"sockets-path" normalize:"filepath"`
-	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
-	Shell                       string   `cli:"shell"`
-	Tags                        []string `cli:"tags" normalize:"list"`
-	TagsFromEC2MetaData         bool     `cli:"tags-from-ec2-meta-data"`
-	TagsFromEC2MetaDataPaths    []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
-	TagsFromEC2Tags             bool     `cli:"tags-from-ec2-tags"`
-	TagsFromECSMetaData         bool     `cli:"tags-from-ecs-meta-data"`
-	TagsFromGCPMetaData         bool     `cli:"tags-from-gcp-meta-data"`
-	TagsFromGCPMetaDataPaths    []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
-	TagsFromGCPLabels           bool     `cli:"tags-from-gcp-labels"`
-	TagsFromHost                bool     `cli:"tags-from-host"`
-	WaitForEC2TagsTimeout       string   `cli:"wait-for-ec2-tags-timeout"`
-	WaitForEC2MetaDataTimeout   string   `cli:"wait-for-ec2-meta-data-timeout"`
-	WaitForECSMetaDataTimeout   string   `cli:"wait-for-ecs-meta-data-timeout"`
-	WaitForGCPLabelsTimeout     string   `cli:"wait-for-gcp-labels-timeout"`
-	GitCheckoutFlags            string   `cli:"git-checkout-flags"`
-	GitCloneFlags               string   `cli:"git-clone-flags"`
-	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
-	GitCleanFlags               string   `cli:"git-clean-flags"`
-	GitFetchFlags               string   `cli:"git-fetch-flags"`
-	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules             bool     `cli:"no-git-submodules"`
-	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval               bool     `cli:"no-command-eval"`
-	NoLocalHooks                bool     `cli:"no-local-hooks"`
-	NoPlugins                   bool     `cli:"no-plugins"`
-	NoPluginValidation          bool     `cli:"no-plugin-validation"`
-	NoPTY                       bool     `cli:"no-pty"`
-	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
-	NoANSITimestamps            bool     `cli:"no-ansi-timestamps"`
-	TimestampLines              bool     `cli:"timestamp-lines"`
-	HealthCheckAddr             string   `cli:"health-check-addr"`
-	MetricsDatadog              bool     `cli:"metrics-datadog"`
-	MetricsDatadogHost          string   `cli:"metrics-datadog-host"`
-	MetricsDatadogDistributions bool     `cli:"metrics-datadog-distributions"`
-	TracingBackend              string   `cli:"tracing-backend"`
-	TracingServiceName          string   `cli:"tracing-service-name"`
-	Spawn                       int      `cli:"spawn"`
-	SpawnWithPriority           bool     `cli:"spawn-with-priority"`
-	LogFormat                   string   `cli:"log-format"`
-	CancelSignal                string   `cli:"cancel-signal"`
-	SignalGracePeriodSeconds    int      `cli:"signal-grace-period-seconds"`
-	RedactedVars                []string `cli:"redacted-vars" normalize:"list"`
+	Config string `cli:"config"`
+
+	Name              string   `cli:"name"`
+	Priority          string   `cli:"priority"`
+	Spawn             int      `cli:"spawn"`
+	SpawnWithPriority bool     `cli:"spawn-with-priority"`
+	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
+	CancelSignal      string   `cli:"cancel-signal"`
+
+	JobSigningKeyPath                       string `cli:"job-signing-key-path" normalize:"filepath"`
+	JobVerificationKeyPath                  string `cli:"job-verification-key-path" normalize:"filepath"`
+	JobVerificationNoSignatureBehavior      string `cli:"job-verification-no-signature-behavior"`
+	JobVerificationInvalidSignatureBehavior string `cli:"job-verification-invalid-signature-behavior"`
+
+	AcquireJob                 string `cli:"acquire-job"`
+	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
+	DisconnectAfterIdleTimeout int    `cli:"disconnect-after-idle-timeout"`
+	CancelGracePeriod          int    `cli:"cancel-grace-period"`
+	SignalGracePeriodSeconds   int    `cli:"signal-grace-period-seconds"`
+
+	EnableJobLogTmpfile bool   `cli:"enable-job-log-tmpfile"`
+	JobLogPath          string `cli:"job-log-path" normalize:"filepath"`
+
+	LogFormat            string `cli:"log-format"`
+	WriteJobLogsToStdout bool   `cli:"write-job-logs-to-stdout"`
+
+	BuildPath   string `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath   string `cli:"hooks-path" normalize:"filepath"`
+	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
+	PluginsPath string `cli:"plugins-path" normalize:"filepath"`
+
+	Shell           string `cli:"shell"`
+	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
+	NoPTY           bool   `cli:"no-pty"`
+
+	NoANSITimestamps bool `cli:"no-ansi-timestamps"`
+	TimestampLines   bool `cli:"timestamp-lines"`
+
+	Tags                      []string `cli:"tags" normalize:"list"`
+	TagsFromEC2MetaData       bool     `cli:"tags-from-ec2-meta-data"`
+	TagsFromEC2MetaDataPaths  []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
+	TagsFromEC2Tags           bool     `cli:"tags-from-ec2-tags"`
+	TagsFromECSMetaData       bool     `cli:"tags-from-ecs-meta-data"`
+	TagsFromGCPMetaData       bool     `cli:"tags-from-gcp-meta-data"`
+	TagsFromGCPMetaDataPaths  []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
+	TagsFromGCPLabels         bool     `cli:"tags-from-gcp-labels"`
+	TagsFromHost              bool     `cli:"tags-from-host"`
+	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
+	WaitForEC2MetaDataTimeout string   `cli:"wait-for-ec2-meta-data-timeout"`
+	WaitForECSMetaDataTimeout string   `cli:"wait-for-ecs-meta-data-timeout"`
+	WaitForGCPLabelsTimeout   string   `cli:"wait-for-gcp-labels-timeout"`
+
+	GitCheckoutFlags      string `cli:"git-checkout-flags"`
+	GitCloneFlags         string `cli:"git-clone-flags"`
+	GitCloneMirrorFlags   string `cli:"git-clone-mirror-flags"`
+	GitCleanFlags         string `cli:"git-clean-flags"`
+	GitFetchFlags         string `cli:"git-fetch-flags"`
+	GitMirrorsPath        string `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout int    `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
+	NoGitSubmodules       bool   `cli:"no-git-submodules"`
+
+	NoSSHKeyscan       bool `cli:"no-ssh-keyscan"`
+	NoCommandEval      bool `cli:"no-command-eval"`
+	NoLocalHooks       bool `cli:"no-local-hooks"`
+	NoPlugins          bool `cli:"no-plugins"`
+	NoPluginValidation bool `cli:"no-plugin-validation"`
+	NoFeatureReporting bool `cli:"no-feature-reporting"`
+
+	HealthCheckAddr string `cli:"health-check-addr"`
+
+	MetricsDatadog              bool   `cli:"metrics-datadog"`
+	MetricsDatadogHost          string `cli:"metrics-datadog-host"`
+	MetricsDatadogDistributions bool   `cli:"metrics-datadog-distributions"`
+	TracingBackend              string `cli:"tracing-backend"`
+	TracingServiceName          string `cli:"tracing-service-name"`
 
 	// Global flags
 	Debug             bool     `cli:"debug"`
@@ -559,6 +579,26 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
 			Value:  "buildkite-agent",
 		},
+		cli.StringFlag{
+			Name:   "job-verification-key-path",
+			Usage:  "Path to a file containing a verification key. Passing this flag enables job verification. For hmac-sha256, the raw file content is used as the shared key",
+			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_KEY_PATH",
+		},
+		cli.StringFlag{
+			Name:   "job-signing-key-path",
+			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
+			EnvVar: "BUILDKITE_PIPELINE_JOB_SIGNING_KEY_PATH",
+		},
+		cli.StringFlag{
+			Name:   "job-verification-no-signature-behavior",
+			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v", verificationFailureBehaviors),
+			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
+		},
+		cli.StringFlag{
+			Name:   "job-verification-invalid-signature-behavior",
+			Usage:  fmt.Sprintf("The behavior when a job is received, and the signature calculated is different from the one specified. One of: %v", verificationFailureBehaviors),
+			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_INVALID_SIGNATURE_BEHAVIOR",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -660,6 +700,16 @@ var AgentStartCommand = cli.Command{
 		if err != nil {
 			fmt.Printf("%s", err)
 			os.Exit(1)
+		}
+
+		if cfg.JobVerificationKeyPath != "" {
+			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationNoSignatureBehavior) {
+				l.Fatal("Invalid job verification no signature behavior %q. Must be one of: %v", cfg.JobVerificationNoSignatureBehavior, verificationFailureBehaviors)
+			}
+
+			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationInvalidSignatureBehavior) {
+				l.Fatal("Invalid job verification invalid signature behavior %q. Must be one of: %v", cfg.JobVerificationInvalidSignatureBehavior, verificationFailureBehaviors)
+			}
 		}
 
 		// Force some settings if on Windows (these aren't supported yet)
@@ -774,42 +824,46 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:            cfg.BootstrapScript,
-			BuildPath:                  cfg.BuildPath,
-			SocketsPath:                cfg.SocketsPath,
-			GitMirrorsPath:             cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:       cfg.GitMirrorsSkipUpdate,
-			HooksPath:                  cfg.HooksPath,
-			PluginsPath:                cfg.PluginsPath,
-			GitCheckoutFlags:           cfg.GitCheckoutFlags,
-			GitCloneFlags:              cfg.GitCloneFlags,
-			GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
-			GitCleanFlags:              cfg.GitCleanFlags,
-			GitFetchFlags:              cfg.GitFetchFlags,
-			GitSubmodules:              !cfg.NoGitSubmodules,
-			SSHKeyscan:                 !cfg.NoSSHKeyscan,
-			CommandEval:                !cfg.NoCommandEval,
-			PluginsEnabled:             !cfg.NoPlugins,
-			PluginValidation:           !cfg.NoPluginValidation,
-			LocalHooksEnabled:          !cfg.NoLocalHooks,
-			StrictSingleHooks:          cfg.StrictSingleHooks,
-			RunInPty:                   !cfg.NoPTY,
-			ANSITimestamps:             !cfg.NoANSITimestamps,
-			TimestampLines:             cfg.TimestampLines,
-			DisconnectAfterJob:         cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
-			CancelGracePeriod:          cfg.CancelGracePeriod,
-			SignalGracePeriod:          signalGracePeriod,
-			EnableJobLogTmpfile:        cfg.EnableJobLogTmpfile,
-			JobLogPath:                 cfg.JobLogPath,
-			WriteJobLogsToStdout:       cfg.WriteJobLogsToStdout,
-			LogFormat:                  cfg.LogFormat,
-			Shell:                      cfg.Shell,
-			RedactedVars:               cfg.RedactedVars,
-			AcquireJob:                 cfg.AcquireJob,
-			TracingBackend:             cfg.TracingBackend,
-			TracingServiceName:         cfg.TracingServiceName,
+			BootstrapScript:                         cfg.BootstrapScript,
+			BuildPath:                               cfg.BuildPath,
+			SocketsPath:                             cfg.SocketsPath,
+			GitMirrorsPath:                          cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:                   cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:                    cfg.GitMirrorsSkipUpdate,
+			HooksPath:                               cfg.HooksPath,
+			PluginsPath:                             cfg.PluginsPath,
+			GitCheckoutFlags:                        cfg.GitCheckoutFlags,
+			GitCloneFlags:                           cfg.GitCloneFlags,
+			GitCloneMirrorFlags:                     cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                           cfg.GitCleanFlags,
+			GitFetchFlags:                           cfg.GitFetchFlags,
+			GitSubmodules:                           !cfg.NoGitSubmodules,
+			SSHKeyscan:                              !cfg.NoSSHKeyscan,
+			CommandEval:                             !cfg.NoCommandEval,
+			PluginsEnabled:                          !cfg.NoPlugins,
+			PluginValidation:                        !cfg.NoPluginValidation,
+			LocalHooksEnabled:                       !cfg.NoLocalHooks,
+			StrictSingleHooks:                       cfg.StrictSingleHooks,
+			RunInPty:                                !cfg.NoPTY,
+			ANSITimestamps:                          !cfg.NoANSITimestamps,
+			TimestampLines:                          cfg.TimestampLines,
+			DisconnectAfterJob:                      cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:              cfg.DisconnectAfterIdleTimeout,
+			CancelGracePeriod:                       cfg.CancelGracePeriod,
+			SignalGracePeriod:                       signalGracePeriod,
+			EnableJobLogTmpfile:                     cfg.EnableJobLogTmpfile,
+			JobLogPath:                              cfg.JobLogPath,
+			WriteJobLogsToStdout:                    cfg.WriteJobLogsToStdout,
+			LogFormat:                               cfg.LogFormat,
+			Shell:                                   cfg.Shell,
+			RedactedVars:                            cfg.RedactedVars,
+			AcquireJob:                              cfg.AcquireJob,
+			TracingBackend:                          cfg.TracingBackend,
+			TracingServiceName:                      cfg.TracingServiceName,
+			JobSigningKeyPath:                       cfg.JobSigningKeyPath,
+			JobVerificationKeyPath:                  cfg.JobVerificationKeyPath,
+			JobVerificationNoSignatureBehavior:      cfg.JobVerificationNoSignatureBehavior,
+			JobVerificationInvalidSignatureBehavior: cfg.JobVerificationInvalidSignatureBehavior,
 		}
 
 		if loader.File != nil {

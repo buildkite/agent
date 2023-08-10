@@ -41,6 +41,9 @@ const (
 
 	// BuildkiteMessageName is the env var name of the build/commit message.
 	BuildkiteMessageName = "BUILDKITE_MESSAGE"
+
+	VerificationBehaviourWarn  = "warn"
+	VerificationBehaviourBlock = "block"
 )
 
 // Certain env can only be set by agent configuration.
@@ -105,6 +108,10 @@ type JobRunner struct {
 	// The configuration for the job runner
 	conf JobRunnerConfig
 
+	// How the JobRunner should respond in various signature failure modes
+	InvalidSignatureBehavior string
+	NoSignatureBehavior      string
+
 	// The logger to use
 	logger logger.Logger
 
@@ -156,6 +163,17 @@ func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (j
 		logger:    l,
 		conf:      conf,
 		apiClient: apiClient,
+	}
+
+	var err error
+	r.InvalidSignatureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.JobVerificationInvalidSignatureBehavior)
+	if err != nil {
+		return nil, fmt.Errorf("setting invalid signature behavior: %w", err)
+	}
+
+	r.NoSignatureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.JobVerificationNoSignatureBehavior)
+	if err != nil {
+		return nil, fmt.Errorf("setting no signature behavior: %w", err)
 	}
 
 	if conf.JobStatusInterval == 0 {
@@ -358,6 +376,22 @@ func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (j
 	return r, nil
 }
 
+func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, error) {
+	if r.conf.AgentConfiguration.JobVerificationKeyPath == "" {
+		// We won't be verifying jobs, so it doesn't matter
+		return "if you're seeing this string, there's a problem with the job verification code in the agent. contact support@buildkite.com", nil
+	}
+
+	switch behavior {
+	case VerificationBehaviourBlock, VerificationBehaviourWarn:
+		return behavior, nil
+	case "":
+		return VerificationBehaviourBlock, nil
+	default:
+		return "", fmt.Errorf("invalid job verification behavior: %q", behavior)
+	}
+}
+
 // Creates the environment variables that will be used in the process and writes a flat environment file
 func (r *JobRunner) createEnvironment() ([]string, error) {
 	// Create a clone of our jobs environment. We'll then set the
@@ -461,6 +495,11 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	// to propagate it if it's explicitly disabled.
 	if !r.conf.AgentConfiguration.RunInPty {
 		env["BUILDKITE_PTY"] = "false"
+	}
+
+	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
+	if r.conf.AgentConfiguration.JobSigningKeyPath != "" {
+		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_PATH"] = r.conf.AgentConfiguration.JobSigningKeyPath
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
@@ -575,97 +614,6 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 
 		return err
 	})
-}
-
-// finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
-// cannot return successfully, this will retry for a long time.
-func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit processExit, failedChunkCount int) error {
-	r.conf.Job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
-	r.conf.Job.ExitStatus = strconv.Itoa(exit.Status)
-	r.conf.Job.Signal = exit.Signal
-	r.conf.Job.SignalReason = exit.SignalReason
-	r.conf.Job.ChunksFailedCount = failedChunkCount
-
-	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
-		r.conf.Job.ExitStatus, r.conf.Job.Signal, r.conf.Job.SignalReason)
-
-	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
-	defer cancel()
-
-	return roko.NewRetrier(
-		roko.TryForever(),
-		roko.WithJitter(),
-		roko.WithStrategy(roko.Constant(1*time.Second)),
-	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.FinishJob(ctx, r.conf.Job)
-		if err != nil {
-			// If the API returns with a 422, that means that we
-			// succesfully tried to finish the job, but Buildkite
-			// rejected the finish for some reason. This can
-			// sometimes mean that Buildkite has cancelled the job
-			// before we get a chance to send the final API call
-			// (maybe this agent took too long to kill the
-			// process). In that case, we don't want to keep trying
-			// to finish the job forever so we'll just bail out and
-			// go find some more work to do.
-			if response != nil && response.StatusCode == 422 {
-				r.logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
-				retrier.Break()
-			} else {
-				r.logger.Warn("%s (%s)", err, retrier)
-			}
-		}
-
-		return err
-	})
-}
-
-// jobLogStreamer waits for the process to start, then grabs the job output
-// every few seconds and sends it back to Buildkite.
-func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
-	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Log Streamer")
-	defer done()
-	setStat("🏃 Starting...")
-
-	defer func() {
-		wg.Done()
-		r.logger.Debug("[JobRunner] Routine that processes the log has finished")
-	}()
-
-	select {
-	case <-r.process.Started():
-	case <-ctx.Done():
-		return
-	}
-
-	for {
-		setStat("📨 Sending process output to log streamer")
-
-		// Send the output of the process to the log streamer
-		// for processing
-		chunk := r.output.ReadAndTruncate()
-		if err := r.logStreamer.Process(chunk); err != nil {
-			r.logger.Error("Could not stream the log output: %v", err)
-			// So far, the only error from logStreamer.Process is if the log has
-			// reached the limit.
-			// Since we're not writing any more, close the buffer, which will
-			// cause future Writes to return an error.
-			r.output.Close()
-		}
-
-		setStat("😴 Sleeping for a bit")
-
-		// Sleep for a bit, or until the job is finished
-		select {
-		case <-time.After(1 * time.Second):
-		case <-ctx.Done():
-			return
-		case <-r.process.Done():
-			return
-		}
-	}
-
-	// The final output after the process has finished is processed in Run().
 }
 
 // jobCancellationChecker waits for the processs to start, then continuously
