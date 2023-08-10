@@ -46,6 +46,10 @@ steps:
           propagate-environment: true
           tmpfs:
             - "/root/.gnupg"
+    retry:
+      automatic:
+        - exit_status: 1
+          limit: 3
 
   - name: ":docker: Publish Edge Docker Images"
     command: ".buildkite/steps/publish-docker-images.sh"

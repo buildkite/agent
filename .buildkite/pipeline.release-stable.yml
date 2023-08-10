@@ -48,6 +48,10 @@ steps:
           propagate-environment: true
           volumes:
             - "/yum.buildkite.com"
+    retry:
+      automatic:
+        - exit_status: 1
+          limit: 3
 
   - name: ":debian: Publish Debian Package"
     command: ".buildkite/steps/publish-debian-package.sh"
