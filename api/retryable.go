@@ -5,10 +5,9 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"syscall"
-
-	"golang.org/x/exp/slices"
 )
 
 var retrableErrorSuffixes = []string{
