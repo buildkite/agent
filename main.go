@@ -68,7 +68,7 @@ func main() {
 		clicommand.AnnotateCommand,
 		{
 			Name:  "annotation",
-			Usage: "Make changes an annotation on the currently running build",
+			Usage: "Make changes to an annotation on the currently running build",
 			Subcommands: []cli.Command{
 				clicommand.AnnotationRemoveCommand,
 			},
