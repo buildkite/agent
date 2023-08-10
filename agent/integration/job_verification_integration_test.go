@@ -175,10 +175,10 @@ func TestJobVerification(t *testing.T) {
 	}
 }
 
-func symmetricJWKFor(t *testing.T, keyMaterial string) jwk.Key {
+func symmetricJWKFor(t *testing.T, payload string) jwk.Key {
 	t.Helper()
 
-	key, err := jwk.FromRaw([]byte(keyMaterial)) // calling FromRaw on a []byte will always yield a symmetric key
+	key, err := jwk.FromRaw([]byte(payload)) // calling FromRaw on a []byte will always yield a symmetric key
 	if err != nil {
 		t.Fatalf("creating jwk: %v", err)
 	}
@@ -188,7 +188,7 @@ func symmetricJWKFor(t *testing.T, keyMaterial string) jwk.Key {
 		t.Fatalf("setting alg: %v", err)
 	}
 
-	err = key.Set("kid", keyMaterial) // please don't make the id the key in real life
+	err = key.Set("kid", payload) // please don't make the id the key in real life
 	if err != nil {
 		t.Fatalf("setting kid: %v", err)
 	}

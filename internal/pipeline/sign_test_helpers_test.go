@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -49,6 +50,17 @@ func newECKeyPair(t *testing.T, alg jwa.SignatureAlgorithm, crv elliptic.Curve) 
 	priv, err := ecdsa.GenerateKey(crv, rand.Reader)
 	if err != nil {
 		t.Fatalf("failed to generate EC private key: %s", err)
+	}
+
+	return newKeyPair(t, alg, priv)
+}
+
+func newEdwardsKeyPair(t *testing.T, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) {
+	t.Helper()
+
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate Edwards private key: %s", err)
 	}
 
 	return newKeyPair(t, alg, priv)

@@ -17,28 +17,28 @@ func TestSignVerify(t *testing.T) {
 	}
 
 	cases := []struct {
-		name              string
-		generateSigner    func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set)
-		alg               jwa.SignatureAlgorithm
-		expectedSignature string
+		name                           string
+		generateSigner                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set)
+		alg                            jwa.SignatureAlgorithm
+		expectedDeterministicSignature string
 	}{
 		{
-			name:              "HMAC-SHA256",
-			generateSigner:    func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
-			alg:               jwa.HS256,
-			expectedSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..f5NQYQtR0Eg-0pzzCon2ykzGy5oDPYtQw0C0fTKGI38",
+			name:                           "HMAC-SHA256",
+			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
+			alg:                            jwa.HS256,
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..f5NQYQtR0Eg-0pzzCon2ykzGy5oDPYtQw0C0fTKGI38",
 		},
 		{
-			name:              "HMAC-SHA384",
-			generateSigner:    func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
-			alg:               jwa.HS384,
-			expectedSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..HgHltOlatth2TCc4swArP1UL_Zm2Rh2ccEC26s1sFBO6FOW5qfW37uQ9CHAz6dhh",
+			name:                           "HMAC-SHA384",
+			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
+			alg:                            jwa.HS384,
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..HgHltOlatth2TCc4swArP1UL_Zm2Rh2ccEC26s1sFBO6FOW5qfW37uQ9CHAz6dhh",
 		},
 		{
-			name:              "HMAC-SHA512",
-			generateSigner:    func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
-			alg:               jwa.HS512,
-			expectedSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..mcph5zwioGkmx-aPrxExzc9QRzO4afn_kK_89aEuo4xYD0tcUD8OJom09x2xcvK6eRkOpvVlkrKLBzvh-7uu6w",
+			name:                           "HMAC-SHA512",
+			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
+			alg:                            jwa.HS512,
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..mcph5zwioGkmx-aPrxExzc9QRzO4afn_kK_89aEuo4xYD0tcUD8OJom09x2xcvK6eRkOpvVlkrKLBzvh-7uu6w",
 		},
 		{
 			name:           "RSA-PSS 256",
@@ -70,6 +70,11 @@ func TestSignVerify(t *testing.T) {
 			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newECKeyPair(t, alg, elliptic.P521()) },
 			alg:            jwa.ES512,
 		},
+		{
+			name:           "EdDSA Ed25519",
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newEdwardsKeyPair(t, alg) },
+			alg:            jwa.EdDSA,
+		},
 	}
 
 	for _, tc := range cases {
@@ -80,20 +85,19 @@ func TestSignVerify(t *testing.T) {
 
 			sig, err := Sign(step, signer)
 			if err != nil {
-				t.Errorf("Sign(CommandStep, signer) error = %v", err)
+				t.Fatalf("Sign(CommandStep, signer) error = %v", err)
 			}
 
 			if sig.Algorithm != tc.alg.String() {
 				t.Errorf("Signature.Algorithm = %v, want %v", sig.Algorithm, tc.alg)
 			}
 
-			if !strings.HasPrefix(tc.alg.String(), "PS") && !strings.HasPrefix(tc.alg.String(), "ES") {
-				// It's impossible to generate deterministic RSA or ECDSA keys in golang (using the stdlib anyway - third party
-				// libraries not withstanding), even with a seeded random source, so we can't test against the signature value
-				// for asymmetric key algorithms. We can (and do) still check that we can verify the signature, though.
-				// See: https://github.com/golang/go/issues/58637#issuecomment-1600627963
-				if sig.Value != tc.expectedSignature {
-					t.Errorf("Signature.Value = %v, want %v", sig.Value, tc.expectedSignature)
+			if strings.HasPrefix(tc.alg.String(), "HS") {
+				// Of all of the RFC7518 and RFC8037 JWA signing algorithms, only HMAC-SHA* (HS***) are deterministic
+				// This means for all other algorithms, the signature value will be different each time, so we can't test
+				// against it. We still verify that we can verify the signature, though.
+				if sig.Value != tc.expectedDeterministicSignature {
+					t.Errorf("Signature.Value = %v, want %v", sig.Value, tc.expectedDeterministicSignature)
 				}
 			}
 

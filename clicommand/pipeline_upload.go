@@ -464,7 +464,7 @@ func searchForSecrets(l logger.Logger, cfg *PipelineUploadConfig, environ map[st
 }
 
 func validateJWK(key jwk.Key, alg jwa.SignatureAlgorithm) error {
-	validKeyTypes := []jwa.KeyType{jwa.RSA, jwa.EC, jwa.OctetSeq}
+	validKeyTypes := []jwa.KeyType{jwa.RSA, jwa.EC, jwa.OctetSeq, jwa.OKP}
 	if !slices.Contains(validKeyTypes, key.KeyType()) {
 		return fmt.Errorf("unsupported key type %s. Key type must be one of %v", key.KeyType(), validKeyTypes)
 	}
@@ -473,6 +473,7 @@ func validateJWK(key jwk.Key, alg jwa.SignatureAlgorithm) error {
 		jwa.RSA:      {jwa.RS256, jwa.RS384, jwa.RS512, jwa.PS256, jwa.PS384, jwa.PS512},
 		jwa.EC:       {jwa.ES256, jwa.ES384, jwa.ES512},
 		jwa.OctetSeq: {jwa.HS256, jwa.HS384, jwa.HS512},
+		jwa.OKP:      {jwa.EdDSA},
 	}
 
 	if !slices.Contains(validAlgsForType[key.KeyType()], alg) {
