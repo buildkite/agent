@@ -1,4 +1,4 @@
-package replacer
+package replacer_test
 
 import (
 	"sort"
