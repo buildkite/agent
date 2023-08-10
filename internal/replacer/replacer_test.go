@@ -142,7 +142,6 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 			want:    "Lorem [REDACTED] dolor sit amet",
 		},
 		{
-
 			desc: "Break stream mid-secret with pending redaction",
 			// "um do" is marked as a redacted range, but because "ipsum dolor"
 			// is incomplete, [REDACTED] isn't written out yet. Later,
@@ -162,6 +161,7 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
 			var buf strings.Builder
 
 			replacer := replacer.New(&buf, test.needles, redact.Redact)
