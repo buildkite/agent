@@ -19,6 +19,8 @@ import (
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
+	t.Parallel()
+
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
@@ -45,6 +47,8 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 }
 
 func TestRunAndCaptureWithExitCode(t *testing.T) {
+	t.Parallel()
+
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
@@ -70,6 +74,8 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
+	t.Parallel()
+
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
@@ -105,6 +111,8 @@ func TestRun(t *testing.T) {
 }
 
 func TestRunWithStdin(t *testing.T) {
+	t.Parallel()
+
 	out := &bytes.Buffer{}
 	sh := newShellForTest(t)
 	sh.Writer = out
@@ -118,6 +126,8 @@ func TestRunWithStdin(t *testing.T) {
 }
 
 func TestContextCancelTerminates(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Not supported in windows")
 	}
@@ -152,6 +162,8 @@ func TestContextCancelTerminates(t *testing.T) {
 }
 
 func TestInterrupt(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Not supported in windows")
 	}
@@ -190,6 +202,8 @@ func TestInterrupt(t *testing.T) {
 }
 
 func TestDefaultWorkingDirFromSystem(t *testing.T) {
+	t.Parallel()
+
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
@@ -205,6 +219,8 @@ func TestDefaultWorkingDirFromSystem(t *testing.T) {
 }
 
 func TestWorkingDir(t *testing.T) {
+	t.Parallel()
+
 	tempDir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {
 		t.Fatalf(`os.MkdirTemp("", "shelltest") error = %v`, err)
@@ -282,6 +298,8 @@ func TestWorkingDir(t *testing.T) {
 }
 
 func TestLockFileRetriesAndTimesOut(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Flakey on windows")
 	}
@@ -335,6 +353,8 @@ func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 
 // TestAcquiringLockHelperProcess isn't a real test. It's used as a helper process
 func TestAcquiringLockHelperProcess(t *testing.T) {
+	t.Parallel()
+
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
 		return
 	}
@@ -353,6 +373,7 @@ func TestAcquiringLockHelperProcess(t *testing.T) {
 }
 
 func newShellForTest(t *testing.T) *shell.Shell {
+	t.Helper()
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
@@ -362,6 +383,8 @@ func newShellForTest(t *testing.T) *shell.Shell {
 }
 
 func TestRunWithoutPrompt(t *testing.T) {
+	t.Parallel()
+
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
@@ -383,6 +406,8 @@ func TestRunWithoutPrompt(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		in      time.Duration
 		want    time.Duration
@@ -405,12 +430,16 @@ func TestRound(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := shell.Round(tt.in)
-		if got != tt.want {
-			t.Errorf("shell.Round(%v): got %v, want %v", tt.in, got, tt.want)
-		}
-		if got.String() != tt.wantStr {
-			t.Errorf("shell.Round(%v): got %q, want %v", tt.in, got.String(), tt.wantStr)
-		}
+		tt := tt
+		t.Run(tt.wantStr, func(t *testing.T) {
+			t.Parallel()
+			got := shell.Round(tt.in)
+			if got != tt.want {
+				t.Errorf("shell.Round(%v): got %v, want %v", tt.in, got, tt.want)
+			}
+			if got.String() != tt.wantStr {
+				t.Errorf("shell.Round(%v): got %q, want %v", tt.in, got.String(), tt.wantStr)
+			}
+		})
 	}
 }
