@@ -13,10 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/detector"
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/olfactor"
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
+	"gotest.tools/v3/assert"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
@@ -321,7 +322,7 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	if err != nil {
 		t.Errorf("acquireLockInOtherProcess(%q) error = %v", lockPath, err)
 	}
-	defer cmd.Process.Kill()
+	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
 
 	timeout := time.Second * 2
 	if _, err := sh.LockFile(context.Background(), lockPath, timeout); err != context.DeadlineExceeded {
@@ -383,57 +384,72 @@ func newShellForTest(t *testing.T) *shell.Shell {
 	return sh
 }
 
-func TestRunWithoutPromptAndDectectInStream(t *testing.T) {
+func TestRunWithoutPromptWithOlfactor(t *testing.T) {
 	t.Parallel()
 
 	for _, test := range []struct {
-		name     string
-		detectee string
-		command  []string
-		output   string
-		exitCode int
+		name        string
+		smell       string
+		expectSmell bool
+		command     []string
+		output      string
+		exitCode    int
 	}{
 		{
-			name:     "detects_noting",
-			detectee: "hi",
-			command:  []string{"bash", "-c", "echo hi"},
-			output:   "hi\n",
-			exitCode: 0,
+			name:        "smells_nothing_when_no_error",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo hi"},
+			output:      "hi\n",
+			exitCode:    0,
 		},
 		{
-			name:     "detects_stdout",
-			detectee: "hi",
-			command:  []string{"bash", "-c", "echo hi; false"},
-			output:   "hi\n",
-			exitCode: 1,
+			name:        "smells_stdout",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo hi; false"},
+			output:      "hi\n",
+			exitCode:    1,
 		},
 		{
-			name:     "detects_stderr",
-			detectee: "hi",
-			command:  []string{"bash", "-c", "echo hi >&2; false"},
-			output:   "hi\n",
-			exitCode: 1,
+			name:        "smells_stderr",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo hi >&2; false"},
+			output:      "hi\n",
+			exitCode:    1,
 		},
 		{
-			name:     "detects_infix",
-			detectee: "hi",
-			command:  []string{"bash", "-c", "echo lorem ipsum; echo hi; echo bye; false"},
-			output:   "lorem ipsum\nhi\nbye\n",
-			exitCode: 1,
+			name:        "smells_infix",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo lorem ipsum; echo hi; echo bye; false"},
+			output:      "lorem ipsum\nhi\nbye\n",
+			exitCode:    1,
 		},
 		{
-			name:     "detects_infix_inline",
-			detectee: "hi",
-			command:  []string{"bash", "-c", "echo lorem hipsum; echo bye; false"},
-			output:   "lorem hipsum\nbye\n",
-			exitCode: 1,
+			name:        "smells_infix_inline",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo lorem hipsum; echo bye; false"},
+			output:      "lorem hipsum\nbye\n",
+			exitCode:    1,
 		},
 		{
-			name:     "detects_partial",
-			detectee: "hi",
-			command:  []string{"bash", "-c", "echo hi, how are you; false"},
-			output:   "hi, how are you\n",
-			exitCode: 1,
+			name:        "smells_partial",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo hi, how are you; false"},
+			output:      "hi, how are you\n",
+			exitCode:    1,
+		},
+		{
+			name:        "no_smell",
+			smell:       "hi",
+			expectSmell: false,
+			command:     []string{"bash", "-ec", "echo bye, how were you; false"},
+			output:      "bye, how were you\n",
+			exitCode:    1,
 		},
 	} {
 		test := test
@@ -441,39 +457,31 @@ func TestRunWithoutPromptAndDectectInStream(t *testing.T) {
 			t.Parallel()
 
 			sh, err := shell.New()
-			if err != nil {
-				t.Fatalf("shell.New() error = %v", err)
-			}
+			assert.NilError(t, err)
+
 			out := &bytes.Buffer{}
 			sh.Writer = out
-
-			if err := sh.RunWithoutPromptAndDectectInStream(
+			if err := sh.RunWithOlfactor(
 				context.Background(),
-				test.detectee,
+				test.smell,
 				test.command[0],
 				test.command[1:]...,
-			); err == nil && test.exitCode != 0 {
+			); err == nil {
 				// if there is no error, we expect an 0 exit code
-				t.Errorf("sh.RunWithoutPrompt(echo hi; false) = nil, expected err w/ exit status %d", test.exitCode)
-			} else if derr := new(detector.DetectedErr); !errors.As(err, &derr) {
-				// if there is an error, we expect a DetectedErr
-				t.Errorf("sh.RunWithoutPrompt(echo hi; false) = %v, expected DetectedErr", err)
-			} else if derr.Detectee != test.detectee {
-				// if there is a detectErr, we expect the detectee to be the same as the test.detectee
-				t.Errorf(
-					"sh.RunWithoutPrompt(echo hi; false) detected = %q, want %q",
-					derr.Detectee,
-					test.detectee,
+				assert.Check(t, test.exitCode == 0)
+			} else if derr := new(olfactor.OlfactoryError); !errors.As(err, &derr) {
+				assert.Check(t, !test.expectSmell, "no smell detected, but %s was expected", test.smell)
+				assert.ErrorContains(t, err, "exit status 1")
+			} else {
+				// if there was a OlfactoryError, we expect the smell to match the test.smell
+				// and the exit code to match the test.exitCode
+				assert.ErrorIs(
+					t,
+					olfactor.NewOlfactoryError(test.smell, newFakeExitError(test.exitCode)),
+					err,
 				)
-			} else if eerr := new(exec.ExitError); !errors.As(derr, &eerr) && eerr.ExitCode() != test.exitCode {
-				// if there is a mathcing DetectedErr, we expect the wrapped ExitError to have the
-				// same exit code as the test.exitCode
-				t.Errorf("sh.RunWithoutPrompt(echo hi; false) = %v, expected exit 1", err)
 			}
-
-			if got, want := out.String(), test.output; got != want {
-				t.Errorf("sh.RunWithoutPrompt(echo hi) output = %q, want %q", got, want)
-			}
+			assert.Equal(t, test.output, out.String())
 		})
 	}
 }

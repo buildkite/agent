@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/detector"
+	"github.com/buildkite/agent/v3/internal/olfactor"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
@@ -274,23 +274,32 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 	})
 }
 
-// RunWithoutPromptButRetainOnError runs a command, writes stdout and err to the logger,
-// and returns an error if it fails. It doesn't show a prompt. If the process exits with a non-zero
-// exit code, and `retain` was printed on the shell (i.e. the combined stream of stdout and stderr),
-// the error can be used to determin this.
-func (s *Shell) RunWithoutPromptAndDectectInStream(
+// RunWithOlfactor runs a command, writes stdout and stderr to the shell's writer,
+// and returns an error if it fails. If the process exits with a non-zero exit code,
+// and `smell` was written to the logger (i.e. the combined stream of stdout and stderr),
+// the error will be of type `olfactor.OlfactoryError`. If the process exits 0, the error
+// will be nil.
+func (s *Shell) RunWithOlfactor(
 	ctx context.Context,
-	detectee string,
+	smell string,
 	command string,
 	arg ...string,
 ) error {
+	formatted := process.FormatCommand(command, arg)
+	if s.stdin == nil {
+		s.Promptf("%s", formatted)
+	} else {
+		// bash-syntax-compatible indication that input is coming from somewhere
+		s.Promptf("%s < /dev/stdin", formatted)
+	}
+
 	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
 	}
 
-	w, d := detector.New(io.Discard, detectee)
+	w, o := olfactor.New(io.Discard, smell)
 	mw := io.MultiWriter(s.Writer, w)
 
 	if err := s.executeCommand(ctx, cmd, mw, executeFlags{
@@ -298,8 +307,8 @@ func (s *Shell) RunWithoutPromptAndDectectInStream(
 		Stderr: true,
 		PTY:    s.PTY,
 	}); err != nil {
-		if d.Detected() {
-			return detector.NewDetectedErr(detectee, err)
+		if o.Smelt() {
+			return olfactor.NewOlfactoryError(smell, err)
 		}
 		return err
 	}
