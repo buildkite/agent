@@ -20,20 +20,20 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
-
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/detector"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
+	"github.com/opentracing/opentracing-go"
 )
 
-var (
-	lockRetryDuration = time.Second
-)
+const lockRetryDuration = time.Second
+
+var ErrShellNotStarted = errors.New("shell not started")
 
 // Shell represents a virtual shell, handles logging, executing commands and
 // provides hooks for capturing output and exit conditions.
@@ -180,7 +180,7 @@ func (s *Shell) WaitStatus() (process.WaitStatus, error) {
 	defer s.cmdLock.Unlock()
 
 	if s.cmd == nil || s.cmd.proc == nil {
-		return nil, errors.New("shell not started")
+		return nil, ErrShellNotStarted
 	}
 	return s.cmd.proc.WaitStatus(), nil
 }
@@ -190,8 +190,13 @@ type LockFile interface {
 	Unlock() error
 }
 
-func (s *Shell) flock(ctx context.Context, path string, timeout time.Duration) (*flock.Flock, error) {
-	absolutePathToLock, err := filepath.Abs(path + "f") // + "f" to ensure that flocks and lockfiles never share a filename
+func (s *Shell) flock(
+	ctx context.Context,
+	path string,
+	timeout time.Duration,
+) (*flock.Flock, error) {
+	// + "f" to ensure that flocks and lockfiles never share a filename
+	absolutePathToLock, err := filepath.Abs(path + "f")
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
 	}
@@ -267,6 +272,39 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 		Stderr: true,
 		PTY:    s.PTY,
 	})
+}
+
+// RunWithoutPromptButRetainOnError runs a command, writes stdout and err to the logger,
+// and returns an error if it fails. It doesn't show a prompt. If the process exits with a non-zero
+// exit code, and `retain` was printed on the shell (i.e. the combined stream of stdout and stderr),
+// the error can be used to determin this.
+func (s *Shell) RunWithoutPromptAndDectectInStream(
+	ctx context.Context,
+	detectee string,
+	command string,
+	arg ...string,
+) error {
+	cmd, err := s.buildCommand(command, arg...)
+	if err != nil {
+		s.Errorf("Error building command: %v", err)
+		return err
+	}
+
+	w, d := detector.New(io.Discard, detectee)
+	mw := io.MultiWriter(s.Writer, w)
+
+	if err := s.executeCommand(ctx, cmd, mw, executeFlags{
+		Stdout: true,
+		Stderr: true,
+		PTY:    s.PTY,
+	}); err != nil {
+		if d.Detected() {
+			return detector.NewDetectedErr(detectee, err)
+		}
+		return err
+	}
+
+	return nil
 }
 
 // RunWithoutPrompt runs a command, writes stdout and err to the logger,
@@ -487,7 +525,12 @@ func round(d time.Duration) time.Duration {
 	}
 }
 
-func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, flags executeFlags) error {
+func (s *Shell) executeCommand(
+	ctx context.Context,
+	cmd *command,
+	w io.Writer,
+	flags executeFlags,
+) error {
 	// Combine the two slices of env, let the latter overwrite the former
 	tracedEnv := env.FromSlice(cmd.Env)
 	s.injectTraceCtx(ctx, tracedEnv)
