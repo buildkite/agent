@@ -2,7 +2,6 @@ package clicommand
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
@@ -10,8 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
@@ -363,30 +360,8 @@ var BootstrapCommand = cli.Command{
 		StrictSingleHooksFlag,
 	},
 	Action: func(c *cli.Context) {
-		// The configuration will be loaded into this struct
-		cfg := BootstrapConfig{}
-
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(&cfg)
-
-		// Now that we have a logger, log out the warnings that loading config generated
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Enable experiments
-		for _, name := range cfg.Experiments {
-			experiments.EnableWithWarnings(l, name)
-		}
-
-		// Handle profiling flag
-		done := HandleProfileFlag(l, cfg)
+		ctx := context.Background()
+		cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](c)
 		defer done()
 
 		// Turn of PTY support if we're on Windows
@@ -464,7 +439,7 @@ var BootstrapCommand = cli.Command{
 			TracingServiceName:           cfg.TracingServiceName,
 		})
 
-		ctx, cancel := context.WithCancel(context.Background())
+		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
 		signals := make(chan os.Signal, 1)
@@ -499,7 +474,7 @@ var BootstrapCommand = cli.Command{
 		}()
 
 		// Run the bootstrap and get the exit code
-		exitCode := bootstrap.Run(ctx)
+		exitCode := bootstrap.Run(cctx)
 
 		signalMu.Lock()
 		defer signalMu.Unlock()

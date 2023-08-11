@@ -39,7 +39,17 @@ Examples:
    $ echo '{"ALPACA":"Geronimo the Incredible","LLAMA":"Kuzco"}' | buildkite-agent env set --input-format=json --output-format=quiet -
 `
 
-type EnvSetConfig struct{}
+type EnvSetConfig struct {
+	InputFormat  string `cli:"input-format"`
+	OutputFormat string `cli:"output-format"`
+
+	// Global flags
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
+}
 
 var EnvSetCommand = cli.Command{
 	Name:        "set",
@@ -58,17 +68,25 @@ var EnvSetCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_ENV_SET_OUTPUT_FORMAT",
 			Value:  "plain",
 		},
+
+		// Global flags
+		NoColorFlag,
+		DebugFlag,
+		LogLevelFlag,
+		ExperimentsFlag,
+		ProfileFlag,
 	},
 	Action: envSetAction,
 }
 
 func envSetAction(c *cli.Context) error {
 	ctx := context.Background()
+	cfg, l, _, done := setupLoggerAndConfig[EnvSetConfig](c)
+	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, envClientErrMessage, err)
-		os.Exit(1)
+		l.Fatal(envClientErrMessage, err)
 	}
 
 	req := &jobapi.EnvUpdateRequest{
@@ -77,7 +95,7 @@ func envSetAction(c *cli.Context) error {
 
 	var parse func(string) error
 
-	switch c.String("input-format") {
+	switch cfg.InputFormat {
 	case "plain":
 		parse = func(input string) error {
 			e, v, ok := env.Split(input)
@@ -95,41 +113,38 @@ func envSetAction(c *cli.Context) error {
 		}
 
 	default:
-		fmt.Fprintf(c.App.ErrWriter, "Invalid input format %q\n", c.String("input-format"))
+		l.Fatal("Invalid input format %q\n", c.String("input-format"))
 	}
 
 	// Inspect each arg, which could either be "-" for stdin, or "KEY=value"
 	for _, arg := range c.Args() {
 		if arg == "-" {
-			// Parse standard input
+			// TODO: replace with c.App.Reader (or something like that) when we upgrade to urfave/cli v3
 			sc := bufio.NewScanner(os.Stdin)
 			line := 1
 			for sc.Scan() {
 				if err := parse(sc.Text()); err != nil {
-					fmt.Fprintf(c.App.ErrWriter, "Couldn't parse input line %d: %v\n", line, err)
-					os.Exit(1)
+					l.Fatal("Couldn't parse input line %d: %v\n", line, err)
 				}
 				line++
 			}
 			if err := sc.Err(); err != nil {
-				fmt.Fprintf(c.App.ErrWriter, "Couldn't scan the input buffer: %v\n", err)
-				os.Exit(1)
+				l.Fatal("Couldn't scan the input buffer: %v\n", err)
 			}
 			continue
 		}
 		// Parse args directly
 		if err := parse(arg); err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Couldn't parse the command-line argument %q: %v\n", arg, err)
-			os.Exit(1)
+			l.Fatal("Couldn't parse the command-line argument %q: %v\n", arg, err)
 		}
 	}
 
 	resp, err := client.EnvUpdate(ctx, req)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Couldn't update the job executor environment: %v\n", err)
+		l.Error("Couldn't update the job executor environment: %v\n", err)
 	}
 
-	switch c.String("output-format") {
+	switch cfg.OutputFormat {
 	case "quiet":
 		return nil
 
@@ -156,12 +171,11 @@ func envSetAction(c *cli.Context) error {
 			enc.SetIndent("", "  ")
 		}
 		if err := enc.Encode(resp); err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Error marshalling JSON: %v\n", err)
-			os.Exit(1)
+			l.Fatal("Error marshalling JSON: %v\n", err)
 		}
 
 	default:
-		fmt.Fprintf(c.App.ErrWriter, "Invalid output format %q\n", c.String("output-format"))
+		l.Fatal("Invalid output format %q\n", c.String("output-format"))
 	}
 
 	return nil

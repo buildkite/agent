@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -95,26 +93,7 @@ var OIDCRequestTokenCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-
-		// The configuration will be loaded into this struct
-		cfg := OIDCTokenConfig{}
-
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(&cfg)
-
-		// Now that we have a logger, log out the warnings that loading config generated
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Setup any global configuration options
-		done := HandleGlobalFlags(l, cfg)
+		cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](c)
 		defer done()
 
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
@@ -140,6 +119,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			}
 
 			var resp *api.Response
+			var err error
 			token, resp, err = client.OIDCToken(ctx, req)
 			if resp != nil {
 				switch resp.StatusCode {
@@ -164,7 +144,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			return err
 		}
 
-		fmt.Println(token.Token)
-		return nil
+		_, err := fmt.Fprintln(c.App.Writer, token.Token)
+		return err
 	},
 }

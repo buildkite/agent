@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
 )
@@ -15,12 +14,12 @@ const lockGetHelpDescription = `Usage:
    buildkite-agent lock get [key]
 
 Description:
-   Retrieves the value of a lock key. Any key not in use returns an empty 
+   Retrieves the value of a lock key. Any key not in use returns an empty
    string.
-   
+
    Note that this subcommand is only available when an agent has been started
    with the ′agent-api′ experiment enabled.
-   
+
    ′lock get′ is generally only useful for inspecting lock state, as the value
    can change concurrently. To acquire or release a lock, use ′lock acquire′ and
    ′lock release′.
@@ -36,13 +35,20 @@ type LockGetConfig struct {
 	// Common config options
 	LockScope   string `cli:"lock-scope"`
 	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
+
+	// Global flags
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
 }
 
 var LockGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Gets a lock value from the agent leader",
 	Description: lockGetHelpDescription,
-	Flags:       lockCommonFlags,
+	Flags:       append(globalFlags(), lockCommonFlags...),
 	Action:      lockGetAction,
 }
 
@@ -53,39 +59,22 @@ func lockGetAction(c *cli.Context) error {
 	}
 	key := c.Args()[0]
 
-	// Load the configuration
-	cfg := LockGetConfig{}
-	loader := cliconfig.Loader{
-		CLI:                    c,
-		Config:                 &cfg,
-		DefaultConfigFilePaths: DefaultConfigFilePaths(),
-	}
-	warnings, err := loader.Load()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %s\n", err)
-		os.Exit(1)
-	}
-	for _, warning := range warnings {
-		fmt.Fprintln(c.App.ErrWriter, warning)
-	}
+	ctx := context.Background()
+	cfg, l, _, done := setupLoggerAndConfig[LockGetConfig](c)
+	defer done()
 
 	if cfg.LockScope != "machine" {
-		fmt.Fprintln(c.App.Writer, "Only 'machine' scope for locks is supported in this version.")
-		os.Exit(1)
+		l.Fatal("Only 'machine' scope for locks is supported in this version.")
 	}
 
-	ctx := context.Background()
-
-	cli, err := lock.NewClient(ctx, cfg.SocketsPath)
+	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, lockClientErrMessage, err)
-		os.Exit(1)
+		l.Fatal(lockClientErrMessage, err)
 	}
 
-	v, err := cli.Get(ctx, key)
+	v, err := client.Get(ctx, key)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Couldn't get lock state: %v\n", err)
-		os.Exit(1)
+		l.Fatal("Couldn't get lock state: %v", err)
 	}
 
 	fmt.Fprintln(c.App.Writer, v)

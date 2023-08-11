@@ -18,7 +18,6 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/internal/agentapi"
@@ -225,7 +224,7 @@ func DefaultShell() string {
 	}
 }
 
-func DefaultConfigFilePaths() (paths []string) {
+func defaultConfigFilePaths() (paths []string) {
 	// Toggle beetwen windows and *nix paths
 	if runtime.GOOS == "windows" {
 		paths = []string{
@@ -661,45 +660,14 @@ var AgentStartCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-
-		// The configuration will be loaded into this struct
-		cfg := AgentStartConfig{}
-
-		// Setup the config loader. You'll see that we also path paths to
-		// potential config files. The loader will use the first one it finds.
-		loader := cliconfig.Loader{
-			CLI:                    c,
-			Config:                 &cfg,
-			DefaultConfigFilePaths: DefaultConfigFilePaths(),
-		}
-
-		// Load the configuration
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %s\n", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(cfg)
-		// Add this when using JSON output to help differentiate agent vs job logs.
-		if cfg.LogFormat == "json" {
-			l = l.WithFields(logger.StringField("source", "agent"))
-		}
-
-		// Show warnings now we have a logger
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Setup any global configuration options
-		done := HandleGlobalFlags(l, cfg)
+		cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](c, withConfigFilePaths(
+			defaultConfigFilePaths(),
+		))
 		defer done()
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
-		err = UnsetConfigFromEnvironment(c)
-		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
+		if err := UnsetConfigFromEnvironment(c); err != nil {
+			l.Fatal("Failed to unset config from environment: %v", err)
 		}
 
 		if cfg.JobVerificationKeyPath != "" {
@@ -727,8 +695,8 @@ var AgentStartCommand = cli.Command{
 		}
 
 		isSetNoPlugins := c.IsSet("no-plugins")
-		if loader.File != nil {
-			if _, exists := loader.File.Config["no-plugins"]; exists {
+		if configFile != nil {
+			if _, exists := configFile.Config["no-plugins"]; exists {
 				isSetNoPlugins = true
 			}
 		}
@@ -866,8 +834,8 @@ var AgentStartCommand = cli.Command{
 			JobVerificationInvalidSignatureBehavior: cfg.JobVerificationInvalidSignatureBehavior,
 		}
 
-		if loader.File != nil {
-			agentConf.ConfigPath = loader.File.Path
+		if configFile != nil {
+			agentConf.ConfigPath = configFile.Path
 		}
 
 		if cfg.LogFormat == "text" {

@@ -102,13 +102,13 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 		}
 
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", socketToken))
-
 		resp, err = client.Do(req)
 		if err != nil {
 			t.Errorf("sending patch request: %v", err)
 			c.Exit(1)
 			return
 		}
+		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)

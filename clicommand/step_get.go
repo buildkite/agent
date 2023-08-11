@@ -3,11 +3,9 @@ package clicommand
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -89,28 +87,9 @@ var StepGetCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-
-		// The configuration will be loaded into this struct
-		cfg := StepGetConfig{}
-
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(&cfg)
-
-		// Now that we have a logger, log out the warnings that loading config generated
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Setup any global configuration options
-		done := HandleGlobalFlags(l, cfg)
+		cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](c)
 		defer done()
 
 		// Create the API client
@@ -126,10 +105,11 @@ var StepGetCommand = cli.Command{
 		// Find the step attribute
 		var resp *api.Response
 		var stepExportResponse *api.StepExportResponse
-		err = roko.NewRetrier(
+		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			var err error
 			stepExportResponse, resp, err = client.StepExport(ctx, cfg.StepOrKey, stepExportRequest)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
@@ -140,14 +120,12 @@ var StepGetCommand = cli.Command{
 				return err
 			}
 			return nil
-		})
-
-		// Deal with the error if we got one
-		if err != nil {
+		}); err != nil {
 			l.Fatal("Failed to get step: %s", err)
 		}
 
 		// Output the value to STDOUT
-		fmt.Print(stepExportResponse.Output)
+		_, err := fmt.Println(c.App.Writer, stepExportResponse.Output)
+		return err
 	},
 }
