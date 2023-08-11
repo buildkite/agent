@@ -381,11 +381,6 @@ func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (j
 }
 
 func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, error) {
-	// if r.conf.AgentConfiguration.JobVerificationKeyPath == "" {
-	// 	// We won't be verifying jobs, so it doesn't matter
-	// 	return "if you're seeing this string, there's a problem with the job verification code in the agent. contact support@buildkite.com", nil
-	// }
-
 	switch behavior {
 	case VerificationBehaviourBlock, VerificationBehaviourWarn:
 		return behavior, nil
