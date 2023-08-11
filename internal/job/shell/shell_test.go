@@ -316,26 +316,12 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 
 	lockPath := filepath.Join(dir, "my.lock")
 
-	// acquire a lock in another process
 	cmd, err := acquireLockInOtherProcess(lockPath)
-	if err != nil {
-		t.Errorf("acquireLockInOtherProcess(%q) error = %v", lockPath, err)
-	}
+	assert.NilError(t, err)
 	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
 
-	timeout := time.Second * 2
-	if _, err := sh.LockFile(
-		context.Background(),
-		lockPath,
-		timeout,
-	); errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf(
-			"sh.LockFile(%q, %v) error = %v, want context.DeadlineExceeded",
-			lockPath,
-			timeout,
-			err,
-		)
-	}
+	_, err = sh.LockFile(context.Background(), lockPath, 2*time.Second)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
