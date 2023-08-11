@@ -232,6 +232,16 @@ func (r *mockShellRunner) Run(_ context.Context, cmd string, args ...string) err
 	return nil
 }
 
+func (r *mockShellRunner) RunWithOlfactor(
+	_ context.Context,
+	smell string,
+	cmd string,
+	args ...string,
+) error {
+	r.got = append(r.got, append([]string{cmd}, args...))
+	return nil
+}
+
 func (r *mockShellRunner) Check(t *testing.T) {
 	if diff := cmp.Diff(r.got, r.want); diff != "" {
 		t.Errorf("mockShellRunner diff (-got +want):\n%s", diff)

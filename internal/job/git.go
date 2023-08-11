@@ -41,6 +41,7 @@ func (e *gitError) Unwrap() error {
 
 type shellRunner interface {
 	Run(context.Context, string, ...string) error
+	RunWithOlfactor(context.Context, string, string, ...string) error
 }
 
 func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, reference string) error {
@@ -120,7 +121,12 @@ func gitCleanSubmodules(ctx context.Context, sh shellRunner, gitCleanFlags strin
 	return nil
 }
 
-func gitFetch(ctx context.Context, sh shellRunner, gitFetchFlags, repository string, refSpec ...string) error {
+func gitFetch(
+	ctx context.Context,
+	sh shellRunner,
+	gitFetchFlags, repository string,
+	refSpec ...string,
+) error {
 	individualFetchFlags, err := shellwords.Split(gitFetchFlags)
 	if err != nil {
 		return err
@@ -139,14 +145,16 @@ func gitFetch(ctx context.Context, sh shellRunner, gitFetchFlags, repository str
 		commandArgs = append(commandArgs, individualRefSpecs...)
 	}
 
-	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
+	const badObject = "fatal: bad object"
+
+	if err := sh.RunWithOlfactor(ctx, badObject, "git", commandArgs...); err != nil {
 		// "fatal: bad object" can happen when the local repo in the checkout
 		// directory is corrupted, not just the remote or the mirror.
 		// When using git mirrors, the existing checkout directory might have a
 		// reference to an object that it expects in the mirror, but the mirror
 		// no longer contains it (for whatever reason).
 		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-		if strings.HasPrefix(err.Error(), "fatal: bad object") {
+		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smell == badObject {
 			return &gitError{error: err, Type: gitErrorFetchBadObject}
 		}
 
