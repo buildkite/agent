@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/olfactor"
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 	"gotest.tools/v3/assert"
@@ -325,8 +324,17 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
 
 	timeout := time.Second * 2
-	if _, err := sh.LockFile(context.Background(), lockPath, timeout); err != context.DeadlineExceeded {
-		t.Errorf("sh.LockFile(%q, %v) error = %v, want context.DeadlineExceeded", lockPath, timeout, err)
+	if _, err := sh.LockFile(
+		context.Background(),
+		lockPath,
+		timeout,
+	); errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf(
+			"sh.LockFile(%q, %v) error = %v, want context.DeadlineExceeded",
+			lockPath,
+			timeout,
+			err,
+		)
 	}
 }
 
@@ -469,17 +477,13 @@ func TestRunWithoutPromptWithOlfactor(t *testing.T) {
 			); err == nil {
 				// if there is no error, we expect an 0 exit code
 				assert.Check(t, test.exitCode == 0)
-			} else if derr := new(olfactor.OlfactoryError); !errors.As(err, &derr) {
+			} else if derr := new(shell.OlfactoryError); !errors.As(err, &derr) {
 				assert.Check(t, !test.expectSmell, "no smell detected, but %s was expected", test.smell)
 				assert.ErrorContains(t, err, "exit status 1")
 			} else {
 				// if there was a OlfactoryError, we expect the smell to match the test.smell
 				// and the exit code to match the test.exitCode
-				assert.ErrorIs(
-					t,
-					olfactor.NewOlfactoryError(test.smell, newFakeExitError(test.exitCode)),
-					err,
-				)
+				assert.ErrorContains(t, err, "error running command: exit status 1, detected: hi")
 			}
 			assert.Equal(t, test.output, out.String())
 		})

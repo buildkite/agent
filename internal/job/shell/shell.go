@@ -308,7 +308,7 @@ func (s *Shell) RunWithOlfactor(
 		PTY:    s.PTY,
 	}); err != nil {
 		if o.Smelt() {
-			return olfactor.NewOlfactoryError(smell, err)
+			return NewOlfactoryError(smell, err)
 		}
 		return err
 	}

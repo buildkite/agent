@@ -1,12 +1,13 @@
-package olfactor
+package shell
 
 import (
 	"errors"
 	"fmt"
 )
 
-// OlfactoryError is returned from the Olfactor when it detects a smell.
-// it wraps the error returned from the command that was run.
+// OlfactoryError is returned from the RunWithOlfactor when the command exits
+// with an non-zero exit code and the olfactor detects the `Smell`.
+// It wraps the original error and records what the smell was.
 type OlfactoryError struct {
 	Smell string
 	inner error
