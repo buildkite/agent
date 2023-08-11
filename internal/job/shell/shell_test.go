@@ -3,8 +3,8 @@ package shell_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/detector"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
@@ -32,7 +33,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 
 	go func() {
 		call := <-sshKeygen.Ch
-		fmt.Fprintln(call.Stdout, "Llama party! 🎉")
+		_, _ = fmt.Fprintln(call.Stdout, "Llama party! 🎉")
 		call.Exit(0)
 	}()
 
@@ -59,7 +60,7 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 
 	go func() {
 		call := <-sshKeygen.Ch
-		fmt.Fprintln(call.Stdout, "Llama drama! 🚨")
+		_, _ = fmt.Fprintln(call.Stdout, "Llama drama! 🚨")
 		call.Exit(24)
 	}()
 
@@ -362,12 +363,12 @@ func TestAcquiringLockHelperProcess(t *testing.T) {
 	fileName := os.Args[len(os.Args)-1]
 	sh := newShellForTest(t)
 
-	log.Printf("Locking %s", fileName)
+	t.Logf("Locking %s", fileName)
 	if _, err := sh.LockFile(context.Background(), fileName, time.Second*10); err != nil {
-		os.Exit(1)
+		t.Fatalf("sh.LockFile(%q) error = %v", fileName, err)
 	}
 
-	log.Printf("Acquired lock %s", fileName)
+	t.Logf("Acquired lock %s", fileName)
 	c := make(chan struct{})
 	<-c
 }
@@ -380,6 +381,101 @@ func newShellForTest(t *testing.T) *shell.Shell {
 	}
 	sh.Logger = shell.DiscardLogger
 	return sh
+}
+
+func TestRunWithoutPromptAndDectectInStream(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		detectee string
+		command  []string
+		output   string
+		exitCode int
+	}{
+		{
+			name:     "detects_noting",
+			detectee: "hi",
+			command:  []string{"bash", "-c", "echo hi"},
+			output:   "hi\n",
+			exitCode: 0,
+		},
+		{
+			name:     "detects_stdout",
+			detectee: "hi",
+			command:  []string{"bash", "-c", "echo hi; false"},
+			output:   "hi\n",
+			exitCode: 1,
+		},
+		{
+			name:     "detects_stderr",
+			detectee: "hi",
+			command:  []string{"bash", "-c", "echo hi >&2; false"},
+			output:   "hi\n",
+			exitCode: 1,
+		},
+		{
+			name:     "detects_infix",
+			detectee: "hi",
+			command:  []string{"bash", "-c", "echo lorem ipsum; echo hi; echo bye; false"},
+			output:   "lorem ipsum\nhi\nbye\n",
+			exitCode: 1,
+		},
+		{
+			name:     "detects_infix_inline",
+			detectee: "hi",
+			command:  []string{"bash", "-c", "echo lorem hipsum; echo bye; false"},
+			output:   "lorem hipsum\nbye\n",
+			exitCode: 1,
+		},
+		{
+			name:     "detects_partial",
+			detectee: "hi",
+			command:  []string{"bash", "-c", "echo hi, how are you; false"},
+			output:   "hi, how are you\n",
+			exitCode: 1,
+		},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			sh, err := shell.New()
+			if err != nil {
+				t.Fatalf("shell.New() error = %v", err)
+			}
+			out := &bytes.Buffer{}
+			sh.Writer = out
+
+			if err := sh.RunWithoutPromptAndDectectInStream(
+				context.Background(),
+				test.detectee,
+				test.command[0],
+				test.command[1:]...,
+			); err == nil && test.exitCode != 0 {
+				// if there is no error, we expect an 0 exit code
+				t.Errorf("sh.RunWithoutPrompt(echo hi; false) = nil, expected err w/ exit status %d", test.exitCode)
+			} else if derr := new(detector.DetectedErr); !errors.As(err, &derr) {
+				// if there is an error, we expect a DetectedErr
+				t.Errorf("sh.RunWithoutPrompt(echo hi; false) = %v, expected DetectedErr", err)
+			} else if derr.Detectee != test.detectee {
+				// if there is a detectErr, we expect the detectee to be the same as the test.detectee
+				t.Errorf(
+					"sh.RunWithoutPrompt(echo hi; false) detected = %q, want %q",
+					derr.Detectee,
+					test.detectee,
+				)
+			} else if eerr := new(exec.ExitError); !errors.As(derr, &eerr) && eerr.ExitCode() != test.exitCode {
+				// if there is a mathcing DetectedErr, we expect the wrapped ExitError to have the
+				// same exit code as the test.exitCode
+				t.Errorf("sh.RunWithoutPrompt(echo hi; false) = %v, expected exit 1", err)
+			}
+
+			if got, want := out.String(), test.output; got != want {
+				t.Errorf("sh.RunWithoutPrompt(echo hi) output = %q, want %q", got, want)
+			}
+		})
+	}
 }
 
 func TestRunWithoutPrompt(t *testing.T) {
