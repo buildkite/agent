@@ -1575,18 +1575,35 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 
 	default:
-		// Otherwise fetch and checkout the commit directly. Some repositories don't
-		// support fetching a specific commit so we fall back to fetching all heads
-		// and tags, hoping that the commit is included.
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Commit); err != nil {
-			// By default `git fetch origin` will only fetch tags which are
-			// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
-			// fetch all tags in addition to the default refspec, but pre 1.9.0 it
-			// excludes the default refspec.
-			gitFetchRefspec, _ := e.shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
-			if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
+		// Otherwise fetch and checkout the commit directly.
+		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Commit); err == nil {
+			break // it worked, break out of the switch statement
+		} else if gerr := new(gitError); errors.As(err, &gerr) {
+			// if we fail in a way that means the repository is corrupt, we should bail
+			switch gerr.Type {
+			case gitErrorFetchRetryClean, gitErrorFetchBadObject:
 				return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
 			}
+		}
+
+		// Some repositories don't support fetching a specific commit so we fall
+		// back to fetching all heads and tags, hoping that the commit is included.
+		e.shell.Commentf("Commit fetch failed, trying to fetch all heads and tags")
+		// By default `git fetch origin` will only fetch tags which are
+		// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
+		// fetch all tags in addition to the default refspec, but pre 1.9.0 it
+		// excludes the default refspec.
+		gitFetchRefspec, err := e.shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
+		if err != nil {
+			return fmt.Errorf("getting remote.origin.fetch: %w", err)
+		}
+
+		if err := gitFetch(
+			ctx,
+			e.shell,
+			gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*",
+		); err != nil {
+			return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
 		}
 	}
 
