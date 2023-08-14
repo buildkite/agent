@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -138,7 +139,7 @@ var ArtifactUploadCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](ctx, c)
 		defer done()
@@ -162,7 +163,9 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Upload the artifacts
 		if err := uploader.Upload(ctx); err != nil {
-			l.Fatal("Failed to upload artifacts: %s", err)
+			return fmt.Errorf("failed to upload artifacts: %w", err)
 		}
+
+		return nil
 	},
 }

@@ -7,7 +7,6 @@ package main
 //go:generate go fmt internal/mime/mime.go
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -51,7 +50,7 @@ Options:
 `
 
 func printVersion(c *cli.Context) {
-	fmt.Printf("%v version %v, build %v\n", c.App.Name, c.App.Version, version.BuildVersion())
+	fmt.Fprintf(c.App.Writer, "%v version %v, build %v\n", c.App.Name, c.App.Version, version.BuildVersion())
 }
 
 func main() {
@@ -154,16 +153,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var err error
-	if err = app.Run(os.Args); err == nil {
-		return
+	if err := app.Run(os.Args); err != nil {
+		os.Exit(clicommand.ErrToExitCode(err))
 	}
-
-	fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
-
-	if eerr := new(clicommand.ExitError); errors.As(err, &eerr) {
-		os.Exit(eerr.Code())
-	}
-
-	os.Exit(1)
 }

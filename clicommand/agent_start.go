@@ -3,6 +3,7 @@ package clicommand
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -677,7 +678,7 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
 		},
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](ctx, c, withConfigFilePaths(
 			defaultConfigFilePaths(),
@@ -686,16 +687,24 @@ var AgentStartCommand = cli.Command{
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
-			l.Fatal("Failed to unset config from environment: %v", err)
+			return fmt.Errorf("failed to unset config from environment: %w", err)
 		}
 
 		if cfg.JobVerificationJWKSPath != "" {
 			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationNoSignatureBehavior) {
-				l.Fatal("Invalid job verification no signature behavior %q. Must be one of: %v", cfg.JobVerificationNoSignatureBehavior, verificationFailureBehaviors)
+				return fmt.Errorf(
+					"invalid job verification no signature behavior %q. Must be one of: %v",
+					cfg.JobVerificationNoSignatureBehavior,
+					verificationFailureBehaviors,
+				)
 			}
 
 			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationInvalidSignatureBehavior) {
-				l.Fatal("Invalid job verification invalid signature behavior %q. Must be one of: %v", cfg.JobVerificationInvalidSignatureBehavior, verificationFailureBehaviors)
+				return fmt.Errorf(
+					"invalid job verification invalid signature behavior %q. Must be one of: %v",
+					cfg.JobVerificationInvalidSignatureBehavior,
+					verificationFailureBehaviors,
+				)
 			}
 		}
 
@@ -708,7 +717,7 @@ var AgentStartCommand = cli.Command{
 		if cfg.BootstrapScript == "" {
 			exePath, err := os.Executable()
 			if err != nil {
-				l.Fatal("Unable to find executable path for bootstrap")
+				return errors.New("unable to find executable path for bootstrap")
 			}
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
 		}
@@ -756,7 +765,7 @@ var AgentStartCommand = cli.Command{
 			var err error
 			ec2TagTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse ec2 tag timeout: %v", err)
+				return fmt.Errorf("failed to parse ec2 tag timeout: %w", err)
 			}
 		}
 
@@ -765,7 +774,7 @@ var AgentStartCommand = cli.Command{
 			var err error
 			ec2MetaDataTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse ec2 meta-data timeout: %v", err)
+				return fmt.Errorf("failed to parse ec2 meta-data timeout: %w", err)
 			}
 		}
 
@@ -774,7 +783,7 @@ var AgentStartCommand = cli.Command{
 			var err error
 			ecsMetaDataTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse ecs meta-data timeout: %v", err)
+				return fmt.Errorf("failed to parse ecs meta-data timeout: %w", err)
 			}
 		}
 
@@ -783,12 +792,12 @@ var AgentStartCommand = cli.Command{
 			var err error
 			gcpLabelsTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse gcp labels timeout: %v", err)
+				return fmt.Errorf("failed to parse gcp labels timeout: %w", err)
 			}
 		}
 
 		if cfg.CancelGracePeriod <= cfg.SignalGracePeriodSeconds {
-			l.Fatal("cancel-grace-period must be greater than signal-grace-period-seconds")
+			return errors.New("cancel-grace-period must be greater than signal-grace-period-seconds")
 		}
 
 		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
@@ -801,11 +810,18 @@ var AgentStartCommand = cli.Command{
 
 		// Sense check supported tracing backends, we don't want bootstrapped jobs to silently have no tracing
 		if _, has := tracetools.ValidTracingBackends[cfg.TracingBackend]; !has {
-			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
+			return fmt.Errorf(
+				"the given tracing backend %q is not supported. Valid backends are: %q",
+				cfg.TracingBackend,
+				maps.Keys(tracetools.ValidTracingBackends),
+			)
 		}
 
 		if experiments.IsEnabled(ctx, experiments.AgentAPI) {
-			shutdown := runAgentAPI(ctx, l, cfg.SocketsPath)
+			shutdown, err := runAgentAPI(ctx, l, cfg.SocketsPath)
+			if err != nil {
+				return err
+			}
 			defer shutdown()
 		}
 
@@ -897,7 +913,7 @@ var AgentStartCommand = cli.Command{
 			}
 		} else if cfg.LogFormat != "json" {
 			// TODO If/when cli is upgraded to v2, choice validation can be done with per-argument Actions.
-			l.Fatal("Invalid log format %v. Only 'text' or 'json' are allowed.", cfg.LogFormat)
+			return fmt.Errorf("invalid log format %q. Only 'text' or 'json' are allowed.", cfg.LogFormat)
 		}
 
 		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), fmt.Sprintf("%d", os.Getpid()))
@@ -939,7 +955,7 @@ var AgentStartCommand = cli.Command{
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
-			l.Fatal("Failed to parse cancel-signal: %v", err)
+			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
 		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
@@ -948,7 +964,7 @@ var AgentStartCommand = cli.Command{
 			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
 			// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 			if err := os.MkdirAll(agentConf.BuildPath, 0777); err != nil {
-				l.Fatal("Failed to create builds path: %v", err)
+				return fmt.Errorf("failed to create builds path: %w", err)
 			}
 		}
 
@@ -985,7 +1001,7 @@ var AgentStartCommand = cli.Command{
 		// Spawning multiple agents doesn't work if the agent is being
 		// booted in acquisition mode
 		if cfg.Spawn > 1 && cfg.AcquireJob != "" {
-			l.Fatal("You can't spawn multiple agents and acquire a job at the same time")
+			return errors.New("You can't spawn multiple agents and acquire a job at the same time")
 		}
 
 		var workers []*agent.AgentWorker
@@ -1014,7 +1030,7 @@ var AgentStartCommand = cli.Command{
 			// Register the agent with the buildkite API
 			ag, err := agent.Register(ctx, l, client, registerReq)
 			if err != nil {
-				l.Fatal("%s", err)
+				return err
 			}
 
 			// Create an agent worker to run the agent
@@ -1043,7 +1059,7 @@ var AgentStartCommand = cli.Command{
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
 		if err := agentStartupHook(l, cfg); err != nil {
-			l.Fatal("%s", err)
+			return fmt.Errorf("failed to run startup hook: %w", err)
 		}
 
 		// Handle process signals
@@ -1079,10 +1095,7 @@ var AgentStartCommand = cli.Command{
 			}()
 		}
 
-		// Start the agent pool
-		if err := pool.Start(ctx); err != nil {
-			l.Fatal("%s", err)
-		}
+		return pool.Start(ctx)
 	},
 }
 
@@ -1194,7 +1207,7 @@ func defaultSocketsPath() string {
 
 // runAgentAPI runs an API socket that can be used to interact with this
 // (top-level) agent. It returns a shutdown function.
-func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) func() {
+func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func(), error) {
 	path := agentapi.DefaultSocketPath(socketsPath)
 	// There should be only one Agent API socket per agent process.
 	// If a previous agent crashed and left behind a socket, we can
@@ -1203,10 +1216,11 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) func(
 
 	svr, err := agentapi.NewServer(path, l)
 	if err != nil {
-		l.Fatal("Couldn't create Agent API server: %v", err)
+		return nil, fmt.Errorf("couldn't create Agent API server: %w", err)
 	}
+
 	if err := svr.Start(); err != nil {
-		l.Fatal("Couldn't start Agent API server: %v", err)
+		return nil, fmt.Errorf("couldn't start Agent API server: %w", err)
 	}
 
 	// Try to be the leader - no worries if this fails.
@@ -1223,7 +1237,7 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) func(
 		if d, err := os.Readlink(leaderPath); err == nil && d == path {
 			os.Remove(leaderPath)
 		}
-	}
+	}, nil
 }
 
 // leaderPinger pings the leader socket for liveness, and takes over if it

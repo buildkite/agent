@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -93,9 +94,8 @@ var StepUpdateCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
-		ctx := context.Background()
-		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](ctx, c)
+	Action: func(c *cli.Context) error {
+		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](context.Background(), c)
 		defer done()
 
 		// Read the value from STDIN if argument omitted entirely
@@ -104,7 +104,7 @@ var StepUpdateCommand = cli.Command{
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				l.Fatal("Failed to read from STDIN: %s", err)
+				return fmt.Errorf("failed to read from STDIN: %w", err)
 			}
 			cfg.Value = string(input)
 		}
@@ -141,7 +141,9 @@ var StepUpdateCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to change step: %s", err)
+			return fmt.Errorf("failed to change step: %w", err)
 		}
+
+		return nil
 	},
 }

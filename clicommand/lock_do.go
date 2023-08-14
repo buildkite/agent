@@ -2,8 +2,8 @@ package clicommand
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/buildkite/agent/v3/lock"
@@ -79,16 +79,15 @@ var LockDoCommand = cli.Command{
 func lockDoAction(c *cli.Context) error {
 	if c.NArg() != 1 {
 		fmt.Fprint(c.App.ErrWriter, lockDoHelpDescription)
-		os.Exit(1)
+		return &SilentExitError{code: 1}
 	}
 	key := c.Args()[0]
 
-	ctx := context.Background()
-	ctx, cfg, l, _, done := setupLoggerAndConfig[LockDoConfig](ctx, c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockDoConfig](context.Background(), c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		return errors.New("only 'machine' scope for locks is supported in this version.")
 	}
 
 	if cfg.LockWaitTimeout != 0 {
@@ -99,18 +98,18 @@ func lockDoAction(c *cli.Context) error {
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		return fmt.Errorf(lockClientErrMessage, err)
 	}
 
 	do, err := client.DoOnceStart(ctx, key)
 	if err != nil {
-		l.Fatal("Couldn't start do-once lock: %v\n", err)
+		return fmt.Errorf("couldn't start do-once lock: %w", err)
 	}
 
 	if do {
-		fmt.Fprintln(c.App.Writer, "do")
-		return nil
+		_, err = fmt.Fprintln(c.App.Writer, "do")
+	} else {
+		_, err = fmt.Fprintln(c.App.Writer, "done")
 	}
-	fmt.Fprintln(c.App.Writer, "done")
-	return nil
+	return err
 }

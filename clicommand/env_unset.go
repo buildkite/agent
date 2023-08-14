@@ -86,7 +86,7 @@ func envUnsetAction(c *cli.Context) error {
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		l.Fatal(envClientErrMessage, err)
+		return fmt.Errorf(envClientErrMessage, err)
 	}
 
 	var del []string
@@ -117,27 +117,24 @@ func envUnsetAction(c *cli.Context) error {
 			line := 1
 			for sc.Scan() {
 				if err := parse(sc.Text()); err != nil {
-					fmt.Fprintf(c.App.ErrWriter, "Couldn't parse input line %d: %v\n", line, err)
-					os.Exit(1)
+					return fmt.Errorf("couldn't parse input line %d: %w", line, err)
 				}
 				line++
 			}
 			if err := sc.Err(); err != nil {
-				fmt.Fprintf(c.App.ErrWriter, "Couldn't scan the input buffer: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("couldn't scan the input buffer: %w", err)
 			}
 			continue
 		}
 		// Parse args directly
 		if err := parse(arg); err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Couldn't parse the command-line argument %q: %v\n", arg, err)
-			os.Exit(1)
+			return fmt.Errorf("couldn't parse the command-line argument %q: %w", arg, err)
 		}
 	}
 
 	unset, err := client.EnvDelete(ctx, del)
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "Couldn't unset the job executor environment variables: %v\n", err)
+		l.Error("couldn't unset the job executor environment variables: %v", err)
 	}
 
 	switch cfg.OutputFormat {
@@ -160,12 +157,11 @@ func envUnsetAction(c *cli.Context) error {
 			enc.SetIndent("", "  ")
 		}
 		if err := enc.Encode(unset); err != nil {
-			fmt.Fprintf(c.App.ErrWriter, "Error marshalling JSON: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error marshalling JSON: %w", err)
 		}
 
 	default:
-		fmt.Fprintf(c.App.ErrWriter, "Invalid output format %q\n", c.String("output-format"))
+		return fmt.Errorf("invalid output format %q", cfg.OutputFormat)
 	}
 
 	return nil

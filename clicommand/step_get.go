@@ -88,8 +88,7 @@ var StepGetCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
-		ctx := context.Background()
-		ctx, cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](ctx, c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](context.Background(), c)
 		defer done()
 
 		// Create the API client
@@ -121,7 +120,7 @@ var StepGetCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to get step: %s", err)
+			return fmt.Errorf("failed to get step: %w", err)
 		}
 
 		// Output the value to STDOUT

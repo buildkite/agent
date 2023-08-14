@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -159,7 +160,7 @@ var PipelineUploadCommand = cli.Command{
 		ProfileFlag,
 		RedactedVars,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](ctx, c)
 		defer done()
@@ -175,7 +176,7 @@ var PipelineUploadCommand = cli.Command{
 			filename = filepath.Base(cfg.FilePath)
 			file, err := os.Open(cfg.FilePath)
 			if err != nil {
-				l.Fatal("Failed to read file: %v", err)
+				return fmt.Errorf("failed to read file: %w", err)
 			}
 			defer file.Close()
 			input = file
@@ -212,10 +213,10 @@ var PipelineUploadCommand = cli.Command{
 			// If more than 1 of the config files exist, throw an
 			// error. There can only be one!!
 			if len(exists) > 1 {
-				l.Fatal("Found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
+				return fmt.Errorf("found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
 			}
 			if len(exists) == 0 {
-				l.Fatal("Could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
+				return fmt.Errorf("could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
 			}
 
 			found := exists[0]
@@ -226,7 +227,7 @@ var PipelineUploadCommand = cli.Command{
 			filename = path.Base(found)
 			file, err := os.Open(found)
 			if err != nil {
-				l.Fatal("Failed to read file %q: %v", found, err)
+				return fmt.Errorf("failed to read file %q: %w", found, err)
 			}
 			defer file.Close()
 			input = file
@@ -236,10 +237,10 @@ var PipelineUploadCommand = cli.Command{
 		if input != os.Stdin {
 			fi, err := input.Stat()
 			if err != nil {
-				l.Fatal("Couldn't stat pipeline configuration file %q: %v", input.Name(), err)
+				return fmt.Errorf("couldn't stat pipeline configuration file %q: %v", input.Name(), err)
 			}
 			if fi.Size() == 0 {
-				l.Fatal("Pipeline file %q is empty", input.Name())
+				return fmt.Errorf("pipeline file %q is empty", input.Name())
 			}
 		}
 
@@ -269,11 +270,11 @@ var PipelineUploadCommand = cli.Command{
 		// Parse the pipeline
 		result, err := pipeline.Parse(input)
 		if err != nil {
-			l.Fatal("Pipeline parsing of %q failed: %v", src, err)
+			return fmt.Errorf("pipeline parsing of %q failed: %v", src, err)
 		}
 		if !cfg.NoInterpolation {
 			if err := result.Interpolate(environ); err != nil {
-				l.Fatal("Pipeline interpolation of %q failed: %v", src, err)
+				return fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 			}
 		}
 
@@ -289,11 +290,11 @@ var PipelineUploadCommand = cli.Command{
 
 			key, err := loadSigningKey(cfg)
 			if err != nil {
-				l.Fatal("Couldn't load signing key: %v", err)
+				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
 
 			if err := result.Sign(key); err != nil {
-				l.Fatal("Couldn't sign pipeline: %v", err)
+				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
 		}
 
@@ -311,27 +312,27 @@ var PipelineUploadCommand = cli.Command{
 				encode = yaml.NewEncoder(os.Stdout).Encode
 
 			default:
-				l.Fatal("Unknown output format %q", cfg.DryRunFormat)
+				return fmt.Errorf("unknown output format %q", cfg.DryRunFormat)
 			}
 
 			// All logging happens to stderr.
 			// So this can be used with other tools to get interpolated, signed
 			// JSON or YAML.
 			if err := encode(result); err != nil {
-				l.Fatal("%#v", err)
+				return err
 			}
 
-			return
+			return nil
 		}
 
 		// Check we have a job id set if not in dry run
 		if cfg.Job == "" {
-			l.Fatal("Missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
+			return errors.New("missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
 		}
 
 		// Check we have an agent access token if not in dry run
 		if cfg.AgentAccessToken == "" {
-			l.Fatal("Missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
+			return errors.New("missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
 		}
 
 		uploader := &agent.PipelineUploader{
@@ -345,14 +346,22 @@ var PipelineUploadCommand = cli.Command{
 			RetrySleepFunc: time.Sleep,
 		}
 		if err := uploader.Upload(ctx, l); err != nil {
-			l.Fatal("%v", err)
+			return err
 		}
 
 		l.Info("Successfully uploaded and parsed pipeline config")
+
+		return nil
 	},
 }
 
-func searchForSecrets(l logger.Logger, cfg *PipelineUploadConfig, environ map[string]string, result *pipeline.Pipeline, src string) {
+func searchForSecrets(
+	l logger.Logger,
+	cfg *PipelineUploadConfig,
+	environ map[string]string,
+	result *pipeline.Pipeline,
+	src string,
+) error {
 	// Get vars to redact, as both a map and a slice.
 	vars := redact.Vars(shell.StderrLogger, cfg.RedactedVars, environ)
 	needles := make([]string, 0, len(vars))
@@ -376,18 +385,20 @@ func searchForSecrets(l logger.Logger, cfg *PipelineUploadConfig, environ map[st
 
 	// Encode the pipeline as JSON into the searcher.
 	if err := json.NewEncoder(searcher).Encode(result); err != nil {
-		l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
+		return fmt.Errorf("couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%w)", src, err)
 	}
 
 	if len(secretsFound) > 0 {
 		if cfg.RejectSecrets {
-			l.Fatal("Pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
-		} else {
-			l.Warn("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
-			l.Warn("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
-			l.Warn("The behaviour in the above flags will become default in Buildkite Agent v4")
+			return fmt.Errorf("pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
 		}
+
+		l.Warn("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
+		l.Warn("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
+		l.Warn("The behaviour in the above flags will become default in Buildkite Agent v4")
 	}
+
+	return nil
 }
 
 func loadSigningKey(cfg PipelineUploadConfig) (jwk.Key, error) {

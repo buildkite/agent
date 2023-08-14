@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -101,7 +102,7 @@ var ArtifactDownloadCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactDownloadConfig](ctx, c)
 		defer done()
@@ -121,7 +122,9 @@ var ArtifactDownloadCommand = cli.Command{
 
 		// Download the artifacts
 		if err := downloader.Download(ctx); err != nil {
-			l.Fatal("Failed to download artifacts: %s", err)
+			return fmt.Errorf("failed to download artifacts: %w", err)
 		}
+
+		return nil
 	},
 }

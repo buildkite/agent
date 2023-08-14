@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/urfave/cli"
 )
 
-const envClientErrMessage = `Could not create Job API client: %v
+const envClientErrMessage = `Could not create Job API client: %w
 This command can only be used from hooks or plugins running under a job executor
 where the "job-api" experiment is enabled.`
 
@@ -102,12 +101,12 @@ func envGetAction(c *cli.Context) error {
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		l.Fatal(envClientErrMessage, err)
+		return fmt.Errorf(envClientErrMessage, err)
 	}
 
 	envMap, err := client.EnvGet(ctx)
 	if err != nil {
-		l.Fatal("Couldn't fetch the job executor environment variables: %v\n", err)
+		return fmt.Errorf("couldn't fetch the job executor environment variables: %w", err)
 	}
 
 	notFound := false
@@ -148,7 +147,7 @@ func envGetAction(c *cli.Context) error {
 			enc.SetIndent("", "  ")
 		}
 		if err := enc.Encode(envMap); err != nil {
-			l.Fatal("Error marshalling JSON: %v\n", err)
+			return fmt.Errorf("error marshalling JSON: %w", err)
 		}
 
 	default:
@@ -156,8 +155,7 @@ func envGetAction(c *cli.Context) error {
 	}
 
 	if notFound {
-		done()
-		os.Exit(1)
+		return &SilentExitError{code: 1}
 	}
 
 	return nil

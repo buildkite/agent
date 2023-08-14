@@ -99,7 +99,7 @@ var OIDCRequestTokenCommand = cli.Command{
 
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
 		if cfg.Lifetime < 0 {
-			l.Fatal("Lifetime %d must be a non-negative integer.", cfg.Lifetime)
+			return fmt.Errorf("lifetime %d must be a non-negative integer.", cfg.Lifetime)
 		}
 
 		// Create the API client
@@ -145,7 +145,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			return err
 		}
 
-		_, err := fmt.Fprintln(c.App.Writer, token.Token)
-		return err
+		_, _ = fmt.Fprintln(c.App.Writer, token.Token)
+		return nil
 	},
 }

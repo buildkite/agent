@@ -72,7 +72,7 @@ var MetaDataKeysCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataKeysConfig](ctx, c)
 		defer done()
@@ -107,11 +107,13 @@ var MetaDataKeysCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to find meta-data keys: %s", err)
+			return fmt.Errorf("failed to find meta-data keys: %w", err)
 		}
 
 		for _, key := range keys {
 			fmt.Fprintf(c.App.Writer, "%s\n", key)
 		}
+
+		return nil
 	},
 }

@@ -109,18 +109,25 @@ var ArtifactShasumCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactShasumConfig](ctx, c)
 		defer done()
 
 		if err := searchAndPrintShaSum(ctx, cfg, l, os.Stdout); err != nil {
-			l.Fatal(err.Error())
+			return err
 		}
+
+		return nil
 	},
 }
 
-func searchAndPrintShaSum(ctx context.Context, cfg ArtifactShasumConfig, l logger.Logger, stdout io.Writer) error {
+func searchAndPrintShaSum(
+	ctx context.Context,
+	cfg ArtifactShasumConfig,
+	l logger.Logger,
+	stdout io.Writer,
+) error {
 	// Create the API client
 	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
@@ -152,5 +159,6 @@ func searchAndPrintShaSum(ctx context.Context, cfg ArtifactShasumConfig, l logge
 		}
 		fmt.Fprintln(stdout, sha)
 	}
+
 	return nil
 }

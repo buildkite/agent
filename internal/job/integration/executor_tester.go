@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,8 +19,10 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"gotest.tools/v3/assert"
 
 	"github.com/buildkite/bintest/v3"
 )
@@ -335,10 +338,8 @@ func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
 	err := e.Run(t, env...)
-	t.Logf("Bootstrap output:\n%s", e.Output)
-
-	if err != nil {
-		t.Fatalf("BootstrapTester.Run(%q) = %v", env, err)
+	if serr := new(clicommand.SilentExitError); errors.As(err, &serr) && serr.Code() != 0 {
+		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
 	}
 
 	e.CheckMocks(t)

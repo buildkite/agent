@@ -88,7 +88,7 @@ func envSetAction(c *cli.Context) error {
 
 	client, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {
-		l.Fatal(envClientErrMessage, err)
+		return fmt.Errorf(envClientErrMessage, err)
 	}
 
 	req := &jobapi.EnvUpdateRequest{
@@ -115,7 +115,7 @@ func envSetAction(c *cli.Context) error {
 		}
 
 	default:
-		l.Fatal("Invalid input format %q\n", c.String("input-format"))
+		return fmt.Errorf("invalid input format %q", cfg.InputFormat)
 	}
 
 	// Inspect each arg, which could either be "-" for stdin, or "KEY=value"
@@ -126,24 +126,24 @@ func envSetAction(c *cli.Context) error {
 			line := 1
 			for sc.Scan() {
 				if err := parse(sc.Text()); err != nil {
-					l.Fatal("Couldn't parse input line %d: %v\n", line, err)
+					return fmt.Errorf("couldn't parse input line %d: %w", line, err)
 				}
 				line++
 			}
 			if err := sc.Err(); err != nil {
-				l.Fatal("Couldn't scan the input buffer: %v\n", err)
+				return fmt.Errorf("couldn't scan the input buffer: %w", err)
 			}
 			continue
 		}
 		// Parse args directly
 		if err := parse(arg); err != nil {
-			l.Fatal("Couldn't parse the command-line argument %q: %v\n", arg, err)
+			return fmt.Errorf("couldn't parse the command-line argument %q: %w", arg, err)
 		}
 	}
 
 	resp, err := client.EnvUpdate(ctx, req)
 	if err != nil {
-		l.Error("Couldn't update the job executor environment: %v\n", err)
+		l.Error("Couldn't update the job executor environment: %v", err)
 	}
 
 	switch cfg.OutputFormat {
@@ -173,11 +173,11 @@ func envSetAction(c *cli.Context) error {
 			enc.SetIndent("", "  ")
 		}
 		if err := enc.Encode(resp); err != nil {
-			l.Fatal("Error marshalling JSON: %v\n", err)
+			return fmt.Errorf("error marshalling JSON: %w", err)
 		}
 
 	default:
-		l.Fatal("Invalid output format %q\n", c.String("output-format"))
+		return fmt.Errorf("invalid output format %q", cfg.OutputFormat)
 	}
 
 	return nil

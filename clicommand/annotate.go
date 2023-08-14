@@ -114,14 +114,16 @@ var AnnotateCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotateConfig](ctx, c)
 		defer done()
 
 		if err := annotate(ctx, cfg, l); err != nil {
-			l.Fatal(err.Error())
+			return err
 		}
+
+		return nil
 	},
 }
 
@@ -136,14 +138,14 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		// Actually read the file from STDIN
 		stdin, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return fmt.Errorf("Failed to read from STDIN: %w", err)
+			return fmt.Errorf("failed to read from STDIN: %w", err)
 		}
 
 		body = string(stdin[:])
 	}
 
 	if bodySize := len(cfg.Body); bodySize > maxBodySize {
-		return fmt.Errorf("Annotation body size (%dB) exceeds maximum (%dB)", bodySize, maxBodySize)
+		return fmt.Errorf("annotation body size (%dB) exceeds maximum (%dB)", bodySize, maxBodySize)
 	}
 
 	// Create the API client
@@ -158,7 +160,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 	}
 
 	// Retry the annotation a few times before giving up
-	err := roko.NewRetrier(
+	if err := roko.NewRetrier(
 		roko.WithMaxAttempts(5),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
 		roko.WithJitter(),
@@ -178,11 +180,8 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 			return err
 		}
 		return nil
-	})
-
-	// Show a fatal error if we gave up trying to create the annotation
-	if err != nil {
-		return fmt.Errorf("Failed to annotate build: %w", err)
+	}); err != nil {
+		return fmt.Errorf("failed to annotate build: %w", err)
 	}
 
 	l.Debug("Successfully annotated build")
