@@ -278,7 +278,7 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 // and returns an error if it fails. If the process exits with a non-zero exit code,
 // and `smell` was written to the logger (i.e. the combined stream of stdout and stderr),
 // the error will be of type `olfactor.OlfactoryError`. If the process exits 0, the error
-// will be nil.
+// will be nil whether or not the output contained `smell`.
 func (s *Shell) RunWithOlfactor(
 	ctx context.Context,
 	smell string,
