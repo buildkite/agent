@@ -37,6 +37,5 @@ func (e *OlfactoryError) Unwrap() error {
 // Is returns true if the target is an OlfactoryError and the inner errors are equal
 func (e *OlfactoryError) Is(target error) bool {
 	terr, ok := target.(*OlfactoryError)
-	// the detected slices were sorted on the way in, so we can compare them directly
 	return ok && e.Smell == terr.Smell && errors.Is(e.inner, terr.inner)
 }
