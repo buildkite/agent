@@ -22,29 +22,11 @@ type GroupStep struct {
 	RemainingFields map[string]any `yaml:",inline"`
 }
 
-// unmarshalMap unmarshals a group step from an ordered map.
-func (g *GroupStep) unmarshalMap(m *ordered.MapSA) error {
-	err := m.Range(func(k string, v any) error {
-		switch k {
-		case "group":
-			g.Group = v
-
-		case "steps":
-			if err := g.Steps.unmarshalAny(v); err != nil {
-				return fmt.Errorf("unmarshaling steps: %v", err)
-			}
-
-		default:
-			// Preserve any other key.
-			if g.RemainingFields == nil {
-				g.RemainingFields = make(map[string]any)
-			}
-			g.RemainingFields[k] = v
-		}
-		return nil
-	})
-	if err != nil {
-		return err
+// UnmarshalOrdered unmarshals a group step from an ordered map.
+func (g *GroupStep) UnmarshalOrdered(src any) error {
+	type wrappedGroup GroupStep
+	if err := ordered.Unmarshal(src, (*wrappedGroup)(g)); err != nil {
+		return fmt.Errorf("unmarshalling GroupStep: %w", err)
 	}
 
 	// Ensure Steps is never nil. Server side expects a sequence.

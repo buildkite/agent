@@ -31,61 +31,30 @@ func (c *CommandStep) MarshalJSON() ([]byte, error) {
 	return inlineFriendlyMarshalJSON(c)
 }
 
-// unmarshalMap unmarshals a command step from an ordered map.
-func (c *CommandStep) unmarshalMap(m *ordered.MapSA) error {
-	return m.Range(func(k string, v any) error {
-		switch k {
-		case "command", "commands":
-			// command and commands are aliases for the same thing, which can be
-			// either one big string or a sequence of strings.
-			// So we need to act as though we are unmarshaling either string or
-			// []string (but with type []any).
-			switch x := v.(type) {
-			case []any:
-				cmds := make([]string, 0, len(x))
-				for _, cx := range x {
-					cmds = append(cmds, fmt.Sprint(cx))
-				}
-				// Normalise cmds into one single command string.
-				// This makes signing easier later on - it's easier to hash one
-				// string consistently than it is to pick apart multiple strings
-				// in a consistent way in order to hash all of them
-				// consistently.
-				c.Command = strings.Join(cmds, "\n")
+// UnmarshalOrdered unmarshals a command step from an ordered map.
+func (c *CommandStep) UnmarshalOrdered(src any) error {
+	type wrappedCommand CommandStep
+	// Unmarshal into this secret type, then process special fields specially.
+	fullCommand := new(struct {
+		Command  []string `yaml:"command"`
+		Commands []string `yaml:"commands"`
 
-			case string:
-				c.Command = x
-
-			default:
-				// Some weird-looking command that's not a string...
-				c.Command = fmt.Sprint(x)
-			}
-
-		case "plugins":
-			if err := c.Plugins.unmarshalAny(v); err != nil {
-				return fmt.Errorf("unmarshaling plugins: %w", err)
-			}
-
-		case "signature":
-			sig := new(Signature)
-			if err := sig.unmarshalAny(v); err != nil {
-				return fmt.Errorf("unmarshaling signature: %w", err)
-			}
-			c.Signature = sig
-
-		case "matrix":
-			c.Matrix = v
-
-		default:
-			// Preserve any other key.
-			if c.RemainingFields == nil {
-				c.RemainingFields = make(map[string]any)
-			}
-			c.RemainingFields[k] = v
-		}
-
-		return nil
+		// Use inline trickery to capture the rest of the struct.
+		Rem *wrappedCommand `yaml:",inline"`
 	})
+	fullCommand.Rem = (*wrappedCommand)(c)
+	if err := ordered.Unmarshal(src, fullCommand); err != nil {
+		return fmt.Errorf("unmarshalling CommandStep: %w", err)
+	}
+
+	// Normalise cmds into one single command string.
+	// This makes signing easier later on - it's easier to hash one
+	// string consistently than it is to pick apart multiple strings
+	// in a consistent way in order to hash all of them
+	// consistently.
+	cmds := append(fullCommand.Command, fullCommand.Commands...)
+	c.Command = strings.Join(cmds, "\n")
+	return nil
 }
 
 // SignedFields returns the default fields for signing.

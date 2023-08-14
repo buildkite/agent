@@ -3,7 +3,6 @@ package pipeline
 import (
 	"encoding/json"
 
-	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
 )
 
@@ -25,9 +24,9 @@ func (u UnknownStep) MarshalYAML() (any, error) {
 	return u.Contents, nil
 }
 
-// unmarshalMap unmarshals an unknown step from an ordered map.
-func (u *UnknownStep) unmarshalMap(m *ordered.MapSA) error {
-	u.Contents = m
+// UnmarshalOrdered unmarshals an unknown step.
+func (u *UnknownStep) UnmarshalOrdered(src any) error {
+	u.Contents = src
 	return nil
 }
 

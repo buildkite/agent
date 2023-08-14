@@ -683,9 +683,11 @@ func TestParserPreservesBools(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{
-			TriggerStep{
-				"trigger": "hello",
-				"async":   true,
+			&TriggerStep{
+				Contents: map[string]any{
+					"trigger": "hello",
+					"async":   true,
+				},
 			},
 		},
 	}
@@ -790,9 +792,11 @@ func TestParserPreservesFloats(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{
-			TriggerStep{
-				"trigger": "hello",
-				"llamas":  3.142,
+			&TriggerStep{
+				Contents: map[string]any{
+					"trigger": "hello",
+					"llamas":  3.142,
+				},
 			},
 		},
 	}
@@ -831,9 +835,11 @@ func TestParserHandlesDates(t *testing.T) {
 	}
 	want := &Pipeline{
 		Steps: Steps{
-			TriggerStep{
-				"trigger": "hello",
-				"llamas":  llamatime,
+			&TriggerStep{
+				Contents: map[string]any{
+					"trigger": "hello",
+					"llamas":  llamatime,
+				},
 			},
 		},
 	}

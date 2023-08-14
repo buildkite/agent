@@ -15,8 +15,8 @@ var errSigningRefusedUnknownStepType = errors.New("refusing to sign pipeline con
 // since it has custom logic for determining the correct step type.
 type Steps []Step
 
-// unmarshalAny unmarshals a slice ([]any) into a slice of steps.
-func (s *Steps) unmarshalAny(o any) error {
+// UnmarshalOrdered unmarshals a slice ([]any) into a slice of steps.
+func (s *Steps) UnmarshalOrdered(o any) error {
 	if o == nil {
 		if *s == nil {
 			// `steps: null` is normalised to an empty slice.
@@ -87,7 +87,7 @@ func stepFromMap(o *ordered.MapSA) (Step, error) {
 	}
 
 	// Decode the step (into the right step type).
-	if err := step.unmarshalMap(o); err != nil {
+	if err := ordered.Unmarshal(o, step); err != nil {
 		// Hmm, maybe we picked the wrong kind of step?
 		return &UnknownStep{Contents: o}, nil
 	}
@@ -103,7 +103,7 @@ func stepByType(sType string) (Step, error) {
 	case "block", "input", "manual":
 		return &InputStep{Contents: map[string]any{}}, nil
 	case "trigger":
-		return make(TriggerStep), nil
+		return new(TriggerStep), nil
 	case "group": // as far as i know this doesn't happen, but it's here for completeness
 		return new(GroupStep), nil
 	default:
@@ -125,7 +125,7 @@ func stepByKeyInference(o *ordered.MapSA) (Step, error) {
 		return new(InputStep), nil
 
 	case o.Contains("trigger"):
-		return make(TriggerStep), nil
+		return new(TriggerStep), nil
 
 	case o.Contains("group"):
 		return new(GroupStep), nil

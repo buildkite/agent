@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
 )
 
@@ -32,11 +31,6 @@ func (s *InputStep) MarshalJSON() ([]byte, error) {
 
 func (s InputStep) interpolate(env interpolate.Env) error {
 	return interpolateMap(env, s.Contents)
-}
-
-func (s *InputStep) unmarshalMap(m *ordered.MapSA) error {
-	s.Contents = m.ToMap()
-	return nil
 }
 
 func (*InputStep) stepTag() {}

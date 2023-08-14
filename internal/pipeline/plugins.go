@@ -9,14 +9,14 @@ import (
 // Plugins is a sequence of plugins. It is useful for unmarshaling.
 type Plugins []*Plugin
 
-// unmarshalAny unmarshals Plugins from either
+// UnmarshalOrdered unmarshals Plugins from either
 //   - []any - originally a sequence of "one-item mappings" (normal form), or
 //   - *ordered.MapSA - a mapping (where order is important...non-normal form).
 //
 // "plugins" is supposed to be a sequence of one-item maps, since order matters.
 // But some people (even us) write plugins into one big mapping and rely on
 // order preservation.
-func (p *Plugins) unmarshalAny(o any) error {
+func (p *Plugins) UnmarshalOrdered(o any) error {
 	// Whether processing one big map, or a sequence of small maps, the central
 	// part remains the same.
 	// Parse each "key: value" as "name: config", then append in order.
