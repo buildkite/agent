@@ -299,10 +299,8 @@ func (s *Shell) RunWithOlfactor(
 		return err
 	}
 
-	w, o := olfactor.New(io.Discard, smell)
-	mw := io.MultiWriter(s.Writer, w)
-
-	if err := s.executeCommand(ctx, cmd, mw, executeFlags{
+	w, o := olfactor.New(s.Writer, smell)
+	if err := s.executeCommand(ctx, cmd, w, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
