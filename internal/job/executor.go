@@ -1598,9 +1598,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			return fmt.Errorf("getting remote.origin.fetch: %w", err)
 		}
 
-		if err := gitFetch(
-			ctx,
-			e.shell,
+		if err := gitFetch(ctx, e.shell,
 			gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*",
 		); err != nil {
 			return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
