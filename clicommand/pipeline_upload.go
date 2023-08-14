@@ -512,7 +512,7 @@ func concat[T any](a ...[]T) []T {
 		cap += len(s)
 	}
 
-	var result []T
+	result := make([]T, 0, cap)
 	for _, s := range a {
 		result = append(result, s...)
 	}
