@@ -327,8 +327,8 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 	expectedLockPath := lockfile + "f" // flock-locked files are created with the suffix 'f'
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestAcquiringLockHelperProcess", "--", lockfile)
-	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1"}
+	cmd := exec.Command(os.Args[0], "--", lockfile)
+	cmd.Env = []string{"TEST_MAIN_WANT_HELPER_PROCESS=1"}
 
 	err := cmd.Start()
 	if err != nil {
@@ -338,34 +338,13 @@ func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 	// wait for the above process to get a lock
 	for {
 		if _, err = os.Stat(expectedLockPath); os.IsNotExist(err) {
-			time.Sleep(time.Millisecond * 10)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		break
 	}
 
 	return cmd, nil
-}
-
-// TestAcquiringLockHelperProcess isn't a real test. It's used as a helper process
-func TestAcquiringLockHelperProcess(t *testing.T) {
-	t.Parallel()
-
-	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
-		return
-	}
-
-	fileName := os.Args[len(os.Args)-1]
-	sh := newShellForTest(t)
-
-	t.Logf("Locking %s", fileName)
-	if _, err := sh.LockFile(context.Background(), fileName, time.Second*10); err != nil {
-		t.Fatalf("sh.LockFile(%q) error = %v", fileName, err)
-	}
-
-	t.Logf("Acquired lock %s", fileName)
-	c := make(chan struct{})
-	<-c
 }
 
 func newShellForTest(t *testing.T) *shell.Shell {
