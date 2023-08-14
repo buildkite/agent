@@ -7,6 +7,7 @@ package main
 //go:generate go fmt internal/mime/mime.go
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -143,18 +144,26 @@ func main() {
 
 	// When no sub command is used
 	app.Action = func(c *cli.Context) {
-		cli.ShowAppHelp(c)
+		_ = cli.ShowAppHelp(c)
 		os.Exit(1)
 	}
 
 	// When a sub command can't be found
 	app.CommandNotFound = func(c *cli.Context, command string) {
-		cli.ShowAppHelp(c)
+		_ = cli.ShowAppHelp(c)
 		os.Exit(1)
 	}
 
-	if err := app.Run(os.Args); err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
+	var err error
+	if err = app.Run(os.Args); err == nil {
+		return
 	}
+
+	fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+
+	if eerr := new(clicommand.ExitError); errors.As(err, &eerr) {
+		os.Exit(eerr.Code())
+	}
+
+	os.Exit(1)
 }
