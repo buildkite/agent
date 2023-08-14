@@ -40,8 +40,8 @@ func (e *gitError) Unwrap() error {
 }
 
 type shellRunner interface {
-	Run(context.Context, string, ...string) error
-	RunWithOlfactor(context.Context, string, string, ...string) error
+	Run(ctx context.Context, cmd string, args ...string) error
+	RunWithOlfactor(ctx context.Context, smell string, cmd string, args ...string) error
 }
 
 func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, reference string) error {
