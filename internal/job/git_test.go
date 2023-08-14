@@ -51,17 +51,21 @@ func TestParseGittableURL(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		u, err := parseGittableURL(test.url)
-		if err != nil {
-			t.Errorf("parseGittableURL(%q) error = %v", test.url, err)
-			continue
-		}
-		if got, want := u.String(), test.wantParsed; got != want {
-			t.Errorf("parseGittableURL(%q) u.String() = %q, want %q", test.url, got, want)
-		}
-		if got, want := u.Host, test.wantHost; got != want {
-			t.Errorf("parseGittableURL(%q) u.Host = %q, want %q", test.url, got, want)
-		}
+		test := test
+		t.Run(test.url, func(t *testing.T) {
+			t.Parallel()
+			u, err := parseGittableURL(test.url)
+			if err != nil {
+				t.Errorf("parseGittableURL(%q) error = %v", test.url, err)
+				return
+			}
+			if got, want := u.String(), test.wantParsed; got != want {
+				t.Errorf("parseGittableURL(%q) u.String() = %q, want %q", test.url, got, want)
+			}
+			if got, want := u.Host, test.wantHost; got != want {
+				t.Errorf("parseGittableURL(%q) u.Host = %q, want %q", test.url, got, want)
+			}
+		})
 	}
 }
 
@@ -138,13 +142,18 @@ func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if got := resolveGitHost(ctx, sh, test.alias); got != test.want {
-			t.Errorf("resolveGitHost(ctx, sh, %q) = %q, want %q", test.alias, got, test.want)
-		}
+		test := test
+		t.Run(test.alias, func(t *testing.T) {
+			t.Parallel()
+			if got := resolveGitHost(ctx, sh, test.alias); got != test.want {
+				t.Errorf("resolveGitHost(ctx, sh, %q) = %q, want %q", test.alias, got, test.want)
+			}
+		})
 	}
 }
 
 func TestGitCheckRefFormat(t *testing.T) {
+	t.Parallel()
 	for ref, want := range map[string]bool{
 		"hello":          true,
 		"hello-world":    true,
@@ -162,13 +171,19 @@ func TestGitCheckRefFormat(t *testing.T) {
 		"@":              false,
 		"back\\slash":    false,
 	} {
-		if got := gitCheckRefFormat(ref); got != want {
-			t.Errorf("gitCheckRefFormat(%q) = %t, want %t", ref, got, want)
-		}
+		ref := ref
+		want := want
+		t.Run(ref, func(t *testing.T) {
+			t.Parallel()
+			if got := gitCheckRefFormat(ref); got != want {
+				t.Errorf("gitCheckRefFormat(%q) = %t, want %t", ref, got, want)
+			}
+		})
 	}
 }
 
 func TestGitCheckoutValidatesRef(t *testing.T) {
+	t.Parallel()
 	sh := new(mockShellRunner)
 	defer sh.Check(t)
 	err := gitCheckout(context.Background(), &shell.Shell{}, "", "--nope")
@@ -176,6 +191,7 @@ func TestGitCheckoutValidatesRef(t *testing.T) {
 }
 
 func TestGitCheckout(t *testing.T) {
+	t.Parallel()
 	sh := new(mockShellRunner).Expect("git", "checkout", "-f", "-q", "main")
 	defer sh.Check(t)
 	err := gitCheckout(context.Background(), sh, "-f -q", "main")
@@ -183,6 +199,7 @@ func TestGitCheckout(t *testing.T) {
 }
 
 func TestGitCheckoutSketchyArgs(t *testing.T) {
+	t.Parallel()
 	sh := new(mockShellRunner)
 	defer sh.Check(t)
 	err := gitCheckout(context.Background(), sh, "-f -q", "  --hello")
@@ -190,6 +207,7 @@ func TestGitCheckoutSketchyArgs(t *testing.T) {
 }
 
 func TestGitClone(t *testing.T) {
+	t.Parallel()
 	sh := new(mockShellRunner).Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
 	defer sh.Check(t)
 	err := gitClone(context.Background(), sh, "-v --references url", "repo", "dir")
@@ -197,6 +215,7 @@ func TestGitClone(t *testing.T) {
 }
 
 func TestGitClean(t *testing.T) {
+	t.Parallel()
 	sh := new(mockShellRunner).Expect("git", "clean", "--foo", "--bar")
 	defer sh.Check(t)
 	err := gitClean(context.Background(), sh, "--foo --bar")
@@ -204,13 +223,16 @@ func TestGitClean(t *testing.T) {
 }
 
 func TestGitCleanSubmodules(t *testing.T) {
-	sh := new(mockShellRunner).Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
+	t.Parallel()
+	sh := new(mockShellRunner).
+		Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
 	defer sh.Check(t)
 	err := gitCleanSubmodules(context.Background(), sh, "--foo --bar")
 	require.NoError(t, err)
 }
 
 func TestGitFetch(t *testing.T) {
+	t.Parallel()
 	sh := new(mockShellRunner).Expect("git", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2")
 	defer sh.Check(t)
 	err := gitFetch(context.Background(), sh, "--foo --bar", "repo", "ref1", "ref2")
@@ -232,7 +254,18 @@ func (r *mockShellRunner) Run(_ context.Context, cmd string, args ...string) err
 	return nil
 }
 
+func (r *mockShellRunner) RunWithOlfactor(
+	_ context.Context,
+	_ string,
+	cmd string,
+	args ...string,
+) error {
+	r.got = append(r.got, append([]string{cmd}, args...))
+	return nil
+}
+
 func (r *mockShellRunner) Check(t *testing.T) {
+	t.Helper()
 	if diff := cmp.Diff(r.got, r.want); diff != "" {
 		t.Errorf("mockShellRunner diff (-got +want):\n%s", diff)
 	}

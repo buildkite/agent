@@ -3,8 +3,8 @@ package shell_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,9 +16,12 @@ import (
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
+	"gotest.tools/v3/assert"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
+	t.Parallel()
+
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
@@ -30,7 +33,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 
 	go func() {
 		call := <-sshKeygen.Ch
-		fmt.Fprintln(call.Stdout, "Llama party! 🎉")
+		_, _ = fmt.Fprintln(call.Stdout, "Llama party! 🎉")
 		call.Exit(0)
 	}()
 
@@ -45,6 +48,8 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 }
 
 func TestRunAndCaptureWithExitCode(t *testing.T) {
+	t.Parallel()
+
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
@@ -55,7 +60,7 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 
 	go func() {
 		call := <-sshKeygen.Ch
-		fmt.Fprintln(call.Stdout, "Llama drama! 🚨")
+		_, _ = fmt.Fprintln(call.Stdout, "Llama drama! 🚨")
 		call.Exit(24)
 	}()
 
@@ -70,6 +75,8 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
+	t.Parallel()
+
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
@@ -105,6 +112,8 @@ func TestRun(t *testing.T) {
 }
 
 func TestRunWithStdin(t *testing.T) {
+	t.Parallel()
+
 	out := &bytes.Buffer{}
 	sh := newShellForTest(t)
 	sh.Writer = out
@@ -118,6 +127,8 @@ func TestRunWithStdin(t *testing.T) {
 }
 
 func TestContextCancelTerminates(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Not supported in windows")
 	}
@@ -152,6 +163,8 @@ func TestContextCancelTerminates(t *testing.T) {
 }
 
 func TestInterrupt(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Not supported in windows")
 	}
@@ -190,6 +203,8 @@ func TestInterrupt(t *testing.T) {
 }
 
 func TestDefaultWorkingDirFromSystem(t *testing.T) {
+	t.Parallel()
+
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
@@ -205,6 +220,8 @@ func TestDefaultWorkingDirFromSystem(t *testing.T) {
 }
 
 func TestWorkingDir(t *testing.T) {
+	t.Parallel()
+
 	tempDir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {
 		t.Fatalf(`os.MkdirTemp("", "shelltest") error = %v`, err)
@@ -282,6 +299,8 @@ func TestWorkingDir(t *testing.T) {
 }
 
 func TestLockFileRetriesAndTimesOut(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Flakey on windows")
 	}
@@ -297,24 +316,19 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 
 	lockPath := filepath.Join(dir, "my.lock")
 
-	// acquire a lock in another process
 	cmd, err := acquireLockInOtherProcess(lockPath)
-	if err != nil {
-		t.Errorf("acquireLockInOtherProcess(%q) error = %v", lockPath, err)
-	}
-	defer cmd.Process.Kill()
+	assert.NilError(t, err)
+	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
 
-	timeout := time.Second * 2
-	if _, err := sh.LockFile(context.Background(), lockPath, timeout); err != context.DeadlineExceeded {
-		t.Errorf("sh.LockFile(%q, %v) error = %v, want context.DeadlineExceeded", lockPath, timeout, err)
-	}
+	_, err = sh.LockFile(context.Background(), lockPath, 2*time.Second)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 	expectedLockPath := lockfile + "f" // flock-locked files are created with the suffix 'f'
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestAcquiringLockHelperProcess", "--", lockfile)
-	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1"}
+	cmd := exec.Command(os.Args[0], "--", lockfile)
+	cmd.Env = []string{"TEST_MAIN_WANT_HELPER_PROCESS=1"}
 
 	err := cmd.Start()
 	if err != nil {
@@ -324,7 +338,7 @@ func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 	// wait for the above process to get a lock
 	for {
 		if _, err = os.Stat(expectedLockPath); os.IsNotExist(err) {
-			time.Sleep(time.Millisecond * 10)
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 		break
@@ -333,26 +347,8 @@ func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// TestAcquiringLockHelperProcess isn't a real test. It's used as a helper process
-func TestAcquiringLockHelperProcess(t *testing.T) {
-	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
-		return
-	}
-
-	fileName := os.Args[len(os.Args)-1]
-	sh := newShellForTest(t)
-
-	log.Printf("Locking %s", fileName)
-	if _, err := sh.LockFile(context.Background(), fileName, time.Second*10); err != nil {
-		os.Exit(1)
-	}
-
-	log.Printf("Acquired lock %s", fileName)
-	c := make(chan struct{})
-	<-c
-}
-
 func newShellForTest(t *testing.T) *shell.Shell {
+	t.Helper()
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
@@ -361,7 +357,107 @@ func newShellForTest(t *testing.T) *shell.Shell {
 	return sh
 }
 
+func TestRunWithoutPromptWithOlfactor(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name        string
+		smell       string
+		expectSmell bool
+		command     []string
+		output      string
+		exitCode    int
+	}{
+		{
+			name:        "smells_nothing_when_no_error",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo hi"},
+			output:      "hi\n",
+			exitCode:    0,
+		},
+		{
+			name:        "smells_stdout",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo hi; false"},
+			output:      "hi\n",
+			exitCode:    1,
+		},
+		{
+			name:        "smells_stderr",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo hi >&2; false"},
+			output:      "hi\n",
+			exitCode:    1,
+		},
+		{
+			name:        "smells_infix",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo lorem ipsum; echo hi; echo bye; false"},
+			output:      "lorem ipsum\nhi\nbye\n",
+			exitCode:    1,
+		},
+		{
+			name:        "smells_infix_inline",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo lorem hipsum; echo bye; false"},
+			output:      "lorem hipsum\nbye\n",
+			exitCode:    1,
+		},
+		{
+			name:        "smells_partial",
+			smell:       "hi",
+			expectSmell: true,
+			command:     []string{"bash", "-ec", "echo hi, how are you; false"},
+			output:      "hi, how are you\n",
+			exitCode:    1,
+		},
+		{
+			name:        "no_smell",
+			smell:       "hi",
+			expectSmell: false,
+			command:     []string{"bash", "-ec", "echo bye, how were you; false"},
+			output:      "bye, how were you\n",
+			exitCode:    1,
+		},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			sh, err := shell.New()
+			assert.NilError(t, err)
+
+			out := &bytes.Buffer{}
+			sh.Writer = out
+			if err := sh.RunWithOlfactor(
+				context.Background(),
+				test.smell,
+				test.command[0],
+				test.command[1:]...,
+			); err == nil {
+				// if there is no error, we expect an 0 exit code
+				assert.Check(t, test.exitCode == 0)
+			} else if derr := new(shell.OlfactoryError); !errors.As(err, &derr) {
+				assert.Check(t, !test.expectSmell, "no smell detected, but %s was expected", test.smell)
+				assert.ErrorContains(t, err, "exit status 1")
+			} else {
+				// if there was a OlfactoryError, we expect the smell to match the test.smell
+				// and the exit code to match the test.exitCode
+				assert.ErrorContains(t, err, "error running command: exit status 1, detected: hi")
+			}
+			assert.Equal(t, test.output, out.String())
+		})
+	}
+}
+
 func TestRunWithoutPrompt(t *testing.T) {
+	t.Parallel()
+
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
@@ -383,6 +479,8 @@ func TestRunWithoutPrompt(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		in      time.Duration
 		want    time.Duration
@@ -405,12 +503,16 @@ func TestRound(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := shell.Round(tt.in)
-		if got != tt.want {
-			t.Errorf("shell.Round(%v): got %v, want %v", tt.in, got, tt.want)
-		}
-		if got.String() != tt.wantStr {
-			t.Errorf("shell.Round(%v): got %q, want %v", tt.in, got.String(), tt.wantStr)
-		}
+		tt := tt
+		t.Run(tt.wantStr, func(t *testing.T) {
+			t.Parallel()
+			got := shell.Round(tt.in)
+			if got != tt.want {
+				t.Errorf("shell.Round(%v): got %v, want %v", tt.in, got, tt.want)
+			}
+			if got.String() != tt.wantStr {
+				t.Errorf("shell.Round(%v): got %q, want %v", tt.in, got.String(), tt.wantStr)
+			}
+		})
 	}
 }

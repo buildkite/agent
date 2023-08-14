@@ -1,4 +1,4 @@
-package replacer
+package replacer_test
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/redact"
+	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -98,7 +99,7 @@ func TestReplacerLoremIpsum(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			replacer := New(&buf, test.needles, redact.Redact)
+			replacer := replacer.New(&buf, test.needles, redact.Redact)
 			fmt.Fprint(replacer, lipsum)
 			replacer.Flush()
 
@@ -112,7 +113,7 @@ func TestReplacerLoremIpsum(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			replacer := New(&buf, test.needles, redact.Redact)
+			replacer := replacer.New(&buf, test.needles, redact.Redact)
 			for _, c := range []byte(lipsum) {
 				replacer.Write([]byte{c})
 			}
@@ -141,7 +142,6 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 			want:    "Lorem [REDACTED] dolor sit amet",
 		},
 		{
-
 			desc: "Break stream mid-secret with pending redaction",
 			// "um do" is marked as a redacted range, but because "ipsum dolor"
 			// is incomplete, [REDACTED] isn't written out yet. Later,
@@ -161,9 +161,10 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
 			var buf strings.Builder
 
-			replacer := New(&buf, test.needles, redact.Redact)
+			replacer := replacer.New(&buf, test.needles, redact.Redact)
 
 			for _, input := range test.inputs {
 				fmt.Fprint(replacer, input)
@@ -181,7 +182,7 @@ func TestReplacerResetMidStream(t *testing.T) {
 	t.Parallel()
 
 	var buf strings.Builder
-	replacer := New(&buf, []string{"secret1111"}, redact.Redact)
+	replacer := replacer.New(&buf, []string{"secret1111"}, redact.Redact)
 
 	// start writing to the stream (no trailing newline, to be extra tricky)
 	replacer.Write([]byte("redact secret1111 but don't redact secret2222 until"))
@@ -203,7 +204,7 @@ func TestReplacerMultibyte(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	replacer := New(&buf, []string{"ÿ"}, redact.Redact)
+	replacer := replacer.New(&buf, []string{"ÿ"}, redact.Redact)
 
 	replacer.Write([]byte("fooÿbar"))
 	replacer.Flush()
@@ -218,7 +219,7 @@ func TestReplacerMultiLine(t *testing.T) {
 
 	var buf strings.Builder
 
-	replacer := New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
+	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
 
 	fmt.Fprintln(replacer, "lalalala")
 	fmt.Fprintln(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----")
@@ -236,7 +237,7 @@ func TestReplacerMultiLine(t *testing.T) {
 
 func BenchmarkReplacer(b *testing.B) {
 	b.ResetTimer()
-	r := New(io.Discard, bigLipsumSecrets, redact.Redact)
+	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redact)
 	for n := 0; n < b.N; n++ {
 		fmt.Fprintln(r, bigLipsum)
 	}
@@ -268,7 +269,7 @@ func FuzzReplacer(f *testing.F) {
 		}
 
 		var sb strings.Builder
-		replacer := New(&sb, secrets, redact.Redact)
+		replacer := replacer.New(&sb, secrets, redact.Redact)
 		if split < 0 || split >= len(plaintext) {
 			fmt.Fprint(replacer, plaintext)
 		} else {

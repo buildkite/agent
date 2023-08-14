@@ -25,7 +25,7 @@ directory.
 
 You might also be familiar with `git clone --bare`: this exposes all the
 normally-hidden Git magic, at the expense of not checking out the main branch
-for you in the root of the directory. 
+for you in the root of the directory.
 
 So instead of:
 
@@ -53,7 +53,7 @@ HEAD		config		description	hooks		info		objects		packed-refs	refs
 
 `git clone --mirror` is just like `git clone --bare`, except it also clones
 all the other stuff you don't normally get with `git clone` or
-`git clone --bare`. 
+`git clone --bare`.
 
 For our purposes we are interested in `--mirror` because it gives us _all_ the
 branches, which is important because the agent doesn't know in advance which
@@ -84,7 +84,7 @@ surprise you! (The answer is no. No, they are probably not safe).
 This is the reason we have a locking system in the mirror to prevent multiple
 agents updating the mirror at the same time.
 
-Because the mirror directory can be a network file share, we also need to 
+Because the mirror directory can be a network file share, we also need to
 ensure the lock works across multiple machines. We do that with file-based
 locks.
 
@@ -122,7 +122,7 @@ mostly belong to `Mirror`. So far so good.
 
 What happens when we fetch new objects into Mirror, with `git fetch`?
 You might guess that `git fetch` only ever adds new objects, but unfortunately,
-`git fetch` by default runs `git maintentance run --auto`, which sometimes
+`git fetch` by default runs `git maintenance run --auto`, which sometimes
 cleans up old unreferenced objects.
 
 Unreferenced by _what_? By `Mirror` _only_. `Mirror` doesn't know that its
@@ -149,8 +149,8 @@ it works, and if you have git mirrors enabled, it's relatively painless.
 That's the usual way. `git remote update` updates mirrors, and it updates
 _everything_ in a mirror. But for CI/CD purposes we only need the mirror to have
 objects needed for a particular job. Eagerly updating everything with
-`git remote update` is too much work. So in PR 
-[#1112](https://github.com/buildkite/agent/pull/1112) we switched from 
+`git remote update` is too much work. So in PR
+[#1112](https://github.com/buildkite/agent/pull/1112) we switched from
 `git remote update` to `git fetch origin <branch>`.
 
 `git remote update` also almost certainly runs auto maintenance, clearing out
@@ -178,7 +178,7 @@ for each clone.
 
 Maybe! Worktrees have been around since at least Git 2.7.0.
 
-In a `--bare` or `--mirror` clone, Git doesn't provide a working copy of the 
+In a `--bare` or `--mirror` clone, Git doesn't provide a working copy of the
 files in the repo. But you can still get them, make commits, etc, if you need
 to. The most convenient way to do that is using a _worktree_.
 
@@ -207,14 +207,14 @@ across different machines sharing the mirror via a network share.
 Git submodules are a way for one repository to refer to another repository, so
 that the contents of that second repository can be used from code in the first.
 
-If we have mirrors enabled, what happens to submodules? Well, submodules 
+If we have mirrors enabled, what happens to submodules? Well, submodules
 _should be mirrored_. Fortunately, submodule mirrors can be created and updated
 just like regular mirrors, because at the end of the day, submodules are
 just _other repos_.
 
 But then the main repo---the one that we check out in order to do a job---how
 exactly does that learn how to use the submodule mirrors instead of cloning them
-directly? 
+directly?
 
 The agent has to update the submodule configuration in the main repo, using
 `git submodule update --reference <submodule_mirror>`. It has to do that for
