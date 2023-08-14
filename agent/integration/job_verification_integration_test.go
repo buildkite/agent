@@ -2,7 +2,6 @@ package integration
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -10,77 +9,28 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/bintest/v3"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 const (
-	defaultJobID = "my-job-id"
-	signingKey   = "llamasrock"
+	defaultJobID      = "my-job-id"
+	signingKeyLlamas  = "llamas"
+	signingKeyAlpacas = "alpacas"
 )
 
 var (
-	jobWithInvalidSignature = &api.Job{
-		ID:                 defaultJobID,
-		ChunksMaxSizeBytes: 1024,
-		Step: pipeline.CommandStep{
-			Command: "echo hello world",
-			Signature: &pipeline.Signature{
-				Algorithm:    "hmac-sha256",
-				SignedFields: []string{"command"},
-				Value:        "bm90LXRoZS1yZWFsLXNpZ25hdHVyZQ==", // base64("not-the-real-signature"), an invalid signature
-			},
-		},
-		Env: map[string]string{
-			"BUILDKITE_COMMAND": "echo hello world",
-		},
-	}
-
-	jobWithValidSignature = &api.Job{
-		ID:                 defaultJobID,
-		ChunksMaxSizeBytes: 1024,
-		Step: pipeline.CommandStep{
-			Command: "echo hello world",
-			Signature: &pipeline.Signature{
-				Algorithm:    "hmac-sha256",
-				SignedFields: []string{"command"},
-				// To calculate the below value:
-				// $ echo -n "llamasrock" > ~/secretkey.txt &&  \
-				//   echo "steps: [{command: 'echo hello world'}]" \
-				//   | buildkite-agent pipeline upload --dry-run --signing-key-path ~/secretkey.txt \
-				//   | jq ".steps[0].signature.value"
-				Value: "lBpQXxY9mrqN4mnhhNXdXr7PfAjXSPG7nN0zoAPclG4=",
-			},
-		},
-		Env: map[string]string{
-			"BUILDKITE_COMMAND": "echo hello world",
-		},
-	}
-
-	jobWithNoSignature = &api.Job{
+	job = api.Job{
 		ChunksMaxSizeBytes: 1024,
 		ID:                 defaultJobID,
 		Step:               pipeline.CommandStep{Command: "echo hello world"},
 		Env:                map[string]string{"BUILDKITE_COMMAND": "echo hello world"},
 	}
 
-	jobWithMismatchedStepAndJob = &api.Job{
+	jobWithMismatchedStepAndJob = api.Job{
 		ID:                 defaultJobID,
 		ChunksMaxSizeBytes: 1024,
-		Step: pipeline.CommandStep{
-			Signature: &pipeline.Signature{
-				Algorithm:    "hmac-sha256",
-				SignedFields: []string{"command"},
-				// To calculate the below value:
-				// $ echo -n "llamasrock" > ~/secretkey.txt &&  \
-				//   echo "steps: [{command: 'echo hello world'}]" \
-				//   | buildkite-agent pipeline upload --dry-run --signing-key-path ~/secretkey.txt \
-				//   | jq ".steps[0].signature.value"
-				Value: "lBpQXxY9mrqN4mnhhNXdXr7PfAjXSPG7nN0zoAPclG4=",
-			},
-			Command: "echo hello world",
-		},
-		Env: map[string]string{
-			"BUILDKITE_COMMAND": "echo 'THIS ISN'T HELLO WORLD!!!! CRIMES'",
-		},
+		Step:               pipeline.CommandStep{Command: "echo hello world"},
+		Env:                map[string]string{"BUILDKITE_COMMAND": "echo 'THIS ISN'T HELLO WORLD!!!! CRIMES'"},
 	}
 )
 
@@ -90,7 +40,9 @@ func TestJobVerification(t *testing.T) {
 	cases := []struct {
 		name                     string
 		agentConf                agent.AgentConfiguration
-		job                      *api.Job
+		job                      api.Job
+		signingKey               jwk.Key
+		verificationJWKS         jwk.Set
 		mockBootstrapExpectation func(*bintest.Mock)
 		expectedExitStatus       string
 		expectedSignalReason     string
@@ -99,7 +51,9 @@ func TestJobVerification(t *testing.T) {
 		{
 			name:                     "when job signature is invalid, and InvalidSignatureBehavior is block, it refuses the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourBlock},
-			job:                      jobWithInvalidSignature,
+			job:                      job,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas), // different signing and verification keys
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyAlpacas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
@@ -108,7 +62,9 @@ func TestJobVerification(t *testing.T) {
 		{
 			name:                     "when job signature is invalid, and InvalidSignatureBehavior is warn, it warns and runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourWarn},
-			job:                      jobWithInvalidSignature,
+			job:                      job,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas), // different signing and verification keys
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyAlpacas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
 			expectedExitStatus:       "0",
 			expectLogsContain:        []string{"⚠️ WARNING"},
@@ -116,7 +72,9 @@ func TestJobVerification(t *testing.T) {
 		{
 			name:                     "when job signature is valid, it runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourBlock},
-			job:                      jobWithValidSignature,
+			job:                      job,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
 			expectedExitStatus:       "0",
 			expectedSignalReason:     "",
@@ -124,7 +82,9 @@ func TestJobVerification(t *testing.T) {
 		{
 			name:                     "when job signature is missing, and NoSignatureBehavior is block, it refuses the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
-			job:                      jobWithNoSignature,
+			job:                      job,
+			signingKey:               nil,
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, "this one is the naughty one")),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
@@ -133,7 +93,9 @@ func TestJobVerification(t *testing.T) {
 		{
 			name:                     "when job signature is missing, and NoSignatureBehavior is warn, it warns and runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourWarn},
-			job:                      jobWithNoSignature,
+			job:                      job,
+			signingKey:               nil,
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
 			expectedExitStatus:       "0",
 			expectLogsContain:        []string{"⚠️ WARNING"},
@@ -142,6 +104,8 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step signature matches, but the job doesn't match the step, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedStepAndJob,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
@@ -151,25 +115,26 @@ func TestJobVerification(t *testing.T) {
 					jobWithMismatchedStepAndJob.Env["BUILDKITE_COMMAND"], jobWithMismatchedStepAndJob.Step.Command),
 			},
 		},
+		{
+			name:                     "when the step has a signature, but the JobRunner doesn't have a verification key, it fails signature verification",
+			agentConf:                agent.AgentConfiguration{},
+			job:                      job,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         nil,
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"but no verification key was provided, so the job can't be verified",
+			},
+		},
 	}
 
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-
-			keyFile, err := os.CreateTemp("", "keyfile")
-			if err != nil {
-				t.Fatalf("making keyfile: %v", err)
-			}
-			defer os.Remove(keyFile.Name())
-
-			_, err = keyFile.Write([]byte(signingKey))
-			if err != nil {
-				t.Fatalf("writing keyfile: %v", err)
-			}
-
-			tc.agentConf.JobVerificationKeyPath = keyFile.Name()
 
 			// create a mock agent API
 			e := createTestAgentEndpoint()
@@ -180,7 +145,14 @@ func TestJobVerification(t *testing.T) {
 			tc.mockBootstrapExpectation(mb)
 			defer mb.CheckAndClose(t)
 
-			runJob(t, tc.job, server, tc.agentConf, mb)
+			tc.job.Step = signStep(t, tc.job.Step, tc.signingKey)
+			runJob(t, testRunJobConfig{
+				job:              &tc.job,
+				server:           server,
+				agentCfg:         tc.agentConf,
+				mockBootstrap:    mb,
+				verificationJWKS: tc.verificationJWKS,
+			})
 
 			job := e.finishesFor(t, tc.job.ID)[0]
 
@@ -203,42 +175,51 @@ func TestJobVerification(t *testing.T) {
 	}
 }
 
-func TestWhenTheJobHasASignature_ButTheJobRunnerCantVerify_ItRefusesTheJob(t *testing.T) {
-	t.Parallel()
+func symmetricJWKFor(t *testing.T, payload string) jwk.Key {
+	t.Helper()
 
-	job := jobWithValidSignature
-
-	// create a mock agent API
-	e := createTestAgentEndpoint()
-	server := e.server(job.ID)
-	defer server.Close()
-
-	mb := mockBootstrap(t)
-	mb.Expect().NotCalled()
-	defer mb.CheckAndClose(t)
-
-	runJob(t, job, server, agent.AgentConfiguration{}, mb) // note no verification config
-
-	finish := e.finishesFor(t, job.ID)[0]
-
-	if got, want := finish.ExitStatus, "-1"; got != want {
-		t.Errorf("job.ExitStatus = %q, want %q", got, want)
+	key, err := jwk.FromRaw([]byte(payload)) // calling FromRaw on a []byte will always yield a symmetric key
+	if err != nil {
+		t.Fatalf("creating jwk: %v", err)
 	}
 
-	logs := e.logsFor(t, job.ID)
-
-	expectLogsContain := []string{
-		"⚠️ ERROR",
-		fmt.Sprintf("job %q was signed with signature %q, but no verification key was provided, so the job can't be verified", job.ID, job.Step.Signature.Value),
+	err = key.Set("alg", "HS256")
+	if err != nil {
+		t.Fatalf("setting alg: %v", err)
 	}
 
-	for _, want := range expectLogsContain {
-		if !strings.Contains(logs, want) {
-			t.Errorf("logs = %q, want to contain %q", logs, want)
+	err = key.Set("kid", payload) // please don't make the id the key in real life
+	if err != nil {
+		t.Fatalf("setting kid: %v", err)
+	}
+
+	return key
+}
+
+func jwksFromKeys(t *testing.T, jwkes ...jwk.Key) jwk.Set {
+	set := jwk.NewSet()
+	for _, jwk := range jwkes {
+		err := set.AddKey(jwk)
+		if err != nil {
+			t.Fatalf("adding key to set: %v", err)
 		}
 	}
 
-	if got, want := finish.SignalReason, agent.SignalReasonSignatureRejected; got != want {
-		t.Errorf("job.SignalReason = %q, want %q", got, want)
+	return set
+}
+
+func signStep(t *testing.T, step pipeline.CommandStep, key jwk.Key) pipeline.CommandStep {
+	t.Helper()
+
+	t.Logf("%s: signing step with key: %v", t.Name(), key)
+	if key == nil {
+		return step
 	}
+
+	signature, err := pipeline.Sign(&step, key)
+	if err != nil {
+		t.Fatalf("signing step: %v", err)
+	}
+	step.Signature = signature
+	return step
 }

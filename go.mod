@@ -19,6 +19,7 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-querystring v1.1.0
+	github.com/lestrrat-go/jwx/v2 v2.0.11
 	github.com/mattn/go-zglob v0.0.4
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/oleiade/reflections v1.0.1
@@ -60,9 +61,11 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/ebitengine/purego v0.4.0-alpha.4.0.20230519103000-ee8dcecc618f // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/s2a-go v0.1.4 // indirect
@@ -71,6 +74,11 @@ require (
 	github.com/googleapis/gax-go/v2 v2.12.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.1 // indirect
+	github.com/lestrrat-go/httpcc v1.0.1 // indirect
+	github.com/lestrrat-go/httprc v1.0.4 // indirect
+	github.com/lestrrat-go/iter v1.0.2 // indirect
+	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/outcaste-io/ristretto v0.2.1 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect
@@ -80,6 +88,7 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.6.0 // indirect
+	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/tinylib/msgp v1.1.8 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.16.0 // indirect

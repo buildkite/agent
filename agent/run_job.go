@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/hook"
-	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -34,19 +33,6 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	defer done()
 
 	r.startedAt = time.Now()
-
-	var verifier pipeline.Verifier
-	if r.conf.AgentConfiguration.JobVerificationKeyPath != "" {
-		verificationKey, err := os.ReadFile(r.conf.AgentConfiguration.JobVerificationKeyPath)
-		if err != nil {
-			return fmt.Errorf("failed to read job verification key: %w", err)
-		}
-
-		verifier, err = pipeline.NewVerifier("hmac-sha256", verificationKey)
-		if err != nil {
-			return fmt.Errorf("failed to create job verifier: %w", err)
-		}
-	}
 
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
@@ -89,7 +75,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	job := r.conf.Job
 
-	if verifier == nil && job.Step.Signature != nil {
+	if r.conf.JWKS == nil && job.Step.Signature != nil {
 		r.verificationFailureLogs(
 			fmt.Errorf("job %q was signed with signature %q, but no verification key was provided, so the job can't be verified", job.ID, job.Step.Signature.Value),
 			VerificationBehaviourBlock,
@@ -99,9 +85,9 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		return nil
 	}
 
-	if verifier != nil {
+	if r.conf.JWKS != nil {
 		ise := &invalidSignatureError{}
-		switch err := r.verifyJob(verifier); {
+		switch err := r.verifyJob(r.conf.JWKS); {
 		case errors.Is(err, ErrNoSignature):
 			r.verificationFailureLogs(err, r.NoSignatureBehavior)
 			if r.NoSignatureBehavior == VerificationBehaviourBlock {

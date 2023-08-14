@@ -22,6 +22,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/bintest/v3"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 func mockBootstrap(t *testing.T) *bintest.Mock {
@@ -38,7 +39,15 @@ func mockBootstrap(t *testing.T) *bintest.Mock {
 	return bs
 }
 
-func runJob(t *testing.T, j *api.Job, server *httptest.Server, cfg agent.AgentConfiguration, bs *bintest.Mock) {
+type testRunJobConfig struct {
+	job              *api.Job
+	server           *httptest.Server
+	agentCfg         agent.AgentConfiguration
+	mockBootstrap    *bintest.Mock
+	verificationJWKS jwk.Set
+}
+
+func runJob(t *testing.T, cfg testRunJobConfig) {
 	t.Helper()
 
 	l := logger.Discard
@@ -48,16 +57,17 @@ func runJob(t *testing.T, j *api.Job, server *httptest.Server, cfg agent.AgentCo
 	scope := m.Scope(metrics.Tags{})
 
 	// set the bootstrap into the config
-	cfg.BootstrapScript = bs.Path
+	cfg.agentCfg.BootstrapScript = cfg.mockBootstrap.Path
 
 	client := api.NewClient(l, api.Config{
-		Endpoint: server.URL,
+		Endpoint: cfg.server.URL,
 		Token:    "llamasrock",
 	})
 
 	jr, err := agent.NewJobRunner(l, client, agent.JobRunnerConfig{
-		Job:                j,
-		AgentConfiguration: cfg,
+		Job:                cfg.job,
+		JWKS:               cfg.verificationJWKS,
+		AgentConfiguration: cfg.agentCfg,
 		MetricsScope:       scope,
 	})
 	if err != nil {

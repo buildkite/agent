@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/internal/pipeline"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 var ErrNoSignature = errors.New("job had no signature to verify")
@@ -40,7 +40,7 @@ func (r *JobRunner) verificationFailureLogs(err error, behavior string) {
 	}
 }
 
-func (r *JobRunner) verifyJob(verifier pipeline.Verifier) error {
+func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	step := r.conf.Job.Step
 
 	if step.Matrix != nil {
@@ -55,7 +55,7 @@ func (r *JobRunner) verifyJob(verifier pipeline.Verifier) error {
 	}
 
 	// Verify the signature
-	if err := step.Signature.Verify(&step, verifier); err != nil {
+	if err := step.Signature.Verify(&step, r.conf.JWKS); err != nil {
 		return newInvalidSignatureError(err)
 	}
 

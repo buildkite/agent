@@ -7,6 +7,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/interpolate"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 // Pipeline models a pipeline.
@@ -149,10 +150,9 @@ func (p *Pipeline) interpolateEnvBlock(envMap *env.Environment) error {
 }
 
 // Sign signs each signable part of the pipeline. Currently this is limited to
-// command steps (including command steps within group steps). The Signer is
-// reset before starting, and after each part. Parts are mutated directly, so an
-// error part-way through may leave some steps un-signed.
-func (p *Pipeline) Sign(signer Signer) error {
-	signer.Reset()
-	return p.Steps.sign(signer)
+// command steps (including command steps within group steps). Parts are
+// mutated directly, so an error part-way through may leave some steps
+// un-signed.
+func (p *Pipeline) Sign(key jwk.Key) error {
+	return p.Steps.sign(key)
 }

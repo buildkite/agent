@@ -21,6 +21,7 @@ import (
 	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 const (
@@ -79,6 +80,9 @@ type JobRunnerConfig struct {
 
 	// How often to check if the job has been cancelled
 	JobStatusInterval time.Duration
+
+	// The JSON Web Keyset for verifying the job
+	JWKS jwk.Set
 
 	// A scope for metrics within a job
 	MetricsScope *metrics.Scope
@@ -377,11 +381,6 @@ func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (j
 }
 
 func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, error) {
-	if r.conf.AgentConfiguration.JobVerificationKeyPath == "" {
-		// We won't be verifying jobs, so it doesn't matter
-		return "if you're seeing this string, there's a problem with the job verification code in the agent. contact support@buildkite.com", nil
-	}
-
 	switch behavior {
 	case VerificationBehaviourBlock, VerificationBehaviourWarn:
 		return behavior, nil
@@ -498,8 +497,16 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
-	if r.conf.AgentConfiguration.JobSigningKeyPath != "" {
-		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_PATH"] = r.conf.AgentConfiguration.JobSigningKeyPath
+	if r.conf.AgentConfiguration.JobSigningJWKSPath != "" {
+		env["BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH"] = r.conf.AgentConfiguration.JobSigningJWKSPath
+	}
+
+	if r.conf.AgentConfiguration.JobSigningKeyID != "" {
+		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID"] = r.conf.AgentConfiguration.JobSigningKeyID
+	}
+
+	if r.conf.AgentConfiguration.JobSigningAlgorithm != "" {
+		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM"] = r.conf.AgentConfiguration.JobSigningAlgorithm
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation

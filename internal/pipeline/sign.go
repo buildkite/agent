@@ -2,17 +2,15 @@ package pipeline
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"sort"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
+	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v2/jws"
 )
 
 // Signature models a signature (on a step, etc).
@@ -23,31 +21,36 @@ type Signature struct {
 }
 
 // Sign computes a new signature for an object containing values using a given
-// signer. Sign resets the signer after use.
-func Sign(sf SignedFielder, signer Signer) (*Signature, error) {
+// key.
+func Sign(sf SignedFielder, key jwk.Key) (*Signature, error) {
+	payload := &bytes.Buffer{}
+
 	values := sf.SignedFields()
 	if len(values) == 0 {
 		return nil, errors.New("sign: no fields to sign")
 	}
 
 	// Ensure this part is the same as in Verify...
-	defer signer.Reset()
-	writeLengthPrefixed(signer, signer.AlgorithmName())
-	fields, err := writeFields(signer, values)
+	writeLengthPrefixed(payload, key.Algorithm().String())
+	fields, err := writeFields(payload, values)
 	if err != nil {
 		return nil, err
 	}
 	// ...end
 
-	sig, err := signer.Sign()
+	sig, err := jws.Sign(nil,
+		jws.WithKey(key.Algorithm(), key),
+		jws.WithDetachedPayload(payload.Bytes()),
+		jws.WithCompact(),
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Signature{
-		Algorithm:    signer.AlgorithmName(),
+		Algorithm:    key.Algorithm().String(),
 		SignedFields: fields,
-		Value:        base64.StdEncoding.EncodeToString(sig),
+		Value:        string(sig),
 	}, nil
 }
 
@@ -56,18 +59,9 @@ func Sign(sf SignedFielder, signer Signer) (*Signature, error) {
 // (Verify does not create a new verifier based on the Algorithm field, in case
 // you want to use a non-standard algorithm, but it must match the verifier's
 // AlgorithmName).
-func (s *Signature) Verify(sf SignedFielder, verifier Verifier) error {
-	if s.Algorithm != verifier.AlgorithmName() {
-		return fmt.Errorf("algorithm name mismatch (signature alg = %q, verifier alg = %q)", s.Algorithm, verifier.AlgorithmName())
-	}
-
+func (s *Signature) Verify(sf SignedFielder, keySet jwk.Set) error {
 	if len(s.SignedFields) == 0 {
 		return errors.New("signature covers no fields")
-	}
-
-	sig, err := base64.StdEncoding.DecodeString(s.Value)
-	if err != nil {
-		return fmt.Errorf("decoding signature value: %w", err)
 	}
 
 	values, err := sf.ValuesForFields(s.SignedFields)
@@ -75,15 +69,18 @@ func (s *Signature) Verify(sf SignedFielder, verifier Verifier) error {
 		return fmt.Errorf("obtaining values for fields: %w", err)
 	}
 
-	// Ensure this part is the same as in Sign...
-	defer verifier.Reset()
-	writeLengthPrefixed(verifier, verifier.AlgorithmName())
-	if _, err := writeFields(verifier, values); err != nil {
+	payload := &bytes.Buffer{}
+	writeLengthPrefixed(payload, s.Algorithm)
+	if _, err := writeFields(payload, values); err != nil {
 		return err
 	}
 	// ...end
 
-	return verifier.Verify(sig)
+	_, err = jws.Verify([]byte(s.Value),
+		jws.WithKeySet(keySet),
+		jws.WithDetachedPayload(payload.Bytes()),
+	)
+	return err
 }
 
 // unmarshalAny unmarshals an *ordered.Map[string, any] into this Signature.
@@ -146,92 +143,6 @@ type SignedFielder interface {
 	// values if "mandatory" fields are missing (e.g. signing a command step
 	// should always sign the command).
 	ValuesForFields([]string) (map[string]string, error)
-}
-
-// NewSigner returns a new Signer for the given algorithm,
-// provided with a signing/verification key.
-func NewSigner(algorithm string, key any) (Signer, error) {
-	switch algorithm {
-	case "hmac-sha256":
-		return newHMACSHA256(key)
-	default:
-		return nil, fmt.Errorf("unknown signing algorithm %q", algorithm)
-	}
-}
-
-// NewSigner returns a new Verifier for the given algorithm,
-// provided with a signing/verification key.
-func NewVerifier(algorithm string, key any) (Verifier, error) {
-	switch algorithm {
-	case "hmac-sha256":
-		return newHMACSHA256(key)
-	default:
-		return nil, fmt.Errorf("unknown signing algorithm %q", algorithm)
-	}
-}
-
-// Signer describes operations that support the Sign func.
-type Signer interface {
-	// Data written here is hashed into a digest. The signature is (at least
-	// nominally) computed from the digest.
-	hash.Hash
-
-	// AlgorithmName returns the name of the algorithm (which should match the
-	// argument to NewSigner).
-	AlgorithmName() string
-
-	// Sign returns a signature for the data written so far.
-	Sign() ([]byte, error)
-}
-
-// Verifier describes operations that support the Signature.Verify method.
-type Verifier interface {
-	// Data written here is hashed into a digest. The verifier must check (at
-	// least nominally) that the digest matches the data, and the signature is
-	// a valid signature for the digest.
-	hash.Hash
-
-	// AlgorithmName returns the name of the algorithm (which should match the
-	// argument to NewVerifier).
-	AlgorithmName() string
-
-	// Verify checks a given signature is valid for the data written so far.
-	Verify([]byte) error
-}
-
-type hmacSHA256 struct {
-	hash.Hash
-}
-
-func newHMACSHA256(key any) (hmacSHA256, error) {
-	var bkey []byte
-	switch tkey := key.(type) {
-	case []byte:
-		bkey = tkey
-
-	case string:
-		bkey = []byte(tkey)
-
-	default:
-		return hmacSHA256{}, fmt.Errorf("wrong key type (got %T, want []byte or string)", key)
-	}
-	return hmacSHA256{
-		Hash: hmac.New(sha256.New, bkey),
-	}, nil
-}
-
-func (h hmacSHA256) AlgorithmName() string { return "hmac-sha256" }
-
-func (h hmacSHA256) Sign() ([]byte, error) {
-	return h.Hash.Sum(nil), nil
-}
-
-func (h hmacSHA256) Verify(sig []byte) error {
-	c := h.Hash.Sum(nil)
-	if !bytes.Equal(c, sig) {
-		return errors.New("signature mismatch")
-	}
-	return nil
 }
 
 // writeFields writes the values (length-prefixed) into h. It also returns the
