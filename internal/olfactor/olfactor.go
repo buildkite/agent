@@ -6,14 +6,18 @@ import (
 	"github.com/buildkite/agent/v3/internal/replacer"
 )
 
-// Olfactor may be used for 'sniffing' the output of a command.
+// Olfactor may be used for 'sniffing' an io stream for a string. In other
+// words, the io stream can be monitored for a particular string, and if that
+// string is written to the io stream, the olfactor will record that it has
+// 'smelt' the string.
 type Olfactor struct {
 	smell string
 	smelt bool
 }
 
-// New returns a writer and an olfactor. Writes to the writer will be forwarded
-// to `dst` and the olfactor will sniff for the given smell.
+// New returns an io.Writer and an Olfactor. Writes to the writer will be
+// forwarded to `dst` and the returned Olfactor will recored whether `smell`
+// has been written to the io.Writer.
 func New(dst io.Writer, smell string) (io.Writer, *Olfactor) {
 	if smell == "" {
 		return dst, &Olfactor{smell: "", smelt: true}
@@ -25,7 +29,7 @@ func New(dst io.Writer, smell string) (io.Writer, *Olfactor) {
 	}), d
 }
 
-// Smelt returns true if the olfactor smelt the smell.
+// Smelt returns true if and only if the olfactor smelt the smell.
 func (d *Olfactor) Smelt() bool {
 	return d.smelt
 }
