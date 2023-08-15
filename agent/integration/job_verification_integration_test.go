@@ -22,15 +22,52 @@ var (
 	job = api.Job{
 		ChunksMaxSizeBytes: 1024,
 		ID:                 defaultJobID,
-		Step:               pipeline.CommandStep{Command: "echo hello world"},
-		Env:                map[string]string{"BUILDKITE_COMMAND": "echo hello world"},
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+			Plugins: pipeline.Plugins{
+				{
+					Name: "some-plugin#v1.0.0",
+					Config: map[string]string{
+						"key": "value",
+					},
+				},
+			},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_PLUGINS": `[{"some-plugin#v1.0.0":{"key":"value"}}]`,
+		},
 	}
 
 	jobWithMismatchedStepAndJob = api.Job{
 		ID:                 defaultJobID,
 		ChunksMaxSizeBytes: 1024,
-		Step:               pipeline.CommandStep{Command: "echo hello world"},
-		Env:                map[string]string{"BUILDKITE_COMMAND": "echo 'THIS ISN'T HELLO WORLD!!!! CRIMES'"},
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo 'THIS ISN'T HELLO WORLD!!!! CRIMES'",
+		},
+	}
+
+	jobWithMismatchedPlugins = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+			Plugins: pipeline.Plugins{
+				{
+					Name: "some-plugin#v1.0.0",
+					Config: map[string]string{
+						"key": "value",
+					},
+				},
+			},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_PLUGINS": `[{"crimes-plugin#v1.0.0":{"steal":"everything"}}]`,
+		},
 	}
 )
 
@@ -113,6 +150,21 @@ func TestJobVerification(t *testing.T) {
 				"⚠️ ERROR",
 				fmt.Sprintf(`the value of field "command" on the job (%q) does not match the value of the field on the step (%q)`,
 					jobWithMismatchedStepAndJob.Env["BUILDKITE_COMMAND"], jobWithMismatchedStepAndJob.Step.Command),
+			},
+		},
+		{
+			name:                     "when the step signature matches, but the plugins doesn't match the step, it fails signature verification",
+			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			job:                      jobWithMismatchedPlugins,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				fmt.Sprintf(`the value of field "plugins" on the job (%q) does not match the value of the field on the step (%q)`,
+					jobWithMismatchedPlugins.Env["BUILDKITE_PLUGINS"], job.Env["BUILDKITE_PLUGINS"]),
 			},
 		},
 		{

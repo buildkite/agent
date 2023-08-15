@@ -1,7 +1,7 @@
 package pipeline
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -58,25 +58,62 @@ func (c *CommandStep) UnmarshalOrdered(src any) error {
 }
 
 // SignedFields returns the default fields for signing.
-func (c *CommandStep) SignedFields() map[string]string {
+func (c *CommandStep) SignedFields() (map[string]string, error) {
+	plugins := ""
+	if len(c.Plugins) > 0 {
+		// TODO: Reconsider using JSON here - is it stable enough?
+		pj, err := json.Marshal(c.Plugins)
+		if err != nil {
+			return nil, err
+		}
+		plugins = string(pj)
+	}
 	return map[string]string{
 		"command": c.Command,
-	}
+		"plugins": plugins,
+	}, nil
 }
 
 // ValuesForFields returns the contents of fields to sign.
 func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error) {
+	// Make a set of required fields. As fields is processed, mark them off by
+	// deleting them.
+	required := map[string]struct{}{
+		"command": {},
+		"plugins": {},
+	}
+
 	out := make(map[string]string, len(fields))
 	for _, f := range fields {
+		delete(required, f)
+
 		switch f {
 		case "command":
 			out["command"] = c.Command
+
+		case "plugins":
+			if len(c.Plugins) == 0 {
+				out["plugins"] = ""
+				break
+			}
+			// TODO: Reconsider using JSON here - is it stable enough?
+			val, err := json.Marshal(c.Plugins)
+			if err != nil {
+				return nil, err
+			}
+			out["plugins"] = string(val)
+
 		default:
 			return nil, fmt.Errorf("unknown or unsupported field for signing %q", f)
 		}
 	}
-	if _, ok := out["command"]; !ok {
-		return nil, errors.New("command is required for signature verification")
+
+	if len(required) > 0 {
+		missing := make([]string, 0, len(required))
+		for k := range required {
+			missing = append(missing, k)
+		}
+		return nil, fmt.Errorf("one or more required fields are not present: %v", missing)
 	}
 	return out, nil
 }
