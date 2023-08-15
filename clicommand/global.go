@@ -301,7 +301,7 @@ func setupLoggerAndConfig[T any](c *cli.Context, opts ...configOpts) (
 
 	warnings, err := loader.Load()
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "%s", err)
+		fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
 		os.Exit(1)
 	}
 
