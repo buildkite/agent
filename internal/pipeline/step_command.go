@@ -15,10 +15,11 @@ var _ SignedFielder = (*CommandStep)(nil)
 //
 // Standard caveats apply - see the package comment.
 type CommandStep struct {
-	Command   string     `yaml:"command"`
-	Plugins   Plugins    `yaml:"plugins,omitempty"`
-	Signature *Signature `yaml:"signature,omitempty"`
-	Matrix    any        `yaml:"matrix,omitempty"`
+	Command   string            `yaml:"command"`
+	Plugins   Plugins           `yaml:"plugins,omitempty"`
+	Env       map[string]string `yaml:"env,omitempty"`
+	Signature *Signature        `yaml:"signature,omitempty"`
+	Matrix    any               `yaml:"matrix,omitempty"`
 
 	// RemainingFields stores any other top-level mapping items so they at least
 	// survive an unmarshal-marshal round-trip.
@@ -68,10 +69,15 @@ func (c *CommandStep) SignedFields() (map[string]string, error) {
 		}
 		plugins = string(pj)
 	}
-	return map[string]string{
+	out := map[string]string{
 		"command": c.Command,
 		"plugins": plugins,
-	}, nil
+	}
+	// Steps can have their own env. These can be overridden by the pipeline!
+	for e, v := range c.Env {
+		out[EnvNamespacePrefix+e] = v
+	}
+	return out, nil
 }
 
 // ValuesForFields returns the contents of fields to sign.
@@ -81,6 +87,12 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error
 	required := map[string]struct{}{
 		"command": {},
 		"plugins": {},
+	}
+	// Env vars that the step has, but the pipeline doesn't have, are required.
+	// But we don't know what the pipeline has without passing it in, so treat
+	// all step env vars as required.
+	for e := range c.Env {
+		required[EnvNamespacePrefix+e] = struct{}{}
 	}
 
 	out := make(map[string]string, len(fields))
@@ -104,6 +116,15 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error
 			out["plugins"] = string(val)
 
 		default:
+			if e, has := strings.CutPrefix(f, EnvNamespacePrefix); has {
+				// Env vars requested in `fields`, but are not in this step, are
+				// skipped.
+				if v, ok := c.Env[e]; ok {
+					out[f] = v
+				}
+				break
+			}
+
 			return nil, fmt.Errorf("unknown or unsupported field for signing %q", f)
 		}
 	}
@@ -128,11 +149,16 @@ func (c *CommandStep) interpolate(env interpolate.Env) error {
 		return err
 	}
 
-	if c.Matrix, err = interpolateAny(env, c.Matrix); err != nil {
+	if err := interpolateMap(env, c.Env); err != nil {
 		return err
 	}
 
 	// NB: Do not interpolate Signature.
+
+	if c.Matrix, err = interpolateAny(env, c.Matrix); err != nil {
+		return err
+	}
+
 	if err := interpolateMap(env, c.RemainingFields); err != nil {
 		return err
 	}

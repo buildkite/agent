@@ -120,9 +120,10 @@ func (p *Pipeline) interpolateEnvBlock(envMap *env.Environment) error {
 }
 
 // Sign signs each signable part of the pipeline. Currently this is limited to
-// command steps (including command steps within group steps). Parts are
+// command steps (including command steps within group steps), including all
+// plugin configurations and the pipeline "env". Parts of the pipeline are
 // mutated directly, so an error part-way through may leave some steps
 // un-signed.
 func (p *Pipeline) Sign(key jwk.Key) error {
-	return p.Steps.sign(key)
+	return p.Steps.sign(p.Env.ToMap(), key)
 }

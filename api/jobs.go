@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/buildkite/agent/v3/internal/pipeline"
 )
@@ -37,6 +38,11 @@ func (j *Job) ValuesForFields(fields []string) (map[string]string, error) {
 			o[f] = j.Env["BUILDKITE_PLUGINS"]
 
 		default:
+			if e, has := strings.CutPrefix(f, pipeline.EnvNamespacePrefix); has {
+				o[f] = j.Env[e]
+				break
+			}
+
 			return nil, fmt.Errorf("unknown or unsupported field on Job struct for signing/verification: %q", f)
 		}
 	}
