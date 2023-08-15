@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.51.0](https://github.com/buildkite/agent/tree/v3.51.0) (2023-08-15)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.50.4...v3.51.0)
+
+### Added
+- Add --strict-single-hooks [#2268](https://github.com/buildkite/agent/pull/2268) (@DrJosh9000)
+- Add missing 'an' in annotation help [#2285](https://github.com/buildkite/agent/pull/2285) (@mdb)
+- [Experimental] Verify step signatures [#2210](https://github.com/buildkite/agent/pull/2210) (@moskyb)
+- [Experimental] Pipeline Signing/Verification with JWS [#2252](https://github.com/buildkite/agent/pull/2252) (@moskyb)
+- [Experimental] Include plugins in command step signatures [#2292](https://github.com/buildkite/agent/pull/2292) (@DrJosh9000)
+
+### Changed
+- Make the agent send a SIGTERM (configurable) before a SIGKILL to subprocesses [#2250](https://github.com/buildkite/agent/pull/2250) (@triarius)
+- Limit job log length [#2192](https://github.com/buildkite/agent/pull/2192) (@DrJosh9000)
+- Refactor redactor into streaming replacer and use it to redact secrets [#2277](https://github.com/buildkite/agent/pull/2277) (@DrJosh9000)
+- Dependency upgrades [#2278](https://github.com/buildkite/agent/pull/2278) [#2274](https://github.com/buildkite/agent/pull/2274) [#2271](https://github.com/buildkite/agent/pull/2271) [#2272](https://github.com/buildkite/agent/pull/2272) [#2275](https://github.com/buildkite/agent/pull/2275) [#2266](https://github.com/buildkite/agent/pull/2266) (@dependabot[bot])
+
+### Fixed
+- Fix `fatal: bad object` not detected from git fetch [#2286](https://github.com/buildkite/agent/pull/2286) (@triarius)
+- Fix scalar plugin parsing [#2264](https://github.com/buildkite/agent/pull/2264) (@DrJosh9000)
+
+### Internal
+- Reorganise step types among files [#2267](https://github.com/buildkite/agent/pull/2267) (@DrJosh9000)
+- Upload test coverage [#2270](https://github.com/buildkite/agent/pull/2270) (@DrJosh9000)
+- Remove unwrapping in error `Is` methods [#2269](https://github.com/buildkite/agent/pull/2269) (@triarius)
+- Use capacity hint in `concat` [#2288](https://github.com/buildkite/agent/pull/2288) (@DrJosh9000)
+- Add ordered.Unmarshal, and use it in pipeline parsing [#2279](https://github.com/buildkite/agent/pull/2279) (@DrJosh9000)
+- Create a setup method for config and logger to reduce boilerplate [#2281](https://github.com/buildkite/agent/pull/2281) (@triarius)
+- Add retry for publishing RPMs [#2280](https://github.com/buildkite/agent/pull/2280) (@triarius)
+- Fix data race in testAgentEndpoint [#2265](https://github.com/buildkite/agent/pull/2265) (@DrJosh9000)
+- Fix missing "fmt" import [#2287](https://github.com/buildkite/agent/pull/2287) (@DrJosh9000)
+
 ## [v3.50.4](https://github.com/buildkite/agent/tree/v3.50.4) (2023-07-31)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.50.3...v3.50.4)
 
