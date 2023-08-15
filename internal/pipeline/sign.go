@@ -25,7 +25,10 @@ type Signature struct {
 func Sign(sf SignedFielder, key jwk.Key) (*Signature, error) {
 	payload := &bytes.Buffer{}
 
-	values := sf.SignedFields()
+	values, err := sf.SignedFields()
+	if err != nil {
+		return nil, err
+	}
 	if len(values) == 0 {
 		return nil, errors.New("sign: no fields to sign")
 	}
@@ -134,7 +137,7 @@ func (s *Signature) unmarshalAny(o any) error {
 type SignedFielder interface {
 	// SignedFields returns the default set of fields to sign, and their values.
 	// This is called by Sign.
-	SignedFields() map[string]string
+	SignedFields() (map[string]string, error)
 
 	// ValuesForFields looks up each field and produces a map of values. This is
 	// called by Verify. The set of fields might differ from the default, e.g.

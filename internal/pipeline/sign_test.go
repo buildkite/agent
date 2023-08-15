@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
@@ -14,6 +15,21 @@ import (
 func TestSignVerify(t *testing.T) {
 	step := &CommandStep{
 		Command: "llamas",
+		Plugins: Plugins{
+			{
+				Name:   "some-plugin#v1.0.0",
+				Config: nil,
+			},
+			{
+				Name: "another-plugin#v3.4.5",
+				Config: ordered.MapFromItems(
+					ordered.TupleSA{
+						Key:   "llama",
+						Value: "Kuzco",
+					},
+				),
+			},
+		},
 	}
 
 	cases := []struct {
@@ -26,19 +42,19 @@ func TestSignVerify(t *testing.T) {
 			name:                           "HMAC-SHA256",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS256,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..f5NQYQtR0Eg-0pzzCon2ykzGy5oDPYtQw0C0fTKGI38",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..NDiUjV0myH279-OQi6eOKjgyhAPUnc5ZmZoynhUUvIo",
 		},
 		{
 			name:                           "HMAC-SHA384",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS384,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..HgHltOlatth2TCc4swArP1UL_Zm2Rh2ccEC26s1sFBO6FOW5qfW37uQ9CHAz6dhh",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..XGdZ7TG0lBSg7rXc091A3OaXAjODyI7aFkAjFJblD0YUnC5WW6WHgmJqlrG94x7z",
 		},
 		{
 			name:                           "HMAC-SHA512",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS512,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..mcph5zwioGkmx-aPrxExzc9QRzO4afn_kK_89aEuo4xYD0tcUD8OJom09x2xcvK6eRkOpvVlkrKLBzvh-7uu6w",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..GvKR_cGqNcF8EgffnkSoymJORoH60W36O80tYnGwnKXTUTh0XVmnEp0gT03YYRdf39JnwqbMGCticQJFFA_jWg",
 		},
 		{
 			name:           "RSA-PSS 256",
@@ -110,7 +126,7 @@ func TestSignVerify(t *testing.T) {
 
 type testFields map[string]string
 
-func (m testFields) SignedFields() map[string]string { return m }
+func (m testFields) SignedFields() (map[string]string, error) { return m, nil }
 
 func (m testFields) ValuesForFields(fields []string) (map[string]string, error) {
 	out := make(map[string]string, len(fields))

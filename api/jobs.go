@@ -32,6 +32,10 @@ func (j *Job) ValuesForFields(fields []string) (map[string]string, error) {
 		switch f {
 		case "command":
 			o[f] = j.Env["BUILDKITE_COMMAND"]
+
+		case "plugins":
+			o[f] = j.Env["BUILDKITE_PLUGINS"]
+
 		default:
 			return nil, fmt.Errorf("unknown or unsupported field on Job struct for signing/verification: %q", f)
 		}
