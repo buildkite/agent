@@ -3,7 +3,6 @@ package pipeline
 import (
 	"encoding/json"
 
-	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
 )
 
@@ -33,11 +32,6 @@ func (s *WaitStep) MarshalJSON() ([]byte, error) {
 
 func (s *WaitStep) interpolate(env interpolate.Env) error {
 	return interpolateMap(env, s.Contents)
-}
-
-func (s *WaitStep) unmarshalMap(m *ordered.MapSA) error {
-	s.Contents = m.ToMap()
-	return nil
 }
 
 func (*WaitStep) stepTag() {}

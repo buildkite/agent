@@ -28,52 +28,22 @@ func (p *Pipeline) MarshalJSON() ([]byte, error) {
 	return inlineFriendlyMarshalJSON(p)
 }
 
-// unmarshalAny unmarshals the pipeline from either []any (a legacy sequence of
-// steps) or *ordered.MapSA (a modern pipeline configuration).
-func (p *Pipeline) unmarshalAny(o any) error {
+// UnmarshalOrdered unmarshals the pipeline from either []any (a legacy
+// sequence of steps) or *ordered.MapSA (a modern pipeline configuration).
+func (p *Pipeline) UnmarshalOrdered(o any) error {
 	switch o := o.(type) {
 	case *ordered.MapSA:
 		// A pipeline can be a mapping.
-		err := o.Range(func(k string, v any) error {
-			switch k {
-			case "steps":
-				if err := p.Steps.unmarshalAny(v); err != nil {
-					return fmt.Errorf("unmarshaling steps: %w", err)
-				}
-
-			case "env":
-				// If they wrote `env: null` or similar, then they mean it.
-				if v == nil {
-					p.Env = nil
-					return nil
-				}
-
-				// v must be *ordered.MapSA. We want *ordered.MapSS.
-				msa, ok := v.(*ordered.MapSA)
-				if !ok {
-					return fmt.Errorf("unmarshaling env: got %T, want *ordered.Map[string, any]", v)
-				}
-				// Anything that is a string will fmt.Sprint as itself.
-				// Anything not a string will be converted to a string.
-				sprint := func(x any) string { return fmt.Sprint(x) }
-				p.Env = ordered.TransformValues(msa, sprint)
-
-			default:
-				// Preserve any other key.
-				if p.RemainingFields == nil {
-					p.RemainingFields = make(map[string]any)
-				}
-				p.RemainingFields[k] = v
-			}
-			return nil
-		})
-		if err != nil {
-			return err
+		// Wrap in a secret type to avoid infinite recursion between this method
+		// and ordered.Unmarshal.
+		type wrappedPipeline Pipeline
+		if err := ordered.Unmarshal(o, (*wrappedPipeline)(p)); err != nil {
+			return fmt.Errorf("unmarshaling Pipeline: %w", err)
 		}
 
 	case []any:
 		// A pipeline can be a sequence of steps.
-		if err := p.Steps.unmarshalAny(o); err != nil {
+		if err := ordered.Unmarshal(o, &p.Steps); err != nil {
 			return fmt.Errorf("unmarshaling steps: %w", err)
 		}
 

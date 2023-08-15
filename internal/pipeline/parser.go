@@ -22,15 +22,9 @@ func Parse(src io.Reader) (*Pipeline, error) {
 	// *yaml.Node into *ordered.Map, []any, or any (recursively).
 	// This resolves aliases and merges and gives a more convenient form to work
 	// with when handling different structural representations of the same
-	// configuration.
-	o, err := ordered.DecodeYAML(n)
-	if err != nil {
-		return nil, err
-	}
-
-	// Then decode _that_ into a pipeline.
+	// configuration. Then decode _that_ into a pipeline.
 	p := new(Pipeline)
-	return p, p.unmarshalAny(o)
+	return p, ordered.Unmarshal(n, p)
 }
 
 func formatYAMLError(err error) error {
