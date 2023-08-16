@@ -3,7 +3,7 @@ set -euo pipefail
 
 
 echo "--- :package: Downloading bk binary"
-go install github.com/buildkite/cli/v2/cmd/bk@main
+go install github.com/buildkite/cli/v2/cmd/bk@cdcc5fa4b6e209f5ffa79469dad04938d6eed0cd
 
 echo "--- :package: Downloading built binary"
 rm -rf pkg/*
