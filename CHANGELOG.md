@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.52.0](https://github.com/buildkite/agent/tree/v3.52.0) (2023-08-17)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.51.0...v3.52.0)
+
+### Added
+- [Experimental] Include pipeline and step env in step signatures [#2295](https://github.com/buildkite/agent/pull/2295) (@DrJosh9000)
+
+### Fixed
+- Fix step get is printing the address of the stdout stream at the start [#2299](https://github.com/buildkite/agent/pull/2299) (@triarius)
+
+### Changed
+- Add a newline after printing errors from the config parser [#2296](https://github.com/buildkite/agent/pull/2296) (@triarius)
+
+### Internal
+- Enable mount-buildkite-agent in release pipeline containers [#2298](https://github.com/buildkite/agent/pull/2298) (@DrJosh9000)
+- Update ecr, docker plugins, and agent image ver [#2297](https://github.com/buildkite/agent/pull/2297) (@DrJosh9000)
+- Pin bk cli used in agent pipeline to a commit [#2294](https://github.com/buildkite/agent/pull/2294) (@triarius)
+
 ## [v3.51.0](https://github.com/buildkite/agent/tree/v3.51.0) (2023-08-15)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.50.4...v3.51.0)
 
