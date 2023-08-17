@@ -30,6 +30,20 @@ func TestSignVerify(t *testing.T) {
 				),
 			},
 		},
+		Env: map[string]string{
+			"CONTEXT": "cats",
+			"DEPLOY":  "0",
+		},
+	}
+	// The pipeline-level env that the agent uploads:
+	signEnv := map[string]string{
+		"DEPLOY": "1",
+	}
+	// The backend combines the pipeline and step envs, providing a new env:
+	verifyEnv := map[string]string{
+		"CONTEXT": "cats",
+		"DEPLOY":  "1", // NB: pipeline env overrides step env.
+		"MISC":    "llama drama",
 	}
 
 	cases := []struct {
@@ -42,19 +56,19 @@ func TestSignVerify(t *testing.T) {
 			name:                           "HMAC-SHA256",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS256,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..NDiUjV0myH279-OQi6eOKjgyhAPUnc5ZmZoynhUUvIo",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..0kDPckkYX838NHBKfRA_be4FqpKpBabqohpgU5sGSGI",
 		},
 		{
 			name:                           "HMAC-SHA384",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS384,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..XGdZ7TG0lBSg7rXc091A3OaXAjODyI7aFkAjFJblD0YUnC5WW6WHgmJqlrG94x7z",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..GSufqnr_XZkobn0SYnoA2T_rciQJNenP7XMNuXPPcZai98KrE1kbD_FhVZn_D-d4",
 		},
 		{
 			name:                           "HMAC-SHA512",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS512,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..GvKR_cGqNcF8EgffnkSoymJORoH60W36O80tYnGwnKXTUTh0XVmnEp0gT03YYRdf39JnwqbMGCticQJFFA_jWg",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..QP7CAzIZLKylXhJ-t7eEPxIro2j0-BR03PpUGLfDgT0-5oycmHYJWaF8UNFLM425VEKhW88Tr749nYByVy4eZQ",
 		},
 		{
 			name:           "RSA-PSS 256",
@@ -99,7 +113,7 @@ func TestSignVerify(t *testing.T) {
 			t.Parallel()
 			signer, verifier := tc.generateSigner(tc.alg)
 
-			sig, err := Sign(step, signer)
+			sig, err := Sign(signEnv, step, signer)
 			if err != nil {
 				t.Fatalf("Sign(CommandStep, signer) error = %v", err)
 			}
@@ -117,7 +131,7 @@ func TestSignVerify(t *testing.T) {
 				}
 			}
 
-			if err := sig.Verify(step, verifier); err != nil {
+			if err := sig.Verify(verifyEnv, step, verifier); err != nil {
 				t.Errorf("sig.Verify(CommandStep, verifier) = %v", err)
 			}
 		})
@@ -167,9 +181,9 @@ func TestSignConcatenatedFields(t *testing.T) {
 
 	signer, _ := newSymmetricKeyPair(t, "alpacas", jwa.HS256)
 	for _, m := range maps {
-		sig, err := Sign(m, signer)
+		sig, err := Sign(nil, m, signer)
 		if err != nil {
-			t.Errorf("Sign(%v, pts) error = %v", m, err)
+			t.Fatalf("Sign(%v, pts) error = %v", m, err)
 		}
 
 		sigs[sig.Value] = append(sigs[sig.Value], m)
@@ -190,8 +204,8 @@ func TestUnknownAlgorithm(t *testing.T) {
 	signer, _ := newSymmetricKeyPair(t, "alpacas", jwa.HS256)
 	signer.Set(jwk.AlgorithmKey, "rot13")
 
-	if _, err := Sign(&CommandStep{Command: "llamas"}, signer); err == nil {
-		t.Errorf("Sign(CommandStep, signer) = %v, want non-nil error", err)
+	if _, err := Sign(nil, &CommandStep{Command: "llamas"}, signer); err == nil {
+		t.Errorf("Sign(nil, CommandStep, signer) = %v, want non-nil error", err)
 	}
 }
 
@@ -207,7 +221,7 @@ func TestVerifyBadSignature(t *testing.T) {
 	}
 
 	_, verifier := newSymmetricKeyPair(t, "alpacas", jwa.HS256)
-	if err := sig.Verify(cs, verifier); err == nil {
+	if err := sig.Verify(nil, cs, verifier); err == nil {
 		t.Errorf("sig.Verify(CommandStep, alpacas) = %v, want non-nil error", err)
 	}
 }
@@ -220,7 +234,84 @@ func TestSignUnknownStep(t *testing.T) {
 	}
 
 	signer, _ := newSymmetricKeyPair(t, "alpacas", jwa.HS256)
-	if err := steps.sign(signer); !errors.Is(err, errSigningRefusedUnknownStepType) {
+	if err := steps.sign(nil, signer); !errors.Is(err, errSigningRefusedUnknownStepType) {
 		t.Errorf("steps.sign(signer) = %v, want %v", err, errSigningRefusedUnknownStepType)
+	}
+}
+
+func TestSignVerifyEnv(t *testing.T) {
+	cases := []struct {
+		name        string
+		step        *CommandStep
+		pipelineEnv map[string]string
+		verifyEnv   map[string]string
+	}{
+		{
+			name: "step env only",
+			step: &CommandStep{
+				Command: "llamas",
+				Env: map[string]string{
+					"CONTEXT": "cats",
+					"DEPLOY":  "0",
+				},
+			},
+			verifyEnv: map[string]string{
+				"CONTEXT": "cats",
+				"DEPLOY":  "0",
+				"MISC":    "apple",
+			},
+		},
+		{
+			name: "pipeline env only",
+			step: &CommandStep{
+				Command: "llamas",
+			},
+			pipelineEnv: map[string]string{
+				"CONTEXT": "cats",
+				"DEPLOY":  "0",
+			},
+			verifyEnv: map[string]string{
+				"CONTEXT": "cats",
+				"DEPLOY":  "0",
+				"MISC":    "apple",
+			},
+		},
+		{
+			name: "step and pipeline env",
+			step: &CommandStep{
+				Command: "llamas",
+				Env: map[string]string{
+					"CONTEXT": "cats",
+					"DEPLOY":  "0",
+				},
+			},
+			pipelineEnv: map[string]string{
+				"CONTEXT": "dogs",
+				"DEPLOY":  "1",
+			},
+			verifyEnv: map[string]string{
+				// NB: pipeline env overrides step env.
+				"CONTEXT": "dogs",
+				"DEPLOY":  "1",
+				"MISC":    "apple",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			signer, verifier := newSymmetricKeyPair(t, "alpacas", jwa.HS256)
+
+			sig, err := Sign(tc.pipelineEnv, tc.step, signer)
+			if err != nil {
+				t.Fatalf("Sign(CommandStep, signer) error = %v", err)
+			}
+
+			if err := sig.Verify(tc.verifyEnv, tc.step, verifier); err != nil {
+				t.Errorf("sig.Verify(CommandStep, verifier) = %v", err)
+			}
+		})
 	}
 }

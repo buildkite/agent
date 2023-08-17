@@ -19,23 +19,29 @@ const (
 )
 
 var (
+	pipelineUploadEnv = map[string]string{
+		"DEPLOY": "0",
+	}
+
 	job = api.Job{
 		ChunksMaxSizeBytes: 1024,
 		ID:                 defaultJobID,
 		Step: pipeline.CommandStep{
 			Command: "echo hello world",
-			Plugins: pipeline.Plugins{
-				{
-					Name: "some-plugin#v1.0.0",
-					Config: map[string]string{
-						"key": "value",
-					},
+			Plugins: pipeline.Plugins{{
+				Name: "some-plugin#v1.0.0",
+				Config: map[string]string{
+					"key": "value",
 				},
+			}},
+			Env: map[string]string{
+				"DEPLOY": "1", // overridden by pipeline env
 			},
 		},
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
 			"BUILDKITE_PLUGINS": `[{"some-plugin#v1.0.0":{"key":"value"}}]`,
+			"DEPLOY":            "0",
 		},
 	}
 
@@ -47,6 +53,7 @@ var (
 		},
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo 'THIS ISN'T HELLO WORLD!!!! CRIMES'",
+			"DEPLOY":            "0",
 		},
 	}
 
@@ -55,18 +62,29 @@ var (
 		ID:                 defaultJobID,
 		Step: pipeline.CommandStep{
 			Command: "echo hello world",
-			Plugins: pipeline.Plugins{
-				{
-					Name: "some-plugin#v1.0.0",
-					Config: map[string]string{
-						"key": "value",
-					},
+			Plugins: pipeline.Plugins{{
+				Name: "some-plugin#v1.0.0",
+				Config: map[string]string{
+					"key": "value",
 				},
-			},
+			}},
 		},
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
 			"BUILDKITE_PLUGINS": `[{"crimes-plugin#v1.0.0":{"steal":"everything"}}]`,
+			"DEPLOY":            "0",
+		},
+	}
+
+	jobWithMismatchedEnv = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"DEPLOY":            "crimes",
 		},
 	}
 )
@@ -181,6 +199,17 @@ func TestJobVerification(t *testing.T) {
 				"but no verification key was provided, so the job can't be verified",
 			},
 		},
+		{
+			name:                     "when the step has a signature, but the env does not match, it fails signature verification",
+			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			job:                      jobWithMismatchedEnv,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain:        []string{"⚠️ ERROR"},
+		},
 	}
 
 	for _, tc := range cases {
@@ -197,7 +226,7 @@ func TestJobVerification(t *testing.T) {
 			tc.mockBootstrapExpectation(mb)
 			defer mb.CheckAndClose(t)
 
-			tc.job.Step = signStep(t, tc.job.Step, tc.signingKey)
+			tc.job.Step = signStep(t, pipelineUploadEnv, tc.job.Step, tc.signingKey)
 			runJob(t, testRunJobConfig{
 				job:              &tc.job,
 				server:           server,
@@ -260,7 +289,7 @@ func jwksFromKeys(t *testing.T, jwkes ...jwk.Key) jwk.Set {
 	return set
 }
 
-func signStep(t *testing.T, step pipeline.CommandStep, key jwk.Key) pipeline.CommandStep {
+func signStep(t *testing.T, env map[string]string, step pipeline.CommandStep, key jwk.Key) pipeline.CommandStep {
 	t.Helper()
 
 	t.Logf("%s: signing step with key: %v", t.Name(), key)
@@ -268,7 +297,7 @@ func signStep(t *testing.T, step pipeline.CommandStep, key jwk.Key) pipeline.Com
 		return step
 	}
 
-	signature, err := pipeline.Sign(&step, key)
+	signature, err := pipeline.Sign(env, &step, key)
 	if err != nil {
 		t.Fatalf("signing step: %v", err)
 	}
