@@ -19,6 +19,7 @@ steps:
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
+          mount-buildkite-agent: true
 
   - name: ":octocat: :rocket: Create Github Release (if necessary)"
     command: ".buildkite/steps/github-release.sh"
@@ -33,6 +34,7 @@ steps:
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
+          mount-buildkite-agent: true
 
   - name: ":redhat: Publish RPM Package"
     command: ".buildkite/steps/publish-rpm-package.sh"
@@ -46,6 +48,7 @@ steps:
           image: "buildkite/agent:3.51.0"
           entrypoint: bash
           propagate-environment: true
+          mount-buildkite-agent: true
           volumes:
             - "/yum.buildkite.com"
     retry:
@@ -67,6 +70,7 @@ steps:
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
+          mount-buildkite-agent: true
           tmpfs:
             - "/root/.gnupg"
 
@@ -97,3 +101,4 @@ steps:
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
+          mount-buildkite-agent: true
