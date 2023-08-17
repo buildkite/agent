@@ -8,10 +8,10 @@ steps:
     agents:
       queue: "deploy"
     plugins:
-      - ecr#v2.0.0:
+      - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
-      - docker#v3.5.0:
+      - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
 
@@ -23,8 +23,8 @@ steps:
     agents:
       queue: "deploy"
     plugins:
-      - docker#v3.5.0:
-          image: "buildkite/agent:3.45.0"
+      - docker#v5.8.0:
+          image: "buildkite/agent:3.51.0"
           entrypoint: bash
           propagate-environment: true
           volumes:
@@ -38,10 +38,10 @@ steps:
     agents:
       queue: "deploy"
     plugins:
-      - ecr#v2.0.0:
+      - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
-      - docker#v3.5.0:
+      - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
           tmpfs:
@@ -58,6 +58,6 @@ steps:
     agents:
       queue: "deploy"
     plugins:
-      - ecr#v2.0.0:
+      - ecr#v2.7.0:
           login: true
           account-ids: "445615400570"
