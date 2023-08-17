@@ -125,7 +125,7 @@ var StepGetCommand = cli.Command{
 		}
 
 		// Output the value to STDOUT
-		_, err := fmt.Println(c.App.Writer, stepExportResponse.Output)
+		_, err := fmt.Fprintln(c.App.Writer, stepExportResponse.Output)
 		return err
 	},
 }
