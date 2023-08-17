@@ -898,7 +898,7 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 func TestParserInterpolatesPluginConfigs(t *testing.T) {
 	envMap := env.New()
 	input := strings.NewReader(`env:
-  ECR_PLUGIN_VER: "v2.0.0"
+  ECR_PLUGIN_VER: "v2.7.0"
   ECR_ACCOUNT: "0123456789"
 steps:
 - label: ":docker: Docker Build"
@@ -918,7 +918,7 @@ steps:
 	}
 	want := &Pipeline{
 		Env: ordered.MapFromItems(
-			ordered.TupleSS{Key: "ECR_PLUGIN_VER", Value: "v2.0.0"},
+			ordered.TupleSS{Key: "ECR_PLUGIN_VER", Value: "v2.7.0"},
 			ordered.TupleSS{Key: "ECR_ACCOUNT", Value: "0123456789"},
 		),
 		Steps: Steps{
@@ -926,7 +926,7 @@ steps:
 				Command: "echo foo",
 				Plugins: Plugins{
 					{
-						Name: "ecr#v2.0.0",
+						Name: "ecr#v2.7.0",
 						Config: ordered.MapFromItems(
 							ordered.TupleSA{Key: "login", Value: true},
 							ordered.TupleSA{Key: "account_ids", Value: "0123456789"},
