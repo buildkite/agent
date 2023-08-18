@@ -54,7 +54,7 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 
 		checkout, err := e.checkoutPlugin(ctx, p)
 		if err != nil {
-			return fmt.Errorf("Failed to checkout plugin %s: %w", p.Name(), err)
+			return fmt.Errorf("failed to checkout plugin %s: %w", p.Name(), err)
 		}
 
 		err = e.validatePluginCheckout(ctx, checkout)
