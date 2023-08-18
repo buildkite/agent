@@ -412,24 +412,20 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 
 	// Get changed environment
 	changes, err := script.Changes()
-	if err != nil {
-		// Could not compute the changes in environment or working directory
-		// for some reason...
-
-		switch err.(type) {
-		case *hook.HookExitError:
-			// ...because the hook called exit(), tsk we ignore any changes
-			// since we can't discern them but continue on with the job
-			break
-		default:
-			// ...because something else happened, report it and stop the job
-			return fmt.Errorf("Failed to get environment: %w", err)
+	if herr := new(hook.HookExitError); errors.As(err, &herr) {
+		// Ignore changes to env when there was a hook exited with an error, but continue
+		if e.shell.Debug {
+			e.shell.Commentf("Hook exited with error: %v, ignoring environment changes", herr)
 		}
-	} else {
-		// Hook exited successfully (and not early!) We have an environment and
-		// wd change we can apply to our subsequent phases
-		e.applyEnvironmentChanges(changes, redactors)
+		return nil
+	} else if err != nil {
+		// Fail if there were any errors other than the hook exiting with a non-zero exit code
+		return fmt.Errorf("Failed to get environment: %w", err)
 	}
+
+	// Hook exited successfully (and not early!) We have an environment and
+	// wd change we can apply to our subsequent phases
+	e.applyEnvironmentChanges(changes, redactors)
 
 	return nil
 }
