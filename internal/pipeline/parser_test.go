@@ -13,6 +13,8 @@ import (
 )
 
 func TestParserParsesYAML(t *testing.T) {
+	t.Parallel()
+
 	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 	input := strings.NewReader("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\"")
 	got, err := Parse(input)
@@ -50,6 +52,8 @@ func TestParserParsesYAML(t *testing.T) {
 }
 
 func TestParserParsesYAMLWithNoInterpolation(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\"")
 	got, err := Parse(input)
 	if err != nil {
@@ -83,6 +87,8 @@ func TestParserParsesYAMLWithNoInterpolation(t *testing.T) {
 }
 
 func TestParserSupportsYAMLMergesAndAnchors(t *testing.T) {
+	t.Parallel()
+
 	const complexYAML = `---
 base_step: &base_step
   type: script
@@ -290,6 +296,8 @@ steps:
 }
 
 func TestParserCanDetermineStepTypeFromTypeKey(t *testing.T) {
+	t.Parallel()
+
 	const yaml = `---
 steps:
   - type: "block"
@@ -329,6 +337,8 @@ steps:
 }
 
 func TestParserParsesNoSteps(t *testing.T) {
+	t.Parallel()
+
 	tests := []string{
 		"steps: null\n",
 		"steps:\n\n",
@@ -364,6 +374,8 @@ func TestParserParsesNoSteps(t *testing.T) {
 }
 
 func TestParserParsesGroups(t *testing.T) {
+	t.Parallel()
+
 	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 
 	input := strings.NewReader(`---
@@ -433,6 +445,8 @@ steps:
 }
 
 func TestParserParsesAndInterpolatesGroups(t *testing.T) {
+	t.Parallel()
+
 	for _, test := range []struct {
 		name             string
 		env              *env.Environment
@@ -529,6 +543,7 @@ steps:
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := Parse(strings.NewReader(test.input))
 			assert.NilError(t, err)
 
@@ -546,6 +561,8 @@ steps:
 }
 
 func TestParserParsesScalarSteps(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader(`---
 steps:
   - wait
@@ -595,6 +612,8 @@ steps:
 }
 
 func TestParserReturnsYAMLParsingErrors(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader("steps: %blah%")
 	_, err := Parse(input)
 
@@ -606,6 +625,8 @@ func TestParserReturnsYAMLParsingErrors(t *testing.T) {
 }
 
 func TestParserReturnsJSONParsingErrors(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader("{")
 	_, err := Parse(input)
 
@@ -617,6 +638,8 @@ func TestParserReturnsJSONParsingErrors(t *testing.T) {
 }
 
 func TestParserParsesJSON(t *testing.T) {
+	t.Parallel()
+
 	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 	input := strings.NewReader("\n\n     \n  { \"steps\": [{\"command\" : \"bye ${ENV_VAR_FRIEND}\"  } ] }\n")
 	got, err := Parse(input)
@@ -654,6 +677,8 @@ func TestParserParsesJSON(t *testing.T) {
 }
 
 func TestParserParsesJSONArrays(t *testing.T) {
+	t.Parallel()
+
 	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 	input := strings.NewReader("\n\n     \n  [ { \"command\": \"bye ${ENV_VAR_FRIEND}\" } ]\n")
 	got, err := Parse(input)
@@ -690,6 +715,8 @@ func TestParserParsesJSONArrays(t *testing.T) {
 }
 
 func TestParserParsesTopLevelSteps(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader("---\n- name: Build\n  command: echo hello world\n- wait\n")
 	got, err := Parse(input)
 	if err != nil {
@@ -730,6 +757,8 @@ func TestParserParsesTopLevelSteps(t *testing.T) {
 }
 
 func TestParserPreservesUnknownStepTypes(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader(`---
 steps:
   - catawumpus
@@ -770,6 +799,8 @@ steps:
 }
 
 func TestParserParsesEnvAndStepsNull(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader(`---
 env: null
 steps: null
@@ -789,6 +820,8 @@ steps: null
 }
 
 func TestParserPreservesBools(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader("steps:\n  - trigger: hello\n    async: true")
 	got, err := Parse(input)
 	if err != nil {
@@ -827,6 +860,8 @@ func TestParserPreservesBools(t *testing.T) {
 }
 
 func TestParserPreservesInts(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader("steps:\n  - command: hello\n    parallelism: 10")
 	got, err := Parse(input)
 	if err != nil {
@@ -865,6 +900,8 @@ func TestParserPreservesInts(t *testing.T) {
 }
 
 func TestParserPreservesNull(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader("steps:\n  - wait: ~\n    if: foo")
 	got, err := Parse(input)
 	if err != nil {
@@ -898,6 +935,8 @@ func TestParserPreservesNull(t *testing.T) {
 }
 
 func TestParserPreservesFloats(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader("steps:\n  - trigger: hello\n    llamas: 3.142")
 	got, err := Parse(input)
 	if err != nil {
@@ -936,6 +975,8 @@ func TestParserPreservesFloats(t *testing.T) {
 }
 
 func TestParserHandlesDates(t *testing.T) {
+	t.Parallel()
+
 	const timestamp = "2002-08-15T17:18:23.18-06:00"
 	input := strings.NewReader("steps:\n  - trigger: hello\n    llamas: " + timestamp)
 	got, err := Parse(input)
@@ -979,6 +1020,8 @@ func TestParserHandlesDates(t *testing.T) {
 }
 
 func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
+	t.Parallel()
+
 	envMap := env.FromSlice([]string{"FROM_ENV=llamas"})
 	input := strings.NewReader(`{
 	"env": {
@@ -1010,6 +1053,8 @@ func TestParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 }
 
 func TestParserInterpolatesPluginConfigs(t *testing.T) {
+	t.Parallel()
+
 	envMap := env.New()
 	input := strings.NewReader(`env:
   ECR_PLUGIN_VER: "v2.7.0"
@@ -1059,6 +1104,8 @@ steps:
 }
 
 func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
+	t.Parallel()
+
 	envMap := env.FromSlice([]string{"YEAR_FROM_SHELL=1912"})
 	input := strings.NewReader(`
 {
@@ -1096,6 +1143,8 @@ func TestParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 }
 
 func TestParserPreservesOrderOfPlugins(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader(`---
 steps:
   - name: ":s3: xxx"
@@ -1213,6 +1262,8 @@ steps:
 }
 
 func TestParserParsesScalarPlugins(t *testing.T) {
+	t.Parallel()
+
 	input := strings.NewReader(`---
   steps:
     - name: ":s3: xxx"
@@ -1284,6 +1335,8 @@ func TestParserParsesScalarPlugins(t *testing.T) {
 }
 
 func TestParserParsesConditionalWithEndOfLineAnchorDollarSign(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		desc        string
 		interpolate bool
@@ -1331,7 +1384,9 @@ steps:
 }`
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
 			input := strings.NewReader(test.pipeline)
 			got, err := Parse(input)
 			if err != nil {
@@ -1359,6 +1414,8 @@ steps:
 }
 
 func TestPipelinePropagatesTracingDataIfAvailable(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		desc     string
 		pipeline string
@@ -1422,7 +1479,9 @@ steps:
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
 			input := strings.NewReader(test.pipeline)
 			e := env.New()
 			e.Set("BUILDKITE_TRACE_CONTEXT", "123")

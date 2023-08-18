@@ -10,6 +10,8 @@ type strukt struct {
 }
 
 func TestInlineFriendlyMarshalJSON(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		strukt strukt
@@ -46,7 +48,9 @@ func TestInlineFriendlyMarshalJSON(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := inlineFriendlyMarshalJSON(tt.strukt)
 			if err != nil {
 				t.Errorf("inlineFriendlyMarshalJSON() error = %v", err)
@@ -61,6 +65,8 @@ func TestInlineFriendlyMarshalJSON(t *testing.T) {
 }
 
 func TestInlineFriendlyMarshalJSON_FailsWhenInlineFieldsIsntAMap(t *testing.T) {
+	t.Parallel()
+
 	type test struct {
 		Qux string `yaml:",inline"`
 	}

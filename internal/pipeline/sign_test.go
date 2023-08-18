@@ -10,9 +10,12 @@ import (
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
+	"gotest.tools/v3/assert"
 )
 
 func TestSignVerify(t *testing.T) {
+	t.Parallel()
+
 	step := &CommandStep{
 		Command: "llamas",
 		Plugins: Plugins{
@@ -155,6 +158,8 @@ func (m testFields) ValuesForFields(fields []string) (map[string]string, error) 
 }
 
 func TestSignConcatenatedFields(t *testing.T) {
+	t.Parallel()
+
 	// Tests that Sign is resilient to concatenation.
 	// Specifically, these maps should all have distinct "content". (If you
 	// simply wrote the strings one after the other, they could be equal.)
@@ -201,8 +206,11 @@ func TestSignConcatenatedFields(t *testing.T) {
 }
 
 func TestUnknownAlgorithm(t *testing.T) {
+	t.Parallel()
+
 	signer, _ := newSymmetricKeyPair(t, "alpacas", jwa.HS256)
-	signer.Set(jwk.AlgorithmKey, "rot13")
+	err := signer.Set(jwk.AlgorithmKey, "rot13")
+	assert.NilError(t, err)
 
 	if _, err := Sign(nil, &CommandStep{Command: "llamas"}, signer); err == nil {
 		t.Errorf("Sign(nil, CommandStep, signer) = %v, want non-nil error", err)

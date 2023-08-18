@@ -20,7 +20,7 @@ func newSymmetricKeyPair(t *testing.T, key string, alg jwa.SignatureAlgorithm) (
 		t.Fatalf("failed to create symmetric key: %s", err)
 	}
 
-	setAll(t, skey, map[string]interface{}{
+	setAll(t, skey, map[string]any{
 		jwk.AlgorithmKey: alg,
 		jwk.KeyIDKey:     t.Name(),
 	})
@@ -67,12 +67,13 @@ func newEdwardsKeyPair(t *testing.T, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.S
 }
 
 func newKeyPair(t *testing.T, alg jwa.SignatureAlgorithm, privKey any) (jwk.Key, jwk.Set) {
+	t.Helper()
 	privJWK, err := jwk.FromRaw(privKey)
 	if err != nil {
 		t.Fatalf("jwk.FromRaw(%v) error = %v", privKey, err)
 	}
 
-	setAll(t, privJWK, map[string]interface{}{
+	setAll(t, privJWK, map[string]any{
 		jwk.AlgorithmKey: alg,
 		jwk.KeyIDKey:     t.Name(),
 	})
@@ -90,7 +91,7 @@ func newKeyPair(t *testing.T, alg jwa.SignatureAlgorithm, privKey any) (jwk.Key,
 	return privJWK, set
 }
 
-func setAll(t *testing.T, key jwk.Key, values map[string]interface{}) {
+func setAll(t *testing.T, key jwk.Key, values map[string]any) {
 	t.Helper()
 
 	for k, v := range values {
