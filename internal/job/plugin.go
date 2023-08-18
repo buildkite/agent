@@ -224,14 +224,13 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 				e.shell.Logger.Warningf("Ignoring additional %s hook (%s plugin, position %d)",
 					name, p.Plugin.Name(), i+1)
 				continue
-			} else {
-				e.shell.Logger.Warningf("The additional %s hook (%s plugin, position %d) "+
-					"will be ignored in a future version of the agent. To enforce "+
-					"single %s hooks now, pass the --strict-single-hooks flag, set "+
-					"the environment variable BUILDKITE_STRICT_SINGLE_HOOKS=true, "+
-					"or set strict-single-hooks=true in your agent configuration",
-					name, p.Plugin.Name(), i+1, name)
 			}
+			e.shell.Logger.Warningf("The additional %s hook (%s plugin, position %d) "+
+				"will be ignored in a future version of the agent. To enforce "+
+				"single %s hooks now, pass the --strict-single-hooks flag, set "+
+				"the environment variable BUILDKITE_STRICT_SINGLE_HOOKS=true, "+
+				"or set strict-single-hooks=true in your agent configuration",
+				name, p.Plugin.Name(), i+1, name)
 		}
 		hookTypeSeen[name] = true
 
