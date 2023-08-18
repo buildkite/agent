@@ -747,15 +747,18 @@ func (e *Executor) validatePluginCheckout(ctx context.Context, checkout *pluginC
 	val := &plugin.Validator{}
 	result := val.Validate(ctx, checkout.Definition, checkout.Plugin.Configuration)
 
-	if !result.Valid() {
-		e.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
-		json, _ := json.Marshal(checkout.Plugin.Configuration)
-		e.shell.Commentf("Plugin configuration JSON is %s", json)
-		return result
+	if result.Valid() {
+		e.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
+		return nil
 	}
 
-	e.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
-	return nil
+	e.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
+	config, err := json.Marshal(checkout.Plugin.Configuration)
+	if err != nil {
+		e.shell.Commentf("Plugin configuration is not valid JSON")
+	}
+	e.shell.Commentf("Plugin configuration JSON is %s", config)
+	return result
 }
 
 // PluginPhase is where plugins that weren't filtered in the Environment phase are
