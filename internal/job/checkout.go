@@ -16,28 +16,36 @@ import (
 	"github.com/buildkite/roko"
 )
 
+var ErrCheckoutDirRemoveFailed = errors.New("failed to remove checkout dir")
+
 func (e *Executor) removeCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// on windows, sometimes removing large dirs can fail for various reasons
 	// for instance having files open
 	// see https://github.com/golang/go/issues/20841
-	for i := 0; i < 10; i++ {
+	if err := roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Constant(10*time.Second)),
+	).Do(func(r *roko.Retrier) error {
 		e.shell.Commentf("Removing %s", checkoutPath)
-		if err := os.RemoveAll(checkoutPath); err != nil {
+		err := os.RemoveAll(checkoutPath)
+		if _, err := os.Stat(checkoutPath); os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
 			e.shell.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
 		} else {
-			if _, err := os.Stat(checkoutPath); os.IsNotExist(err) {
-				return nil
-			} else {
-				e.shell.Errorf("Failed to remove %s", checkoutPath)
-			}
+			e.shell.Errorf("Failed to remove %q", checkoutPath)
+			err = ErrCheckoutDirRemoveFailed
 		}
 		e.shell.Commentf("Waiting 10 seconds")
-		<-time.After(time.Second * 10)
+		return err
+	}); err != nil {
+		return fmt.Errorf("%w: checkout path: %s", err, checkoutPath)
 	}
 
-	return fmt.Errorf("Failed to remove %s", checkoutPath)
+	return nil
 }
 
 func (e *Executor) createCheckoutDir() error {
