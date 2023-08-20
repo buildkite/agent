@@ -410,22 +410,21 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 }
 
 func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
-	var mirrorDir string
 	// Skip updating the Git mirror before using it?
-	if e.ExecutorConfig.GitMirrorsSkipUpdate {
-		mirrorDir = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
-		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
-
-		// Check if specified mirrorDir exists, otherwise the clone will fail.
-		if !utils.FileExists(mirrorDir) {
-			// Fall back to a clean clone, rather than failing the clone and therefore the build
-			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
-			mirrorDir = ""
-		}
-		return mirrorDir, nil
+	if !e.ExecutorConfig.GitMirrorsSkipUpdate {
+		return e.updateGitMirror(ctx, repository)
 	}
 
-	return e.updateGitMirror(ctx, repository)
+	mirrorDir := filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+	e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
+
+	// Check if specified mirrorDir exists, otherwise the clone will fail.
+	if !utils.FileExists(mirrorDir) {
+		// Fall back to a clean clone, rather than failing the clone and therefore the build
+		e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
+		mirrorDir = ""
+	}
+	return mirrorDir, nil
 }
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
@@ -730,7 +729,7 @@ func (e *Executor) resolveCommit(ctx context.Context) {
 		e.shell.Warningf("Error running git rev-parse %q: %v", commitRef, err)
 		return
 	}
-	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
+	trimmedCmdOut := strings.TrimSpace(cmdOut)
 	if trimmedCmdOut != commitRef {
 		e.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
 		e.shell.Env.Set("BUILDKITE_COMMIT", trimmedCmdOut)
