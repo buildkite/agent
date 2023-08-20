@@ -220,6 +220,15 @@ var EqualSS = Equal[string, string]
 // EqualSA is a convenience alias to reduce keyboard wear.
 var EqualSA = Equal[string, any]
 
+func (m *Map[K, V]) Equal(target any) bool {
+	switch targetT := (target).(type) {
+	case *Map[K, V]:
+		return Equal(m, targetT)
+	default:
+		return false
+	}
+}
+
 // compact re-organises the internal storage of the Map.
 func (m *Map[K, V]) compact() {
 	pairs := make([]Tuple[K, V], 0, len(m.index))
