@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/google/go-cmp/cmp"
+	"gotest.tools/v3/assert"
 )
 
 func TestParserParsesYAML(t *testing.T) {
@@ -428,6 +429,119 @@ steps:
 }`
 	if diff := cmp.Diff(string(gotJSON), wantJSON); diff != "" {
 		t.Errorf("marshalled JSON diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestParserParsesAndInterpolatesGroups(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		env              *env.Environment
+		input            string
+		expectedPipeline *Pipeline
+		expectedJSON     string
+	}{
+		{
+			name: "group with interpolations",
+			env:  env.New(),
+			input: `---
+env:
+  FOO: bar
+steps:
+  - group: group ${FOO}
+    steps: null
+`,
+			expectedPipeline: &Pipeline{
+				Env: ordered.MapFromItems(ordered.MkTuple("FOO", "bar")),
+				Steps: Steps{
+					&GroupStep{
+						Group: NewGroupString("group bar"),
+						Steps: Steps{},
+					},
+				},
+			},
+			expectedJSON: `{
+  "env": {
+    "FOO": "bar"
+  },
+  "steps": [
+    {
+      "group": "group bar",
+      "steps": []
+    }
+  ]
+}`,
+		},
+		{
+			name: "group with interpolations from global env",
+			env:  env.FromSlice([]string{`FOO=bar`}),
+			input: `---
+steps:
+  - group: group ${FOO}
+    steps: null
+`,
+			expectedPipeline: &Pipeline{
+				Steps: Steps{
+					&GroupStep{
+						Group: NewGroupString("group bar"),
+						Steps: Steps{},
+					},
+				},
+			},
+			expectedJSON: `{
+  "steps": [
+    {
+      "group": "group bar",
+      "steps": []
+    }
+  ]
+}`,
+		},
+		{
+			name: "group with interpolations from global env and non-trivial steps",
+			env:  env.FromSlice([]string{`FOO=bar`}),
+			input: `---
+steps:
+  - group: group ${FOO}
+    steps:
+    - command: echo $FOO
+`,
+			expectedPipeline: &Pipeline{
+				Steps: Steps{
+					&GroupStep{
+						Group: NewGroupString("group bar"),
+						Steps: Steps{&CommandStep{Command: "echo bar"}},
+					},
+				},
+			},
+			expectedJSON: `{
+  "steps": [
+    {
+      "group": "group bar",
+      "steps": [
+        {
+          "command": "echo bar"
+        }
+      ]
+    }
+  ]
+}`,
+		},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			got, err := Parse(strings.NewReader(test.input))
+			assert.NilError(t, err)
+
+			err = got.Interpolate(test.env)
+			assert.NilError(t, err)
+
+			assert.DeepEqual(t, got, test.expectedPipeline)
+
+			gotJSON, err := json.MarshalIndent(got, "", "  ")
+			assert.NilError(t, err)
+
+			assert.DeepEqual(t, string(gotJSON), test.expectedJSON)
+		})
 	}
 }
 
