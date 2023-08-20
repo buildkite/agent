@@ -1,11 +1,14 @@
 package pipeline
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
 )
+
+var ErrInvalidGroup = errors.New("invalid group")
 
 // GroupStep models a group step.
 //
@@ -13,7 +16,7 @@ import (
 type GroupStep struct {
 	// Group is typically a key with no value. Since it must always exist in
 	// a group step, here it is.
-	Group any `yaml:"group"`
+	Group Group `yaml:"group"`
 
 	Steps Steps `yaml:"steps"`
 
@@ -24,22 +27,76 @@ type GroupStep struct {
 
 // UnmarshalOrdered unmarshals a group step from an ordered map.
 func (g *GroupStep) UnmarshalOrdered(src any) error {
-	type wrappedGroup GroupStep
-	if err := ordered.Unmarshal(src, (*wrappedGroup)(g)); err != nil {
-		return fmt.Errorf("unmarshalling GroupStep: %w", err)
-	}
+	switch srcT := src.(type) {
+	case *ordered.MapSA:
+		group, exists := srcT.Get("group")
+		if !exists {
+			return fmt.Errorf("unmarshalling GroupStep: %w", ErrInvalidGroup)
+		}
 
-	// Ensure Steps is never nil. Server side expects a sequence.
-	if g.Steps == nil {
-		g.Steps = Steps{}
+		switch groupT := group.(type) {
+		case nil:
+			// `group: null` is valid in a group step
+		case string:
+			g.Group = NewGroupString(groupT)
+		default:
+			return fmt.Errorf("unmarshalling GroupStep: %w", ErrInvalidGroup)
+		}
+
+		steps, exists := srcT.Get("steps")
+		if !exists {
+			return fmt.Errorf("unmarshalling GroupStep: %w", ErrInvalidGroup)
+		}
+
+		if err := g.Steps.UnmarshalOrdered(steps); err != nil {
+			return fmt.Errorf("unmarshalling GroupStep: %w", err)
+		}
+
+		// Since we errored if `group` or `step` were missing, this is non-negative
+		numRemainingFields := srcT.Len() - 2
+		if numRemainingFields == 0 {
+			return nil
+		}
+
+		// Remove these fields so they don't end up in RemainingFields
+		remainingFields := make(map[string]any, numRemainingFields)
+		_ = srcT.Range(func(k string, v any) error {
+			if k != "group" && k != "steps" {
+				remainingFields[k] = v
+			}
+			return nil
+		})
+
+		g.RemainingFields = remainingFields
+
+		return nil
+
+	default:
+		fmt.Printf("srcT: %T\n", srcT)
+		type wrappedGroup GroupStep
+		if err := ordered.Unmarshal(src, (*wrappedGroup)(g)); err != nil {
+			return fmt.Errorf("unmarshalling GroupStep: %w", err)
+		}
+
+		// Ensure Steps is never nil. Server side expects a sequence.
+		if g.Steps == nil {
+			g.Steps = Steps{}
+		}
+		return nil
 	}
-	return nil
 }
 
 func (g *GroupStep) interpolate(env interpolate.Env) error {
+	if g.Group != nil {
+		if err := g.Group.interpolate(env); err != nil {
+			return err
+		}
+	}
+
 	if err := g.Steps.interpolate(env); err != nil {
 		return err
 	}
+
 	return interpolateMap(env, g.RemainingFields)
 }
 
