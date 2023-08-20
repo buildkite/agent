@@ -1033,7 +1033,11 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		return nil, err
 	}
 	// Switch back to the previous working directory
-	defer e.shell.Chdir(previousWd)
+	defer func() {
+		if err := e.shell.Chdir(previousWd); err != nil && e.Debug {
+			e.shell.Errorf("failed to switch back to previous working directory: %v", err)
+		}
+	}()
 
 	args := []string{"clone", "-v"}
 	if e.GitSubmodules {
