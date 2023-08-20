@@ -220,6 +220,11 @@ var EqualSS = Equal[string, string]
 // EqualSA is a convenience alias to reduce keyboard wear.
 var EqualSA = Equal[string, any]
 
+// Equal reports if the two maps are equal (they contain the same items in the
+// same order). Keys are compared directly; values are compared using go-cmp
+// (provided with Equal[string, any] and Equal[string, string] as a comparers).
+//
+// This method should only be used in tests as it uses go-cmp, which may panic.
 func (m *Map[K, V]) Equal(target any) bool {
 	switch targetT := (target).(type) {
 	case *Map[K, V]:
