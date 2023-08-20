@@ -952,7 +952,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 
 	// Ensure the plugin directory exists, otherwise we can't create the lock
 	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-	if err := os.MkdirAll(e.PluginsPath, 0777); err != nil {
+	if err := os.MkdirAll(e.PluginsPath, 0o777); err != nil {
 		return nil, err
 	}
 
