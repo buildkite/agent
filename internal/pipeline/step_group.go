@@ -13,7 +13,7 @@ import (
 type GroupStep struct {
 	// Group is typically a key with no value. Since it must always exist in
 	// a group step, here it is.
-	Group any `yaml:"group"`
+	Group *string `yaml:"group"`
 
 	Steps Steps `yaml:"steps"`
 
@@ -37,6 +37,12 @@ func (g *GroupStep) UnmarshalOrdered(src any) error {
 }
 
 func (g *GroupStep) interpolate(env interpolate.Env) error {
+	grp, err := interpolateAny(env, g.Group)
+	if err != nil {
+		return err
+	}
+	g.Group = grp
+
 	if err := g.Steps.interpolate(env); err != nil {
 		return err
 	}
