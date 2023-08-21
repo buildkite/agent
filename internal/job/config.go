@@ -164,6 +164,9 @@ type ExecutorConfig struct {
 
 	// Service name to use when reporting traces.
 	TracingServiceName string
+
+	// Whether to auto-create tracing spans for log groups.
+	TraceLogGroups bool
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
