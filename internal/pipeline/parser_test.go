@@ -367,7 +367,7 @@ func TestParserParsesGroups(t *testing.T) {
 
 	input := strings.NewReader(`---
 steps:
-  - group:
+  - group: ${ENV_VAR_FRIEND}
     steps:
       - command: hello ${ENV_VAR_FRIEND}
       - wait
@@ -386,6 +386,7 @@ steps:
 	want := &Pipeline{
 		Steps: Steps{
 			&GroupStep{
+				Group: `"friend"`,
 				Steps: Steps{
 					&CommandStep{Command: `hello "friend"`},
 					&WaitStep{Scalar: "wait"},
@@ -409,7 +410,7 @@ steps:
 	const wantJSON = `{
   "steps": [
     {
-      "group": null,
+      "group": "\"friend\"",
       "steps": [
         {
           "command": "hello \"friend\""
