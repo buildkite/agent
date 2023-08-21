@@ -28,6 +28,13 @@ func interpolateAny[T any](env interpolate.Env, o T) (T, error) {
 	case selfInterpolater:
 		err = t.interpolate(env)
 
+	case *string:
+		if t == nil {
+			return o, nil
+		}
+		*t, err = interpolate.Interpolate(env, *t)
+		a = t
+
 	case string:
 		a, err = interpolate.Interpolate(env, t)
 

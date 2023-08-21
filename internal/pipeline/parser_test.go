@@ -11,6 +11,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func ptr[T any](x T) *T { return &x }
+
 func TestParserParsesYAML(t *testing.T) {
 	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 	input := strings.NewReader("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\"")
@@ -386,7 +388,7 @@ steps:
 	want := &Pipeline{
 		Steps: Steps{
 			&GroupStep{
-				Group: `"friend"`,
+				Group: ptr(`"friend"`),
 				Steps: Steps{
 					&CommandStep{Command: `hello "friend"`},
 					&WaitStep{Scalar: "wait"},

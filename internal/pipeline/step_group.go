@@ -13,7 +13,7 @@ import (
 type GroupStep struct {
 	// Group is typically a key with no value. Since it must always exist in
 	// a group step, here it is.
-	Group any `yaml:"group"`
+	Group *string `yaml:"group"`
 
 	Steps Steps `yaml:"steps"`
 
