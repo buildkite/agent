@@ -944,7 +944,6 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		return nil, fmt.Errorf("Can't checkout plugin without a `plugins-path`")
 	}
 
-	// Get the identifer for the plugin
 	id, err := p.Identifier()
 	if err != nil {
 		return nil, err
