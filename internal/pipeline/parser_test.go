@@ -14,7 +14,7 @@ import (
 func ptr[T any](x T) *T { return &x }
 
 func TestParserParsesYAML(t *testing.T) {
-	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND=friend`})
+	envMap := env.FromSlice([]string{"ENV_VAR_FRIEND=friend"})
 	input := strings.NewReader("steps:\n  - command: \"hello ${ENV_VAR_FRIEND}\"")
 	got, err := Parse(input)
 	if err != nil {
@@ -26,7 +26,7 @@ func TestParserParsesYAML(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{
-			&CommandStep{Command: `hello friend`},
+			&CommandStep{Command: "hello friend"},
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -59,7 +59,7 @@ func TestParserParsesYAMLWithNoInterpolation(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{
-			&CommandStep{Command: `hello ${ENV_VAR_FRIEND}`},
+			&CommandStep{Command: "hello ${ENV_VAR_FRIEND}"},
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -365,7 +365,7 @@ func TestParserParsesNoSteps(t *testing.T) {
 }
 
 func TestParserParsesGroups(t *testing.T) {
-	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND=friend`})
+	envMap := env.FromSlice([]string{"ENV_VAR_FRIEND=friend"})
 
 	input := strings.NewReader(`---
 steps:
@@ -488,7 +488,7 @@ func TestParserReturnsYAMLParsingErrors(t *testing.T) {
 	_, err := Parse(input)
 
 	// TODO: avoid testing for specific error strings
-	got, want := err.Error(), `found character that cannot start any token`
+	got, want := err.Error(), "found character that cannot start any token"
 	if got != want {
 		t.Errorf("Parse(input) error = %q, want %q", got, want)
 	}
@@ -499,14 +499,14 @@ func TestParserReturnsJSONParsingErrors(t *testing.T) {
 	_, err := Parse(input)
 
 	// TODO: avoid testing for specific error strings
-	got, want := err.Error(), `line 1: did not find expected node content`
+	got, want := err.Error(), "line 1: did not find expected node content"
 	if got != want {
 		t.Errorf("Parse(input) error = %q, want %q", got, want)
 	}
 }
 
 func TestParserParsesJSON(t *testing.T) {
-	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND=friend`})
+	envMap := env.FromSlice([]string{"ENV_VAR_FRIEND=friend"})
 	input := strings.NewReader("\n\n     \n  { \"steps\": [{\"command\" : \"bye ${ENV_VAR_FRIEND}\"  } ] }\n")
 	got, err := Parse(input)
 	if err != nil {
@@ -518,7 +518,7 @@ func TestParserParsesJSON(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{
-			&CommandStep{Command: `bye friend`},
+			&CommandStep{Command: "bye friend"},
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
@@ -543,7 +543,7 @@ func TestParserParsesJSON(t *testing.T) {
 }
 
 func TestParserParsesJSONArrays(t *testing.T) {
-	envMap := env.FromSlice([]string{`ENV_VAR_FRIEND=friend`})
+	envMap := env.FromSlice([]string{"ENV_VAR_FRIEND=friend"})
 	input := strings.NewReader("\n\n     \n  [ { \"command\": \"bye ${ENV_VAR_FRIEND}\" } ]\n")
 	got, err := Parse(input)
 	if err != nil {
@@ -555,7 +555,7 @@ func TestParserParsesJSONArrays(t *testing.T) {
 
 	want := &Pipeline{
 		Steps: Steps{
-			&CommandStep{Command: `bye friend`},
+			&CommandStep{Command: "bye friend"},
 		},
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
