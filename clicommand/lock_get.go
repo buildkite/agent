@@ -27,9 +27,7 @@ Description:
 Examples:
 
    $ buildkite-agent lock get llama
-   Kuzco
-
-`
+   Kuzco`
 
 type LockGetConfig struct {
 	// Common config options
