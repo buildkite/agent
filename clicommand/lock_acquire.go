@@ -54,7 +54,7 @@ func lockAcquireFlags() []cli.Flag {
 		[]cli.Flag{
 			cli.DurationFlag{
 				Name:   "lock-wait-timeout",
-				Usage:  "If specified, sets a maximum duration to wait for a lock before giving up",
+				Usage:  "Sets a maximum duration to wait for a lock before giving up",
 				EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
 			},
 		},
