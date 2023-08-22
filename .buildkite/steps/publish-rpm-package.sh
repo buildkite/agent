@@ -25,8 +25,11 @@ updaterepo() {
   # Reuses the old package metadata, and add new packages with --pkglist.
   # createrepo_c tests that pkglist is a _regular_ file, so we can't use 
   # a Bash process substitution i.e. <(find ...)
+  # Note also that createrepo_c appends pkglist lines to the path it is given
+  # to find files. Busybox find (in Alpine) has no -printf verb, so...........
+  # go go gadget `awk`
   pkglist="$(mktemp pkglist.XXXXXXXX)"
-  find "$1" -type f -name "*.rpm" > "${pkglist}"
+  find "$1" -type f -name '*.rpm' | awk -F/ '{print $NF}' > "${pkglist}"
   createrepo_c \
     --no-database \
     --unique-md-filenames \
