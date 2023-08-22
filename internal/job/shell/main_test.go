@@ -45,6 +45,12 @@ func acquiringLockHelperProcess() error {
 	}
 
 	log.Printf("Acquired lock %s", fileName)
-	// sleep forever
-	select {}
+	// sleep forever, but keep the main goroutine busy
+	c := make(chan struct{}, 1)
+	for {
+		select {
+		case <-c:
+		case c <- struct{}{}:
+		}
+	}
 }
