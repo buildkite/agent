@@ -56,6 +56,7 @@ aws --region us-east-1 \
   --delete \
   --only-show-errors \
   "s3://${RPM_S3_BUCKET}" "${YUM_PATH}"
+du -hs "${YUM_PATH}"
 
 # Add the rpms and update meta-data
 for ARCH in "x86_64" "i386" "aarch64"; do
