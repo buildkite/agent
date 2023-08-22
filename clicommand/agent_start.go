@@ -599,7 +599,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "job-signing-algorithm",
-			Usage:  "The algorithm to use when signing pipelines. Must be a valid RF7518 JWA algorithm. Required when using a JWKS, and the given key doesn't have an alg parameter",
+			Usage:  "The algorithm to use when signing pipelines. Must be an algorithm specified in RFC 7518: JWA. Required when using a JWKS, and the given key doesn't have an alg parameter",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
 		},
 		cli.StringFlag{
