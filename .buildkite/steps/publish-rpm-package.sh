@@ -65,7 +65,10 @@ for ARCH in "x86_64" "i386" "aarch64"; do
   mkdir -p "${ARCH_PATH}"
   find "rpm/" -type f -name "*${ARCH}*" | xargs cp -t "${ARCH_PATH}"
 
-  createrepo --update "${ARCH_PATH}" || createrepo "${ARCH_PATH}"
+  if ! createrepo --update "${ARCH_PATH}"; then
+    rm -fr "${ARCH_PATH}/.repodata"
+    createrepo "${ARCH_PATH}"
+  fi
 done
 
 # Sync back our changes to S3
