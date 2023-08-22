@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build")
+artifacts_build="$(buildkite-agent meta-data get "agent-artifacts-build")"
 
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
@@ -11,17 +11,26 @@ dry_run() {
   fi
 }
 
-if [[ "$CODENAME" == "" ]]; then
+# createrepo_c is much faster and more resilient than createrepo
+createrepo() {
+  createrepo_c \
+    --no-database \
+    --unique-md-filenames \
+    --retain-old-md-by-age=180d \
+    "$@"
+}
+
+if [[ "${CODENAME}" == "" ]]; then
   echo "Error: Missing \$CODENAME (stable or unstable)"
   exit 1
 fi
 
-YUM_PATH=/yum.buildkite.com
+YUM_PATH="/yum.buildkite.com"
 
 echo '--- Downloading built yum packages'
 rm -rf rpm
 mkdir -p rpm
-buildkite-agent artifact download --build "$artifacts_build" "rpm/*.rpm" rpm/
+buildkite-agent artifact download --build "${artifacts_build}" "rpm/*.rpm" rpm/
 
 echo '--- Installing dependencies'
 # currently, the libcrypto3-3.0.5-r0 in the alpine/v3.16/main repo isn't compatible with createrepo_c:
@@ -40,23 +49,35 @@ apk add --update-cache --no-progress \
 apk add --no-progress coreutils aws-cli
 
 # Make sure we have a local copy of the yum repo
-echo "--- Syncing s3://$RPM_S3_BUCKET to `hostname`"
-mkdir -p $YUM_PATH
-aws --region us-east-1 s3 sync --delete --only-show-errors "s3://$RPM_S3_BUCKET" "$YUM_PATH"
+echo "--- Syncing s3://${RPM_S3_BUCKET} to $(hostname)"
+mkdir -p "${YUM_PATH}"
+aws --region us-east-1 \
+  s3 sync \
+  --delete \
+  --only-show-errors \
+  "s3://${RPM_S3_BUCKET}" "${YUM_PATH}"
+du -hs "${YUM_PATH}"
 
 # Add the rpms and update meta-data
 for ARCH in "x86_64" "i386" "aarch64"; do
   echo "--- Updating yum repository for ${CODENAME}/${ARCH}"
 
   ARCH_PATH="${YUM_PATH}/buildkite-agent/${CODENAME}/${ARCH}"
-  mkdir -p "$ARCH_PATH"
-  find "rpm/" -type f -name "*${ARCH}*" | xargs cp -t "$ARCH_PATH"
+  mkdir -p "${ARCH_PATH}"
+  find "rpm/" -type f -name "*${ARCH}*" | xargs cp -t "${ARCH_PATH}"
 
-  # createrepo_c is much faster and more resilient than createrepo
-  createrepo_c --no-database --unique-md-filenames --retain-old-md-by-age=180d --update "$ARCH_PATH" || \
-    createrepo_c --no-database --unique-md-filenames --retain-old-md-by-age=180d "$ARCH_PATH"
+  if ! createrepo --update "${ARCH_PATH}"; then
+    rm -fr "${ARCH_PATH}/.repodata"
+    createrepo "${ARCH_PATH}"
+  fi
 done
 
 # Sync back our changes to S3
-echo "--- Syncing local $YUM_PATH changes back to s3://$RPM_S3_BUCKET"
-dry_run aws --region us-east-1 s3 sync --delete "$YUM_PATH/" "s3://$RPM_S3_BUCKET" --no-guess-mime-type --exclude "lost+found" --exclude ".repodata"
+echo "--- Syncing local ${YUM_PATH} changes back to s3://${RPM_S3_BUCKET}"
+dry_run aws --region us-east-1 \
+  s3 sync \
+  --delete \
+  --no-guess-mime-type \
+  --exclude "lost+found" \
+  --exclude ".repodata" \
+  "${YUM_PATH}/" "s3://${RPM_S3_BUCKET}"
