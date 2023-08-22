@@ -768,13 +768,12 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 		return nil
 	}
 
-	// NOTE: these are method expressions: https://go.dev/ref/spec#MethodExpr
-	checkoutPluginFunc := (*Executor).checkoutPlugin
+	checkoutPluginMethod := e.checkoutPlugin
 	if experiments.IsEnabled(experiments.IsolatedPluginCheckout) {
 		if e.Debug {
 			e.shell.Commentf("Using isolated plugin checkout")
 		}
-		checkoutPluginFunc = (*Executor).checkoutPluginIsolated
+		checkoutPluginMethod = e.checkoutPluginIsolated
 	}
 
 	checkouts := []*pluginCheckout{}
@@ -788,7 +787,7 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 			continue
 		}
 
-		checkout, err := checkoutPluginFunc(e, ctx, p)
+		checkout, err := checkoutPluginMethod(ctx, p)
 		if err != nil {
 			return fmt.Errorf("Failed to checkout plugin %s: %w", p.Name(), err)
 		}
