@@ -97,3 +97,8 @@ We now understand this causes a bug, and we want to avoid it. Enabling this expe
 https://github.com/buildkite/agent/blob/40b8a5f3794b04bd64da6e2527857add849a35bd/internal/job/executor.go#L1980-L1993
 
 **Status:** Since the default behaviour is buggy, we will be promoting this to non-experiment soon™️.
+
+### `isolated-plugin-checkout`
+Checks out each plugin to an directory that that is namespaced by the agent name. Thus each agent worker will have an isolated copy of the plugin. This removes the need to lock the plugin checkout directories in a single agent process with spawned workers. However, if your plugin directory is shared between multiple agent processes *with the name agent name* , you may run into race conditions. This is just one reason we recommend you ensure agents have unique names.
+
+***Status:*** Likely to be the default behaviour in the future.
