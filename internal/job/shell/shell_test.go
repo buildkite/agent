@@ -316,15 +316,14 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 
 	lockPath := filepath.Join(dir, "my.lock")
 
-	cmd, err := acquireLockInOtherProcess(t, lockPath)
-	assert.NilError(t, err)
+	cmd := acquireLockInOtherProcess(t, lockPath)
 	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
 
 	_, err = sh.LockFile(context.Background(), lockPath, 2*time.Second)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
-func acquireLockInOtherProcess(t *testing.T, lockfile string) (*exec.Cmd, error) {
+func acquireLockInOtherProcess(t *testing.T, lockfile string) *exec.Cmd {
 	t.Helper()
 
 	expectedLockPath := lockfile + "f" // flock-locked files are created with the suffix 'f'
@@ -348,7 +347,7 @@ func acquireLockInOtherProcess(t *testing.T, lockfile string) (*exec.Cmd, error)
 		break
 	}
 
-	return cmd, nil
+	return cmd
 }
 
 func newShellForTest(t *testing.T) *shell.Shell {
