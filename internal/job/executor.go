@@ -768,6 +768,15 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 		return nil
 	}
 
+	// NOTE: these are method expressions: https://go.dev/ref/spec#MethodExpr
+	checkoutPluginFunc := (*Executor).checkoutPlugin
+	if experiments.IsEnabled(experiments.IsolatedPluginCheckout) {
+		if e.Debug {
+			e.shell.Commentf("Using isolated plugin checkout")
+		}
+		checkoutPluginFunc = (*Executor).checkoutPluginIsolated
+	}
+
 	checkouts := []*pluginCheckout{}
 
 	// Checkout and validate plugins that aren't vendored
@@ -779,7 +788,7 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 			continue
 		}
 
-		checkout, err := e.checkoutPlugin(ctx, p)
+		checkout, err := checkoutPluginFunc(e, ctx, p)
 		if err != nil {
 			return fmt.Errorf("Failed to checkout plugin %s: %w", p.Name(), err)
 		}
@@ -935,6 +944,138 @@ func (e *Executor) hasPluginHook(name string) bool {
 		}
 	}
 	return false
+}
+
+// Checkout a given plugin to the plugins directory and return that directory. Each agent worker
+// will checkout the plugin to a different directory, so that they don't conflict with each other.
+func (e *Executor) checkoutPluginIsolated(ctx context.Context, p *plugin.Plugin) (*pluginCheckout, error) {
+	// Make sure we have a plugin path before trying to do anything
+	if e.PluginsPath == "" {
+		return nil, fmt.Errorf("Can't checkout plugin without a `plugins-path`")
+	}
+
+	id, err := p.Identifier()
+	if err != nil {
+		return nil, err
+	}
+
+	pluginParentDir := filepath.Join(e.PluginsPath, e.AgentName)
+
+	// Ensure the parent of the plugin directory exists, otherwise we can't move the temp git repo dir
+	// into it. The actual file permissions will be reduced by umask, and won't be 0o777 unless the
+	// user has manually changed the umask to 0o000
+	if err := os.MkdirAll(pluginParentDir, 0o777); err != nil {
+		return nil, err
+	}
+
+	// Create a path to the plugin
+	pluginDirectory := filepath.Join(pluginParentDir, id)
+	pluginGitDirectory := filepath.Join(pluginDirectory, ".git")
+	checkout := &pluginCheckout{
+		Plugin:      p,
+		CheckoutDir: pluginDirectory,
+		HooksDir:    filepath.Join(pluginDirectory, "hooks"),
+	}
+
+	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
+	// BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true).
+	//
+	// Neither of the obvious options here is very nice.  Either we git-fetch and git-checkout on
+	// existing repos, which is probably fast, but it's _surprisingly hard_ to write a really robust
+	// chain of Git commands that'll definitely get you a clean version of a given upstream branch
+	// ref (the branch might have been force-pushed, the checkout might have become dirty and
+	// unmergeable, etc.).  Plus, then we're duplicating a bunch of fetch/checkout machinery and
+	// perhaps missing things (like `addRepositoryHostToSSHKnownHosts` which is called down below).
+	// Alternatively, we can DRY it up and simply `rm -rf` the plugin directory if it exists, but
+	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
+	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
+	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
+	if e.ExecutorConfig.PluginsAlwaysCloneFresh && utils.FileExists(pluginDirectory) {
+		e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
+		err = os.RemoveAll(pluginDirectory)
+		if err != nil {
+			e.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
+			return nil, err
+		}
+	}
+
+	if utils.FileExists(pluginGitDirectory) {
+		// It'd be nice to show the current commit of the plugin, so
+		// let's figure that out.
+		headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, pluginDirectory, "--short=7", "HEAD")
+		if err != nil {
+			e.shell.Commentf("Plugin %q already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
+		} else {
+			e.shell.Commentf("Plugin %q already checked out (%s)", p.Label(), strings.TrimSpace(headCommit))
+		}
+
+		return checkout, nil
+	}
+
+	e.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, pluginDirectory)
+
+	repo, err := p.Repository()
+	if err != nil {
+		return nil, err
+	}
+
+	if e.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(ctx, e.shell, repo)
+	}
+
+	// Make the directory
+	tempDir, err := os.MkdirTemp(e.PluginsPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Switch to the plugin directory
+	e.shell.Commentf("Switching to the temporary plugin directory")
+	previousWd := e.shell.Getwd()
+	if err := e.shell.Chdir(tempDir); err != nil {
+		return nil, err
+	}
+	// Switch back to the previous working directory
+	defer func() {
+		if err := e.shell.Chdir(previousWd); err != nil && e.Debug {
+			e.shell.Errorf("failed to switch back to previous working directory: %v", err)
+		}
+	}()
+
+	args := []string{"clone", "-v"}
+	if e.GitSubmodules {
+		// "--recursive" was added in Git 1.6.5, and is an alias to
+		// "--recurse-submodules" from Git 2.13.
+		args = append(args, "--recursive")
+	}
+	args = append(args, "--", repo, ".")
+
+	// Plugin clones shouldn't use custom GitCloneFlags
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(3),
+		roko.WithStrategy(roko.Constant(2*time.Second)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		return e.shell.Run(ctx, "git", args...)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Switch to the version if we need to
+	if p.Version != "" {
+		e.shell.Commentf("Checking out `%s`", p.Version)
+		if err = e.shell.Run(ctx, "git", "checkout", "-f", p.Version); err != nil {
+			return nil, err
+		}
+	}
+
+	e.shell.Commentf("Moving temporary plugin directory to final location")
+	err = os.Rename(tempDir, pluginDirectory)
+	if err != nil {
+		return nil, err
+	}
+
+	return checkout, nil
 }
 
 // Checkout a given plugin to the plugins directory and return that directory
