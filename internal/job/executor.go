@@ -947,6 +947,8 @@ func (e *Executor) hasPluginHook(name string) bool {
 
 // Checkout a given plugin to the plugins directory and return that directory. Each agent worker
 // will checkout the plugin to a different directory, so that they don't conflict with each other.
+// Because the plugin directory is unique to the agent worker, we don't lock it. However, if
+// multiple agent workers have access to the plugin directory, they need to have different names.
 func (e *Executor) checkoutPluginIsolated(ctx context.Context, p *plugin.Plugin) (*pluginCheckout, error) {
 	// Make sure we have a plugin path before trying to do anything
 	if e.PluginsPath == "" {
