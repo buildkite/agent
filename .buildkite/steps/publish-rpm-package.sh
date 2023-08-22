@@ -23,14 +23,19 @@ createrepo() {
 
 updaterepo() {
   # Reuses the old package metadata, and add new packages with --pkglist.
+  # createrepo_c tests that pkglist is a _regular_ file, so we can't use 
+  # a Bash process substitution i.e. <(find ...)
+  pkglist="$(mktemp pkglist.XXXXXXXX)"
+  find "$1" -type f -name "*.rpm" > "${pkglist}"
   createrepo_c \
     --no-database \
     --unique-md-filenames \
     --retain-old-md-by-age=180d \
     --update \
-    --pkglist <(find "$1" -type f -name "*.rpm") \
+    --pkglist "${pkglist}" \
     --recycle-pkglist \
     "$@"
+  rm "${pkglist}"
 }
 
 sync_from_s3() {
