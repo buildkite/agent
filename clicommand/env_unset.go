@@ -26,7 +26,7 @@ Description:
 
 Examples:
 
-   Unsetting the variables ′LLAMA′ and ′ALPACA′)
+   Unsetting the variables ′LLAMA′ and ′ALPACA′:
 
    $ buildkite-agent env unset LLAMA ALPACA
    Unset:
