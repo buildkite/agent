@@ -11,7 +11,7 @@ import (
 
 const lockDoneHelpDescription = `Usage:
 
-   buildkite-agent lock release [key]
+   buildkite-agent lock done [key]
 
 Description:
    Completes a do-once lock. This should only be used by the process performing
@@ -23,12 +23,10 @@ Description:
 Examples:
 
    #!/bin/bash
-   if [ $(buildkite-agent lock do llama) = 'do' ] ; then
-	  setup_code()
-	  buildkite-agent lock done llama
-   fi
-
-`
+   if [[ $(buildkite-agent lock do llama) == 'do' ]]; then
+     # your critical section here...
+     buildkite-agent lock done llama
+   fi`
 
 type LockDoneConfig struct {
 	// Common config options

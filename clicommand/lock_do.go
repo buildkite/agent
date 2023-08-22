@@ -33,12 +33,10 @@ Description:
 Examples:
 
    #!/bin/bash
-   if [ $(buildkite-agent lock do llama) = 'do' ] ; then
-      setup_code()
-      buildkite-agent lock done llama
-   fi
-
-`
+   if [[ $(buildkite-agent lock do llama) == 'do' ]]; then
+     # your critical section here...
+     buildkite-agent lock done llama
+   fi`
 
 type LockDoConfig struct {
 	// Common config options

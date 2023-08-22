@@ -24,11 +24,10 @@ Description:
 
 Examples:
 
-   $ token=$(buildkite-agent lock acquire llama)
-   $ critical_section()
-   $ buildkite-agent lock release llama "${token}"
-
-`
+   #!/bin/bash
+   token=$(buildkite-agent lock acquire llama)
+   # your critical section here...
+   buildkite-agent lock release llama "${token}"`
 
 type LockReleaseConfig struct {
 	// Common config options
