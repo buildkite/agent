@@ -12,15 +12,15 @@ import (
 
 const metaDataGetHelpDescription = `Usage:
 
-   buildkite-agent meta-data get <key> [options...]
+    buildkite-agent meta-data get <key> [options...]
 
 Description:
 
-   Get data from a builds key/value store.
+Get data from a build's key/value store.
 
 Example:
 
-   $ buildkite-agent meta-data get "foo"`
+    $ buildkite-agent meta-data get "foo"`
 
 type MetaDataGetConfig struct {
 	Key     string `cli:"arg:0" label:"meta-data key" validate:"required"`

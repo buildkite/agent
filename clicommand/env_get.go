@@ -13,54 +13,54 @@ import (
 
 const envClientErrMessage = `Could not create Job API client: %v
 This command can only be used from hooks or plugins running under a job executor
-where the "job-api" experiment is enabled.
-`
+where the "job-api" experiment is enabled.`
 
 const envGetHelpDescription = `Usage:
 
-   buildkite-agent env get [variables]
+    buildkite-agent env get [variables]
 
 Description:
-   Retrieves environment variables and their current values from the current job
-   execution environment.
 
-   Note that this subcommand is only available from within the job executor with
-   the ′job-api′ experiment enabled.
+Retrieves environment variables and their current values from the current job
+execution environment.
 
-   Changes to the job environment only apply to the environments of subsequent
-   phases of the job. However, ′env get′ can be used to inspect the changes made
-   with ′env set′ and ′env unset′.
+Note that this subcommand is only available from within the job executor with
+the ′job-api′ experiment enabled.
+
+Changes to the job environment only apply to the environments of subsequent
+phases of the job. However, ′env get′ can be used to inspect the changes made
+with ′env set′ and ′env unset′.
 
 Examples:
-   Getting all variables in key=value format:
 
-   $ buildkite-agent env get
-   ALPACA=Geronimo the Incredible
-   BUILDKITE=true
-   LLAMA=Kuzco
-   ...
+Getting all variables in key=value format:
 
-   Getting the value of one variable:
+    $ buildkite-agent env get
+    ALPACA=Geronimo the Incredible
+    BUILDKITE=true
+    LLAMA=Kuzco
+    ...
 
-   $ buildkite-agent env get LLAMA
-   Kuzco
+Getting the value of one variable:
 
-   Getting multiple specific variables:
+    $ buildkite-agent env get LLAMA
+    Kuzco
 
-   $ buildkite-agent env get LLAMA ALPACA
-   ALPACA=Geronimo the Incredible
-   LLAMA=Kuzco
+Getting multiple specific variables:
 
-   Getting variables as a JSON object:
+    $ buildkite-agent env get LLAMA ALPACA
+    ALPACA=Geronimo the Incredible
+    LLAMA=Kuzco
 
-   $ buildkite-agent env get --format=json-pretty
-   {
-     "ALPACA": "Geronimo the Incredible",
-     "BUILDKITE": "true",
-     "LLAMA": "Kuzco",
-     ...
-   }
-`
+Getting variables as a JSON object:
+
+    $ buildkite-agent env get --format=json-pretty
+    {
+      "ALPACA": "Geronimo the Incredible",
+      "BUILDKITE": "true",
+      "LLAMA": "Kuzco",
+      ...
+    }`
 
 type EnvGetConfig struct {
 	Format string `cli:"format"`

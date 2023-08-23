@@ -10,15 +10,17 @@ import (
 )
 
 const acknowledgementsHelpDescription = `Usage:
-  buildkite-agent acknowledgements
+
+    buildkite-agent acknowledgements
 
 Description:
-   Prints the licenses and notices of open source software incorporated into
-   this software.
+
+Prints the licenses and notices of open source software incorporated into
+this software.
 
 Example:
 
-	$ buildkite-agent acknowledgements`
+    $ buildkite-agent acknowledgements`
 
 //go:embed *.md.gz
 var files embed.FS

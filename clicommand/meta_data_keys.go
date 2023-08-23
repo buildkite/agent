@@ -12,16 +12,16 @@ import (
 
 const metaDataKeysHelpDescription = `Usage:
 
-   buildkite-agent meta-data keys [options...]
+    buildkite-agent meta-data keys [options...]
 
 Description:
 
-   Lists all meta-data keys that have been previously set, delimited by a newline
-   and terminated with a trailing newline.
+Lists all meta-data keys that have been previously set, delimited by a newline
+and terminated with a trailing newline.
 
 Example:
 
-   $ buildkite-agent meta-data keys`
+    $ buildkite-agent meta-data keys`
 
 type MetaDataKeysConfig struct {
 	Job   string `cli:"job"`

@@ -12,16 +12,16 @@ import (
 
 const metaDataExistsHelpDescription = `Usage:
 
-   buildkite-agent meta-data exists <key> [options...]
+    buildkite-agent meta-data exists <key> [options...]
 
 Description:
 
-   The command exits with a status of 0 if the key has been set, or it will
-   exit with a status of 100 if the key doesn't exist.
+The command exits with a status of 0 if the key has been set, or it will
+exit with a status of 100 if the key doesn't exist.
 
 Example:
 
-   $ buildkite-agent meta-data exists "foo"`
+    $ buildkite-agent meta-data exists "foo"`
 
 type MetaDataExistsConfig struct {
 	Key   string `cli:"arg:0" label:"meta-data key" validate:"required"`

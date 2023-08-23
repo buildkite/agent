@@ -39,20 +39,20 @@ import (
 
 const startDescription = `Usage:
 
-   buildkite-agent start [options...]
+    buildkite-agent start [options...]
 
 Description:
 
-   When a job is ready to run it will call the "bootstrap-script"
-   and pass it all the environment variables required for the job to run.
-   This script is responsible for checking out the code, and running the
-   actual build script defined in the pipeline.
+When a job is ready to run it will call the "bootstrap-script"
+and pass it all the environment variables required for the job to run.
+This script is responsible for checking out the code, and running the
+actual build script defined in the pipeline.
 
-   The agent will run any jobs within a PTY (pseudo terminal) if available.
+The agent will run any jobs within a PTY (pseudo terminal) if available.
 
 Example:
 
-   $ buildkite-agent start --token xxx`
+    $ buildkite-agent start --token xxx`
 
 var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
