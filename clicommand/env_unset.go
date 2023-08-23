@@ -81,7 +81,7 @@ var EnvUnsetCommand = cli.Command{
 
 func envUnsetAction(c *cli.Context) error {
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[EnvUnsetConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[EnvUnsetConfig](ctx, c)
 	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)

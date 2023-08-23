@@ -103,7 +103,7 @@ var ArtifactDownloadCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[ArtifactDownloadConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactDownloadConfig](ctx, c)
 		defer done()
 
 		// Create the API client

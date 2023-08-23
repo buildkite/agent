@@ -168,7 +168,7 @@ type AgentStartConfig struct {
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
-func (asc AgentStartConfig) Features() []string {
+func (asc AgentStartConfig) Features(ctx context.Context) []string {
 	if asc.NoFeatureReporting {
 		return []string{}
 	}
@@ -207,7 +207,7 @@ func (asc AgentStartConfig) Features() []string {
 		features = append(features, "no-script-eval")
 	}
 
-	for _, exp := range experiments.Enabled() {
+	for _, exp := range experiments.Enabled(ctx) {
 		features = append(features, fmt.Sprintf("experiment-%s", exp))
 	}
 
@@ -679,7 +679,7 @@ var AgentStartCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](c, withConfigFilePaths(
+		ctx, cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](ctx, c, withConfigFilePaths(
 			defaultConfigFilePaths(),
 		))
 		defer done()
@@ -804,7 +804,7 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
-		if experiments.IsEnabled(experiments.AgentAPI) {
+		if experiments.IsEnabled(ctx, experiments.AgentAPI) {
 			shutdown := runAgentAPI(ctx, l, cfg.SocketsPath)
 			defer shutdown()
 		}
@@ -979,7 +979,7 @@ var AgentStartCommand = cli.Command{
 			// dispatches if it's being booted to acquire a
 			// specific job.
 			IgnoreInDispatches: cfg.AcquireJob != "",
-			Features:           cfg.Features(),
+			Features:           cfg.Features(ctx),
 		}
 
 		// Spawning multiple agents doesn't work if the agent is being
@@ -1002,7 +1002,7 @@ var AgentStartCommand = cli.Command{
 
 			if cfg.SpawnWithPriority {
 				p := i
-				if experiments.IsEnabled(experiments.DescendingSpawnPrioity) {
+				if experiments.IsEnabled(ctx, experiments.DescendingSpawnPrioity) {
 					// This experiment helps jobs be assigned across all hosts
 					// in cases where the value of --spawn varies between hosts.
 					p = -i

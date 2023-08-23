@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 	if err != nil {
@@ -45,7 +47,7 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	mb.Expect().NotCalled() // The bootstrap won't be called, as the pre-bootstrap hook failed
 	defer mb.CheckAndClose(t)
 
-	runJob(t, testRunJobConfig{
+	runJob(t, ctx, testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{HooksPath: hooksDir},
@@ -65,6 +67,7 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 
 func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	exits := []int{0, 1, 2, 3}
 	for _, exit := range exits {
@@ -89,7 +92,7 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 			server := e.server("my-job-id")
 			defer server.Close()
 
-			runJob(t, testRunJobConfig{
+			runJob(t, ctx, testRunJobConfig{
 				job:           j,
 				server:        server,
 				agentCfg:      agent.AgentConfiguration{},
@@ -106,6 +109,7 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 
 func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	jobToken := "actually-llamas-are-only-okay"
 
@@ -133,7 +137,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	server := e.server("my-job-id")
 	defer server.Close()
 
-	runJob(t, testRunJobConfig{
+	runJob(t, ctx, testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{},
@@ -145,6 +149,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 // Maybe that the job runner pulls the access token from the API client? but that's all handled in the `runJob` helper...
 func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	j := &api.Job{
 		ID:                 "my-job-id",
@@ -169,7 +174,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	server := e.server("my-job-id")
 	defer server.Close()
 
-	runJob(t, testRunJobConfig{
+	runJob(t, ctx, testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{},
@@ -179,6 +184,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 
 func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	j := &api.Job{
 		ID:                 "my-job-id",
@@ -204,7 +210,7 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	server := e.server("my-job-id")
 	defer server.Close()
 
-	runJob(t, testRunJobConfig{
+	runJob(t, ctx, testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{CommandEval: true},

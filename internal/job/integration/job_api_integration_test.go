@@ -16,9 +16,9 @@ import (
 )
 
 func TestBootstrapRunsJobAPI(t *testing.T) {
-	defer experiments.EnableWithUndo(experiments.JobAPI)()
+	ctx, _ := experiments.Enable(mainCtx, experiments.JobAPI)
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}

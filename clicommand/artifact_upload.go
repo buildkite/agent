@@ -140,7 +140,7 @@ var ArtifactUploadCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](ctx, c)
 		defer done()
 
 		// Create the API client

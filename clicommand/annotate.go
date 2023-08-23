@@ -116,7 +116,7 @@ var AnnotateCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[AnnotateConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotateConfig](ctx, c)
 		defer done()
 
 		if err := annotate(ctx, cfg, l); err != nil {

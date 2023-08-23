@@ -94,7 +94,7 @@ var OIDCRequestTokenCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](ctx, c)
 		defer done()
 
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0

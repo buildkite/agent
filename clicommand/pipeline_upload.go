@@ -161,7 +161,7 @@ var PipelineUploadCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](ctx, c)
 		defer done()
 
 		// Find the pipeline either from STDIN or the first argument

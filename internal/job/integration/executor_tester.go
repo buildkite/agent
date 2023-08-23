@@ -3,6 +3,7 @@ package integration
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -43,7 +44,7 @@ type ExecutorTester struct {
 	mocks    []*bintest.Mock
 }
 
-func NewBootstrapTester() (*ExecutorTester, error) {
+func NewBootstrapTester(ctx context.Context) (*ExecutorTester, error) {
 	// The job API experiment adds a unix domain socket to a directory in the home directory
 	// UDS names are limited to 108 characters, so we need to use a shorter home directory
 	// Who knows what's going on in windowsland
@@ -114,7 +115,7 @@ func NewBootstrapTester() (*ExecutorTester, error) {
 	}
 
 	// Support testing experiments
-	experiments := experiments.Enabled()
+	experiments := experiments.Enabled(ctx)
 	if len(experiments) > 0 {
 		bt.Env = append(bt.Env, "BUILDKITE_AGENT_EXPERIMENT="+strings.Join(experiments, ","))
 	}

@@ -83,7 +83,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell.InterruptSignal = e.ExecutorConfig.CancelSignal
 		e.shell.SignalGracePeriod = e.ExecutorConfig.SignalGracePeriod
 	}
-	if experiments.IsEnabled(experiments.KubernetesExec) {
+	if experiments.IsEnabled(ctx, experiments.KubernetesExec) {
 		kubernetesClient := &kubernetes.Client{}
 		if err := e.startKubernetesClient(ctx, kubernetesClient); err != nil {
 			e.shell.Errorf("Failed to start kubernetes client: %v", err)
@@ -120,7 +120,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	e.shell.Env = env.FromSlice(os.Environ())
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
-	cleanup, err := e.startJobAPI()
+	cleanup, err := e.startJobAPI(ctx)
 	if err != nil {
 		e.shell.Errorf("Error setting up job API: %v", err)
 		return 1
@@ -300,7 +300,7 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 
 	e.shell.Headerf("Running %s hook", hookName)
 
-	if !experiments.IsEnabled(experiments.PolyglotHooks) {
+	if !experiments.IsEnabled(ctx, experiments.PolyglotHooks) {
 		return e.runWrappedShellScriptHook(ctx, hookName, hookCfg)
 	}
 
@@ -769,7 +769,7 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 	}
 
 	checkoutPluginMethod := e.checkoutPlugin
-	if experiments.IsEnabled(experiments.IsolatedPluginCheckout) {
+	if experiments.IsEnabled(ctx, experiments.IsolatedPluginCheckout) {
 		if e.Debug {
 			e.shell.Commentf("Using isolated plugin checkout")
 		}
@@ -1870,7 +1870,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	}
 
 	// resolve BUILDKITE_COMMIT based on the local git repo
-	if experiments.IsEnabled(experiments.ResolveCommitAfterCheckout) {
+	if experiments.IsEnabled(ctx, experiments.ResolveCommitAfterCheckout) {
 		e.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
 		e.resolveCommit(ctx)
 	}
@@ -2027,7 +2027,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 
 	isExitError := shell.IsExitError(commandErr)
 	isExitSignaled := shell.IsExitSignaled(commandErr)
-	avoidRecursiveTrap := experiments.IsEnabled(experiments.AvoidRecursiveTrap)
+	avoidRecursiveTrap := experiments.IsEnabled(ctx, experiments.AvoidRecursiveTrap)
 
 	switch {
 	case isExitError && isExitSignaled && avoidRecursiveTrap:
@@ -2190,7 +2190,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	//    elsewhere in the agent.
 	//
 	// Therefore, we are phasing it out under an experiment.
-	if !experiments.IsEnabled(experiments.AvoidRecursiveTrap) && !commandIsScript && shellscript.IsPOSIXShell(e.Shell) {
+	if !experiments.IsEnabled(ctx, experiments.AvoidRecursiveTrap) && !commandIsScript && shellscript.IsPOSIXShell(e.Shell) {
 		cmdToExec = fmt.Sprintf("trap 'kill -- $$' INT TERM QUIT; %s", cmdToExec)
 	}
 

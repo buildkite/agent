@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -11,6 +12,11 @@ import (
 	"github.com/buildkite/bintest/v3"
 	"github.com/urfave/cli"
 )
+
+// This context needs to be stored here in order to pass experiments to tests,
+// because testing.M can only Run (without passing arguments or context).
+// In ordinary code, pass contexts as arguments!
+var mainCtx = context.Background()
 
 func TestMain(m *testing.M) {
 	// If we are passed "bootstrap", execute like the bootstrap cli
@@ -36,7 +42,7 @@ func TestMain(m *testing.M) {
 
 	// Support running the test suite against a given experiment
 	if exp := os.Getenv("TEST_EXPERIMENT"); exp != "" {
-		experiments.Enable(exp)
+		mainCtx, _ = experiments.Enable(mainCtx, exp)
 		fmt.Printf("!!! Enabling experiment %q for test suite\n", exp)
 	}
 

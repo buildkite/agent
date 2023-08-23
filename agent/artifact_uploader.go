@@ -73,7 +73,7 @@ func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig
 
 func (a *ArtifactUploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
-	artifacts, err := a.Collect()
+	artifacts, err := a.Collect(ctx)
 	if err != nil {
 		return fmt.Errorf("collecting artifacts: %w", err)
 	}
@@ -107,7 +107,7 @@ func isDir(path string) bool {
 	return fi.IsDir()
 }
 
-func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
+func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifact, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
@@ -182,7 +182,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 				return nil, fmt.Errorf("resolving relative path for file %s: %w", file, err)
 			}
 
-			if experiments.IsEnabled(experiments.NormalisedUploadPaths) {
+			if experiments.IsEnabled(ctx, experiments.NormalisedUploadPaths) {
 				// Convert any Windows paths to Unix/URI form
 				path = filepath.ToSlash(path)
 			}
