@@ -571,8 +571,14 @@ func (s *Shell) executeCommand(
 	tracedEnv := env.FromSlice(cmd.Env)
 	s.injectTraceCtx(ctx, tracedEnv)
 	cmd.Env = tracedEnv.ToSlice()
-	logToSpanWriter := &spanMakerWriter{w: w, ctx: ctx, span: nil}
-	defer func() { logToSpanWriter.FinishIfActive() }()
+	writer := w
+	writerCloser := func() {}
+	if s.TraceLogGroups {
+		logToSpanWriter := &spanMakerWriter{w: w, ctx: ctx, span: nil}
+		writer = logToSpanWriter
+		writerCloser = func() { logToSpanWriter.FinishIfActive() }
+	}
+	defer writerCloser()
 
 	s.cmdLock.Lock()
 	s.cmd = cmd
@@ -592,11 +598,11 @@ func (s *Shell) executeCommand(
 	// Modify process config based on execution flags
 	if flags.PTY {
 		cfg.PTY = true
-		cfg.Stdout = logToSpanWriter
+		cfg.Stdout = writer
 	} else {
 		// Show stdout if requested or via debug
 		if flags.Stdout {
-			cfg.Stdout = logToSpanWriter
+			cfg.Stdout = writer
 		} else if s.Debug {
 			stdOutStreamer := NewLoggerStreamer(s.Logger)
 			defer stdOutStreamer.Close()
@@ -605,7 +611,7 @@ func (s *Shell) executeCommand(
 
 		// Show stderr if requested or via debug
 		if flags.Stderr {
-			cfg.Stderr = logToSpanWriter
+			cfg.Stderr = writer
 		} else if s.Debug {
 			stdErrStreamer := NewLoggerStreamer(s.Logger)
 			defer stdErrStreamer.Close()
