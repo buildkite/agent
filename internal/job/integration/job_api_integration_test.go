@@ -16,6 +16,8 @@ import (
 )
 
 func TestBootstrapRunsJobAPI(t *testing.T) {
+	t.Parallel()
+
 	ctx, _ := experiments.Enable(mainCtx, experiments.JobAPI)
 
 	tester, err := NewBootstrapTester(ctx)

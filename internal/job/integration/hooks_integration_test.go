@@ -511,12 +511,12 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 }
 
 func TestPreExitHooksFireAfterCancel(t *testing.T) {
+	t.Parallel()
+
 	// TODO: Why is this test skipped on windows and darwin?
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		t.Skip()
 	}
-
-	t.Parallel()
 
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
@@ -548,6 +548,8 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 }
 
 func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("script hooks aren't supported on windows")
 	}
@@ -587,6 +589,8 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 }
 
 func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
+	t.Parallel()
+
 	ctx := mainCtx
 	ctx, _ = experiments.Enable(ctx, experiments.PolyglotHooks)
 	ctx, _ = experiments.Enable(ctx, experiments.JobAPI)

@@ -207,11 +207,11 @@ func TestOverlappingPluginHooks(t *testing.T) {
 }
 
 func TestPluginCloneRetried(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Not passing on windows, needs investigation")
 	}
-
-	t.Parallel()
 
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
@@ -278,6 +278,8 @@ func TestPluginCloneRetried(t *testing.T) {
 // that a plugin modified upstream is treated as expected.  That is, by default, the updates won't
 // take effect, but with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH set, they will.
 func TestModifiedPluginNoForcePull(t *testing.T) {
+	t.Parallel()
+
 	ctx := mainCtx
 
 	tester, err := NewBootstrapTester(ctx)
@@ -387,6 +389,8 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 // and after modifying a plugin's source, but this time with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH
 // set to true.  So, we expect the upstream plugin changes to take effect on our second build.
 func TestModifiedPluginWithForcePull(t *testing.T) {
+	t.Parallel()
+
 	ctx := mainCtx
 
 	tester, err := NewBootstrapTester(mainCtx)

@@ -59,6 +59,8 @@ func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
 }
 
 func TestWithResolvingCommitExperiment_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
 	ctx, _ := experiments.Enable(mainCtx, experiments.ResolveCommitAfterCheckout)
 	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
@@ -479,6 +481,8 @@ func TestCleaningAnExistingCheckout_WithGitMirrors(t *testing.T) {
 }
 
 func TestForcingACleanCheckout_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -503,6 +507,8 @@ func TestForcingACleanCheckout_WithGitMirrors(t *testing.T) {
 }
 
 func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -532,6 +538,8 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder_WithGitMirrors(t *testi
 }
 
 func TestCheckoutRetriesOnCleanFailure_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -562,6 +570,8 @@ func TestCheckoutRetriesOnCleanFailure_WithGitMirrors(t *testing.T) {
 }
 
 func TestCheckoutRetriesOnCloneFailure_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -590,6 +600,8 @@ func TestCheckoutRetriesOnCloneFailure_WithGitMirrors(t *testing.T) {
 }
 
 func TestCheckoutDoesNotRetryOnHookFailure_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)

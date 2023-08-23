@@ -19,6 +19,8 @@ import (
 // that a plugin modified upstream is treated as expected.  That is, by default, the updates won't
 // take effect, but with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH set, they will.
 func TestModifiedIsolatedPluginNoForcePull(t *testing.T) {
+	t.Parallel()
+
 	ctx, _ := experiments.Enable(mainCtx, experiments.IsolatedPluginCheckout)
 
 	tester, err := NewBootstrapTester(ctx)
@@ -128,6 +130,8 @@ func TestModifiedIsolatedPluginNoForcePull(t *testing.T) {
 // and after modifying a plugin's source, but this time with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH
 // set to true.  So, we expect the upstream plugin changes to take effect on our second build.
 func TestModifiedIsolatedPluginWithForcePull(t *testing.T) {
+	t.Parallel()
+
 	ctx, _ := experiments.Enable(mainCtx, experiments.IsolatedPluginCheckout)
 
 	tester, err := NewBootstrapTester(ctx)

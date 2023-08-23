@@ -29,6 +29,8 @@ var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit
 const gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
 
 func TestWithResolvingCommitExperiment(t *testing.T) {
+	t.Parallel()
+
 	ctx, _ := experiments.Enable(mainCtx, experiments.ResolveCommitAfterCheckout)
 	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
@@ -528,6 +530,8 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 }
 
 func TestForcingACleanCheckout(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -548,6 +552,8 @@ func TestForcingACleanCheckout(t *testing.T) {
 }
 
 func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -573,6 +579,8 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 }
 
 func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -599,6 +607,8 @@ func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
 }
 
 func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -623,6 +633,8 @@ func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
 }
 
 func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
