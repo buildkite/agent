@@ -12,31 +12,32 @@ import (
 
 const lockDoHelpDescription = `Usage:
 
-   buildkite-agent lock do [key]
+    buildkite-agent lock do [key]
 
 Description:
-   Begins a do-once lock. Do-once can be used by multiple processes to
-   wait for completion of some shared work, where only one process should do
-   the work.
 
-   Note that this subcommand is only available when an agent has been started
-   with the ′agent-api′ experiment enabled.
+Begins a do-once lock. Do-once can be used by multiple processes to
+wait for completion of some shared work, where only one process should do
+the work.
 
-   ′lock do′ will do one of two things:
+Note that this subcommand is only available when an agent has been started
+with the ′agent-api′ experiment enabled.
 
-   - Print 'do'. The calling process should proceed to do the work and then
-     call ′lock done′.
-   - Wait until the work is marked as done (with ′lock done′) and print 'done'.
+′lock do′ will do one of two things:
 
-   If ′lock do′ prints 'done' immediately, the work was already done.
+- Print 'do'. The calling process should proceed to do the work and then
+  call ′lock done′.
+- Wait until the work is marked as done (with ′lock done′) and print 'done'.
+
+If ′lock do′ prints 'done' immediately, the work was already done.
 
 Examples:
 
-   #!/bin/bash
-   if [[ $(buildkite-agent lock do llama) == 'do' ]]; then
-     # your critical section here...
-     buildkite-agent lock done llama
-   fi`
+    #!/bin/bash
+    if [[ $(buildkite-agent lock do llama) == 'do' ]]; then
+      # your critical section here...
+      buildkite-agent lock done llama
+    fi`
 
 type LockDoConfig struct {
 	// Common config options
@@ -58,7 +59,7 @@ func lockDoFlags() []cli.Flag {
 		[]cli.Flag{
 			cli.DurationFlag{
 				Name:   "lock-wait-timeout",
-				Usage:  "If specified, sets a maximum duration to wait for a lock before giving up",
+				Usage:  "Sets a maximum duration to wait for a lock before giving up",
 				EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
 			},
 		},

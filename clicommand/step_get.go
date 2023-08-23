@@ -12,23 +12,23 @@ import (
 
 const stepGetHelpDescription = `Usage:
 
-   buildkite-agent step get <attribute> [options...]
+    buildkite-agent step get <attribute> [options...]
 
 Description:
 
-   Retrieve the value of an attribute in a step. If no attribute is passed, the
-   entire step will be returned.
+Retrieve the value of an attribute in a step. If no attribute is passed, the
+entire step will be returned.
 
-   In the event a complex object is returned (an object or an array),
-   you'll need to supply the --format option to tell the agent how it should
-   output the data (currently only JSON is supported).
+In the event a complex object is returned (an object or an array),
+you'll need to supply the --format option to tell the agent how it should
+output the data (currently only JSON is supported).
 
 Example:
 
-   $ buildkite-agent step get "label" --step "key"
-   $ buildkite-agent step get --format json
-   $ buildkite-agent step get "retry" --format json
-   $ buildkite-agent step get "state" --step "my-other-step"`
+    $ buildkite-agent step get "label" --step "key"
+    $ buildkite-agent step get --format json
+    $ buildkite-agent step get "retry" --format json
+    $ buildkite-agent step get "state" --step "my-other-step"`
 
 type StepGetConfig struct {
 	Attribute string `cli:"arg:0" label:"step attribute"`

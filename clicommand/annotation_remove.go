@@ -11,19 +11,19 @@ import (
 
 const annotationRemoveHelpDescription = `Usage:
 
-   buildkite-agent annotation remove [arguments...]
+    buildkite-agent annotation remove [arguments...]
 
 Description:
 
-   Remove an existing annotation which was previously published using the
-   buildkite-agent annotate command.
+Remove an existing annotation which was previously published using the
+buildkite-agent annotate command.
 
-   If you leave context blank, it will use the default context.
+If you leave context blank, it will use the default context.
 
 Example:
 
-   $ buildkite-agent annotation remove
-   $ buildkite-agent annotation remove --context "remove-me"`
+    $ buildkite-agent annotation remove
+    $ buildkite-agent annotation remove --context "remove-me"`
 
 type AnnotationRemoveConfig struct {
 	Context string `cli:"context" validate:"required"`

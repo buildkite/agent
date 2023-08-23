@@ -12,27 +12,27 @@ import (
 
 const lockAcquireHelpDescription = `Usage:
 
-   buildkite-agent lock acquire [key]
+    buildkite-agent lock acquire [key]
 
 Description:
-   Acquires the lock for the given key. ′lock acquire′ will wait (potentially
-   forever) until it can acquire the lock, if the lock is already held by
-   another process. If multiple processes are waiting for the same lock, there
-   is no ordering guarantee of which one will be given the lock next.
 
-   To prevent separate processes unlocking each other, the output from ′lock
-   acquire′ should be stored, and passed to ′lock release′.
+Acquires the lock for the given key. ′lock acquire′ will wait (potentially
+forever) until it can acquire the lock, if the lock is already held by
+another process. If multiple processes are waiting for the same lock, there
+is no ordering guarantee of which one will be given the lock next.
 
-   Note that this subcommand is only available when an agent has been started
-   with the ′agent-api′ experiment enabled.
+To prevent separate processes unlocking each other, the output from ′lock
+acquire′ should be stored, and passed to ′lock release′.
+
+Note that this subcommand is only available when an agent has been started
+with the ′agent-api′ experiment enabled.
 
 Examples:
 
-   $ token=$(buildkite-agent lock acquire llama)
-   $ critical_section()
-   $ buildkite-agent lock release llama "${token}"
-
-`
+    #!/bin/bash
+    token=$(buildkite-agent lock acquire llama)
+    # your critical section here...
+    buildkite-agent lock release llama "${token}"`
 
 type LockAcquireConfig struct {
 	// Common config options
