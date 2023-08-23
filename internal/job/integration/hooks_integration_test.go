@@ -325,25 +325,80 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 
 	ctx := mainCtx
 
-	var testCases = []struct {
+	testCases := []struct {
 		failingHook         string
 		expectGlobalPreExit bool
 		expectLocalPreExit  bool
 		expectCheckout      bool
 		expectArtifacts     bool
 	}{
-		{"environment", true, false, false, false},
-		{"pre-checkout", true, false, false, false},
-		{"post-checkout", true, true, true, true},
-		{"checkout", true, false, false, false},
-		{"pre-command", true, true, true, true},
-		{"command", true, true, true, true},
-		{"post-command", true, true, true, true},
-		{"pre-artifact", true, true, true, false},
-		{"post-artifact", true, true, true, true},
+		{
+			failingHook:         "environment",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  false,
+			expectCheckout:      false,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "pre-checkout",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  false,
+			expectCheckout:      false,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "post-checkout",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "checkout",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  false,
+			expectCheckout:      false,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "pre-command",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     true,
+		},
+		{
+			failingHook:         "command",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     true,
+		},
+		{
+			failingHook:         "post-command",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     true,
+		},
+		{
+			failingHook:         "pre-artifact",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "post-artifact",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     true,
+		},
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.failingHook, func(t *testing.T) {
 			t.Parallel()
 
