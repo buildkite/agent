@@ -76,7 +76,7 @@ var AnnotationRemoveCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[AnnotationRemoveConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotationRemoveConfig](ctx, c)
 		defer done()
 
 		// Create the API client

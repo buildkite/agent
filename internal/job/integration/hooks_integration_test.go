@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/bintest/v3"
 )
@@ -19,7 +19,7 @@ import (
 func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -63,7 +63,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -123,7 +123,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -157,7 +157,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 }
 
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -194,7 +194,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -224,7 +224,7 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 func TestReplacingCheckoutHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -253,7 +253,7 @@ func TestReplacingCheckoutHook(t *testing.T) {
 func TestReplacingGlobalCommandHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -278,7 +278,7 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 func TestReplacingLocalCommandHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -304,7 +304,7 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -323,29 +323,86 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 	t.Parallel()
 
-	var testCases = []struct {
+	ctx := mainCtx
+
+	testCases := []struct {
 		failingHook         string
 		expectGlobalPreExit bool
 		expectLocalPreExit  bool
 		expectCheckout      bool
 		expectArtifacts     bool
 	}{
-		{"environment", true, false, false, false},
-		{"pre-checkout", true, false, false, false},
-		{"post-checkout", true, true, true, true},
-		{"checkout", true, false, false, false},
-		{"pre-command", true, true, true, true},
-		{"command", true, true, true, true},
-		{"post-command", true, true, true, true},
-		{"pre-artifact", true, true, true, false},
-		{"post-artifact", true, true, true, true},
+		{
+			failingHook:         "environment",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  false,
+			expectCheckout:      false,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "pre-checkout",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  false,
+			expectCheckout:      false,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "post-checkout",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "checkout",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  false,
+			expectCheckout:      false,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "pre-command",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     true,
+		},
+		{
+			failingHook:         "command",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     true,
+		},
+		{
+			failingHook:         "post-command",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     true,
+		},
+		{
+			failingHook:         "pre-artifact",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     false,
+		},
+		{
+			failingHook:         "post-artifact",
+			expectGlobalPreExit: true,
+			expectLocalPreExit:  true,
+			expectCheckout:      true,
+			expectArtifacts:     true,
+		},
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.failingHook, func(t *testing.T) {
 			t.Parallel()
 
-			tester, err := NewBootstrapTester()
+			tester, err := NewBootstrapTester(ctx)
 			if err != nil {
 				t.Fatalf("NewBootstrapTester() error = %v", err)
 			}
@@ -395,7 +452,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -416,6 +473,8 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 	t.Parallel()
 
+	ctx := mainCtx
+
 	for _, hook := range []string{
 		"environment",
 		"pre-checkout",
@@ -429,7 +488,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 		// "post-artifact",
 	} {
 		t.Run(hook, func(t *testing.T) {
-			tester, err := NewBootstrapTester()
+			tester, err := NewBootstrapTester(ctx)
 			if err != nil {
 				t.Fatalf("NewBootstrapTester() error = %v", err)
 			}
@@ -452,14 +511,14 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 }
 
 func TestPreExitHooksFireAfterCancel(t *testing.T) {
+	t.Parallel()
+
 	// TODO: Why is this test skipped on windows and darwin?
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		t.Skip()
 	}
 
-	t.Parallel()
-
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -489,6 +548,8 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 }
 
 func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("script hooks aren't supported on windows")
 	}
@@ -502,9 +563,9 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 		t.Fatal("ruby not found in $PATH. This test requires ruby to be installed on the host")
 	}
 
-	defer experiments.EnableWithUndo(experiments.PolyglotHooks)()
+	ctx, _ := experiments.Enable(mainCtx, experiments.PolyglotHooks)
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -528,10 +589,13 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 }
 
 func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
-	defer experiments.EnableWithUndo(experiments.PolyglotHooks)()
-	defer experiments.EnableWithUndo(experiments.JobAPI)()
+	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	ctx := mainCtx
+	ctx, _ = experiments.Enable(ctx, experiments.PolyglotHooks)
+	ctx, _ = experiments.Enable(ctx, experiments.JobAPI)
+
+	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}

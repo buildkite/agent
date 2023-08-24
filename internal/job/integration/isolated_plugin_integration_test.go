@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -19,12 +19,11 @@ import (
 // that a plugin modified upstream is treated as expected.  That is, by default, the updates won't
 // take effect, but with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH set, they will.
 func TestModifiedIsolatedPluginNoForcePull(t *testing.T) {
-	// t.Parallel() cannot be used here because we are modifying the global experiments state
+	t.Parallel()
 
-	undo := experiments.EnableWithUndo(experiments.IsolatedPluginCheckout)
-	defer undo()
+	ctx, _ := experiments.Enable(mainCtx, experiments.IsolatedPluginCheckout)
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -89,7 +88,7 @@ func TestModifiedIsolatedPluginNoForcePull(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 
 	// Now, we want to "repeat" the test build, having modified the plugin's contents.
-	tester2, err := NewBootstrapTester()
+	tester2, err := NewBootstrapTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -131,12 +130,11 @@ func TestModifiedIsolatedPluginNoForcePull(t *testing.T) {
 // and after modifying a plugin's source, but this time with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH
 // set to true.  So, we expect the upstream plugin changes to take effect on our second build.
 func TestModifiedIsolatedPluginWithForcePull(t *testing.T) {
-	// t.Parallel() cannot be used here because we are modifying the global experiments state
+	t.Parallel()
 
-	undo := experiments.EnableWithUndo(experiments.IsolatedPluginCheckout)
-	defer undo()
+	ctx, _ := experiments.Enable(mainCtx, experiments.IsolatedPluginCheckout)
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -193,7 +191,7 @@ func TestModifiedIsolatedPluginWithForcePull(t *testing.T) {
 
 	tester.RunAndCheck(t, env...)
 
-	tester2, err := NewBootstrapTester()
+	tester2, err := NewBootstrapTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}

@@ -80,7 +80,7 @@ var MetaDataGetCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[MetaDataGetConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataGetConfig](ctx, c)
 		defer done()
 
 		// Create the API client

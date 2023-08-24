@@ -95,7 +95,7 @@ var StepUpdateCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](ctx, c)
 		defer done()
 
 		// Read the value from STDIN if argument omitted entirely

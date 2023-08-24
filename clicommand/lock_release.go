@@ -59,7 +59,7 @@ func lockReleaseAction(c *cli.Context) error {
 	key, token := c.Args()[0], c.Args()[1]
 
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[LockReleaseConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[LockReleaseConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {

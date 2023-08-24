@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -91,6 +92,7 @@ var (
 
 func TestJobVerification(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	cases := []struct {
 		name                     string
@@ -227,7 +229,7 @@ func TestJobVerification(t *testing.T) {
 			defer mb.CheckAndClose(t)
 
 			tc.job.Step = signStep(t, pipelineUploadEnv, tc.job.Step, tc.signingKey)
-			runJob(t, testRunJobConfig{
+			runJob(t, ctx, testRunJobConfig{
 				job:              &tc.job,
 				server:           server,
 				agentCfg:         tc.agentConf,

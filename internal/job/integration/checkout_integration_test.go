@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -29,10 +29,10 @@ var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit
 const gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
 
 func TestWithResolvingCommitExperiment(t *testing.T) {
-	// t.Parallel() cannot be used with experiments.Enable()
-	defer experiments.EnableWithUndo(experiments.ResolveCommitAfterCheckout)()
+	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	ctx, _ := experiments.Enable(mainCtx, experiments.ResolveCommitAfterCheckout)
+	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -72,7 +72,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 func TestCheckingOutLocalGitProject(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -116,7 +116,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		t.Skip()
 	}
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -182,7 +182,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		t.Skip()
 	}
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -238,7 +238,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -277,7 +277,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 func TestCheckoutErrorIsRetried(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -340,7 +340,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 func TestFetchErrorIsRetried(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -402,7 +402,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -418,7 +418,7 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -446,7 +446,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -467,7 +467,7 @@ func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -496,7 +496,7 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 
 	t.Parallel()
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -530,7 +530,9 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 }
 
 func TestForcingACleanCheckout(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -550,7 +552,9 @@ func TestForcingACleanCheckout(t *testing.T) {
 }
 
 func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -575,7 +579,9 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 }
 
 func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -601,7 +607,9 @@ func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
 }
 
 func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -625,7 +633,9 @@ func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
 }
 
 func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
-	tester, err := NewBootstrapTester()
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -658,7 +668,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 		t.Skip("Not supported on windows")
 	}
 
-	tester, err := NewBootstrapTester()
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}

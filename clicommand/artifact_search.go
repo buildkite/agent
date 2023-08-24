@@ -135,7 +135,7 @@ var ArtifactSearchCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](ctx, c)
 		defer done()
 
 		// Create the API client

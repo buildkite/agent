@@ -97,7 +97,7 @@ var EnvGetCommand = cli.Command{
 
 func envGetAction(c *cli.Context) error {
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[EnvGetConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[EnvGetConfig](ctx, c)
 	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)

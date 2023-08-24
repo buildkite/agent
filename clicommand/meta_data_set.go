@@ -78,7 +78,7 @@ var MetaDataSetCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](ctx, c)
 		defer done()
 
 		// Read the value from STDIN if argument omitted entirely

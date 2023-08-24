@@ -363,7 +363,7 @@ var BootstrapCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
 
 		// Turn of PTY support if we're on Windows

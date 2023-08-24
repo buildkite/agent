@@ -83,7 +83,7 @@ var EnvSetCommand = cli.Command{
 
 func envSetAction(c *cli.Context) error {
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[EnvSetConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[EnvSetConfig](ctx, c)
 	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)

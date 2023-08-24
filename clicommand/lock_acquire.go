@@ -79,7 +79,7 @@ func lockAcquireAction(c *cli.Context) error {
 	key := c.Args()[0]
 
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[LockAcquireConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[LockAcquireConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {

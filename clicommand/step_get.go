@@ -89,7 +89,7 @@ var StepGetCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](ctx, c)
 		defer done()
 
 		// Create the API client

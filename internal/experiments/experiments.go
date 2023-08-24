@@ -5,7 +5,9 @@
 package experiments
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"github.com/buildkite/agent/v3/logger"
 )
@@ -58,20 +60,23 @@ var (
 		InbuiltStatusPage: standardPromotionMsg(InbuiltStatusPage, "v3.48.0"),
 	}
 
-	experiments = make(map[string]bool, len(Available))
+	// Used to track experiments possibly in use.
+	allMu sync.Mutex
+	all   = make(map[string]struct{})
 )
 
 func standardPromotionMsg(key, version string) string {
 	return fmt.Sprintf("The %s experiment has been promoted to a stable feature in agent version %s. You can safely remove the `--experiment %s` flag to silence this message and continue using the feature", key, version, key)
 }
 
-func EnableWithUndo(key string) func() {
-	Enable(key)
-	return func() { Disable(key) }
+type experimentCtxKey struct {
+	experiment string
 }
 
-func EnableWithWarnings(l logger.Logger, key string) State {
-	state := Enable(key)
+// EnableWithWarnings enables an experiment in a new context, logging
+// information about unknown and promoted experiments.
+func EnableWithWarnings(ctx context.Context, l logger.Logger, key string) (context.Context, State) {
+	newctx, state := Enable(ctx, key)
 	switch state {
 	case StateKnown:
 	// Noop
@@ -80,39 +85,52 @@ func EnableWithWarnings(l logger.Logger, key string) State {
 	case StatePromoted:
 		l.Warn(Promoted[key])
 	}
-	return state
+	return newctx, state
 }
 
-// Enable a particular experiment in the agent.
-func Enable(key string) (state State) {
-	experiments[key] = true
+// Enable a particular experiment in a new context.
+func Enable(ctx context.Context, key string) (newctx context.Context, state State) {
+	allMu.Lock()
+	all[key] = struct{}{}
+	allMu.Unlock()
+
+	newctx = context.WithValue(ctx, experimentCtxKey{key}, true)
 
 	if _, promoted := Promoted[key]; promoted {
-		return StatePromoted
+		return newctx, StatePromoted
 	}
 
 	if _, known := Available[key]; known {
-		return StateKnown
+		return newctx, StateKnown
 	}
 
-	return StateUnknown
+	return newctx, StateUnknown
 }
 
-// Disable a particular experiment in the agent.
-func Disable(key string) {
-	delete(experiments, key)
+// Disable a particular experiment in a new context.
+func Disable(ctx context.Context, key string) context.Context {
+	// Even if we learn about the experiment through disablement, it is still
+	// an experiment...
+	allMu.Lock()
+	all[key] = struct{}{}
+	allMu.Unlock()
+
+	return context.WithValue(ctx, experimentCtxKey{key}, false)
 }
 
-// IsEnabled reports whether the named experiment is enabled.
-func IsEnabled(key string) bool {
-	return experiments[key] // map[T]bool returns false for missing keys
+// IsEnabled reports whether the named experiment is enabled in the context.
+func IsEnabled(ctx context.Context, key string) bool {
+	state := ctx.Value(experimentCtxKey{key})
+	return state != nil && state.(bool)
 }
 
 // Enabled returns the keys of all the enabled experiments.
-func Enabled() []string {
+func Enabled(ctx context.Context) []string {
+	allMu.Lock()
+	defer allMu.Unlock()
 	var keys []string
-	for key, enabled := range experiments {
-		if enabled {
+	for key := range all {
+		if IsEnabled(ctx, key) {
 			keys = append(keys, key)
 		}
 	}
