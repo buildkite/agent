@@ -813,12 +813,12 @@ var AgentStartCommand = cli.Command{
 		if cfg.JobVerificationJWKSPath != "" {
 			jwksBytes, err := os.ReadFile(cfg.JobVerificationJWKSPath)
 			if err != nil {
-				l.Fatal("Failed to read job verification key: %w", err)
+				l.Fatal("Failed to read job verification key: %v", err)
 			}
 
 			jwks, err = jwk.Parse(jwksBytes)
 			if err != nil {
-				l.Fatal("Failed to parse job verification key set: %w", err)
+				l.Fatal("Failed to parse job verification key set: %v", err)
 			}
 
 			if jwks.Len() == 0 {
