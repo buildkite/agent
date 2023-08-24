@@ -7,9 +7,15 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/buildkite/interpolate"
+	"gopkg.in/yaml.v3"
 )
 
-var _ SignedFielder = (*CommandStep)(nil)
+var _ interface {
+	json.Marshaler
+	json.Unmarshaler
+	ordered.Unmarshaler
+	SignedFielder
+} = (*CommandStep)(nil)
 
 // CommandStep models a command step.
 //
@@ -30,6 +36,17 @@ type CommandStep struct {
 // yaml.v3 has "inline" but encoding/json has no concept of it.
 func (c *CommandStep) MarshalJSON() ([]byte, error) {
 	return inlineFriendlyMarshalJSON(c)
+}
+
+// UnmarshalJSON is used when unmarshalling an individual step directly, e.g.
+// from the Agent API Accept Job.
+func (c *CommandStep) UnmarshalJSON(b []byte) error {
+	// JSON is just a specific kind of YAML.
+	var n yaml.Node
+	if err := yaml.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	return ordered.Unmarshal(&n, &c)
 }
 
 // UnmarshalOrdered unmarshals a command step from an ordered map.

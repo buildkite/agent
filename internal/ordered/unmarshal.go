@@ -32,8 +32,8 @@ type Unmarshaler interface {
 // of types under the hood, but some combinations don't work. Good luck!
 //
 //   - If dst is nil, then src must be nil.
-//   - If src is *yaml.Node, then DecodeYAML is called to translate the node
-//     into another type.
+//   - If src is yaml.Node or *yaml.Node, then DecodeYAML is called to translate
+//     the node into another type.
 //   - If dst is a pointer and src is nil, then the value dst points to is set
 //     to zero.
 //   - If dst is a pointer to a pointer, Unmarshal recursively calls Unmarshal
@@ -69,7 +69,16 @@ func Unmarshal(src, dst any) error {
 		return ErrIntoNil
 	}
 
-	if n, ok := src.(*yaml.Node); ok {
+	// Apply DecodeYAML to yaml.Node or *yaml.Node first.
+	switch n := src.(type) {
+	case yaml.Node:
+		o, err := DecodeYAML(&n)
+		if err != nil {
+			return err
+		}
+		src = o
+
+	case *yaml.Node:
 		o, err := DecodeYAML(n)
 		if err != nil {
 			return err

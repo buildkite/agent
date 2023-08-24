@@ -929,7 +929,7 @@ steps:
 				Command: "echo foo",
 				Plugins: Plugins{
 					{
-						Name: "ecr#v2.7.0",
+						Source: "ecr#v2.7.0",
 						Config: ordered.MapFromItems(
 							ordered.TupleSA{Key: "login", Value: true},
 							ordered.TupleSA{Key: "account_ids", Value: "0123456789"},
@@ -1017,13 +1017,13 @@ steps:
 				Command: "script/buildkite/xxx.sh",
 				Plugins: Plugins{
 					{
-						Name: "xxx/aws-assume-role#v0.1.0",
+						Source: "xxx/aws-assume-role#v0.1.0",
 						Config: ordered.MapFromItems(
 							ordered.TupleSA{Key: "role", Value: "arn:aws:iam::xxx:role/xxx"},
 						),
 					},
 					{
-						Name: "ecr#v1.1.4",
+						Source: "ecr#v1.1.4",
 						Config: ordered.MapFromItems(
 							ordered.TupleSA{Key: "login", Value: true},
 							ordered.TupleSA{Key: "account_ids", Value: "xxx"},
@@ -1031,7 +1031,7 @@ steps:
 						),
 					},
 					{
-						Name: "docker-compose#v2.5.1",
+						Source: "docker-compose#v2.5.1",
 						Config: ordered.MapFromItems(
 							ordered.TupleSA{Key: "run", Value: "xxx"},
 							ordered.TupleSA{Key: "config", Value: ".buildkite/docker/docker-compose.yml"},
@@ -1070,19 +1070,19 @@ steps:
       "name": ":s3: xxx",
       "plugins": [
         {
-          "xxx/aws-assume-role#v0.1.0": {
+          "github.com/xxx/aws-assume-role-buildkite-plugin#v0.1.0": {
             "role": "arn:aws:iam::xxx:role/xxx"
           }
         },
         {
-          "ecr#v1.1.4": {
+          "github.com/buildkite-plugins/ecr-buildkite-plugin#v1.1.4": {
             "login": true,
             "account_ids": "xxx",
             "registry_region": "us-east-1"
           }
         },
         {
-          "docker-compose#v2.5.1": {
+          "github.com/buildkite-plugins/docker-compose-buildkite-plugin#v2.5.1": {
             "run": "xxx",
             "config": ".buildkite/docker/docker-compose.yml",
             "env": [
@@ -1124,13 +1124,13 @@ func TestParserParsesScalarPlugins(t *testing.T) {
 				Command: "script/buildkite/xxx.sh",
 				Plugins: Plugins{
 					{
-						Name: "example-plugin#v1.0.0",
+						Source: "example-plugin#v1.0.0",
 					},
 					{
-						Name: "another-plugin#v0.0.1-beta43",
+						Source: "another-plugin#v0.0.1-beta43",
 					},
 					{
-						Name: "docker-compose#v2.5.1",
+						Source: "docker-compose#v2.5.1",
 						Config: ordered.MapFromItems(
 							ordered.TupleSA{Key: "config", Value: ".buildkite/docker/docker-compose.yml"},
 						),
@@ -1156,10 +1156,10 @@ func TestParserParsesScalarPlugins(t *testing.T) {
       "command": "script/buildkite/xxx.sh",
       "name": ":s3: xxx",
       "plugins": [
-        "example-plugin#v1.0.0",
-        "another-plugin#v0.0.1-beta43",
+        "github.com/buildkite-plugins/example-plugin-buildkite-plugin#v1.0.0",
+        "github.com/buildkite-plugins/another-plugin-buildkite-plugin#v0.0.1-beta43",
         {
-          "docker-compose#v2.5.1": {
+          "github.com/buildkite-plugins/docker-compose-buildkite-plugin#v2.5.1": {
             "config": ".buildkite/docker/docker-compose.yml"
           }
         }

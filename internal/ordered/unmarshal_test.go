@@ -8,6 +8,71 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	bigYAMLNode = yaml.Node{
+		Kind: yaml.MappingNode,
+		Tag:  "!!map",
+		Content: []*yaml.Node{
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "key"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "value"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "molehill"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "large"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "switch"},
+			{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "count"},
+			{Kind: yaml.ScalarNode, Tag: "!!int", Value: "42"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "fader"},
+			{Kind: yaml.ScalarNode, Tag: "!!float", Value: "2.71828"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "slicey"},
+			{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{
+				{Kind: yaml.ScalarNode, Tag: "!!int", Value: "5"},
+				{Kind: yaml.ScalarNode, Tag: "!!int", Value: "6"},
+				{Kind: yaml.ScalarNode, Tag: "!!int", Value: "7"},
+				{Kind: yaml.ScalarNode, Tag: "!!int", Value: "8"},
+			}},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "next"},
+			{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "key"},
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "another value"},
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "molehill"},
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "extra large"},
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "switch"},
+				{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"},
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "count"},
+				{Kind: yaml.ScalarNode, Tag: "!!int", Value: "42000"},
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "fader"},
+				{Kind: yaml.ScalarNode, Tag: "!!float", Value: "1.618"},
+			}},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "inner"},
+			{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "llama"},
+				{Kind: yaml.ScalarNode, Tag: "!!str", Value: "Kuzco"},
+			}},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "notAField"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "super important"},
+		},
+	}
+	bigOrdinaryStruct = ordinaryStruct{
+		Key:      "value",
+		Mountain: "large",
+		Switch:   true,
+		Count:    42,
+		Fader:    2.71828,
+		Slicey:   []int{5, 6, 7, 8},
+		Inner:    struct{ Llama string }{"Kuzco"},
+		Next: &ordinaryStruct{
+			Key:      "another value",
+			Mountain: "extra large",
+			Switch:   true,
+			Count:    42000,
+			Fader:    1.618,
+		},
+		Remaining: map[string]any{
+			"notAField": "super important",
+		},
+	}
+)
+
 type ordinaryStruct struct {
 	Key      string
 	Mountain string `yaml:"molehill"`
@@ -353,7 +418,7 @@ func TestUnmarshal(t *testing.T) {
 			))),
 		},
 		{
-			desc: "*MapSA to *testStruct without inline",
+			desc: "*MapSA to *ordinaryStruct without inline",
 			src: MapFromItems(
 				TupleSA{Key: "key", Value: "value"},
 				TupleSA{Key: "molehill", Value: "large"},
@@ -373,7 +438,7 @@ func TestUnmarshal(t *testing.T) {
 			},
 		},
 		{
-			desc: "*MapSA to *testStruct with inline",
+			desc: "*MapSA to *ordinaryStruct with inline",
 			src: MapFromItems(
 				TupleSA{Key: "key", Value: "value"},
 				TupleSA{Key: "molehill", Value: "large"},
@@ -401,7 +466,7 @@ func TestUnmarshal(t *testing.T) {
 			},
 		},
 		{
-			desc: "*MapSA to *testStruct with existing",
+			desc: "*MapSA to *ordinaryStruct with existing",
 			src: MapFromItems(
 				TupleSA{Key: "key", Value: "value"},
 				TupleSA{Key: "molehill", Value: "large"},
@@ -570,70 +635,16 @@ func TestUnmarshal(t *testing.T) {
 			},
 		},
 		{
-			desc: "*yaml.Node into testStruct",
-			src: &yaml.Node{
-				Kind: yaml.MappingNode,
-				Tag:  "!!map",
-				Content: []*yaml.Node{
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "key"},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "value"},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "molehill"},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "large"},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "switch"},
-					{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "count"},
-					{Kind: yaml.ScalarNode, Tag: "!!int", Value: "42"},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "fader"},
-					{Kind: yaml.ScalarNode, Tag: "!!float", Value: "2.71828"},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "slicey"},
-					{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{
-						{Kind: yaml.ScalarNode, Tag: "!!int", Value: "5"},
-						{Kind: yaml.ScalarNode, Tag: "!!int", Value: "6"},
-						{Kind: yaml.ScalarNode, Tag: "!!int", Value: "7"},
-						{Kind: yaml.ScalarNode, Tag: "!!int", Value: "8"},
-					}},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "next"},
-					{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "key"},
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "another value"},
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "molehill"},
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "extra large"},
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "switch"},
-						{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"},
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "count"},
-						{Kind: yaml.ScalarNode, Tag: "!!int", Value: "42000"},
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "fader"},
-						{Kind: yaml.ScalarNode, Tag: "!!float", Value: "1.618"},
-					}},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "inner"},
-					{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "llama"},
-						{Kind: yaml.ScalarNode, Tag: "!!str", Value: "Kuzco"},
-					}},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "notAField"},
-					{Kind: yaml.ScalarNode, Tag: "!!str", Value: "super important"},
-				},
-			},
-			dst: &ordinaryStruct{},
-			want: &ordinaryStruct{
-				Key:      "value",
-				Mountain: "large",
-				Switch:   true,
-				Count:    42,
-				Fader:    2.71828,
-				Slicey:   []int{5, 6, 7, 8},
-				Inner:    struct{ Llama string }{"Kuzco"},
-				Next: &ordinaryStruct{
-					Key:      "another value",
-					Mountain: "extra large",
-					Switch:   true,
-					Count:    42000,
-					Fader:    1.618,
-				},
-				Remaining: map[string]any{
-					"notAField": "super important",
-				},
-			},
+			desc: "yaml.Node into ordinaryStruct",
+			src:  bigYAMLNode,
+			dst:  &ordinaryStruct{},
+			want: &bigOrdinaryStruct,
+		},
+		{
+			desc: "*yaml.Node into ordinaryStruct",
+			src:  &bigYAMLNode,
+			dst:  &ordinaryStruct{},
+			want: &bigOrdinaryStruct,
 		},
 	}
 

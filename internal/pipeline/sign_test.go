@@ -17,11 +17,11 @@ func TestSignVerify(t *testing.T) {
 		Command: "llamas",
 		Plugins: Plugins{
 			{
-				Name:   "some-plugin#v1.0.0",
+				Source: "some-plugin#v1.0.0",
 				Config: nil,
 			},
 			{
-				Name: "another-plugin#v3.4.5",
+				Source: "another-plugin#v3.4.5",
 				Config: ordered.MapFromItems(
 					ordered.TupleSA{
 						Key:   "llama",
@@ -56,19 +56,19 @@ func TestSignVerify(t *testing.T) {
 			name:                           "HMAC-SHA256",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS256,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..0kDPckkYX838NHBKfRA_be4FqpKpBabqohpgU5sGSGI",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..Xd7udcMRc3Gg236JdiV2vggGrqxAfgfLZdCLUpgAN34",
 		},
 		{
 			name:                           "HMAC-SHA384",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS384,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..GSufqnr_XZkobn0SYnoA2T_rciQJNenP7XMNuXPPcZai98KrE1kbD_FhVZn_D-d4",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..g-_B2RO6o_oZjPoM2UyCHDANbPeeqLBUexLRl_MoW7BdpLC7r6mLc0wgRIzJy6ih",
 		},
 		{
 			name:                           "HMAC-SHA512",
 			generateSigner:                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set) { return newSymmetricKeyPair(t, "alpacas", alg) },
 			alg:                            jwa.HS512,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..QP7CAzIZLKylXhJ-t7eEPxIro2j0-BR03PpUGLfDgT0-5oycmHYJWaF8UNFLM425VEKhW88Tr749nYByVy4eZQ",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6IlRlc3RTaWduVmVyaWZ5In0..iW8eaMBrcK7Ehj41DRzgQp3haYBf70JgA_n0C4d_acRZCdVUm-GJv9pdxQ5O0pYd7gJC_wMmaNMkuj4TXqlPvg",
 		},
 		{
 			name:           "RSA-PSS 256",

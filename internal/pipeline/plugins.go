@@ -23,7 +23,7 @@ func (p *Plugins) UnmarshalOrdered(o any) error {
 	unmarshalMap := func(m *ordered.MapSA) error {
 		return m.Range(func(k string, v any) error {
 			*p = append(*p, &Plugin{
-				Name:   k,
+				Source: k,
 				Config: v,
 			})
 			return nil
@@ -51,7 +51,7 @@ func (p *Plugins) UnmarshalOrdered(o any) error {
 				//   - plugin#1.0.0
 				// (no config, only plugin)
 				*p = append(*p, &Plugin{
-					Name:   ct,
+					Source: ct,
 					Config: nil,
 				})
 
