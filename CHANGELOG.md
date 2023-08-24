@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.52.1](https://github.com/buildkite/agent/tree/v3.52.1) (2023-08-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.52.0...v3.52.1)
+
+### Fixed
+- Fix missing group interpolation [#2303](https://github.com/buildkite/agent/pull/2303) (@DrJosh9000)
+- Experimental fix for agent workers reading plugin directories while they are being written to by other agent workers [#2301](https://github.com/buildkite/agent/pull/2301) (@triarius)
+
+### Internal
+- Rework method of pushing releases to RPM repos [#2315](https://github.com/buildkite/agent/pull/2315) [#2314](https://github.com/buildkite/agent/pull/2314) [#2312](https://github.com/buildkite/agent/pull/2312) [#2310](https://github.com/buildkite/agent/pull/2310) [#2304](https://github.com/buildkite/agent/pull/2304) (@DrJosh9000)
+- Update help text with suggestions from docs code review [#2313](https://github.com/buildkite/agent/pull/2313) (@triarius)
+- Fix a flaky shell test [#2311](https://github.com/buildkite/agent/pull/2311) (@triarius)
+- Adjust cli help output to work better with documentation generation [#2317](https://github.com/buildkite/agent/pull/2317) (@triarius)
+
 ## [v3.52.0](https://github.com/buildkite/agent/tree/v3.52.0) (2023-08-17)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.51.0...v3.52.0)
 
