@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
 )

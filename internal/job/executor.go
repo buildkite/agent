@@ -20,8 +20,8 @@ import (
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"

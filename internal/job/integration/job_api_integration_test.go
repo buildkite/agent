@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/bintest/v3"
 )

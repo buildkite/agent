@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 
 	"github.com/buildkite/bintest/v3"
 )
