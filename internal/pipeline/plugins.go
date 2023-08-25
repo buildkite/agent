@@ -31,6 +31,10 @@ func (p *Plugins) UnmarshalOrdered(o any) error {
 	}
 
 	switch o := o.(type) {
+	case nil:
+		*p = nil
+		return nil
+
 	case []any:
 		for _, c := range o {
 			switch ct := c.(type) {
