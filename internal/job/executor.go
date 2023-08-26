@@ -392,18 +392,33 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		e.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
 	}
 
+	const maxHookRetry = 3
+
 	// Run the wrapper script
-	if err = e.shell.RunScript(ctx, script.Path(), hookCfg.Env); err != nil {
+	if err := roko.NewRetrier(
+		roko.WithStrategy(roko.Constant(time.Second)),
+		roko.WithMaxAttempts(maxHookRetry),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		// Run the script and only retry on fork/exec errors
+		err := e.shell.RunScript(ctx, script.Path(), hookCfg.Env)
+		if perr := new(os.PathError); errors.As(err, &perr) && perr.Op == "fork/exec" {
+			return err
+		}
+		r.Break()
+		return err
+	}); err != nil {
 		exitCode := shell.GetExitCode(err)
 		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
 
-		// Give a simpler error if it's just a shell exit error
+		// If the hook exited with a non-zero exit code, then we should pass that back to the executor
+		// so it may inform the Buildkite API
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
 				Code:    exitCode,
 				Message: fmt.Sprintf("The %s hook exited with status %d", hookName, exitCode),
 			}
 		}
+
 		return err
 	}
 
