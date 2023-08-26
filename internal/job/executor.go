@@ -21,6 +21,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
@@ -363,6 +364,31 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, hookName string, hookCf
 	return e.shell.RunWithEnv(ctx, environ, hookCfg.Path)
 }
 
+func logOpenedHookInfo(l shell.Logger, hookName, path string) {
+	switch {
+	case runtime.GOOS == "linux":
+		procPath, err := file.OpenedBy(l, path)
+		if err != nil {
+			l.Errorf("The %s hook failed to run because and we could not find the process that had it opened", hookName)
+		} else {
+			l.Errorf("The %s hook failed to run because it was open by %s", hookName, procPath)
+		}
+	case utils.FileExists("/dev/fd"):
+		isOpened, err := file.IsOpened(l, path)
+		if err == nil {
+			if isOpened {
+				l.Errorf("The %s hook failed to run because it was opened by this buildkite-agent")
+			} else {
+				l.Errorf("The %s hook failed to run because it was opened by another process")
+			}
+			break
+		}
+		fallthrough
+	default:
+		l.Errorf("The %s hook failed to run because it was opened", hookName)
+	}
+}
+
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	redactors := e.setupRedactors()
 	defer redactors.Flush()
@@ -417,6 +443,12 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 				Code:    exitCode,
 				Message: fmt.Sprintf("The %s hook exited with status %d", hookName, exitCode),
 			}
+		}
+
+		// If the error is from fork/exec, then inspect the file to see why it failed to be executed,
+		// even after the retry
+		if perr := new(os.PathError); errors.As(err, &perr) && perr.Op == "fork/exec" {
+			logOpenedHookInfo(e.shell.Logger, hookName, perr.Path)
 		}
 
 		return err
