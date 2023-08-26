@@ -386,7 +386,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 
 	// Show the hook runner in debug, but the thing being run otherwise 💅🏻
 	if e.Debug {
-		e.shell.Commentf("A hook runner was written to \"%s\" with the following:", script.Path())
+		e.shell.Commentf("A hook runner was written to %q with the following:", script.Path())
 		e.shell.Promptf("%s", process.FormatCommand(script.Path(), nil))
 	} else {
 		e.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
