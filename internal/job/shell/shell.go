@@ -589,7 +589,7 @@ func (s *Shell) executeCommand(
 	s.cmdLock.Unlock()
 
 	if err := p.Run(ctx); err != nil {
-		return fmt.Errorf("Error running %q: %w", cmdStr, err)
+		return fmt.Errorf("error running %q: %w", cmdStr, err)
 	}
 
 	return p.WaitResult()
