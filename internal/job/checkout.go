@@ -692,7 +692,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		//    may span multiple lines.
 		gitArgs := []string{
 			"--no-pager",
-			"show",
+			"log",
+			"-1",
 			"HEAD",
 			"-s", // --no-patch was introduced in v1.8.4 in 2013, but e.g. CentOS 7 isn't there yet
 			"--no-color",
