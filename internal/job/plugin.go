@@ -18,6 +18,13 @@ import (
 	"github.com/buildkite/roko"
 )
 
+type pluginCheckout struct {
+	*plugin.Plugin
+	*plugin.Definition
+	CheckoutDir string
+	HooksDir    string
+}
+
 func (e *Executor) hasPlugins() bool {
 	return e.ExecutorConfig.Plugins != ""
 }

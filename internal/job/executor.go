@@ -1089,13 +1089,6 @@ func (e *Executor) setupRedactors() replacer.Mux {
 	return mux
 }
 
-type pluginCheckout struct {
-	*plugin.Plugin
-	*plugin.Definition
-	CheckoutDir string
-	HooksDir    string
-}
-
 func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *kubernetes.Client) error {
 	e.shell.Commentf("Using experimental Kubernetes support")
 	err := roko.NewRetrier(
