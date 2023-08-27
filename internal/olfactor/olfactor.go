@@ -4,32 +4,34 @@ import (
 	"io"
 
 	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/internal/trie"
 )
 
-// Olfactor may be used for 'sniffing' an io stream for a string. In other
-// words, the io stream can be monitored for a particular string, and if that
-// string is written to the io stream, the olfactor will record that it has
-// 'smelt' the string.
+// Olfactor may be used for 'sniffing' an io stream for strings. In other
+// words, the io stream can be monitored for a particular strings, and if they
+// string are written to the io stream, the olfactor will record that it has
+// 'smelt' that string.
 type Olfactor struct {
-	smell string
-	smelt bool
+	smelt *trie.Trie
 }
 
 // New returns an io.Writer and an Olfactor. Writes to the writer will be
-// forwarded to `dst` and the returned Olfactor will recored whether `smell`
-// has been written to the io.Writer.
-func New(dst io.Writer, smell string) (io.Writer, *Olfactor) {
-	if smell == "" {
-		return dst, &Olfactor{smell: "", smelt: true}
-	}
-	d := &Olfactor{smelt: false, smell: smell}
-	return replacer.New(dst, []string{d.smell}, func(b []byte) []byte {
-		d.smelt = true
+// forwarded to `dst` and the returned Olfactor will recored whether the
+// elements of `smells` have been written to the io.Writer.
+//
+// If a smell is the empty string, we consider it to have been smelt, even if
+// nothing was wrtten to the io.Writer. This is consistent with the notion that
+// writing an empty string to a writer is the same as writing nothing to the
+// writer.
+func New(dst io.Writer, smells []string) (io.Writer, *Olfactor) {
+	d := &Olfactor{smelt: trie.New()}
+	return replacer.New(dst, smells, func(b []byte) []byte {
+		d.smelt.Insert(string(b))
 		return b
 	}), d
 }
 
-// Smelt returns true if and only if the olfactor smelt the smell.
-func (d *Olfactor) Smelt() bool {
-	return d.smelt
+// Smelt returns true if and only if the Olfactor smelt the smell.
+func (d *Olfactor) Smelt(smell string) bool {
+	return d.smelt.PrefixExists(smell)
 }

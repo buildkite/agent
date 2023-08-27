@@ -13,43 +13,68 @@ func TestOlfactor(t *testing.T) {
 
 	for _, test := range []struct {
 		name     string
-		smell    string
+		smells   []string
 		input    string
-		expected bool
+		expected []bool
 	}{
 		{
-			name:     "smell_is_found",
-			smell:    "smell",
+			name:     "1_smell_is_found",
+			smells:   []string{"smell"},
 			input:    "smell",
-			expected: true,
+			expected: []bool{true},
 		},
 		{
-			name:     "smell_is_not_found",
-			smell:    "smell",
+			name:     "1_smell_is_not_found",
+			smells:   []string{"smell"},
 			input:    "nope",
-			expected: false,
+			expected: []bool{false},
 		},
 		{
 			name:     "input_is_empty",
-			smell:    "smell",
+			smells:   []string{"smell"},
 			input:    "",
-			expected: false,
+			expected: []bool{false},
 		},
 		{
-			name:     "smell_is_empty",
-			smell:    "",
+			name:     "1_smell_is_empty",
+			smells:   []string{""},
 			input:    "a",
-			expected: true,
+			expected: []bool{true},
+		},
+		{
+			name:     "2_smells_both_found",
+			smells:   []string{"smell", "smell2"},
+			input:    "smell2",
+			expected: []bool{true, true},
+		},
+		{
+			name:     "2_disjoint_smells_both_found",
+			smells:   []string{"smell", "hello"},
+			input:    "smell2hello",
+			expected: []bool{true, true},
+		},
+		{
+			name:     "2_smells_both_not_found",
+			smells:   []string{"smell", "smell2"},
+			input:    "notasmel",
+			expected: []bool{false, false},
 		},
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			w, olfactor := olfactor.New(io.Discard, test.smell)
+			assert.Equal(t, len(test.smells), len(test.expected))
+
+			w, olfactor := olfactor.New(io.Discard, test.smells)
 			_, err := w.Write([]byte(test.input))
 			assert.NilError(t, err)
-			assert.Equal(t, test.expected, olfactor.Smelt())
+
+			for i, smell := range test.smells {
+				expected := test.expected[i]
+				smelt := olfactor.Smelt(smell)
+				assert.Check(t, expected == smelt, "smell: %q", smell)
+			}
 		})
 	}
 }
