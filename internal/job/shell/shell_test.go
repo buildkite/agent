@@ -3,7 +3,6 @@ package shell_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,6 +16,7 @@ import (
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 	"gotest.tools/v3/assert"
+	acmp "gotest.tools/v3/assert/cmp"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
@@ -360,72 +360,64 @@ func newShellForTest(t *testing.T) *shell.Shell {
 	return sh
 }
 
-func TestRunWithoutPromptWithOlfactor(t *testing.T) {
+func TestRunWithOlfactor(t *testing.T) {
 	t.Parallel()
 
 	for _, test := range []struct {
-		name        string
-		smell       string
-		expectSmell bool
-		command     []string
-		output      string
-		exitCode    int
+		name           string
+		smellsToSniff  []string
+		command        []string
+		output         string
+		smellsInOutput []string
 	}{
 		{
-			name:        "smells_nothing_when_no_error",
-			smell:       "hi",
-			expectSmell: true,
-			command:     []string{"bash", "-ec", "echo hi"},
-			output:      "hi\n",
-			exitCode:    0,
+			name:           "smells_stdout",
+			smellsToSniff:  []string{"hi"},
+			command:        []string{"bash", "-ec", "echo hi; false"},
+			output:         "hi\n",
+			smellsInOutput: []string{"hi"},
 		},
 		{
-			name:        "smells_stdout",
-			smell:       "hi",
-			expectSmell: true,
-			command:     []string{"bash", "-ec", "echo hi; false"},
-			output:      "hi\n",
-			exitCode:    1,
+			name:           "smells_stderr",
+			smellsToSniff:  []string{"hi"},
+			command:        []string{"bash", "-ec", "echo hi >&2; false"},
+			output:         "hi\n",
+			smellsInOutput: []string{"hi"},
 		},
 		{
-			name:        "smells_stderr",
-			smell:       "hi",
-			expectSmell: true,
-			command:     []string{"bash", "-ec", "echo hi >&2; false"},
-			output:      "hi\n",
-			exitCode:    1,
+			name:           "smells_infix",
+			smellsToSniff:  []string{"hi"},
+			command:        []string{"bash", "-ec", "echo lorem ipsum; echo hi; echo bye; false"},
+			output:         "lorem ipsum\nhi\nbye\n",
+			smellsInOutput: []string{"hi"},
 		},
 		{
-			name:        "smells_infix",
-			smell:       "hi",
-			expectSmell: true,
-			command:     []string{"bash", "-ec", "echo lorem ipsum; echo hi; echo bye; false"},
-			output:      "lorem ipsum\nhi\nbye\n",
-			exitCode:    1,
+			name:           "smells_infix_inline",
+			smellsToSniff:  []string{"hi"},
+			command:        []string{"bash", "-ec", "echo lorem hipsum; echo bye; false"},
+			output:         "lorem hipsum\nbye\n",
+			smellsInOutput: []string{"hi"},
 		},
 		{
-			name:        "smells_infix_inline",
-			smell:       "hi",
-			expectSmell: true,
-			command:     []string{"bash", "-ec", "echo lorem hipsum; echo bye; false"},
-			output:      "lorem hipsum\nbye\n",
-			exitCode:    1,
+			name:           "smells_partial",
+			smellsToSniff:  []string{"ar"},
+			command:        []string{"bash", "-ec", "echo hi, how are you; false"},
+			output:         "hi, how are you\n",
+			smellsInOutput: []string{"ar"},
 		},
 		{
-			name:        "smells_partial",
-			smell:       "hi",
-			expectSmell: true,
-			command:     []string{"bash", "-ec", "echo hi, how are you; false"},
-			output:      "hi, how are you\n",
-			exitCode:    1,
+			name:           "no_smell",
+			smellsToSniff:  []string{"hi"},
+			command:        []string{"bash", "-ec", "echo bye, how were you; false"},
+			output:         "bye, how were you\n",
+			smellsInOutput: []string{},
 		},
 		{
-			name:        "no_smell",
-			smell:       "hi",
-			expectSmell: false,
-			command:     []string{"bash", "-ec", "echo bye, how were you; false"},
-			output:      "bye, how were you\n",
-			exitCode:    1,
+			name:           "multiple_smells",
+			smellsToSniff:  []string{"bye", "how"},
+			command:        []string{"bash", "-ec", "echo bye, how were you; false"},
+			output:         "bye, how were you\n",
+			smellsInOutput: []string{"bye", "how"},
 		},
 	} {
 		test := test
@@ -437,25 +429,33 @@ func TestRunWithoutPromptWithOlfactor(t *testing.T) {
 
 			out := &bytes.Buffer{}
 			sh.Writer = out
-			if err := sh.RunWithOlfactor(
+			err = sh.RunWithOlfactor(
 				context.Background(),
-				test.smell,
+				test.smellsToSniff,
 				test.command[0],
 				test.command[1:]...,
-			); err == nil {
-				// if there is no error, we expect an 0 exit code
-				assert.Check(t, test.exitCode == 0)
-			} else if derr := new(shell.OlfactoryError); !errors.As(err, &derr) {
-				assert.Check(t, !test.expectSmell, "no smell detected, but %s was expected", test.smell)
-				assert.ErrorContains(t, err, "exit status 1")
-			} else {
-				// if there was a OlfactoryError, we expect the smell to match the test.smell
-				// and the exit code to match the test.exitCode
-				assert.ErrorContains(t, err, "error running command: exit status 1, detected: hi")
-			}
+			)
+			assert.Assert(t, err != nil)
 			assert.Equal(t, test.output, out.String())
+
+			for _, smell := range test.smellsInOutput {
+				assert.Check(t, acmp.ErrorIs(err, shell.NewOlfactoryError(smell, nil)))
+			}
 		})
 	}
+
+	t.Run("smells_nothing_when_exit_0", func(t *testing.T) {
+		t.Parallel()
+
+		sh, err := shell.New()
+		assert.NilError(t, err)
+
+		out := &bytes.Buffer{}
+		sh.Writer = out
+		err = sh.RunWithOlfactor(context.Background(), []string{"hi"}, "bash", "-ec", "echo hi")
+		assert.NilError(t, err)
+		assert.Check(t, acmp.Equal(out.String(), "hi\n"))
+	})
 }
 
 func TestRunWithoutPrompt(t *testing.T) {

@@ -41,7 +41,7 @@ func (e *gitError) Unwrap() error {
 
 type shellRunner interface {
 	Run(ctx context.Context, cmd string, args ...string) error
-	RunWithOlfactor(ctx context.Context, smell string, cmd string, args ...string) error
+	RunWithOlfactor(ctx context.Context, smells []string, cmd string, args ...string) error
 }
 
 func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, reference string) error {
@@ -148,7 +148,7 @@ func gitFetch(
 
 	const badObject = "fatal: bad object"
 
-	if err := sh.RunWithOlfactor(ctx, badObject, "git", commandArgs...); err != nil {
+	if err := sh.RunWithOlfactor(ctx, []string{badObject}, "git", commandArgs...); err != nil {
 		// "fatal: bad object" can happen when the local repo in the checkout
 		// directory is corrupted, not just the remote or the mirror.
 		// When using git mirrors, the existing checkout directory might have a

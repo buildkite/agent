@@ -256,7 +256,7 @@ func (r *mockShellRunner) Run(_ context.Context, cmd string, args ...string) err
 
 func (r *mockShellRunner) RunWithOlfactor(
 	_ context.Context,
-	_ string,
+	_ []string,
 	cmd string,
 	args ...string,
 ) error {

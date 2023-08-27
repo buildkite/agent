@@ -1,9 +1,6 @@
 package shell
 
-import (
-	"errors"
-	"fmt"
-)
+import "fmt"
 
 // OlfactoryError is returned from the RunWithOlfactor when the command exits
 // with an non-zero exit code and the olfactor detects the `Smell`.
@@ -37,5 +34,5 @@ func (e *OlfactoryError) Unwrap() error {
 // Is returns true if the target is an OlfactoryError and the inner errors are equal
 func (e *OlfactoryError) Is(target error) bool {
 	terr, ok := target.(*OlfactoryError)
-	return ok && e.Smell == terr.Smell && errors.Is(e.inner, terr.inner)
+	return ok && e.Smell == terr.Smell
 }

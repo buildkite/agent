@@ -281,7 +281,7 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 // will be nil whether or not the output contained `smell`.
 func (s *Shell) RunWithOlfactor(
 	ctx context.Context,
-	smell string,
+	smells []string,
 	command string,
 	arg ...string,
 ) error {
@@ -299,14 +299,17 @@ func (s *Shell) RunWithOlfactor(
 		return err
 	}
 
-	w, o := olfactor.New(s.Writer, smell)
+	w, o := olfactor.New(s.Writer, smells)
 	if err := s.executeCommand(ctx, cmd, w, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
 	}); err != nil {
-		if o.Smelt() {
-			return NewOlfactoryError(smell, err)
+		// wrap err with the smells that were smelt
+		for _, smell := range smells {
+			if o.Smelt(smell) {
+				err = NewOlfactoryError(smell, err)
+			}
 		}
 		return err
 	}
