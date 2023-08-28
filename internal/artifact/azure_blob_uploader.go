@@ -6,8 +6,10 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 )
@@ -27,11 +29,11 @@ type AzureBlobUploader struct {
 	// Container name, set from the destination.
 	ContainerName string
 
-	// The virtual directory path, set from the destination
+	// The virtual directory path, set from the destination.
 	BlobPath string
 
 	// Azure Blob storage client.
-	client *azblob.Client
+	client *service.Client
 
 	// The original configuration
 	conf AzureBlobUploaderConfig
@@ -65,11 +67,36 @@ func NewAzureBlobUploader(l logger.Logger, c AzureBlobUploaderConfig) (*AzureBlo
 
 // URL returns the full destination URL of an artifact.
 func (u *AzureBlobUploader) URL(artifact *api.Artifact) string {
-	return (&url.URL{
+	outURL := &url.URL{
 		Scheme: "https",
 		Host:   u.StorageAccountName + azureBlobHostSuffix,
 		Path:   path.Join(u.ContainerName, u.BlobPath, artifact.Path),
-	}).String()
+	}
+
+	// Generate a shared access signature token for the URL?
+	sasDur := os.Getenv("BUILDKITE_AZURE_BLOB_SAS_TOKEN_DURATION")
+	if sasDur == "" {
+		// no. plain URL.
+		return outURL.String()
+	}
+
+	dur, err := time.ParseDuration(sasDur)
+	if err != nil {
+		u.logger.Error("BUILDKITE_AZURE_BLOB_SAS_TOKEN_DURATION is not a valid duration: %v", err)
+		return outURL.String()
+	}
+
+	bc := u.client.NewContainerClient(u.ContainerName).NewBlobClient(path.Join(u.BlobPath, artifact.Path))
+	perms := sas.BlobPermissions{Read: true}
+	expiry := time.Now().Add(dur)
+	sasURL, err := bc.GetSASURL(perms, expiry, nil)
+	if err != nil {
+		u.logger.Error("Couldn't generate SAS URL for container: %v", err)
+		return outURL.String()
+	}
+
+	u.logger.Info("Generated Blob SAS URL %q", sasURL)
+	return sasURL
 }
 
 // Upload uploads an artifact file.
@@ -84,6 +111,7 @@ func (u *AzureBlobUploader) Upload(ctx context.Context, artifact *api.Artifact) 
 	blobName := path.Join(u.BlobPath, artifact.Path)
 
 	u.logger.Debug("Uploading %q to container %q path %q", artifact.Path, u.ContainerName, u.BlobPath)
-	_, err = u.client.UploadFile(ctx, u.ContainerName, blobName, f, nil)
+	bbc := u.client.NewContainerClient(u.ContainerName).NewBlockBlobClient(blobName)
+	_, err = bbc.UploadFile(ctx, f, nil)
 	return err
 }

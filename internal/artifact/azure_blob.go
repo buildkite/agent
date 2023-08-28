@@ -3,10 +3,11 @@ package artifact
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -14,22 +15,43 @@ import (
 const azureBlobHostSuffix = ".blob.core.windows.net"
 
 // NewAzureBlobClient creates a new Azure Blob client.
-func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*azblob.Client, error) {
+func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Client, error) {
 	url := fmt.Sprintf("https://%s%s/", storageAccountName, azureBlobHostSuffix)
 
 	// TODO: other credentials?
-	l.Debug("Connecting to Azure using Default Azure Credential")
-	credential, err := azidentity.NewDefaultAzureCredential(nil)
+
+	if connStr := os.Getenv("BUILDKITE_AZURE_BLOB_CONNECTION_STRING"); connStr != "" {
+		l.Debug("Connecting to Azure Blob Storage using Connection String")
+		client, err := service.NewClientFromConnectionString(connStr, nil)
+		if err != nil {
+			return nil, fmt.Errorf("creating Azure Blob storage client with connection string: %w", err)
+		}
+		return client, nil
+	}
+
+	if accKey := os.Getenv("BUILDKITE_AZURE_BLOB_ACCOUNT_KEY"); accKey != "" {
+		l.Debug("Connecting to Azure Blob Storage using Shared Key Credential")
+		cred, err := service.NewSharedKeyCredential(storageAccountName, accKey)
+		if err != nil {
+			return nil, fmt.Errorf("creating Azure shared key credential: %w", err)
+		}
+		client, err := service.NewClientWithSharedKeyCredential(url, cred, nil)
+		if err != nil {
+			return nil, fmt.Errorf("creating Azure Blob storage client with a shared key credential: %w", err)
+		}
+		return client, nil
+	}
+
+	l.Debug("Connecting to Azure Blob Storage using Default Azure Credential")
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating default Azure credential: %w", err)
 	}
 
-	l.Debug("Creating Azure Blob storage client")
-	client, err := azblob.NewClient(url, credential, nil)
+	client, err := service.NewClient(url, cred, nil)
 	if err != nil {
-		return nil, fmt.Errorf("creating Azure Blob storage client: %w", err)
+		return nil, fmt.Errorf("creating Azure Blob storage client with default Azure credential: %w", err)
 	}
-
 	return client, nil
 }
 

@@ -61,7 +61,8 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 			MaxRetries: int32(d.conf.Retries),
 		},
 	}
-	if _, err := client.DownloadFile(ctx, ctr, p, f, opts); err != nil {
+	bc := client.NewContainerClient(ctr).NewBlobClient(p)
+	if _, err := bc.DownloadFile(ctx, f, opts); err != nil {
 		return err
 	}
 
