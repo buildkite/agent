@@ -183,7 +183,9 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	if err != nil {
 		return nil, err
 	}
-	wrap.beforeEnvFile.Close()
+	if err := wrap.beforeEnvFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close before env file: %w", err)
+	}
 
 	// We'll then pump the ENV _after_ the hook into this temp file
 	wrap.afterEnvFile, err = shell.TempFileWithExtension(
@@ -192,7 +194,9 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	if err != nil {
 		return nil, err
 	}
-	wrap.afterEnvFile.Close()
+	if err := wrap.afterEnvFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close after env file: %w", err)
+	}
 
 	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
@@ -232,6 +236,11 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 		return wrap, err
 	}
 
+	// the defered close attempt will discard any errors,
+	// and attempting to execute a unclosed script will fail with ETXTBSY
+	if err := wrap.scriptFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close script file: %w", err)
+	}
 	return wrap, nil
 }
 
