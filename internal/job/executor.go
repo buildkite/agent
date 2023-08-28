@@ -369,9 +369,10 @@ func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
 	case runtime.GOOS == "linux":
 		procPath, err := file.OpenedBy(l, debug, path)
 		if err != nil {
-			l.Errorf("The %s hook failed to run because and we could not find the process that had it opened", hookName)
+			l.Errorf("The %s hook failed to run because it was already open. We couldn't find out what process had the hook open", hookName)
+
 		} else {
-			l.Errorf("The %s hook failed to run because it was open by %s", hookName, procPath)
+			l.Errorf("The %s hook failed to run the %s process has the hook file open", hookName, procPath)
 		}
 	case utils.FileExists("/dev/fd"):
 		isOpened, err := file.IsOpened(l, debug, path)
