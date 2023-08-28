@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/job/shell"
 )
 
-func IsOpened(l shell.Logger, path string) (bool, error) {
+func IsOpened(l shell.Logger, debug bool, path string) (bool, error) {
 	fdEntries, err := os.ReadDir("/dev/fd")
 	if err != nil {
 		return false, fmt.Errorf("failed to read /dev/fd: %w", err)
@@ -17,6 +17,9 @@ func IsOpened(l shell.Logger, path string) (bool, error) {
 	for _, fdEntry := range fdEntries {
 		fd, err := strconv.ParseInt(fdEntry.Name(), 10, 64)
 		if err != nil {
+			if debug {
+				l.Warningf("Failed to parse fd %s: %s", fd, err)
+			}
 			continue
 		}
 
@@ -26,6 +29,9 @@ func IsOpened(l shell.Logger, path string) (bool, error) {
 
 		fdPath, err := os.Readlink(fmt.Sprintf("/dev/fd/%d", fd))
 		if err != nil {
+			if debug {
+				l.Warningf("Failed to readlink /dev/fd/%d: %v", fd, err)
+			}
 			continue
 		}
 
