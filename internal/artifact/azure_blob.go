@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -14,11 +15,11 @@ import (
 // The domain suffix for Azure Blob storage.
 const azureBlobHostSuffix = ".blob.core.windows.net"
 
-// NewAzureBlobClient creates a new Azure Blob client.
+// NewAzureBlobClient creates a new Azure Blob Storage client.
 func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Client, error) {
-	url := fmt.Sprintf("https://%s%s/", storageAccountName, azureBlobHostSuffix)
 
-	// TODO: other credentials?
+	// TODO: Other credential types?
+	// https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#readme-credential-types
 
 	if connStr := os.Getenv("BUILDKITE_AZURE_BLOB_CONNECTION_STRING"); connStr != "" {
 		l.Debug("Connecting to Azure Blob Storage using Connection String")
@@ -28,6 +29,8 @@ func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Cl
 		}
 		return client, nil
 	}
+
+	url := fmt.Sprintf("https://%s%s/", storageAccountName, azureBlobHostSuffix)
 
 	if accKey := os.Getenv("BUILDKITE_AZURE_BLOB_ACCOUNT_KEY"); accKey != "" {
 		l.Debug("Connecting to Azure Blob Storage using Shared Key Credential")
@@ -55,26 +58,53 @@ func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Cl
 	return client, nil
 }
 
-// ParseAzureBlobDestination parses a destination as a URL into a storage
-// account name, container name, and remaining path.
-func ParseAzureBlobDestination(destination string) (san, ctr, path string, err error) {
-	u, err := url.Parse(destination)
+// AzureBlobLocation specifies the location of a blob in Azure Blob Storage.
+type AzureBlobLocation struct {
+	StorageAccountName string
+	ContainerName      string
+	BlobPath           string
+}
+
+// URL returns an Azure Blob Storage URL for the blob.
+func (l *AzureBlobLocation) URL(blob string) string {
+	return (&url.URL{
+		Scheme: "https",
+		Host:   l.StorageAccountName + azureBlobHostSuffix,
+		Path:   path.Join(l.ContainerName, l.BlobPath, blob),
+	}).String()
+}
+
+// String returns the location as a URL string.
+func (l *AzureBlobLocation) String() string {
+	return l.URL("")
+}
+
+// ParseAzureBlobLocation parses a URL into an Azure Blob Storage location.
+func ParseAzureBlobLocation(loc string) (*AzureBlobLocation, error) {
+	u, err := url.Parse(loc)
 	if err != nil {
-		return "", "", "", fmt.Errorf("parsing destination: %w", err)
+		return nil, fmt.Errorf("parsing location: %w", err)
+	}
+	if u.Scheme != "https" {
+		return nil, fmt.Errorf("parsing location: want https:// scheme, got %q", u.Scheme)
 	}
 	san, ok := strings.CutSuffix(u.Host, azureBlobHostSuffix)
 	if !ok {
-		return "", "", "", fmt.Errorf("parsing destination: want subdomain of %s, got %q", azureBlobHostSuffix, u.Host)
+		return nil, fmt.Errorf("parsing location: want subdomain of %s, got %q", azureBlobHostSuffix, u.Host)
 	}
-	ctr, path, ok = strings.Cut(strings.TrimPrefix(u.Path, "/"), "/")
+	ctr, blob, ok := strings.Cut(strings.TrimPrefix(u.Path, "/"), "/")
 	if !ok {
-		return "", "", "", fmt.Errorf("parsing destination: want container name as first segment of path, got %q", u.Path)
+		return nil, fmt.Errorf("parsing location: want container name as first segment of path, got %q", u.Path)
 	}
-	return san, ctr, path, nil
+	return &AzureBlobLocation{
+		StorageAccountName: san,
+		ContainerName:      ctr,
+		BlobPath:           blob,
+	}, nil
 }
 
-// IsAzureBlobPath reports if the destination is an Azure Blob storage path.
-func IsAzureBlobPath(destination string) bool {
-	_, _, _, err := ParseAzureBlobDestination(destination)
+// IsAzureBlobPath reports if the location is an Azure Blob Storage path.
+func IsAzureBlobPath(loc string) bool {
+	_, err := ParseAzureBlobLocation(loc)
 	return err == nil
 }

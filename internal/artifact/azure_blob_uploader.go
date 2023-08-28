@@ -3,7 +3,6 @@ package artifact
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path"
 	"time"
@@ -21,16 +20,10 @@ type AzureBlobUploaderConfig struct {
 	Destination string
 }
 
-// AzureBlobUploader uploads artifacts to Azure Blob storage.
+// AzureBlobUploader uploads artifacts to Azure Blob Storage.
 type AzureBlobUploader struct {
-	// The storage account name set from the destination
-	StorageAccountName string
-
-	// Container name, set from the destination.
-	ContainerName string
-
-	// The virtual directory path, set from the destination.
-	BlobPath string
+	// Upload location in Azure Blob Storage.
+	loc *AzureBlobLocation
 
 	// Azure Blob storage client.
 	client *service.Client
@@ -44,58 +37,54 @@ type AzureBlobUploader struct {
 
 // NewAzureBlobUploader creates a new AzureBlobUploader.
 func NewAzureBlobUploader(l logger.Logger, c AzureBlobUploaderConfig) (*AzureBlobUploader, error) {
-	storageAccountName, container, blobPath, err := ParseAzureBlobDestination(c.Destination)
+	loc, err := ParseAzureBlobLocation(c.Destination)
 	if err != nil {
 		return nil, err
 	}
 
 	// Initialize the Azure client, and authenticate it
-	client, err := NewAzureBlobClient(l, storageAccountName)
+	client, err := NewAzureBlobClient(l, loc.StorageAccountName)
 	if err != nil {
 		return nil, err
 	}
 
 	return &AzureBlobUploader{
-		logger:             l,
-		conf:               c,
-		client:             client,
-		StorageAccountName: storageAccountName,
-		ContainerName:      container,
-		BlobPath:           blobPath,
+		logger: l,
+		conf:   c,
+		client: client,
+		loc:    loc,
 	}, nil
 }
 
 // URL returns the full destination URL of an artifact.
 func (u *AzureBlobUploader) URL(artifact *api.Artifact) string {
-	outURL := &url.URL{
-		Scheme: "https",
-		Host:   u.StorageAccountName + azureBlobHostSuffix,
-		Path:   path.Join(u.ContainerName, u.BlobPath, artifact.Path),
-	}
+	outURL := u.loc.URL(artifact.Path)
 
 	// Generate a shared access signature token for the URL?
 	sasDur := os.Getenv("BUILDKITE_AZURE_BLOB_SAS_TOKEN_DURATION")
 	if sasDur == "" {
 		// no. plain URL.
-		return outURL.String()
+		return outURL
 	}
 
 	dur, err := time.ParseDuration(sasDur)
 	if err != nil {
 		u.logger.Error("BUILDKITE_AZURE_BLOB_SAS_TOKEN_DURATION is not a valid duration: %v", err)
-		return outURL.String()
+		return outURL
 	}
 
-	bc := u.client.NewContainerClient(u.ContainerName).NewBlobClient(path.Join(u.BlobPath, artifact.Path))
+	fullPath := path.Join(u.loc.BlobPath, artifact.Path)
+	blobClient := u.client.NewContainerClient(u.loc.ContainerName).NewBlobClient(fullPath)
 	perms := sas.BlobPermissions{Read: true}
 	expiry := time.Now().Add(dur)
-	sasURL, err := bc.GetSASURL(perms, expiry, nil)
+
+	sasURL, err := blobClient.GetSASURL(perms, expiry, nil)
 	if err != nil {
 		u.logger.Error("Couldn't generate SAS URL for container: %v", err)
-		return outURL.String()
+		return outURL
 	}
 
-	u.logger.Info("Generated Blob SAS URL %q", sasURL)
+	u.logger.Debug("Generated Azure Blob SAS URL %q", sasURL)
 	return sasURL
 }
 
@@ -108,10 +97,11 @@ func (u *AzureBlobUploader) Upload(ctx context.Context, artifact *api.Artifact) 
 	}
 	defer f.Close()
 
-	blobName := path.Join(u.BlobPath, artifact.Path)
+	blobName := path.Join(u.loc.BlobPath, artifact.Path)
 
-	u.logger.Debug("Uploading %q to container %q path %q", artifact.Path, u.ContainerName, u.BlobPath)
-	bbc := u.client.NewContainerClient(u.ContainerName).NewBlockBlobClient(blobName)
+	u.logger.Debug("Uploading %s to %s", artifact.Path, u.loc.URL(blobName))
+
+	bbc := u.client.NewContainerClient(u.loc.ContainerName).NewBlockBlobClient(blobName)
 	_, err = bbc.UploadFile(ctx, f, nil)
 	return err
 }

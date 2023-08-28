@@ -20,30 +20,28 @@ type AzureBlobDownloaderConfig struct {
 
 // AzureBlobDownloader downloads files from Azure Blob storage.
 type AzureBlobDownloader struct {
-	l    logger.Logger
-	conf AzureBlobDownloaderConfig
+	logger logger.Logger
+	conf   AzureBlobDownloaderConfig
 }
 
 // NewAzureBlobDownloader creates a new AzureBlobDownloader.
 func NewAzureBlobDownloader(l logger.Logger, c AzureBlobDownloaderConfig) *AzureBlobDownloader {
 	return &AzureBlobDownloader{
-		l:    l,
-		conf: c,
+		logger: l,
+		conf:   c,
 	}
 }
 
 // Start starts the download.
 func (d *AzureBlobDownloader) Start(ctx context.Context) error {
-	san, ctr, dir, err := ParseAzureBlobDestination(d.conf.Repository)
+	loc, err := ParseAzureBlobLocation(d.conf.Repository)
 	if err != nil {
 		return err
 	}
 
-	d.l.Debug("Azure Blob storage: storage account name = %q", san)
-	d.l.Debug("Azure Blob storage: container = %q", ctr)
-	d.l.Debug("Azure Blob storage: virtual directory = %q", dir)
+	d.logger.Debug("Azure Blob Storage path: %v", loc)
 
-	client, err := NewAzureBlobClient(d.l, san)
+	client, err := NewAzureBlobClient(d.logger, loc.StorageAccountName)
 	if err != nil {
 		return err
 	}
@@ -54,14 +52,17 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 	}
 	defer f.Close()
 
-	p := path.Join(dir, d.conf.Path)
+	fullPath := path.Join(loc.BlobPath, d.conf.Path)
+
+	// Show a nice message that we're starting to download the file
+	d.logger.Debug("Downloading %s to %s", loc.URL(d.conf.Path), d.conf.Path)
 
 	opts := &azblob.DownloadFileOptions{
 		RetryReaderOptionsPerBlock: azblob.RetryReaderOptions{
 			MaxRetries: int32(d.conf.Retries),
 		},
 	}
-	bc := client.NewContainerClient(ctr).NewBlobClient(p)
+	bc := client.NewContainerClient(loc.ContainerName).NewBlobClient(fullPath)
 	if _, err := bc.DownloadFile(ctx, f, opts); err != nil {
 		return err
 	}
