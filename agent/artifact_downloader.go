@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/buildkite/agent/v3/api"
+	iartifact "github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/pool"
 )
@@ -179,6 +180,15 @@ func (a *ArtifactDownloader) createDownloader(artifact *api.Artifact, path, dest
 
 	case strings.HasPrefix(artifact.UploadDestination, "rt://"):
 		return NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
+			Path:        path,
+			Repository:  artifact.UploadDestination,
+			Destination: destination,
+			Retries:     5,
+			DebugHTTP:   a.conf.DebugHTTP,
+		})
+
+	case iartifact.IsAzureBlobPath(artifact.UploadDestination):
+		return iartifact.NewAzureBlobDownloader(a.logger, iartifact.AzureBlobDownloaderConfig{
 			Path:        path,
 			Repository:  artifact.UploadDestination,
 			Destination: destination,

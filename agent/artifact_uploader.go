@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/mime"
 	"github.com/buildkite/agent/v3/logger"
@@ -285,8 +286,14 @@ func (a *ArtifactUploader) createUploader() (uploader Uploader, err error) {
 			DebugHTTP:   a.conf.DebugHTTP,
 		})
 
+	case artifact.IsAzureBlobPath(a.conf.Destination):
+		dest = "Azure Blob storage"
+		return artifact.NewAzureBlobUploader(a.logger, artifact.AzureBlobUploaderConfig{
+			Destination: a.conf.Destination,
+		})
+
 	default:
-		return nil, fmt.Errorf("invalid upload destination: '%v'. Only s3://, gs://, or rt:// destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination)
+		return nil, fmt.Errorf("invalid upload destination: '%v'. Only s3://*, gs://*, rt://*, or https://*.blob.core.windows.net destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination)
 	}
 }
 

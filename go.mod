@@ -4,6 +4,8 @@ go 1.18
 
 require (
 	cloud.google.com/go/compute/metadata v0.2.3
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.1
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0
 	github.com/DataDog/datadog-go/v5 v5.3.0
 	github.com/aws/aws-sdk-go v1.44.317
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
@@ -50,6 +52,9 @@ require (
 
 require (
 	cloud.google.com/go/compute v1.23.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.1 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.3.0 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.1.1 // indirect
 	github.com/DataDog/appsec-internal-go v1.0.0 // indirect
 	github.com/DataDog/datadog-agent/pkg/obfuscate v0.45.0-rc.1 // indirect
 	github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.46.0-rc.4 // indirect
@@ -67,6 +72,7 @@ require (
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
+	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/s2a-go v0.1.4 // indirect
@@ -75,6 +81,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.12.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.15.2 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.1 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/httprc v1.0.4 // indirect
@@ -83,6 +90,7 @@ require (
 	github.com/outcaste-io/ristretto v0.2.1 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect
+	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/qri-io/jsonpointer v0.1.1 // indirect
