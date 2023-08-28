@@ -233,7 +233,7 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	// Make script executable
 	err = utils.ChmodExecutable(wrap.scriptFile.Name())
 	if err != nil {
-		return wrap, err
+		return nil, err
 	}
 
 	// the defered close attempt will discard any errors,
