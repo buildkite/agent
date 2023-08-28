@@ -18,6 +18,7 @@ var (
 	numeric        = regexp.MustCompile("^[0-9]+$")
 )
 
+// OpenedBy attempts to find the executable that opened the given file.
 func OpenedBy(l shell.Logger, debug bool, path string) (string, error) {
 	pidEntries, err := os.ReadDir("/proc")
 	if err != nil {

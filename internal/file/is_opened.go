@@ -8,6 +8,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/job/shell"
 )
 
+// IsOpened returns true if the file at the given path is opened by the current process.
 func IsOpened(l shell.Logger, debug bool, path string) (bool, error) {
 	fdEntries, err := os.ReadDir("/dev/fd")
 	if err != nil {
