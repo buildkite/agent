@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/buildkite/agent/v3/api"
+	iartifact "github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/pool"
 )
@@ -57,14 +58,14 @@ func NewArtifactDownloader(l logger.Logger, ac APIClient, c ArtifactDownloaderCo
 
 func (a *ArtifactDownloader) Download(ctx context.Context) error {
 	// Turn the download destination into an absolute path and confirm it exists
-	downloadDestination, _ := filepath.Abs(a.conf.Destination)
-	fileInfo, err := os.Stat(downloadDestination)
+	destination, _ := filepath.Abs(a.conf.Destination)
+	fileInfo, err := os.Stat(destination)
 	if err != nil {
 		return fmt.Errorf("Could not find information about destination: %s %v",
-			downloadDestination, err)
+			destination, err)
 	}
 	if !fileInfo.IsDir() {
-		return fmt.Errorf("%s is not a directory", downloadDestination)
+		return fmt.Errorf("%s is not a directory", destination)
 	}
 
 	artifacts, err := NewArtifactSearcher(a.logger, a.apiClient, a.conf.BuildID).
@@ -79,7 +80,7 @@ func (a *ArtifactDownloader) Download(ctx context.Context) error {
 		return errors.New("No artifacts found for downloading")
 	}
 
-	a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
+	a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
 
 	p := pool.New(pool.MaxConcurrencyLimit)
 	errors := []error{}
@@ -101,46 +102,7 @@ func (a *ArtifactDownloader) Download(ctx context.Context) error {
 				path = strings.Replace(path, `\`, `/`, -1)
 			}
 
-			// Handle downloading from S3, GS, or RT
-			var dler interface {
-				Start(context.Context) error
-			}
-			switch {
-			case strings.HasPrefix(artifact.UploadDestination, "s3://"):
-				bucketName, _ := ParseS3Destination(artifact.UploadDestination)
-				dler = NewS3Downloader(a.logger, S3DownloaderConfig{
-					S3Client:    s3Clients[bucketName],
-					Path:        path,
-					S3Path:      artifact.UploadDestination,
-					Destination: downloadDestination,
-					Retries:     5,
-					DebugHTTP:   a.conf.DebugHTTP,
-				})
-			case strings.HasPrefix(artifact.UploadDestination, "gs://"):
-				dler = NewGSDownloader(a.logger, GSDownloaderConfig{
-					Path:        path,
-					Bucket:      artifact.UploadDestination,
-					Destination: downloadDestination,
-					Retries:     5,
-					DebugHTTP:   a.conf.DebugHTTP,
-				})
-			case strings.HasPrefix(artifact.UploadDestination, "rt://"):
-				dler = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
-					Path:        path,
-					Repository:  artifact.UploadDestination,
-					Destination: downloadDestination,
-					Retries:     5,
-					DebugHTTP:   a.conf.DebugHTTP,
-				})
-			default:
-				dler = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
-					URL:         artifact.URL,
-					Path:        path,
-					Destination: downloadDestination,
-					Retries:     5,
-					DebugHTTP:   a.conf.DebugHTTP,
-				})
-			}
+			dler := a.createDownloader(artifact, path, destination, s3Clients)
 
 			// If the downloaded encountered an error, lock
 			// the pool, collect it, then unlock the pool
@@ -187,4 +149,60 @@ func (a *ArtifactDownloader) generateS3Clients(artifacts []*api.Artifact) (map[s
 	}
 
 	return s3Clients, nil
+}
+
+type downloader interface {
+	Start(context.Context) error
+}
+
+func (a *ArtifactDownloader) createDownloader(artifact *api.Artifact, path, destination string, s3Clients map[string]*s3.S3) downloader {
+	// Handle downloading from S3, GS, RT, or Azure
+	switch {
+	case strings.HasPrefix(artifact.UploadDestination, "s3://"):
+		bucketName, _ := ParseS3Destination(artifact.UploadDestination)
+		return NewS3Downloader(a.logger, S3DownloaderConfig{
+			S3Client:    s3Clients[bucketName],
+			Path:        path,
+			S3Path:      artifact.UploadDestination,
+			Destination: destination,
+			Retries:     5,
+			DebugHTTP:   a.conf.DebugHTTP,
+		})
+
+	case strings.HasPrefix(artifact.UploadDestination, "gs://"):
+		return NewGSDownloader(a.logger, GSDownloaderConfig{
+			Path:        path,
+			Bucket:      artifact.UploadDestination,
+			Destination: destination,
+			Retries:     5,
+			DebugHTTP:   a.conf.DebugHTTP,
+		})
+
+	case strings.HasPrefix(artifact.UploadDestination, "rt://"):
+		return NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
+			Path:        path,
+			Repository:  artifact.UploadDestination,
+			Destination: destination,
+			Retries:     5,
+			DebugHTTP:   a.conf.DebugHTTP,
+		})
+
+	case iartifact.IsAzureBlobPath(artifact.UploadDestination):
+		return iartifact.NewAzureBlobDownloader(a.logger, iartifact.AzureBlobDownloaderConfig{
+			Path:        path,
+			Repository:  artifact.UploadDestination,
+			Destination: destination,
+			Retries:     5,
+			DebugHTTP:   a.conf.DebugHTTP,
+		})
+
+	default:
+		return NewDownload(a.logger, http.DefaultClient, DownloadConfig{
+			URL:         artifact.URL,
+			Path:        path,
+			Destination: destination,
+			Retries:     5,
+			DebugHTTP:   a.conf.DebugHTTP,
+		})
+	}
 }

@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"context"
+
 	"github.com/buildkite/agent/v3/api"
 )
 
@@ -10,5 +12,5 @@ type Uploader interface {
 	URL(*api.Artifact) string
 
 	// The actual uploading of the file
-	Upload(*api.Artifact) error
+	Upload(context.Context, *api.Artifact) error
 }
