@@ -103,6 +103,9 @@ var RedactedVars = cli.StringSliceFlag{
 		"*_PRIVATE_KEY",
 		"*_ACCESS_KEY",
 		"*_SECRET_KEY",
+		// Connection strings frequently contain passwords, e.g.
+		// https://user:pass@host/ or Server=foo;Database=my-db;User Id=user;Password=pass;
+		"*_CONNECTION_STRING",
 	},
 }
 

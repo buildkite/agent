@@ -32,7 +32,7 @@ func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Cl
 
 	url := fmt.Sprintf("https://%s%s/", storageAccountName, azureBlobHostSuffix)
 
-	if accKey := os.Getenv("BUILDKITE_AZURE_BLOB_ACCOUNT_KEY"); accKey != "" {
+	if accKey := os.Getenv("BUILDKITE_AZURE_BLOB_ACCESS_KEY"); accKey != "" {
 		l.Debug("Connecting to Azure Blob Storage using Shared Key Credential")
 		cred, err := service.NewSharedKeyCredential(storageAccountName, accKey)
 		if err != nil {
