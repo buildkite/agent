@@ -28,7 +28,10 @@ const (
 	gitErrorCleanSubmodules
 )
 
-var errNoHostname = errors.New("no hostname found")
+var (
+	errNoHostname = errors.New("no hostname found")
+	errInvalidRef = errors.New("is not a valid git ref format")
+)
 
 type gitError struct {
 	error
@@ -50,7 +53,7 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 		return err
 	}
 	if !gitCheckRefFormat(reference) {
-		return fmt.Errorf("%q is not a valid git ref format", reference)
+		return fmt.Errorf("%q %w", reference, errInvalidRef)
 	}
 
 	commandArgs := []string{"checkout"}
