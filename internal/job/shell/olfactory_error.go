@@ -31,7 +31,9 @@ func (e *OlfactoryError) Unwrap() error {
 	return e.inner
 }
 
-// Is returns true if the target is an OlfactoryError and the inner errors are equal
+// Is returns true if the target is an OlfactoryError and the smells match. If
+// you want to check the inner errors match, you should unwrap them and run
+// errors.Is on the unwrapped errors.
 func (e *OlfactoryError) Is(target error) bool {
 	terr, ok := target.(*OlfactoryError)
 	return ok && e.Smell == terr.Smell
