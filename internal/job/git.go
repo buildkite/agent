@@ -58,7 +58,7 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 	commandArgs = append(commandArgs, reference)
 
 	const badReference = "fatal: reference is not a tree"
-	if err := sh.RunWithOlfactor(ctx, badReference, "git", commandArgs...); err != nil {
+	if err := sh.RunWithOlfactor(ctx, []string{badReference}, "git", commandArgs...); err != nil {
 		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smell == badReference {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
@@ -67,6 +67,7 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorCheckoutRetryClean}
 		}
+
 		return &gitError{error: err, Type: gitErrorCheckout}
 	}
 
@@ -147,7 +148,6 @@ func gitFetch(
 	}
 
 	const badObject = "fatal: bad object"
-
 	if err := sh.RunWithOlfactor(ctx, []string{badObject}, "git", commandArgs...); err != nil {
 		// "fatal: bad object" can happen when the local repo in the checkout
 		// directory is corrupted, not just the remote or the mirror.
@@ -163,6 +163,7 @@ func gitFetch(
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorFetchRetryClean}
 		}
+
 		return &gitError{error: err, Type: gitErrorFetch}
 	}
 
