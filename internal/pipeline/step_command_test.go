@@ -44,29 +44,27 @@ func TestCommandStepUnmarshalJSON(t *testing.T) {
 		Plugins: Plugins{
 			{
 				Source: "github.com/xxx/aws-assume-role-buildkite-plugin#v0.1.0",
-				Config: ordered.MapFromItems(
-					ordered.TupleSA{Key: "role", Value: "arn:aws:iam::xxx:role/xxx"},
-				),
+				Config: map[string]any{"role": "arn:aws:iam::xxx:role/xxx"},
 			},
 			{
 				Source: "github.com/buildkite-plugins/ecr-buildkite-plugin#v1.1.4",
-				Config: ordered.MapFromItems(
-					ordered.TupleSA{Key: "login", Value: true},
-					ordered.TupleSA{Key: "account_ids", Value: "xxx"},
-					ordered.TupleSA{Key: "registry_region", Value: "us-east-1"},
-				),
+				Config: map[string]any{
+					"login":           true,
+					"account_ids":     "xxx",
+					"registry_region": "us-east-1",
+				},
 			},
 			{
 				Source: "github.com/buildkite-plugins/docker-compose-buildkite-plugin#v2.5.1",
-				Config: ordered.MapFromItems(
-					ordered.TupleSA{Key: "run", Value: "xxx"},
-					ordered.TupleSA{Key: "config", Value: ".buildkite/docker/docker-compose.yml"},
-					ordered.TupleSA{Key: "env", Value: []any{
+				Config: map[string]any{
+					"run":    "xxx",
+					"config": ".buildkite/docker/docker-compose.yml",
+					"env": []any{
 						"AWS_ACCESS_KEY_ID",
 						"AWS_SECRET_ACCESS_KEY",
 						"AWS_SESSION_TOKEN",
-					}},
-				),
+					},
+				},
 			},
 		},
 	}

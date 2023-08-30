@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
@@ -22,12 +21,7 @@ func TestSignVerify(t *testing.T) {
 			},
 			{
 				Source: "another-plugin#v3.4.5",
-				Config: ordered.MapFromItems(
-					ordered.TupleSA{
-						Key:   "llama",
-						Value: "Kuzco",
-					},
-				),
+				Config: map[string]any{"llama": "Kuzco"},
 			},
 		},
 		Env: map[string]string{

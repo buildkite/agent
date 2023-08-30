@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -35,7 +36,23 @@ func (j *Job) ValuesForFields(fields []string) (map[string]string, error) {
 			o[f] = j.Env["BUILDKITE_COMMAND"]
 
 		case "plugins":
-			o[f] = j.Env["BUILDKITE_PLUGINS"]
+			if j.Env["BUILDKITE_PLUGINS"] == "" {
+				o[f] = ""
+				continue
+			}
+			// Plugins needs to be normalised, because key order in each plugin
+			// config is frequently varied by the backend.
+			// The reliable way to make it consistent is an unmarshal-remarshal
+			// round-trip.
+			var ps pipeline.Plugins
+			if err := json.Unmarshal([]byte(j.Env["BUILDKITE_PLUGINS"]), &ps); err != nil {
+				return nil, fmt.Errorf("unmarshaling BUIDLKITE_PLUGINS: %w", err)
+			}
+			normalised, err := json.Marshal(ps)
+			if err != nil {
+				return nil, fmt.Errorf("re-marshaling BUIDLKITE_PLUGINS: %w", err)
+			}
+			o[f] = string(normalised)
 
 		default:
 			if e, has := strings.CutPrefix(f, pipeline.EnvNamespacePrefix); has {

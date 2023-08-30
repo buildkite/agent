@@ -930,10 +930,10 @@ steps:
 				Plugins: Plugins{
 					{
 						Source: "ecr#v2.7.0",
-						Config: ordered.MapFromItems(
-							ordered.TupleSA{Key: "login", Value: true},
-							ordered.TupleSA{Key: "account_ids", Value: "0123456789"},
-						),
+						Config: map[string]any{
+							"login":       true,
+							"account_ids": "0123456789",
+						},
 					},
 				},
 				RemainingFields: map[string]any{
@@ -1018,29 +1018,27 @@ steps:
 				Plugins: Plugins{
 					{
 						Source: "xxx/aws-assume-role#v0.1.0",
-						Config: ordered.MapFromItems(
-							ordered.TupleSA{Key: "role", Value: "arn:aws:iam::xxx:role/xxx"},
-						),
+						Config: map[string]any{"role": "arn:aws:iam::xxx:role/xxx"},
 					},
 					{
 						Source: "ecr#v1.1.4",
-						Config: ordered.MapFromItems(
-							ordered.TupleSA{Key: "login", Value: true},
-							ordered.TupleSA{Key: "account_ids", Value: "xxx"},
-							ordered.TupleSA{Key: "registry_region", Value: "us-east-1"},
-						),
+						Config: map[string]any{
+							"login":           true,
+							"account_ids":     "xxx",
+							"registry_region": "us-east-1",
+						},
 					},
 					{
 						Source: "docker-compose#v2.5.1",
-						Config: ordered.MapFromItems(
-							ordered.TupleSA{Key: "run", Value: "xxx"},
-							ordered.TupleSA{Key: "config", Value: ".buildkite/docker/docker-compose.yml"},
-							ordered.TupleSA{Key: "env", Value: []any{
+						Config: map[string]any{
+							"run":    "xxx",
+							"config": ".buildkite/docker/docker-compose.yml",
+							"env": []any{
 								"AWS_ACCESS_KEY_ID",
 								"AWS_SECRET_ACCESS_KEY",
 								"AWS_SESSION_TOKEN",
-							}},
-						),
+							},
+						},
 					},
 				},
 				RemainingFields: map[string]any{
@@ -1076,20 +1074,20 @@ steps:
         },
         {
           "github.com/buildkite-plugins/ecr-buildkite-plugin#v1.1.4": {
-            "login": true,
             "account_ids": "xxx",
+            "login": true,
             "registry_region": "us-east-1"
           }
         },
         {
           "github.com/buildkite-plugins/docker-compose-buildkite-plugin#v2.5.1": {
-            "run": "xxx",
             "config": ".buildkite/docker/docker-compose.yml",
             "env": [
               "AWS_ACCESS_KEY_ID",
               "AWS_SECRET_ACCESS_KEY",
               "AWS_SESSION_TOKEN"
-            ]
+            ],
+            "run": "xxx"
           }
         }
       ]
@@ -1131,9 +1129,9 @@ func TestParserParsesScalarPlugins(t *testing.T) {
 					},
 					{
 						Source: "docker-compose#v2.5.1",
-						Config: ordered.MapFromItems(
-							ordered.TupleSA{Key: "config", Value: ".buildkite/docker/docker-compose.yml"},
-						),
+						Config: map[string]any{
+							"config": ".buildkite/docker/docker-compose.yml",
+						},
 					},
 				},
 				RemainingFields: map[string]any{

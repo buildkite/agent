@@ -184,6 +184,32 @@ func (m *Map[K, V]) ToMap() map[K]V {
 	return um
 }
 
+// ToMapRecursive converts a weakly typed nested structure consisting of
+// *Map[string, any], []any, and any (i.e. output from DecodeYAML),
+// into one containing the same data but where each *Map[string, any] is
+// map[string]any.
+func ToMapRecursive(src any) any {
+	switch tsrc := src.(type) {
+	case *Map[string, any]:
+		um := make(map[string]any, len(tsrc.index))
+		tsrc.Range(func(k string, v any) error {
+			um[k] = ToMapRecursive(v)
+			return nil
+		})
+		return um
+
+	case []any:
+		s := make([]any, len(tsrc))
+		for i, e := range tsrc {
+			s[i] = ToMapRecursive(e)
+		}
+		return s
+
+	default:
+		return src
+	}
+}
+
 // Equal reports if the two maps are equal (they contain the same items in the
 // same order). Keys are compared directly; values are compared using go-cmp
 // (provided with Equal[string, any] and Equal[string, string] as a comparers).
