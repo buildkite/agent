@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strings"
 
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jws"
@@ -43,11 +42,12 @@ func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, err
 	// our documented behaviour:
 	// https://buildkite.com/docs/pipelines/environment-variables#defining-your-own
 	// This override is handled by mapUnion.
+	values = mapUnion(values, env)
 
 	// Ensure this part writes the same data to the payload as in Verify...
 	payload := &bytes.Buffer{}
 	writeLengthPrefixed(payload, key.Algorithm().String())
-	fields := writeFields(payload, mapUnion(values, env))
+	fields := writeFields(payload, values)
 	// ...end
 
 	sig, err := jws.Sign(nil,
@@ -80,22 +80,28 @@ func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.S
 		return fmt.Errorf("obtaining values for fields: %w", err)
 	}
 
-	// env:: fields that were signed are all required in the env map.
+	// Namespace the env values.
+	env = prefixKeys(env, EnvNamespacePrefix)
+
+	// NB: env overrides values from sf (see comment in Sign).
+	values = mapUnion(values, env)
+
+	// env:: fields that were signed are all required from either the env map or
+	// the step env map.
 	// We can't verify other env vars though - they can vary for lots of reasons
 	// (e.g. Buildkite-provided vars added by the backend.)
 	// This is still strong enough for a user to enforce any particular env var
 	// exists and has a particular value - make it a part of the pipeline or
 	// step env.
-	envVars := filterPrefix(s.SignedFields, EnvNamespacePrefix)
-	env, err = requireKeys(prefixKeys(env, EnvNamespacePrefix), envVars)
+	required, err := requireKeys(values, s.SignedFields)
 	if err != nil {
-		return fmt.Errorf("obtaining values for env vars: %w", err)
+		return fmt.Errorf("obtaining required keys: %w", err)
 	}
 
 	// Ensure this part writes the same data to the payload as in Sign...
 	payload := &bytes.Buffer{}
 	writeLengthPrefixed(payload, s.Algorithm)
-	writeFields(payload, mapUnion(values, env))
+	writeFields(payload, required)
 	// ...end
 
 	_, err = jws.Verify([]byte(s.Value),
@@ -161,17 +167,6 @@ func prefixKeys[V any, M ~map[string]V](in M, prefix string) M {
 	out := make(M, len(in))
 	for k, v := range in {
 		out[prefix+k] = v
-	}
-	return out
-}
-
-// filterPrefix returns values from the slice having the prefix.
-func filterPrefix(in []string, prefix string) []string {
-	out := make([]string, 0, len(in))
-	for _, s := range in {
-		if strings.HasPrefix(s, prefix) {
-			out = append(out, s)
-		}
 	}
 	return out
 }
