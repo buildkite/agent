@@ -119,7 +119,7 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 	return artifactURL.String()
 }
 
-func (u *GSUploader) Upload(artifact *api.Artifact) error {
+func (u *GSUploader) Upload(_ context.Context, artifact *api.Artifact) error {
 	permission := os.Getenv("BUILDKITE_GS_ACL")
 
 	// The dirtiest validation method ever...

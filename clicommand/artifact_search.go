@@ -14,35 +14,57 @@ import (
 
 const searchHelpDescription = `Usage:
 
-   buildkite-agent artifact search [options] <query>
+    buildkite-agent artifact search [options] <query>
 
 Description:
 
-	 Searches for build artifacts specified by <query> on Buildkite
+Searches for build artifacts specified by <query> on Buildkite
 
-   Note: You need to ensure that your search query is surrounded by quotes if
-   using a wild card as the built-in shell path globbing will provide files,
-   which will break the search.
+Note: You need to ensure that your search query is surrounded by quotes if
+using a wild card as the built-in shell path globbing will provide files,
+which will break the search.
 
 Example:
 
-   $ buildkite-agent artifact search "pkg/*.tar.gz" --build xxx
+    $ buildkite-agent artifact search "pkg/*.tar.gz" --build xxx
 
-   This will search across all uploaded artifacts in a build for files that match that query.
-   The first argument is the search query.
+This will search across all uploaded artifacts in a build for files that match that query.
+The first argument is the search query.
 
-   If you're trying to find a specific file, and there are multiple artifacts from different
-   jobs, you can target the particular job you want to search the artifacts from using --step:
+If you're trying to find a specific file, and there are multiple artifacts from different
+jobs, you can target the particular job you want to search the artifacts from using --step:
 
-   $ buildkite-agent artifact search "pkg/*.tar.gz" --step "tests" --build xxx
+    $ buildkite-agent artifact search "pkg/*.tar.gz" --step "tests" --build xxx
 
-   You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)
+You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)
 
-   Output formatting can be altered with the -format flag as follows:
+Output formatting can be altered with the -format flag as follows:
 
-   $ buildkite-agent artifact search "*" -format "%p\n"
+    $ buildkite-agent artifact search "*" -format "%p\n"
 
-   The above will return a list of filenames separated by newline.`
+The above will return a list of filenames separated by newline.`
+
+const artifactSearchHelpTemplate = `{{.Description}}
+
+Options:
+
+{{range .VisibleFlags}}  {{.}}
+{{end}}
+Format specifiers:
+
+  %i    UUID of the artifact
+
+  %p    Artifact path
+
+  %c    Artifact creation time (an ISO 8601 / RFC-3339 formatted UTC timestamp)
+
+  %j    UUID of the job that uploaded the artifact, helpful for subsequent artifact downloads
+
+  %s    File size of the artifact in bytes
+
+  %S    SHA1 checksum of the artifact
+
+  %u    Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead`
 
 type ArtifactSearchConfig struct {
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
@@ -67,32 +89,10 @@ type ArtifactSearchConfig struct {
 }
 
 var ArtifactSearchCommand = cli.Command{
-	Name:        "search",
-	Usage:       "Searches artifacts in Buildkite",
-	Description: searchHelpDescription,
-	CustomHelpTemplate: `{{.Description}}
-
-Options:
-
-   {{range .VisibleFlags}}{{.}}
-   {{end}}
-
-Format specifiers:
-
-	%i		UUID of the artifact
-
-	%p		Artifact path
-
-	%c		Artifact creation time (an ISO 8601 / RFC-3339 formatted UTC timestamp)
-
-	%j		UUID of the job that uploaded the artifact, helpful for subsequent artifact downloads
-
-	%s		File size of the artifact in bytes
-
-	%S		SHA1 checksum of the artifact
-
-	%u		Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead
-`,
+	Name:               "search",
+	Usage:              "Searches artifacts in Buildkite",
+	Description:        searchHelpDescription,
+	CustomHelpTemplate: artifactSearchHelpTemplate,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "step",
@@ -135,7 +135,7 @@ Format specifiers:
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](ctx, c)
 		defer done()
 
 		// Create the API client

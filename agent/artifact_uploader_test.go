@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
 )
@@ -24,7 +25,7 @@ func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
 }
 
 func TestCollect(t *testing.T) {
-	// t.Parallel() cannot be used with experiments.Enable
+	ctx := context.Background()
 
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
@@ -100,24 +101,16 @@ func TestCollect(t *testing.T) {
 	// path.Join function instead (which uses Unix/URI-style path separators,
 	// regardless of platform)
 
-	experimentKey := experiments.NormalisedUploadPaths
-	experimentPrev := experiments.IsEnabled(experimentKey)
-	defer func() {
-		if experimentPrev {
-			experiments.Enable(experimentKey)
-		} else {
-			experiments.Disable(experimentKey)
-		}
-	}()
-	experiments.Disable(experimentKey)
-	artifactsWithoutExperimentEnabled, err := uploader.Collect()
+	ctxExpEnabled, _ := experiments.Enable(ctx, experiments.NormalisedUploadPaths)
+	ctxExpDisabled := experiments.Disable(ctx, experiments.NormalisedUploadPaths)
+
+	artifactsWithoutExperimentEnabled, err := uploader.Collect(ctxExpDisabled)
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
 
-	experiments.Enable(experimentKey)
-	artifactsWithExperimentEnabled, err := uploader.Collect()
+	artifactsWithExperimentEnabled, err := uploader.Collect(ctxExpEnabled)
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)
 	}
@@ -167,6 +160,8 @@ func TestCollect(t *testing.T) {
 }
 
 func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
+	ctx := context.Background()
+
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
@@ -181,7 +176,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect()
+	artifacts, err := uploader.Collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -190,6 +185,8 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
+	ctx := context.Background()
+
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
@@ -203,7 +200,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect()
+	artifacts, err := uploader.Collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -214,6 +211,8 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T) {
+	ctx := context.Background()
+
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
@@ -229,7 +228,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 		GlobResolveFollowSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect()
+	artifacts, err := uploader.Collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -240,6 +239,8 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 }
 
 func TestCollectWithDuplicateMatches(t *testing.T) {
+	ctx := context.Background()
+
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
@@ -252,7 +253,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect()
+	artifacts, err := uploader.Collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -274,6 +275,8 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 }
 
 func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
+	ctx := context.Background()
+
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
@@ -287,7 +290,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 		GlobResolveFollowSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect()
+	artifacts, err := uploader.Collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -310,6 +313,8 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 }
 
 func TestCollectMatchesUploadSymlinks(t *testing.T) {
+	ctx := context.Background()
+
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
@@ -322,7 +327,7 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 		UploadSkipSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect()
+	artifacts, err := uploader.Collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}

@@ -18,9 +18,9 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/logger"
@@ -39,20 +39,20 @@ import (
 
 const startDescription = `Usage:
 
-   buildkite-agent start [options...]
+    buildkite-agent start [options...]
 
 Description:
 
-   When a job is ready to run it will call the "bootstrap-script"
-   and pass it all the environment variables required for the job to run.
-   This script is responsible for checking out the code, and running the
-   actual build script defined in the pipeline.
+When a job is ready to run it will call the "bootstrap-script"
+and pass it all the environment variables required for the job to run.
+This script is responsible for checking out the code, and running the
+actual build script defined in the pipeline.
 
-   The agent will run any jobs within a PTY (pseudo terminal) if available.
+The agent will run any jobs within a PTY (pseudo terminal) if available.
 
 Example:
 
-   $ buildkite-agent start --token xxx`
+    $ buildkite-agent start --token xxx`
 
 var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
@@ -168,7 +168,7 @@ type AgentStartConfig struct {
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
-func (asc AgentStartConfig) Features() []string {
+func (asc AgentStartConfig) Features(ctx context.Context) []string {
 	if asc.NoFeatureReporting {
 		return []string{}
 	}
@@ -207,7 +207,7 @@ func (asc AgentStartConfig) Features() []string {
 		features = append(features, "no-script-eval")
 	}
 
-	for _, exp := range experiments.Enabled() {
+	for _, exp := range experiments.Enabled(ctx) {
 		features = append(features, fmt.Sprintf("experiment-%s", exp))
 	}
 
@@ -599,7 +599,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "job-signing-algorithm",
-			Usage:  "The algorithm to use when signing pipelines. Must be a valid RF7518 JWA algorithm. Required when using a JWKS, and the given key doesn't have an alg parameter",
+			Usage:  "The algorithm to use when signing pipelines. Must be an algorithm specified in RFC 7518: JWA. Required when using a JWKS, and the given key doesn't have an alg parameter",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
 		},
 		cli.StringFlag{
@@ -679,7 +679,7 @@ var AgentStartCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](c, withConfigFilePaths(
+		ctx, cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](ctx, c, withConfigFilePaths(
 			defaultConfigFilePaths(),
 		))
 		defer done()
@@ -804,7 +804,7 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
-		if experiments.IsEnabled(experiments.AgentAPI) {
+		if experiments.IsEnabled(ctx, experiments.AgentAPI) {
 			shutdown := runAgentAPI(ctx, l, cfg.SocketsPath)
 			defer shutdown()
 		}
@@ -813,12 +813,12 @@ var AgentStartCommand = cli.Command{
 		if cfg.JobVerificationJWKSPath != "" {
 			jwksBytes, err := os.ReadFile(cfg.JobVerificationJWKSPath)
 			if err != nil {
-				l.Fatal("Failed to read job verification key: %w", err)
+				l.Fatal("Failed to read job verification key: %v", err)
 			}
 
 			jwks, err = jwk.Parse(jwksBytes)
 			if err != nil {
-				l.Fatal("Failed to parse job verification key set: %w", err)
+				l.Fatal("Failed to parse job verification key set: %v", err)
 			}
 
 			if jwks.Len() == 0 {
@@ -979,7 +979,7 @@ var AgentStartCommand = cli.Command{
 			// dispatches if it's being booted to acquire a
 			// specific job.
 			IgnoreInDispatches: cfg.AcquireJob != "",
-			Features:           cfg.Features(),
+			Features:           cfg.Features(ctx),
 		}
 
 		// Spawning multiple agents doesn't work if the agent is being
@@ -1002,7 +1002,7 @@ var AgentStartCommand = cli.Command{
 
 			if cfg.SpawnWithPriority {
 				p := i
-				if experiments.IsEnabled(experiments.DescendingSpawnPrioity) {
+				if experiments.IsEnabled(ctx, experiments.DescendingSpawnPrioity) {
 					// This experiment helps jobs be assigned across all hosts
 					// in cases where the value of --spawn varies between hosts.
 					p = -i

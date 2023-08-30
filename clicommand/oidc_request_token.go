@@ -33,23 +33,24 @@ type OIDCTokenConfig struct {
 }
 
 const (
+	backoffSeconds       = 2
+	maxAttempts          = 5
 	oidcTokenDescription = `Usage:
 
-   buildkite-agent oidc request-token [options...]
+    buildkite-agent oidc request-token [options...]
 
 Description:
-   Requests and prints an OIDC token from Buildkite that claims the Job ID
-   (amongst other things) and the specified audience. If no audience is
-   specified, the endpoint's default audience will be claimed.
+
+Requests and prints an OIDC token from Buildkite that claims the Job ID
+(amongst other things) and the specified audience. If no audience is
+specified, the endpoint's default audience will be claimed.
 
 Example:
-   $ buildkite-agent oidc request-token --audience sts.amazonaws.com
 
-   Requests and prints an OIDC token from Buildkite that claims the Job ID
-   (amongst other things) and the audience "sts.amazonaws.com".
-`
-	backoffSeconds = 2
-	maxAttempts    = 5
+    $ buildkite-agent oidc request-token --audience sts.amazonaws.com
+
+Requests and prints an OIDC token from Buildkite that claims the Job ID
+(amongst other things) and the audience "sts.amazonaws.com".`
 )
 
 var OIDCRequestTokenCommand = cli.Command{
@@ -93,7 +94,7 @@ var OIDCRequestTokenCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](ctx, c)
 		defer done()
 
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0

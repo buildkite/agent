@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
@@ -162,7 +162,7 @@ type jobAPI interface {
 var _ jobRunner = (*JobRunner)(nil)
 
 // Initializes the job runner
-func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
+func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
 	r := &JobRunner{
 		logger:    l,
 		conf:      conf,
@@ -220,7 +220,7 @@ func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (j
 		r.envFile = file
 	}
 
-	env, err := r.createEnvironment()
+	env, err := r.createEnvironment(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +333,7 @@ func NewJobRunner(l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (j
 	processEnv := append(os.Environ(), env...)
 
 	// The process that will run the bootstrap script
-	if experiments.IsEnabled(experiments.KubernetesExec) {
+	if experiments.IsEnabled(ctx, experiments.KubernetesExec) {
 		containerCount, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_COUNT"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
@@ -392,7 +392,7 @@ func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, erro
 }
 
 // Creates the environment variables that will be used in the process and writes a flat environment file
-func (r *JobRunner) createEnvironment() ([]string, error) {
+func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
 	// sent by Buildkite. The variables below should always take
@@ -476,7 +476,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
 	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = fmt.Sprintf("%d", r.conf.AgentConfiguration.GitMirrorsLockTimeout)
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
-	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
+	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(ctx), ",")
 	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
 	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.StrictSingleHooks)
 

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,8 @@ import (
 )
 
 func TestFormUploading(t *testing.T) {
+	ctx := context.Background()
+
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/buildkiteartifacts.com":
@@ -106,7 +109,7 @@ func TestFormUploading(t *testing.T) {
 				}},
 		}
 
-		if err := uploader.Upload(artifact); err != nil {
+		if err := uploader.Upload(ctx, artifact); err != nil {
 			t.Errorf("uploader.Upload(artifact) = %v", err)
 		}
 	}
@@ -117,6 +120,7 @@ func TestFormUploading(t *testing.T) {
 }
 
 func TestFormUploadFileMissing(t *testing.T) {
+	ctx := context.Background()
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, "Not found", http.StatusNotFound)
 	}))
@@ -154,12 +158,13 @@ func TestFormUploadFileMissing(t *testing.T) {
 			}},
 	}
 
-	if err := uploader.Upload(artifact); !os.IsNotExist(err) {
+	if err := uploader.Upload(ctx, artifact); !os.IsNotExist(err) {
 		t.Errorf("uploader.Upload(artifact) = %v, want os.ErrNotExist", err)
 	}
 }
 
 func TestFormUploadTooBig(t *testing.T) {
+	ctx := context.Background()
 	uploader := NewFormUploader(logger.Discard, FormUploaderConfig{})
 	const size = int64(6442450944) // 6Gb
 	artifact := &api.Artifact{
@@ -172,7 +177,7 @@ func TestFormUploadTooBig(t *testing.T) {
 		UploadInstructions: &api.ArtifactUploadInstructions{},
 	}
 
-	if err := uploader.Upload(artifact); !errors.Is(err, errArtifactTooLarge{Size: size}) {
+	if err := uploader.Upload(ctx, artifact); !errors.Is(err, errArtifactTooLarge{Size: size}) {
 		t.Errorf("uploader.Upload(artifact) = %v, want errArtifactTooLarge", err)
 	}
 }

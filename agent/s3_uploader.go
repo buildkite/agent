@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -80,7 +81,7 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 	return url.String()
 }
 
-func (u *S3Uploader) Upload(artifact *api.Artifact) error {
+func (u *S3Uploader) Upload(_ context.Context, artifact *api.Artifact) error {
 
 	permission, err := u.resolvePermission()
 	if err != nil {

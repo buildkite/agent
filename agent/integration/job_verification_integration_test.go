@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -29,7 +30,7 @@ var (
 		Step: pipeline.CommandStep{
 			Command: "echo hello world",
 			Plugins: pipeline.Plugins{{
-				Name: "some-plugin#v1.0.0",
+				Source: "some#v1.0.0",
 				Config: map[string]string{
 					"key": "value",
 				},
@@ -40,7 +41,7 @@ var (
 		},
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
-			"BUILDKITE_PLUGINS": `[{"some-plugin#v1.0.0":{"key":"value"}}]`,
+			"BUILDKITE_PLUGINS": `[{"github.com/buildkite-plugins/some-buildkite-plugin#v1.0.0":{"key":"value"}}]`,
 			"DEPLOY":            "0",
 		},
 	}
@@ -63,7 +64,7 @@ var (
 		Step: pipeline.CommandStep{
 			Command: "echo hello world",
 			Plugins: pipeline.Plugins{{
-				Name: "some-plugin#v1.0.0",
+				Source: "some#v1.0.0",
 				Config: map[string]string{
 					"key": "value",
 				},
@@ -71,7 +72,7 @@ var (
 		},
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
-			"BUILDKITE_PLUGINS": `[{"crimes-plugin#v1.0.0":{"steal":"everything"}}]`,
+			"BUILDKITE_PLUGINS": `[{"github.com/buildkite-plugins/crimes-buildkite-plugin#v1.0.0":{"steal":"everything"}}]`,
 			"DEPLOY":            "0",
 		},
 	}
@@ -91,6 +92,7 @@ var (
 
 func TestJobVerification(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	cases := []struct {
 		name                     string
@@ -227,7 +229,7 @@ func TestJobVerification(t *testing.T) {
 			defer mb.CheckAndClose(t)
 
 			tc.job.Step = signStep(t, pipelineUploadEnv, tc.job.Step, tc.signingKey)
-			runJob(t, testRunJobConfig{
+			runJob(t, ctx, testRunJobConfig{
 				job:              &tc.job,
 				server:           server,
 				agentCfg:         tc.agentConf,

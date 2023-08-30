@@ -11,24 +11,24 @@ import (
 
 const lockReleaseHelpDescription = `Usage:
 
-   buildkite-agent lock release [key] [token]
+    buildkite-agent lock release [key] [token]
 
 Description:
-   Releases the lock for the given key. This should only be called by the
-   process that acquired the lock. To help prevent different processes unlocking
-   each other unintentionally, the output from ′lock acquire′ is required as the
-   second argument.
 
-   Note that this subcommand is only available when an agent has been started
-   with the ′agent-api′ experiment enabled.
+Releases the lock for the given key. This should only be called by the
+process that acquired the lock. To help prevent different processes unlocking
+each other unintentionally, the output from ′lock acquire′ is required as the
+second argument, namely, the ′token′ in the Usage section above.
+
+Note that this subcommand is only available when an agent has been started
+with the ′agent-api′ experiment enabled.
 
 Examples:
 
-   $ token=$(buildkite-agent lock acquire llama)
-   $ critical_section()
-   $ buildkite-agent lock release llama "${token}"
-
-`
+    #!/bin/bash
+    token=$(buildkite-agent lock acquire llama)
+    # your critical section here...
+    buildkite-agent lock release llama "${token}"`
 
 type LockReleaseConfig struct {
 	// Common config options
@@ -59,7 +59,7 @@ func lockReleaseAction(c *cli.Context) error {
 	key, token := c.Args()[0], c.Args()[1]
 
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[LockReleaseConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[LockReleaseConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {

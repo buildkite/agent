@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	_ "crypto/sha512" // import sha512 to make sha512 ssl certs work
 	"fmt"
 	"io"
@@ -52,7 +53,7 @@ func (u *FormUploader) URL(artifact *api.Artifact) string {
 	return ""
 }
 
-func (u *FormUploader) Upload(artifact *api.Artifact) error {
+func (u *FormUploader) Upload(_ context.Context, artifact *api.Artifact) error {
 	if artifact.FileSize > maxFormUploadedArtifactSize {
 		return errArtifactTooLarge{Size: artifact.FileSize}
 	}

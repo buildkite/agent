@@ -24,7 +24,6 @@ Available commands are:
   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
   {{end}}
 Use "{{.Name}} <command> --help" for more information about a command.
-
 `
 
 const subcommandHelpTemplate = `Usage:
@@ -33,20 +32,21 @@ const subcommandHelpTemplate = `Usage:
 
 Available commands are:
 
-   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-   {{end}}{{if .VisibleFlags}}
+  {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
+  {{end}}{{if .VisibleFlags}}
+
 Options:
 
-   {{range .VisibleFlags}}{{.}}
-   {{end}}{{end}}
+{{range .VisibleFlags}}  {{.}}
+{{end}}{{ end -}}
 `
 
 const commandHelpTemplate = `{{.Description}}
 
 Options:
 
-   {{range .VisibleFlags}}{{.}}
-   {{end}}
+{{range .VisibleFlags}}  {{.}}
+{{ end -}}
 `
 
 func printVersion(c *cli.Context) {

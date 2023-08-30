@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -98,7 +99,7 @@ func (u *ArtifactoryUploader) URL(artifact *api.Artifact) string {
 	return url.String()
 }
 
-func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
+func (u *ArtifactoryUploader) Upload(_ context.Context, artifact *api.Artifact) error {
 	// Open file from filesystem
 	u.logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
 	f, err := os.Open(artifact.AbsolutePath)

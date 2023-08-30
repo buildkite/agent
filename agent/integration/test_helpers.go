@@ -47,7 +47,7 @@ type testRunJobConfig struct {
 	verificationJWKS jwk.Set
 }
 
-func runJob(t *testing.T, cfg testRunJobConfig) {
+func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) {
 	t.Helper()
 
 	l := logger.Discard
@@ -64,7 +64,7 @@ func runJob(t *testing.T, cfg testRunJobConfig) {
 		Token:    "llamasrock",
 	})
 
-	jr, err := agent.NewJobRunner(l, client, agent.JobRunnerConfig{
+	jr, err := agent.NewJobRunner(ctx, l, client, agent.JobRunnerConfig{
 		Job:                cfg.job,
 		JWKS:               cfg.verificationJWKS,
 		AgentConfiguration: cfg.agentCfg,

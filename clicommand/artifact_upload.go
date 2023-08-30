@@ -10,60 +10,60 @@ import (
 
 const uploadHelpDescription = `Usage:
 
-   buildkite-agent artifact upload [options] <pattern> [destination]
+    buildkite-agent artifact upload [options] <pattern> [destination]
 
 Description:
 
-   Uploads files to a job as artifacts.
+Uploads files to a job as artifacts.
 
-   You need to ensure that the paths are surrounded by quotes otherwise the
-   built-in shell path globbing will provide the files, which is currently not
-   supported.
+You need to ensure that the paths are surrounded by quotes otherwise the
+built-in shell path globbing will provide the files, which is currently not
+supported.
 
-   You can specify an alternate destination on Amazon S3, Google Cloud Storage
-   or Artifactory as per the examples below. This may be specified in the
-   'destination' argument, or in the 'BUILDKITE_ARTIFACT_UPLOAD_DESTINATION'
-   environment variable.  Otherwise, artifacts are uploaded to a
-   Buildkite-managed Amazon S3 bucket, where they’re retained for six months.
+You can specify an alternate destination on Amazon S3, Google Cloud Storage
+or Artifactory as per the examples below. This may be specified in the
+'destination' argument, or in the 'BUILDKITE_ARTIFACT_UPLOAD_DESTINATION'
+environment variable.  Otherwise, artifacts are uploaded to a
+Buildkite-managed Amazon S3 bucket, where they’re retained for six months.
 
 Example:
 
-   $ buildkite-agent artifact upload "log/**/*.log"
+    $ buildkite-agent artifact upload "log/**/*.log"
 
-   You can also upload directly to Amazon S3 if you'd like to host your own artifacts:
+You can also upload directly to Amazon S3 if you'd like to host your own artifacts:
 
-   $ export BUILDKITE_S3_ACCESS_KEY_ID=xxx
-   $ export BUILDKITE_S3_SECRET_ACCESS_KEY=yyy
-   $ export BUILDKITE_S3_DEFAULT_REGION=eu-central-1 # default is us-east-1
-   $ export BUILDKITE_S3_ACL=private # default is public-read
-   $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID
+    $ export BUILDKITE_S3_ACCESS_KEY_ID=xxx
+    $ export BUILDKITE_S3_SECRET_ACCESS_KEY=yyy
+    $ export BUILDKITE_S3_DEFAULT_REGION=eu-central-1 # default is us-east-1
+    $ export BUILDKITE_S3_ACL=private # default is public-read
+    $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID
 
-   You can use Amazon IAM assumed roles by specifying the session token:
+You can use Amazon IAM assumed roles by specifying the session token:
 
-   $ export BUILDKITE_S3_SESSION_TOKEN=zzz
+    $ export BUILDKITE_S3_SESSION_TOKEN=zzz
 
-   Or upload directly to Google Cloud Storage:
+Or upload directly to Google Cloud Storage:
 
-   $ export BUILDKITE_GS_ACL=private
-   $ buildkite-agent artifact upload "log/**/*.log" gs://name-of-your-gs-bucket/$BUILDKITE_JOB_ID
+    $ export BUILDKITE_GS_ACL=private
+    $ buildkite-agent artifact upload "log/**/*.log" gs://name-of-your-gs-bucket/$BUILDKITE_JOB_ID
 
-   Or upload directly to Artifactory:
+Or upload directly to Artifactory:
 
-   $ export BUILDKITE_ARTIFACTORY_URL=http://my-artifactory-instance.com/artifactory
-   $ export BUILDKITE_ARTIFACTORY_USER=carol-danvers
-   $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
-   $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID
+    $ export BUILDKITE_ARTIFACTORY_URL=http://my-artifactory-instance.com/artifactory
+    $ export BUILDKITE_ARTIFACTORY_USER=carol-danvers
+    $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
+    $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID
 
-   By default, symlinks to directories will not be explored when resolving the glob, but symlinks to files will be uploaded as the linked files.
-   To ignore symlinks to files use:
+By default, symlinks to directories will not be explored when resolving the glob, but symlinks to
+files will be uploaded as the linked files. To ignore symlinks to files use:
 
-   $ buildkite-agent artifact upload --upload-skip-symlinks "log/**/*.log"
+    $ buildkite-agent artifact upload --upload-skip-symlinks "log/**/*.log"
 
-   Note: uploading symlinks to files without following them is not supported.
-   If you need to preserve them in a directory, we recommend creating a tar archive:
+Note: uploading symlinks to files without following them is not supported.
+If you need to preserve them in a directory, we recommend creating a tar archive:
 
-   $ tar -cvf log.tar log/**/*
-   $ buildkite-agent upload log.tar`
+    $ tar -cvf log.tar log/**/*
+    $ buildkite-agent upload log.tar`
 
 type ArtifactUploadConfig struct {
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
@@ -140,7 +140,7 @@ var ArtifactUploadCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](ctx, c)
 		defer done()
 
 		// Create the API client

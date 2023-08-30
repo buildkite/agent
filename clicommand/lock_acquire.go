@@ -12,27 +12,27 @@ import (
 
 const lockAcquireHelpDescription = `Usage:
 
-   buildkite-agent lock acquire [key]
+    buildkite-agent lock acquire [key]
 
 Description:
-   Acquires the lock for the given key. ′lock acquire′ will wait (potentially
-   forever) until it can acquire the lock, if the lock is already held by
-   another process. If multiple processes are waiting for the same lock, there
-   is no ordering guarantee of which one will be given the lock next.
 
-   To prevent separate processes unlocking each other, the output from ′lock
-   acquire′ should be stored, and passed to ′lock release′.
+Acquires the lock for the given key. ′lock acquire′ will wait (potentially
+forever) until it can acquire the lock, if the lock is already held by
+another process. If multiple processes are waiting for the same lock, there
+is no ordering guarantee of which one will be given the lock next.
 
-   Note that this subcommand is only available when an agent has been started
-   with the ′agent-api′ experiment enabled.
+To prevent separate processes unlocking each other, the output from ′lock
+acquire′ should be stored, and passed to ′lock release′.
+
+Note that this subcommand is only available when an agent has been started
+with the ′agent-api′ experiment enabled.
 
 Examples:
 
-   $ token=$(buildkite-agent lock acquire llama)
-   $ critical_section()
-   $ buildkite-agent lock release llama "${token}"
-
-`
+    #!/bin/bash
+    token=$(buildkite-agent lock acquire llama)
+    # your critical section here...
+    buildkite-agent lock release llama "${token}"`
 
 type LockAcquireConfig struct {
 	// Common config options
@@ -54,7 +54,7 @@ func lockAcquireFlags() []cli.Flag {
 		[]cli.Flag{
 			cli.DurationFlag{
 				Name:   "lock-wait-timeout",
-				Usage:  "If specified, sets a maximum duration to wait for a lock before giving up",
+				Usage:  "Sets a maximum duration to wait for a lock before giving up",
 				EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
 			},
 		},
@@ -79,7 +79,7 @@ func lockAcquireAction(c *cli.Context) error {
 	key := c.Args()[0]
 
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[LockAcquireConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[LockAcquireConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {

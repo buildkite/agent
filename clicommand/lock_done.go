@@ -11,24 +11,23 @@ import (
 
 const lockDoneHelpDescription = `Usage:
 
-   buildkite-agent lock release [key]
+    buildkite-agent lock done [key]
 
 Description:
-   Completes a do-once lock. This should only be used by the process performing
-   the work.
 
-   Note that this subcommand is only available when an agent has been started
-   with the ′agent-api′ experiment enabled.
+Completes a do-once lock. This should only be used by the process performing
+the work.
+
+Note that this subcommand is only available when an agent has been started
+with the ′agent-api′ experiment enabled.
 
 Examples:
 
-   #!/bin/bash
-   if [ $(buildkite-agent lock do llama) = 'do' ] ; then
-	  setup_code()
-	  buildkite-agent lock done llama
-   fi
-
-`
+    #!/bin/bash
+    if [[ $(buildkite-agent lock do llama) == 'do' ]]; then
+      # your critical section here...
+      buildkite-agent lock done llama
+    fi`
 
 type LockDoneConfig struct {
 	// Common config options
@@ -59,7 +58,7 @@ func lockDoneAction(c *cli.Context) error {
 	key := c.Args()[0]
 
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[LockDoneConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[LockDoneConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {

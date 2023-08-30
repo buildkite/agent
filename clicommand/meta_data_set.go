@@ -14,23 +14,23 @@ import (
 
 const metaDataSetHelpDescription = `Usage:
 
-   buildkite-agent meta-data set <key> [value] [options...]
+    buildkite-agent meta-data set <key> [value] [options...]
 
 Description:
 
-   Set arbitrary data on a build using a basic key/value store.
+Set arbitrary data on a build using a basic key/value store.
 
-   You can supply the value as an argument to the command, or pipe in a file or
-   script output.
+You can supply the value as an argument to the command, or pipe in a file or
+script output.
 
-   The value must be a non-empty string, and strings containing only whitespace
-   characters are not allowed.
+The value must be a non-empty string, and strings containing only whitespace
+characters are not allowed.
 
 Example:
 
-   $ buildkite-agent meta-data set "foo" "bar"
-   $ buildkite-agent meta-data set "foo" < ./tmp/meta-data-value
-   $ ./script/meta-data-generator | buildkite-agent meta-data set "foo"`
+    $ buildkite-agent meta-data set "foo" "bar"
+    $ buildkite-agent meta-data set "foo" < ./tmp/meta-data-value
+    $ ./script/meta-data-generator | buildkite-agent meta-data set "foo"`
 
 type MetaDataSetConfig struct {
 	Key   string `cli:"arg:0" label:"meta-data key" validate:"required"`
@@ -78,7 +78,7 @@ var MetaDataSetCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](ctx, c)
 		defer done()
 
 		// Read the value from STDIN if argument omitted entirely

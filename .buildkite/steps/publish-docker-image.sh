@@ -15,7 +15,7 @@ dry_run() {
 }
 
 skopeo() {
-  docker run --rm -v "${DOCKER_CONFIG:-$HOME/.docker}:/root/.docker:ro" quay.io/skopeo/stable:v1.10.0 "$@"
+  docker run --rm -v "${DOCKER_CONFIG:-$HOME/.docker}:/root/.docker:ro" quay.io/skopeo/stable:v1 "$@"
 }
 
 # Convert 2.3.2 into [ 2.3.2 2.3 2 ] or 3.0-beta.42 in [ 3.0-beta.42 3.0 3 ]

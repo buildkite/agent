@@ -15,7 +15,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/artifact"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/mime"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/pool"
@@ -73,7 +74,7 @@ func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig
 
 func (a *ArtifactUploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
-	artifacts, err := a.Collect()
+	artifacts, err := a.Collect(ctx)
 	if err != nil {
 		return fmt.Errorf("collecting artifacts: %w", err)
 	}
@@ -107,7 +108,7 @@ func isDir(path string) bool {
 	return fi.IsDir()
 }
 
-func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
+func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifact, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
@@ -182,7 +183,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 				return nil, fmt.Errorf("resolving relative path for file %s: %w", file, err)
 			}
 
-			if experiments.IsEnabled(experiments.NormalisedUploadPaths) {
+			if experiments.IsEnabled(ctx, experiments.NormalisedUploadPaths) {
 				// Convert any Windows paths to Unix/URI form
 				path = filepath.ToSlash(path)
 			}
@@ -246,41 +247,59 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	return artifact, nil
 }
 
-func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
-	var uploader Uploader
-	var err error
-
-	// Determine what uploader to use
-	if a.conf.Destination != "" {
-		if strings.HasPrefix(a.conf.Destination, "s3://") {
-			uploader, err = NewS3Uploader(a.logger, S3UploaderConfig{
-				Destination: a.conf.Destination,
-				DebugHTTP:   a.conf.DebugHTTP,
-			})
-		} else if strings.HasPrefix(a.conf.Destination, "gs://") {
-			uploader, err = NewGSUploader(a.logger, GSUploaderConfig{
-				Destination: a.conf.Destination,
-				DebugHTTP:   a.conf.DebugHTTP,
-			})
-		} else if strings.HasPrefix(a.conf.Destination, "rt://") {
-			uploader, err = NewArtifactoryUploader(a.logger, ArtifactoryUploaderConfig{
-				Destination: a.conf.Destination,
-				DebugHTTP:   a.conf.DebugHTTP,
-			})
-		} else {
-			return fmt.Errorf("invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload schemes are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination)
+// createUploader applies some heuristics to the destination to infer which
+// uploader to use.
+func (a *ArtifactUploader) createUploader() (uploader Uploader, err error) {
+	var dest string
+	defer func() {
+		if err != nil || dest == "" {
+			return
 		}
+		a.logger.Info("Uploading to %s (%q), using your agent configuration", dest, a.conf.Destination)
+	}()
 
-		a.logger.Info("Uploading to %q, using your agent configuration", a.conf.Destination)
-	} else {
-		uploader = NewFormUploader(a.logger, FormUploaderConfig{
+	switch {
+	case a.conf.Destination == "":
+		a.logger.Info("Uploading to default Buildkite artifact storage")
+		return NewFormUploader(a.logger, FormUploaderConfig{
 			DebugHTTP: a.conf.DebugHTTP,
+		}), nil
+
+	case strings.HasPrefix(a.conf.Destination, "s3://"):
+		dest = "Amazon S3"
+		return NewS3Uploader(a.logger, S3UploaderConfig{
+			Destination: a.conf.Destination,
+			DebugHTTP:   a.conf.DebugHTTP,
 		})
 
-		a.logger.Info("Uploading to default Buildkite artifact storage")
-	}
+	case strings.HasPrefix(a.conf.Destination, "gs://"):
+		dest = "Google Cloud Storage"
+		return NewGSUploader(a.logger, GSUploaderConfig{
+			Destination: a.conf.Destination,
+			DebugHTTP:   a.conf.DebugHTTP,
+		})
 
-	// Check if creation caused an error
+	case strings.HasPrefix(a.conf.Destination, "rt://"):
+		dest = "Artifactory"
+		return NewArtifactoryUploader(a.logger, ArtifactoryUploaderConfig{
+			Destination: a.conf.Destination,
+			DebugHTTP:   a.conf.DebugHTTP,
+		})
+
+	case artifact.IsAzureBlobPath(a.conf.Destination):
+		dest = "Azure Blob storage"
+		return artifact.NewAzureBlobUploader(a.logger, artifact.AzureBlobUploaderConfig{
+			Destination: a.conf.Destination,
+		})
+
+	default:
+		return nil, fmt.Errorf("invalid upload destination: '%v'. Only s3://*, gs://*, rt://*, or https://*.blob.core.windows.net destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination)
+	}
+}
+
+func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
+	// Determine what uploader to use
+	uploader, err := a.createUploader()
 	if err != nil {
 		return fmt.Errorf("creating uploader: %v", err)
 	}
@@ -413,7 +432,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 				roko.WithMaxAttempts(10),
 				roko.WithStrategy(roko.Constant(5*time.Second)),
 			).DoWithContext(ctx, func(r *roko.Retrier) error {
-				if err := uploader.Upload(artifact); err != nil {
+				if err := uploader.Upload(ctx, artifact); err != nil {
 					a.logger.Warn("%s (%s)", err, r)
 					return err
 				}

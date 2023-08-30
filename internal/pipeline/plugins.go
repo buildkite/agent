@@ -23,7 +23,7 @@ func (p *Plugins) UnmarshalOrdered(o any) error {
 	unmarshalMap := func(m *ordered.MapSA) error {
 		return m.Range(func(k string, v any) error {
 			*p = append(*p, &Plugin{
-				Name:   k,
+				Source: k,
 				Config: v,
 			})
 			return nil
@@ -31,6 +31,10 @@ func (p *Plugins) UnmarshalOrdered(o any) error {
 	}
 
 	switch o := o.(type) {
+	case nil:
+		*p = nil
+		return nil
+
 	case []any:
 		for _, c := range o {
 			switch ct := c.(type) {
@@ -51,7 +55,7 @@ func (p *Plugins) UnmarshalOrdered(o any) error {
 				//   - plugin#1.0.0
 				// (no config, only plugin)
 				*p = append(*p, &Plugin{
-					Name:   ct,
+					Source: ct,
 					Config: nil,
 				})
 

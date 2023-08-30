@@ -16,29 +16,31 @@ import (
 
 const bootstrapHelpDescription = `Usage:
 
-   buildkite-agent bootstrap [options...]
+     buildkite-agent bootstrap [options...]
 
 Description:
 
-   The bootstrap command executes a Buildkite job locally.
+The bootstrap command executes a Buildkite job locally.
 
-   Generally the bootstrap command is run as a sub-process of the buildkite-agent to execute
-   a given job sent from buildkite.com, but you can also invoke the bootstrap manually.
+Generally the bootstrap command is run as a sub-process of the buildkite-agent to execute
+a given job sent from buildkite.com, but you can also invoke the bootstrap manually.
 
-   Execution is broken down into phases. By default, the bootstrap runs a plugin phase which
-   sets up any plugins specified, then a checkout phase which pulls down your code and then a
-   command phase that executes the specified command in the created environment.
+Execution is broken down into phases. By default, the bootstrap runs a plugin phase which
+sets up any plugins specified, then a checkout phase which pulls down your code and then a
+command phase that executes the specified command in the created environment.
 
-   You can run only specific phases with the --phases flag.
+You can run only specific phases with the --phases flag.
 
-   The bootstrap is also responsible for executing hooks around the phases.
-   See https://buildkite.com/docs/agent/v3/hooks for more details.
+The bootstrap is also responsible for executing hooks around the phases.
+See https://buildkite.com/docs/agent/v3/hooks for more details.
 
 Example:
 
-   $ eval $(curl -s -H "Authorization: Bearer xxx" \
-     "https://api.buildkite.com/v2/organizations/[org]/pipelines/[proj]/builds/[build]/jobs/[job]/env.txt" | sed 's/^/export /')
-   $ buildkite-agent bootstrap --build-path builds`
+    $ eval $(curl -s -H "Authorization: Bearer xxx" \
+       "https://api.buildkite.com/v2/organizations/[org]/pipelines/[proj]/builds/[build]/jobs/[job]/env.txt" | \
+       sed 's/^/export /' \
+     )
+    $ buildkite-agent bootstrap --build-path builds`
 
 type BootstrapConfig struct {
 	Command                      string   `cli:"command"`
@@ -361,7 +363,7 @@ var BootstrapCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		ctx := context.Background()
-		cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
 
 		// Turn of PTY support if we're on Windows

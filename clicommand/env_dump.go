@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 
@@ -10,12 +11,13 @@ import (
 
 const envDumpHelpDescription = `Usage:
 
-   buildkite-agent env dump [options]
+buildkite-agent env dump [options]
 
 Description:
-   Prints out the environment of the current process as a JSON object, easily
-   parsable by other programs. Used when executing hooks to discover changes
-   that hooks make to the environment.
+
+Prints out the environment of the current process as a JSON object, easily
+parsable by other programs. Used when executing hooks to discover changes
+that hooks make to the environment.
 
 Example:
 
@@ -52,7 +54,7 @@ var EnvDumpCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
-		cfg, l, _, done := setupLoggerAndConfig[EnvDumpConfig](c)
+		_, cfg, l, _, done := setupLoggerAndConfig[EnvDumpConfig](context.Background(), c)
 		defer done()
 
 		envn := os.Environ()

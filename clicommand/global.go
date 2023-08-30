@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -9,7 +10,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/oleiade/reflections"
@@ -102,6 +103,9 @@ var RedactedVars = cli.StringSliceFlag{
 		"*_PRIVATE_KEY",
 		"*_ACCESS_KEY",
 		"*_SECRET_KEY",
+		// Connection strings frequently contain passwords, e.g.
+		// https://user:pass@host/ or Server=foo;Database=my-db;User Id=user;Password=pass;
+		"*_CONNECTION_STRING",
 	},
 }
 
@@ -182,23 +186,28 @@ func HandleProfileFlag(l logger.Logger, cfg any) func() {
 	return func() {}
 }
 
-func HandleGlobalFlags(l logger.Logger, cfg any) func() {
+func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.Context, func()) {
 	// Enable experiments
 	experimentNames, err := reflections.GetField(cfg, "Experiments")
-	if err == nil {
-		experimentNamesSlice, ok := experimentNames.([]string)
-		if ok {
-			for _, name := range experimentNamesSlice {
-				state := experiments.EnableWithWarnings(l, name)
-				if state == experiments.StateKnown {
-					l.Debug("Enabled experiment %q", name)
-				}
-			}
+	if err != nil {
+		return ctx, HandleProfileFlag(l, cfg)
+	}
+
+	experimentNamesSlice, ok := experimentNames.([]string)
+	if !ok {
+		return ctx, HandleProfileFlag(l, cfg)
+	}
+
+	for _, name := range experimentNamesSlice {
+		nctx, state := experiments.EnableWithWarnings(ctx, l, name)
+		if state == experiments.StateKnown {
+			l.Debug("Enabled experiment %q", name)
 		}
+		ctx = nctx
 	}
 
 	// Handle profiling flag
-	return HandleProfileFlag(l, cfg)
+	return ctx, HandleProfileFlag(l, cfg)
 }
 
 func handleLogLevelFlag(l logger.Logger, cfg any) error {
@@ -287,7 +296,8 @@ func withConfigFilePaths(paths []string) func(*cliconfig.Loader) {
 // future to clean up other resources. Importantly, the calling code does not
 // need to know or care about what the returned function does, only that it
 // must defer it.
-func setupLoggerAndConfig[T any](c *cli.Context, opts ...configOpts) (
+func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...configOpts) (
+	newCtx context.Context,
 	cfg T,
 	l logger.Logger,
 	f *cliconfig.File,
@@ -319,5 +329,6 @@ func setupLoggerAndConfig[T any](c *cli.Context, opts ...configOpts) (
 	}
 
 	// Setup any global configuration options
-	return cfg, l, loader.File, HandleGlobalFlags(l, cfg)
+	ctx, done = HandleGlobalFlags(ctx, l, cfg)
+	return ctx, cfg, l, loader.File, done
 }

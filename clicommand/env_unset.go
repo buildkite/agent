@@ -13,30 +13,31 @@ import (
 
 const envUnsetHelpDescription = `Usage:
 
-   buildkite-agent env unset [variables]
+    buildkite-agent env unset [variables]
 
 Description:
-   Unsets environment variables in the current job execution environment.
-   Changes to the job environment variables only apply to subsequent phases of the job.
-   This command cannot unset Buildkite read-only variables.
 
-   To read the new values of variables from within the current phase, use ′env get′.
+Unsets environment variables in the current job execution environment.
+Changes to the job environment variables only apply to subsequent phases of the job.
+This command cannot unset Buildkite read-only variables.
 
-   Note that this subcommand is only available from within the job executor with the job-api experiment enabled.
+To read the new values of variables from within the current phase, use ′env get′.
+
+Note that this subcommand is only available from within the job executor with the job-api experiment enabled.
 
 Examples:
 
-   Unsetting the variables ′LLAMA′ and ′ALPACA′)
+Unsetting the variables ′LLAMA′ and ′ALPACA′:
 
-   $ buildkite-agent env unset LLAMA ALPACA
-   Unset:
-   - ALPACA
-   - LLAMA
+    $ buildkite-agent env unset LLAMA ALPACA
+    Unset:
+    - ALPACA
+    - LLAMA
 
-   Unsetting the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied over standard input
+Unsetting the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied over standard input
 
-   $ echo '["LLAMA","ALPACA"]' | buildkite-agent env unset --input-format=json --output-format=quiet -
-`
+    $ echo '["LLAMA","ALPACA"]' | \
+        buildkite-agent env unset --input-format=json --output-format=quiet -`
 
 type EnvUnsetConfig struct {
 	InputFormat  string `cli:"input-format"`
@@ -80,7 +81,7 @@ var EnvUnsetCommand = cli.Command{
 
 func envUnsetAction(c *cli.Context) error {
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[EnvUnsetConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[EnvUnsetConfig](ctx, c)
 	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)

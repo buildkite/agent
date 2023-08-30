@@ -11,25 +11,24 @@ import (
 
 const lockGetHelpDescription = `Usage:
 
-   buildkite-agent lock get [key]
+    buildkite-agent lock get [key]
 
 Description:
-   Retrieves the value of a lock key. Any key not in use returns an empty
-   string.
 
-   Note that this subcommand is only available when an agent has been started
-   with the ′agent-api′ experiment enabled.
+Retrieves the value of a lock key. Any key not in use returns an empty
+string.
 
-   ′lock get′ is generally only useful for inspecting lock state, as the value
-   can change concurrently. To acquire or release a lock, use ′lock acquire′ and
-   ′lock release′.
+Note that this subcommand is only available when an agent has been started
+with the ′agent-api′ experiment enabled.
+
+′lock get′ is generally only useful for inspecting lock state, as the value
+can change concurrently. To acquire or release a lock, use ′lock acquire′ and
+′lock release′.
 
 Examples:
 
-   $ buildkite-agent lock get llama
-   Kuzco
-
-`
+    $ buildkite-agent lock get llama
+    Kuzco`
 
 type LockGetConfig struct {
 	// Common config options
@@ -60,7 +59,7 @@ func lockGetAction(c *cli.Context) error {
 	key := c.Args()[0]
 
 	ctx := context.Background()
-	cfg, l, _, done := setupLoggerAndConfig[LockGetConfig](c)
+	ctx, cfg, l, _, done := setupLoggerAndConfig[LockGetConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
