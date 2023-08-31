@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.53.0](https://github.com/buildkite/agent/tree/v3.53.0) (2023-08-31)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.52.1...v3.53.0)
+
+### Added
+- Artifact upload and download to/from Azure Blob Storage [#2318](https://github.com/buildkite/agent/pull/2318) (@DrJosh9000)
+
+### Fixed
+- Fix detection of missing commits on checkout [#2322](https://github.com/buildkite/agent/pull/2322) (@goodspark)
+- [Experimental] Handle the case when unmarshalling a step where there aren't any plugins [#2321](https://github.com/buildkite/agent/pull/2321) (@moskyb)
+- [Experimental] Fix signature mismatches when steps have plugins [#2339](https://github.com/buildkite/agent/pull/2339), [#2319](https://github.com/buildkite/agent/pull/2319) (@DrJosh9000)
+- [Experimental] Catch step env/job env edge case [#2340](https://github.com/buildkite/agent/pull/2340) (@DrJosh9000)
+
+### Changed
+- Retry fork/exec errors when running hook [#2325](https://github.com/buildkite/agent/pull/2325) (@triarius)
+
+### Internal
+- Fix ECR authentication failure [#2337](https://github.com/buildkite/agent/pull/2337), [#2335](https://github.com/buildkite/agent/pull/2335), [#2334](https://github.com/buildkite/agent/pull/2334) (@DrJosh9000)
+- Split checkout, artifact, and plugin phases out of executor.go [#2324](https://github.com/buildkite/agent/pull/2324) (@triarius)
+- Store experiments in contexts [#2316](https://github.com/buildkite/agent/pull/2316) (@DrJosh9000)
+
 ## [v3.52.1](https://github.com/buildkite/agent/tree/v3.52.1) (2023-08-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.52.0...v3.52.1)
 
