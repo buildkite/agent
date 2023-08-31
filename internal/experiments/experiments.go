@@ -32,6 +32,7 @@ const (
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
 	AvoidRecursiveTrap         = "avoid-recursive-trap"
 	IsolatedPluginCheckout     = "isolated-plugin-checkout"
+	UseZZGlob                  = "use-zzglob"
 
 	// Promoted experiments
 	ANSITimestamps    = "ansi-timestamps"
@@ -51,6 +52,7 @@ var (
 		ResolveCommitAfterCheckout: {},
 		AvoidRecursiveTrap:         {},
 		IsolatedPluginCheckout:     {},
+		UseZZGlob:                  {},
 	}
 
 	Promoted = map[string]string{

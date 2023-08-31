@@ -38,6 +38,7 @@ After repository checkout, resolve `BUILDKITE_COMMIT` to a commit hash. This mak
 **Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
 
 ### `kubernetes-exec`
+
 Modifies `start` and `bootstrap` in such a way that they can run in separate Kubernetes containers in the same pod.
 
 Currently, this experiment is being used by [agent-stack-k8s](https://github.com/buildkite/agent-stack-k8s).
@@ -99,6 +100,20 @@ https://github.com/buildkite/agent/blob/40b8a5f3794b04bd64da6e2527857add849a35bd
 **Status:** Since the default behaviour is buggy, we will be promoting this to non-experiment soon™️.
 
 ### `isolated-plugin-checkout`
+
 Checks out each plugin to an directory that that is namespaced by the agent name. Thus each agent worker will have an isolated copy of the plugin. This removes the need to lock the plugin checkout directories in a single agent process with spawned workers. However, if your plugin directory is shared between multiple agent processes *with the same agent name* , you may run into race conditions. This is just one reason we recommend you ensure agents have unique names.
 
-***Status:*** Likely to be the default behaviour in the future.
+**Status:** Likely to be the default behaviour in the future.
+
+### `use-zzglob`
+
+Uses a different library for resolving glob expressions used for `artifact upload`.
+The new glob library should resolve a few issues experienced with the old library:
+
+- Because `**` is used to mean "zero or more path segments", `/**/` should match `/`.
+- Directories that cannot match the glob pattern shouldn't be walked while resolving the pattern. Failure to do this makes `artifact upload` difficult to use when run in a directory containing a mix of subdirectories with different permissions.
+- Failures to walk potential file paths should be reported individually.
+
+The new library should handle all syntax supported by the old library, but because of the chance of incompatibilities and bugs, we're providing it via experiment only for now.
+
+**Status:** Since using the old library causes problems, we hope to promote this to be the default soon™️.

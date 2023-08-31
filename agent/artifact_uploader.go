@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DrJosh9000/zzglob"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/internal/experiments"
@@ -22,7 +24,7 @@ import (
 	"github.com/buildkite/agent/v3/pool"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
-	zglob "github.com/mattn/go-zglob"
+	"github.com/mattn/go-zglob"
 )
 
 const (
@@ -125,19 +127,46 @@ func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifa
 
 		a.logger.Debug("Searching for %s", globPath)
 
-		// Resolve the globs (with * and ** in them), if it's a non-globbed path and doesn't exists
-		// then we will get the ErrNotExist that is handled below
-		globfunc := zglob.Glob
-		if a.conf.GlobResolveFollowSymlinks {
-			// Follow symbolic links for files & directories while expanding globs
-			globfunc = zglob.GlobFollowSymlinks
-		}
-		files, err := globfunc(globPath)
-		if errors.Is(err, os.ErrNotExist) {
-			a.logger.Info("File not found: %s", globPath)
-			continue
-		} else if err != nil {
-			return nil, fmt.Errorf("resolving glob: %w", err)
+		// Resolve the globs (with * and ** in them)
+		var files []string
+		if experiments.IsEnabled(ctx, experiments.UseZZGlob) {
+			// New zzglob library.
+			pattern, err := zzglob.Parse(globPath)
+			if err != nil {
+				return nil, fmt.Errorf("invalid glob pattern: %w", err)
+			}
+
+			walkDirFunc := func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					a.logger.Warn("Couldn't walk path %s", path)
+					return nil
+				}
+				if d != nil && d.IsDir() {
+					a.logger.Warn("Glob pattern %s matched a directory %s", globPath, path)
+					return nil
+				}
+				files = append(files, path)
+				return nil
+			}
+			err = pattern.Glob(walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
+			if err != nil {
+				return nil, fmt.Errorf("globbing pattern: %w", err)
+			}
+		} else {
+			// Old go-zglob library.
+			globfunc := zglob.Glob
+			if a.conf.GlobResolveFollowSymlinks {
+				// Follow symbolic links for files & directories while expanding globs
+				globfunc = zglob.GlobFollowSymlinks
+			}
+			files, err = globfunc(globPath)
+			if errors.Is(err, os.ErrNotExist) {
+				a.logger.Info("File not found: %s", globPath)
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("resolving glob: %w", err)
+			}
 		}
 
 		// Process each glob match into an api.Artifact
