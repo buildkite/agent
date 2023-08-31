@@ -65,12 +65,14 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	// step. If they don't, we need to fail the job - more or less the only reason that the job and the step would have
 	// different fields would be if someone had modified the job on the backend after it was signed (aka crimes)
 	//
-	// However, this consistency check does not apply to `env::`:
-	// 1. Signature.Verify ensures every signed env var has the right value and
-	//    no signed vars are missing from the job env, and
+	// However, this consistency check does not apply entirely to `env::`:
+	// 1. Signature.Verify ensures every signed env var has the right value, and
 	// 2. step env can be overridden by the pipeline env, but each step only
 	//    knows about its own env. So the job env and step env can disagree
 	//    under normal circumstances.
+	// We still have to catch when a signature validates only because the step
+	// has an env var (not used to run the job), that is not present in the
+	// job env (is actually used).
 	signedFields := step.Signature.SignedFields
 
 	jobFields, err := r.conf.Job.ValuesForFields(signedFields)
@@ -84,7 +86,8 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	}
 
 	for _, field := range signedFields {
-		if strings.HasPrefix(field, pipeline.EnvNamespacePrefix) {
+		if strings.HasPrefix(field, pipeline.EnvNamespacePrefix) && jobFields[field] != "" {
+			// Signature.Verify handled this case.
 			continue
 		}
 

@@ -88,6 +88,19 @@ var (
 			"DEPLOY":            "crimes",
 		},
 	}
+
+	jobWithStepEnvButNoCorrespondingJobEnv = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+			Env:     map[string]string{"CRIMES": "disable"},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"DEPLOY":            "0",
+		},
+	}
 )
 
 func TestJobVerification(t *testing.T) {
@@ -205,6 +218,17 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step has a signature, but the env does not match, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedEnv,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain:        []string{"⚠️ ERROR"},
+		},
+		{
+			name:                     "when the step has a signature, but the step env is not in the job env, it fails signature verification",
+			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			job:                      jobWithStepEnvButNoCorrespondingJobEnv,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
