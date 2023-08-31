@@ -4,10 +4,10 @@ import (
 	"crypto/elliptic"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/ordered"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
@@ -22,12 +22,7 @@ func TestSignVerify(t *testing.T) {
 			},
 			{
 				Source: "another-plugin#v3.4.5",
-				Config: ordered.MapFromItems(
-					ordered.TupleSA{
-						Key:   "llama",
-						Value: "Kuzco",
-					},
-				),
+				Config: map[string]any{"llama": "Kuzco"},
 			},
 		},
 		Env: map[string]string{
@@ -313,5 +308,46 @@ func TestSignVerifyEnv(t *testing.T) {
 				t.Errorf("sig.Verify(CommandStep, verifier) = %v", err)
 			}
 		})
+	}
+}
+
+func TestSignatureStability(t *testing.T) {
+	t.Parallel()
+
+	// The idea here is to sign and verify a step that is likely to encode in a
+	// non-stable way if there are ordering bugs.
+
+	pluginSubCfg := make(map[string]any)
+	pluginCfg := map[string]any{
+		"subcfg": pluginSubCfg,
+	}
+	step := &CommandStep{
+		Command: "echo 'hello friend'",
+		Env:     make(map[string]string),
+		Plugins: Plugins{&Plugin{
+			Source: "huge-config#v1.0.0",
+			Config: pluginCfg,
+		}},
+	}
+	env := make(map[string]string)
+
+	// there are n! permutations of n items, but only one is correct
+	// 128! is absurdly large, and we fill four maps...
+	for i := 0; i < 128; i++ {
+		env[fmt.Sprintf("VAR%08x", rand.Uint32())] = fmt.Sprintf("VAL%08x", rand.Uint32())
+		step.Env[fmt.Sprintf("VAR%08x", rand.Uint32())] = fmt.Sprintf("VAL%08x", rand.Uint32())
+		pluginCfg[fmt.Sprintf("key%08x", rand.Uint32())] = fmt.Sprintf("value%08x", rand.Uint32())
+		pluginSubCfg[fmt.Sprintf("key%08x", rand.Uint32())] = fmt.Sprintf("value%08x", rand.Uint32())
+	}
+
+	signer, verifier := newECKeyPair(t, jwa.ES256, elliptic.P256())
+
+	sig, err := Sign(env, step, signer)
+	if err != nil {
+		t.Fatalf("Sign(env, CommandStep, signer) error = %v", err)
+	}
+
+	if err := sig.Verify(env, step, verifier); err != nil {
+		t.Errorf("sig.Verify(env, CommandStep, verifier) = %v", err)
 	}
 }

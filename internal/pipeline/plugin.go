@@ -27,7 +27,7 @@ type Plugin struct {
 }
 
 // MarshalJSON returns the plugin in "one-key object" form, or "single string"
-// form (no config, only plugin name). Plugin sources are marshalled into "full"
+// form (no config, only plugin source). Plugin sources are marshalled into "full"
 // form.
 func (p *Plugin) MarshalJSON() ([]byte, error) {
 	// NB: MarshalYAML (as seen below) never returns an error.
@@ -36,7 +36,7 @@ func (p *Plugin) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalYAML returns the plugin in either "one-item map" form, or "scalar"
-// form (no config, only plugin name). Plugin sources are marshalled into "full"
+// form (no config, only plugin source). Plugin sources are marshalled into "full"
 // form.
 func (p *Plugin) MarshalYAML() (any, error) {
 	if p.Config == nil {

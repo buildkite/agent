@@ -772,3 +772,53 @@ hello:
 		})
 	}
 }
+
+func TestToMapRecursive(t *testing.T) {
+	t.Parallel()
+
+	src := MapFromItems(
+		TupleSA{Key: "llama", Value: "Kuzco"},
+		TupleSA{Key: "alpaca", Value: "Geronimo"},
+		TupleSA{Key: "nil", Value: nil},
+		TupleSA{Key: "nested", Value: []any{
+			MapFromItems(
+				TupleSA{Key: "llama", Value: "Kuzco1"},
+				TupleSA{Key: "alpaca", Value: "Geronimo1"},
+			),
+			MapFromItems(
+				TupleSA{Key: "llama", Value: "Kuzco2"},
+				TupleSA{Key: "alpaca", Value: "Geronimo2"},
+				TupleSA{Key: "nested again", Value: MapFromItems(
+					TupleSA{Key: "llama", Value: "Kuzco3"},
+					TupleSA{Key: "alpaca", Value: "Geronimo3"},
+				)},
+			),
+		}},
+	)
+
+	got := ToMapRecursive(src)
+
+	want := map[string]any{
+		"llama":  "Kuzco",
+		"alpaca": "Geronimo",
+		"nil":    nil,
+		"nested": []any{
+			map[string]any{
+				"llama":  "Kuzco1",
+				"alpaca": "Geronimo1",
+			},
+			map[string]any{
+				"llama":  "Kuzco2",
+				"alpaca": "Geronimo2",
+				"nested again": map[string]any{
+					"llama":  "Kuzco3",
+					"alpaca": "Geronimo3",
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("ToMapRecursive output diff (-got +want):\n%s", diff)
+	}
+}
