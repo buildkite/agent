@@ -438,9 +438,11 @@ func TestRunWithOlfactor(t *testing.T) {
 			assert.Assert(t, err != nil)
 			assert.Equal(t, test.output, out.String())
 
+			smells := make(map[string]struct{}, len(test.smellsInOutput))
 			for _, smell := range test.smellsInOutput {
-				assert.Check(t, acmp.ErrorIs(err, shell.NewOlfactoryError(smell, nil)))
+				smells[smell] = struct{}{}
 			}
+			assert.Check(t, acmp.ErrorIs(err, shell.NewOlfactoryError(smells, nil)))
 		})
 	}
 

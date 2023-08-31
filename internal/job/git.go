@@ -62,11 +62,12 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 
 	const badReference = "fatal: reference is not a tree"
 	if err := sh.RunWithOlfactor(ctx, []string{badReference}, "git", commandArgs...); err != nil {
-		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smell == badReference {
+		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smelt(badReference) {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
 
-		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
+		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
+		// don't result in it
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorCheckoutRetryClean}
 		}
@@ -158,11 +159,12 @@ func gitFetch(
 		// reference to an object that it expects in the mirror, but the mirror
 		// no longer contains it (for whatever reason).
 		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smell == badObject {
+		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smelt(badObject) {
 			return &gitError{error: err, Type: gitErrorFetchBadObject}
 		}
 
-		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
+		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
+		// don't result in it
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorFetchRetryClean}
 		}

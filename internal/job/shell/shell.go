@@ -306,12 +306,13 @@ func (s *Shell) RunWithOlfactor(
 		PTY:    s.PTY,
 	}); err != nil {
 		// wrap err with the smells that were smelt
-		for _, smell := range smells {
+		smellSet := make(map[string]struct{})
+		for _, smell := range o.AllSmelt() {
 			if o.Smelt(smell) {
-				err = NewOlfactoryError(smell, err)
+				smellSet[smell] = struct{}{}
 			}
 		}
-		return err
+		return NewOlfactoryError(smellSet, err)
 	}
 
 	return nil

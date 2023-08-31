@@ -35,3 +35,8 @@ func New(dst io.Writer, smells []string) (io.Writer, *Olfactor) {
 func (d *Olfactor) Smelt(smell string) bool {
 	return d.smelt.PrefixExists(smell)
 }
+
+// AllSmelt returns all the smells that the Olfactor has smelt.
+func (d *Olfactor) AllSmelt() []string {
+	return d.smelt.Contents()
+}
