@@ -57,7 +57,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 		{"rev-parse", "HEAD"},
 	})
 
@@ -97,7 +97,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -163,7 +163,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		{"submodule", "foreach", "--recursive", "git reset --hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -224,7 +224,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -263,7 +263,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 		{"fetch", "--depth=1", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -326,7 +326,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -388,7 +388,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
