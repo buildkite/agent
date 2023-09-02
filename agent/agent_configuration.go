@@ -57,4 +57,5 @@ type AgentConfiguration struct {
 	AcquireJob                 string
 	TracingBackend             string
 	TracingServiceName         string
+	TraceLogGroups             bool
 }

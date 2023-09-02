@@ -94,6 +94,7 @@ type BootstrapConfig struct {
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
+	TraceLogGroups               bool     `cli:"trace-log-groups"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -355,6 +356,11 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
 			Value:  "buildkite-agent",
 		},
+		cli.BoolFlag{
+			Name:   "trace-log-groups",
+			Usage:  "Automatically creates tracing spans for log groups when tracing is enabled.",
+			EnvVar: "BUILDKITE_TRACE_LOG_GROUPS",
+		},
 		DebugFlag,
 		LogLevelFlag,
 		ExperimentsFlag,
@@ -439,6 +445,7 @@ var BootstrapCommand = cli.Command{
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
+			TraceLogGroups:               cfg.TraceLogGroups,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
