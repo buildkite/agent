@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/bintest/v3"
+	"gotest.tools/v3/assert"
 )
 
 func TestRunningPlugins(t *testing.T) {
@@ -321,7 +322,9 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	// You may be surprised that we're creating a branch here.  This is so we can test the behaviour
 	// when a branch has had new commits added to it.
-	p.gitRepository.CreateBranch("something-fixed")
+	err = p.gitRepository.CreateBranch("something-fixed")
+	assert.NilError(t, err)
+
 	// To test this, we also set our testPlugin to version "something-fixed", so that the agent will
 	// check out that ref.
 	p.versionTag = "something-fixed"
@@ -500,6 +503,8 @@ type testPlugin struct {
 }
 
 func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
+	t.Helper()
+
 	repo, err := newGitRepository()
 	if err != nil {
 		t.Fatalf("newGitRepository() error = %v", err)
@@ -534,6 +539,8 @@ func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 // modifyTestPlugin applies a change to a plugin's contents and makes a commit.  This is useful for
 // testing BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH behaviour.
 func modifyTestPlugin(t *testing.T, hooks map[string][]string, testPlugin *testPlugin) {
+	t.Helper()
+
 	repo := testPlugin.gitRepository
 
 	for hook, lines := range hooks {

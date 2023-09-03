@@ -2,9 +2,11 @@ package integration
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func createTestGitRespository() (*gitRepository, error) {
@@ -14,43 +16,51 @@ func createTestGitRespository() (*gitRepository, error) {
 	}
 
 	if err = repo.CreateBranch("main"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating main branch: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(repo.Path, "test.txt"), []byte("This is a test"), 0600); err != nil {
-		return nil, err
+	if err := os.WriteFile(
+		filepath.Join(repo.Path, "test.txt"),
+		[]byte("This is a test"),
+		0o600,
+	); err != nil {
+		return nil, fmt.Errorf("writing test.txt: %w", err)
 	}
 
 	if err = repo.Add("test.txt"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("adding test.txt: %w", err)
 	}
 
 	if err = repo.Commit("Initial Commit"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initial commit: %w", err)
 	}
 
 	if err = repo.CreateBranch("update-test-txt"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating branch: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(repo.Path, "test.txt"), []byte("This is a test pull request"), 0600); err != nil {
-		return nil, err
+	if err := os.WriteFile(
+		filepath.Join(repo.Path, "test.txt"),
+		[]byte("This is a test pull request"),
+		0o600,
+	); err != nil {
+		return nil, fmt.Errorf("writing to test.txt: %w", err)
 	}
 
 	if err = repo.Add("test.txt"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("adding test.txt again: %w", err)
 	}
 
 	if err = repo.Commit("PR Commit"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("commit PR Commit: %w", err)
 	}
 
 	if _, err = repo.Execute("update-ref", "refs/pull/123/head", "HEAD"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("updating ref: %w", err)
 	}
 
 	if err = repo.CheckoutBranch("main"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("checkout main: %w", err)
 	}
 
 	return repo, nil
@@ -136,9 +146,9 @@ func (gr *gitRepository) Execute(args ...string) (string, error) {
 	}
 	cmd := exec.Command(path, args...)
 	cmd.Dir = gr.Path
-	// log.Printf("$ git %v", args)
+	log.Printf("$ git %s", strings.Join(args, " "))
 	out, err := cmd.CombinedOutput()
-	// log.Printf("Result: %v %s", err, out)
+	log.Printf("Result: %v %s", err, out)
 	return string(out), err
 }
 

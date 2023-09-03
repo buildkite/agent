@@ -135,9 +135,7 @@ func NewBootstrapTester(ctx context.Context) (*ExecutorTester, error) {
 			"TEMP="+os.Getenv("TEMP"),
 		)
 	} else {
-		bt.Env = append(bt.Env,
-			"PATH="+pathDir+":"+os.Getenv("PATH"),
-		)
+		bt.Env = append(bt.Env, "PATH="+pathDir+":"+os.Getenv("PATH"))
 	}
 
 	// Create a mock used for hook assertions
@@ -282,7 +280,7 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 
 	buf := &buffer{}
 
-	if os.Getenv(`DEBUG_BOOTSTRAP`) == "1" {
+	if os.Getenv("DEBUG_BOOTSTRAP") == "1" {
 		w := newTestLogWriter(t)
 		e.cmd.Stdout = io.MultiWriter(buf, w)
 		e.cmd.Stderr = io.MultiWriter(buf, w)
