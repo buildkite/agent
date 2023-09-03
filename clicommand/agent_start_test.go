@@ -11,6 +11,8 @@ import (
 )
 
 func setupHooksPath(t *testing.T) (string, func()) {
+	t.Helper()
+
 	hooksPath, err := os.MkdirTemp("", "")
 	if err != nil {
 		assert.FailNow(t, "failed to create temp file: %v", err)
@@ -19,6 +21,8 @@ func setupHooksPath(t *testing.T) (string, func()) {
 }
 
 func writeAgentHook(t *testing.T, dir, hookName string) string {
+	t.Helper()
+
 	var filename, script string
 	if runtime.GOOS == "windows" {
 		filename = hookName + ".bat"
@@ -28,13 +32,15 @@ func writeAgentHook(t *testing.T, dir, hookName string) string {
 		script = "echo hello world"
 	}
 	filepath := filepath.Join(dir, filename)
-	if err := os.WriteFile(filepath, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(filepath, []byte(script), 0o755); err != nil {
 		assert.FailNow(t, "failed to write %q hook: %v", hookName, err)
 	}
 	return filepath
 }
 
 func TestAgentStartupHook(t *testing.T) {
+	t.Parallel()
+
 	cfg := func(hooksPath string) AgentStartConfig {
 		return AgentStartConfig{
 			HooksPath: hooksPath,
@@ -45,7 +51,10 @@ func TestAgentStartupHook(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		prompt = ">"
 	}
+
 	t.Run("with agent-startup hook", func(t *testing.T) {
+		t.Parallel()
+
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-startup")
@@ -59,7 +68,10 @@ func TestAgentStartupHook(t *testing.T) {
 			}, log.Messages)
 		}
 	})
+
 	t.Run("with no agent-startup hook", func(t *testing.T) {
+		t.Parallel()
+
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
@@ -69,7 +81,10 @@ func TestAgentStartupHook(t *testing.T) {
 			assert.Equal(t, []string{}, log.Messages)
 		}
 	})
+
 	t.Run("with bad hooks path", func(t *testing.T) {
+		t.Parallel()
+
 		log := logger.NewBuffer()
 		err := agentStartupHook(log, cfg("zxczxczxc"))
 
@@ -80,6 +95,8 @@ func TestAgentStartupHook(t *testing.T) {
 }
 
 func TestAgentShutdownHook(t *testing.T) {
+	t.Parallel()
+
 	cfg := func(hooksPath string) AgentStartConfig {
 		return AgentStartConfig{
 			HooksPath: hooksPath,
@@ -90,7 +107,10 @@ func TestAgentShutdownHook(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		prompt = ">"
 	}
+
 	t.Run("with agent-shutdown hook", func(t *testing.T) {
+		t.Parallel()
+
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-shutdown")
@@ -102,7 +122,10 @@ func TestAgentShutdownHook(t *testing.T) {
 			"[info] hello world",                // output
 		}, log.Messages)
 	})
+
 	t.Run("with no agent-shutdown hook", func(t *testing.T) {
+		t.Parallel()
+
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
@@ -110,7 +133,10 @@ func TestAgentShutdownHook(t *testing.T) {
 		agentShutdownHook(log, cfg(hooksPath))
 		assert.Equal(t, []string{}, log.Messages)
 	})
+
 	t.Run("with bad hooks path", func(t *testing.T) {
+		t.Parallel()
+
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg("zxczxczxc"))
 		assert.Equal(t, []string{}, log.Messages)

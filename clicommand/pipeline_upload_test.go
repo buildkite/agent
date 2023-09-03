@@ -209,6 +209,8 @@ func TestInjectAlgorithm(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			key := tc.keyFunc(t)
 			err := key.Set(jwk.KeyIDKey, tc.keyName)
 			if err != nil {
