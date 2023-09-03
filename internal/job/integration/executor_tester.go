@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,9 +18,9 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	"gotest.tools/v3/assert"
 
 	"github.com/buildkite/bintest/v3"
@@ -335,8 +334,7 @@ func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
-	err := e.Run(t, env...)
-	if serr := new(clicommand.SilentExitError); errors.As(err, &serr) && serr.Code() != 0 {
+	if err := e.Run(t, env...); shell.GetExitCode(err) != 0 {
 		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
 	}
 
