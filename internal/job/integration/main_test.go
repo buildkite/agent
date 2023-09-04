@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 		}
 
 		if err := app.Run(os.Args); err != nil {
-			os.Exit(clicommand.ErrToExitCode(err))
+			os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
 		}
 
 		return
