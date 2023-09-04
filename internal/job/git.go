@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/olfactor"
 	"github.com/buildkite/shellwords"
 )
 
@@ -44,7 +45,12 @@ func (e *gitError) Unwrap() error {
 
 type shellRunner interface {
 	Run(ctx context.Context, cmd string, args ...string) error
-	RunWithOlfactor(ctx context.Context, smells []string, cmd string, args ...string) error
+	RunWithOlfactor(
+		ctx context.Context,
+		smells []string,
+		cmd string,
+		args ...string,
+	) (*olfactor.Olfactor, error)
 }
 
 func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, reference string) error {
@@ -61,8 +67,8 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 	commandArgs = append(commandArgs, reference)
 
 	const badReference = "fatal: reference is not a tree"
-	if err := sh.RunWithOlfactor(ctx, []string{badReference}, "git", commandArgs...); err != nil {
-		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smelt(badReference) {
+	if o, err := sh.RunWithOlfactor(ctx, []string{badReference}, "git", commandArgs...); err != nil {
+		if o.Smelt(badReference) {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
 
@@ -152,14 +158,14 @@ func gitFetch(
 	}
 
 	const badObject = "fatal: bad object"
-	if err := sh.RunWithOlfactor(ctx, []string{badObject}, "git", commandArgs...); err != nil {
+	if o, err := sh.RunWithOlfactor(ctx, []string{badObject}, "git", commandArgs...); err != nil {
 		// "fatal: bad object" can happen when the local repo in the checkout
 		// directory is corrupted, not just the remote or the mirror.
 		// When using git mirrors, the existing checkout directory might have a
 		// reference to an object that it expects in the mirror, but the mirror
 		// no longer contains it (for whatever reason).
 		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smelt(badObject) {
+		if o.Smelt(badObject) {
 			return &gitError{error: err, Type: gitErrorFetchBadObject}
 		}
 

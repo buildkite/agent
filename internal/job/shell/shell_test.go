@@ -3,6 +3,7 @@ package shell_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,7 +17,6 @@ import (
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 	"gotest.tools/v3/assert"
-	acmp "gotest.tools/v3/assert/cmp"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
@@ -419,6 +419,13 @@ func TestRunWithOlfactor(t *testing.T) {
 			output:         "bye, how were you\n",
 			smellsInOutput: []string{"bye", "how"},
 		},
+		{
+			name:           "smells_when_exit_0",
+			smellsToSniff:  []string{"how"},
+			command:        []string{"bash", "-ec", "echo hi, how are you?"},
+			output:         "hi, how are you?\n",
+			smellsInOutput: []string{"how"},
+		},
 	} {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
@@ -429,35 +436,21 @@ func TestRunWithOlfactor(t *testing.T) {
 
 			out := &bytes.Buffer{}
 			sh.Writer = out
-			err = sh.RunWithOlfactor(
+			o, err := sh.RunWithOlfactor(
 				context.Background(),
 				test.smellsToSniff,
 				test.command[0],
 				test.command[1:]...,
 			)
-			assert.Assert(t, err != nil)
-			assert.Equal(t, test.output, out.String())
-
-			smells := make(map[string]struct{}, len(test.smellsInOutput))
-			for _, smell := range test.smellsInOutput {
-				smells[smell] = struct{}{}
+			if eerr := new(exec.ExitError); !errors.As(err, &eerr) {
+				assert.NilError(t, err)
 			}
-			assert.Check(t, acmp.ErrorIs(err, shell.NewOlfactoryError(smells, nil)))
+			assert.Equal(t, test.output, out.String())
+			for _, smell := range test.smellsInOutput {
+				assert.Check(t, o.Smelt(smell))
+			}
 		})
 	}
-
-	t.Run("smells_nothing_when_exit_0", func(t *testing.T) {
-		t.Parallel()
-
-		sh, err := shell.New()
-		assert.NilError(t, err)
-
-		out := &bytes.Buffer{}
-		sh.Writer = out
-		err = sh.RunWithOlfactor(context.Background(), []string{"hi"}, "bash", "-ec", "echo hi")
-		assert.NilError(t, err)
-		assert.Check(t, acmp.Equal(out.String(), "hi\n"))
-	})
 }
 
 func TestRunWithoutPrompt(t *testing.T) {

@@ -284,7 +284,7 @@ func (s *Shell) RunWithOlfactor(
 	smells []string,
 	command string,
 	arg ...string,
-) error {
+) (*olfactor.Olfactor, error) {
 	formatted := process.FormatCommand(command, arg)
 	if s.stdin == nil {
 		s.Promptf("%s", formatted)
@@ -296,26 +296,15 @@ func (s *Shell) RunWithOlfactor(
 	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
-		return err
+		return nil, err
 	}
 
 	w, o := olfactor.New(s.Writer, smells)
-	if err := s.executeCommand(ctx, cmd, w, executeFlags{
+	return o, s.executeCommand(ctx, cmd, w, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
-	}); err != nil {
-		// wrap err with the smells that were smelt
-		smellSet := make(map[string]struct{})
-		for _, smell := range o.AllSmelt() {
-			if o.Smelt(smell) {
-				smellSet[smell] = struct{}{}
-			}
-		}
-		return NewOlfactoryError(smellSet, err)
-	}
-
-	return nil
+	})
 }
 
 // RunWithoutPrompt runs a command, writes stdout and err to the logger,

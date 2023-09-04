@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/olfactor"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -239,6 +240,8 @@ func TestGitFetch(t *testing.T) {
 	require.NoError(t, err)
 }
 
+var _ shellRunner = (*mockShellRunner)(nil)
+
 // mockShellRunner implements shellRunner for testing expected calls.
 type mockShellRunner struct {
 	got, want [][]string
@@ -259,9 +262,9 @@ func (r *mockShellRunner) RunWithOlfactor(
 	_ []string,
 	cmd string,
 	args ...string,
-) error {
+) (*olfactor.Olfactor, error) {
 	r.got = append(r.got, append([]string{cmd}, args...))
-	return nil
+	return nil, nil
 }
 
 func (r *mockShellRunner) Check(t *testing.T) {
