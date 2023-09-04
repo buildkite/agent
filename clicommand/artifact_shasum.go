@@ -113,12 +113,7 @@ var ArtifactShasumCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactShasumConfig](ctx, c)
 		defer done()
-
-		if err := searchAndPrintShaSum(ctx, cfg, l, os.Stdout); err != nil {
-			return err
-		}
-
-		return nil
+		return searchAndPrintShaSum(ctx, cfg, l, os.Stdout)
 	},
 }
 
