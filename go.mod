@@ -34,7 +34,7 @@ require (
 	github.com/urfave/cli v1.22.14
 	go.opentelemetry.io/contrib/propagators/aws v1.17.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.17.0
-	go.opentelemetry.io/contrib/propagators/jaeger v1.17.0
+	go.opentelemetry.io/contrib/propagators/jaeger v1.18.0
 	go.opentelemetry.io/contrib/propagators/ot v1.18.0
 	go.opentelemetry.io/otel v1.17.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.17.0
