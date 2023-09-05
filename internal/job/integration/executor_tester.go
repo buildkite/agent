@@ -20,10 +20,8 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job/shell"
-	"gotest.tools/v3/assert"
-
 	"github.com/buildkite/bintest/v3"
+	"gotest.tools/v3/assert"
 )
 
 // ExecutorTester invokes a buildkite-agent bootstrap script with a temporary environment
@@ -333,11 +331,8 @@ func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 // Run the bootstrap and then check the mocks
 func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
-
-	if err := e.Run(t, env...); shell.GetExitCode(err) != 0 {
-		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
-	}
-
+	err := e.Run(t, env...)
+	assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
 	e.CheckMocks(t)
 }
 
