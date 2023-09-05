@@ -29,11 +29,10 @@ func TestMain(m *testing.M) {
 		}
 
 		if err := app.Run(os.Args); err != nil {
-			fmt.Printf("%v\n", err)
-			os.Exit(1)
+			os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
 		}
 
-		os.Exit(0)
+		return
 	}
 
 	if os.Getenv("BINTEST_DEBUG") == "1" {

@@ -13,6 +13,8 @@ import (
 )
 
 func newArtifactTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
 		case "/builds/buildid/artifacts/search?query=foo.%2A&state=finished":
@@ -24,6 +26,8 @@ func newArtifactTestServer(t *testing.T) *httptest.Server {
 }
 
 func TestSearchAndPrintSha1Sum(t *testing.T) {
+	t.Parallel()
+
 	server := newArtifactTestServer(t)
 	defer server.Close()
 
@@ -47,6 +51,8 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 }
 
 func TestSearchAndPrintSha256Sum(t *testing.T) {
+	t.Parallel()
+
 	server := newArtifactTestServer(t)
 	defer server.Close()
 

@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
@@ -361,7 +362,7 @@ var BootstrapCommand = cli.Command{
 		ProfileFlag,
 		StrictSingleHooksFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
@@ -378,13 +379,13 @@ var BootstrapCommand = cli.Command{
 			case "plugin", "checkout", "command":
 				// Valid phase
 			default:
-				l.Fatal("Invalid phase %q", phase)
+				return fmt.Errorf("invalid phase %q", phase)
 			}
 		}
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
-			l.Fatal("Failed to parse cancel-signal: %v", err)
+			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
 		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
@@ -465,7 +466,9 @@ var BootstrapCommand = cli.Command{
 			defer signalMu.Unlock()
 
 			// Cancel the bootstrap
-			bootstrap.Cancel()
+			if err := bootstrap.Cancel(); err != nil {
+				l.Debug("Failed to cancel bootstrap: %v", err)
+			}
 
 			// Track the state and signal used
 			cancelled = true
@@ -496,6 +499,6 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
-		os.Exit(exitCode)
+		return &SilentExitError{code: exitCode}
 	},
 }

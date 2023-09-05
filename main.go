@@ -50,7 +50,7 @@ Options:
 `
 
 func printVersion(c *cli.Context) {
-	fmt.Printf("%v version %v, build %v\n", c.App.Name, c.App.Version, version.BuildVersion())
+	fmt.Fprintf(c.App.Writer, "%v version %v, build %v\n", c.App.Name, c.App.Version, version.BuildVersion())
 }
 
 func main() {
@@ -143,18 +143,17 @@ func main() {
 
 	// When no sub command is used
 	app.Action = func(c *cli.Context) {
-		cli.ShowAppHelp(c)
+		_ = cli.ShowAppHelp(c)
 		os.Exit(1)
 	}
 
 	// When a sub command can't be found
 	app.CommandNotFound = func(c *cli.Context, command string) {
-		cli.ShowAppHelp(c)
+		_ = cli.ShowAppHelp(c)
 		os.Exit(1)
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
+		os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
 	}
 }

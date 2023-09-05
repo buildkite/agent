@@ -2,8 +2,8 @@ package clicommand
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
 
 	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
@@ -54,28 +54,28 @@ var LockGetCommand = cli.Command{
 func lockGetAction(c *cli.Context) error {
 	if c.NArg() != 1 {
 		fmt.Fprint(c.App.ErrWriter, lockGetHelpDescription)
-		os.Exit(1)
+		return &SilentExitError{code: 1}
 	}
 	key := c.Args()[0]
 
-	ctx := context.Background()
-	ctx, cfg, l, _, done := setupLoggerAndConfig[LockGetConfig](ctx, c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockGetConfig](context.Background(), c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		return errors.New("only 'machine' scope for locks is supported in this version.")
 	}
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		return fmt.Errorf(lockClientErrMessage, err)
 	}
 
 	v, err := client.Get(ctx, key)
 	if err != nil {
-		l.Fatal("Couldn't get lock state: %v", err)
+		return fmt.Errorf("couldn't get lock state: %w", err)
 	}
 
 	fmt.Fprintln(c.App.Writer, v)
+
 	return nil
 }

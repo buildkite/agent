@@ -3,7 +3,6 @@ package clicommand
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
@@ -54,25 +53,24 @@ var LockReleaseCommand = cli.Command{
 func lockReleaseAction(c *cli.Context) error {
 	if c.NArg() != 2 {
 		fmt.Fprint(c.App.ErrWriter, lockReleaseHelpDescription)
-		os.Exit(1)
+		return &SilentExitError{code: 1}
 	}
 	key, token := c.Args()[0], c.Args()[1]
 
-	ctx := context.Background()
-	ctx, cfg, l, _, done := setupLoggerAndConfig[LockReleaseConfig](ctx, c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockReleaseConfig](context.Background(), c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		return fmt.Errorf("only 'machine' scope for locks is supported in this version.")
 	}
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		return fmt.Errorf(lockClientErrMessage, err)
 	}
 
 	if err := client.Unlock(ctx, key, token); err != nil {
-		l.Fatal("Could not release lock: %v", err)
+		return fmt.Errorf("could not release lock: %w", err)
 	}
 
 	return nil

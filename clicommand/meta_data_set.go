@@ -2,6 +2,8 @@ package clicommand
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -76,7 +78,7 @@ var MetaDataSetCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](ctx, c)
 		defer done()
@@ -87,17 +89,17 @@ var MetaDataSetCommand = cli.Command{
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				l.Fatal("Failed to read from STDIN: %s", err)
+				return fmt.Errorf("failed to read from STDIN: %w", err)
 			}
 			cfg.Value = string(input)
 		}
 
 		if strings.TrimSpace(cfg.Key) == "" {
-			l.Fatal("Key cannot be empty, or composed of only whitespace characters")
+			return errors.New("key cannot be empty, or composed of only whitespace characters")
 		}
 
 		if strings.TrimSpace(cfg.Value) == "" {
-			l.Fatal("Value cannot be empty, or composed of only whitespace characters")
+			return errors.New("value cannot be empty, or composed of only whitespace characters")
 		}
 
 		// Create the API client
@@ -124,7 +126,9 @@ var MetaDataSetCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to set meta-data: %s", err)
+			return fmt.Errorf("failed to set meta-data: %w", err)
 		}
+
+		return nil
 	},
 }

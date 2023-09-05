@@ -2,8 +2,8 @@ package clicommand
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/buildkite/agent/v3/lock"
@@ -74,16 +74,15 @@ var LockAcquireCommand = cli.Command{
 func lockAcquireAction(c *cli.Context) error {
 	if c.NArg() != 1 {
 		fmt.Fprint(c.App.ErrWriter, lockAcquireHelpDescription)
-		os.Exit(1)
+		return &SilentExitError{code: 1}
 	}
 	key := c.Args()[0]
 
-	ctx := context.Background()
-	ctx, cfg, l, _, done := setupLoggerAndConfig[LockAcquireConfig](ctx, c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockAcquireConfig](context.Background(), c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		return errors.New("only 'machine' scope for locks is supported in this version.")
 	}
 
 	if cfg.LockWaitTimeout != 0 {
@@ -94,14 +93,14 @@ func lockAcquireAction(c *cli.Context) error {
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		return fmt.Errorf(lockClientErrMessage, err)
 	}
 
 	token, err := client.Lock(ctx, key)
 	if err != nil {
-		l.Fatal("Could not acquire lock: %v\n", err)
+		return fmt.Errorf("could not acquire lock: %w", err)
 	}
 
-	fmt.Fprintln(c.App.Writer, token)
-	return nil
+	_, err = fmt.Fprintln(c.App.Writer, token)
+	return err
 }

@@ -78,7 +78,7 @@ var MetaDataGetCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataGetConfig](ctx, c)
 		defer done()
@@ -122,15 +122,20 @@ var MetaDataGetCommand = cli.Command{
 			// We also use `IsSet` instead of `cfg.Default != ""`
 			// to allow people to use a default of a blank string.
 			if resp.StatusCode == 404 && c.IsSet("default") {
-				l.Warn("No meta-data value exists with key `%s`, returning the supplied default \"%s\"", cfg.Key, cfg.Default)
+				l.Warn(
+					"No meta-data value exists with key %q, returning the supplied default %q",
+					cfg.Key,
+					cfg.Default,
+				)
 				fmt.Fprint(c.App.Writer, cfg.Default)
-				return
+				return nil
 			}
 
-			l.Fatal("Failed to get meta-data: %s", err)
+			return fmt.Errorf("failed to get meta-data: %w", err)
 		}
 
-		// Output the value to STDOUT
-		fmt.Fprint(c.App.Writer, metaData.Value)
+		// TODO: in the next agent magor version, we should terminate with a newline using fmt.FPrintln
+		_, err := fmt.Fprint(c.App.Writer, metaData.Value)
+		return err
 	},
 }

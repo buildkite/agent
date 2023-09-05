@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -104,10 +105,11 @@ var AnnotationRemoveCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to remove annotation: %s", err)
+			return fmt.Errorf("failed to remove annotation: %w", err)
 		}
 
 		l.Debug("Successfully removed annotation")
+
 		return nil
 	},
 }

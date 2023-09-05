@@ -20,6 +20,8 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job/shell"
+	"gotest.tools/v3/assert"
 
 	"github.com/buildkite/bintest/v3"
 )
@@ -132,9 +134,7 @@ func NewBootstrapTester(ctx context.Context) (*ExecutorTester, error) {
 			"TEMP="+os.Getenv("TEMP"),
 		)
 	} else {
-		bt.Env = append(bt.Env,
-			"PATH="+pathDir+":"+os.Getenv("PATH"),
-		)
+		bt.Env = append(bt.Env, "PATH="+pathDir+":"+os.Getenv("PATH"))
 	}
 
 	// Create a mock used for hook assertions
@@ -279,7 +279,7 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 
 	buf := &buffer{}
 
-	if os.Getenv(`DEBUG_BOOTSTRAP`) == "1" {
+	if os.Getenv("DEBUG_BOOTSTRAP") == "1" {
 		w := newTestLogWriter(t)
 		e.cmd.Stdout = io.MultiWriter(buf, w)
 		e.cmd.Stderr = io.MultiWriter(buf, w)
@@ -334,11 +334,8 @@ func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
-	err := e.Run(t, env...)
-	t.Logf("Bootstrap output:\n%s", e.Output)
-
-	if err != nil {
-		t.Fatalf("BootstrapTester.Run(%q) = %v", env, err)
+	if err := e.Run(t, env...); shell.GetExitCode(err) != 0 {
+		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
 	}
 
 	e.CheckMocks(t)

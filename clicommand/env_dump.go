@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/buildkite/agent/v3/env"
@@ -11,7 +12,7 @@ import (
 
 const envDumpHelpDescription = `Usage:
 
-buildkite-agent env dump [options]
+    buildkite-agent env dump [options]
 
 Description:
 
@@ -54,7 +55,7 @@ var EnvDumpCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
-		_, cfg, l, _, done := setupLoggerAndConfig[EnvDumpConfig](context.Background(), c)
+		_, cfg, _, _, done := setupLoggerAndConfig[EnvDumpConfig](context.Background(), c)
 		defer done()
 
 		envn := os.Environ()
@@ -72,7 +73,7 @@ var EnvDumpCommand = cli.Command{
 		}
 
 		if err := enc.Encode(envMap); err != nil {
-			l.Fatal("Error marshalling JSON: %v", err)
+			return fmt.Errorf("error marshalling JSON: %w", err)
 		}
 
 		return nil

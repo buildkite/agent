@@ -149,11 +149,10 @@ var ArtifactSearchCommand = cli.Command{
 		}
 
 		if len(artifacts) == 0 {
-			if cfg.AllowEmptyResults {
-				l.Info("No matches found for %q", cfg.Query)
-			} else {
-				l.Fatal("No matches found for %q", cfg.Query)
+			if !cfg.AllowEmptyResults {
+				return fmt.Errorf("no matches found for %q", cfg.Query)
 			}
+			l.Info("No matches found for %q", cfg.Query)
 		}
 
 		for _, artifact := range artifacts {

@@ -2,7 +2,7 @@ package clicommand
 
 import (
 	"context"
-	"os"
+	"fmt"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -73,7 +73,7 @@ var MetaDataExistsCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataExistsConfig](ctx, c)
 		defer done()
@@ -108,12 +108,13 @@ var MetaDataExistsCommand = cli.Command{
 			}
 			return nil
 		}); err != nil {
-			l.Fatal("Failed to see if meta-data exists: %s", err)
+			return fmt.Errorf("failed to see if meta-data exists: %w", err)
 		}
 
-		// If the meta data didn't exist, exit with an error.
 		if !exists.Exists {
-			os.Exit(100)
+			return &SilentExitError{code: 100}
 		}
+
+		return nil
 	},
 }

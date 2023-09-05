@@ -43,15 +43,15 @@ var AcknowledgementsCommand = cli.Command{
 		if err != nil {
 			f, err = files.Open("dummy.md.gz")
 			if err != nil {
-				return fmt.Errorf("Couldn't open any embedded acknowledgements files: %w", err)
+				return fmt.Errorf("couldn't open any embedded acknowledgements files: %w", err)
 			}
 		}
 		r, err := gzip.NewReader(f)
 		if err != nil {
-			return fmt.Errorf("Couldn't create a gzip reader: %w", err)
+			return fmt.Errorf("couldn't create a gzip reader: %w", err)
 		}
 		if _, err := io.Copy(c.App.Writer, r); err != nil {
-			return fmt.Errorf("Couldn't copy acknowledgments to output: %w", err)
+			return fmt.Errorf("couldn't copy acknowledgments to output: %w", err)
 		}
 		return nil
 	},

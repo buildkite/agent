@@ -2,8 +2,8 @@ package clicommand
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
 
 	"github.com/buildkite/agent/v3/lock"
 	"github.com/urfave/cli"
@@ -53,25 +53,24 @@ var LockDoneCommand = cli.Command{
 func lockDoneAction(c *cli.Context) error {
 	if c.NArg() != 1 {
 		fmt.Fprint(c.App.ErrWriter, lockDoneHelpDescription)
-		os.Exit(1)
+		return &SilentExitError{code: 1}
 	}
 	key := c.Args()[0]
 
-	ctx := context.Background()
-	ctx, cfg, l, _, done := setupLoggerAndConfig[LockDoneConfig](ctx, c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockDoneConfig](context.Background(), c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		l.Fatal("Only 'machine' scope for locks is supported in this version.")
+		return errors.New("only 'machine' scope for locks is supported in this version.")
 	}
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)
 	if err != nil {
-		l.Fatal(lockClientErrMessage, err)
+		return fmt.Errorf(lockClientErrMessage, err)
 	}
 
 	if err := client.DoOnceEnd(ctx, key); err != nil {
-		l.Fatal("Couldn't complete do-once lock: %v", err)
+		return fmt.Errorf("couldn't complete do-once lock: %w", err)
 	}
 
 	return nil
