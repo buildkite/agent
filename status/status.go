@@ -190,7 +190,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	data := &statusData{
 		Items:        rootItem.items,
 		Version:      version.Version(),
-		Build:        version.BuildVersion(),
+		Build:        version.BuildNumber(),
 		Hostname:     hostname,
 		Username:     username,
 		ExePath:      exepath,

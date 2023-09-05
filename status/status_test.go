@@ -46,7 +46,7 @@ func TestSmokeStatusTemplate(t *testing.T) {
 			},
 		},
 		Version:      version.Version(),
-		Build:        version.BuildVersion(),
+		Build:        version.BuildNumber(),
 		Hostname:     hostname,
 		Username:     username,
 		ExePath:      exepath,

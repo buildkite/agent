@@ -19,17 +19,17 @@ import (
 
 //go:embed VERSION
 var baseVersion string
-var buildVersion string
+var buildNumber string
 
 func Version() string {
 	return strings.TrimSpace(baseVersion)
 }
 
-func BuildVersion() string {
-	if buildVersion == "" {
+func BuildNumber() string {
+	if buildNumber == "" {
 		return "x"
 	}
-	return buildVersion
+	return buildNumber
 }
 
 func commitInfo() string {
@@ -55,9 +55,9 @@ func commitInfo() string {
 // [build metadata](https://semver.org/#spec-item-10) consisting of the build
 // number (if any), the commit hash, and whether the build was dirty.
 func FullVersion() string {
-	return fmt.Sprintf("%s+%s.%s", Version(), BuildVersion(), commitInfo())
+	return fmt.Sprintf("%s+%s.%s", Version(), BuildNumber(), commitInfo())
 }
 
 func UserAgent() string {
-	return "buildkite-agent/" + Version() + "." + BuildVersion() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+	return "buildkite-agent/" + Version() + "." + BuildNumber() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 }
