@@ -143,6 +143,11 @@ steps:
           - with: { os: openbsd, arch: arm64 }
             skip: "arm64 OpenBSD is not currently supported"
 
+  - label: ":bathtub: Check version string is clean"
+    key: check-version-string
+    depends_on: build-binary
+    command: .buildkite/steps/check-version-string.sh
+
   - name: ":technologist: Test bk cli + Agent cli"
     key: test-bk-cli
     depends_on: build-binary
