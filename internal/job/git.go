@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/olfactor"
 	"github.com/buildkite/shellwords"
 )
 
@@ -28,7 +29,10 @@ const (
 	gitErrorCleanSubmodules
 )
 
-var errNoHostname = errors.New("no hostname found")
+var (
+	errNoHostname = errors.New("no hostname found")
+	errInvalidRef = errors.New("is not a valid git ref format")
+)
 
 type gitError struct {
 	error
@@ -41,7 +45,12 @@ func (e *gitError) Unwrap() error {
 
 type shellRunner interface {
 	Run(ctx context.Context, cmd string, args ...string) error
-	RunWithOlfactor(ctx context.Context, smell string, cmd string, args ...string) error
+	RunWithOlfactor(
+		ctx context.Context,
+		smells []string,
+		cmd string,
+		args ...string,
+	) (*olfactor.Olfactor, error)
 }
 
 func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, reference string) error {
@@ -50,7 +59,7 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 		return err
 	}
 	if !gitCheckRefFormat(reference) {
-		return fmt.Errorf("%q is not a valid git ref format", reference)
+		return fmt.Errorf("%q %w", reference, errInvalidRef)
 	}
 
 	commandArgs := []string{"checkout"}
@@ -58,15 +67,17 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 	commandArgs = append(commandArgs, reference)
 
 	const badReference = "fatal: reference is not a tree"
-	if err := sh.RunWithOlfactor(ctx, badReference, "git", commandArgs...); err != nil {
-		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smell == badReference {
+	if o, err := sh.RunWithOlfactor(ctx, []string{badReference}, "git", commandArgs...); err != nil {
+		if o.Smelt(badReference) {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
 
-		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
+		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
+		// don't result in it
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorCheckoutRetryClean}
 		}
+
 		return &gitError{error: err, Type: gitErrorCheckout}
 	}
 
@@ -147,22 +158,23 @@ func gitFetch(
 	}
 
 	const badObject = "fatal: bad object"
-
-	if err := sh.RunWithOlfactor(ctx, badObject, "git", commandArgs...); err != nil {
+	if o, err := sh.RunWithOlfactor(ctx, []string{badObject}, "git", commandArgs...); err != nil {
 		// "fatal: bad object" can happen when the local repo in the checkout
 		// directory is corrupted, not just the remote or the mirror.
 		// When using git mirrors, the existing checkout directory might have a
 		// reference to an object that it expects in the mirror, but the mirror
 		// no longer contains it (for whatever reason).
 		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-		if oerr := new(shell.OlfactoryError); errors.As(err, &oerr) && oerr.Smell == badObject {
+		if o.Smelt(badObject) {
 			return &gitError{error: err, Type: gitErrorFetchBadObject}
 		}
 
-		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc, don't result in it
+		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
+		// don't result in it
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorFetchRetryClean}
 		}
+
 		return &gitError{error: err, Type: gitErrorFetch}
 	}
 

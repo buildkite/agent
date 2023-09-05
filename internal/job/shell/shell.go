@@ -281,10 +281,10 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 // will be nil whether or not the output contained `smell`.
 func (s *Shell) RunWithOlfactor(
 	ctx context.Context,
-	smell string,
+	smells []string,
 	command string,
 	arg ...string,
-) error {
+) (*olfactor.Olfactor, error) {
 	formatted := process.FormatCommand(command, arg)
 	if s.stdin == nil {
 		s.Promptf("%s", formatted)
@@ -296,22 +296,15 @@ func (s *Shell) RunWithOlfactor(
 	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
-		return err
+		return nil, err
 	}
 
-	w, o := olfactor.New(s.Writer, smell)
-	if err := s.executeCommand(ctx, cmd, w, executeFlags{
+	w, o := olfactor.New(s.Writer, smells)
+	return o, s.executeCommand(ctx, cmd, w, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
-	}); err != nil {
-		if o.Smelt() {
-			return NewOlfactoryError(smell, err)
-		}
-		return err
-	}
-
-	return nil
+	})
 }
 
 // RunWithoutPrompt runs a command, writes stdout and err to the logger,
