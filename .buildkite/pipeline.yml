@@ -90,6 +90,7 @@ steps:
       - test-race-linux-arm64
       - test-linux-arm64
       - test-windows
+    allow_dependency_failure: true
     plugins:
       - junit-annotate#v1.6.0:
           artifacts: junit-*.xml
