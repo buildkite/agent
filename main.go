@@ -50,7 +50,7 @@ Options:
 `
 
 func printVersion(c *cli.Context) {
-	fmt.Fprintf(c.App.Writer, "%v version %v, build %v\n", c.App.Name, c.App.Version, version.BuildVersion())
+	fmt.Fprintf(c.App.Writer, "%s %s\n", c.App.Name, version.FullVersion())
 }
 
 func main() {
