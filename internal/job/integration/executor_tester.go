@@ -332,7 +332,7 @@ func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 	err := e.Run(t, env...)
-	assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
+	assert.NilError(t, err, "executor output:\n%s", e.Output)
 	e.CheckMocks(t)
 }
 
