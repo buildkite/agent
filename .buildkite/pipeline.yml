@@ -4,8 +4,8 @@ agents:
   queue: agent-runners-linux-amd64
 
 steps:
-  - name: ":go: go fmt"
-    key: test-go-fmt
+  - name: ":go: Check go-fmt and go-mod-tidy"
+    key: check-go-fmt-mod-tidy
     command: ".buildkite/steps/test-go-fmt.sh"
     plugins:
       docker-compose#v4.14.0:
