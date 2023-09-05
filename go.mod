@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0
 	github.com/DataDog/datadog-go/v5 v5.3.0
 	github.com/DrJosh9000/zzglob v0.0.15
-	github.com/aws/aws-sdk-go v1.44.334
+	github.com/aws/aws-sdk-go v1.45.2
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.1.1
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
