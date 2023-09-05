@@ -254,11 +254,14 @@ steps:
   - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
     depends_on:
+      - check-go-fmt-mod-tidy
+      - check-code-generation
+      - check-version-string
       - test-windows
       - test-bk-cli
+      - test-docker-amd64
+      - test-docker-arm64
       - build-rpm-packages
       - build-debian-packages
       - build-github-release
-      - test-docker-amd64
-      - test-docker-arm64
     command: ".buildkite/steps/upload-release-steps.sh"
