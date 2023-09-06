@@ -7,8 +7,8 @@ macOS version          | Last Go version to support | Last Agent version to supp
 10.10 (Yosemite)       | [1.12][go112]              | [v3.15.2][agent3152]
 10.11 (El Capitan)     | [1.14][go114]              | [v3.25.0][agent3250]
 10.12 (Sierra)         | [1.16][go116]              | [v3.33.3][agent3333]
-10.13 (High Sierra)    | [1.20][go120]              | [v3.53.0][agent3530]
-10.14 (Mojave)         | [1.20][go120]              | [v3.53.0][agent3530]
+10.13 (High Sierra)    | [1.20][go120]              | [Latest release][latest]
+10.14 (Mojave)         | [1.20][go120]              | [Latest release][latest]
 10.15 (Catalina)       | TBC                        | [Latest release][latest]
 11 (Big Sur)           | TBC                        | [Latest release][latest]
 12 (Monterey)          | TBC                        | [Latest release][latest]
@@ -25,5 +25,4 @@ macOS version          | Last Go version to support | Last Agent version to supp
 [agent3152]: https://github.com/buildkite/agent/releases/tag/v3.15.2
 [agent3250]: https://github.com/buildkite/agent/releases/tag/v3.25.0
 [agent3333]: https://github.com/buildkite/agent/releases/tag/v3.33.3
-[agent3530]: https://github.com/buildkite/agent/releases/tag/v3.53.0
 [latest]: https://github.com/buildkite/agent/releases/
