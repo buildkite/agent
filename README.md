@@ -68,9 +68,9 @@ For example, agent version 3.45.6 is published as:
 #### Supported operating systems
 
 - Alpine 3.18
-- Ubuntu 18.04 LTS (x86_64), supported to end of life for 18.04
-- Ubuntu 20.04 LTS (x86_64), supported to end of life for 20.04
-- Ubuntu 22.04 LTS (x86_64), supported to end of life for 22.04
+- Ubuntu 18.04 LTS (x86_64), supported to end of standard support for 18.04
+- Ubuntu 20.04 LTS (x86_64), supported to end of standard support for 20.04
+- Ubuntu 22.04 LTS (x86_64), supported to end of standard support for 22.04
 
 ## Starting
 
@@ -183,9 +183,10 @@ like systems, as well as Windows.
   - 12 (Monterey)
   - 13 (Ventura)
 - Windows Server
-  - 2012
+  - 2012 R2
   - 2016
   - 2019
+  - 2022
 
 [^1]: See https://github.com/golang/go/issues/23011 for macOS / Go support and
 [Supported macOS Versions](./docs/macos.md) for the last supported version of the
