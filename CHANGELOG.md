@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.54.0](https://github.com/buildkite/agent/tree/v3.54.0) (2023-09-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.53.0...v3.54.0)
+
+> ⚠️ We're adjusting how the set of supported OS versions changes over time.
+> For the details, see [#2354](https://github.com/buildkite/agent/pull/2354).
+
+### Added
+- New experiment `use-zzglob`: uses a different library for resolving glob patterns in `buildkite-agent artifact upload` [#2341](https://github.com/buildkite/agent/pull/2341) (@DrJosh9000)
+
+### Changed
+- Logged errors might look different: errors passed back up to main.go from clicommand [#2347](https://github.com/buildkite/agent/pull/2347) (@triarius)
+- HEAD commit found faster: `git log` is now used to get commit information instead of `git show` [#2323](https://github.com/buildkite/agent/pull/2323) (@leakingtapan)
+
+### Internal
+- Adapt Olfactor to allow sniffing for multiple smells [#2332](https://github.com/buildkite/agent/pull/2332) (@triarius)
+
 ## [v3.53.0](https://github.com/buildkite/agent/tree/v3.53.0) (2023-08-31)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.52.1...v3.53.0)
 
