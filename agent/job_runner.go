@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -567,6 +568,19 @@ type LogWriter struct {
 func (w LogWriter) Write(bytes []byte) (int, error) {
 	w.l.Info("%s", bytes)
 	return len(bytes), nil
+}
+
+func validateRepository(allowedRepos []string, pipelineRepo string) error {
+	if len(allowedRepos) == 0 {
+		return nil
+	}
+
+	for _, allowedRepo := range allowedRepos {
+		if match, _ := regexp.MatchString(allowedRepo, pipelineRepo); match {
+			return nil
+		}
+	}
+	return fmt.Errorf("repository %s isn't allowed", pipelineRepo)
 }
 
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {

@@ -129,12 +129,13 @@ type AgentStartConfig struct {
 	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
 
-	NoSSHKeyscan       bool `cli:"no-ssh-keyscan"`
-	NoCommandEval      bool `cli:"no-command-eval"`
-	NoLocalHooks       bool `cli:"no-local-hooks"`
-	NoPlugins          bool `cli:"no-plugins"`
-	NoPluginValidation bool `cli:"no-plugin-validation"`
-	NoFeatureReporting bool `cli:"no-feature-reporting"`
+	NoSSHKeyscan        bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval       bool     `cli:"no-command-eval"`
+	NoLocalHooks        bool     `cli:"no-local-hooks"`
+	NoPlugins           bool     `cli:"no-plugins"`
+	NoPluginValidation  bool     `cli:"no-plugin-validation"`
+	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
+	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -206,6 +207,10 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 
 	if asc.NoCommandEval {
 		features = append(features, "no-script-eval")
+	}
+
+	if len(asc.AllowedRepositories) > 0 {
+		features = append(features, "allowed-repositories")
 	}
 
 	for _, exp := range experiments.Enabled(ctx) {
@@ -532,14 +537,20 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
 		},
 		cli.BoolFlag{
-			Name:   "metrics-datadog",
-			Usage:  "Send metrics to DogStatsD for Datadog",
-			EnvVar: "BUILDKITE_METRICS_DATADOG",
-		},
-		cli.BoolFlag{
 			Name:   "no-feature-reporting",
 			Usage:  "Disables sending a list of enabled features back to the Buildkite mothership. We use this information to measure feature usage, but if you're not comfortable sharing that information then that's totally okay :)",
 			EnvVar: "BUILDKITE_AGENT_NO_FEATURE_REPORTING",
+		},
+		cli.StringSliceFlag{
+			Name:   "allowed-repositories",
+			Value:  &cli.StringSlice{},
+			Usage:  "A comma-separated list of regular expressions representing repositories the agent is allowed to clone (for example, \"^git@github.com:buildkite/.*\" or \"^https://github.com/buildkite/.*\")",
+			EnvVar: "BUILDKITE_ALLOWED_REPOSITORIES",
+		},
+		cli.BoolFlag{
+			Name:   "metrics-datadog",
+			Usage:  "Send metrics to DogStatsD for Datadog",
+			EnvVar: "BUILDKITE_METRICS_DATADOG",
 		},
 		cli.StringFlag{
 			Name:   "metrics-datadog-host",
@@ -863,6 +874,7 @@ var AgentStartCommand = cli.Command{
 			PluginsEnabled:                          !cfg.NoPlugins,
 			PluginValidation:                        !cfg.NoPluginValidation,
 			LocalHooksEnabled:                       !cfg.NoLocalHooks,
+			AllowedRepositories:                     cfg.AllowedRepositories,
 			StrictSingleHooks:                       cfg.StrictSingleHooks,
 			RunInPty:                                !cfg.NoPTY,
 			ANSITimestamps:                          !cfg.NoANSITimestamps,
