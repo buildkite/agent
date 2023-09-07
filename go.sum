@@ -33,8 +33,8 @@ github.com/DataDog/go-tuf v1.0.1-0.5.2/go.mod h1:zBcq6f654iVqmkk8n2Cx81E1JnNTMOA
 github.com/DataDog/gostackparse v0.5.0 h1:jb72P6GFHPHz2W0onsN51cS3FkaMDcjb0QzgxxA4gDk=
 github.com/DataDog/sketches-go v1.2.1 h1:qTBzWLnZ3kM2kw39ymh6rMcnN+5VULwFs++lEYUUsro=
 github.com/DataDog/sketches-go v1.2.1/go.mod h1:1xYmPLY1So10AwxV6MJV0J53XVH+WL9Ad1KetxVivVI=
-github.com/DrJosh9000/zzglob v0.0.15 h1:LoukPRH8OHn6hs3wAzoz8VoszQBAe8R5H6SmGiNhkqU=
-github.com/DrJosh9000/zzglob v0.0.15/go.mod h1:+iLI/qvROFsS1A/jl+B8MVYNu/0cjveYOJqU37O8fcs=
+github.com/DrJosh9000/zzglob v0.0.16 h1:InAfM7blw2OWstG9uSTVnsrXgKWK/a7ZJ6dUYJc3b+s=
+github.com/DrJosh9000/zzglob v0.0.16/go.mod h1:+iLI/qvROFsS1A/jl+B8MVYNu/0cjveYOJqU37O8fcs=
 github.com/Microsoft/go-winio v0.5.0/go.mod h1:JPGBdM1cNvN/6ISo+n8V5iA4v8pBzdOpzfwIujj1a84=
 github.com/Microsoft/go-winio v0.5.1/go.mod h1:JPGBdM1cNvN/6ISo+n8V5iA4v8pBzdOpzfwIujj1a84=
 github.com/Microsoft/go-winio v0.5.2 h1:a9IhgEQBCUEk6QCdml9CiJGhAws+YwffDHEMp1VMrpA=
