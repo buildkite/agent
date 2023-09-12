@@ -11,9 +11,11 @@ import (
 
 // Pre-release builds' versions must be in the format `x.y-beta`, `x.y-beta.z` or `x.y-beta.z.a`
 
-//go:embed VERSION
-var baseVersion string
-var buildNumber string
+var (
+	//go:embed VERSION
+	baseVersion string
+	buildNumber = "x"
+)
 
 func Version() string {
 	return strings.TrimSpace(baseVersion)
@@ -30,9 +32,6 @@ func Version() string {
 //
 // On CI, the binaries are always built with the buildVersion variable set.
 func BuildNumber() string {
-	if buildNumber == "" {
-		return "x"
-	}
 	return buildNumber
 }
 
