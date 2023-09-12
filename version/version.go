@@ -47,10 +47,13 @@ func commitInfo() string {
 	dirty := ".dirty"
 	var commit string
 	for _, setting := range info.Settings {
-		if setting.Key == "vcs.revision" {
+		switch setting.Key {
+		case "vcs.revision":
 			commit = setting.Value
-		} else if setting.Key == "vcs.modified" && setting.Value == "false" {
-			dirty = ""
+		case "vcs.modified":
+			if setting.Value == "false" {
+				dirty = ""
+			}
 		}
 	}
 
