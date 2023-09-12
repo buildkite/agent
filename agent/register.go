@@ -32,7 +32,7 @@ func Register(ctx context.Context, l logger.Logger, ac APIClient, req api.AgentR
 
 	// Set some static things to set on the register request
 	req.Version = version.Version()
-	req.Build = version.BuildVersion()
+	req.Build = version.BuildNumber()
 	req.PID = os.Getpid()
 	req.Arch = runtime.GOARCH
 	req.MachineID = machineID

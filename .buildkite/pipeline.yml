@@ -4,23 +4,14 @@ agents:
   queue: agent-runners-linux-amd64
 
 steps:
-  - name: ":go: go fmt"
-    key: test-go-fmt
-    command: ".buildkite/steps/test-go-fmt.sh"
+  - name: ":go::robot_face: Check Code Committed"
+    key: check-code-committed
+    command: .buildkite/steps/check-code-committed.sh
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
-
-  - name: ":robot_face: Check code generation"
-    key: check-code-generation
-    command: .buildkite/steps/check-code-generation.sh
-    plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
 
   - name: ":linux: Linux AMD64 Tests"
     key: test-linux-amd64
@@ -90,6 +81,7 @@ steps:
       - test-race-linux-arm64
       - test-linux-arm64
       - test-windows
+    allow_dependency_failure: true
     plugins:
       - junit-annotate#v1.6.0:
           artifacts: junit-*.xml
@@ -141,6 +133,11 @@ steps:
 
           - with: { os: openbsd, arch: arm64 }
             skip: "arm64 OpenBSD is not currently supported"
+
+  - label: ":bathtub: Check version string is clean"
+    key: check-version-string
+    depends_on: build-binary
+    command: .buildkite/steps/check-version-string.sh
 
   - name: ":technologist: Test bk cli + Agent cli"
     key: test-bk-cli
@@ -248,11 +245,13 @@ steps:
   - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
     depends_on:
+      - check-code-committed
+      - check-version-string
       - test-windows
       - test-bk-cli
+      - test-docker-amd64
+      - test-docker-arm64
       - build-rpm-packages
       - build-debian-packages
       - build-github-release
-      - test-docker-amd64
-      - test-docker-arm64
     command: ".buildkite/steps/upload-release-steps.sh"
