@@ -59,5 +59,11 @@ func FullVersion() string {
 }
 
 func UserAgent() string {
-	return "buildkite-agent/" + Version() + "." + BuildNumber() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+	return fmt.Sprintf(
+		"buildkite-agent/%s.%s (%s; %s)",
+		Version(),
+		BuildNumber(),
+		runtime.GOOS,
+		runtime.GOARCH,
+	)
 }
