@@ -4,23 +4,14 @@ agents:
   queue: agent-runners-linux-amd64
 
 steps:
-  - name: ":go: Check go-fmt and go-mod-tidy"
-    key: check-go-fmt-mod-tidy
-    command: ".buildkite/steps/test-go-fmt.sh"
+  - name: ":go::robot_face: Check Code Committed"
+    key: check-code-committed
+    command: .buildkite/steps/check-code-committed.sh
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
-
-  - name: ":robot_face: Check code generation"
-    key: check-code-generation
-    command: .buildkite/steps/check-code-generation.sh
-    plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
 
   - name: ":linux: Linux AMD64 Tests"
     key: test-linux-amd64
@@ -254,8 +245,7 @@ steps:
   - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
     depends_on:
-      - check-go-fmt-mod-tidy
-      - check-code-generation
+      - check-code-committed
       - check-version-string
       - test-windows
       - test-bk-cli
