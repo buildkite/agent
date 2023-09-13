@@ -93,7 +93,7 @@ type ArtifactBatchUpdateRequest struct {
 
 // CreateArtifacts takes a slice of artifacts, and creates them on Buildkite as a batch.
 func (c *Client) CreateArtifacts(ctx context.Context, jobId string, batch *ArtifactBatch) (*ArtifactBatchCreateResponse, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
+	u := fmt.Sprintf("jobs/%s/artifacts", railsPathEscape(jobId))
 
 	req, err := c.newRequest(ctx, "POST", u, batch)
 	if err != nil {
@@ -111,7 +111,7 @@ func (c *Client) CreateArtifacts(ctx context.Context, jobId string, batch *Artif
 
 // Updates a particular artifact
 func (c *Client) UpdateArtifacts(ctx context.Context, jobId string, artifactStates map[string]string) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
+	u := fmt.Sprintf("jobs/%s/artifacts", railsPathEscape(jobId))
 	payload := ArtifactBatchUpdateRequest{}
 
 	for id, state := range artifactStates {
@@ -133,7 +133,7 @@ func (c *Client) UpdateArtifacts(ctx context.Context, jobId string, artifactStat
 
 // SearchArtifacts searches Buildkite for a set of artifacts
 func (c *Client) SearchArtifacts(ctx context.Context, buildId string, opt *ArtifactSearchOptions) ([]*Artifact, *Response, error) {
-	u := fmt.Sprintf("builds/%s/artifacts/search", buildId)
+	u := fmt.Sprintf("builds/%s/artifacts/search", railsPathEscape(buildId))
 	u, err := addOptions(u, opt)
 	if err != nil {
 		return nil, nil, err

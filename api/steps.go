@@ -18,7 +18,7 @@ type StepExportResponse struct {
 
 // StepExport gets an attribute from step
 func (c *Client) StepExport(ctx context.Context, stepIdOrKey string, stepGetRequest *StepExportRequest) (*StepExportResponse, *Response, error) {
-	u := fmt.Sprintf("steps/%s/export", stepIdOrKey)
+	u := fmt.Sprintf("steps/%s/export", railsPathEscape(stepIdOrKey))
 
 	req, err := c.newRequest(ctx, "POST", u, stepGetRequest)
 	if err != nil {
@@ -45,7 +45,7 @@ type StepUpdate struct {
 
 // StepUpdate updates a step
 func (c *Client) StepUpdate(ctx context.Context, stepIdOrKey string, stepUpdate *StepUpdate) (*Response, error) {
-	u := fmt.Sprintf("steps/%s", stepIdOrKey)
+	u := fmt.Sprintf("steps/%s", railsPathEscape(stepIdOrKey))
 
 	req, err := c.newRequest(ctx, "PUT", u, stepUpdate)
 	if err != nil {

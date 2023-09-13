@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
@@ -24,8 +25,8 @@ type testOIDCTokenServer struct {
 
 func (s *testOIDCTokenServer) New(t *testing.T) *httptest.Server {
 	t.Helper()
-	path := fmt.Sprintf("/jobs/%s/oidc/tokens", s.jobID)
-	forbiddenPath := fmt.Sprintf("/jobs/%s/oidc/tokens", s.forbiddenJobID)
+	path := fmt.Sprintf("/jobs/%s/oidc/tokens", url.PathEscape(s.jobID))
+	forbiddenPath := fmt.Sprintf("/jobs/%s/oidc/tokens", url.PathEscape(s.forbiddenJobID))
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if got, want := authToken(req), s.accessToken; got != want {
 			http.Error(

@@ -28,7 +28,7 @@ func (c *Client) UploadPipeline(
 	pipeline *PipelineChange,
 	headers ...Header,
 ) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/pipelines?async=true", jobId)
+	u := fmt.Sprintf("jobs/%s/pipelines?async=true", railsPathEscape(jobId))
 
 	req, err := c.newRequest(ctx, "POST", u, pipeline, headers...)
 	if err != nil {
@@ -44,7 +44,7 @@ func (c *Client) PipelineUploadStatus(
 	uuid string,
 	headers ...Header,
 ) (*PipelineUploadStatus, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/pipelines/%s", jobId, uuid)
+	u := fmt.Sprintf("jobs/%s/pipelines/%s", railsPathEscape(jobId), railsPathEscape(uuid))
 
 	req, err := c.newRequest(ctx, "GET", u, nil, headers...)
 	if err != nil {
