@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.55.0](https://github.com/buildkite/agent/tree/v3.55.0) (2023-09-14)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.54.0...v3.55.0)
+
+### Fixed
+- Annotations created with contexts that contain `.` can now be removed [#2365](https://github.com/buildkite/agent/pull/2365) (@DrJosh9000)
+
+### Changed
+- Add a full agent version which includes the commit [#2283](https://github.com/buildkite/agent/pull/2283) (@triarius)
+
 ## [v3.54.0](https://github.com/buildkite/agent/tree/v3.54.0) (2023-09-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.53.0...v3.54.0)
 
