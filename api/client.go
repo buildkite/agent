@@ -364,3 +364,8 @@ func addOptions(s string, opt any) (string, error) {
 func joinURLPath(endpoint string, path string) string {
 	return strings.TrimRight(endpoint, "/") + "/" + strings.TrimLeft(path, "/")
 }
+
+// Rails doesn't accept dots in some path segments.
+func railsPathEscape(s string) string {
+	return strings.ReplaceAll(url.PathEscape(s), ".", "%2E")
+}

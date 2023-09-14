@@ -85,7 +85,7 @@ type jobFinishRequest struct {
 
 // GetJobState returns the state of a given job
 func (c *Client) GetJobState(ctx context.Context, id string) (*JobState, *Response, error) {
-	u := fmt.Sprintf("jobs/%s", id)
+	u := fmt.Sprintf("jobs/%s", railsPathEscape(id))
 
 	req, err := c.newRequest(ctx, "GET", u, nil)
 	if err != nil {
@@ -103,7 +103,7 @@ func (c *Client) GetJobState(ctx context.Context, id string) (*JobState, *Respon
 
 // Acquires a job using its ID
 func (c *Client) AcquireJob(ctx context.Context, id string, headers ...Header) (*Job, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/acquire", id)
+	u := fmt.Sprintf("jobs/%s/acquire", railsPathEscape(id))
 
 	req, err := c.newRequest(ctx, "PUT", u, nil, headers...)
 	if err != nil {
@@ -123,7 +123,7 @@ func (c *Client) AcquireJob(ctx context.Context, id string, headers ...Header) (
 // environment variables (when a job is accepted, the agents environment is
 // applied to the job)
 func (c *Client) AcceptJob(ctx context.Context, job *Job) (*Job, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/accept", job.ID)
+	u := fmt.Sprintf("jobs/%s/accept", railsPathEscape(job.ID))
 
 	req, err := c.newRequest(ctx, "PUT", u, nil)
 	if err != nil {
@@ -141,7 +141,7 @@ func (c *Client) AcceptJob(ctx context.Context, job *Job) (*Job, *Response, erro
 
 // StartJob starts the passed in job
 func (c *Client) StartJob(ctx context.Context, job *Job) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/start", job.ID)
+	u := fmt.Sprintf("jobs/%s/start", railsPathEscape(job.ID))
 
 	req, err := c.newRequest(ctx, "PUT", u, &jobStartRequest{
 		StartedAt: job.StartedAt,
@@ -155,7 +155,7 @@ func (c *Client) StartJob(ctx context.Context, job *Job) (*Response, error) {
 
 // FinishJob finishes the passed in job
 func (c *Client) FinishJob(ctx context.Context, job *Job) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/finish", job.ID)
+	u := fmt.Sprintf("jobs/%s/finish", railsPathEscape(job.ID))
 
 	req, err := c.newRequest(ctx, "PUT", u, &jobFinishRequest{
 		FinishedAt:        job.FinishedAt,

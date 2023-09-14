@@ -15,7 +15,7 @@ type Annotation struct {
 
 // Annotate a build in the Buildkite UI
 func (c *Client) Annotate(ctx context.Context, jobId string, annotation *Annotation) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/annotations", jobId)
+	u := fmt.Sprintf("jobs/%s/annotations", railsPathEscape(jobId))
 
 	req, err := c.newRequest(ctx, "POST", u, annotation)
 	if err != nil {
@@ -27,7 +27,7 @@ func (c *Client) Annotate(ctx context.Context, jobId string, annotation *Annotat
 
 // Remove an annotation from a build
 func (c *Client) AnnotationRemove(ctx context.Context, jobId string, context string) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/annotations/%s", jobId, context)
+	u := fmt.Sprintf("jobs/%s/annotations/%s", railsPathEscape(jobId), railsPathEscape(context))
 
 	req, err := c.newRequest(ctx, "DELETE", u, nil)
 	if err != nil {

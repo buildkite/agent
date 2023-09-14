@@ -13,7 +13,7 @@ type HeaderTimes struct {
 
 // SaveHeaderTimes saves the header times to the job
 func (c *Client) SaveHeaderTimes(ctx context.Context, jobId string, headerTimes *HeaderTimes) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/header_times", jobId)
+	u := fmt.Sprintf("jobs/%s/header_times", railsPathEscape(jobId))
 
 	req, err := c.newRequest(ctx, "POST", u, headerTimes)
 	if err != nil {

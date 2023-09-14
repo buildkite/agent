@@ -20,7 +20,7 @@ type MetaDataExists struct {
 
 // Sets the meta data value
 func (c *Client) SetMetaData(ctx context.Context, jobId string, metaData *MetaData) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/data/set", jobId)
+	u := fmt.Sprintf("jobs/%s/data/set", railsPathEscape(jobId))
 
 	req, err := c.newRequest(ctx, "POST", u, metaData)
 	if err != nil {
@@ -36,7 +36,7 @@ func (c *Client) GetMetaData(ctx context.Context, scope, id, key string) (*MetaD
 		return nil, nil, errors.New("scope must either be job or build")
 	}
 
-	u := fmt.Sprintf("%ss/%s/data/get", scope, id)
+	u := fmt.Sprintf("%ss/%s/data/get", scope, railsPathEscape(id))
 	m := &MetaData{Key: key}
 
 	req, err := c.newRequest(ctx, "POST", u, m)
@@ -58,7 +58,7 @@ func (c *Client) ExistsMetaData(ctx context.Context, scope, id, key string) (*Me
 		return nil, nil, errors.New("scope must either be job or build")
 	}
 
-	u := fmt.Sprintf("%ss/%s/data/exists", scope, id)
+	u := fmt.Sprintf("%ss/%s/data/exists", scope, railsPathEscape(id))
 	m := &MetaData{Key: key}
 
 	req, err := c.newRequest(ctx, "POST", u, m)
@@ -80,7 +80,7 @@ func (c *Client) MetaDataKeys(ctx context.Context, scope, id string) ([]string, 
 		return nil, nil, errors.New("scope must either be job or build")
 	}
 
-	u := fmt.Sprintf("%ss/%s/data/keys", scope, id)
+	u := fmt.Sprintf("%ss/%s/data/keys", scope, railsPathEscape(id))
 
 	req, err := c.newRequest(ctx, "POST", u, nil)
 	if err != nil {

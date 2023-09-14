@@ -27,7 +27,7 @@ func (c *Client) OIDCToken(ctx context.Context, methodReq *OIDCTokenRequest) (*O
 		Claims:   methodReq.Claims,
 	}
 
-	u := fmt.Sprintf("jobs/%s/oidc/tokens", methodReq.Job)
+	u := fmt.Sprintf("jobs/%s/oidc/tokens", railsPathEscape(methodReq.Job))
 	httpReq, err := c.newRequest(ctx, "POST", u, m)
 	if err != nil {
 		return nil, nil, err
