@@ -364,6 +364,56 @@ func TestParserParsesNoSteps(t *testing.T) {
 	}
 }
 
+func TestParserParsesMatrices(t *testing.T) {
+	input := strings.NewReader(`---
+steps:
+  - name: "shape time"
+    command: "echo 'its a {{matrix.color}} {{matrix.shape}}!'"
+    matrix:
+      color:
+        - vermillion
+        - murex
+        - cochineal
+      shape:
+        - annulus
+        - heptagram
+        - icosahedron
+`)
+	got, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse(input) error = %v", err)
+	}
+
+	want := &Pipeline{
+		Steps: Steps{
+			&CommandStep{
+				Command: "echo 'its a {{matrix.color}} {{matrix.shape}}!'",
+				Matrix: &Matrix{
+					Contents: map[string][]any{
+						"color": {
+							"vermillion",
+							"murex",
+							"cochineal",
+						},
+						"shape": {
+							"annulus",
+							"heptagram",
+							"icosahedron",
+						},
+					},
+				},
+				RemainingFields: map[string]any{
+					"name": "shape time",
+				},
+			},
+		},
+	}
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("parsed pipeline diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestParserParsesGroups(t *testing.T) {
 	envMap := env.FromSlice([]string{"ENV_VAR_FRIEND=friend"})
 
