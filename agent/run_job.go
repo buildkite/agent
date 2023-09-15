@@ -116,6 +116,18 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		}
 	}
 
+	// Validate the repository if the list of allowed repositories is set
+	allowedRepos := r.conf.AgentConfiguration.AllowedRepositories
+	pipelineRepo := job.Env["BUILDKITE_REPO"]
+	err := validateRepository(allowedRepos, pipelineRepo)
+	if err != nil {
+		r.logStreamer.Process([]byte(fmt.Sprintf("%s", err)))
+		r.logger.Error("%s", err)
+		exit.Status = -1
+		exit.SignalReason = SignalReasonAgentRefused
+		return nil
+	}
+
 	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for
 	// it to tell us whether it is happy to proceed.
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {

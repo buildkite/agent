@@ -24,6 +24,7 @@ type AgentConfiguration struct {
 	GitCleanFlags         string
 	GitFetchFlags         string
 	GitSubmodules         bool
+	AllowedRepositories   []string
 	SSHKeyscan            bool
 	CommandEval           bool
 	PluginsEnabled        bool
