@@ -276,7 +276,7 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit pr
 		response, err := r.apiClient.FinishJob(ctx, r.conf.Job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
-			// succesfully tried to finish the job, but Buildkite
+			// successfully tried to finish the job, but Buildkite
 			// rejected the finish for some reason. This can
 			// sometimes mean that Buildkite has cancelled the job
 			// before we get a chance to send the final API call

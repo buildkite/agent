@@ -637,7 +637,7 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 	})
 }
 
-// jobCancellationChecker waits for the processs to start, then continuously
+// jobCancellationChecker waits for the processes to start, then continuously
 // polls GetJobState to see if the job has been cancelled server-side. If so,
 // it calls r.Cancel.
 func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGroup) {

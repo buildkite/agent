@@ -426,8 +426,8 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 					a.logger.Error("Error uploading artifact states: %s", err)
 
 					// Track the error that was raised. We need to
-					// aquire a lock since we mutate the errors
-					// slice in mutliple routines.
+					// acquire a lock since we mutate the errors
+					// slice in multiple routines.
 					errorsMutex.Lock()
 					errors = append(errors, err)
 					errorsMutex.Unlock()
