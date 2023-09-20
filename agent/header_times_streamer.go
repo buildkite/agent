@@ -115,7 +115,7 @@ func (h *headerTimesStreamer) Upload(ctx context.Context) {
 	// Store the current cursor value
 	c := h.cursor
 
-	// Grab only the times that we haven't uploaded yet. We need to acquire 
+	// Grab only the times that we haven't uploaded yet. We need to acquire
 	// a lock since other routines may be adding to it.
 	h.timesMutex.Lock()
 	length := len(h.times)
