@@ -97,7 +97,7 @@ func (h *headerTimesStreamer) Scan(line string) bool {
 	if isHeader(line) {
 		h.logger.Debug("[HeaderTimesStreamer] Found header %q", line)
 
-		// Aquire a lock on the times and then add the current time to
+		// Acquire a lock on the times and then add the current time to
 		// our times slice.
 		h.timesMutex.Lock()
 		h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
@@ -115,7 +115,7 @@ func (h *headerTimesStreamer) Upload(ctx context.Context) {
 	// Store the current cursor value
 	c := h.cursor
 
-	// Grab only the times that we haven't uploaded yet. We need to aquire
+	// Grab only the times that we haven't uploaded yet. We need to acquire
 	// a lock since other routines may be adding to it.
 	h.timesMutex.Lock()
 	length := len(h.times)
@@ -154,7 +154,7 @@ func (h *headerTimesStreamer) Stop() {
 	h.uploadWaitGroup.Wait()
 
 	// Since we're modifying the waitGroup and the streaming flag, we need
-	// to aquire a write lock.
+	// to acquire a write lock.
 	h.streamingMutex.Lock()
 	h.streaming = false
 	h.streamingMutex.Unlock()
