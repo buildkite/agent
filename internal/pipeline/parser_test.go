@@ -1475,7 +1475,7 @@ steps:
 			if err != nil {
 				t.Fatalf("Parse(%q) error = %v", test.input, err)
 			}
-			if diff := cmp.Diff(got, test.want, cmp.Comparer(ordered.EqualSA)); err != nil {
+			if diff := cmp.Diff(got, test.want, cmp.Comparer(ordered.EqualSA)); diff != "" {
 				t.Errorf("parsed pipeline diff (-got +want):\n%s", diff)
 			}
 			gotJSON, err := json.MarshalIndent(got, "", "  ")
