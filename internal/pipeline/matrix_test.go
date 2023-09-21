@@ -11,6 +11,76 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestVariants(t *testing.T) {
+	t.Parallel()
+
+	m := &Matrix{
+		Contents: map[string][]any{
+			"shape": {
+				"annulus",
+				"heptagram",
+			},
+			"color": {
+				"vermillion",
+				"chartreuse",
+			},
+		},
+	}
+
+	expectedVariants := []MatrixVariant{
+		{
+			SelectedDimensions: []SelectedDimension{
+				{Dimension: "shape", Value: "annulus"},
+				{Dimension: "color", Value: "vermillion"},
+			},
+		},
+		{
+			SelectedDimensions: []SelectedDimension{
+				{Dimension: "shape", Value: "annulus"},
+				{Dimension: "color", Value: "chartreuse"},
+			},
+		},
+		{
+			SelectedDimensions: []SelectedDimension{
+				{Dimension: "shape", Value: "heptagram"},
+				{Dimension: "color", Value: "vermillion"},
+			},
+		},
+		{
+			SelectedDimensions: []SelectedDimension{
+				{Dimension: "shape", Value: "heptagram"},
+				{Dimension: "color", Value: "chartreuse"},
+			},
+		},
+	}
+
+	// Why not use cmp.Diff like in the rest of the tests?
+	// For both the output of Variants() and, for a `SelectedDimensions` type, the order doesn't matter at all - the only
+	// thing that matters is that the same dimensions/value pairs are present. cmp.Diff doesn't have a (nice) way to ignore
+	// order, so we check that the length is the same and that all of the expected variants are present.
+	actualVariants := m.Variants()
+	for _, ev := range expectedVariants {
+		if !sliceHasVariant(t, actualVariants, ev) {
+			t.Fatalf("expected variant %v, but it was not found", ev)
+		}
+	}
+
+	if len(actualVariants) != len(expectedVariants) {
+		t.Fatalf("expected %d variants, got %d", len(expectedVariants), len(actualVariants))
+	}
+}
+
+func sliceHasVariant(t *testing.T, s []MatrixVariant, v MatrixVariant) bool {
+	t.Helper()
+
+	for _, sv := range s {
+		if sv.Equal(v) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestMarshalUnmarshalYAML(t *testing.T) {
 	t.Parallel()
 
