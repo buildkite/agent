@@ -25,7 +25,7 @@ steps:
       queue: "deploy"
     plugins:
       - docker#v5.8.0:
-          image: "buildkite/agent:3.51.0"
+          image: "buildkite/agent:3.55.0-ubuntu"
           entrypoint: bash
           propagate-environment: true
           mount-buildkite-agent: true
