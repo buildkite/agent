@@ -39,3 +39,15 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      otel:
+        patterns:
+        - go.opentelemetry.io/*
+      golang-x:
+        patterns:
+        - golang.org/x/*
+      cloud-providers:
+        patterns:
+        - github.com/Azure/*
+        - github.com/aws/*
+        - google.golang.org/*
