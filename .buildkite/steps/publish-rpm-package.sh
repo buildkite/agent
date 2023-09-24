@@ -23,13 +23,12 @@ createrepo() {
 
 updaterepo() {
   # Reuses the old package metadata, and add new packages with --pkglist.
-  # createrepo_c tests that pkglist is a _regular_ file, so we can't use 
+  # createrepo_c tests that pkglist is a _regular_ file, so we can't use
   # a Bash process substitution i.e. <(find ...)
-  # --skip-stat prevents createrepo_c from trying to stat all the RPMs that 
+  # --skip-stat prevents createrepo_c from trying to stat all the RPMs that
   # aren't synced here.
   # Note also that createrepo_c appends pkglist lines to the path it is given
-  # to find files. Busybox find (in Alpine) has no -printf verb, so...........
-  # go go gadget `awk`
+  # to find files.
   pkglist="$(mktemp pkglist.XXXXXXXX)"
   find "$1" -type f -name '*.rpm' | awk -F/ '{print $NF}' > "${pkglist}"
   createrepo_c \
@@ -67,20 +66,8 @@ mkdir -p rpm
 buildkite-agent artifact download --build "${artifacts_build}" "rpm/*.rpm" rpm/
 
 echo '--- Installing dependencies'
-# currently, the libcrypto3-3.0.5-r0 in the alpine/v3.16/main repo isn't compatible with createrepo_c:
-#     ERROR: unable to select packages:
-#       so:libcrypto.so.3 (no such package):
-#         required by: createrepo_c-libs-0.17.1-r2[so:libcrypto.so.3]
-# So, we add alpine/edge/main for libcrypto3 and alpine/edge/testing for createrepo_c.
-# In future we can probably remove the explicit libcrypto3 install, and the alpine/edge/main repo.
-apk add --update-cache --no-progress \
-  --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main \
-  --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-  'libcrypto3>=3.0.5-r2' \
-  createrepo_c
-
-# createrepo_c requires some exotic flags on the cp, which aren't available on the busybox version
-apk add --no-progress coreutils aws-cli
+apt update
+apt install -y createrepo_c awscli
 
 mkdir -p "${YUM_PATH}"
 
