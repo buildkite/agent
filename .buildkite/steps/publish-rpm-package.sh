@@ -67,7 +67,7 @@ buildkite-agent artifact download --build "${artifacts_build}" "rpm/*.rpm" rpm/
 
 echo '--- Installing dependencies'
 apt update
-apt install -y createrepo-c awscli
+DEBIAN_FRONTEND=noninteractive apt install -y createrepo-c awscli
 
 mkdir -p "${YUM_PATH}"
 
