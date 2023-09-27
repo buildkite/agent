@@ -39,12 +39,15 @@ func acquiringLockHelperProcess() error {
 	}
 	sh.Logger = shell.DiscardLogger
 
-	log.Printf("Locking %s", fileName)
-	if _, err := sh.LockFile(context.Background(), fileName, 10*time.Second); err != nil {
+	log.Printf("🔓 Locking %s forever...", fileName)
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	defer canc()
+	if _, err := sh.LockFile(ctx, fileName); err != nil {
 		return fmt.Errorf("sh.LockFile(%q) error = %w", fileName, err)
 	}
 
-	log.Printf("Acquired lock %s", fileName)
+	log.Printf("🔒 Acquired lock %s", fileName)
+
 	// sleep forever, but keep the main goroutine busy
 	for {
 		time.Sleep(1 * time.Second)

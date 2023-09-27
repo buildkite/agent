@@ -91,7 +91,9 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 
 func (kh *knownHosts) Add(ctx context.Context, host string) error {
 	// Use a lockfile to prevent parallel processes stepping on each other
-	lock, err := kh.Shell.LockFile(ctx, kh.Path+".lock", time.Second*30)
+	lockCtx, canc := context.WithTimeout(ctx, 30*time.Second)
+	defer canc()
+	lock, err := kh.Shell.LockFile(lockCtx, kh.Path+".lock")
 	if err != nil {
 		return err
 	}
