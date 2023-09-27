@@ -13,6 +13,7 @@ var (
 	_ interface {
 		json.Marshaler
 		ordered.Unmarshaler
+		yaml.Marshaler
 		selfInterpolater
 	} = (*Matrix)(nil)
 
@@ -48,7 +49,7 @@ type Matrix struct {
 func (m *Matrix) UnmarshalOrdered(o any) error {
 	switch src := o.(type) {
 	case []any:
-		// Single (unnamed) dimension matrix, no adjustments.
+		// Single anonymous dimension matrix, no adjustments.
 		//
 		// matrix:
 		//   - apple
@@ -60,8 +61,8 @@ func (m *Matrix) UnmarshalOrdered(o any) error {
 		m.Setup = MatrixSetup{"": s}
 
 	case *ordered.MapSA:
-		// Single (unnamed) or multiple (named) dimensions, with or without
-		// adjustments.
+		// Single anonymous dimension, or multiple named dimensions, with or
+		// without adjustments.
 		// Unmarshal into this secret wrapper type to avoid infinite recursion.
 		type wrappedMatrix Matrix
 		if err := ordered.Unmarshal(o, (*wrappedMatrix)(m)); err != nil {
@@ -74,9 +75,31 @@ func (m *Matrix) UnmarshalOrdered(o any) error {
 	return nil
 }
 
-// MarshalJSON is needed to use inlineFriendlyMarshalJSON.
+// Reports if the matrix is a single anonymous dimension matrix with no
+// adjustments or any other fields. (It's a list of items.)
+func (m *Matrix) isSimple() bool {
+	return len(m.Setup) == 1 && len(m.Setup[""]) != 0 && len(m.Adjustments) == 0 && len(m.RemainingFields) == 0
+}
+
+// MarshalJSON is needed to use inlineFriendlyMarshalJSON, and reduces the
+// representation to a single list if the matrix is simple.
 func (m *Matrix) MarshalJSON() ([]byte, error) {
+	if m.isSimple() {
+		return json.Marshal(m.Setup[""])
+	}
 	return inlineFriendlyMarshalJSON(m)
+}
+
+// MarshalYAML is needed to reduce the representation to a single slice if
+// the matrix is simple.
+func (m *Matrix) MarshalYAML() (any, error) {
+	if m.isSimple() {
+		return m.Setup[""], nil
+	}
+	// Just in case the YAML marshaler tries to call MarshalYAML on the output,
+	// wrap m in a type without a MarshalYAML method.
+	type wrappedMatrix Matrix
+	return (*wrappedMatrix)(m), nil
 }
 
 func (m *Matrix) interpolate(env interpolate.Env) error {
@@ -97,7 +120,7 @@ func (m *Matrix) interpolate(env interpolate.Env) error {
 // matrix values.
 type MatrixSetup map[string]MatrixScalars
 
-// MarshalJSON returns either a list (if the setup is a single unnamed
+// MarshalJSON returns either a list (if the setup is a single anonymous
 // dimension) or an object (if it contains one or more (named) dimensions).
 func (ms MatrixSetup) MarshalJSON() ([]byte, error) {
 	// Note that MarshalYAML (below) always returns nil error.
@@ -105,7 +128,7 @@ func (ms MatrixSetup) MarshalJSON() ([]byte, error) {
 	return json.Marshal(o)
 }
 
-// MarshalYAML returns either a Scalars (if the setup is a single unnamed
+// MarshalYAML returns either a Scalars (if the setup is a single anonymous
 // dimension) or a map (if it contains one or more (named) dimensions).
 func (ms MatrixSetup) MarshalYAML() (any, error) {
 	if len(ms) == 1 && len(ms[""]) > 0 {
@@ -121,7 +144,7 @@ func (ms *MatrixSetup) UnmarshalOrdered(o any) error {
 	}
 	switch src := o.(type) {
 	case []any:
-		// Single (unnamed) dimension, but we only get here if its under a setup
+		// Single anonymous dimension, but we only get here if its under a setup
 		// key. (Maybe the user wants adjustments for their single dimension.)
 		//
 		// matrix:
@@ -176,7 +199,7 @@ func (ma *MatrixAdjustment) interpolate(env interpolate.Env) error {
 }
 
 // MatrixAdjustmentWith is either a map of dimension key -> dimension value,
-// or a single value (for unnamed single dimension matrices).
+// or a single value (for single anonymous dimension matrices).
 type MatrixAdjustmentWith map[string]any
 
 // MarshalJSON returns either a single scalar or an object.
@@ -204,7 +227,7 @@ func (maw *MatrixAdjustmentWith) UnmarshalOrdered(o any) error {
 	switch src := o.(type) {
 	case bool, int, string:
 		// A single scalar.
-		// (This is how you can do adjustments on a single unnamed dimension.)
+		// (This is how you can do adjustments on a single anonymous dimension.)
 		//
 		// matrix:
 		//   setup:

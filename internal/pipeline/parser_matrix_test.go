@@ -19,7 +19,7 @@ func TestParser_Matrix(t *testing.T) {
 		wantJSON string
 	}{
 		{
-			desc: "Matrix with single unnamed dimension at top level",
+			desc: "Single anonymous dimension at top level",
 			input: `---
 steps:
   - command: echo {{matrix}}
@@ -44,19 +44,17 @@ steps:
   "steps": [
     {
       "command": "echo {{matrix}}",
-      "matrix": {
-        "setup": [
-          "apple",
-          47,
-          true
-        ]
-      }
+      "matrix": [
+        "apple",
+        47,
+        true
+      ]
     }
   ]
 }`,
 		},
 		{
-			desc: "Matrix with single unnamed dimension in setup",
+			desc: "Single anonymous dimension in setup",
 			input: `---
 steps:
   - command: echo {{matrix}}
@@ -82,19 +80,17 @@ steps:
   "steps": [
     {
       "command": "echo {{matrix}}",
-      "matrix": {
-        "setup": [
-          "apple",
-          true,
-          47
-        ]
-      }
+      "matrix": [
+        "apple",
+        true,
+        47
+      ]
     }
   ]
 }`,
 		},
 		{
-			desc: "Matrix with single unnamed dimension in setup with adjustments",
+			desc: "Single anonymous dimension in setup with adjustments",
 			input: `---
 steps:
   - command: echo {{matrix}}
@@ -157,7 +153,7 @@ steps:
 }`,
 		},
 		{
-			desc: "Matrix with multiple dimensions",
+			desc: "Multiple dimensions",
 			input: `---
 steps:
   - command: GOOS={{matrix.os}} GOARCH={{matrix.arch}} go build
@@ -206,7 +202,7 @@ steps:
 }`,
 		},
 		{
-			desc: "Matrix with multiple dimensions and adjustments",
+			desc: "Multiple dimensions and adjustments",
 			input: `---
 steps:
   - command: GOOS={{matrix.os}} GOARCH={{matrix.arch}} go build
@@ -326,7 +322,7 @@ steps:
 }`,
 		},
 		{
-			desc: "Matrix with multiple dimensions, adjustments, and interpolation",
+			desc: "Multiple dimensions, adjustments, and interpolation",
 			input: `---
 env:
   OS_KEY: os
