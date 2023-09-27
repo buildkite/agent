@@ -190,50 +190,51 @@ type LockFile interface {
 	Unlock() error
 }
 
-func (s *Shell) flock(
-	ctx context.Context,
-	path string,
-	timeout time.Duration,
-) (*flock.Flock, error) {
+func (s *Shell) flock(ctx context.Context, path string) (*flock.Flock, error) {
 	// + "f" to ensure that flocks and lockfiles never share a filename
 	absolutePathToLock, err := filepath.Abs(path + "f")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
+		return nil, fmt.Errorf("failed to find absolute path to lock %q: %w", path, err)
 	}
 
 	lock := flock.New(absolutePathToLock)
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
+retryLoop:
 	for {
 		// Keep trying the lock until we get it
-		if gotLock, err := lock.TryLock(); !gotLock || err != nil {
-			if err != nil {
-				s.Commentf("Could not acquire lock on \"%s\" (%s)", absolutePathToLock, err)
-			} else {
-				s.Commentf("Could not acquire lock on \"%s\" (Locked by other process)", absolutePathToLock)
-			}
-			s.Commentf("Trying again in %s...", lockRetryDuration)
-			time.Sleep(lockRetryDuration)
-		} else {
-			break
+		gotLock, err := lock.TryLock()
+		switch {
+		case err != nil:
+			s.Commentf("Could not acquire lock on %q (%v)", absolutePathToLock, err)
+			return nil, err
+
+		case !gotLock:
+			s.Commentf("Could not acquire lock on %q (locked by another process)", absolutePathToLock)
+
+		default:
+			break retryLoop
 		}
 
+		s.Commentf("Trying again in %v...", lockRetryDuration)
+		timer := time.NewTimer(lockRetryDuration)
+		defer timer.Stop()
+
 		select {
+		case <-timer.C:
+			// Ready to retry!
+
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		default:
-			// No value ready, moving on
 		}
 	}
 
-	return lock, err
+	return lock, nil
 }
 
-// Create a cross-process file-based lock based on pid files
-func (s *Shell) LockFile(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
-	return s.flock(ctx, path, timeout)
+// LockFile creates a cross-process file-based lock. To set a timeout on
+// attempts to acquire the lock, pass a context with a timeout.
+func (s *Shell) LockFile(ctx context.Context, path string) (LockFile, error) {
+	return s.flock(ctx, path)
 }
 
 // Run runs a command, write stdout and stderr to the logger and return an error

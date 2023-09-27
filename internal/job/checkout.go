@@ -258,7 +258,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	}
 
 	// Lock the mirror dir to prevent concurrent clones
-	mirrorCloneLock, err := e.shell.LockFile(ctx, mirrorDir+".clonelock", lockTimeout)
+	cloneCtx, canc := context.WithTimeout(ctx, lockTimeout)
+	defer canc()
+	mirrorCloneLock, err := e.shell.LockFile(cloneCtx, mirrorDir+".clonelock")
 	if err != nil {
 		return "", err
 	}
@@ -295,7 +297,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	}
 
 	// Lock the mirror dir to prevent concurrent updates
-	mirrorUpdateLock, err := e.shell.LockFile(ctx, mirrorDir+".updatelock", lockTimeout)
+	updateCtx, canc := context.WithTimeout(ctx, lockTimeout)
+	defer canc()
+	mirrorUpdateLock, err := e.shell.LockFile(updateCtx, mirrorDir+".updatelock")
 	if err != nil {
 		return "", err
 	}

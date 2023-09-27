@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/bintest/v3"
+	"github.com/gofrs/flock"
 	"github.com/google/go-cmp/cmp"
 	"gotest.tools/v3/assert"
 )
@@ -305,9 +307,9 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 		t.Skip("Flakey on windows")
 	}
 
-	dir, err := os.MkdirTemp("", "shelltest")
+	dir, err := os.MkdirTemp("", "TestLockFileRetriesAndTimesOut")
 	if err != nil {
-		t.Fatalf(`os.MkdirTemp("", "shelltest") error = %v`, err)
+		t.Fatalf(`os.MkdirTemp("", "TestLockFileRetriesAndTimesOut") error = %v`, err)
 	}
 	defer os.RemoveAll(dir)
 
@@ -319,33 +321,40 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	cmd := acquireLockInOtherProcess(t, lockPath)
 	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
 
-	_, err = sh.LockFile(context.Background(), lockPath, 2*time.Second)
+	ctx, canc := context.WithTimeout(context.Background(), 2*time.Second)
+	defer canc()
+
+	lock, err := sh.LockFile(ctx, lockPath)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Equal(t, lock, (*flock.Flock)(nil))
 }
 
 func acquireLockInOtherProcess(t *testing.T, lockfile string) *exec.Cmd {
 	t.Helper()
 
-	expectedLockPath := lockfile + "f" // flock-locked files are created with the suffix 'f'
-
 	t.Logf("acquiring lock in other process: %s", lockfile)
+
+	done := make(chan struct{})
+	search := replacer.New(os.Stderr, []string{"🔒 Acquired lock"}, func(b []byte) []byte {
+		t.Logf("✅ Acquired lock in other process!")
+		close(done)
+		return b
+	})
 
 	cmd := exec.Command(os.Args[0], "--", lockfile)
 	cmd.Env = []string{"TEST_MAIN_WANT_HELPER_PROCESS=1"}
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = search
 
 	err := cmd.Start()
 	assert.NilError(t, err)
 
 	// wait for the above process to get a lock
-	for {
-		if _, err = os.Stat(expectedLockPath); os.IsNotExist(err) {
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-		break
-	}
+	// This used to be a stat loop, checking for the existence of the lock file.
+	// But lock files are a two-step process (open, then flock), so a stat loop
+	// doesn't end when the child process has the lock, only when the file
+	// exists, so occasionally the unit test would successfully grab the lock.
+	<-done
 
 	return cmd
 }
