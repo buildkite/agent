@@ -1,6 +1,10 @@
 package pipeline
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+)
 
 func TestPluginFullSource(t *testing.T) {
 	t.Parallel()
@@ -81,4 +85,68 @@ func TestPluginFullSource(t *testing.T) {
 			t.Errorf("%#v.FullSource() = %q, want %q", p, got, want)
 		}
 	}
+}
+
+func TestPluginMatrixInterpolate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		matrixSelection map[string]any
+		p, want         *Plugin
+	}{
+		{
+			name: "no matrix",
+			p: &Plugin{
+				Source: "docker#v1.2.3",
+				Config: map[string]any{
+					"something": "foo",
+					"other": map[string]any{
+						"thing": "bar",
+					},
+				},
+			},
+			want: &Plugin{
+				Source: "docker#v1.2.3",
+				Config: map[string]any{
+					"something": "foo",
+					"other": map[string]any{
+						"thing": "bar",
+					},
+				},
+			},
+		},
+		{
+			name: "matrix",
+			matrixSelection: map[string]any{
+				"docker_version": "4.5.6",
+				"image":          "alpine",
+			},
+			p: &Plugin{
+				Source: "docker#{{matrix.docker_version}}",
+				Config: map[string]any{
+					"image": "{{matrix.image}}",
+				},
+			},
+			want: &Plugin{
+				Source: "docker#4.5.6",
+				Config: map[string]any{
+					"image": "alpine",
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			interpolated := test.p.MatrixInterpolate(test.matrixSelection)
+			if diff := cmp.Diff(interpolated, test.want); diff != "" {
+				t.Errorf("interpolateMatrix() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+
 }

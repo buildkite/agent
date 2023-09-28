@@ -184,4 +184,27 @@ func (c *CommandStep) interpolate(env interpolate.Env) error {
 	return nil
 }
 
+func (c *CommandStep) MatrixInterpolate(selection map[string]any) {
+	transform := matrixInterpolator(selection)
+	c.Command = transform(c.Command)
+
+	if len(c.Env) != 0 {
+		newEnv := make(map[string]string, len(c.Env))
+		for k, v := range c.Env {
+			newEnv[transform(k)] = transform(v)
+		}
+
+		c.Env = newEnv
+	}
+
+	if len(c.Plugins) != 0 {
+		newPlugins := make(Plugins, 0, len(c.Plugins))
+		for _, plug := range c.Plugins {
+			newPlugins = append(newPlugins, plug.MatrixInterpolate(selection))
+		}
+
+		c.Plugins = newPlugins
+	}
+}
+
 func (CommandStep) stepTag() {}
