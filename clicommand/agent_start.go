@@ -57,6 +57,18 @@ Example:
 
 var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
+const (
+	// most permissive - tell shell to evaluate command
+	commandModeEval = "eval"
+	// only execute files in the repo
+	commandModeRepoExecutable = "repo-executable"
+	// only execute files in the repo + no arguments + no plugins
+	// backwards compatible with the 'no-command-eval' flag
+	commandModeRepoExecutableStrict = "repo-executable-strict"
+)
+
+var commandModes = []string{commandModeEval, commandModeRepoExecutable, commandModeRepoExecutableStrict}
+
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
 // - As a flag in the AgentStartCommand (with matching env)
@@ -130,12 +142,12 @@ type AgentStartConfig struct {
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
 
 	NoSSHKeyscan        bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval       bool     `cli:"no-command-eval"`
 	NoLocalHooks        bool     `cli:"no-local-hooks"`
 	NoPlugins           bool     `cli:"no-plugins"`
 	NoPluginValidation  bool     `cli:"no-plugin-validation"`
 	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
 	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
+	CommandMode         string   `cli:"command-mode"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -168,6 +180,7 @@ type AgentStartConfig struct {
 	TagsFromEC2                  bool     `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
 	TagsFromGCP                  bool     `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
+	NoCommandEval                bool     `cli:"no-command-eval" deprecated:"User command-mode instead"`
 }
 
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
@@ -274,6 +287,8 @@ var AgentStartCommand = cli.Command{
 	Usage:       "Starts a Buildkite agent",
 	Description: startDescription,
 	Flags: []cli.Flag{
+		cli.StringFlag{},
+
 		cli.StringFlag{
 			Name:   "config",
 			Value:  "",
@@ -512,11 +527,6 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_SSH_KEYSCAN",
 		},
 		cli.BoolFlag{
-			Name:   "no-command-eval",
-			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
-			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
-		},
-		cli.BoolFlag{
 			Name:   "no-plugins",
 			Usage:  "Don't allow this agent to load plugins",
 			EnvVar: "BUILDKITE_NO_PLUGINS",
@@ -546,6 +556,12 @@ var AgentStartCommand = cli.Command{
 			Value:  &cli.StringSlice{},
 			Usage:  "A comma-separated list of regular expressions representing repositories the agent is allowed to clone (for example, \"^git@github.com:buildkite/.*\" or \"^https://github.com/buildkite/.*\")",
 			EnvVar: "BUILDKITE_ALLOWED_REPOSITORIES",
+		},
+		cli.StringFlag{
+			Name:   "command-mode",
+			Value:  "",
+			Usage:  "Specifies how the agent should execute commands - can be 'eval', 'repo-executable', or 'repo-executable-strict'",
+			EnvVar: "BUILDKITE_COMMAND_MODE",
 		},
 		cli.BoolFlag{
 			Name:   "metrics-datadog",
@@ -688,6 +704,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
 		},
+		cli.BoolFlag{
+			Name:   "no-command-eval",
+			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
+			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
+		},
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -733,6 +754,20 @@ var AgentStartCommand = cli.Command{
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
 		}
 
+		// no-command-eval is deprecated and equivalent to command-mode=repo-executable-strict
+		if c.IsSet("no-command-eval") {
+			if len(cfg.CommandMode) > 0 {
+				return fmt.Errorf("you may set either 'no-command-eval' or 'command-mode', but not both")
+			}
+			if cfg.NoCommandEval {
+				cfg.CommandMode = commandModeRepoExecutableStrict
+			}
+		}
+
+		if !slices.Contains(commandModes, cfg.CommandMode) {
+			return fmt.Errorf("invalid value '%s' for option 'command-mode' - can be one of %v", cfg.CommandMode, commandModes)
+		}
+
 		isSetNoPlugins := c.IsSet("no-plugins")
 		if configFile != nil {
 			if _, exists := configFile.Config["no-plugins"]; exists {
@@ -740,24 +775,24 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		// Show a warning if plugins are enabled by no-command-eval or no-local-hooks is set
+		// Show a warning if plugins are enabled but commandModeRepoExecutableStrict or no-local-hooks is set
 		if isSetNoPlugins && !cfg.NoPlugins {
-			msg := "Plugins have been specifically enabled, despite %s being enabled. " +
-				"Plugins can execute arbitrary hooks and commands, make sure you are " +
-				"whitelisting your plugins in " +
-				"your environment hook."
+			msg := "Plugins have been explicitly enabled via configuration, despite %s being enabled."
 
-			switch {
-			case cfg.NoCommandEval:
-				l.Warn(msg, "no-command-eval")
-			case cfg.NoLocalHooks:
+			if cfg.CommandMode == commandModeRepoExecutableStrict {
+				l.Warn(msg, commandModeRepoExecutableStrict)
+			}
+			if cfg.NoLocalHooks {
 				l.Warn(msg, "no-local-hooks")
+			}
+			if cfg.CommandMode == commandModeRepoExecutableStrict || cfg.NoLocalHooks {
+				l.Warn("Plugins can execute arbitrary hooks and commands, make sure you are allow-listing your plugins in your environment hook.")
 			}
 		}
 
-		// Turning off command eval or local hooks will also turn off plugins unless
-		// `--no-plugins=false` is provided specifically
-		if (cfg.NoCommandEval || cfg.NoLocalHooks) && !isSetNoPlugins {
+		// Specifying commandModeRepoExecutableStrict turning off local hooks will also turn off plugins unless
+		// `--no-plugins=false` is set explicitly
+		if (cfg.CommandMode == commandModeRepoExecutableStrict || cfg.NoLocalHooks) && !isSetNoPlugins {
 			cfg.NoPlugins = true
 		}
 

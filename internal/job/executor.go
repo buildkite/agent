@@ -692,8 +692,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
 	// It's important to do this before checking out plugins, in case you want
-	// to use the global environment hook to whitelist the plugins that are
-	// allowed to be used.
+	// to use the global environment hook to allow-list plugins.
 	err = e.executeGlobalHook(ctx, "environment")
 	return err
 }
@@ -873,24 +872,25 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		return fmt.Errorf("The command phase has no `command` to execute. Provide a `command` field in your step configuration, or define a `command` hook in a step plug-in, your repository `.buildkite/hooks`, or agent `hooks-path`.")
 	}
 
-	scriptFileName := strings.Replace(e.Command, "\n", "", -1)
-	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
-	commandIsScript := err == nil && utils.FileExists(pathToCommand)
+	command := strings.Replace(e.Command, "\n", "", -1)
+
+	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), command))
+	commandIsFile := err == nil && utils.FileExists(pathToCommand)
 	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
 
-	// If the command isn't a script, then it's something we need
+	// If the command isn't a file, then it's something we need
 	// to eval. But before we even try running it, we should double
 	// check that the agent is allowed to eval commands.
-	if !commandIsScript && !e.CommandEval {
-		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
+	if !commandIsFile && !e.CommandEval {
+		e.shell.Commentf("No such file: \"%s\"", command)
+		return fmt.Errorf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a file within your repository to execute instead (such as scripts/test.sh).")
 	}
 
-	// Also make sure that the script we've resolved is definitely within this
+	// Also make sure that the file we've resolved is definitely within this
 	// repository checkout and isn't elsewhere on the system.
-	if commandIsScript && !e.CommandEval && !strings.HasPrefix(pathToCommand, e.shell.Getwd()+string(os.PathSeparator)) {
-		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
+	if commandIsFile && !e.CommandEval && !strings.HasPrefix(pathToCommand, e.shell.Getwd()+string(os.PathSeparator)) {
+		e.shell.Commentf("No such file: \"%s\"", command)
+		return fmt.Errorf("This agent is only allowed to execute files within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a file within your repository to execute instead (such as scripts/test.sh).")
 	}
 
 	var cmdToExec string
@@ -924,7 +924,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		}
 
 		cmdToExec = batchScript
-	} else if commandIsScript {
+	} else if commandIsFile {
 		// If we're running without CommandEval, the usual reason is we're
 		// trying to protect the agent from malicious activity from outside
 		// (including from the master).
@@ -979,7 +979,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 
 	// We added the `trap` below because we used to think that:
 	//
-	// If we aren't running a script, try and detect if we are using a posix shell
+	// If we aren't executing a file, try and detect if we are using a posix shell
 	// and if so add a trap so that the intermediate shell doesn't swallow signals
 	// from cancellation
 	//
@@ -991,7 +991,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	//    elsewhere in the agent.
 	//
 	// Therefore, we are phasing it out under an experiment.
-	if !experiments.IsEnabled(ctx, experiments.AvoidRecursiveTrap) && !commandIsScript && shellscript.IsPOSIXShell(e.Shell) {
+	if !experiments.IsEnabled(ctx, experiments.AvoidRecursiveTrap) && !commandIsFile && shellscript.IsPOSIXShell(e.Shell) {
 		cmdToExec = fmt.Sprintf("trap 'kill -- $$' INT TERM QUIT; %s", cmdToExec)
 	}
 
