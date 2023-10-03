@@ -142,13 +142,13 @@ type AgentStartConfig struct {
 
 	NoSSHKeyscan              bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval             bool     `cli:"no-command-eval"`
+	CommandMode               string   `cli:"command-mode"`
+	CommandExecutableRepoOnly bool     `cli:"command-executable-repo-only"`
 	NoLocalHooks              bool     `cli:"no-local-hooks"`
 	NoPlugins                 bool     `cli:"no-plugins"`
 	NoPluginValidation        bool     `cli:"no-plugin-validation"`
 	NoFeatureReporting        bool     `cli:"no-feature-reporting"`
 	AllowedRepositories       []string `cli:"allowed-repositories" normalize:"list"`
-	CommandMode               string   `cli:"command-mode"`
-	CommandExecutableRepoOnly bool     `cli:"command-executable-repo-only"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -526,8 +526,19 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-command-eval",
-			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins (by default)",
+			Usage:  "Don't allow this agent to run arbitrary console commands; also disables plugins by default - can only be used with command-mode 'legacy'",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
+		},
+		cli.StringFlag{
+			Name:   "command-mode",
+			Value:  commandModeLegacy,
+			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'executable'",
+			EnvVar: "BUILDKITE_COMMAND_MODE",
+		},
+		cli.BoolFlag{
+			Name:   "command-executable-repo-only",
+			Usage:  "Command executable must be in the repo - only used if 'command-mode' is 'executable'",
+			EnvVar: "BUILDKITE_COMMAND_EXECUTABLE_REPO_ONLY",
 		},
 		cli.BoolFlag{
 			Name:   "no-plugins",
@@ -559,17 +570,6 @@ var AgentStartCommand = cli.Command{
 			Value:  &cli.StringSlice{},
 			Usage:  "A comma-separated list of regular expressions representing repositories the agent is allowed to clone (for example, \"^git@github.com:buildkite/.*\" or \"^https://github.com/buildkite/.*\")",
 			EnvVar: "BUILDKITE_ALLOWED_REPOSITORIES",
-		},
-		cli.StringFlag{
-			Name:   "command-mode",
-			Value:  commandModeShell,
-			Usage:  "Specifies how the agent should run commands - can be 'shell' or 'executable'",
-			EnvVar: "BUILDKITE_COMMAND_MODE",
-		},
-		cli.BoolFlag{
-			Name:   "command-executable-repo-only",
-			Usage:  "Command executable must be in the repo - only used if 'command-mode' is 'executable'",
-			EnvVar: "BUILDKITE_COMMAND_EXECUTABLE_REPO_ONLY",
 		},
 		cli.BoolFlag{
 			Name:   "metrics-datadog",
@@ -903,6 +903,8 @@ var AgentStartCommand = cli.Command{
 			GitSubmodules:                           !cfg.NoGitSubmodules,
 			SSHKeyscan:                              !cfg.NoSSHKeyscan,
 			CommandEval:                             !cfg.NoCommandEval,
+			CommandMode:                             cfg.CommandMode,
+			CommandExecutableRepoOnly:               cfg.CommandExecutableRepoOnly,
 			PluginsEnabled:                          !cfg.NoPlugins,
 			PluginValidation:                        !cfg.NoPluginValidation,
 			LocalHooksEnabled:                       !cfg.NoLocalHooks,

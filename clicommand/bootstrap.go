@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
+	"golang.org/x/exp/slices"
 )
 
 const bootstrapHelpDescription = `Usage:
@@ -78,6 +79,8 @@ type BootstrapConfig struct {
 	SocketsPath                  string   `cli:"sockets-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool     `cli:"command-eval"`
+	CommandMode                  string   `cli:"command-mode"`
+	CommandExecutableRepoOnly    bool     `cli:"command-executable-repo-only"`
 	PluginsEnabled               bool     `cli:"plugins-enabled"`
 	PluginValidation             bool     `cli:"plugin-validation"`
 	PluginsAlwaysCloneFresh      bool     `cli:"plugins-always-clone-fresh"`
@@ -291,6 +294,17 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Allow running of arbitrary commands",
 			EnvVar: "BUILDKITE_COMMAND_EVAL",
 		},
+		cli.StringFlag{
+			Name:   "command-mode",
+			Value:  commandModeLegacy,
+			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'executable'",
+			EnvVar: "BUILDKITE_COMMAND_MODE",
+		},
+		cli.BoolFlag{
+			Name:   "command-executable-repo-only",
+			Usage:  "Command executable must be in the repo - only used if 'command-mode' is 'executable'",
+			EnvVar: "BUILDKITE_COMMAND_EXECUTABLE_REPO_ONLY",
+		},
 		cli.BoolTFlag{
 			Name:   "plugins-enabled",
 			Usage:  "Allow plugins to be run",
@@ -383,6 +397,11 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
+		// validate command-mode
+		if !slices.Contains(commandModes, cfg.CommandMode) {
+			return fmt.Errorf("unknown command-mode '%s'", cfg.CommandMode)
+		}
+
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
@@ -404,6 +423,7 @@ var BootstrapCommand = cli.Command{
 			CleanCheckout:                cfg.CleanCheckout,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
+			CommandMode:                  cfg.CommandMode,
 			Commit:                       cfg.Commit,
 			Debug:                        cfg.Debug,
 			GitCheckoutFlags:             cfg.GitCheckoutFlags,

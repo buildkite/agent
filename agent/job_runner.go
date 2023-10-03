@@ -468,6 +468,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.SSHKeyscan)
 	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitSubmodules)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandEval)
+	env["BUILDKITE_COMMAND_MODE"] = r.conf.AgentConfiguration.CommandMode
+	env["BUILDKITE_COMMAND_EXECUTABLE_REPO_ONLY"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandExecutableRepoOnly)
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
