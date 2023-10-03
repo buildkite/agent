@@ -424,6 +424,7 @@ var BootstrapCommand = cli.Command{
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			CommandMode:                  cfg.CommandMode,
+			CommandRepoOnly:              cfg.CommandRepoOnly,
 			Commit:                       cfg.Commit,
 			Debug:                        cfg.Debug,
 			GitCheckoutFlags:             cfg.GitCheckoutFlags,

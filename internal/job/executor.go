@@ -913,13 +913,11 @@ func (e *Executor) executeProgramCommands(ctx context.Context, command string) e
 	if !filepath.IsAbs(path) {
 		path, err = filepath.Abs(filepath.Join(e.shell.Getwd(), path))
 		if err != nil {
-			e.shell.Errorf("Can't get absolute path of command %q", command)
-			return err
+			return fmt.Errorf("can't get absolute path of command %q: %v", command, err)
 		}
 	}
 
 	if e.ExecutorConfig.CommandRepoOnly && !strings.HasPrefix(path, e.shell.Getwd()+string(os.PathSeparator)) {
-		e.shell.Errorf("Command must refer to a program in the repo")
 		return fmt.Errorf("command must refer to a program in the repo")
 	}
 
