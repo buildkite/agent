@@ -176,11 +176,23 @@ type MatrixAdjustments []*MatrixAdjustment
 // MatrixAdjustment models an adjustment - a combination of (possibly new)
 // matrix values, and skip/soft fail configuration.
 type MatrixAdjustment struct {
-	With     MatrixAdjustmentWith `yaml:"with"`
-	Skip     bool                 `yaml:"skip,omitempty"`
-	SoftFail bool                 `yaml:"soft_fail,omitempty"`
+	With MatrixAdjustmentWith `yaml:"with"`
+	Skip any                  `yaml:"skip,omitempty"`
 
-	RemainingFields map[string]any `yaml:",inline"`
+	RemainingFields map[string]any `yaml:",inline"` // NB: soft_fail is in the remaining fields
+}
+
+func (ma *MatrixAdjustment) ShouldSkip() bool {
+	switch s := ma.Skip.(type) {
+	case bool:
+		return s
+
+	case nil:
+		return false
+
+	default:
+		return true
+	}
 }
 
 // MarshalJSON is needed to use inlineFriendlyMarshalJSON.
