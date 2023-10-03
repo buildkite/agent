@@ -297,12 +297,12 @@ var BootstrapCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "command-mode",
 			Value:  commandModeLegacy,
-			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'executable'",
+			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'program'",
 			EnvVar: "BUILDKITE_COMMAND_MODE",
 		},
 		cli.BoolTFlag{
 			Name:   "command-repo-only",
-			Usage:  "Command must be in the repo - only used if 'command-mode' is 'executable'",
+			Usage:  "Command must be in the repo - only used if 'command-mode' is 'program'",
 			EnvVar: "BUILDKITE_COMMAND_REPO_ONLY",
 		},
 		cli.BoolTFlag{
@@ -398,7 +398,7 @@ var BootstrapCommand = cli.Command{
 		}
 
 		// validate command-mode
-		if !slices.Contains(commandModes, cfg.CommandMode) {
+		if !slices.Contains(job.CommandModes, cfg.CommandMode) {
 			return fmt.Errorf("unknown command-mode '%s'", cfg.CommandMode)
 		}
 

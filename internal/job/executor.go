@@ -36,14 +36,14 @@ import (
 
 const (
 	// command will be evaluated via configured shell using legacy method
-	commandModeLegacy = "legacy"
+	CommandModeLegacy = "legacy"
 	// command will be evaluated via configured shell
-	commandModeShell = "shell"
-	// command will be run directly (not via shell) as an executable
-	commandModeExecutable = "executable"
+	CommandModeShell = "shell"
+	// command will be run directly (not via shell) as a binary executable or text file starting with shebang
+	CommandModeProgram = "program"
 )
 
-var commandModes = []string{commandModeLegacy, commandModeShell, commandModeExecutable}
+var CommandModes = []string{CommandModeLegacy, CommandModeShell, CommandModeProgram}
 
 // Executor represents the phases of execution in a Buildkite Job. It's run as
 // a sub-process of the buildkite-agent and finishes at the conclusion of a job.
@@ -878,13 +878,13 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	defer redactors.Flush()
 
 	switch e.ExecutorConfig.CommandMode {
-	case commandModeLegacy:
+	case CommandModeLegacy:
 		return e.executeLegacyCommands(ctx)
-	case commandModeShell:
+	case CommandModeShell:
 		return e.executeShellCommands(ctx)
-	case commandModeExecutable:
+	case CommandModeProgram:
 		for _, command := range strings.Split(e.Command, "\n") {
-			err := e.executeExecutableCommands(ctx, command)
+			err := e.executeProgramCommands(ctx, command)
 			if err != nil {
 				return err
 			}
@@ -896,7 +896,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	}
 }
 
-func (e *Executor) executeExecutableCommands(ctx context.Context, command string) error {
+func (e *Executor) executeProgramCommands(ctx context.Context, command string) error {
 	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
 	var err error
@@ -904,7 +904,7 @@ func (e *Executor) executeExecutableCommands(ctx context.Context, command string
 	span.AddAttributes(map[string]string{
 		"hook.name":         "command",
 		"hook.type":         "default",
-		"hook.command-mode": "executable",
+		"hook.command-mode": "program",
 	})
 
 	cmdTokens, err := shellwords.Split(command)
@@ -919,13 +919,13 @@ func (e *Executor) executeExecutableCommands(ctx context.Context, command string
 	}
 
 	if e.ExecutorConfig.CommandRepoOnly && !strings.HasPrefix(path, e.shell.Getwd()+string(os.PathSeparator)) {
-		e.shell.Errorf("Command must refer to an executable in the repo")
-		return fmt.Errorf("command must refer to an executable in the repo")
+		e.shell.Errorf("Command must refer to a program in the repo")
+		return fmt.Errorf("command must refer to a program in the repo")
 	}
 
 	args := cmdTokens[1:]
 
-	e.shell.Headerf("Running executable command")
+	e.shell.Headerf("Running program")
 
 	if e.Debug {
 		e.shell.Promptf("%s", process.FormatCommand(path, args))

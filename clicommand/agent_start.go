@@ -22,6 +22,7 @@ import (
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/logger"
@@ -56,17 +57,6 @@ Example:
     $ buildkite-agent start --token xxx`
 
 var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
-
-const (
-	// command will be evaluated via configured shell using legacy method
-	commandModeLegacy = "legacy"
-	// command will be evaluated via configured shell
-	commandModeShell = "shell"
-	// command will be run directly (not via shell) as an executable
-	commandModeExecutable = "executable"
-)
-
-var commandModes = []string{commandModeLegacy, commandModeShell, commandModeExecutable}
 
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
@@ -531,13 +521,13 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "command-mode",
-			Value:  commandModeLegacy,
-			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'executable'",
+			Value:  job.CommandModeLegacy,
+			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'program'",
 			EnvVar: "BUILDKITE_COMMAND_MODE",
 		},
 		cli.BoolTFlag{
 			Name:   "command-repo-only",
-			Usage:  "Command must be in the repo - only used if 'command-mode' is 'executable'",
+			Usage:  "Command must be in the repo - only used if 'command-mode' is 'program'",
 			EnvVar: "BUILDKITE_COMMAND_REPO_ONLY",
 		},
 		cli.BoolFlag{
@@ -757,11 +747,11 @@ var AgentStartCommand = cli.Command{
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
 		}
 
-		if !slices.Contains(commandModes, cfg.CommandMode) {
+		if !slices.Contains(job.CommandModes, cfg.CommandMode) {
 			return fmt.Errorf("unknown command-mode '%s'", cfg.CommandMode)
 		}
 
-		if cfg.NoCommandEval && cfg.CommandMode != commandModeLegacy {
+		if cfg.NoCommandEval && cfg.CommandMode != job.CommandModeLegacy {
 			return fmt.Errorf("can't set no-command-eval unless command-mode is 'legacy'")
 		}
 

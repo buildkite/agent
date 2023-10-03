@@ -98,7 +98,7 @@ type ExecutorConfig struct {
 	// How to execute commands
 	CommandMode string
 
-	// Should executable commands have to be in the repo
+	// Should program commands have to be in the repo
 	CommandRepoOnly bool
 
 	// Are plugins enabled?
