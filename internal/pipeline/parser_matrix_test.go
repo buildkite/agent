@@ -104,6 +104,8 @@ steps:
           skip: true
         - with: 42
           soft_fail: true
+        - with: banana
+          skip: "how dare you, you know i'm allergic to bananas!"
 `,
 			want: &Pipeline{
 				Steps: Steps{
@@ -119,8 +121,14 @@ steps:
 									Skip: true,
 								},
 								{
-									With:     MatrixAdjustmentWith{"": 42},
-									SoftFail: true,
+									With: MatrixAdjustmentWith{"": 42},
+									RemainingFields: map[string]any{
+										"soft_fail": true,
+									},
+								},
+								{
+									With: MatrixAdjustmentWith{"": "banana"},
+									Skip: "how dare you, you know i'm allergic to bananas!",
 								},
 							},
 						},
@@ -140,6 +148,10 @@ steps:
           {
             "soft_fail": true,
             "with": 42
+          },
+          {
+            "skip": "how dare you, you know i'm allergic to bananas!",
+            "with": "banana"
           }
         ],
         "setup": [
@@ -265,7 +277,9 @@ steps:
 										"arch": "ppc",
 										"os":   8,
 									},
-									SoftFail: true,
+									RemainingFields: map[string]any{
+										"soft_fail": true,
+									},
 								},
 							},
 						},
@@ -369,7 +383,9 @@ steps:
 										"arch": "s390x",
 										"os":   "zos",
 									},
-									SoftFail: true,
+									RemainingFields: map[string]any{
+										"soft_fail": true,
+									},
 								},
 							},
 						},
