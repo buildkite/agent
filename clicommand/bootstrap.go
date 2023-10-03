@@ -296,13 +296,13 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "command-mode",
-			Value:  commandModeLegacy,
+			Value:  job.CommandModeLegacy,
 			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'program'",
 			EnvVar: "BUILDKITE_COMMAND_MODE",
 		},
 		cli.BoolTFlag{
 			Name:   "command-repo-only",
-			Usage:  "Command must be in the repo - only used if 'command-mode' is 'program'",
+			Usage:  "Command must refer to a program in the repo - only used if 'command-mode' is 'program'",
 			EnvVar: "BUILDKITE_COMMAND_REPO_ONLY",
 		},
 		cli.BoolTFlag{

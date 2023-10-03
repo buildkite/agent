@@ -527,7 +527,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolTFlag{
 			Name:   "command-repo-only",
-			Usage:  "Command must be in the repo - only used if 'command-mode' is 'program'",
+			Usage:  "Command must refer to a program in the repo - only used if 'command-mode' is 'program'",
 			EnvVar: "BUILDKITE_COMMAND_REPO_ONLY",
 		},
 		cli.BoolFlag{
