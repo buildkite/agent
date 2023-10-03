@@ -911,19 +911,21 @@ func (e *Executor) executeExecutableCommands(ctx context.Context, command string
 
 	path := cmdTokens[0]
 	if !filepath.IsAbs(path) {
-		path, err = filepath.Abs(filepath.Join(e.shell.Getwd(), command))
+		path, err = filepath.Abs(filepath.Join(e.shell.Getwd(), path))
 		if err != nil {
 			e.shell.Errorf("Can't get absolute path of command %q", command)
 			return err
 		}
 	}
 
-	if e.ExecutorConfig.CommandExecutableRepoOnly && !strings.HasPrefix(path, e.shell.Getwd()+string(os.PathSeparator)) {
+	if e.ExecutorConfig.CommandRepoOnly && !strings.HasPrefix(path, e.shell.Getwd()+string(os.PathSeparator)) {
 		e.shell.Errorf("Command must refer to an executable in the repo")
 		return fmt.Errorf("command must refer to an executable in the repo")
 	}
 
 	args := cmdTokens[1:]
+
+	e.shell.Headerf("Running executable command")
 
 	if e.Debug {
 		e.shell.Promptf("%s", process.FormatCommand(path, args))

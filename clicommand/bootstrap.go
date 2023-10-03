@@ -80,7 +80,7 @@ type BootstrapConfig struct {
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool     `cli:"command-eval"`
 	CommandMode                  string   `cli:"command-mode"`
-	CommandExecutableRepoOnly    bool     `cli:"command-executable-repo-only"`
+	CommandRepoOnly              bool     `cli:"command-repo-only"`
 	PluginsEnabled               bool     `cli:"plugins-enabled"`
 	PluginValidation             bool     `cli:"plugin-validation"`
 	PluginsAlwaysCloneFresh      bool     `cli:"plugins-always-clone-fresh"`
@@ -300,10 +300,10 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'executable'",
 			EnvVar: "BUILDKITE_COMMAND_MODE",
 		},
-		cli.BoolFlag{
-			Name:   "command-executable-repo-only",
-			Usage:  "Command executable must be in the repo - only used if 'command-mode' is 'executable'",
-			EnvVar: "BUILDKITE_COMMAND_EXECUTABLE_REPO_ONLY",
+		cli.BoolTFlag{
+			Name:   "command-repo-only",
+			Usage:  "Command must be in the repo - only used if 'command-mode' is 'executable'",
+			EnvVar: "BUILDKITE_COMMAND_REPO_ONLY",
 		},
 		cli.BoolTFlag{
 			Name:   "plugins-enabled",

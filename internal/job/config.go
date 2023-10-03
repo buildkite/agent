@@ -99,7 +99,7 @@ type ExecutorConfig struct {
 	CommandMode string
 
 	// Should executable commands have to be in the repo
-	CommandExecutableRepoOnly bool
+	CommandRepoOnly bool
 
 	// Are plugins enabled?
 	PluginsEnabled bool

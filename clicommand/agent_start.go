@@ -140,15 +140,15 @@ type AgentStartConfig struct {
 	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
 
-	NoSSHKeyscan              bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval             bool     `cli:"no-command-eval"`
-	CommandMode               string   `cli:"command-mode"`
-	CommandExecutableRepoOnly bool     `cli:"command-executable-repo-only"`
-	NoLocalHooks              bool     `cli:"no-local-hooks"`
-	NoPlugins                 bool     `cli:"no-plugins"`
-	NoPluginValidation        bool     `cli:"no-plugin-validation"`
-	NoFeatureReporting        bool     `cli:"no-feature-reporting"`
-	AllowedRepositories       []string `cli:"allowed-repositories" normalize:"list"`
+	NoSSHKeyscan        bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval       bool     `cli:"no-command-eval"`
+	CommandMode         string   `cli:"command-mode"`
+	CommandRepoOnly     bool     `cli:"command-repo-only"`
+	NoLocalHooks        bool     `cli:"no-local-hooks"`
+	NoPlugins           bool     `cli:"no-plugins"`
+	NoPluginValidation  bool     `cli:"no-plugin-validation"`
+	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
+	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -535,10 +535,10 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'executable'",
 			EnvVar: "BUILDKITE_COMMAND_MODE",
 		},
-		cli.BoolFlag{
-			Name:   "command-executable-repo-only",
-			Usage:  "Command executable must be in the repo - only used if 'command-mode' is 'executable'",
-			EnvVar: "BUILDKITE_COMMAND_EXECUTABLE_REPO_ONLY",
+		cli.BoolTFlag{
+			Name:   "command-repo-only",
+			Usage:  "Command must be in the repo - only used if 'command-mode' is 'executable'",
+			EnvVar: "BUILDKITE_COMMAND_REPO_ONLY",
 		},
 		cli.BoolFlag{
 			Name:   "no-plugins",
@@ -904,7 +904,7 @@ var AgentStartCommand = cli.Command{
 			SSHKeyscan:                              !cfg.NoSSHKeyscan,
 			CommandEval:                             !cfg.NoCommandEval,
 			CommandMode:                             cfg.CommandMode,
-			CommandExecutableRepoOnly:               cfg.CommandExecutableRepoOnly,
+			CommandRepoOnly:                         cfg.CommandRepoOnly,
 			PluginsEnabled:                          !cfg.NoPlugins,
 			PluginValidation:                        !cfg.NoPluginValidation,
 			LocalHooksEnabled:                       !cfg.NoLocalHooks,
