@@ -83,9 +83,9 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name            string
-		matrixSelection map[string]any
-		step, want      *CommandStep
+		name       string
+		ms         MatrixPermutation
+		step, want *CommandStep
 	}{
 		{
 			name: "it does nothing when there's no matrix stuff",
@@ -114,10 +114,10 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 		},
 		{
 			name: "it interplates environment variable names and values",
-			matrixSelection: map[string]any{
-				"demonym_suffix": "DER",
-				"value":          "true",
-				"name":           "Taylor Launtner",
+			ms: MatrixPermutation{
+				{Dimension: "name", Value: "Taylor Launtner"},
+				{Dimension: "demonym_suffix", Value: "DER"},
+				{Dimension: "value", Value: "true"},
 			},
 			step: &CommandStep{
 				Command: "script/buildkite/xxx.sh",
@@ -136,9 +136,9 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 		},
 		{
 			name: "it interpolates plugin config",
-			matrixSelection: map[string]any{
-				"docker_version": "4.5.6",
-				"image":          "alpine",
+			ms: MatrixPermutation{
+				{Dimension: "docker_version", Value: "4.5.6"},
+				{Dimension: "image", Value: "alpine"},
 			},
 			step: &CommandStep{
 				Command: "script/buildkite/xxx.sh",
@@ -165,9 +165,9 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 		},
 		{
 			name: "it interpolates commands",
-			matrixSelection: map[string]any{
-				"goos":   "linux",
-				"goarch": "amd64",
+			ms: MatrixPermutation{
+				{Dimension: "goos", Value: "linux"},
+				{Dimension: "goarch", Value: "amd64"},
 			},
 			step: &CommandStep{Command: "GOOS={{matrix.goos}} GOARCH={{matrix.goarch}} go build -o foobar ."},
 			want: &CommandStep{Command: "GOOS=linux GOARCH=amd64 go build -o foobar ."},
@@ -177,7 +177,7 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			tc.step.MatrixInterpolate(tc.matrixSelection)
+			tc.step.MatrixInterpolate(tc.ms)
 			if diff := cmp.Diff(tc.step, tc.want, cmp.Comparer(ordered.EqualSA)); diff != "" {
 				t.Errorf("CommandStep diff after MatrixInterpolate (-got +want):\n%s", diff)
 			}

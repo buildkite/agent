@@ -8,7 +8,7 @@ import (
 
 func TestMatrixInterpolater_Simple(t *testing.T) {
 	t.Parallel()
-	transform := matrixInterpolator(map[string]any{"": "llama"})
+	transform := newMatrixInterpolator(MatrixPermutation{{Dimension: "", Value: "llama"}})
 
 	tests := []struct {
 		name, input, want string
@@ -55,13 +55,11 @@ func TestMatrixInterpolater_Simple(t *testing.T) {
 
 func TestMatrixInterpolater_Multiple(t *testing.T) {
 	t.Parallel()
-	transform := matrixInterpolator(
-		map[string]any{
-			"protagonist": "kuzco",
-			"animal":      "llama",
-			"weapon":      "poison",
-		},
-	)
+	transform := newMatrixInterpolator(MatrixPermutation{
+		{Dimension: "protagonist", Value: "kuzco"},
+		{Dimension: "animal", Value: "llama"},
+		{Dimension: "weapon", Value: "poison"},
+	})
 
 	tests := []struct {
 		name, input, want string
@@ -116,24 +114,24 @@ func TestMatrixInterpolateAny(t *testing.T) {
 
 	cases := []struct {
 		name              string
-		matrixSelection   map[string]any
+		ms                MatrixPermutation
 		interpolate, want any
 	}{
 		{
-			name:            "string",
-			interpolate:     "this is a {{matrix}}",
-			matrixSelection: map[string]any{"": "llama"},
-			want:            "this is a llama",
+			name:        "string",
+			interpolate: "this is a {{matrix}}",
+			ms:          MatrixPermutation{{Dimension: "", Value: "llama"}},
+			want:        "this is a llama",
 		},
 		{
 			name: "deeply nested interpolation",
-			matrixSelection: map[string]any{
-				"mountain": "cotopaxi",
-				"country":  "ecuador",
-				"food":     "bolon de verde",
-				"animal":   "andean condor",
-				"currency": "usd",
-				"language": "spanish",
+			ms: MatrixPermutation{
+				{Dimension: "mountain", Value: "cotopaxi"},
+				{Dimension: "country", Value: "ecuador"},
+				{Dimension: "food", Value: "bolon de verde"},
+				{Dimension: "animal", Value: "andean condor"},
+				{Dimension: "currency", Value: "usd"},
+				{Dimension: "language", Value: "spanish"},
 			},
 			interpolate: []any{
 				"one", "{{matrix.mountain}}", 3, "{{matrix.country}}", true,
@@ -154,19 +152,19 @@ func TestMatrixInterpolateAny(t *testing.T) {
 		},
 		{
 			name: "structs don't get interpolated",
-			matrixSelection: map[string]any{
-				"name":     "cotopaxi",
-				"altitude": "5897m",
+			ms: MatrixPermutation{
+				{Dimension: "name", Value: "cotopaxi"},
+				{Dimension: "altitude", Value: "5897m"},
 			},
 			interpolate: mountain{Name: "{{matrix.name}}", Altitude: "{{matrix.altitude}}"},
 			want:        mountain{Name: "{{matrix.name}}", Altitude: "{{matrix.altitude}}"},
 		},
 		{
 			name: "concrete containers (eg slices, maps that don't contain any) don't get interpolated",
-			matrixSelection: map[string]any{
-				"mountain": "cotopaxi",
-				"country":  "ecuador",
-				"animal":   "{{matrix.animal}}",
+			ms: MatrixPermutation{
+				{Dimension: "mountain", Value: "cotopaxi"},
+				{Dimension: "country", Value: "ecuador"},
+				{Dimension: "animal", Value: "andean condor"},
 			},
 			interpolate: []any{[]string{"{{matrix.mountain}}", "{{matrix.country}}"}, map[string]string{"animal": "{{matrix.animal}}"}},
 			want:        []any{[]string{"{{matrix.mountain}}", "{{matrix.country}}"}, map[string]string{"animal": "{{matrix.animal}}"}},
@@ -178,10 +176,10 @@ func TestMatrixInterpolateAny(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tf := matrixInterpolator(tc.matrixSelection)
+			tf := newMatrixInterpolator(tc.ms)
 			got := matrixInterpolateAny(tc.interpolate, tf)
 			if diff := cmp.Diff(got, tc.want); diff != "" {
-				t.Errorf("matrixInterpolateAny(% #v, % #v) diff (-got +want):\n%s", tc.interpolate, tc.matrixSelection, diff)
+				t.Errorf("matrixInterpolateAny(% #v, % #v) diff (-got +want):\n%s", tc.interpolate, tc.ms, diff)
 			}
 		})
 	}

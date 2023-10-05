@@ -111,9 +111,8 @@ func (p *Plugin) interpolate(tf stringTransformer) error {
 	return nil
 }
 
-func (p *Plugin) MatrixInterpolate(selection map[string]any) *Plugin {
+func (p *Plugin) MatrixInterpolate(transform stringTransformFunc) *Plugin {
 	new := &Plugin{}
-	transform := matrixInterpolator(selection)
 
 	new.Source = transform(p.Source)
 

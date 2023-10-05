@@ -11,17 +11,29 @@ var matrixTokenRE = regexp.MustCompile(`\{\{\s*matrix(\.[\w-\.]+)?\s*\}\}`)
 
 type stringTransformFunc = func(string) string
 
-// matrixInterpolator creates a reusable string transformer that applies matrix
+// MatrixPermutation represents a possible permutation of a matrix. If a matrix has three dimensions each with three values,
+// there will be 27 permutations. Each permutation is a slice of SelectedDimensions, with Dimension values being implicitly
+// unique
+type MatrixPermutation []SelectedDimension
+
+// SelectedDimension represents a single dimension/value pair in a matrix permutation.
+type SelectedDimension struct {
+	Dimension string `json:"dimension"`
+	Value     any    `json:"value"`
+}
+
+// newMatrixInterpolator creates a reusable string transformer that applies matrix
 // interpolation.
-func matrixInterpolator(selection map[string]any) stringTransformFunc {
+func newMatrixInterpolator(mp MatrixPermutation) stringTransformFunc {
 	replacements := make(map[string]string)
-	for dim, val := range selection {
-		if dim == "" {
-			replacements[""] = fmt.Sprint(val)
+	for _, sd := range mp {
+		if sd.Dimension == "" {
+			replacements[""] = fmt.Sprint(sd.Value)
 		} else {
-			replacements["."+dim] = fmt.Sprint(val)
+			replacements["."+sd.Dimension] = fmt.Sprint(sd.Value)
 		}
 	}
+
 	return func(src string) string {
 		return matrixTokenRE.ReplaceAllStringFunc(src, func(s string) string {
 			sub := matrixTokenRE.FindStringSubmatch(s)
