@@ -1,9 +1,8 @@
 package pipeline
 
 import (
-	"golang.org/x/exp/slices"
-
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 type PermutationSet []MatrixPermutation
@@ -25,7 +24,6 @@ func (m *Matrix) Permute() PermutationSet {
 		for _, value := range v {
 			valuesByDimension[k] = append(valuesByDimension[k], SelectedDimension{Dimension: k, Value: value})
 		}
-
 	}
 
 	p := cartesianProduct(maps.Values(valuesByDimension)...)
@@ -37,21 +35,21 @@ func (m *Matrix) Permute() PermutationSet {
 	return adjustPermutations(permutations, m.Adjustments)
 }
 
-func cartesianProduct[T any](slices ...[]T) [][]T {
-	if len(slices) == 0 {
+func cartesianProduct[T any](slcs ...[]T) [][]T {
+	if len(slcs) == 0 {
 		return [][]T{}
 	}
 
 	// Initialize the result with the first slice
 	result := [][]T{}
-	for _, element := range slices[0] {
+	for _, element := range slcs[0] {
 		result = append(result, []T{element})
 	}
 
 	// Iterate through the remaining slices and combine with the existing result
-	for i := 1; i < len(slices); i++ {
+	for i := 1; i < len(slcs); i++ {
 		tempResult := [][]T{}
-		for _, element := range slices[i] {
+		for _, element := range slcs[i] {
 			for _, existing := range result {
 				// Create a copy of the existing slice and add the new element
 				newSlice := make([]T, len(existing))
