@@ -112,9 +112,8 @@ func (p *Plugin) interpolate(env interpolate.Env) error {
 	return nil
 }
 
-func (p *Plugin) MatrixInterpolate(selection map[string]any) *Plugin {
+func (p *Plugin) MatrixInterpolate(transform stringTransformFunc) *Plugin {
 	new := &Plugin{}
-	transform := matrixInterpolator(selection)
 
 	new.Source = transform(p.Source)
 

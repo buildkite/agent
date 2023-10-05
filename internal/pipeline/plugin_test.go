@@ -91,9 +91,9 @@ func TestPluginMatrixInterpolate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name            string
-		matrixSelection map[string]any
-		p, want         *Plugin
+		name    string
+		ms      MatrixPermutation
+		p, want *Plugin
 	}{
 		{
 			name: "no matrix",
@@ -118,9 +118,9 @@ func TestPluginMatrixInterpolate(t *testing.T) {
 		},
 		{
 			name: "matrix",
-			matrixSelection: map[string]any{
-				"docker_version": "4.5.6",
-				"image":          "alpine",
+			ms: MatrixPermutation{
+				{Dimension: "docker_version", Value: "4.5.6"},
+				{Dimension: "image", Value: "alpine"},
 			},
 			p: &Plugin{
 				Source: "docker#{{matrix.docker_version}}",
@@ -142,7 +142,9 @@ func TestPluginMatrixInterpolate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			interpolated := test.p.MatrixInterpolate(test.matrixSelection)
+			tf := newMatrixInterpolator(test.ms)
+
+			interpolated := test.p.MatrixInterpolate(tf)
 			if diff := cmp.Diff(interpolated, test.want); diff != "" {
 				t.Errorf("interpolateMatrix() mismatch (-want +got):\n%s", diff)
 			}
