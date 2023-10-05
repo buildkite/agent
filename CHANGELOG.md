@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.56.0](https://github.com/buildkite/agent/tree/v3.56.0) (2023-10-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.55.0...v3.56.0)
+
+### Security
+- Upgrade libc packages in Ubuntu 22.04 docker image to those patched for [CVE-2023-4911](https://ubuntu.com/security/CVE-2023-4911) [#2410](https://github.com/buildkite/agent/pull/2410) (@triarius)
+
+### Added
+- Add `allow-repositories` param to enable repository allow-listing [#2361](https://github.com/buildkite/agent/pull/2361) (@david-poirier)
+
+### Changed
+- Upgrade pre-installed packages in docker images [#2410](https://github.com/buildkite/agent/pull/2410) (@triarius)
+- Add Matrix parsing [#2382](https://github.com/buildkite/agent/pull/2382) (@DrJosh9000)
+- Add `EXPERIMENTAL:` to the help text for all pipeline signing flags [#2412](https://github.com/buildkite/agent/pull/2412) (@moskyb)
+
+### Fixed
+- Fix parsing pipelines what use a string as the skip key in a matrix adjustment [#2407](https://github.com/buildkite/agent/pull/2407) (@moskyb)
+
+### Internal
+- Fix flaky TestLockFileRetriesAndTimesOut [#2392](https://github.com/buildkite/agent/pull/2392) (@DrJosh9000)
+- Fix apt install awscli [#2390](https://github.com/buildkite/agent/pull/2390) (@moskyb)
+- Fix incorrect check in a test 😅 [#2381](https://github.com/buildkite/agent/pull/2381) (@DrJosh9000)
+- Run createrepo_c on ubuntu [#2385](https://github.com/buildkite/agent/pull/2385) [#2389](https://github.com/buildkite/agent/pull/2389) (@moskyb)
+- Update dependabot config to use groups [#2384](https://github.com/buildkite/agent/pull/2384) (@moskyb)
+- Fix some typos in code comments [#2380](https://github.com/buildkite/agent/pull/2380) (@testwill)
+
+And (a slightly larger?) than usual amount of (@dependabot[bot]) updates [#2369](https://github.com/buildkite/agent/pull/2369) [#2371](https://github.com/buildkite/agent/pull/2371) [#2372](https://github.com/buildkite/agent/pull/2372) [#2373](https://github.com/buildkite/agent/pull/2373) [#2377](https://github.com/buildkite/agent/pull/2377) [#2378](https://github.com/buildkite/agent/pull/2378) [#2383](https://github.com/buildkite/agent/pull/2383) [#2386](https://github.com/buildkite/agent/pull/2386) [#2387](https://github.com/buildkite/agent/pull/2387) [#2397](https://github.com/buildkite/agent/pull/2397) [#2398](https://github.com/buildkite/agent/pull/2398) [#2399](https://github.com/buildkite/agent/pull/2399) [#2400](https://github.com/buildkite/agent/pull/2400) [#2401](https://github.com/buildkite/agent/pull/2401) [#2402](https://github.com/buildkite/agent/pull/2402) [#2403](https://github.com/buildkite/agent/pull/2403) [#2405](https://github.com/buildkite/agent/pull/2405)
+
+
 ## [v3.55.0](https://github.com/buildkite/agent/tree/v3.55.0) (2023-09-14)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.54.0...v3.55.0)
 
