@@ -35,6 +35,18 @@ const lockRetryDuration = time.Second
 
 var ErrShellNotStarted = errors.New("shell not started")
 
+type ProcessRunner interface {
+	Interrupt() error
+	Run(ctx context.Context) error
+	Terminate() error
+	WaitResult() error
+	WaitStatus() process.WaitStatus
+}
+
+var _ ProcessRunner = (*process.Process)(nil)
+
+type newProcess func(l logger.Logger, c process.Config) ProcessRunner
+
 // Shell represents a virtual shell, handles logging, executing commands and
 // provides hooks for capturing output and exit conditions.
 //
@@ -63,6 +75,9 @@ type Shell struct {
 	// Current working directory that shell commands get executed in
 	wd string
 
+	// function to create new process
+	NewProcess newProcess
+
 	// Currently running command
 	cmd     *command
 	cmdLock sync.Mutex
@@ -82,10 +97,11 @@ func New() (*Shell, error) {
 	}
 
 	return &Shell{
-		Logger: StderrLogger,
-		Env:    env.FromSlice(os.Environ()),
-		Writer: os.Stdout,
-		wd:     wd,
+		Logger:     StderrLogger,
+		Env:        env.FromSlice(os.Environ()),
+		Writer:     os.Stdout,
+		wd:         wd,
+		NewProcess: func(l logger.Logger, c process.Config) ProcessRunner { return process.New(l, c) },
 	}, nil
 }
 
@@ -456,7 +472,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 
 type command struct {
 	process.Config
-	proc *process.Process
+	proc ProcessRunner
 }
 
 // buildCommand returns a command that can later be executed
@@ -575,7 +591,7 @@ func (s *Shell) executeCommand(
 		}
 	}
 
-	p := process.New(logger.Discard, cfg)
+	p := s.NewProcess(logger.Discard, cfg)
 
 	s.cmdLock.Lock()
 	s.cmd.proc = p
