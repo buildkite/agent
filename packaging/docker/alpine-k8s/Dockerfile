@@ -2,7 +2,7 @@
 
 FROM alpine:3.18.3 AS base
 
-RUN apk update && apk add --no-cache \
+RUN apk update && apk upgrade && apk add --no-cache \
     bash \
     curl \
     docker-cli \

@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DOCKER_COMPOSE_VERSION=1.27.4
 ENV TINI_VERSION=0.19.0
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     apt-transport-https \
     curl \
     ca-certificates \
