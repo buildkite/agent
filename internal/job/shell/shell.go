@@ -121,6 +121,7 @@ func (s *Shell) WithStdin(r io.Reader) *Shell {
 		wd:                s.wd,
 		InterruptSignal:   s.InterruptSignal,
 		SignalGracePeriod: s.SignalGracePeriod,
+		NewProcess:        s.NewProcess,
 	}
 }
 
