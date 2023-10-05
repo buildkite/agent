@@ -595,11 +595,6 @@ var AgentStartCommand = cli.Command{
 			Value:  "buildkite-agent",
 		},
 		cli.StringFlag{
-			Name:   "job-verification-key-path",
-			Usage:  "EXPERIMENTAL: Path to a file containing a verification key. Passing this flag enables job verification. For hmac-sha256, the raw file content is used as the shared key",
-			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_KEY_PATH",
-		},
-		cli.StringFlag{
 			Name:   "job-verification-jwks-path",
 			Usage:  "EXPERIMENTAL: Path to a file containing a JSON Web Key Set (JWKS), used to verify job signatures. ",
 			EnvVar: "BUILDKITE_AGENT_JWKS_FILE_PATH",

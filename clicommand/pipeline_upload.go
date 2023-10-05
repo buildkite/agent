@@ -126,11 +126,6 @@ var PipelineUploadCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
 		cli.StringFlag{
-			Name:   "signing-key-path",
-			Usage:  "EXPERIMENTAL: Path to a file containing a signing key. Passing this flag enables pipeline signing. For hmac-sha256, the raw file content is used as the shared key",
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_PATH",
-		},
-		cli.StringFlag{
 			Name:   "jwks-file-path",
 			Usage:  "EXPERIMENTAL: Path to a file containing a JWKS. Passing this flag enables pipeline signing",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
