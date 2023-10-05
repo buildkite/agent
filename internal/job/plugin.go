@@ -451,7 +451,9 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// Try and lock this particular plugin while we check it out (we create
 	// the file outside of the plugin directory so git clone doesn't have
 	// a cry about the directory not being empty)
-	pluginCheckoutLock, err := e.shell.LockFile(ctx, filepath.Join(e.PluginsPath, id+".lock"), time.Minute*5)
+	checkoutCtx, canc := context.WithTimeout(ctx, 5*time.Minute)
+	defer canc()
+	pluginCheckoutLock, err := e.shell.LockFile(checkoutCtx, filepath.Join(e.PluginsPath, id+".lock"))
 	if err != nil {
 		return nil, err
 	}

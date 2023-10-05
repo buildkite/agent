@@ -25,7 +25,7 @@ type CommandStep struct {
 	Plugins   Plugins           `yaml:"plugins,omitempty"`
 	Env       map[string]string `yaml:"env,omitempty"`
 	Signature *Signature        `yaml:"signature,omitempty"`
-	Matrix    any               `yaml:"matrix,omitempty"`
+	Matrix    *Matrix           `yaml:"matrix,omitempty"`
 
 	// RemainingFields stores any other top-level mapping items so they at least
 	// survive an unmarshal-marshal round-trip.
