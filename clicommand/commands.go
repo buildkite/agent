@@ -2,7 +2,7 @@ package clicommand
 
 import "github.com/urfave/cli"
 
-var Commands = []cli.Command{
+var BuildkiteAgentCommands = []cli.Command{
 	AcknowledgementsCommand,
 	AgentStartCommand,
 	AnnotateCommand,

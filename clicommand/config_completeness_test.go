@@ -82,7 +82,7 @@ func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
 
 func TestAllCommandsAreTestedForConfigCompleteness(t *testing.T) {
 	allCommands := make([]cli.Command, 0, len(commandConfigPairs))
-	for _, command := range Commands {
+	for _, command := range BuildkiteAgentCommands {
 		if len(command.Subcommands) > 0 {
 			allCommands = append(allCommands, command.Subcommands...)
 		} else {
@@ -100,7 +100,7 @@ func TestAllCommandsAreTestedForConfigCompleteness(t *testing.T) {
 		}
 
 		if !found {
-			t.Errorf("command %q is not being tested for config completeness in clicommand_config_completeness_test.go", command.FullName())
+			t.Errorf("command %q is not being tested for config completeness in config_completeness_test.go\n Add it and its associated config struct to the commandConfigPairs slice in config_completeness_test.go", command.FullName())
 		}
 	}
 }

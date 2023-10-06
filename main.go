@@ -62,7 +62,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "buildkite-agent"
 	app.Version = version.Version()
-	app.Commands = clicommand.Commands
+	app.Commands = clicommand.BuildkiteAgentCommands
 	app.ErrWriter = os.Stderr
 
 	// When no sub command is used
