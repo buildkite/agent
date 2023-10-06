@@ -42,7 +42,7 @@ func NewKeyPair(keyID string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, err
 
 		return newECKeyPair(keyID, alg, crv)
 
-	case jwa.RS256, jwa.RS384, jwa.RS512:
+	case jwa.PS256, jwa.PS384, jwa.PS512:
 		return newRSAKeyPair(keyID, alg)
 
 	case jwa.EdDSA:
@@ -53,16 +53,24 @@ func NewKeyPair(keyID string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, err
 	}
 }
 
+func NewSymmetricKeyPairFromString(id, key string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+	return newSymmetricKeyPair(id, []byte(key), alg)
+}
+
 func newSymmetricKeyPair(id string, key []byte, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
 	skey, err := jwk.FromRaw(key)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create symmetric key: %s", err)
 	}
 
-	setAll(skey, map[string]interface{}{
+	err = setAll(skey, map[string]interface{}{
 		jwk.AlgorithmKey: alg,
+		jwk.KeyUsageKey:  jwk.ForSignature,
 		jwk.KeyIDKey:     id,
 	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to set key attributes: %s", err)
+	}
 
 	set := jwk.NewSet()
 	if err := set.AddKey(skey); err != nil {
@@ -106,11 +114,14 @@ func newKeyPair(id string, alg jwa.SignatureAlgorithm, privKey any) (jwk.Key, jw
 		return nil, nil, fmt.Errorf("jwk.FromRaw(%v) error = %v", privKey, err)
 	}
 
-	setAll(privJWK, map[string]interface{}{
+	err = setAll(privJWK, map[string]interface{}{
 		jwk.AlgorithmKey: alg,
 		jwk.KeyIDKey:     id,
 		jwk.KeyUsageKey:  jwk.ForSignature,
 	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to set key attributes: %s", err)
+	}
 
 	pubJWK, err := jwk.PublicKeyOf(privJWK)
 	if err != nil {

@@ -44,6 +44,8 @@ var commandConfigPairs = []configCommandPair{
 }
 
 func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
+	t.Parallel()
+
 	for _, pair := range commandConfigPairs {
 		flagNames := make(map[string]struct{}, len(pair.Command.Flags))
 		for _, flag := range pair.Command.Flags {

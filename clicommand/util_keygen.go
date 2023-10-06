@@ -33,19 +33,20 @@ var KeygenCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "key-id",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_KEY_ID",
-			Usage:  "The ID to use for the private key",
+			EnvVar: "BUILDKITE_AGENT_KEYGEN_KEY_ID",
+			Usage:  "The ID to use for the keys generated",
 		},
 		cli.StringFlag{
 			Name:   "private-key-filename",
 			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_KEY_FILENAME",
-			Usage:  "The filename to write the private key to",
+			Usage:  "The filename to write the private key to. Defaults to a name based on the key id in the current directory",
 		},
 		cli.StringFlag{
 			Name:   "public-keyset-filename",
 			EnvVar: "BUILDKITE_AGENT_KEYGEN_PUBLIC_KEYSET_FILENAME",
-			Usage:  "The filename to write the public keyset to",
+			Usage:  "The filename to write the public keyset to. Defaults to a name based on the key id in the current directory",
 		},
+
 		DebugFlag,
 		LogLevelFlag,
 	},
