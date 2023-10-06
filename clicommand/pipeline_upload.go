@@ -126,23 +126,18 @@ var PipelineUploadCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
 		cli.StringFlag{
-			Name:   "signing-key-path",
-			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing. For hmac-sha256, the raw file content is used as the shared key",
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_PATH",
-		},
-		cli.StringFlag{
 			Name:   "jwks-file-path",
-			Usage:  "Path to a file containing a JWKS. Passing this flag enables pipeline signing",
+			Usage:  "EXPERIMENTAL: Path to a file containing a JWKS. Passing this flag enables pipeline signing",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
 		},
 		cli.StringFlag{
 			Name:   "signing-key-id",
-			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
+			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
 		},
 		cli.StringFlag{
 			Name:   "signing-algorithm",
-			Usage:  fmt.Sprintf("The algorithm to use when signing the pipeline. Must be one of %v, and valid for the given signing key. Required if the JWK specified does not have an alg key", ValidSigningAlgorithms),
+			Usage:  fmt.Sprintf("EXPERIMENTAL: The algorithm to use when signing the pipeline. Must be one of %v, and valid for the given signing key. Required if the JWK specified does not have an alg key", ValidSigningAlgorithms),
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
 		},
 
