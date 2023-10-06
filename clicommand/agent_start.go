@@ -595,38 +595,33 @@ var AgentStartCommand = cli.Command{
 			Value:  "buildkite-agent",
 		},
 		cli.StringFlag{
-			Name:   "job-verification-key-path",
-			Usage:  "Path to a file containing a verification key. Passing this flag enables job verification. For hmac-sha256, the raw file content is used as the shared key",
-			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_KEY_PATH",
-		},
-		cli.StringFlag{
 			Name:   "job-verification-jwks-path",
-			Usage:  "Path to a file containing a JSON Web Key Set (JWKS), used to verify job signatures. ",
+			Usage:  "EXPERIMENTAL: Path to a file containing a JSON Web Key Set (JWKS), used to verify job signatures. ",
 			EnvVar: "BUILDKITE_AGENT_JWKS_FILE_PATH",
 		},
 		cli.StringFlag{
 			Name:   "job-signing-jwks-path",
-			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
+			Usage:  "EXPERIMENTAL: Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
 		},
 		cli.StringFlag{
 			Name:   "job-signing-algorithm",
-			Usage:  "The algorithm to use when signing pipelines. Must be an algorithm specified in RFC 7518: JWA. Required when using a JWKS, and the given key doesn't have an alg parameter",
+			Usage:  "EXPERIMENTAL: The algorithm to use when signing pipelines. Must be an algorithm specified in RFC 7518: JWA. Required when using a JWKS, and the given key doesn't have an alg parameter",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
 		},
 		cli.StringFlag{
 			Name:   "job-signing-key-id",
-			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
+			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
 		},
 		cli.StringFlag{
 			Name:   "job-verification-no-signature-behavior",
-			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v", verificationFailureBehaviors),
+			Usage:  fmt.Sprintf("EXPERIMENTAL: The behavior when a job is received without a signature. One of: %v", verificationFailureBehaviors),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
 		cli.StringFlag{
 			Name:   "job-verification-invalid-signature-behavior",
-			Usage:  fmt.Sprintf("The behavior when a job is received, and the signature calculated is different from the one specified. One of: %v", verificationFailureBehaviors),
+			Usage:  fmt.Sprintf("EXPERIMENTAL: The behavior when a job is received, and the signature calculated is different from the one specified. One of: %v", verificationFailureBehaviors),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_INVALID_SIGNATURE_BEHAVIOR",
 		},
 
