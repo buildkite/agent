@@ -55,7 +55,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS256,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..SHbGJSyZadUIr8M591h_63VS-o0hwZ0n63YBfLfFxzo",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..nSJsm-oUkkCcikVFtt4xzeE1ahOKs6DUaijKUSnjulo",
 		},
 		{
 			name: "HMAC-SHA384",
@@ -63,7 +63,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS384,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..i1cy6E6JfYtoHYmYxJXObV4zr3UD3fPTRLvhu9oi9nq3Shz2eSmLGkdqH8lkL9gQ",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ.._To-WQZzv3mQpN44Tajex526bjmoPJLuMgXd6JjpbbL_91gIe1j4cJiOYYFlZtej",
 		},
 		{
 			name: "HMAC-SHA512",
@@ -71,7 +71,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS512,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..QzsnwhNotMQHSHozrJfkohrpYa9usXPoGQGFUjNoD8kJBWa7zsRMEePo4MnP89P0kMfKOBds3HKR3xMc7X7ZyA",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..v_yGQkln9dygFz46IjYpO_jB-u9uXzoLwnIdS4UKQdMDJc96gc7ldq_19VdPRyGG2jE4kUnW4svkDDCOd6cBXw",
 		},
 		{
 			name:           "RSA-PSS 256",
@@ -149,12 +149,12 @@ func TestSignVerify(t *testing.T) {
 	}
 }
 
-type testFields map[string]string
+type testFields map[string]any
 
-func (m testFields) SignedFields() (map[string]string, error) { return m, nil }
+func (m testFields) SignedFields() (map[string]any, error) { return m, nil }
 
-func (m testFields) ValuesForFields(fields []string) (map[string]string, error) {
-	out := make(map[string]string, len(fields))
+func (m testFields) ValuesForFields(fields []string) (map[string]any, error) {
+	out := make(map[string]any, len(fields))
 	for _, f := range fields {
 		v, ok := m[f]
 		if !ok {
