@@ -25,9 +25,21 @@ type KeygenConfig struct {
 	Profile     string   `cli:"profile"`
 }
 
+// TODO: Add docs link when there is one.
 var KeygenCommand = cli.Command{
 	Name:  "keygen",
-	Usage: "Generate a new key pair, used to sign and verify jobs",
+	Usage: "Generate a new JWS key pair, used for signing and verifying jobs in Buildkite",
+	Description: `Usage:
+
+    buildkite-agent tool keygen [options...]
+
+Description:
+
+This (experimental!) command generates a new JWS key pair, used for signing and verifying jobs in Buildkite.
+The key pair is written to two files, a private keyset and a public keyset. The private keyset should be used
+as for signing, and the public for verification. The keysets are written in JWKS format.
+
+For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "alg",
@@ -60,6 +72,8 @@ var KeygenCommand = cli.Command{
 	Action: func(c *cli.Context) {
 		_, cfg, l, _, done := setupLoggerAndConfig[KeygenConfig](context.Background(), c)
 		defer done()
+
+		l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
 
 		sigAlg := jwa.SignatureAlgorithm(cfg.Alg)
 
