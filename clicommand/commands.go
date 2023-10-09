@@ -78,8 +78,8 @@ var BuildkiteAgentCommands = []cli.Command{
 	},
 	BootstrapCommand,
 	{
-		Name:  "util",
-		Usage: "Utility commands, intended for users and operators of the agent to run directly",
+		Name:  "tool",
+		Usage: "Utility commands, intended for users and operators of the agent to run directly on their machines, and not as part of a Buildkite job",
 		Subcommands: []cli.Command{
 			KeygenCommand,
 		},
