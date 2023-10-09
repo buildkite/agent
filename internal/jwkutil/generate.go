@@ -14,7 +14,7 @@ import (
 
 const symmetricKeyLength = 2048
 
-func NewKeyPair(keyID string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+func NewKeyPair(keyID string, alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 	switch alg {
 	case jwa.HS256, jwa.HS384, jwa.HS512:
 		key := make([]byte, symmetricKeyLength)
@@ -53,11 +53,11 @@ func NewKeyPair(keyID string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, err
 	}
 }
 
-func NewSymmetricKeyPairFromString(id, key string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+func NewSymmetricKeyPairFromString(id, key string, alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 	return newSymmetricKeyPair(id, []byte(key), alg)
 }
 
-func newSymmetricKeyPair(id string, key []byte, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+func newSymmetricKeyPair(id string, key []byte, alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 	skey, err := jwk.FromRaw(key)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create symmetric key: %s", err)
@@ -77,10 +77,10 @@ func newSymmetricKeyPair(id string, key []byte, alg jwa.SignatureAlgorithm) (jwk
 		return nil, nil, fmt.Errorf("failed to add key to set: %s", err)
 	}
 
-	return skey, set, err
+	return set, set, err
 }
 
-func newRSAKeyPair(id string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+func newRSAKeyPair(id string, alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate RSA private key: %s", err)
@@ -89,7 +89,7 @@ func newRSAKeyPair(id string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, err
 	return newKeyPair(id, alg, priv)
 }
 
-func newECKeyPair(id string, alg jwa.SignatureAlgorithm, crv elliptic.Curve) (jwk.Key, jwk.Set, error) {
+func newECKeyPair(id string, alg jwa.SignatureAlgorithm, crv elliptic.Curve) (jwk.Set, jwk.Set, error) {
 
 	priv, err := ecdsa.GenerateKey(crv, rand.Reader)
 	if err != nil {
@@ -99,7 +99,7 @@ func newECKeyPair(id string, alg jwa.SignatureAlgorithm, crv elliptic.Curve) (jw
 	return newKeyPair(id, alg, priv)
 }
 
-func newEdwardsKeyPair(id string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+func newEdwardsKeyPair(id string, alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate Edwards private key: %s", err)
@@ -108,7 +108,7 @@ func newEdwardsKeyPair(id string, alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set,
 	return newKeyPair(id, alg, priv)
 }
 
-func newKeyPair(id string, alg jwa.SignatureAlgorithm, privKey any) (jwk.Key, jwk.Set, error) {
+func newKeyPair(id string, alg jwa.SignatureAlgorithm, privKey any) (jwk.Set, jwk.Set, error) {
 	privJWK, err := jwk.FromRaw(privKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("jwk.FromRaw(%v) error = %v", privKey, err)
@@ -128,12 +128,17 @@ func newKeyPair(id string, alg jwa.SignatureAlgorithm, privKey any) (jwk.Key, jw
 		return nil, nil, fmt.Errorf("jwk.PublicKeyOf(%v) error = %v", privJWK, err)
 	}
 
-	set := jwk.NewSet()
-	if err := set.AddKey(pubJWK); err != nil {
-		return nil, nil, fmt.Errorf("failed to add key to set: %s", err)
+	pubSet := jwk.NewSet()
+	if err := pubSet.AddKey(pubJWK); err != nil {
+		return nil, nil, fmt.Errorf("failed to add public key to set: %s", err)
 	}
 
-	return privJWK, set, nil
+	privSet := jwk.NewSet()
+	if err := privSet.AddKey(privJWK); err != nil {
+		return nil, nil, fmt.Errorf("failed to add private key to set: %s", err)
+	}
+
+	return privSet, pubSet, nil
 }
 
 func setAll(key jwk.Key, values map[string]interface{}) error {

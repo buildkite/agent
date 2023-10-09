@@ -45,13 +45,13 @@ func TestSignVerify(t *testing.T) {
 
 	cases := []struct {
 		name                           string
-		generateSigner                 func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error)
+		generateSigner                 func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error)
 		alg                            jwa.SignatureAlgorithm
 		expectedDeterministicSignature string
 	}{
 		{
 			name: "HMAC-SHA256",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS256,
@@ -59,7 +59,7 @@ func TestSignVerify(t *testing.T) {
 		},
 		{
 			name: "HMAC-SHA384",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS384,
@@ -67,7 +67,7 @@ func TestSignVerify(t *testing.T) {
 		},
 		{
 			name: "HMAC-SHA512",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) {
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS512,
@@ -75,37 +75,37 @@ func TestSignVerify(t *testing.T) {
 		},
 		{
 			name:           "RSA-PSS 256",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
 			alg:            jwa.PS256,
 		},
 		{
 			name:           "RSA-PSS 384",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
 			alg:            jwa.PS384,
 		},
 		{
 			name:           "RSA-PSS 512",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
 			alg:            jwa.PS512,
 		},
 		{
 			name:           "ECDSA P-256",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
 			alg:            jwa.ES256,
 		},
 		{
 			name:           "ECDSA P-384",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
 			alg:            jwa.ES384,
 		},
 		{
 			name:           "ECDSA P-512",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
 			alg:            jwa.ES512,
 		},
 		{
 			name:           "EdDSA Ed25519",
-			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Key, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
+			generateSigner: func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) { return jwkutil.NewKeyPair(keyID, alg) },
 			alg:            jwa.EdDSA,
 		},
 	}
@@ -119,7 +119,12 @@ func TestSignVerify(t *testing.T) {
 				t.Fatalf("generateSigner(%v) error = %v", tc.alg, err)
 			}
 
-			sig, err := Sign(signEnv, step, signer)
+			key, ok := signer.Key(0)
+			if !ok {
+				t.Fatalf("signer.Key(0) = _, false, want true")
+			}
+
+			sig, err := Sign(signEnv, step, key)
 			if err != nil {
 				t.Fatalf("Sign(CommandStep, signer) error = %v", err)
 			}
@@ -190,8 +195,13 @@ func TestSignConcatenatedFields(t *testing.T) {
 		t.Fatalf("NewSymmetricKeyPairFromString(alpacas) error = %v", err)
 	}
 
+	key, ok := signer.Key(0)
+	if !ok {
+		t.Fatalf("signer.Key(0) = _, false, want true")
+	}
+
 	for _, m := range maps {
-		sig, err := Sign(nil, m, signer)
+		sig, err := Sign(nil, m, key)
 		if err != nil {
 			t.Fatalf("Sign(%v, pts) error = %v", m, err)
 		}
@@ -216,9 +226,14 @@ func TestUnknownAlgorithm(t *testing.T) {
 		t.Fatalf("NewSymmetricKeyPairFromString(alpacas) error = %v", err)
 	}
 
-	signer.Set(jwk.AlgorithmKey, "rot13")
+	key, ok := signer.Key(0)
+	if !ok {
+		t.Fatalf("signer.Key(0) = _, false, want true")
+	}
 
-	if _, err := Sign(nil, &CommandStep{Command: "llamas"}, signer); err == nil {
+	key.Set(jwk.AlgorithmKey, "rot13")
+
+	if _, err := Sign(nil, &CommandStep{Command: "llamas"}, key); err == nil {
 		t.Errorf("Sign(nil, CommandStep, signer) = %v, want non-nil error", err)
 	}
 }
@@ -256,7 +271,12 @@ func TestSignUnknownStep(t *testing.T) {
 		t.Fatalf("NewSymmetricKeyPairFromString(alpacas) error = %v", err)
 	}
 
-	if err := steps.sign(nil, signer); !errors.Is(err, errSigningRefusedUnknownStepType) {
+	key, ok := signer.Key(0)
+	if !ok {
+		t.Fatalf("signer.Key(0) = _, false, want true")
+	}
+
+	if err := steps.sign(nil, key); !errors.Is(err, errSigningRefusedUnknownStepType) {
 		t.Errorf("steps.sign(signer) = %v, want %v", err, errSigningRefusedUnknownStepType)
 	}
 }
@@ -325,8 +345,16 @@ func TestSignVerifyEnv(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			signer, verifier, err := jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", jwa.HS256)
+			if err != nil {
+				t.Fatalf("NewSymmetricKeyPairFromString(alpacas) error = %v", err)
+			}
 
-			sig, err := Sign(tc.pipelineEnv, tc.step, signer)
+			key, ok := signer.Key(0)
+			if !ok {
+				t.Fatalf("signer.Key(0) = _, false, want true")
+			}
+
+			sig, err := Sign(tc.pipelineEnv, tc.step, key)
 			if err != nil {
 				t.Fatalf("Sign(CommandStep, signer) error = %v", err)
 			}
@@ -372,7 +400,12 @@ func TestSignatureStability(t *testing.T) {
 		t.Fatalf("NewKeyPair error = %v", err)
 	}
 
-	sig, err := Sign(env, step, signer)
+	key, ok := signer.Key(0)
+	if !ok {
+		t.Fatalf("signer.Key(0) = _, false, want true")
+	}
+
+	sig, err := Sign(env, step, key)
 	if err != nil {
 		t.Fatalf("Sign(env, CommandStep, signer) error = %v", err)
 	}

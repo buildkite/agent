@@ -13,13 +13,16 @@ import (
 )
 
 type KeygenConfig struct {
-	Alg                  string `cli:"alg" validate:"required"`
-	KeyID                string `cli:"key-id" validate:"required"`
-	PrivateKeyFilename   string `cli:"private-key-filename" normalize:"filepath"`
-	PublicKeysetFilename string `cli:"public-keyset-filename" normalize:"filepath"`
+	Alg                   string `cli:"alg" validate:"required"`
+	KeyID                 string `cli:"key-id" validate:"required"`
+	PrivateKeySetFilename string `cli:"private-keyset-filename" normalize:"filepath"`
+	PublicKeysetFilename  string `cli:"public-keyset-filename" normalize:"filepath"`
 
-	LogLevel string `cli:"log-level"`
-	Debug    bool   `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	Experiments []string `cli:"experiment"`
+	Profile     string   `cli:"profile"`
 }
 
 var KeygenCommand = cli.Command{
@@ -37,7 +40,7 @@ var KeygenCommand = cli.Command{
 			Usage:  "The ID to use for the keys generated",
 		},
 		cli.StringFlag{
-			Name:   "private-key-filename",
+			Name:   "private-keyset-filename",
 			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_KEY_FILENAME",
 			Usage:  "The filename to write the private key to. Defaults to a name based on the key id in the current directory",
 		},
@@ -47,12 +50,15 @@ var KeygenCommand = cli.Command{
 			Usage:  "The filename to write the public keyset to. Defaults to a name based on the key id in the current directory",
 		},
 
+		// Global flags
+		NoColorFlag,
 		DebugFlag,
 		LogLevelFlag,
+		ExperimentsFlag,
+		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
-		ctx := context.Background()
-		_, cfg, l, _, done := setupLoggerAndConfig[KeygenConfig](ctx, c)
+		_, cfg, l, _, done := setupLoggerAndConfig[KeygenConfig](context.Background(), c)
 		defer done()
 
 		sigAlg := jwa.SignatureAlgorithm(cfg.Alg)
@@ -66,46 +72,48 @@ var KeygenCommand = cli.Command{
 			l.Fatal("Failed to generate key pair: %v", err)
 		}
 
-		if cfg.PrivateKeyFilename == "" {
-			cfg.PrivateKeyFilename = fmt.Sprintf("./%s-%s-private.json", cfg.Alg, cfg.KeyID)
+		if cfg.PrivateKeySetFilename == "" {
+			cfg.PrivateKeySetFilename = fmt.Sprintf("./%s-%s-private.json", cfg.Alg, cfg.KeyID)
 		}
 
 		if cfg.PublicKeysetFilename == "" {
 			cfg.PublicKeysetFilename = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
 		}
 
-		privFile, err := os.Create(cfg.PrivateKeyFilename)
+		l.Info("Writing private key set to %s...", cfg.PrivateKeySetFilename)
+		pKey, err := json.Marshal(priv)
 		if err != nil {
-			l.Fatal("Failed to open private key file: %v", err)
+			l.Fatal("Failed to marshal private key: %v", err)
 		}
 
-		defer privFile.Close()
-
-		err = json.NewEncoder(privFile).Encode(priv)
+		err = writeIfNotExists(cfg.PrivateKeySetFilename, pKey)
 		if err != nil {
-			l.Fatal("Failed to encode private key file: %v", err)
+			l.Fatal("Failed to write private key file: %v", err)
 		}
 
-		l.Info("Wrote private key to %s", cfg.PrivateKeyFilename)
-
-		pubFile, err := os.Create(cfg.PublicKeysetFilename)
+		l.Info("Writing public key set to %s...", cfg.PublicKeysetFilename)
+		pubKey, err := json.Marshal(pub)
 		if err != nil {
-			l.Fatal("Failed to open public key file: %v", err)
+			l.Fatal("Failed to marshal private key: %v", err)
 		}
 
-		defer pubFile.Close()
-
-		err = json.NewEncoder(pubFile).Encode(pub)
+		err = writeIfNotExists(cfg.PublicKeysetFilename, pubKey)
 		if err != nil {
-			l.Fatal("Failed to encode public key file: %v", err)
+			l.Fatal("Failed to write private key file: %v", err)
 		}
-
-		l.Info("Wrote public key set to %s", cfg.PublicKeysetFilename)
 
 		l.Info("Done! Enjoy your new keys ^_^")
 
 		if slices.Contains(ValidOctetAlgorithms, sigAlg) {
-			l.Info(`Note: Because you're using the %s algorithm, which is symmetric, the public and private keys are identical, save for the fact that the "public" key has been output as a Key Set, rather than a single key.`, sigAlg)
+			l.Info("Note: Because you're using the %s algorithm, which is symmetric, the public and private keys are identical", sigAlg)
 		}
 	},
+}
+
+func writeIfNotExists(filename string, data []byte) error {
+	if _, err := os.Stat(filename); err == nil {
+		return fmt.Errorf("file %s already exists", filename)
+	}
+
+	return os.WriteFile(filename, data, 0o600)
 }
