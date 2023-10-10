@@ -166,8 +166,8 @@ func TestJobVerification(t *testing.T) {
 		expectLogsContain        []string
 	}{
 		{
-			name:                     "when job signature is invalid, and InvalidSignatureBehavior is block, it refuses the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourBlock},
+			name:                     "when job signature is invalid, and JobVerificationFailureBehaviour is block, it refuses the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas), // different signing and verification keys
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyAlpacas)),
@@ -177,8 +177,8 @@ func TestJobVerification(t *testing.T) {
 			expectLogsContain:        []string{"⚠️ ERROR"},
 		},
 		{
-			name:                     "when job signature is invalid, and InvalidSignatureBehavior is warn, it warns and runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourWarn},
+			name:                     "when job signature is invalid, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourWarn},
 			job:                      job,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas), // different signing and verification keys
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyAlpacas)),
@@ -188,7 +188,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is valid, it runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
@@ -198,7 +198,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is valid and there are no plugins, it runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithNoPlugins,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
@@ -208,7 +208,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is valid and plugins is null, it runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithNullPlugins,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
@@ -217,8 +217,8 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     "",
 		},
 		{
-			name:                     "when job signature is missing, and NoSignatureBehavior is block, it refuses the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			name:                     "when job signature is missing, and JobVerificationFailureBehaviour is block, it refuses the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
 			signingKey:               nil,
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, "this one is the naughty one")),
@@ -228,8 +228,8 @@ func TestJobVerification(t *testing.T) {
 			expectLogsContain:        []string{"⚠️ ERROR"},
 		},
 		{
-			name:                     "when job signature is missing, and NoSignatureBehavior is warn, it warns and runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourWarn},
+			name:                     "when job signature is missing, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourWarn},
 			job:                      job,
 			signingKey:               nil,
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
@@ -239,7 +239,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step signature matches, but the job doesn't match the step, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedStepAndJob,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
@@ -254,7 +254,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step signature matches, but the plugins are missing from the job, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMissingPlugins,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
@@ -269,7 +269,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step signature matches, but the plugins doesn't match the step, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedPlugins,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
@@ -298,7 +298,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step has a signature, but the env does not match, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedEnv,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
@@ -309,7 +309,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step has a signature, but the step env is not in the job env, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithStepEnvButNoCorrespondingJobEnv,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),

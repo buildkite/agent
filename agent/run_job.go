@@ -88,17 +88,9 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	if r.conf.JWKS != nil {
 		ise := &invalidSignatureError{}
 		switch err := r.verifyJob(r.conf.JWKS); {
-		case errors.Is(err, ErrNoSignature):
-			r.verificationFailureLogs(err, r.NoSignatureBehavior)
-			if r.NoSignatureBehavior == VerificationBehaviourBlock {
-				exit.Status = -1
-				exit.SignalReason = SignalReasonSignatureRejected
-				return nil
-			}
-
-		case errors.As(err, &ise):
-			r.verificationFailureLogs(err, r.InvalidSignatureBehavior)
-			if r.InvalidSignatureBehavior == VerificationBehaviourBlock {
+		case errors.Is(err, ErrNoSignature) || errors.As(err, &ise):
+			r.verificationFailureLogs(err, r.VerificationFailureBehavior)
+			if r.VerificationFailureBehavior == VerificationBehaviourBlock {
 				exit.Status = -1
 				exit.SignalReason = SignalReasonSignatureRejected
 				return nil

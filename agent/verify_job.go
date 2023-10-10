@@ -40,7 +40,7 @@ func (r *JobRunner) verificationFailureLogs(err error, behavior string) {
 	r.logStreamer.Process([]byte(fmt.Sprintf("⚠️ %s: Job verification failed: %s\n", label, err.Error())))
 
 	if behavior == VerificationBehaviourWarn {
-		r.logger.Warn("Job will be run without verification - this is not recommended. You can change this behavior with the `job-verification-no-signature-behavior` agent configuration option.")
+		r.logger.Warn("Job will be run whether or not it can be verified - this is not recommended. You can change this behavior with the `job-verification-failure-behavior` agent configuration option.")
 		r.logStreamer.Process([]byte(fmt.Sprintf("⚠️ %s: Job will be run without verification\n", label)))
 	}
 }
