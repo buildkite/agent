@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
-	"github.com/buildkite/interpolate"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
@@ -42,8 +41,8 @@ func (s *Steps) UnmarshalOrdered(o any) error {
 	return nil
 }
 
-func (s Steps) interpolate(env interpolate.Env) error {
-	return interpolateSlice(env, s)
+func (s Steps) interpolate(tf stringTransformer) error {
+	return interpolateSlice(tf, s)
 }
 
 // unmarshalStep unmarshals into the right kind of Step.

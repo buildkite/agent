@@ -6,7 +6,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -98,12 +97,12 @@ func (p *Plugin) FullSource() string {
 	}
 }
 
-func (p *Plugin) interpolate(env interpolate.Env) error {
-	name, err := interpolate.Interpolate(env, p.Source)
+func (p *Plugin) interpolate(tf stringTransformer) error {
+	name, err := tf.Transform(p.Source)
 	if err != nil {
 		return err
 	}
-	cfg, err := interpolateAny(env, p.Config)
+	cfg, err := interpolateAny(tf, p.Config)
 	if err != nil {
 		return err
 	}

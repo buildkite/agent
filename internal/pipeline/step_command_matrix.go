@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
-	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -102,17 +101,17 @@ func (m *Matrix) MarshalYAML() (any, error) {
 	return (*wrappedMatrix)(m), nil
 }
 
-func (m *Matrix) interpolate(env interpolate.Env) error {
+func (m *Matrix) interpolate(tf stringTransformer) error {
 	if m == nil {
 		return nil
 	}
-	if err := interpolateMap(env, m.Setup); err != nil {
+	if err := interpolateMap(tf, m.Setup); err != nil {
 		return err
 	}
-	if err := interpolateSlice(env, m.Adjustments); err != nil {
+	if err := interpolateSlice(tf, m.Adjustments); err != nil {
 		return err
 	}
-	return interpolateMap(env, m.RemainingFields)
+	return interpolateMap(tf, m.RemainingFields)
 }
 
 // MatrixSetup is the main setup of a matrix - one or more dimensions. The cross
@@ -200,14 +199,14 @@ func (ma *MatrixAdjustment) MarshalJSON() ([]byte, error) {
 	return inlineFriendlyMarshalJSON(ma)
 }
 
-func (ma *MatrixAdjustment) interpolate(env interpolate.Env) error {
+func (ma *MatrixAdjustment) interpolate(tf stringTransformer) error {
 	if ma == nil {
 		return nil
 	}
-	if err := interpolateMap(env, ma.With); err != nil {
+	if err := interpolateMap(tf, ma.With); err != nil {
 		return err
 	}
-	return interpolateMap(env, ma.RemainingFields)
+	return interpolateMap(tf, ma.RemainingFields)
 }
 
 // MatrixAdjustmentWith is either a map of dimension key -> dimension value,
@@ -297,6 +296,6 @@ func (s *MatrixScalars) UnmarshalOrdered(o any) error {
 
 // This is necessary because interpolateAny, which uses a type switch, matches
 // []any strictly.
-func (s MatrixScalars) interpolate(env interpolate.Env) error {
-	return interpolateSlice(env, s)
+func (s MatrixScalars) interpolate(tf stringTransformer) error {
+	return interpolateSlice(tf, s)
 }

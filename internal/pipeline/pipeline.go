@@ -83,12 +83,14 @@ func (p *Pipeline) Interpolate(envMap *env.Environment) error {
 		return err
 	}
 
+	tf := envInterpolator{envMap: envMap}
+
 	// Recursively go through the rest of the pipeline and perform environment
 	// variable interpolation on strings. Interpolation is performed in-place.
-	if err := interpolateSlice(envMap, p.Steps); err != nil {
+	if err := interpolateSlice(tf, p.Steps); err != nil {
 		return err
 	}
-	return interpolateMap(envMap, p.RemainingFields)
+	return interpolateMap(tf, p.RemainingFields)
 }
 
 // interpolateEnvBlock runs interpolate.Interpolate on each pair in p.Env,

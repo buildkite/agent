@@ -2,8 +2,6 @@ package pipeline
 
 import (
 	"encoding/json"
-
-	"github.com/buildkite/interpolate"
 )
 
 // See the comment in step_scalar.go.
@@ -30,8 +28,8 @@ func (s *WaitStep) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Contents)
 }
 
-func (s *WaitStep) interpolate(env interpolate.Env) error {
-	return interpolateMap(env, s.Contents)
+func (s *WaitStep) interpolate(tf stringTransformer) error {
+	return interpolateMap(tf, s.Contents)
 }
 
 func (*WaitStep) stepTag() {}

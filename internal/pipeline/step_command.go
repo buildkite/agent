@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
-	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -143,27 +142,27 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 	return out, nil
 }
 
-func (c *CommandStep) interpolate(env interpolate.Env) error {
-	cmd, err := interpolate.Interpolate(env, c.Command)
+func (c *CommandStep) interpolate(tf stringTransformer) error {
+	cmd, err := tf.Transform(c.Command)
 	if err != nil {
 		return err
 	}
 
-	if err := interpolateSlice(env, c.Plugins); err != nil {
+	if err := interpolateSlice(tf, c.Plugins); err != nil {
 		return err
 	}
 
-	if err := interpolateMap(env, c.Env); err != nil {
+	if err := interpolateMap(tf, c.Env); err != nil {
 		return err
 	}
 
 	// NB: Do not interpolate Signature.
 
-	if c.Matrix, err = interpolateAny(env, c.Matrix); err != nil {
+	if c.Matrix, err = interpolateAny(tf, c.Matrix); err != nil {
 		return err
 	}
 
-	if err := interpolateMap(env, c.RemainingFields); err != nil {
+	if err := interpolateMap(tf, c.RemainingFields); err != nil {
 		return err
 	}
 
