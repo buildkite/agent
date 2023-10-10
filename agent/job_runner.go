@@ -113,9 +113,8 @@ type JobRunner struct {
 	// The configuration for the job runner
 	conf JobRunnerConfig
 
-	// How the JobRunner should respond in various signature failure modes
-	InvalidSignatureBehavior string
-	NoSignatureBehavior      string
+	// How the JobRunner should respond when job verification fails (one of `block` or `warn`)
+	VerificationFailureBehavior string
 
 	// The logger to use
 	logger logger.Logger
@@ -171,12 +170,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	}
 
 	var err error
-	r.InvalidSignatureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.JobVerificationInvalidSignatureBehavior)
-	if err != nil {
-		return nil, fmt.Errorf("setting invalid signature behavior: %w", err)
-	}
-
-	r.NoSignatureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.JobVerificationNoSignatureBehavior)
+	r.VerificationFailureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.JobVerificationFailureBehaviour)
 	if err != nil {
 		return nil, fmt.Errorf("setting no signature behavior: %w", err)
 	}
@@ -504,10 +498,6 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 
 	if r.conf.AgentConfiguration.JobSigningKeyID != "" {
 		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID"] = r.conf.AgentConfiguration.JobSigningKeyID
-	}
-
-	if r.conf.AgentConfiguration.JobSigningAlgorithm != "" {
-		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM"] = r.conf.AgentConfiguration.JobSigningAlgorithm
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation

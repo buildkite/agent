@@ -73,13 +73,11 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
-	JobSigningJWKSPath  string `cli:"job-signing-jwks-path" normalize:"filepath"`
-	JobSigningAlgorithm string `cli:"job-signing-algorithm"`
-	JobSigningKeyID     string `cli:"job-signing-key-id"`
+	JobSigningJWKSPath string `cli:"job-signing-jwks-path" normalize:"filepath"`
+	JobSigningKeyID    string `cli:"job-signing-key-id"`
 
-	JobVerificationJWKSPath                 string `cli:"job-verification-jwks-path" normalize:"filepath"`
-	JobVerificationNoSignatureBehavior      string `cli:"job-verification-no-signature-behavior"`
-	JobVerificationInvalidSignatureBehavior string `cli:"job-verification-invalid-signature-behavior"`
+	JobVerificationJWKSPath        string `cli:"job-verification-jwks-path" normalize:"filepath"`
+	JobVerificationFailureBehavior string `cli:"job-verification-failure-behavior"`
 
 	AcquireJob                 string `cli:"acquire-job"`
 	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
@@ -605,24 +603,14 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
 		},
 		cli.StringFlag{
-			Name:   "job-signing-algorithm",
-			Usage:  "EXPERIMENTAL: The algorithm to use when signing pipelines. Must be an algorithm specified in RFC 7518: JWA. Required when using a JWKS, and the given key doesn't have an alg parameter",
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
-		},
-		cli.StringFlag{
 			Name:   "job-signing-key-id",
 			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
 		},
 		cli.StringFlag{
-			Name:   "job-verification-no-signature-behavior",
+			Name:   "job-verification-failure-behavior",
 			Usage:  fmt.Sprintf("EXPERIMENTAL: The behavior when a job is received without a signature. One of: %v", verificationFailureBehaviors),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
-		},
-		cli.StringFlag{
-			Name:   "job-verification-invalid-signature-behavior",
-			Usage:  fmt.Sprintf("EXPERIMENTAL: The behavior when a job is received, and the signature calculated is different from the one specified. One of: %v", verificationFailureBehaviors),
-			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_INVALID_SIGNATURE_BEHAVIOR",
 		},
 
 		// API Flags
@@ -697,18 +685,10 @@ var AgentStartCommand = cli.Command{
 		}
 
 		if cfg.JobVerificationJWKSPath != "" {
-			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationNoSignatureBehavior) {
+			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationFailureBehavior) {
 				return fmt.Errorf(
 					"invalid job verification no signature behavior %q. Must be one of: %v",
-					cfg.JobVerificationNoSignatureBehavior,
-					verificationFailureBehaviors,
-				)
-			}
-
-			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationInvalidSignatureBehavior) {
-				return fmt.Errorf(
-					"invalid job verification invalid signature behavior %q. Must be one of: %v",
-					cfg.JobVerificationInvalidSignatureBehavior,
+					cfg.JobVerificationFailureBehavior,
 					verificationFailureBehaviors,
 				)
 			}
@@ -831,70 +811,68 @@ var AgentStartCommand = cli.Command{
 			defer shutdown()
 		}
 
-		var jwks jwk.Set
+		var verificationJWKS jwk.Set
 		if cfg.JobVerificationJWKSPath != "" {
-			jwksBytes, err := os.ReadFile(cfg.JobVerificationJWKSPath)
+			var err error
+			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.JobVerificationJWKSPath)
 			if err != nil {
-				l.Fatal("Failed to read job verification key: %v", err)
+				l.Fatal("Verification JWKS failed validation: %v", err)
 			}
+		}
 
-			jwks, err = jwk.Parse(jwksBytes)
+		if cfg.JobSigningJWKSPath != "" {
+			// The actual JWKS itself doesn't get used until `buildkite-agent pipeline upload` is called, but validate it here anyway
+			_, err := parseAndValidateJWKS(ctx, "signing", cfg.JobSigningJWKSPath)
 			if err != nil {
-				l.Fatal("Failed to parse job verification key set: %v", err)
-			}
-
-			if jwks.Len() == 0 {
-				l.Fatal("Job verification key set is empty")
+				l.Fatal("Signing JWKS failed validation: %v", err)
 			}
 		}
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:                         cfg.BootstrapScript,
-			BuildPath:                               cfg.BuildPath,
-			SocketsPath:                             cfg.SocketsPath,
-			GitMirrorsPath:                          cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:                   cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:                    cfg.GitMirrorsSkipUpdate,
-			HooksPath:                               cfg.HooksPath,
-			PluginsPath:                             cfg.PluginsPath,
-			GitCheckoutFlags:                        cfg.GitCheckoutFlags,
-			GitCloneFlags:                           cfg.GitCloneFlags,
-			GitCloneMirrorFlags:                     cfg.GitCloneMirrorFlags,
-			GitCleanFlags:                           cfg.GitCleanFlags,
-			GitFetchFlags:                           cfg.GitFetchFlags,
-			GitSubmodules:                           !cfg.NoGitSubmodules,
-			SSHKeyscan:                              !cfg.NoSSHKeyscan,
-			CommandEval:                             !cfg.NoCommandEval,
-			PluginsEnabled:                          !cfg.NoPlugins,
-			PluginValidation:                        !cfg.NoPluginValidation,
-			LocalHooksEnabled:                       !cfg.NoLocalHooks,
-			AllowedRepositories:                     cfg.AllowedRepositories,
-			StrictSingleHooks:                       cfg.StrictSingleHooks,
-			RunInPty:                                !cfg.NoPTY,
-			ANSITimestamps:                          !cfg.NoANSITimestamps,
-			TimestampLines:                          cfg.TimestampLines,
-			DisconnectAfterJob:                      cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:              cfg.DisconnectAfterIdleTimeout,
-			CancelGracePeriod:                       cfg.CancelGracePeriod,
-			SignalGracePeriod:                       signalGracePeriod,
-			EnableJobLogTmpfile:                     cfg.EnableJobLogTmpfile,
-			JobLogPath:                              cfg.JobLogPath,
-			WriteJobLogsToStdout:                    cfg.WriteJobLogsToStdout,
-			LogFormat:                               cfg.LogFormat,
-			Shell:                                   cfg.Shell,
-			RedactedVars:                            cfg.RedactedVars,
-			AcquireJob:                              cfg.AcquireJob,
-			TracingBackend:                          cfg.TracingBackend,
-			TracingServiceName:                      cfg.TracingServiceName,
-			JobVerificationNoSignatureBehavior:      cfg.JobVerificationNoSignatureBehavior,
-			JobVerificationInvalidSignatureBehavior: cfg.JobVerificationInvalidSignatureBehavior,
+			BootstrapScript:                 cfg.BootstrapScript,
+			BuildPath:                       cfg.BuildPath,
+			SocketsPath:                     cfg.SocketsPath,
+			GitMirrorsPath:                  cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:           cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:            cfg.GitMirrorsSkipUpdate,
+			HooksPath:                       cfg.HooksPath,
+			PluginsPath:                     cfg.PluginsPath,
+			GitCheckoutFlags:                cfg.GitCheckoutFlags,
+			GitCloneFlags:                   cfg.GitCloneFlags,
+			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                   cfg.GitCleanFlags,
+			GitFetchFlags:                   cfg.GitFetchFlags,
+			GitSubmodules:                   !cfg.NoGitSubmodules,
+			SSHKeyscan:                      !cfg.NoSSHKeyscan,
+			CommandEval:                     !cfg.NoCommandEval,
+			PluginsEnabled:                  !cfg.NoPlugins,
+			PluginValidation:                !cfg.NoPluginValidation,
+			LocalHooksEnabled:               !cfg.NoLocalHooks,
+			AllowedRepositories:             cfg.AllowedRepositories,
+			StrictSingleHooks:               cfg.StrictSingleHooks,
+			RunInPty:                        !cfg.NoPTY,
+			ANSITimestamps:                  !cfg.NoANSITimestamps,
+			TimestampLines:                  cfg.TimestampLines,
+			DisconnectAfterJob:              cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:      cfg.DisconnectAfterIdleTimeout,
+			CancelGracePeriod:               cfg.CancelGracePeriod,
+			SignalGracePeriod:               signalGracePeriod,
+			EnableJobLogTmpfile:             cfg.EnableJobLogTmpfile,
+			JobLogPath:                      cfg.JobLogPath,
+			WriteJobLogsToStdout:            cfg.WriteJobLogsToStdout,
+			LogFormat:                       cfg.LogFormat,
+			Shell:                           cfg.Shell,
+			RedactedVars:                    cfg.RedactedVars,
+			AcquireJob:                      cfg.AcquireJob,
+			TracingBackend:                  cfg.TracingBackend,
+			TracingServiceName:              cfg.TracingServiceName,
+			JobVerificationFailureBehaviour: cfg.JobVerificationFailureBehavior,
 
-			JobSigningJWKSPath:  cfg.JobSigningJWKSPath,
-			JobSigningAlgorithm: cfg.JobSigningAlgorithm,
-			JobSigningKeyID:     cfg.JobSigningKeyID,
+			JobSigningJWKSPath: cfg.JobSigningJWKSPath,
+			JobSigningKeyID:    cfg.JobSigningKeyID,
 
-			JobVerificationJWKS: jwks,
+			JobVerificationJWKS: verificationJWKS,
 		}
 
 		if configFile != nil {
@@ -1104,6 +1082,37 @@ var AgentStartCommand = cli.Command{
 
 		return pool.Start(ctx)
 	},
+}
+
+func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set, error) {
+	jwksBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read job %s keyset: %w", keysetType, err)
+	}
+
+	jwks, err := jwk.Parse(jwksBytes)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse job %s keyset: %w", keysetType, err)
+	}
+
+	if jwks.Len() == 0 {
+		return nil, fmt.Errorf("Job %s keyset is empty", keysetType)
+	}
+
+	iter := jwks.Keys(ctx)
+	for iter.Next(ctx) {
+		keyI := iter.Pair().Value
+		key, ok := keyI.(jwk.Key)
+		if !ok {
+			return nil, fmt.Errorf("Job %s keyset contains a non-key at index %d", keysetType, iter.Pair().Index)
+		}
+
+		if _, ok = key.Get(jwk.AlgorithmKey); !ok {
+			return nil, fmt.Errorf("Job %s keyset contains a key without an algorithm at index %d. All keys used for signing and verification in the agent must have their `alg` key set", keysetType, iter.Pair().Index)
+		}
+	}
+
+	return jwks, nil
 }
 
 func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPool) chan os.Signal {
