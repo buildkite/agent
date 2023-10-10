@@ -80,6 +80,7 @@ func (c *CommandStep) SignedFields() (map[string]any, error) {
 	out := map[string]any{
 		"command": c.Command,
 		"plugins": c.Plugins,
+		"matrix":  c.Matrix,
 	}
 	// Steps can have their own env. These can be overridden by the pipeline!
 	for e, v := range c.Env {
@@ -95,6 +96,7 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 	required := map[string]struct{}{
 		"command": {},
 		"plugins": {},
+		"matrix":  {},
 	}
 	// Env vars that the step has, but the pipeline doesn't have, are required.
 	// But we don't know what the pipeline has without passing it in, so treat
@@ -113,6 +115,9 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 
 		case "plugins":
 			out["plugins"] = c.Plugins
+
+		case "matrix":
+			out["matrix"] = c.Matrix
 
 		default:
 			if e, has := strings.CutPrefix(f, EnvNamespacePrefix); has {
