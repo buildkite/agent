@@ -33,21 +33,18 @@ func TestMatrixInterpolater_Simple(t *testing.T) {
 			input: "one {{matrix}}, two {{ matrix}}, three {{matrix }}, floor",
 			want:  "one llama, two llama, three llama, floor",
 		},
-		{
-			// TODO: Reconsider this behaviour. This might not be ideal.
-			name:  "mismatched matrix",
-			input: "this isn't poison. it's extract of... {{matrix.alpaca}}!",
-			want:  "this isn't poison. it's extract of... !",
-		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			got := transform(test.input)
+			got, err := transform.Transform(test.input)
+			if err != nil {
+				t.Errorf("transform.Transform(%q) error = %v", test.input, err)
+			}
 			if got != test.want {
-				t.Errorf("transform(%q) = %q, want %q", test.input, got, test.want)
+				t.Errorf("transform.Transform(%q) = %q, want %q", test.input, got, test.want)
 			}
 		})
 	}
@@ -84,11 +81,50 @@ func TestMatrixInterpolater_Multiple(t *testing.T) {
 			input: "one {{matrix.animal}}, two {{ matrix.animal}}, three {{matrix.weapon }}, floor",
 			want:  "one llama, two llama, three poison, floor",
 		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := transform.Transform(test.input)
+			if err != nil {
+				t.Errorf("transform.Transform(%q) error = %v", test.input, err)
+			}
+			if got != test.want {
+				t.Errorf("transform(%q) = %q, want %q", test.input, got, test.want)
+			}
+		})
+	}
+}
+
+func TestMatrixInterpolator_Errors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name, input string
+		transform   matrixInterpolator
+	}{
 		{
-			// TODO: Reconsider this behaviour. This might not be ideal.
-			name:  "mismatched matrix",
-			input: "this isn't {{matrix}}. it's extract of... {{matrix.alpaca}}!",
-			want:  "this isn't . it's extract of... !",
+			name:  "mismatched named dimensions",
+			input: "this isn't poison. it's extract of... {{matrix.alpaca}}!",
+			transform: newMatrixInterpolator(MatrixPermutation{
+				{Dimension: "animal", Value: "llama"},
+			}),
+		},
+		{
+			name:  "interpolate anonymous dimension into named token",
+			input: "this isn't {{matrix.weapon}}. it's extract of... llama!",
+			transform: newMatrixInterpolator(MatrixPermutation{
+				{Dimension: "", Value: "poison"},
+			}),
+		},
+		{
+			name:  "interpolate named dimensions into anonymous token",
+			input: "this isn't {{matrix}}. it's extract of... llama!",
+			transform: newMatrixInterpolator(MatrixPermutation{
+				{Dimension: "weapon", Value: "poison"},
+			}),
 		},
 	}
 
@@ -96,9 +132,8 @@ func TestMatrixInterpolater_Multiple(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			got := transform(test.input)
-			if got != test.want {
-				t.Errorf("transform(%q) = %q, want %q", test.input, got, test.want)
+			if _, err := test.transform.Transform(test.input); err == nil {
+				t.Errorf("transform.Transform(%q) error = %v, want non-nil", test.input, err)
 			}
 		})
 	}
@@ -160,14 +195,50 @@ func TestMatrixInterpolateAny(t *testing.T) {
 			want:        mountain{Name: "{{matrix.name}}", Altitude: "{{matrix.altitude}}"},
 		},
 		{
-			name: "concrete containers (eg slices, maps that don't contain any) don't get interpolated",
+			name: "concrete containers get interpolated",
 			ms: MatrixPermutation{
 				{Dimension: "mountain", Value: "cotopaxi"},
 				{Dimension: "country", Value: "ecuador"},
 				{Dimension: "animal", Value: "andean condor"},
 			},
 			interpolate: []any{[]string{"{{matrix.mountain}}", "{{matrix.country}}"}, map[string]string{"animal": "{{matrix.animal}}"}},
-			want:        []any{[]string{"{{matrix.mountain}}", "{{matrix.country}}"}, map[string]string{"animal": "{{matrix.animal}}"}},
+			want:        []any{[]string{"cotopaxi", "ecuador"}, map[string]string{"animal": "andean condor"}},
+		},
+		{
+			name: "matrix doesn't interpolate itself",
+			ms: MatrixPermutation{
+				{Dimension: "mountain", Value: "cotopaxi"},
+				{Dimension: "country", Value: "ecuador"},
+				{Dimension: "animal", Value: "andean condor"},
+			},
+			interpolate: &Matrix{
+				Setup: MatrixSetup{
+					"fruit": MatrixScalars{"banana", "{{matrix.mountain}}"},
+					"shape": MatrixScalars{"{{matrix.country}}", 42},
+				},
+				Adjustments: MatrixAdjustments{
+					{
+						With: MatrixAdjustmentWith{
+							"fruit": "{{matrix.animal}}",
+							"shape": "triangle",
+						},
+					},
+				},
+			},
+			want: &Matrix{
+				Setup: MatrixSetup{
+					"fruit": MatrixScalars{"banana", "{{matrix.mountain}}"},
+					"shape": MatrixScalars{"{{matrix.country}}", 42},
+				},
+				Adjustments: MatrixAdjustments{
+					{
+						With: MatrixAdjustmentWith{
+							"fruit": "{{matrix.animal}}",
+							"shape": "triangle",
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -177,9 +248,12 @@ func TestMatrixInterpolateAny(t *testing.T) {
 			t.Parallel()
 
 			tf := newMatrixInterpolator(tc.ms)
-			got := matrixInterpolateAny(tc.interpolate, tf)
+			got, err := interpolateAny(tf, tc.interpolate)
+			if err != nil {
+				t.Errorf("interpolateAny(% #v, % #v) error = %v", tf, tc.interpolate, err)
+			}
 			if diff := cmp.Diff(got, tc.want); diff != "" {
-				t.Errorf("matrixInterpolateAny(% #v, % #v) diff (-got +want):\n%s", tc.interpolate, tc.ms, diff)
+				t.Errorf("interpolateAny(% #v, % #v) diff (-got +want):\n%s", tf, tc.interpolate, diff)
 			}
 		})
 	}

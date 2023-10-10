@@ -110,15 +110,3 @@ func (p *Plugin) interpolate(tf stringTransformer) error {
 	p.Config = cfg
 	return nil
 }
-
-func (p *Plugin) MatrixInterpolate(transform stringTransformFunc) *Plugin {
-	new := &Plugin{}
-
-	new.Source = transform(p.Source)
-
-	if p.Config != nil {
-		new.Config = matrixInterpolateAny(p.Config, transform)
-	}
-
-	return new
-}

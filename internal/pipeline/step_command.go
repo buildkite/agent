@@ -170,27 +170,4 @@ func (c *CommandStep) interpolate(tf stringTransformer) error {
 	return nil
 }
 
-func (c *CommandStep) MatrixInterpolate(mp MatrixPermutation) {
-	transform := newMatrixInterpolator(mp)
-	c.Command = transform(c.Command)
-
-	if len(c.Env) != 0 {
-		newEnv := make(map[string]string, len(c.Env))
-		for k, v := range c.Env {
-			newEnv[transform(k)] = transform(v)
-		}
-
-		c.Env = newEnv
-	}
-
-	if len(c.Plugins) != 0 {
-		newPlugins := make(Plugins, 0, len(c.Plugins))
-		for _, plug := range c.Plugins {
-			newPlugins = append(newPlugins, plug.MatrixInterpolate(transform))
-		}
-
-		c.Plugins = newPlugins
-	}
-}
-
 func (CommandStep) stepTag() {}

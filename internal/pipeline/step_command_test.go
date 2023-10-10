@@ -177,7 +177,10 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			tc.step.MatrixInterpolate(tc.ms)
+			tf := newMatrixInterpolator(tc.ms)
+			if err := tc.step.interpolate(tf); err != nil {
+				t.Errorf("tc.step.interpolate(matrixInterpolator) error = %v", err)
+			}
 			if diff := cmp.Diff(tc.step, tc.want, cmp.Comparer(ordered.EqualSA)); diff != "" {
 				t.Errorf("CommandStep diff after MatrixInterpolate (-got +want):\n%s", diff)
 			}

@@ -144,9 +144,11 @@ func TestPluginMatrixInterpolate(t *testing.T) {
 
 			tf := newMatrixInterpolator(test.ms)
 
-			interpolated := test.p.MatrixInterpolate(tf)
-			if diff := cmp.Diff(interpolated, test.want); diff != "" {
-				t.Errorf("interpolateMatrix() mismatch (-want +got):\n%s", diff)
+			if err := test.p.interpolate(tf); err != nil {
+				t.Errorf("plugin.interpolate(matrixInterpolator) error = %v", err)
+			}
+			if diff := cmp.Diff(test.p, test.want); diff != "" {
+				t.Errorf("plugin.interpolate(matrixInterpolator) mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

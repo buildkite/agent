@@ -117,6 +117,10 @@ func (m *Matrix) interpolate(tf stringTransformer) error {
 	if m == nil {
 		return nil
 	}
+	if _, is := tf.(matrixInterpolator); is {
+		// Don't interpolate matrixes into matrixes.
+		return nil
+	}
 	if err := interpolateMap(tf, m.Setup); err != nil {
 		return err
 	}
