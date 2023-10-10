@@ -76,19 +76,10 @@ func (c *CommandStep) UnmarshalOrdered(src any) error {
 }
 
 // SignedFields returns the default fields for signing.
-func (c *CommandStep) SignedFields() (map[string]string, error) {
-	plugins := ""
-	if len(c.Plugins) > 0 {
-		// TODO: Reconsider using JSON here - is it stable enough?
-		pj, err := json.Marshal(c.Plugins)
-		if err != nil {
-			return nil, err
-		}
-		plugins = string(pj)
-	}
-	out := map[string]string{
+func (c *CommandStep) SignedFields() (map[string]any, error) {
+	out := map[string]any{
 		"command": c.Command,
-		"plugins": plugins,
+		"plugins": c.Plugins,
 	}
 	// Steps can have their own env. These can be overridden by the pipeline!
 	for e, v := range c.Env {
@@ -98,7 +89,7 @@ func (c *CommandStep) SignedFields() (map[string]string, error) {
 }
 
 // ValuesForFields returns the contents of fields to sign.
-func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error) {
+func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 	// Make a set of required fields. As fields is processed, mark them off by
 	// deleting them.
 	required := map[string]struct{}{
@@ -112,7 +103,7 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error
 		required[EnvNamespacePrefix+e] = struct{}{}
 	}
 
-	out := make(map[string]string, len(fields))
+	out := make(map[string]any, len(fields))
 	for _, f := range fields {
 		delete(required, f)
 
@@ -121,16 +112,7 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error
 			out["command"] = c.Command
 
 		case "plugins":
-			if len(c.Plugins) == 0 {
-				out["plugins"] = ""
-				break
-			}
-			// TODO: Reconsider using JSON here - is it stable enough?
-			val, err := json.Marshal(c.Plugins)
-			if err != nil {
-				return nil, err
-			}
-			out["plugins"] = string(val)
+			out["plugins"] = c.Plugins
 
 		default:
 			if e, has := strings.CutPrefix(f, EnvNamespacePrefix); has {

@@ -40,9 +40,12 @@ var commandConfigPairs = []configCommandPair{
 	{Config: PipelineUploadConfig{}, Command: PipelineUploadCommand},
 	{Config: StepGetConfig{}, Command: StepGetCommand},
 	{Config: StepUpdateConfig{}, Command: StepUpdateCommand},
+	{Config: KeygenConfig{}, Command: KeygenCommand},
 }
 
 func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
+	t.Parallel()
+
 	for _, pair := range commandConfigPairs {
 		flagNames := make(map[string]struct{}, len(pair.Command.Flags))
 		for _, flag := range pair.Command.Flags {
