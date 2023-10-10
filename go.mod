@@ -51,6 +51,8 @@ require (
 	gotest.tools/v3 v3.5.1
 )
 
+require github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2
+
 require (
 	cloud.google.com/go/compute v1.23.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.1 // indirect
