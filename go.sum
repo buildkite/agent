@@ -48,8 +48,8 @@ github.com/buildkite/bintest/v3 v3.1.1 h1:bS924OU8Ljm46DesONXzxxTBMjbliQRnPB+H4D
 github.com/buildkite/bintest/v3 v3.1.1/go.mod h1:T3Et1VwEizryWfwLLruFqExHsEU+wjkxOlL54283ccc=
 github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251 h1:k6UDF1uPYOs0iy1HPeotNa155qXRWrzKnqAaGXHLZCE=
 github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251/go.mod h1:gbPR1gPu9dB96mucYIR7T3B7p/78hRVSOuzIWLHK2Y4=
-github.com/buildkite/roko v1.1.0 h1:UKCUXuW8l9Jl6ep5VXtEX1dloFkIOJ8A7+2GvrvySZI=
-github.com/buildkite/roko v1.1.0/go.mod h1:b3U4GZW/n8GbCh9+pIFLvdY+B+jlh5zOgS8s3WdELbs=
+github.com/buildkite/roko v1.1.1 h1:Yg4Y90rNsOtQFzwaLx6DMooiznDsPBUQs1IS7mm7nWY=
+github.com/buildkite/roko v1.1.1/go.mod h1:XVzYl+i6Ar3xtL0DMN90s3o8SQYhAg+aY6h1PlISI3g=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000 h1:hiVSLk7s3yFKFOHF/huoShLqrj13RMguWX2yzfvy7es=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000/go.mod h1:gv0DYOzHEsKgo31lTCDGauIg4DTTGn41Bzp+t3wSOlk=
 github.com/cenkalti/backoff/v4 v4.2.1 h1:y4OZtCnogmCPw98Zjyt5a6+QwPLGkiQsYW5oUqylYbM=
