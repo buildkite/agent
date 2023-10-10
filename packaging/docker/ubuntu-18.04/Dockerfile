@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM public.ecr.aws/ubuntu/ubuntu:18.04
 
 ARG TARGETOS
 ARG TARGETARCH

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM alpine:3.18.4 AS base
+FROM public.ecr.aws/docker/library/alpine:3.18.4 AS base
 
 RUN apk update && apk upgrade && apk add --no-cache \
     bash \
