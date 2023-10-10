@@ -22,7 +22,7 @@ RUN apk update && apk upgrade && apk add --no-cache \
 
 COPY docker-compose /usr/local/bin/docker-compose
 
-FROM alpine:3.18.4 AS kubectl-downloader
+FROM public.ecr.aws/docker/library/alpine:3.18.4 AS kubectl-downloader
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -35,7 +35,7 @@ wget -qO kubectl \
 chmod +x kubectl
 EOF
 
-FROM alpine:3.18.4 AS kustomize-downloader
+FROM public.ecr.aws/docker/library/alpine:3.18.4 AS kustomize-downloader
 ARG TARGETOS
 ARG TARGETARCH
 
