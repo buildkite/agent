@@ -1,13 +1,12 @@
 package pipeline
 
 import (
-	"bytes"
-	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 
+	"github.com/gowebpki/jcs"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jws"
 )
@@ -41,18 +40,24 @@ func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, err
 	// NB: env overrides values from sf. This may seem backwards but it is
 	// our documented behaviour:
 	// https://buildkite.com/docs/pipelines/environment-variables#defining-your-own
-	// This override is handled by mapUnion.
-	values = mapUnion(values, env)
+	for k, v := range env {
+		values[k] = v
+	}
 
-	// Ensure this part writes the same data to the payload as in Verify...
-	payload := &bytes.Buffer{}
-	writeLengthPrefixed(payload, key.Algorithm().String())
-	fields := writeFields(payload, values)
-	// ...end
+	fields := make([]string, 0, len(values))
+	for field := range values {
+		fields = append(fields, field)
+	}
+	sort.Strings(fields)
+
+	payload, err := canonicalPayload(key.Algorithm().String(), values)
+	if err != nil {
+		return nil, err
+	}
 
 	sig, err := jws.Sign(nil,
 		jws.WithKey(key.Algorithm(), key),
-		jws.WithDetachedPayload(payload.Bytes()),
+		jws.WithDetachedPayload(payload),
 		jws.WithCompact(),
 	)
 	if err != nil {
@@ -84,7 +89,9 @@ func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.S
 	env = prefixKeys(env, EnvNamespacePrefix)
 
 	// NB: env overrides values from sf (see comment in Sign).
-	values = mapUnion(values, env)
+	for k, v := range env {
+		values[k] = v
+	}
 
 	// env:: fields that were signed are all required from either the env map or
 	// the step env map.
@@ -98,17 +105,36 @@ func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.S
 		return fmt.Errorf("obtaining required keys: %w", err)
 	}
 
-	// Ensure this part writes the same data to the payload as in Sign...
-	payload := &bytes.Buffer{}
-	writeLengthPrefixed(payload, s.Algorithm)
-	writeFields(payload, required)
-	// ...end
+	payload, err := canonicalPayload(s.Algorithm, required)
+	if err != nil {
+		return err
+	}
 
 	_, err = jws.Verify([]byte(s.Value),
 		jws.WithKeySet(keySet),
-		jws.WithDetachedPayload(payload.Bytes()),
+		jws.WithDetachedPayload(payload),
 	)
 	return err
+}
+
+// canonicalPayload returns a unique sequence of bytes representing the given
+// algorithm and values using JCS (RFC 8785).
+func canonicalPayload(alg string, values map[string]any) ([]byte, error) {
+	rawPayload, err := json.Marshal(struct {
+		Algorithm string         `json:"alg"`
+		Values    map[string]any `json:"values"`
+	}{
+		Algorithm: alg,
+		Values:    values,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshaling JSON: %w", err)
+	}
+	payload, err := jcs.Transform(rawPayload)
+	if err != nil {
+		return nil, fmt.Errorf("canonicalising JSON: %w", err)
+	}
+	return payload, nil
 }
 
 // SignedFielder describes types that can be signed and have signatures
@@ -118,7 +144,7 @@ func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.S
 type SignedFielder interface {
 	// SignedFields returns the default set of fields to sign, and their values.
 	// This is called by Sign.
-	SignedFields() (map[string]string, error)
+	SignedFields() (map[string]any, error)
 
 	// ValuesForFields looks up each field and produces a map of values. This is
 	// called by Verify. The set of fields might differ from the default, e.g.
@@ -126,40 +152,7 @@ type SignedFielder interface {
 	// field names. signedFielder implementations should reject requests for
 	// values if "mandatory" fields are missing (e.g. signing a command step
 	// should always sign the command).
-	ValuesForFields([]string) (map[string]string, error)
-}
-
-// writeFields writes the values (length-prefixed) into h. It also returns the
-// sorted field names it got from values (so that Sign doesn't end up extracting
-// them twice). It assumes writes to h never error (this is true of
-// bytes.Buffer, strings.Builder, and most hash.Hash implementations).
-// Passing a nil or empty map results in length 0 and no items being written.
-func writeFields(h io.Writer, values map[string]string) []string {
-	// Extract the field names and sort them.
-	fields := make([]string, 0, len(values))
-	for f := range values {
-		fields = append(fields, f)
-	}
-	sort.Strings(fields)
-
-	// If we blast strings at Write, then you could get the same hash for
-	// different fields that happen to have the same data when concatenated.
-	// So write length-prefixed fields, and length-prefix the whole map.
-	binary.Write(h, binary.LittleEndian, uint32(len(fields)))
-	for _, f := range fields {
-		writeLengthPrefixed(h, f)
-		writeLengthPrefixed(h, values[f])
-	}
-
-	return fields
-}
-
-// writeLengthPrefixed writes a length-prefixed string to h. It assumes writes
-// to h never error (this is true of bytes.Buffer, strings.Builder, and most
-// hash.Hash implementations).
-func writeLengthPrefixed(h io.Writer, s string) {
-	binary.Write(h, binary.LittleEndian, uint32(len(s)))
-	h.Write([]byte(s))
+	ValuesForFields([]string) (map[string]any, error)
 }
 
 // prefixKeys returns a copy of a map with each key prefixed with a prefix.
@@ -183,20 +176,4 @@ func requireKeys[K comparable, V any, M ~map[K]V](in M, keys []K) (M, error) {
 		out[k] = v
 	}
 	return out, nil
-}
-
-// mapUnion returns a new map with all elements from the given maps.
-// In case of key collisions, the last-most map containing the key "wins".
-func mapUnion[K comparable, V any, M ~map[K]V](ms ...M) M {
-	s := 0
-	for _, m := range ms {
-		s += len(m)
-	}
-	u := make(M, s)
-	for _, m := range ms {
-		for k, v := range m {
-			u[k] = v
-		}
-	}
-	return u
 }
