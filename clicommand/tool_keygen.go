@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/buildkite/agent/v3/internal/jwkutil"
+	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/slices"
@@ -14,7 +15,7 @@ import (
 
 type KeygenConfig struct {
 	Alg                   string `cli:"alg" validate:"required"`
-	KeyID                 string `cli:"key-id" validate:"required"`
+	KeyID                 string `cli:"key-id"`
 	PrivateKeySetFilename string `cli:"private-keyset-filename" normalize:"filepath"`
 	PublicKeysetFilename  string `cli:"public-keyset-filename" normalize:"filepath"`
 
@@ -49,7 +50,7 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 		cli.StringFlag{
 			Name:   "key-id",
 			EnvVar: "BUILDKITE_AGENT_KEYGEN_KEY_ID",
-			Usage:  "The ID to use for the keys generated",
+			Usage:  "The ID to use for the keys generated. If none is provided, a random one will be generated",
 		},
 		cli.StringFlag{
 			Name:   "private-keyset-filename",
@@ -74,6 +75,11 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 		defer done()
 
 		l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
+
+		if cfg.KeyID == "" {
+			cfg.KeyID = petname.Generate(2, "-")
+			l.Info("No key ID provided, using a randomly generated one: %s", cfg.KeyID)
+		}
 
 		sigAlg := jwa.SignatureAlgorithm(cfg.Alg)
 
