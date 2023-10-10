@@ -91,40 +91,56 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	// job env (is actually used).
 	signedFields := step.Signature.SignedFields
 
-	stepFields, err := step.ValuesForFields(signedFields)
-	if err != nil {
-		return fmt.Errorf("failed to get values for fields %v on step: %w", signedFields, err)
-	}
-
 	for _, field := range signedFields {
 		switch field {
 		case "command": // compare directly
-			if jobCommand := r.conf.Job.Env["BUILDKITE_COMMAND"]; stepFields[field] != jobCommand {
-				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of field %q on the job (%q) does not match the value of the field on the step (%q)", r.conf.Job.ID, step.Signature.Value, field, jobCommand, stepFields[field]))
+			jobCommand := r.conf.Job.Env["BUILDKITE_COMMAND"]
+			if step.Command != jobCommand {
+				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of BUILDKITE_COMMAND (%q) does not match the value of step.command (%q)", r.conf.Job.ID, step.Signature.Value, jobCommand, step.Command))
 			}
 
-		case "plugins": //  compare canonicalised JSON
-			stepPluginsJSON, err := json.Marshal(stepFields[field])
+		case "plugins": // compare canonicalised JSON
+			jobPluginsJSON := r.conf.Job.Env["BUILDKITE_PLUGINS"]
+			// Various equivalent ways to represent "no plugins", however...
+			// jcs.Transform chokes on "" and "null", and json.Marshal encodes
+			// nil slice as "null", but zero-length slice as "[]".
+			emptyStepPlugins := len(step.Plugins) == 0
+			emptyJobPlugins := (jobPluginsJSON == "" || jobPluginsJSON == "null" || jobPluginsJSON == "[]")
+
+			if emptyStepPlugins && emptyJobPlugins {
+				continue // both empty
+			}
+
+			// Marshal step.Plugins into JSON now, in case it is needed for the
+			// error.
+			stepPluginsJSON, err := json.Marshal(step.Plugins)
 			if err != nil {
 				return fmt.Errorf("marshaling step plugins JSON: %v", err)
 			}
+
+			if emptyStepPlugins != emptyJobPlugins {
+				// one is empty but the other is not
+				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)", r.conf.Job.ID, step.Signature.Value, jobPluginsJSON, stepPluginsJSON))
+			}
+
 			stepPluginsNorm, err := jcs.Transform(stepPluginsJSON)
 			if err != nil {
 				return fmt.Errorf("canonicalising step plugins JSON: %v", err)
 			}
-			jobPluginsNorm, err := jcs.Transform([]byte(r.conf.Job.Env["BUILDKITE_PLUGINS"]))
+			jobPluginsNorm, err := jcs.Transform([]byte(jobPluginsJSON))
 			if err != nil {
 				return fmt.Errorf("canonicalising BUILDKITE_PLUGINS: %v", err)
 			}
 
 			if !bytes.Equal(jobPluginsNorm, stepPluginsNorm) {
-				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of field %q on the job (%q) does not match the value of the field on the step (%q)", r.conf.Job.ID, step.Signature.Value, field, jobPluginsNorm, stepPluginsNorm))
+				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)", r.conf.Job.ID, step.Signature.Value, jobPluginsNorm, stepPluginsNorm))
 			}
 
 		default:
 			// env:: - skip any that were verified with Verify.
 			if envName, ok := strings.CutPrefix(field, pipeline.EnvNamespacePrefix); ok {
-				if _, has := r.conf.Job.Env[envName]; has {
+				jobEnv, has := r.conf.Job.Env[envName]
+				if has {
 					// Signature.Verify used the variable value from Env,
 					// handling this case.
 					continue
@@ -132,8 +148,8 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 
 				// It's not in the job env, so ensure that it was blank in the
 				// step env too.
-				if stepFields[field] != "" {
-					return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of field %q on the job (%q) does not match the value of the field on the step (%q)", r.conf.Job.ID, step.Signature.Value, field, "", stepFields[field]))
+				if step.Env[envName] != jobEnv {
+					return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of %s (%q) does not match the value of step.env[%s] (%q)", r.conf.Job.ID, step.Signature.Value, envName, jobEnv, envName, step.Env[envName]))
 				}
 			}
 

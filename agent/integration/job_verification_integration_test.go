@@ -46,6 +46,34 @@ var (
 		},
 	}
 
+	jobWithNoPlugins = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+			Plugins: nil,
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_PLUGINS": "",
+			"DEPLOY":            "0",
+		},
+	}
+
+	jobWithNullPlugins = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+			Plugins: nil,
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_PLUGINS": "null",
+			"DEPLOY":            "0",
+		},
+	}
+
 	jobWithMismatchedStepAndJob = api.Job{
 		ID:                 defaultJobID,
 		ChunksMaxSizeBytes: 1024,
@@ -73,6 +101,25 @@ var (
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
 			"BUILDKITE_PLUGINS": `[{"github.com/buildkite-plugins/crimes-buildkite-plugin#v1.0.0":{"steal":"everything"}}]`,
+			"DEPLOY":            "0",
+		},
+	}
+
+	jobWithMissingPlugins = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+			Plugins: pipeline.Plugins{{
+				Source: "some#v1.0.0",
+				Config: map[string]string{
+					"key": "value",
+				},
+			}},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_PLUGINS": "null",
 			"DEPLOY":            "0",
 		},
 	}
@@ -150,6 +197,26 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     "",
 		},
 		{
+			name:                     "when job signature is valid and there are no plugins, it runs the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourBlock},
+			job:                      jobWithNoPlugins,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+		},
+		{
+			name:                     "when job signature is valid and plugins is null, it runs the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationInvalidSignatureBehavior: agent.VerificationBehaviourBlock},
+			job:                      jobWithNullPlugins,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+		},
+		{
 			name:                     "when job signature is missing, and NoSignatureBehavior is block, it refuses the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
 			job:                      job,
@@ -181,8 +248,23 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
-				fmt.Sprintf(`the value of field "command" on the job (%q) does not match the value of the field on the step (%q)`,
+				fmt.Sprintf(`the value of BUILDKITE_COMMAND (%q) does not match the value of step.command (%q)`,
 					jobWithMismatchedStepAndJob.Env["BUILDKITE_COMMAND"], jobWithMismatchedStepAndJob.Step.Command),
+			},
+		},
+		{
+			name:                     "when the step signature matches, but the plugins are missing from the job, it fails signature verification",
+			agentConf:                agent.AgentConfiguration{JobVerificationNoSignatureBehavior: agent.VerificationBehaviourBlock},
+			job:                      jobWithMissingPlugins,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				fmt.Sprintf(`the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)`,
+					jobWithMissingPlugins.Env["BUILDKITE_PLUGINS"], job.Env["BUILDKITE_PLUGINS"]),
 			},
 		},
 		{
@@ -196,7 +278,7 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
-				fmt.Sprintf(`the value of field "plugins" on the job (%q) does not match the value of the field on the step (%q)`,
+				fmt.Sprintf(`the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)`,
 					jobWithMismatchedPlugins.Env["BUILDKITE_PLUGINS"], job.Env["BUILDKITE_PLUGINS"]),
 			},
 		},
