@@ -33,9 +33,8 @@ type AgentConfiguration struct {
 	StrictSingleHooks     bool
 	RunInPty              bool
 
-	JobSigningJWKSPath  string // Where to find the key to sign jobs with (passed through to jobs, they might be uploading pipelines)
-	JobSigningAlgorithm string // The algorithm to sign jobs with
-	JobSigningKeyID     string // The key ID to sign jobs with
+	JobSigningJWKSPath string // Where to find the key to sign jobs with (passed through to jobs, they might be uploading pipelines)
+	JobSigningKeyID    string // The key ID to sign jobs with
 
 	JobVerificationJWKS                     jwk.Set // The set of keys to verify jobs with
 	JobVerificationNoSignatureBehavior      string  // What to do if a job has no signature (either block or warn)

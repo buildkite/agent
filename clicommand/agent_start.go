@@ -73,9 +73,8 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
-	JobSigningJWKSPath  string `cli:"job-signing-jwks-path" normalize:"filepath"`
-	JobSigningAlgorithm string `cli:"job-signing-algorithm"`
-	JobSigningKeyID     string `cli:"job-signing-key-id"`
+	JobSigningJWKSPath string `cli:"job-signing-jwks-path" normalize:"filepath"`
+	JobSigningKeyID    string `cli:"job-signing-key-id"`
 
 	JobVerificationJWKSPath                 string `cli:"job-verification-jwks-path" normalize:"filepath"`
 	JobVerificationNoSignatureBehavior      string `cli:"job-verification-no-signature-behavior"`
@@ -605,11 +604,6 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
 		},
 		cli.StringFlag{
-			Name:   "job-signing-algorithm",
-			Usage:  "EXPERIMENTAL: The algorithm to use when signing pipelines. Must be an algorithm specified in RFC 7518: JWA. Required when using a JWKS, and the given key doesn't have an alg parameter",
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
-		},
-		cli.StringFlag{
 			Name:   "job-signing-key-id",
 			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
@@ -831,20 +825,20 @@ var AgentStartCommand = cli.Command{
 			defer shutdown()
 		}
 
-		var jwks jwk.Set
+		var verificationJWKS jwk.Set
 		if cfg.JobVerificationJWKSPath != "" {
-			jwksBytes, err := os.ReadFile(cfg.JobVerificationJWKSPath)
+			var err error
+			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.JobVerificationJWKSPath)
 			if err != nil {
-				l.Fatal("Failed to read job verification key: %v", err)
+				l.Fatal("Verification JWKS failed validation: %v", err)
 			}
+		}
 
-			jwks, err = jwk.Parse(jwksBytes)
+		if cfg.JobSigningJWKSPath != "" {
+			// The actual JWKS itself doesn't get used until `buildkite-agent pipeline upload` is called, but validate it here anyway
+			_, err := parseAndValidateJWKS(ctx, "signing", cfg.JobSigningJWKSPath)
 			if err != nil {
-				l.Fatal("Failed to parse job verification key set: %v", err)
-			}
-
-			if jwks.Len() == 0 {
-				l.Fatal("Job verification key set is empty")
+				l.Fatal("Signing JWKS failed validation: %v", err)
 			}
 		}
 
@@ -890,11 +884,10 @@ var AgentStartCommand = cli.Command{
 			JobVerificationNoSignatureBehavior:      cfg.JobVerificationNoSignatureBehavior,
 			JobVerificationInvalidSignatureBehavior: cfg.JobVerificationInvalidSignatureBehavior,
 
-			JobSigningJWKSPath:  cfg.JobSigningJWKSPath,
-			JobSigningAlgorithm: cfg.JobSigningAlgorithm,
-			JobSigningKeyID:     cfg.JobSigningKeyID,
+			JobSigningJWKSPath: cfg.JobSigningJWKSPath,
+			JobSigningKeyID:    cfg.JobSigningKeyID,
 
-			JobVerificationJWKS: jwks,
+			JobVerificationJWKS: verificationJWKS,
 		}
 
 		if configFile != nil {
@@ -1104,6 +1097,37 @@ var AgentStartCommand = cli.Command{
 
 		return pool.Start(ctx)
 	},
+}
+
+func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set, error) {
+	jwksBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read job %s keyset: %w", keysetType, err)
+	}
+
+	jwks, err := jwk.Parse(jwksBytes)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse job %s keyset: %w", keysetType, err)
+	}
+
+	if jwks.Len() == 0 {
+		return nil, fmt.Errorf("Job %s keyset is empty", keysetType)
+	}
+
+	iter := jwks.Keys(ctx)
+	for iter.Next(ctx) {
+		keyI := iter.Pair().Value
+		key, ok := keyI.(jwk.Key)
+		if !ok {
+			return nil, fmt.Errorf("Job %s keyset contains a non-key at index %d", keysetType, iter.Pair().Index)
+		}
+
+		if _, ok = key.Get(jwk.AlgorithmKey); !ok {
+			return nil, fmt.Errorf("Job %s keyset contains a key without an algorithm at index %d. All keys used for signing and verification in the agent must have their `alg` key set", keysetType, iter.Pair().Index)
+		}
+	}
+
+	return jwks, nil
 }
 
 func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPool) chan os.Signal {

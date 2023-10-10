@@ -506,10 +506,6 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID"] = r.conf.AgentConfiguration.JobSigningKeyID
 	}
 
-	if r.conf.AgentConfiguration.JobSigningAlgorithm != "" {
-		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM"] = r.conf.AgentConfiguration.JobSigningAlgorithm
-	}
-
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing
