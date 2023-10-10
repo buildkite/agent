@@ -2,8 +2,6 @@ package pipeline
 
 import (
 	"encoding/json"
-
-	"github.com/buildkite/interpolate"
 )
 
 // UnknownStep models any step we don't know how to represent in this version.
@@ -30,8 +28,8 @@ func (u *UnknownStep) UnmarshalOrdered(src any) error {
 	return nil
 }
 
-func (u *UnknownStep) interpolate(env interpolate.Env) error {
-	c, err := interpolateAny(env, u.Contents)
+func (u *UnknownStep) interpolate(tf stringTransformer) error {
+	c, err := interpolateAny(tf, u.Contents)
 	if err != nil {
 		return err
 	}

@@ -8,17 +8,33 @@ import (
 // This file contains helpers for recursively interpolating all the strings in
 // pipeline objects.
 
+// stringTransformer implementations mutate strings.
+type stringTransformer interface {
+	Transform(string) (string, error)
+}
+
+// envInterpolator returns a reusable string transform that replaces
+// variables (${FOO}) with their values from a map.
+type envInterpolator struct {
+	envMap interpolate.Env
+}
+
+// Transform calls interpolate.Interpolate to transform the string.
+func (e envInterpolator) Transform(s string) (string, error) {
+	return interpolate.Interpolate(e.envMap, s)
+}
+
 // selfInterpolater describes types that can interpolate themselves in-place.
-// They can call interpolate.Interpolate on strings, or
+// They can use the string transformer on string fields, or use
 // interpolate{Slice,Map,OrderedMap,Any} on their other contents, to do this.
 type selfInterpolater interface {
-	interpolate(interpolate.Env) error
+	interpolate(stringTransformer) error
 }
 
 // interpolateAny interpolates (almost) anything in-place. When passed a string,
 // it returns a new string. Anything it doesn't know how to interpolate is
 // returned unaltered.
-func interpolateAny[T any](env interpolate.Env, o T) (T, error) {
+func interpolateAny[T any](tf stringTransformer, o T) (T, error) {
 	// The box-typeswitch-unbox dance is required because the Go compiler
 	// has no type switch for type parameters.
 	var err error
@@ -26,38 +42,38 @@ func interpolateAny[T any](env interpolate.Env, o T) (T, error) {
 
 	switch t := a.(type) {
 	case selfInterpolater:
-		err = t.interpolate(env)
+		err = t.interpolate(tf)
 
 	case *string:
 		if t == nil {
 			return o, nil
 		}
-		*t, err = interpolate.Interpolate(env, *t)
+		*t, err = tf.Transform(*t)
 		a = t
 
 	case string:
-		a, err = interpolate.Interpolate(env, t)
+		a, err = tf.Transform(t)
 
 	case []any:
-		err = interpolateSlice(env, t)
+		err = interpolateSlice(tf, t)
 
 	case []string:
-		err = interpolateSlice(env, t)
+		err = interpolateSlice(tf, t)
 
 	case ordered.Slice:
-		err = interpolateSlice(env, t)
+		err = interpolateSlice(tf, t)
 
 	case map[string]any:
-		err = interpolateMap(env, t)
+		err = interpolateMap(tf, t)
 
 	case map[string]string:
-		err = interpolateMap(env, t)
+		err = interpolateMap(tf, t)
 
 	case *ordered.Map[string, any]:
-		err = interpolateOrderedMap(env, t)
+		err = interpolateOrderedMap(tf, t)
 
 	case *ordered.Map[string, string]:
-		err = interpolateOrderedMap(env, t)
+		err = interpolateOrderedMap(tf, t)
 
 	default:
 		return o, nil
@@ -74,10 +90,10 @@ func interpolateAny[T any](env interpolate.Env, o T) (T, error) {
 
 // interpolateSlice applies interpolateAny over any type of slice. Values in the
 // slice are updated in-place.
-func interpolateSlice[E any, S ~[]E](env interpolate.Env, s S) error {
+func interpolateSlice[E any, S ~[]E](tf stringTransformer, s S) error {
 	for i, e := range s {
 		// It could be a string, so replace the old value with the new.
-		inte, err := interpolateAny(env, e)
+		inte, err := interpolateAny(tf, e)
 		if err != nil {
 			return err
 		}
@@ -88,16 +104,16 @@ func interpolateSlice[E any, S ~[]E](env interpolate.Env, s S) error {
 
 // interpolateMap applies interpolateAny over any type of map. The map is
 // altered in-place.
-func interpolateMap[K comparable, V any, M ~map[K]V](env interpolate.Env, m M) error {
+func interpolateMap[K comparable, V any, M ~map[K]V](tf stringTransformer, m M) error {
 	for k, v := range m {
 		// We interpolate both keys and values.
-		intk, err := interpolateAny(env, k)
+		intk, err := interpolateAny(tf, k)
 		if err != nil {
 			return err
 		}
 
 		// V could be string, so be sure to replace the old value with the new.
-		intv, err := interpolateAny(env, v)
+		intv, err := interpolateAny(tf, v)
 		if err != nil {
 			return err
 		}
@@ -113,14 +129,14 @@ func interpolateMap[K comparable, V any, M ~map[K]V](env interpolate.Env, m M) e
 
 // interpolateOrderedMap applies interpolateAny over any type of ordered.Map.
 // The map is altered in-place.
-func interpolateOrderedMap[K comparable, V any](env interpolate.Env, m *ordered.Map[K, V]) error {
+func interpolateOrderedMap[K comparable, V any](tf stringTransformer, m *ordered.Map[K, V]) error {
 	return m.Range(func(k K, v V) error {
 		// We interpolate both keys and values.
-		intk, err := interpolateAny(env, k)
+		intk, err := interpolateAny(tf, k)
 		if err != nil {
 			return err
 		}
-		intv, err := interpolateAny(env, v)
+		intv, err := interpolateAny(tf, v)
 		if err != nil {
 			return err
 		}
