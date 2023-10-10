@@ -136,6 +136,9 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)", r.conf.Job.ID, step.Signature.Value, jobPluginsNorm, stepPluginsNorm))
 			}
 
+		case "matrix": // compared indirectly through other fields
+			continue
+
 		default:
 			// env:: - skip any that were verified with Verify.
 			if envName, ok := strings.CutPrefix(field, pipeline.EnvNamespacePrefix); ok {
