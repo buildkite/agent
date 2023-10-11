@@ -609,7 +609,8 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "job-verification-failure-behavior",
-			Usage:  fmt.Sprintf("EXPERIMENTAL: The behavior when a job is received without a signature. One of: %v", verificationFailureBehaviors),
+			Value:  agent.VerificationBehaviourBlock,
+			Usage:  fmt.Sprintf("EXPERIMENTAL: The behavior when a job is received without a signature. One of: %v. Defaults to %s", verificationFailureBehaviors, agent.VerificationBehaviourBlock),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
 
