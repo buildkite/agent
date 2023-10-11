@@ -114,6 +114,107 @@ func (m *Matrix) interpolate(tf stringTransformer) error {
 	return interpolateMap(tf, m.RemainingFields)
 }
 
+// validatePermutation checks that the permutation is a valid selection of
+// dimension values, including any non-skipped adjustments.
+func (m *Matrix) validatePermutation(p MatrixPermutation) error {
+	if m == nil {
+		if len(p) > 0 {
+			return fmt.Errorf("non-empty permutation but matrix is nil")
+		}
+		// An empty permutation from a nil matrix...seems fine to me?
+		return nil
+	}
+	if len(p) != len(m.Setup) {
+		return fmt.Errorf("permutation length %d != matrix setup length %d", len(p), len(m.Setup))
+	}
+
+	// Check that the dimensions in the permutation are unique and defined in
+	// the matrix setup.
+	seen := make(map[string]bool)
+	for _, sd := range p {
+		if seen[sd.Dimension] {
+			return fmt.Errorf("permutation repeats dimension %q", sd.Dimension)
+		}
+		seen[sd.Dimension] = true
+
+		if len(m.Setup[sd.Dimension]) == 0 {
+			return fmt.Errorf("permutation has unknown dimension %q", sd.Dimension)
+		}
+	}
+
+	// Check that the permutation values are in the matrix setup (a basic
+	// permutation). Whether they are or are not, we still check adjustments.
+	valid := true
+	for _, sd := range p {
+		match := false
+		for _, v := range m.Setup[sd.Dimension] {
+			if sd.Value == v {
+				match = true
+				break
+			}
+		}
+		if !match {
+			// Not a basic permutation. It could still be an adjustment though.
+			valid = false
+			break
+		}
+	}
+
+	// Check if the permutation matches any adjustment.
+	for _, adj := range m.Adjustments {
+		// Ensure adj.With has the same size and dimension names as m.Setup.
+		// adj.With is a map so no need to check for repetition.
+		// Because adjustments can introduce new dimension values, only the
+		// names of dimensions are checked.
+		if len(adj.With) != len(m.Setup) {
+			return fmt.Errorf("adjustment length %d != matrix setup length %d", len(adj.With), len(m.Setup))
+		}
+		for dim := range adj.With {
+			if len(m.Setup[dim]) == 0 {
+				return fmt.Errorf("adjustment has unknown dimension %q", dim)
+			}
+		}
+
+		// Now we can test whether p == adj.With.
+		match := true
+		for _, sd := range p {
+			if sd.Value != adj.With[sd.Dimension] {
+				match = false
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+
+		if adj.ShouldSkip() {
+			return fmt.Errorf("permutation is a skipped adjustment")
+		}
+		// Not skipped, but is an adjustment, so it's valid.
+		// If multiple adjustments have the same permutation, and any of them
+		// have "skip: true", then that applies, so we can't bail early.
+		valid = true
+	}
+
+	if !valid {
+		return fmt.Errorf("permutation is neither an instance of the matrix setup nor is a matrix adjustment")
+	}
+	return nil
+}
+
+// MatrixPermutation represents a possible permutation of a matrix. If a matrix
+// has three dimensions each with three values, there will be 27 permutations.
+// Each permutation is a slice of SelectedDimensions, with Dimension values
+// being implicitly unique.
+type MatrixPermutation []SelectedDimension
+
+// SelectedDimension represents a single dimension/value pair in a matrix
+// permutation.
+type SelectedDimension struct {
+	Dimension string `json:"dimension"`
+	Value     any    `json:"value"`
+}
+
 // MatrixSetup is the main setup of a matrix - one or more dimensions. The cross
 // product of the dimensions in the setup produces the base combinations of
 // matrix values.
