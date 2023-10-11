@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
@@ -34,6 +35,17 @@ var (
 		ordered.Unmarshaler
 		selfInterpolater
 	} = (*MatrixScalars)(nil)
+)
+
+var (
+	errNilMatrix                    = errors.New("non-empty permutation but matrix is nil")
+	errPermutationLengthMismatch    = errors.New("permutation has wrong length")
+	errPermutationRepeatedDimension = errors.New("permutation has repeated dimension")
+	errPermutationUnknownDimension  = errors.New("permutation has unknown dimension")
+	errAdjustmentLengthMismatch     = errors.New("adjustment has wrong length")
+	errAdjustmentUnknownDimension   = errors.New("adjustment has unknown dimension")
+	errPermutationSkipped           = errors.New("permutation is skipped by adjustment")
+	errPermutationNoMatch           = errors.New("permutation is neither a valid matrix combination nor an adjustment")
 )
 
 // Matrix models the matrix specification for command steps.
@@ -119,13 +131,13 @@ func (m *Matrix) interpolate(tf stringTransformer) error {
 func (m *Matrix) validatePermutation(p MatrixPermutation) error {
 	if m == nil {
 		if len(p) > 0 {
-			return fmt.Errorf("non-empty permutation but matrix is nil")
+			return errNilMatrix
 		}
 		// An empty permutation from a nil matrix...seems fine to me?
 		return nil
 	}
 	if len(p) != len(m.Setup) {
-		return fmt.Errorf("permutation length %d != matrix setup length %d", len(p), len(m.Setup))
+		return fmt.Errorf("%w: %d != %d", errPermutationLengthMismatch, len(p), len(m.Setup))
 	}
 
 	// Check that the dimensions in the permutation are unique and defined in
@@ -133,12 +145,12 @@ func (m *Matrix) validatePermutation(p MatrixPermutation) error {
 	seen := make(map[string]bool)
 	for _, sd := range p {
 		if seen[sd.Dimension] {
-			return fmt.Errorf("permutation repeats dimension %q", sd.Dimension)
+			return fmt.Errorf("%w: %q", errPermutationRepeatedDimension, sd.Dimension)
 		}
 		seen[sd.Dimension] = true
 
 		if len(m.Setup[sd.Dimension]) == 0 {
-			return fmt.Errorf("permutation has unknown dimension %q", sd.Dimension)
+			return fmt.Errorf("%w: %q", errPermutationUnknownDimension, sd.Dimension)
 		}
 	}
 
@@ -167,11 +179,11 @@ func (m *Matrix) validatePermutation(p MatrixPermutation) error {
 		// Because adjustments can introduce new dimension values, only the
 		// names of dimensions are checked.
 		if len(adj.With) != len(m.Setup) {
-			return fmt.Errorf("adjustment length %d != matrix setup length %d", len(adj.With), len(m.Setup))
+			return fmt.Errorf("%w: %d != %d", errAdjustmentLengthMismatch, len(adj.With), len(m.Setup))
 		}
 		for dim := range adj.With {
 			if len(m.Setup[dim]) == 0 {
-				return fmt.Errorf("adjustment has unknown dimension %q", dim)
+				return fmt.Errorf("%w: %q", errAdjustmentUnknownDimension, dim)
 			}
 		}
 
@@ -188,7 +200,7 @@ func (m *Matrix) validatePermutation(p MatrixPermutation) error {
 		}
 
 		if adj.ShouldSkip() {
-			return fmt.Errorf("permutation is a skipped adjustment")
+			return errPermutationSkipped
 		}
 		// Not skipped, but is an adjustment, so it's valid.
 		// If multiple adjustments have the same permutation, and any of them
@@ -197,7 +209,7 @@ func (m *Matrix) validatePermutation(p MatrixPermutation) error {
 	}
 
 	if !valid {
-		return fmt.Errorf("permutation is neither an instance of the matrix setup nor is a matrix adjustment")
+		return errPermutationNoMatch
 	}
 	return nil
 }

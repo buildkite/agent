@@ -1,6 +1,9 @@
 package pipeline
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 	t.Parallel()
@@ -36,62 +39,62 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		perm      MatrixPermutation
-		wantValid bool
+		name string
+		perm MatrixPermutation
+		want error
 	}{
 		{
-			name:      "basic match",
-			perm:      MatrixPermutation{{Value: "Solanaceae"}},
-			wantValid: true,
+			name: "basic match",
+			perm: MatrixPermutation{{Value: "Solanaceae"}},
+			want: nil,
 		},
 		{
-			name:      "basic match (47)",
-			perm:      MatrixPermutation{{Value: 47}},
-			wantValid: true,
+			name: "basic match (47)",
+			perm: MatrixPermutation{{Value: 47}},
+			want: nil,
 		},
 		{
-			name:      "basic match (true)",
-			perm:      MatrixPermutation{{Value: true}},
-			wantValid: true,
+			name: "basic match (true)",
+			perm: MatrixPermutation{{Value: true}},
+			want: nil,
 		},
 		{
-			name:      "basic mismatch",
-			perm:      MatrixPermutation{{Value: "Poaceae"}},
-			wantValid: false,
+			name: "basic mismatch",
+			perm: MatrixPermutation{{Value: "Poaceae"}},
+			want: errPermutationNoMatch,
 		},
 		{
-			name:      "basic mismatch (-66)",
-			perm:      MatrixPermutation{{Value: -66}},
-			wantValid: false,
+			name: "basic mismatch (-66)",
+			perm: MatrixPermutation{{Value: -66}},
+			want: errPermutationNoMatch,
 		},
 		{
-			name:      "basic mismatch (false)",
-			perm:      MatrixPermutation{{Value: false}},
-			wantValid: false,
+			name: "basic mismatch (false)",
+			perm: MatrixPermutation{{Value: false}},
+			want: errPermutationNoMatch,
 		},
 		{
-			name:      "adjustment match",
-			perm:      MatrixPermutation{{Value: "Amaryllidaceae"}},
-			wantValid: true,
+			name: "adjustment match",
+			perm: MatrixPermutation{{Value: "Amaryllidaceae"}},
+			want: nil,
 		},
 		{
-			name:      "adjustment skip",
-			perm:      MatrixPermutation{{Value: "Brassicaceae"}},
-			wantValid: false,
+			name: "adjustment skip",
+			perm: MatrixPermutation{{Value: "Brassicaceae"}},
+			want: errPermutationSkipped,
 		},
 		{
-			name:      "invalid dimension",
-			perm:      MatrixPermutation{{Dimension: "family", Value: "Rosaceae"}},
-			wantValid: false,
+			name: "invalid dimension",
+			perm: MatrixPermutation{{Dimension: "family", Value: "Rosaceae"}},
+			want: errPermutationUnknownDimension,
 		},
 		{
-			name: "wrong dimension count / repeated dimension",
+			name: "wrong dimension count",
 			perm: MatrixPermutation{
 				{Dimension: "", Value: "Lamiaceae"},
 				{Dimension: "", Value: "Rosaceae"},
 			},
-			wantValid: false,
+			want: errPermutationLengthMismatch,
 		},
 	}
 
@@ -101,8 +104,8 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 			t.Parallel()
 
 			err := matrix.validatePermutation(test.perm)
-			if gotValid := (err == nil); gotValid != test.wantValid {
-				t.Errorf("matrix.validatePermutation(%v) = %v", test.perm, err)
+			if !errors.Is(err, test.want) {
+				t.Errorf("matrix.validatePermutation(%v) = %v, want %v", test.perm, err, test.want)
 			}
 		})
 	}
@@ -137,9 +140,9 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 	}
 
 	tests := []struct {
-		name      string
-		perm      MatrixPermutation
-		wantValid bool
+		name string
+		perm MatrixPermutation
+		want error
 	}{
 		{
 			name: "basic match",
@@ -148,7 +151,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 				{Dimension: "plot", Value: 2},
 				{Dimension: "treatment", Value: false},
 			},
-			wantValid: true,
+			want: nil,
 		},
 		{
 			name: "basic mismatch",
@@ -157,7 +160,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 				{Dimension: "plot", Value: 7},
 				{Dimension: "treatment", Value: false},
 			},
-			wantValid: false,
+			want: errPermutationNoMatch,
 		},
 		{
 			name: "adjustment match",
@@ -166,7 +169,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 				{Dimension: "plot", Value: 6},
 				{Dimension: "treatment", Value: true},
 			},
-			wantValid: true,
+			want: nil,
 		},
 		{
 			name: "adjustment skip",
@@ -175,7 +178,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 				{Dimension: "plot", Value: 3},
 				{Dimension: "treatment", Value: true},
 			},
-			wantValid: false,
+			want: errPermutationSkipped,
 		},
 		{
 			name: "wrong dimension count",
@@ -185,7 +188,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 				{Dimension: "treatment", Value: false},
 				{Dimension: "crimes", Value: "p-hacking"},
 			},
-			wantValid: false,
+			want: errPermutationLengthMismatch,
 		},
 		{
 			name: "invalid dimension",
@@ -194,7 +197,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 				{Dimension: "plot", Value: 3},
 				{Dimension: "treatment", Value: false},
 			},
-			wantValid: false,
+			want: errPermutationUnknownDimension,
 		},
 		{
 			name: "repeated dimension",
@@ -203,7 +206,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 				{Dimension: "family", Value: "Rosaceae"},
 				{Dimension: "plot", Value: 1},
 			},
-			wantValid: false,
+			want: errPermutationRepeatedDimension,
 		},
 	}
 
@@ -213,8 +216,8 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 			t.Parallel()
 
 			err := matrix.validatePermutation(test.perm)
-			if gotValid := (err == nil); gotValid != test.wantValid {
-				t.Errorf("matrix.validatePermutation(%v) = %v", test.perm, err)
+			if !errors.Is(err, test.want) {
+				t.Errorf("matrix.validatePermutation(%v) = %v, want %v", test.perm, err, test.want)
 			}
 		})
 	}
@@ -226,21 +229,21 @@ func TestMatrix_ValidatePermutation_Nil(t *testing.T) {
 	var matrix *Matrix // nil
 
 	tests := []struct {
-		name      string
-		perm      MatrixPermutation
-		wantValid bool
+		name string
+		perm MatrixPermutation
+		want error
 	}{
 		{
-			name:      "empty permutation",
-			perm:      MatrixPermutation{},
-			wantValid: true,
+			name: "empty permutation",
+			perm: MatrixPermutation{},
+			want: nil,
 		},
 		{
 			name: "non-empty permutation",
 			perm: MatrixPermutation{
 				{Dimension: "Twin Peaks", Value: "cherry pie"},
 			},
-			wantValid: false,
+			want: errNilMatrix,
 		},
 	}
 
@@ -250,8 +253,8 @@ func TestMatrix_ValidatePermutation_Nil(t *testing.T) {
 			t.Parallel()
 
 			err := matrix.validatePermutation(test.perm)
-			if gotValid := (err == nil); gotValid != test.wantValid {
-				t.Errorf("matrix.validatePermutation(%v) = %v", test.perm, err)
+			if !errors.Is(err, test.want) {
+				t.Errorf("matrix.validatePermutation(%v) = %v, want %v", test.perm, err, test.want)
 			}
 		})
 	}
@@ -269,6 +272,7 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 	tests := []struct {
 		name   string
 		matrix *Matrix
+		want   error
 	}{
 		{
 			name: "wrong dimension count",
@@ -287,6 +291,7 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 					},
 				},
 			},
+			want: errAdjustmentLengthMismatch,
 		},
 		{
 			name: "wrong dimensions",
@@ -306,14 +311,16 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 					},
 				},
 			},
+			want: errAdjustmentUnknownDimension,
 		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			if err := test.matrix.validatePermutation(perm); err == nil {
-				t.Errorf("matrix.validatePermutation(%v) = %v, want non-nil error", perm, err)
+			err := test.matrix.validatePermutation(perm)
+			if !errors.Is(err, test.want) {
+				t.Errorf("matrix.validatePermutation(%v) = %v, want %v", perm, err, test.want)
 			}
 		})
 	}
@@ -353,7 +360,8 @@ func TestMatrix_ValidatePermutation_RepeatAdjustment(t *testing.T) {
 		{Dimension: "treatment", Value: true},
 	}
 
-	if err := matrix.validatePermutation(perm); err == nil {
-		t.Errorf("matrix.validatePermutation(%v) = %v, want non-nil error", perm, err)
+	err := matrix.validatePermutation(perm)
+	if !errors.Is(err, errPermutationSkipped) {
+		t.Errorf("matrix.validatePermutation(%v) = %v, want %v", perm, err, errPermutationSkipped)
 	}
 }
