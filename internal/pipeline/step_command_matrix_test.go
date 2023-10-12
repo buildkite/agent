@@ -11,14 +11,14 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 	matrix := &Matrix{
 		Setup: MatrixSetup{
 			"": {
-				"Apiaceae",
-				"Brassicaceae",
-				"Cucurbitaceae",
-				"Fabaceae",
-				"Lamiaceae",
-				"Rosaceae",
-				"Rutaceae",
-				"Solanaceae",
+				"Umbellifers",
+				"Brassicas",
+				"Squashes",
+				"Legumes",
+				"Mints",
+				"Rose family",
+				"Citruses",
+				"Nightshades",
 				47,
 				true,
 			},
@@ -26,13 +26,13 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 		Adjustments: MatrixAdjustments{
 			{
 				With: MatrixAdjustmentWith{
-					"": "Brassicaceae",
+					"": "Brassicas",
 				},
 				Skip: "yes",
 			},
 			{
 				With: MatrixAdjustmentWith{
-					"": "Amaryllidaceae",
+					"": "Alliums",
 				},
 			},
 		},
@@ -45,7 +45,7 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 	}{
 		{
 			name: "basic match",
-			perm: MatrixPermutation{{Value: "Solanaceae"}},
+			perm: MatrixPermutation{{Value: "Nightshades"}},
 			want: nil,
 		},
 		{
@@ -60,7 +60,7 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 		},
 		{
 			name: "basic mismatch",
-			perm: MatrixPermutation{{Value: "Poaceae"}},
+			perm: MatrixPermutation{{Value: "Grasses"}},
 			want: errPermutationNoMatch,
 		},
 		{
@@ -75,24 +75,24 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 		},
 		{
 			name: "adjustment match",
-			perm: MatrixPermutation{{Value: "Amaryllidaceae"}},
+			perm: MatrixPermutation{{Value: "Alliums"}},
 			want: nil,
 		},
 		{
 			name: "adjustment skip",
-			perm: MatrixPermutation{{Value: "Brassicaceae"}},
+			perm: MatrixPermutation{{Value: "Brassicas"}},
 			want: errPermutationSkipped,
 		},
 		{
 			name: "invalid dimension",
-			perm: MatrixPermutation{{Dimension: "family", Value: "Rosaceae"}},
+			perm: MatrixPermutation{{Dimension: "family", Value: "Rose family"}},
 			want: errPermutationUnknownDimension,
 		},
 		{
 			name: "wrong dimension count",
 			perm: MatrixPermutation{
-				{Dimension: "", Value: "Lamiaceae"},
-				{Dimension: "", Value: "Rosaceae"},
+				{Dimension: "", Value: "Mints"},
+				{Dimension: "", Value: "Rose family"},
 			},
 			want: errPermutationLengthMismatch,
 		},
@@ -116,14 +116,14 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 
 	matrix := &Matrix{
 		Setup: MatrixSetup{
-			"family":    {"Brassicaceae", "Rosaceae", "Solanaceae"},
+			"family":    {"Brassicas", "Rose family", "Nightshades"},
 			"plot":      {1, 2, 3, 4, 5},
 			"treatment": {false, true},
 		},
 		Adjustments: MatrixAdjustments{
 			{
 				With: MatrixAdjustmentWith{
-					"family":    "Brassicaceae",
+					"family":    "Brassicas",
 					"plot":      3,
 					"treatment": true,
 				},
@@ -131,7 +131,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 			},
 			{
 				With: MatrixAdjustmentWith{
-					"family":    "Amaryllidaceae",
+					"family":    "Alliums",
 					"plot":      6,
 					"treatment": true,
 				},
@@ -147,7 +147,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 		{
 			name: "basic match",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Solanaceae"},
+				{Dimension: "family", Value: "Nightshades"},
 				{Dimension: "plot", Value: 2},
 				{Dimension: "treatment", Value: false},
 			},
@@ -156,7 +156,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 		{
 			name: "basic mismatch",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Solanaceae"},
+				{Dimension: "family", Value: "Nightshades"},
 				{Dimension: "plot", Value: 7},
 				{Dimension: "treatment", Value: false},
 			},
@@ -165,7 +165,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 		{
 			name: "adjustment match",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Amaryllidaceae"},
+				{Dimension: "family", Value: "Alliums"},
 				{Dimension: "plot", Value: 6},
 				{Dimension: "treatment", Value: true},
 			},
@@ -174,7 +174,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 		{
 			name: "adjustment skip",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Brassicaceae"},
+				{Dimension: "family", Value: "Brassicas"},
 				{Dimension: "plot", Value: 3},
 				{Dimension: "treatment", Value: true},
 			},
@@ -183,7 +183,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 		{
 			name: "wrong dimension count",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Rosaceae"},
+				{Dimension: "family", Value: "Rose family"},
 				{Dimension: "plot", Value: 3},
 				{Dimension: "treatment", Value: false},
 				{Dimension: "crimes", Value: "p-hacking"},
@@ -193,7 +193,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 		{
 			name: "invalid dimension",
 			perm: MatrixPermutation{
-				{Dimension: "", Value: "Rosaceae"},
+				{Dimension: "", Value: "Rose family"},
 				{Dimension: "plot", Value: 3},
 				{Dimension: "treatment", Value: false},
 			},
@@ -203,7 +203,7 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 			name: "repeated dimension",
 			perm: MatrixPermutation{
 				{Dimension: "family", Value: "Lamiaceae"},
-				{Dimension: "family", Value: "Rosaceae"},
+				{Dimension: "family", Value: "Rose family"},
 				{Dimension: "plot", Value: 1},
 			},
 			want: errPermutationRepeatedDimension,
@@ -264,7 +264,7 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 	t.Parallel()
 
 	perm := MatrixPermutation{
-		{Dimension: "family", Value: "Brassicaceae"},
+		{Dimension: "family", Value: "Brassicas"},
 		{Dimension: "plot", Value: 3},
 		{Dimension: "treatment", Value: true},
 	}
@@ -278,14 +278,14 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 			name: "wrong dimension count",
 			matrix: &Matrix{
 				Setup: MatrixSetup{
-					"family":    {"Brassicaceae", "Rosaceae", "Solanaceae"},
+					"family":    {"Brassicas", "Rose family", "Nightshades"},
 					"plot":      {1, 2, 3, 4, 5},
 					"treatment": {false, true},
 				},
 				Adjustments: MatrixAdjustments{
 					{
 						With: MatrixAdjustmentWith{
-							"family":    "Brassicaceae",
+							"family":    "Brassicas",
 							"treatment": true,
 						},
 					},
@@ -297,7 +297,7 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 			name: "wrong dimensions",
 			matrix: &Matrix{
 				Setup: MatrixSetup{
-					"family":    {"Brassicaceae", "Rosaceae", "Solanaceae"},
+					"family":    {"Brassicas", "Rose family", "Nightshades"},
 					"plot":      {1, 2, 3, 4, 5},
 					"treatment": {false, true},
 				},
@@ -331,21 +331,21 @@ func TestMatrix_ValidatePermutation_RepeatAdjustment(t *testing.T) {
 
 	matrix := &Matrix{
 		Setup: MatrixSetup{
-			"family":    {"Brassicaceae", "Rosaceae", "Solanaceae"},
+			"family":    {"Brassicas", "Rose family", "Nightshades"},
 			"plot":      {1, 2, 3, 4, 5},
 			"treatment": {false, true},
 		},
 		Adjustments: MatrixAdjustments{
 			{
 				With: MatrixAdjustmentWith{
-					"family":    "Brassicaceae",
+					"family":    "Brassicas",
 					"plot":      3,
 					"treatment": true,
 				},
 			},
 			{ // repeated adjustment! "skip: true" takes precedence.
 				With: MatrixAdjustmentWith{
-					"family":    "Brassicaceae",
+					"family":    "Brassicas",
 					"plot":      3,
 					"treatment": true,
 				},
@@ -355,7 +355,7 @@ func TestMatrix_ValidatePermutation_RepeatAdjustment(t *testing.T) {
 	}
 
 	perm := MatrixPermutation{
-		{Dimension: "family", Value: "Brassicaceae"},
+		{Dimension: "family", Value: "Brassicas"},
 		{Dimension: "plot", Value: 3},
 		{Dimension: "treatment", Value: true},
 	}
