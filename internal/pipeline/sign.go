@@ -34,13 +34,8 @@ func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, err
 		return nil, errors.New("no fields to sign")
 	}
 
-	// Namespace the env values.
-	env = prefixKeys(env, EnvNamespacePrefix)
-
-	// NB: env overrides values from sf. This may seem backwards but it is
-	// our documented behaviour:
-	// https://buildkite.com/docs/pipelines/environment-variables#defining-your-own
-	for k, v := range env {
+	// Namespace the env values and include them in the values to sign.
+	for k, v := range prefixKeys(env, EnvNamespacePrefix) {
 		values[k] = v
 	}
 
@@ -85,16 +80,12 @@ func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.S
 		return fmt.Errorf("obtaining values for fields: %w", err)
 	}
 
-	// Namespace the env values.
-	env = prefixKeys(env, EnvNamespacePrefix)
-
-	// NB: env overrides values from sf (see comment in Sign).
-	for k, v := range env {
+	// Namespace the env values and include them in the values to sign.
+	for k, v := range prefixKeys(env, EnvNamespacePrefix) {
 		values[k] = v
 	}
 
-	// env:: fields that were signed are all required from either the env map or
-	// the step env map.
+	// env:: fields that were signed are all required from the env map.
 	// We can't verify other env vars though - they can vary for lots of reasons
 	// (e.g. Buildkite-provided vars added by the backend.)
 	// This is still strong enough for a user to enforce any particular env var

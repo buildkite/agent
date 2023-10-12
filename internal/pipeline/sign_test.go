@@ -55,7 +55,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS256,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..IS-xyKZIK0iUXOs0DRRkr6uCqTXCYIl9YXBODZa-c_Q",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..yZI860Srtl1d2T3VKgTUVugFF_SX4VLqH-vN8zTw5fs",
 		},
 		{
 			name: "HMAC-SHA384",
@@ -63,7 +63,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS384,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..OjgQkbm7Z835QYoD1KvvHV6TQLvEs3G-JnFkOKzsjMOLgcUPd2DHHvKv0uf93gDM",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..dvKFu43gBBy3nKz4JgtqJbo4z4mNUZkOuD9nIGlslrnmQkcznE9pzbd-GtBtAetF",
 		},
 		{
 			name: "HMAC-SHA512",
@@ -71,7 +71,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS512,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..S3jnKQItD63trOQtIddkBu98Xql8_lfl4KEPOy6s1WH8AUI7eNTesfzRZ3l04uVBBU_FWZSWTY5afUbpbjMpvA",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..LciCRCDL_MgOph-1I6vYMEViwanJFdrF9Bh5eiUy9PKIc1RyGnHh7y07ydkwo5Fxf3GqQojhEtTlB8JWvGtaxg",
 		},
 		{
 			name:           "RSA-PSS 256",
