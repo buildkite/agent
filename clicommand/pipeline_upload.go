@@ -70,9 +70,8 @@ type PipelineUploadConfig struct {
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 	RejectSecrets   bool     `cli:"reject-secrets"`
 
-	JWKSFilePath     string `cli:"jwks-file-path"`
-	SigningKeyID     string `cli:"signing-key-id"`
-	SigningAlgorithm string `cli:"signing-algorithm"`
+	JWKSFilePath string `cli:"jwks-file-path"`
+	SigningKeyID string `cli:"signing-key-id"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -134,11 +133,6 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "signing-key-id",
 			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
-		},
-		cli.StringFlag{
-			Name:   "signing-algorithm",
-			Usage:  fmt.Sprintf("EXPERIMENTAL: The algorithm to use when signing the pipeline. Must be one of %v, and valid for the given signing key. Required if the JWK specified does not have an alg key", ValidSigningAlgorithms),
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_ALGORITHM",
 		},
 
 		// API Flags
@@ -422,54 +416,11 @@ func loadSigningKey(cfg PipelineUploadConfig) (jwk.Key, error) {
 		return nil, fmt.Errorf("couldn't find signing key ID %q in JWKS", cfg.SigningKeyID)
 	}
 
-	if err = injectAlgorithm(key, cfg); err != nil {
-		return nil, fmt.Errorf("setting algorithm: %v", err)
-	}
-
 	if err := validateJWK(key); err != nil {
 		return nil, fmt.Errorf("signing key ID %s is invalid: %v", cfg.SigningKeyID, err)
 	}
 
 	return key, nil
-}
-
-func injectAlgorithm(key jwk.Key, cfg PipelineUploadConfig) error {
-	keyHasAlgorithm := key.Algorithm() != nil && key.Algorithm().String() != ""
-
-	var alg jwa.KeyAlgorithm
-	var from string // for error messages
-	switch {
-	case !keyHasAlgorithm && cfg.SigningAlgorithm == "":
-		return fmt.Errorf("signing algorithm is required if JWKS key doesn't have an alg parameter")
-
-	case keyHasAlgorithm && cfg.SigningAlgorithm != "":
-		return fmt.Errorf("signing algorithm is not allowed if JWKS key has an alg parameter")
-
-	case cfg.SigningAlgorithm != "":
-		alg = jwa.SignatureAlgorithm(cfg.SigningAlgorithm)
-		from = "from --signing-algorithm flag"
-
-	case keyHasAlgorithm:
-		alg = key.Algorithm()
-		from = fmt.Sprintf("from JWKS, key ID %s", cfg.SigningKeyID)
-	}
-
-	// The above switch is exhaustive, but just in case, check that the alg isn't invalid (ie. empty)
-	if _, ok := alg.(jwa.InvalidKeyAlgorithm); ok {
-		return fmt.Errorf("signing algorithm %s is not a valid signing algorithm", alg)
-	}
-
-	signingAlg, ok := alg.(jwa.SignatureAlgorithm)
-	if !ok {
-		return fmt.Errorf("algorithm %s (%s) cannot be used for signing/verification", alg, from)
-	}
-
-	err := key.Set(jwk.AlgorithmKey, signingAlg)
-	if err != nil {
-		return fmt.Errorf("setting signing algorithm on key: %v", err)
-	}
-
-	return nil
 }
 
 var (
@@ -490,6 +441,10 @@ func validateJWK(key jwk.Key) error {
 	validKeyTypes := []jwa.KeyType{jwa.RSA, jwa.EC, jwa.OctetSeq, jwa.OKP}
 	if !slices.Contains(validKeyTypes, key.KeyType()) {
 		return fmt.Errorf("unsupported key type %s. Key type must be one of %v", key.KeyType(), validKeyTypes)
+	}
+
+	if _, ok := key.Get(jwk.AlgorithmKey); !ok {
+		return errors.New("key is missing algorithm")
 	}
 
 	signingAlg, ok := key.Algorithm().(jwa.SignatureAlgorithm)

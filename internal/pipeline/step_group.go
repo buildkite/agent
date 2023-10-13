@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
-	"github.com/buildkite/interpolate"
 )
 
 // GroupStep models a group step.
@@ -36,17 +35,17 @@ func (g *GroupStep) UnmarshalOrdered(src any) error {
 	return nil
 }
 
-func (g *GroupStep) interpolate(env interpolate.Env) error {
-	grp, err := interpolateAny(env, g.Group)
+func (g *GroupStep) interpolate(tf stringTransformer) error {
+	grp, err := interpolateAny(tf, g.Group)
 	if err != nil {
 		return err
 	}
 	g.Group = grp
 
-	if err := g.Steps.interpolate(env); err != nil {
+	if err := g.Steps.interpolate(tf); err != nil {
 		return err
 	}
-	return interpolateMap(env, g.RemainingFields)
+	return interpolateMap(tf, g.RemainingFields)
 }
 
 func (GroupStep) stepTag() {}

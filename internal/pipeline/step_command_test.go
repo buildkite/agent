@@ -78,3 +78,112 @@ func TestCommandStepUnmarshalJSON(t *testing.T) {
 		t.Errorf("CommandStep diff after UnmarshalJSON (-got +want):\n%s", diff)
 	}
 }
+
+func TestStepCommandMatrixInterpolate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ms         MatrixPermutation
+		step, want *CommandStep
+	}{
+		{
+			name: "it does nothing when there's no matrix stuff",
+			step: &CommandStep{
+				Command: "script/buildkite/xxx.sh",
+				Plugins: Plugins{
+					{
+						Source: "docker#v1.2.3",
+						Config: map[string]any{
+							"image": "alpine",
+						},
+					},
+				},
+			},
+			want: &CommandStep{
+				Command: "script/buildkite/xxx.sh",
+				Plugins: Plugins{
+					{
+						Source: "docker#v1.2.3",
+						Config: map[string]any{
+							"image": "alpine",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "it interplates environment variable names and values",
+			ms: MatrixPermutation{
+				{Dimension: "name", Value: "Taylor Launtner"},
+				{Dimension: "demonym_suffix", Value: "DER"},
+				{Dimension: "value", Value: "true"},
+			},
+			step: &CommandStep{
+				Command: "script/buildkite/xxx.sh",
+				Env: map[string]string{
+					"NAME":                              "{{matrix.name}}",
+					"MICHIGAN{{matrix.demonym_suffix}}": "{{matrix.value}}",
+				},
+			},
+			want: &CommandStep{
+				Command: "script/buildkite/xxx.sh",
+				Env: map[string]string{
+					"NAME":        "Taylor Launtner",
+					"MICHIGANDER": "true",
+				},
+			},
+		},
+		{
+			name: "it interpolates plugin config",
+			ms: MatrixPermutation{
+				{Dimension: "docker_version", Value: "4.5.6"},
+				{Dimension: "image", Value: "alpine"},
+			},
+			step: &CommandStep{
+				Command: "script/buildkite/xxx.sh",
+				Plugins: Plugins{
+					{
+						Source: "docker#{{matrix.docker_version}}",
+						Config: map[string]any{
+							"image": "{{matrix.image}}",
+						},
+					},
+				},
+			},
+			want: &CommandStep{
+				Command: "script/buildkite/xxx.sh",
+				Plugins: Plugins{
+					{
+						Source: "docker#4.5.6",
+						Config: map[string]any{
+							"image": "alpine",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "it interpolates commands",
+			ms: MatrixPermutation{
+				{Dimension: "goos", Value: "linux"},
+				{Dimension: "goarch", Value: "amd64"},
+			},
+			step: &CommandStep{Command: "GOOS={{matrix.goos}} GOARCH={{matrix.goarch}} go build -o foobar ."},
+			want: &CommandStep{Command: "GOOS=linux GOARCH=amd64 go build -o foobar ."},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			tf := newMatrixInterpolator(tc.ms)
+			if err := tc.step.interpolate(tf); err != nil {
+				t.Errorf("tc.step.interpolate(matrixInterpolator) error = %v", err)
+			}
+			if diff := cmp.Diff(tc.step, tc.want, cmp.Comparer(ordered.EqualSA)); diff != "" {
+				t.Errorf("CommandStep diff after MatrixInterpolate (-got +want):\n%s", diff)
+			}
+		})
+	}
+}

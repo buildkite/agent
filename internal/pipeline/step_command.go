@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/ordered"
-	"github.com/buildkite/interpolate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -76,19 +75,11 @@ func (c *CommandStep) UnmarshalOrdered(src any) error {
 }
 
 // SignedFields returns the default fields for signing.
-func (c *CommandStep) SignedFields() (map[string]string, error) {
-	plugins := ""
-	if len(c.Plugins) > 0 {
-		// TODO: Reconsider using JSON here - is it stable enough?
-		pj, err := json.Marshal(c.Plugins)
-		if err != nil {
-			return nil, err
-		}
-		plugins = string(pj)
-	}
-	out := map[string]string{
+func (c *CommandStep) SignedFields() (map[string]any, error) {
+	out := map[string]any{
 		"command": c.Command,
-		"plugins": plugins,
+		"plugins": c.Plugins,
+		"matrix":  c.Matrix,
 	}
 	// Steps can have their own env. These can be overridden by the pipeline!
 	for e, v := range c.Env {
@@ -98,12 +89,13 @@ func (c *CommandStep) SignedFields() (map[string]string, error) {
 }
 
 // ValuesForFields returns the contents of fields to sign.
-func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error) {
+func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 	// Make a set of required fields. As fields is processed, mark them off by
 	// deleting them.
 	required := map[string]struct{}{
 		"command": {},
 		"plugins": {},
+		"matrix":  {},
 	}
 	// Env vars that the step has, but the pipeline doesn't have, are required.
 	// But we don't know what the pipeline has without passing it in, so treat
@@ -112,7 +104,7 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error
 		required[EnvNamespacePrefix+e] = struct{}{}
 	}
 
-	out := make(map[string]string, len(fields))
+	out := make(map[string]any, len(fields))
 	for _, f := range fields {
 		delete(required, f)
 
@@ -121,16 +113,10 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error
 			out["command"] = c.Command
 
 		case "plugins":
-			if len(c.Plugins) == 0 {
-				out["plugins"] = ""
-				break
-			}
-			// TODO: Reconsider using JSON here - is it stable enough?
-			val, err := json.Marshal(c.Plugins)
-			if err != nil {
-				return nil, err
-			}
-			out["plugins"] = string(val)
+			out["plugins"] = c.Plugins
+
+		case "matrix":
+			out["matrix"] = c.Matrix
 
 		default:
 			if e, has := strings.CutPrefix(f, EnvNamespacePrefix); has {
@@ -156,27 +142,27 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]string, error
 	return out, nil
 }
 
-func (c *CommandStep) interpolate(env interpolate.Env) error {
-	cmd, err := interpolate.Interpolate(env, c.Command)
+func (c *CommandStep) interpolate(tf stringTransformer) error {
+	cmd, err := tf.Transform(c.Command)
 	if err != nil {
 		return err
 	}
 
-	if err := interpolateSlice(env, c.Plugins); err != nil {
+	if err := interpolateSlice(tf, c.Plugins); err != nil {
 		return err
 	}
 
-	if err := interpolateMap(env, c.Env); err != nil {
+	if err := interpolateMap(tf, c.Env); err != nil {
 		return err
 	}
 
 	// NB: Do not interpolate Signature.
 
-	if c.Matrix, err = interpolateAny(env, c.Matrix); err != nil {
+	if c.Matrix, err = interpolateAny(tf, c.Matrix); err != nil {
 		return err
 	}
 
-	if err := interpolateMap(env, c.RemainingFields); err != nil {
+	if err := interpolateMap(tf, c.RemainingFields); err != nil {
 		return err
 	}
 

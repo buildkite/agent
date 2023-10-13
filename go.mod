@@ -8,11 +8,11 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0
 	github.com/DataDog/datadog-go/v5 v5.3.0
 	github.com/DrJosh9000/zzglob v0.0.16
-	github.com/aws/aws-sdk-go v1.45.19
+	github.com/aws/aws-sdk-go v1.45.24
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.1.1
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
-	github.com/buildkite/roko v1.1.0
+	github.com/buildkite/roko v1.1.1
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/creack/pty v1.1.18
 	github.com/denisbrodbeck/machineid v1.0.1
@@ -41,15 +41,17 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.19.0
 	go.opentelemetry.io/otel/sdk v1.19.0
 	go.opentelemetry.io/otel/trace v1.19.0
-	golang.org/x/crypto v0.13.0
+	golang.org/x/crypto v0.14.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
-	golang.org/x/oauth2 v0.12.0
-	golang.org/x/sys v0.12.0
-	google.golang.org/api v0.143.0
+	golang.org/x/oauth2 v0.13.0
+	golang.org/x/sys v0.13.0
+	google.golang.org/api v0.146.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.55.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
 )
+
+require github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2
 
 require (
 	cloud.google.com/go/compute v1.23.0 // indirect
@@ -80,6 +82,7 @@ require (
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.1 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.0 // indirect
+	github.com/gowebpki/jcs v1.0.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
@@ -108,8 +111,8 @@ require (
 	go4.org/intern v0.0.0-20230525184215-6c62f75575cb // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230525183740-e7c30c78aeb2 // indirect
 	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/net v0.15.0 // indirect
-	golang.org/x/term v0.12.0 // indirect
+	golang.org/x/net v0.16.0 // indirect
+	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846 // indirect

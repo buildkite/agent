@@ -10,13 +10,6 @@ This command can only be used when at least one agent is running with the
 // Flags used by all lock subcommands.
 var lockCommonFlags = []cli.Flag{
 	cli.StringFlag{
-		Name:   "config",
-		Value:  "",
-		Usage:  "Path to a configuration file",
-		EnvVar: "BUILDKITE_AGENT_CONFIG",
-	},
-
-	cli.StringFlag{
 		Name:   "lock-scope",
 		Value:  "machine",
 		Usage:  "The scope for locks used in this operation. Currently only 'machine' scope is supported",

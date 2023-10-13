@@ -2,8 +2,6 @@ package pipeline
 
 import (
 	"encoding/json"
-
-	"github.com/buildkite/interpolate"
 )
 
 // TriggerStep models a trigger step.
@@ -18,8 +16,8 @@ func (t TriggerStep) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.Contents)
 }
 
-func (s TriggerStep) interpolate(env interpolate.Env) error {
-	return interpolateMap(env, s.Contents)
+func (s TriggerStep) interpolate(tf stringTransformer) error {
+	return interpolateMap(tf, s.Contents)
 }
 
 func (TriggerStep) stepTag() {}
