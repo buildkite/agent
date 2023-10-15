@@ -84,9 +84,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	// Notes on env vars:
 	// 1. Pipeline env values are included individually in the "env::" namespace
 	//    of fields, and step env vars are a single map under the "env" field.
-	// 2. When producing the job env, pipeline env overrides step env. This may
-	//    seem backwards but it is our documented behaviour:
-	//    https://buildkite.com/docs/pipelines/environment-variables#defining-your-own
+	// 2. When producing the job env, step env overrides pipeline env. Easy.
 	// 3. The backend also adds env vars that can't be known in advance for
 	//    signing.
 	// 4. Step env vars can have matrix tokens (in both names and values).
@@ -98,23 +96,15 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	// under normal circumstances, and verifying it all is a bit complex.
 	//
 	// 1. Every step env var must at least exist in the job env.
-	// 2. Every pipline env var must exist in the job env, and have an equal
-	//    value in the job env, because it overrides step env.
-	// 3. If a var was a pipeline env var, it went in the "env::" namespace, and
-	//    Signature.Verify has checked its value implicitly.
+	// 2. Every pipline env var must at least exist in the job env.
+	// 3. If a var was a pipeline env var, and wasn't overridden by a step var,
+	//    it went in the "env::" namespace, and Signature.Verify has checked its
+	//    value implicitly.
 	// 3. If a var was a step env var, it is an element in step.Env and
 	//    Signature.Verify has checked its pre-matrix value.
-	// 4. If a var was a step env var *and* wasn't overridden by a pipeline env
-	//    var, *then* its (post-matrix) value must equal the job env var.
+	// 4. If a var was a step env var then its post-matrix value must equal
+	//    the job env var.
 	signedFields := step.Signature.SignedFields
-
-	// These env vars came from the pipeline-level env block.
-	pipelineEnv := make(map[string]bool)
-	for _, field := range signedFields {
-		if name, has := strings.CutPrefix(field, pipeline.EnvNamespacePrefix); has {
-			pipelineEnv[name] = true
-		}
-	}
 
 	// Compare each field to the job.
 	for _, field := range signedFields {
@@ -126,18 +116,13 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			}
 
 		case "env":
+			// Everything in the step env (post-matrix interpolation) must be
+			// present in the job env, and have equal values.
 			for name, stepEnvValue := range step.Env {
-				// It must at least exist in the job env.
 				jobEnvValue, has := r.conf.Job.Env[name]
 				if !has {
 					return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but step.env defines %s which is missing from the job environment", r.conf.Job.ID, step.Signature.Value, name))
 				}
-
-				// If it is not overridden by the pipeline...
-				if pipelineEnv[name] {
-					continue
-				}
-				// ...then it must match the step.
 				if jobEnvValue != stepEnvValue {
 					return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of %s (%q) does not match the value of step.env[%s] (%q)", r.conf.Job.ID, step.Signature.Value, name, jobEnvValue, name, stepEnvValue))
 				}

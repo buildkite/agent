@@ -39,7 +39,7 @@ func TestSignVerify(t *testing.T) {
 	// The backend combines the pipeline and step envs, providing a new env:
 	verifyEnv := map[string]string{
 		"CONTEXT": "cats",
-		"DEPLOY":  "1", // NB: pipeline env overrides step env.
+		"DEPLOY":  "0",
 		"MISC":    "llama drama",
 	}
 
@@ -55,7 +55,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS256,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..yZI860Srtl1d2T3VKgTUVugFF_SX4VLqH-vN8zTw5fs",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..F8xH79r8o7GbKKyYViKsbKhMtSGsAXbGIZJfoH9cWS8",
 		},
 		{
 			name: "HMAC-SHA384",
@@ -63,7 +63,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS384,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..dvKFu43gBBy3nKz4JgtqJbo4z4mNUZkOuD9nIGlslrnmQkcznE9pzbd-GtBtAetF",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..nykiFmX1mQUAU8jCkmEFTudWXuQiR9mfQKEwWcH5Vc59aL5dOqfk5IWlKxNGYB9v",
 		},
 		{
 			name: "HMAC-SHA512",
@@ -71,7 +71,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS512,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..LciCRCDL_MgOph-1I6vYMEViwanJFdrF9Bh5eiUy9PKIc1RyGnHh7y07ydkwo5Fxf3GqQojhEtTlB8JWvGtaxg",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..3iFiqkOS0M5uptlFNBf_KABj6RHBugwPHCld_LH2U5H4Peiv-cxqr2EWTfy19j_iRkyr-LGHt-lqUuiC27t2Qw",
 		},
 		{
 			name:           "RSA-PSS 256",

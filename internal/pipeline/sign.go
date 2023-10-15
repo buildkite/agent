@@ -34,9 +34,19 @@ func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, err
 		return nil, errors.New("no fields to sign")
 	}
 
+	// Step env overrides pipeline and build env:
+	// https://buildkite.com/docs/tutorials/pipeline-upgrade#what-is-the-yaml-steps-editor-compatibility-issues
+	// (Beware of inconsistent docs written in the time of legacy steps.)
+	// So if the thing we're signing has an env map, use it to exclude pipeline
+	// vars from signing.
+	objEnv, _ := values["env"].(map[string]string)
+
 	// Namespace the env values and include them in the values to sign.
-	for k, v := range prefixKeys(env, EnvNamespacePrefix) {
-		values[k] = v
+	for k, v := range env {
+		if _, has := objEnv[k]; has {
+			continue
+		}
+		values[EnvNamespacePrefix+k] = v
 	}
 
 	fields := make([]string, 0, len(values))
@@ -80,9 +90,15 @@ func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.S
 		return fmt.Errorf("obtaining values for fields: %w", err)
 	}
 
+	// See Sign above for why we need special handling for step env.
+	objEnv, _ := values["env"].(map[string]string)
+
 	// Namespace the env values and include them in the values to sign.
-	for k, v := range prefixKeys(env, EnvNamespacePrefix) {
-		values[k] = v
+	for k, v := range env {
+		if _, has := objEnv[k]; has {
+			continue
+		}
+		values[EnvNamespacePrefix+k] = v
 	}
 
 	// env:: fields that were signed are all required from the env map.
@@ -144,15 +160,6 @@ type SignedFielder interface {
 	// values if "mandatory" fields are missing (e.g. signing a command step
 	// should always sign the command).
 	ValuesForFields([]string) (map[string]any, error)
-}
-
-// prefixKeys returns a copy of a map with each key prefixed with a prefix.
-func prefixKeys[V any, M ~map[string]V](in M, prefix string) M {
-	out := make(M, len(in))
-	for k, v := range in {
-		out[prefix+k] = v
-	}
-	return out
 }
 
 // requireKeys returns a copy of a map containing only keys from a []string.
