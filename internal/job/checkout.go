@@ -491,6 +491,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	gitFetchFlags := e.GitFetchFlags
 
+	// Bitbucket (at least) send the SHORT SHA1 in the event and git fetch requires the long SHA1
+	if o, err := e.shell.RunAndCapture(ctx, "git", "rev-parse", e.Commit); err != nil {
+		e.shell.Warningf("failed to rev-parse %s, %w", e.Commit, err)
+	} else {
+		e.Commit = o
+	}
+
 	switch {
 	case e.RefSpec != "":
 		// If a refspec is provided then use it instead.
