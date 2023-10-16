@@ -20,7 +20,7 @@ require (
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/gofrs/flock v0.8.1
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.6.0
 	github.com/google/go-querystring v1.1.0
 	github.com/lestrrat-go/jwx/v2 v2.0.13
 	github.com/mattn/go-zglob v0.0.4
