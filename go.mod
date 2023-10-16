@@ -4,11 +4,11 @@ go 1.20
 
 require (
 	cloud.google.com/go/compute/metadata v0.2.3
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.1
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.1.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.4.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0
 	github.com/DataDog/datadog-go/v5 v5.3.0
 	github.com/DrJosh9000/zzglob v0.0.16
-	github.com/aws/aws-sdk-go v1.45.24
+	github.com/aws/aws-sdk-go v1.45.25
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.1.1
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
@@ -45,7 +45,7 @@ require (
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/oauth2 v0.13.0
 	golang.org/x/sys v0.13.0
-	google.golang.org/api v0.146.0
+	google.golang.org/api v0.147.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.55.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
@@ -55,7 +55,7 @@ require github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aa
 
 require (
 	cloud.google.com/go/compute v1.23.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.1 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.8.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.3.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.1.1 // indirect
 	github.com/DataDog/appsec-internal-go v1.0.0 // indirect
@@ -111,15 +111,15 @@ require (
 	go4.org/intern v0.0.0-20230525184215-6c62f75575cb // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230525183740-e7c30c78aeb2 // indirect
 	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/net v0.16.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20230913181813-007df8e322eb // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230920204549-e6e6cdab5c13 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20231002182017-d307bd883b97 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231009173412-8bfb1ae86b6c // indirect
 	google.golang.org/grpc v1.58.2 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	inet.af/netaddr v0.0.0-20230525184311-b8eac61e914a // indirect
