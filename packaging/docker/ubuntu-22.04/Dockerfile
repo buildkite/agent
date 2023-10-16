@@ -13,7 +13,6 @@ set -eufo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get upgrade -y
 apt-get install -y --no-install-recommends \
   apt-transport-https \
   bash \

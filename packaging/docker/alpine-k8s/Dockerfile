@@ -2,7 +2,7 @@
 
 FROM public.ecr.aws/docker/library/alpine:3.18.4 AS base
 
-RUN apk update && apk upgrade && apk add --no-cache \
+RUN apk update && apk add --no-cache \
     bash \
     curl \
     docker-cli \

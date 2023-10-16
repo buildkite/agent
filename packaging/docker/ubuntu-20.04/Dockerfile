@@ -8,7 +8,7 @@ ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DOCKER_COMPOSE_VERSION=1.27.4
 
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-transport-https \
     bash \
     ca-certificates \

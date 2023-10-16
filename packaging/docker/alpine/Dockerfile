@@ -3,7 +3,7 @@ FROM public.ecr.aws/docker/library/alpine:3.18.4
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN apk update && apk upgrade && apk add --no-cache \
+RUN apk add --no-cache \
     bash \
     curl \
     docker-cli \
