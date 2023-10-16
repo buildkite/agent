@@ -76,16 +76,12 @@ func (c *CommandStep) UnmarshalOrdered(src any) error {
 
 // SignedFields returns the default fields for signing.
 func (c *CommandStep) SignedFields() (map[string]any, error) {
-	out := map[string]any{
+	return map[string]any{
 		"command": c.Command,
+		"env":     c.Env,
 		"plugins": c.Plugins,
 		"matrix":  c.Matrix,
-	}
-	// Steps can have their own env. These can be overridden by the pipeline!
-	for e, v := range c.Env {
-		out[EnvNamespacePrefix+e] = v
-	}
-	return out, nil
+	}, nil
 }
 
 // ValuesForFields returns the contents of fields to sign.
@@ -94,14 +90,9 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 	// deleting them.
 	required := map[string]struct{}{
 		"command": {},
+		"env":     {},
 		"plugins": {},
 		"matrix":  {},
-	}
-	// Env vars that the step has, but the pipeline doesn't have, are required.
-	// But we don't know what the pipeline has without passing it in, so treat
-	// all step env vars as required.
-	for e := range c.Env {
-		required[EnvNamespacePrefix+e] = struct{}{}
 	}
 
 	out := make(map[string]any, len(fields))
@@ -112,6 +103,9 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 		case "command":
 			out["command"] = c.Command
 
+		case "env":
+			out["env"] = c.Env
+
 		case "plugins":
 			out["plugins"] = c.Plugins
 
@@ -119,12 +113,8 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 			out["matrix"] = c.Matrix
 
 		default:
-			if e, has := strings.CutPrefix(f, EnvNamespacePrefix); has {
-				// Env vars requested in `fields`, but are not in this step, are
-				// skipped.
-				if v, ok := c.Env[e]; ok {
-					out[f] = v
-				}
+			// All env:: values come from outside the step.
+			if strings.HasPrefix(f, EnvNamespacePrefix) {
 				break
 			}
 
@@ -147,26 +137,34 @@ func (c *CommandStep) interpolate(tf stringTransformer) error {
 	if err != nil {
 		return err
 	}
+	c.Command = cmd
 
 	if err := interpolateSlice(tf, c.Plugins); err != nil {
 		return err
 	}
 
-	if err := interpolateMap(tf, c.Env); err != nil {
-		return err
+	switch tf.(type) {
+	case envInterpolator:
+		if err := interpolateMap(tf, c.Env); err != nil {
+			return err
+		}
+		if c.Matrix, err = interpolateAny(tf, c.Matrix); err != nil {
+			return err
+		}
+
+	case matrixInterpolator:
+		// Matrix interpolation doesn't apply to env keys.
+		if err := interpolateMapValues(tf, c.Env); err != nil {
+			return err
+		}
 	}
 
 	// NB: Do not interpolate Signature.
-
-	if c.Matrix, err = interpolateAny(tf, c.Matrix); err != nil {
-		return err
-	}
 
 	if err := interpolateMap(tf, c.RemainingFields); err != nil {
 		return err
 	}
 
-	c.Command = cmd
 	return nil
 }
 

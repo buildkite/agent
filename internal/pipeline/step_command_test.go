@@ -113,17 +113,16 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 			},
 		},
 		{
-			name: "it interplates environment variable names and values",
+			name: "it interplates environment variable values",
 			ms: MatrixPermutation{
 				{Dimension: "name", Value: "Taylor Launtner"},
-				{Dimension: "demonym_suffix", Value: "DER"},
 				{Dimension: "value", Value: "true"},
 			},
 			step: &CommandStep{
 				Command: "script/buildkite/xxx.sh",
 				Env: map[string]string{
-					"NAME":                              "{{matrix.name}}",
-					"MICHIGAN{{matrix.demonym_suffix}}": "{{matrix.value}}",
+					"NAME":        "{{matrix.name}}",
+					"MICHIGANDER": "{{matrix.value}}",
 				},
 			},
 			want: &CommandStep{

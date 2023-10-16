@@ -36,13 +36,13 @@ var (
 				},
 			}},
 			Env: map[string]string{
-				"DEPLOY": "1", // overridden by pipeline env
+				"DEPLOY": "1",
 			},
 		},
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
 			"BUILDKITE_PLUGINS": `[{"github.com/buildkite-plugins/some-buildkite-plugin#v1.0.0":{"key":"value"}}]`,
-			"DEPLOY":            "0",
+			"DEPLOY":            "1", // step env overrides pipeline env
 		},
 	}
 
@@ -146,6 +146,17 @@ var (
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
 			"DEPLOY":            "0",
+		},
+	}
+
+	jobWithPipelineEnvButNoCorrespondingJobEnv = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
 		},
 	}
 )
@@ -311,6 +322,17 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step has a signature, but the step env is not in the job env, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithStepEnvButNoCorrespondingJobEnv,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain:        []string{"⚠️ ERROR"},
+		},
+		{
+			name:                     "when the step has a signature, but the pipeline env is not in the job env, it fails signature verification",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithPipelineEnvButNoCorrespondingJobEnv,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },

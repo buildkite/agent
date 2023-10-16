@@ -102,8 +102,22 @@ func interpolateSlice[E any, S ~[]E](tf stringTransformer, s S) error {
 	return nil
 }
 
-// interpolateMap applies interpolateAny over any type of map. The map is
-// altered in-place.
+// interpolateMapValues applies interpolateAny over the values of any type of
+// map. The map is altered in-place.
+func interpolateMapValues[K comparable, V any, M ~map[K]V](tf stringTransformer, m M) error {
+	for k, v := range m {
+		// V could be string, so be sure to replace the old value with the new.
+		intv, err := interpolateAny(tf, v)
+		if err != nil {
+			return err
+		}
+		m[k] = intv
+	}
+	return nil
+}
+
+// interpolateMap applies interpolateAny over both keys and values of any type
+// of map. The map is altered in-place.
 func interpolateMap[K comparable, V any, M ~map[K]V](tf stringTransformer, m M) error {
 	for k, v := range m {
 		// We interpolate both keys and values.
