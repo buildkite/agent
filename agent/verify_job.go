@@ -52,13 +52,6 @@ func (r *JobRunner) verificationFailureLogs(err error, behavior string) {
 func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	step := r.conf.Job.Step
 
-	if step.Matrix != nil {
-		r.logger.Warn("Signing/Verification of matrix jobs is not currently supported")
-		r.logger.Warn("Watch this space 👀")
-
-		return nil
-	}
-
 	if step.Signature == nil {
 		return ErrNoSignature
 	}
@@ -66,6 +59,12 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	// Verify the signature
 	if err := step.Signature.Verify(r.conf.Job.Env, &step, r.conf.JWKS); err != nil {
 		return newInvalidSignatureError(ErrVerificationFailed)
+	}
+
+	// Interpolate the matrix permutation (validating the permutation in the
+	// process).
+	if err := step.InterpolateMatrixPermutation(r.conf.Job.MatrixPermutation); err != nil {
+		return newInvalidSignatureError(ErrInvalidJob)
 	}
 
 	// Now that the signature of the job's step is verified, we need to check if
@@ -79,8 +78,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	// - command should match BUILDKITE_COMMAND exactly
 	// - env vars are complicated
 	// - plugins should match BUILDKITE_PLUGINS semantically
-	// - matrix interpolates into the other fields, and does not itself compare
-	//   (not yet implemented).
+	// - matrix interpolates into the others, and does not itself compare
 	//
 	// We can't check that the job is consistent with fields we don't know
 	// about yet, so these are rejected.

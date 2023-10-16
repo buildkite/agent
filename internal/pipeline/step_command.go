@@ -132,6 +132,19 @@ func (c *CommandStep) ValuesForFields(fields []string) (map[string]any, error) {
 	return out, nil
 }
 
+// InterpolateMatrixPermutation validates and then interpolates the choice of
+// matrix values into the step. This should only be used in order to validate
+// a job that's about to be run, and not used before pipeline upload.
+func (c *CommandStep) InterpolateMatrixPermutation(mp MatrixPermutation) error {
+	if err := c.Matrix.validatePermutation(mp); err != nil {
+		return err
+	}
+	if len(mp) == 0 {
+		return nil
+	}
+	return c.interpolate(newMatrixInterpolator(mp))
+}
+
 func (c *CommandStep) interpolate(tf stringTransformer) error {
 	cmd, err := tf.Transform(c.Command)
 	if err != nil {

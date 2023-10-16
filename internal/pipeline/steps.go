@@ -141,11 +141,6 @@ func (s Steps) sign(env map[string]string, key jwk.Key) error {
 	for _, step := range s {
 		switch step := step.(type) {
 		case *CommandStep:
-			if step.Matrix != nil {
-				// Don't sign matrix steps... yet
-				continue
-			}
-
 			sig, err := Sign(env, step, key)
 			if err != nil {
 				return fmt.Errorf("signing step with command %q: %w", step.Command, err)

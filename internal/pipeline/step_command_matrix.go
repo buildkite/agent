@@ -35,6 +35,8 @@ var (
 		ordered.Unmarshaler
 		selfInterpolater
 	} = (*MatrixScalars)(nil)
+
+	_ json.Unmarshaler = (*MatrixPermutation)(nil)
 )
 
 var (
@@ -224,11 +226,38 @@ func (m *Matrix) validatePermutation(p MatrixPermutation) error {
 // being implicitly unique.
 type MatrixPermutation []SelectedDimension
 
+// UnmarshalJSON unmarshals a matrix permutation from a JSON object.
+func (mp *MatrixPermutation) UnmarshalJSON(b []byte) error {
+	if mp == nil {
+		return errors.New("unmarshal into nil pointer")
+	}
+	// Unmarshal the JSON using yaml.v3, to be consistent with everything else.
+	// For example, encoding/json prefers unmarshaling integer-looking numbers
+	// as float64.
+	m := make(map[string]any)
+	if err := yaml.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	for dim, val := range m {
+		switch val.(type) {
+		case bool, int, string:
+			*mp = append(*mp, SelectedDimension{
+				Dimension: dim,
+				Value:     val,
+			})
+
+		default:
+			return fmt.Errorf("unsupported item type %T for key %q; want one of bool, int, or string", val, dim)
+		}
+	}
+	return nil
+}
+
 // SelectedDimension represents a single dimension/value pair in a matrix
 // permutation.
 type SelectedDimension struct {
-	Dimension string `json:"dimension"`
-	Value     any    `json:"value"`
+	Dimension string
+	Value     any
 }
 
 // MatrixSetup is the main setup of a matrix - one or more dimensions. The cross
