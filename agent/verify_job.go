@@ -87,7 +87,8 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	// 2. When producing the job env, step env overrides pipeline env. Easy.
 	// 3. The backend also adds env vars that can't be known in advance for
 	//    signing.
-	// 4. Step env vars can have matrix tokens (in both names and values).
+	// 4. Step env vars can have matrix tokens (interpolated within values, but
+	//    not variable names).
 	// 5. Pipeline env is uploaded as a distinct map, but is not fully available
 	//    for verifying here - we only have job env and step env to work with,
 	//    and only know which vars were pipeline env vars from "env::".

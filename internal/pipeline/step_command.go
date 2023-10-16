@@ -137,26 +137,34 @@ func (c *CommandStep) interpolate(tf stringTransformer) error {
 	if err != nil {
 		return err
 	}
+	c.Command = cmd
 
 	if err := interpolateSlice(tf, c.Plugins); err != nil {
 		return err
 	}
 
-	if err := interpolateMap(tf, c.Env); err != nil {
-		return err
+	switch tf.(type) {
+	case envInterpolator:
+		if err := interpolateMap(tf, c.Env); err != nil {
+			return err
+		}
+		if c.Matrix, err = interpolateAny(tf, c.Matrix); err != nil {
+			return err
+		}
+
+	case matrixInterpolator:
+		// Matrix interpolation doesn't apply to env keys.
+		if err := interpolateMapValues(tf, c.Env); err != nil {
+			return err
+		}
 	}
 
 	// NB: Do not interpolate Signature.
-
-	if c.Matrix, err = interpolateAny(tf, c.Matrix); err != nil {
-		return err
-	}
 
 	if err := interpolateMap(tf, c.RemainingFields); err != nil {
 		return err
 	}
 
-	c.Command = cmd
 	return nil
 }
 

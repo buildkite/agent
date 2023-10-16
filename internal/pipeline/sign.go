@@ -49,6 +49,7 @@ func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, err
 		values[EnvNamespacePrefix+k] = v
 	}
 
+	// Extract the names of the fields.
 	fields := make([]string, 0, len(values))
 	for field := range values {
 		fields = append(fields, field)
@@ -83,8 +84,7 @@ func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.S
 		return errors.New("signature covers no fields")
 	}
 
-	// Ask the object for all fields, including env:: (which may be overridden
-	// by the pipeline env).
+	// Ask the object for values for all fields.
 	values, err := sf.ValuesForFields(s.SignedFields)
 	if err != nil {
 		return fmt.Errorf("obtaining values for fields: %w", err)
