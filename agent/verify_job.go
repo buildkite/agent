@@ -105,7 +105,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			// jcs.Transform chokes on "" and "null", and json.Marshal encodes
 			// nil slice as "null", but zero-length slice as "[]".
 			emptyStepPlugins := len(step.Plugins) == 0
-			emptyJobPlugins := (jobPluginsJSON == "" || jobPluginsJSON == "null" || jobPluginsJSON == "[]")
+			emptyJobPlugins := jobPluginsJSON == ""
 
 			if emptyStepPlugins && emptyJobPlugins {
 				continue // both empty
@@ -127,6 +127,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			if err != nil {
 				return fmt.Errorf("canonicalising step plugins JSON: %v", err)
 			}
+
 			jobPluginsNorm, err := jcs.Transform([]byte(jobPluginsJSON))
 			if err != nil {
 				return fmt.Errorf("canonicalising BUILDKITE_PLUGINS: %v", err)
