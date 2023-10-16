@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -259,8 +258,7 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
-				fmt.Sprintf(`the value of BUILDKITE_COMMAND (%q) does not match the value of step.command (%q)`,
-					jobWithMismatchedStepAndJob.Env["BUILDKITE_COMMAND"], jobWithMismatchedStepAndJob.Step.Command),
+				"job does not match signed step",
 			},
 		},
 		{
@@ -274,8 +272,7 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
-				fmt.Sprintf(`the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)`,
-					jobWithMissingPlugins.Env["BUILDKITE_PLUGINS"], job.Env["BUILDKITE_PLUGINS"]),
+				"job does not match signed step",
 			},
 		},
 		{
@@ -289,8 +286,7 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
-				fmt.Sprintf(`the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)`,
-					jobWithMismatchedPlugins.Env["BUILDKITE_PLUGINS"], job.Env["BUILDKITE_PLUGINS"]),
+				"job does not match signed step",
 			},
 		},
 		{
@@ -316,7 +312,10 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain:        []string{"⚠️ ERROR"},
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"signature verification failed",
+			},
 		},
 		{
 			name:                     "when the step has a signature, but the step env is not in the job env, it fails signature verification",
@@ -327,8 +326,10 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain:        []string{"⚠️ ERROR"},
-		},
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"job does not match signed step",
+			}},
 		{
 			name:                     "when the step has a signature, but the pipeline env is not in the job env, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
@@ -338,8 +339,10 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain:        []string{"⚠️ ERROR"},
-		},
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"signature verification failed",
+			}},
 	}
 
 	for _, tc := range cases {

@@ -12,7 +12,11 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
-var ErrNoSignature = errors.New("job had no signature to verify")
+var (
+	ErrNoSignature        = errors.New("job had no signature to verify")
+	ErrVerificationFailed = errors.New("signature verification failed")
+	ErrInvalidJob         = errors.New("job does not match signed step")
+)
 
 type invalidSignatureError struct {
 	underlying error
@@ -61,7 +65,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 
 	// Verify the signature
 	if err := step.Signature.Verify(r.conf.Job.Env, &step, r.conf.JWKS); err != nil {
-		return newInvalidSignatureError(err)
+		return newInvalidSignatureError(ErrVerificationFailed)
 	}
 
 	// Now that the signature of the job's step is verified, we need to check if
@@ -113,7 +117,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 		case "command": // compare directly
 			jobCommand := r.conf.Job.Env["BUILDKITE_COMMAND"]
 			if step.Command != jobCommand {
-				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of BUILDKITE_COMMAND (%q) does not match the value of step.command (%q)", r.conf.Job.ID, step.Signature.Value, jobCommand, step.Command))
+				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
 		case "env":
@@ -122,10 +126,10 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			for name, stepEnvValue := range step.Env {
 				jobEnvValue, has := r.conf.Job.Env[name]
 				if !has {
-					return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but step.env defines %s which is missing from the job environment", r.conf.Job.ID, step.Signature.Value, name))
+					return newInvalidSignatureError(ErrInvalidJob)
 				}
 				if jobEnvValue != stepEnvValue {
-					return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of %s (%q) does not match the value of step.env[%s] (%q)", r.conf.Job.ID, step.Signature.Value, name, jobEnvValue, name, stepEnvValue))
+					return newInvalidSignatureError(ErrInvalidJob)
 				}
 			}
 
@@ -140,30 +144,26 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			if emptyStepPlugins && emptyJobPlugins {
 				continue // both empty
 			}
-
-			// Marshal step.Plugins into JSON now, in case it is needed for the
-			// error.
-			stepPluginsJSON, err := json.Marshal(step.Plugins)
-			if err != nil {
-				return fmt.Errorf("marshaling step plugins JSON: %v", err)
-			}
-
 			if emptyStepPlugins != emptyJobPlugins {
 				// one is empty but the other is not
-				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)", r.conf.Job.ID, step.Signature.Value, jobPluginsJSON, stepPluginsJSON))
+				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
+			stepPluginsJSON, err := json.Marshal(step.Plugins)
+			if err != nil {
+				return newInvalidSignatureError(ErrInvalidJob)
+			}
 			stepPluginsNorm, err := jcs.Transform(stepPluginsJSON)
 			if err != nil {
-				return fmt.Errorf("canonicalising step plugins JSON: %v", err)
+				return newInvalidSignatureError(ErrInvalidJob)
 			}
 			jobPluginsNorm, err := jcs.Transform([]byte(jobPluginsJSON))
 			if err != nil {
-				return fmt.Errorf("canonicalising BUILDKITE_PLUGINS: %v", err)
+				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
 			if !bytes.Equal(jobPluginsNorm, stepPluginsNorm) {
-				return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)", r.conf.Job.ID, step.Signature.Value, jobPluginsNorm, stepPluginsNorm))
+				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
 		case "matrix": // compared indirectly through other fields
@@ -174,7 +174,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			if name, isEnv := strings.CutPrefix(field, pipeline.EnvNamespacePrefix); isEnv {
 				if _, has := r.conf.Job.Env[name]; !has {
 					// A pipeline env var that is now missing.
-					return newInvalidSignatureError(fmt.Errorf("job %q was signed with signature %q, but pipeline.env defines %s which is missing from the job environment", r.conf.Job.ID, step.Signature.Value, name))
+					return newInvalidSignatureError(ErrInvalidJob)
 				}
 				// The env var is present. Signature.Verify used the value from
 				// the job env, handling this case.
@@ -183,7 +183,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 
 			// We don't know this field, so we cannot ensure it is consistent
 			// with the job.
-			return fmt.Errorf("unknown or unsupported field %q on Job struct for signing/verification of job %s", field, r.conf.Job.ID)
+			return newInvalidSignatureError(ErrInvalidJob)
 		}
 	}
 
