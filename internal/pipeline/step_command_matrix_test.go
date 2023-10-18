@@ -1,8 +1,12 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"errors"
+	"sort"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
@@ -363,5 +367,33 @@ func TestMatrix_ValidatePermutation_RepeatAdjustment(t *testing.T) {
 	err := matrix.validatePermutation(perm)
 	if !errors.Is(err, errPermutationSkipped) {
 		t.Errorf("matrix.validatePermutation(%v) = %v, want %v", perm, err, errPermutationSkipped)
+	}
+}
+
+func TestMatrixPermutation_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	var got MatrixPermutation
+	const input = `{
+		"family": "Brassicas",
+		"plot": 3,
+		"treatment": true
+	}`
+
+	if err := json.Unmarshal([]byte(input), &got); err != nil {
+		t.Fatalf("json.Unmarshal(%q, got) = %v", input, err)
+	}
+
+	sort.Slice(got, func(i, j int) bool {
+		return got[i].Dimension < got[j].Dimension
+	})
+
+	want := MatrixPermutation{
+		{Dimension: "family", Value: "Brassicas"},
+		{Dimension: "plot", Value: 3},
+		{Dimension: "treatment", Value: true},
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("unmarshalled MatrixPermutation diff (-got +want):\n%s", diff)
 	}
 }
