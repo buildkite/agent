@@ -32,6 +32,21 @@ steps:
           volumes:
             - "/yum.buildkite.com"
 
+  - name: ":redhat: Publish Edge RPM Package to Packagecloud"
+    command: ".buildkite/steps/publish-rpm-packagecloud.sh"
+    env:
+      REPOSITORY: "buildkite/agent-experimental"
+      DISTRO_VERSION: rpm_any/rpm_any
+    agents:
+      queue: "deploy"
+    plugins:
+      - docker#v5.8.0:
+          image: "buildkite/agent:3.55.0-ubuntu"
+          entrypoint: bash
+          propagate-environment: true
+          mount-buildkite-agent: true
+    soft_fail: true
+
   - name: ":debian: Publish Edge Debian Package"
     command: ".buildkite/steps/publish-debian-package.sh"
     env:
