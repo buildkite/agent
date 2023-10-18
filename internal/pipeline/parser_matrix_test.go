@@ -34,7 +34,7 @@ steps:
 						Command: "echo {{matrix}}",
 						Matrix: &Matrix{
 							Setup: MatrixSetup{
-								"": {"apple", 47, true},
+								"": {"apple", "47", "true"},
 							},
 						},
 					},
@@ -46,8 +46,8 @@ steps:
       "command": "echo {{matrix}}",
       "matrix": [
         "apple",
-        47,
-        true
+        "47",
+        "true"
       ]
     }
   ]
@@ -70,7 +70,7 @@ steps:
 						Command: "echo {{matrix}}",
 						Matrix: &Matrix{
 							Setup: MatrixSetup{
-								"": {"apple", true, 47},
+								"": {"apple", "true", "47"},
 							},
 						},
 					},
@@ -82,8 +82,8 @@ steps:
       "command": "echo {{matrix}}",
       "matrix": [
         "apple",
-        true,
-        47
+        "true",
+        "47"
       ]
     }
   ]
@@ -113,7 +113,7 @@ steps:
 						Command: "echo {{matrix}}",
 						Matrix: &Matrix{
 							Setup: MatrixSetup{
-								"": {"apple", 47, true},
+								"": {"apple", "47", "true"},
 							},
 							Adjustments: MatrixAdjustments{
 								{
@@ -121,7 +121,7 @@ steps:
 									Skip: true,
 								},
 								{
-									With: MatrixAdjustmentWith{"": 42},
+									With: MatrixAdjustmentWith{"": "42"},
 									RemainingFields: map[string]any{
 										"soft_fail": true,
 									},
@@ -147,7 +147,7 @@ steps:
           },
           {
             "soft_fail": true,
-            "with": 42
+            "with": "42"
           },
           {
             "skip": "how dare you, you know i'm allergic to bananas!",
@@ -156,8 +156,8 @@ steps:
         ],
         "setup": [
           "apple",
-          47,
-          true
+          "47",
+          "true"
         ]
       }
     }
@@ -275,7 +275,7 @@ steps:
 								{
 									With: MatrixAdjustmentWith{
 										"arch": "ppc",
-										"os":   8,
+										"os":   "8",
 									},
 									RemainingFields: map[string]any{
 										"soft_fail": true,
@@ -315,7 +315,7 @@ steps:
             "soft_fail": true,
             "with": {
               "arch": "ppc",
-              "os": 8
+              "os": "8"
             }
           }
         ],

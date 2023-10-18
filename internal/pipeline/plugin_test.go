@@ -119,8 +119,8 @@ func TestPluginMatrixInterpolate(t *testing.T) {
 		{
 			name: "matrix",
 			ms: MatrixPermutation{
-				{Dimension: "docker_version", Value: "4.5.6"},
-				{Dimension: "image", Value: "alpine"},
+				"docker_version": "4.5.6",
+				"image":          "alpine",
 			},
 			p: &Plugin{
 				Source: "docker#{{matrix.docker_version}}",

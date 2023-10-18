@@ -41,11 +41,11 @@ func (m matrixInterpolator) Transform(src string) (string, error) {
 // matrix interpolation.
 func newMatrixInterpolator(mp MatrixPermutation) matrixInterpolator {
 	replacements := make(map[string]string)
-	for _, sd := range mp {
-		if sd.Dimension == "" {
-			replacements[""] = fmt.Sprint(sd.Value)
+	for dim, val := range mp {
+		if dim == "" {
+			replacements[""] = val
 		} else {
-			replacements["."+sd.Dimension] = fmt.Sprint(sd.Value)
+			replacements["."+dim] = val
 		}
 	}
 

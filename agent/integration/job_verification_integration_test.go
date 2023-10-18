@@ -170,8 +170,8 @@ var (
 			"MESSAGE":           "hello world",
 		},
 		MatrixPermutation: pipeline.MatrixPermutation{
-			{Dimension: "greeting", Value: "hello"},
-			{Dimension: "object", Value: "world"},
+			"greeting": "hello",
+			"object":   "world",
 		},
 	}
 
@@ -186,8 +186,8 @@ var (
 			"MESSAGE":           "goodbye mister anderson",
 		},
 		MatrixPermutation: pipeline.MatrixPermutation{ // crimes here:
-			{Dimension: "greeting", Value: "goodbye"},
-			{Dimension: "object", Value: "mister anderson"},
+			"greeting": "goodbye",
+			"object":   "mister anderson",
 		},
 	}
 
@@ -202,8 +202,8 @@ var (
 			"MESSAGE":           "goodbye mister anderson", // crimes~!
 		},
 		MatrixPermutation: pipeline.MatrixPermutation{
-			{Dimension: "greeting", Value: "hello"},
-			{Dimension: "object", Value: "world"},
+			"greeting": "hello",
+			"object":   "world",
 		},
 	}
 )
@@ -491,8 +491,8 @@ func stepWithMatrix() pipeline.CommandStep {
 		},
 		Matrix: &pipeline.Matrix{
 			Setup: pipeline.MatrixSetup{
-				"greeting": pipeline.MatrixScalars{"hello", "今日は"},
-				"object":   pipeline.MatrixScalars{"world", 47},
+				"greeting": []string{"hello", "今日は"},
+				"object":   []string{"world", "47"},
 			},
 		},
 	}
