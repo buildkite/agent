@@ -8,7 +8,7 @@ import (
 
 func TestMatrixInterpolater_Simple(t *testing.T) {
 	t.Parallel()
-	transform := newMatrixInterpolator(MatrixPermutation{{Dimension: "", Value: "llama"}})
+	transform := newMatrixInterpolator(MatrixPermutation{"": "llama"})
 
 	tests := []struct {
 		name, input, want string
@@ -53,9 +53,9 @@ func TestMatrixInterpolater_Simple(t *testing.T) {
 func TestMatrixInterpolater_Multiple(t *testing.T) {
 	t.Parallel()
 	transform := newMatrixInterpolator(MatrixPermutation{
-		{Dimension: "protagonist", Value: "kuzco"},
-		{Dimension: "animal", Value: "llama"},
-		{Dimension: "weapon", Value: "poison"},
+		"protagonist": "kuzco",
+		"animal":      "llama",
+		"weapon":      "poison",
 	})
 
 	tests := []struct {
@@ -106,25 +106,19 @@ func TestMatrixInterpolator_Errors(t *testing.T) {
 		transform   matrixInterpolator
 	}{
 		{
-			name:  "mismatched named dimensions",
-			input: "this isn't poison. it's extract of... {{matrix.alpaca}}!",
-			transform: newMatrixInterpolator(MatrixPermutation{
-				{Dimension: "animal", Value: "llama"},
-			}),
+			name:      "mismatched named dimensions",
+			input:     "this isn't poison. it's extract of... {{matrix.alpaca}}!",
+			transform: newMatrixInterpolator(MatrixPermutation{"animal": "llama"}),
 		},
 		{
-			name:  "interpolate anonymous dimension into named token",
-			input: "this isn't {{matrix.weapon}}. it's extract of... llama!",
-			transform: newMatrixInterpolator(MatrixPermutation{
-				{Dimension: "", Value: "poison"},
-			}),
+			name:      "interpolate anonymous dimension into named token",
+			input:     "this isn't {{matrix.weapon}}. it's extract of... llama!",
+			transform: newMatrixInterpolator(MatrixPermutation{"": "poison"}),
 		},
 		{
-			name:  "interpolate named dimensions into anonymous token",
-			input: "this isn't {{matrix}}. it's extract of... llama!",
-			transform: newMatrixInterpolator(MatrixPermutation{
-				{Dimension: "weapon", Value: "poison"},
-			}),
+			name:      "interpolate named dimensions into anonymous token",
+			input:     "this isn't {{matrix}}. it's extract of... llama!",
+			transform: newMatrixInterpolator(MatrixPermutation{"weapon": "poison"}),
 		},
 	}
 
@@ -155,18 +149,18 @@ func TestMatrixInterpolateAny(t *testing.T) {
 		{
 			name:        "string",
 			interpolate: "this is a {{matrix}}",
-			ms:          MatrixPermutation{{Dimension: "", Value: "llama"}},
+			ms:          MatrixPermutation{"": "llama"},
 			want:        "this is a llama",
 		},
 		{
 			name: "deeply nested interpolation",
 			ms: MatrixPermutation{
-				{Dimension: "mountain", Value: "cotopaxi"},
-				{Dimension: "country", Value: "ecuador"},
-				{Dimension: "food", Value: "bolon de verde"},
-				{Dimension: "animal", Value: "andean condor"},
-				{Dimension: "currency", Value: "usd"},
-				{Dimension: "language", Value: "spanish"},
+				"mountain": "cotopaxi",
+				"country":  "ecuador",
+				"food":     "bolon de verde",
+				"animal":   "andean condor",
+				"currency": "usd",
+				"language": "spanish",
 			},
 			interpolate: []any{
 				"one", "{{matrix.mountain}}", 3, "{{matrix.country}}", true,
@@ -188,8 +182,8 @@ func TestMatrixInterpolateAny(t *testing.T) {
 		{
 			name: "structs don't get interpolated",
 			ms: MatrixPermutation{
-				{Dimension: "name", Value: "cotopaxi"},
-				{Dimension: "altitude", Value: "5897m"},
+				"name":     "cotopaxi",
+				"altitude": "5897m",
 			},
 			interpolate: mountain{Name: "{{matrix.name}}", Altitude: "{{matrix.altitude}}"},
 			want:        mountain{Name: "{{matrix.name}}", Altitude: "{{matrix.altitude}}"},
@@ -197,9 +191,9 @@ func TestMatrixInterpolateAny(t *testing.T) {
 		{
 			name: "concrete containers get interpolated",
 			ms: MatrixPermutation{
-				{Dimension: "mountain", Value: "cotopaxi"},
-				{Dimension: "country", Value: "ecuador"},
-				{Dimension: "animal", Value: "andean condor"},
+				"mountain": "cotopaxi",
+				"country":  "ecuador",
+				"animal":   "andean condor",
 			},
 			interpolate: []any{[]string{"{{matrix.mountain}}", "{{matrix.country}}"}, map[string]string{"animal": "{{matrix.animal}}"}},
 			want:        []any{[]string{"cotopaxi", "ecuador"}, map[string]string{"animal": "andean condor"}},
@@ -207,14 +201,14 @@ func TestMatrixInterpolateAny(t *testing.T) {
 		{
 			name: "matrix doesn't interpolate itself",
 			ms: MatrixPermutation{
-				{Dimension: "mountain", Value: "cotopaxi"},
-				{Dimension: "country", Value: "ecuador"},
-				{Dimension: "animal", Value: "andean condor"},
+				"mountain": "cotopaxi",
+				"country":  "ecuador",
+				"animal":   "andean condor",
 			},
 			interpolate: &Matrix{
 				Setup: MatrixSetup{
-					"fruit": MatrixScalars{"banana", "{{matrix.mountain}}"},
-					"shape": MatrixScalars{"{{matrix.country}}", 42},
+					"fruit": []string{"banana", "{{matrix.mountain}}"},
+					"shape": []string{"{{matrix.country}}", "42"},
 				},
 				Adjustments: MatrixAdjustments{
 					{
@@ -227,8 +221,8 @@ func TestMatrixInterpolateAny(t *testing.T) {
 			},
 			want: &Matrix{
 				Setup: MatrixSetup{
-					"fruit": MatrixScalars{"banana", "{{matrix.mountain}}"},
-					"shape": MatrixScalars{"{{matrix.country}}", 42},
+					"fruit": []string{"banana", "{{matrix.mountain}}"},
+					"shape": []string{"{{matrix.country}}", "42"},
 				},
 				Adjustments: MatrixAdjustments{
 					{
