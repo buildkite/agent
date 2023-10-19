@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM public.ecr.aws/ubuntu/ubuntu:20.04
+FROM public.ecr.aws/ubuntu/ubuntu:20.04@sha256:7278dbd46cfaba8553efcf27152e8d8d56a2ed9d0f61e0df4a77ce15d0ed373a
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -8,7 +8,7 @@ ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DOCKER_COMPOSE_VERSION=1.27.4
 
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-transport-https \
     bash \
     ca-certificates \

@@ -113,17 +113,16 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 			},
 		},
 		{
-			name: "it interplates environment variable names and values",
+			name: "it interplates environment variable values",
 			ms: MatrixPermutation{
-				{Dimension: "name", Value: "Taylor Launtner"},
-				{Dimension: "demonym_suffix", Value: "DER"},
-				{Dimension: "value", Value: "true"},
+				"name":  "Taylor Launtner",
+				"value": "true",
 			},
 			step: &CommandStep{
 				Command: "script/buildkite/xxx.sh",
 				Env: map[string]string{
-					"NAME":                              "{{matrix.name}}",
-					"MICHIGAN{{matrix.demonym_suffix}}": "{{matrix.value}}",
+					"NAME":        "{{matrix.name}}",
+					"MICHIGANDER": "{{matrix.value}}",
 				},
 			},
 			want: &CommandStep{
@@ -137,8 +136,8 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 		{
 			name: "it interpolates plugin config",
 			ms: MatrixPermutation{
-				{Dimension: "docker_version", Value: "4.5.6"},
-				{Dimension: "image", Value: "alpine"},
+				"docker_version": "4.5.6",
+				"image":          "alpine",
 			},
 			step: &CommandStep{
 				Command: "script/buildkite/xxx.sh",
@@ -166,8 +165,8 @@ func TestStepCommandMatrixInterpolate(t *testing.T) {
 		{
 			name: "it interpolates commands",
 			ms: MatrixPermutation{
-				{Dimension: "goos", Value: "linux"},
-				{Dimension: "goarch", Value: "amd64"},
+				"goos":   "linux",
+				"goarch": "amd64",
 			},
 			step: &CommandStep{Command: "GOOS={{matrix.goos}} GOARCH={{matrix.goarch}} go build -o foobar ."},
 			want: &CommandStep{Command: "GOOS=linux GOARCH=amd64 go build -o foobar ."},
