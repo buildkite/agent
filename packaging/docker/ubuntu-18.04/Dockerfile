@@ -1,4 +1,4 @@
-FROM public.ecr.aws/ubuntu/ubuntu:18.04
+FROM public.ecr.aws/ubuntu/ubuntu:18.04@sha256:975b418c2c6c72bdfb978ac631c3fae2f42b752f5ab29dec706a01f3f6acc14b
 
 ARG TARGETOS
 ARG TARGETARCH
