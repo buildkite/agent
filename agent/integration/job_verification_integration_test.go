@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -159,6 +158,54 @@ var (
 			"BUILDKITE_COMMAND": "echo hello world",
 		},
 	}
+
+	jobWithMatrix = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step:               stepWithMatrix(),
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_PLUGINS": `[{"github.com/buildkite-plugins/some-buildkite-plugin#v1.0.0":{"message":"hello world"}}]`,
+			"DEPLOY":            "0",
+			"MESSAGE":           "hello world",
+		},
+		MatrixPermutation: pipeline.MatrixPermutation{
+			"greeting": "hello",
+			"object":   "world",
+		},
+	}
+
+	jobWithInvalidMatrixPermutation = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step:               stepWithMatrix(),
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo goodbye mister anderson",
+			"BUILDKITE_PLUGINS": `[{"github.com/buildkite-plugins/some-buildkite-plugin#v1.0.0":{"message":"goodbye mister anderson"}}]`,
+			"DEPLOY":            "0",
+			"MESSAGE":           "goodbye mister anderson",
+		},
+		MatrixPermutation: pipeline.MatrixPermutation{ // crimes here:
+			"greeting": "goodbye",
+			"object":   "mister anderson",
+		},
+	}
+
+	jobWithMatrixMismatch = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step:               stepWithMatrix(),
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_PLUGINS": `[{"github.com/buildkite-plugins/some-buildkite-plugin#v1.0.0":{"message":"hello world"}}]`,
+			"DEPLOY":            "0",
+			"MESSAGE":           "goodbye mister anderson", // crimes~!
+		},
+		MatrixPermutation: pipeline.MatrixPermutation{
+			"greeting": "hello",
+			"object":   "world",
+		},
+	}
 )
 
 func TestJobVerification(t *testing.T) {
@@ -259,8 +306,7 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
-				fmt.Sprintf(`the value of BUILDKITE_COMMAND (%q) does not match the value of step.command (%q)`,
-					jobWithMismatchedStepAndJob.Env["BUILDKITE_COMMAND"], jobWithMismatchedStepAndJob.Step.Command),
+				"job does not match signed step",
 			},
 		},
 		{
@@ -274,8 +320,7 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
-				fmt.Sprintf(`the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)`,
-					jobWithMissingPlugins.Env["BUILDKITE_PLUGINS"], job.Env["BUILDKITE_PLUGINS"]),
+				"job does not match signed step",
 			},
 		},
 		{
@@ -289,8 +334,7 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"⚠️ ERROR",
-				fmt.Sprintf(`the value of BUILDKITE_PLUGINS (%q) does not match the value of step.plugins (%q)`,
-					jobWithMismatchedPlugins.Env["BUILDKITE_PLUGINS"], job.Env["BUILDKITE_PLUGINS"]),
+				"job does not match signed step",
 			},
 		},
 		{
@@ -316,7 +360,10 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain:        []string{"⚠️ ERROR"},
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"signature verification failed",
+			},
 		},
 		{
 			name:                     "when the step has a signature, but the step env is not in the job env, it fails signature verification",
@@ -327,7 +374,10 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain:        []string{"⚠️ ERROR"},
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"job does not match signed step",
+			},
 		},
 		{
 			name:                     "when the step has a signature, but the pipeline env is not in the job env, it fails signature verification",
@@ -338,7 +388,48 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain:        []string{"⚠️ ERROR"},
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"signature verification failed",
+			},
+		},
+		{
+			name:                     "when job signature is valid, and there is a valid matrix permutation, it runs the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithMatrix,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+		},
+		{
+			name:                     "when the step signature matches, but the matrix permutation isn't valid, it fails signature verification",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithInvalidMatrixPermutation,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"job does not match signed step",
+			},
+		},
+		{
+			name:                     "when the step signature matches, but the post-matrix env doesn't match, it fails signature verification",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithMatrixMismatch,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"job does not match signed step",
+			},
 		},
 	}
 
@@ -383,6 +474,27 @@ func TestJobVerification(t *testing.T) {
 				t.Errorf("job.SignalReason = %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+func stepWithMatrix() pipeline.CommandStep {
+	return pipeline.CommandStep{
+		Command: "echo {{matrix.greeting}} {{matrix.object}}",
+		Plugins: pipeline.Plugins{{
+			Source: "some#v1.0.0",
+			Config: map[string]string{
+				"message": "{{matrix.greeting}} {{matrix.object}}",
+			},
+		}},
+		Env: map[string]string{
+			"MESSAGE": "{{matrix.greeting}} {{matrix.object}}",
+		},
+		Matrix: &pipeline.Matrix{
+			Setup: pipeline.MatrixSetup{
+				"greeting": []string{"hello", "今日は"},
+				"object":   []string{"world", "47"},
+			},
+		},
 	}
 }
 

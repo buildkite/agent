@@ -1,8 +1,11 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
@@ -19,8 +22,6 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 				"Rose family",
 				"Citruses",
 				"Nightshades",
-				47,
-				true,
 			},
 		},
 		Adjustments: MatrixAdjustments{
@@ -45,54 +46,34 @@ func TestMatrix_ValidatePermutation_Simple(t *testing.T) {
 	}{
 		{
 			name: "basic match",
-			perm: MatrixPermutation{{Value: "Nightshades"}},
-			want: nil,
-		},
-		{
-			name: "basic match (47)",
-			perm: MatrixPermutation{{Value: 47}},
-			want: nil,
-		},
-		{
-			name: "basic match (true)",
-			perm: MatrixPermutation{{Value: true}},
+			perm: MatrixPermutation{"": "Nightshades"},
 			want: nil,
 		},
 		{
 			name: "basic mismatch",
-			perm: MatrixPermutation{{Value: "Grasses"}},
-			want: errPermutationNoMatch,
-		},
-		{
-			name: "basic mismatch (-66)",
-			perm: MatrixPermutation{{Value: -66}},
-			want: errPermutationNoMatch,
-		},
-		{
-			name: "basic mismatch (false)",
-			perm: MatrixPermutation{{Value: false}},
+			perm: MatrixPermutation{"": "Grasses"},
 			want: errPermutationNoMatch,
 		},
 		{
 			name: "adjustment match",
-			perm: MatrixPermutation{{Value: "Alliums"}},
+			perm: MatrixPermutation{"": "Alliums"},
 			want: nil,
 		},
 		{
 			name: "adjustment skip",
-			perm: MatrixPermutation{{Value: "Brassicas"}},
+			perm: MatrixPermutation{"": "Brassicas"},
 			want: errPermutationSkipped,
 		},
 		{
 			name: "invalid dimension",
-			perm: MatrixPermutation{{Dimension: "family", Value: "Rose family"}},
+			perm: MatrixPermutation{"family": "Rose family"},
 			want: errPermutationUnknownDimension,
 		},
 		{
 			name: "wrong dimension count",
 			perm: MatrixPermutation{
-				{Dimension: "", Value: "Mints"},
-				{Dimension: "", Value: "Rose family"},
+				"":       "Mints",
+				"family": "Rose family",
 			},
 			want: errPermutationLengthMismatch,
 		},
@@ -117,23 +98,23 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 	matrix := &Matrix{
 		Setup: MatrixSetup{
 			"family":    {"Brassicas", "Rose family", "Nightshades"},
-			"plot":      {1, 2, 3, 4, 5},
-			"treatment": {false, true},
+			"plot":      {"1", "2", "3", "4", "5"},
+			"treatment": {"false", "true"},
 		},
 		Adjustments: MatrixAdjustments{
 			{
 				With: MatrixAdjustmentWith{
 					"family":    "Brassicas",
-					"plot":      3,
-					"treatment": true,
+					"plot":      "3",
+					"treatment": "true",
 				},
 				Skip: "yes",
 			},
 			{
 				With: MatrixAdjustmentWith{
 					"family":    "Alliums",
-					"plot":      6,
-					"treatment": true,
+					"plot":      "6",
+					"treatment": "true",
 				},
 			},
 		},
@@ -147,66 +128,57 @@ func TestMatrix_ValidatePermutation_Multiple(t *testing.T) {
 		{
 			name: "basic match",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Nightshades"},
-				{Dimension: "plot", Value: 2},
-				{Dimension: "treatment", Value: false},
+				"family":    "Nightshades",
+				"plot":      "2",
+				"treatment": "false",
 			},
 			want: nil,
 		},
 		{
 			name: "basic mismatch",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Nightshades"},
-				{Dimension: "plot", Value: 7},
-				{Dimension: "treatment", Value: false},
+				"family":    "Nightshades",
+				"plot":      "7",
+				"treatment": "false",
 			},
 			want: errPermutationNoMatch,
 		},
 		{
 			name: "adjustment match",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Alliums"},
-				{Dimension: "plot", Value: 6},
-				{Dimension: "treatment", Value: true},
+				"family":    "Alliums",
+				"plot":      "6",
+				"treatment": "true",
 			},
 			want: nil,
 		},
 		{
 			name: "adjustment skip",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Brassicas"},
-				{Dimension: "plot", Value: 3},
-				{Dimension: "treatment", Value: true},
+				"family":    "Brassicas",
+				"plot":      "3",
+				"treatment": "true",
 			},
 			want: errPermutationSkipped,
 		},
 		{
 			name: "wrong dimension count",
 			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Rose family"},
-				{Dimension: "plot", Value: 3},
-				{Dimension: "treatment", Value: false},
-				{Dimension: "crimes", Value: "p-hacking"},
+				"family":    "Rose family",
+				"plot":      "3",
+				"treatment": "false",
+				"crimes":    "p-hacking",
 			},
 			want: errPermutationLengthMismatch,
 		},
 		{
 			name: "invalid dimension",
 			perm: MatrixPermutation{
-				{Dimension: "", Value: "Rose family"},
-				{Dimension: "plot", Value: 3},
-				{Dimension: "treatment", Value: false},
+				"":          "Rose family",
+				"plot":      "3",
+				"treatment": "false",
 			},
 			want: errPermutationUnknownDimension,
-		},
-		{
-			name: "repeated dimension",
-			perm: MatrixPermutation{
-				{Dimension: "family", Value: "Lamiaceae"},
-				{Dimension: "family", Value: "Rose family"},
-				{Dimension: "plot", Value: 1},
-			},
-			want: errPermutationRepeatedDimension,
 		},
 	}
 
@@ -241,7 +213,7 @@ func TestMatrix_ValidatePermutation_Nil(t *testing.T) {
 		{
 			name: "non-empty permutation",
 			perm: MatrixPermutation{
-				{Dimension: "Twin Peaks", Value: "cherry pie"},
+				"Twin Peaks": "cherry pie",
 			},
 			want: errNilMatrix,
 		},
@@ -264,9 +236,9 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 	t.Parallel()
 
 	perm := MatrixPermutation{
-		{Dimension: "family", Value: "Brassicas"},
-		{Dimension: "plot", Value: 3},
-		{Dimension: "treatment", Value: true},
+		"family":    "Brassicas",
+		"plot":      "3",
+		"treatment": "true",
 	}
 
 	tests := []struct {
@@ -279,14 +251,14 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 			matrix: &Matrix{
 				Setup: MatrixSetup{
 					"family":    {"Brassicas", "Rose family", "Nightshades"},
-					"plot":      {1, 2, 3, 4, 5},
-					"treatment": {false, true},
+					"plot":      {"1", "2", "3", "4", "5"},
+					"treatment": {"false", "true"},
 				},
 				Adjustments: MatrixAdjustments{
 					{
 						With: MatrixAdjustmentWith{
 							"family":    "Brassicas",
-							"treatment": true,
+							"treatment": "true",
 						},
 					},
 				},
@@ -298,8 +270,8 @@ func TestMatrix_ValidatePermutation_InvalidAdjustment(t *testing.T) {
 			matrix: &Matrix{
 				Setup: MatrixSetup{
 					"family":    {"Brassicas", "Rose family", "Nightshades"},
-					"plot":      {1, 2, 3, 4, 5},
-					"treatment": {false, true},
+					"plot":      {"1", "2", "3", "4", "5"},
+					"treatment": {"false", "true"},
 				},
 				Adjustments: MatrixAdjustments{
 					{
@@ -332,22 +304,22 @@ func TestMatrix_ValidatePermutation_RepeatAdjustment(t *testing.T) {
 	matrix := &Matrix{
 		Setup: MatrixSetup{
 			"family":    {"Brassicas", "Rose family", "Nightshades"},
-			"plot":      {1, 2, 3, 4, 5},
-			"treatment": {false, true},
+			"plot":      {"1", "2", "3", "4", "5"},
+			"treatment": {"false", "true"},
 		},
 		Adjustments: MatrixAdjustments{
 			{
 				With: MatrixAdjustmentWith{
 					"family":    "Brassicas",
-					"plot":      3,
-					"treatment": true,
+					"plot":      "3",
+					"treatment": "true",
 				},
 			},
 			{ // repeated adjustment! "skip: true" takes precedence.
 				With: MatrixAdjustmentWith{
 					"family":    "Brassicas",
-					"plot":      3,
-					"treatment": true,
+					"plot":      "3",
+					"treatment": "true",
 				},
 				Skip: "yes",
 			},
@@ -355,13 +327,37 @@ func TestMatrix_ValidatePermutation_RepeatAdjustment(t *testing.T) {
 	}
 
 	perm := MatrixPermutation{
-		{Dimension: "family", Value: "Brassicas"},
-		{Dimension: "plot", Value: 3},
-		{Dimension: "treatment", Value: true},
+		"family":    "Brassicas",
+		"plot":      "3",
+		"treatment": "true",
 	}
 
 	err := matrix.validatePermutation(perm)
 	if !errors.Is(err, errPermutationSkipped) {
 		t.Errorf("matrix.validatePermutation(%v) = %v, want %v", perm, err, errPermutationSkipped)
+	}
+}
+
+func TestMatrixPermutation_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	var got MatrixPermutation
+	const input = `{
+		"family": "Brassicas",
+		"plot": "3",
+		"treatment": "true"
+	}`
+
+	if err := json.Unmarshal([]byte(input), &got); err != nil {
+		t.Fatalf("json.Unmarshal(%q, got) = %v", input, err)
+	}
+
+	want := MatrixPermutation{
+		"family":    "Brassicas",
+		"plot":      "3",
+		"treatment": "true",
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("unmarshalled MatrixPermutation diff (-got +want):\n%s", diff)
 	}
 }
