@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.57.0](https://github.com/buildkite/agent/tree/v3.57.0) (2023-10-19)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.56.0...v3.57.0)
+
+### Added
+- Experimental: Signed Pipelines
+  - Signing build matrices [#2440](https://github.com/buildkite/agent/pull/2440) [#2429](https://github.com/buildkite/agent/pull/2429) [#2426](https://github.com/buildkite/agent/pull/2426) [#2425](https://github.com/buildkite/agent/pull/2425) [#2391](https://github.com/buildkite/agent/pull/2391) [#2395](https://github.com/buildkite/agent/pull/2395) (@DrJosh9000)
+  - Add debug logs for job verification [#2439](https://github.com/buildkite/agent/pull/2439) (@DrJosh9000)
+  - Reduce information in verification errors [#2431](https://github.com/buildkite/agent/pull/2431) (@DrJosh9000)
+  - Separate step/pipeline env vars for job validation [#2428](https://github.com/buildkite/agent/pull/2428) (@DrJosh9000)
+  - Signing config cleanup [#2420](https://github.com/buildkite/agent/pull/2420) [#2427](https://github.com/buildkite/agent/pull/2427) (@moskyb)
+  - Fix verifying jobs with no plugins [#2419](https://github.com/buildkite/agent/pull/2419) (@DrJosh9000)
+  - Use canonicalised JSON as signature payload [#2416](https://github.com/buildkite/agent/pull/2416) (@DrJosh9000)
+  - Add utility for generating signing and verification keys [#2415](https://github.com/buildkite/agent/pull/2415) [#2422](https://github.com/buildkite/agent/pull/2422) (@moskyb)
+
+
+### Changed
+- Revert "Upgrade pre-installed packages in docker images" and Pin docker images by digest [#2430](https://github.com/buildkite/agent/pull/2430) (@triarius)
+
+### Internal
+- Use docker image bases from ECR public gallery [#2423](https://github.com/buildkite/agent/pull/2423) [#2424](https://github.com/buildkite/agent/pull/2424) (@triarius + @moskyb)
+- Add CODEOWNERS file [#2444](https://github.com/buildkite/agent/pull/2444) (@moskyb)
+- Push agent packages to Packagecloud [#2438](https://github.com/buildkite/agent/pull/2438) [#2441](https://github.com/buildkite/agent/pull/2441) [#2443](https://github.com/buildkite/agent/pull/2443) [#2442](https://github.com/buildkite/agent/pull/2442) (@sj26)
+- Test clicommand config completeness [#2414](https://github.com/buildkite/agent/pull/2414) (@moskyb)
+- As always, the cosmic background radiation of dependabot updates. Thanks dependabot! [#2435](https://github.com/buildkite/agent/pull/2435) [#2434](https://github.com/buildkite/agent/pull/2434) [#2433](https://github.com/buildkite/agent/pull/2433) [#2432](https://github.com/buildkite/agent/pull/2432) [#2421](https://github.com/buildkite/agent/pull/2421) [#2418](https://github.com/buildkite/agent/pull/2418) [#2417](https://github.com/buildkite/agent/pull/2417)  (@dependabot[bot])
+
 ## [v3.56.0](https://github.com/buildkite/agent/tree/v3.56.0) (2023-10-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.55.0...v3.56.0)
 
