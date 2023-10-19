@@ -869,6 +869,8 @@ var AgentStartCommand = cli.Command{
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			SSHKeyscan:                      !cfg.NoSSHKeyscan,
 			CommandEval:                     !cfg.NoCommandEval,
+			CommandMode:                     cfg.CommandMode,
+			CommandRepoOnly:                 cfg.CommandRepoOnly,
 			PluginsEnabled:                  !cfg.NoPlugins,
 			PluginValidation:                !cfg.NoPluginValidation,
 			LocalHooksEnabled:               !cfg.NoLocalHooks,
