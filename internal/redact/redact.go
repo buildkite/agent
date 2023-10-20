@@ -2,9 +2,9 @@
 package redact
 
 import (
-	"path"
-
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"path"
+	"regexp"
 )
 
 // LengthMin is the shortest string length that will be considered a
@@ -43,6 +43,10 @@ func Vars(logger shell.Logger, patterns []string, environment map[string]string)
 	// Lifted out of Bootstrap.setupRedactors to facilitate testing
 	vars := make(map[string]string)
 
+	// Define a regex pattern for "true," "false," "yes," or "no" (case-insensitive)
+	// This will be used to ignore the min length warning
+	booleanPattern := `^(?i:true|false|yes|no)$`
+
 	for name, val := range environment {
 		for _, pattern := range patterns {
 			matched, err := path.Match(pattern, name)
@@ -56,7 +60,8 @@ func Vars(logger shell.Logger, patterns []string, environment map[string]string)
 				continue
 			}
 			if len(val) < LengthMin {
-				if len(val) > 0 {
+				// Only if var length is greater than 0, and it doesn't match booleanPattern
+				if len(val) > 0 && !regexp.MustCompile(booleanPattern).MatchString(val) {
 					logger.Warningf("Value of %s below minimum length (%d bytes) and will not be redacted", name, LengthMin)
 				}
 				continue
