@@ -72,6 +72,7 @@ type PipelineUploadConfig struct {
 
 	JWKSFilePath string `cli:"jwks-file-path"`
 	SigningKeyID string `cli:"signing-key-id"`
+	ExpireAfter  string `cli:"expire-after"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -133,6 +134,12 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "signing-key-id",
 			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
+		},
+		cli.StringFlag{
+			Name:   "expire-after",
+			Usage:  "EXPERIMENTAL: The duration after which the pipeline signature expires. The format is a duration string, e.g. 24h30m",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_EXPIRE_AFTER",
+			Value:  "24h",
 		},
 
 		// API Flags
@@ -277,6 +284,12 @@ var PipelineUploadCommand = cli.Command{
 		if cfg.JWKSFilePath != "" {
 			l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
 
+			// TODO: find a place to store expiry in the backend
+			// expireAfter, err := time.ParseDuration(cfg.ExpireAfter)
+			_, err := time.ParseDuration(cfg.ExpireAfter)
+			if err != nil {
+				return fmt.Errorf("couldn't parse expire-after duration: %w", err)
+			}
 			key, err := loadSigningKey(cfg)
 			if err != nil {
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
