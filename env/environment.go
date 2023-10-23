@@ -98,6 +98,11 @@ func (e *Environment) GetBool(key string, defaultValue bool) bool {
 	}
 }
 
+func (e *Environment) GetStringDefaultEmpty(key string) string {
+	v, _ := e.Get(key)
+	return v
+}
+
 // Exists returns true/false depending on whether or not the key exists in the env
 func (e *Environment) Exists(key string) bool {
 	_, ok := e.underlying.Load(normalizeKeyName(key))

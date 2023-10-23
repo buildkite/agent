@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/gowebpki/jcs"
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -23,9 +25,105 @@ type Signature struct {
 	Value        string   `json:"value" yaml:"value"`
 }
 
+type PipelineInvariants struct {
+	OrganizationSlug string
+	PipelineSlug     string
+	Repository       string
+}
+
+type BuildInvariants struct {
+	Id     string
+	Number string
+	Branch string
+	Tag    string
+	Commit string
+}
+
+type TimeInvariants struct {
+	Expiry time.Time
+}
+
+type Invariants struct {
+	Pipeline PipelineInvariants
+	Build    BuildInvariants
+	Time     TimeInvariants
+}
+
+type CommandStepWithInvariants struct {
+	CommandStep
+	Invariants
+}
+
+// SignedFields returns the default fields for signing.
+func (c *CommandStepWithInvariants) SignedFields() (map[string]any, error) {
+	return map[string]any{
+		"command":    c.Command,
+		"env":        c.Env,
+		"plugins":    c.Plugins,
+		"matrix":     c.Matrix,
+		"invariants": c.Invariants,
+	}, nil
+}
+
+// ValuesForFields returns the contents of fields to sign.
+func (c *CommandStepWithInvariants) ValuesForFields(fields []string) (map[string]any, error) {
+	// Make a set of required fields. As fields is processed, mark them off by
+	// deleting them.
+	required := map[string]struct{}{
+		"command":    {},
+		"env":        {},
+		"plugins":    {},
+		"matrix":     {},
+		"invariants": {},
+	}
+
+	out := make(map[string]any, len(fields))
+	for _, f := range fields {
+		delete(required, f)
+
+		switch f {
+		case "command":
+			out["command"] = c.Command
+
+		case "env":
+			out["env"] = c.Env
+
+		case "plugins":
+			out["plugins"] = c.Plugins
+
+		case "matrix":
+			out["matrix"] = c.Matrix
+
+		case "invariants":
+			out["invariants"] = c.Invariants
+
+		default:
+			// All env:: values come from outside the step.
+			if strings.HasPrefix(f, EnvNamespacePrefix) {
+				break
+			}
+
+			return nil, fmt.Errorf("unknown or unsupported field for signing %q", f)
+		}
+	}
+
+	if len(required) > 0 {
+		missing := make([]string, 0, len(required))
+		for k := range required {
+			missing = append(missing, k)
+		}
+		return nil, fmt.Errorf("one or more required fields are not present: %v", missing)
+	}
+	return out, nil
+}
+
 // Sign computes a new signature for an environment (env) combined with an
 // object containing values (sf) using a given key.
-func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, error) {
+func Sign(
+	env map[string]string,
+	sf SignedFielder,
+	key jwk.Key,
+) (*Signature, error) {
 	values, err := sf.SignedFields()
 	if err != nil {
 		return nil, err
@@ -79,7 +177,11 @@ func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, err
 
 // Verify verifies an existing signature against environment (env) combined with
 // an object containing values (sf) using keys from a keySet.
-func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.Set) error {
+func (s *Signature) Verify(
+	env map[string]string,
+	sf SignedFielder,
+	keySet jwk.Set,
+) error {
 	if len(s.SignedFields) == 0 {
 		return errors.New("signature covers no fields")
 	}
