@@ -150,15 +150,17 @@ func (h *headerTimesStreamer) Upload(ctx context.Context) {
 	timesToUpload := len(times)
 
 	// Do we even have some times to upload
-	if timesToUpload > 0 {
-		// Call our callback with the times for upload
-		h.logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
-		h.uploadCallback(ctx, c, length, payload)
-		h.logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
-
-		// Decrement the wait group for every time we've uploaded.
-		h.uploadWaitGroup.Add(timesToUpload * -1)
+	if timesToUpload == 0 {
+		return
 	}
+
+	// Call our callback with the times for upload
+	h.logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
+	h.uploadCallback(ctx, c, length, payload)
+	h.logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
+
+	// Decrement the wait group for every time we've uploaded.
+	h.uploadWaitGroup.Add(timesToUpload * -1)
 }
 
 func (h *headerTimesStreamer) Stop() {
