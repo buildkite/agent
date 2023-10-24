@@ -310,7 +310,7 @@ var PipelineUploadCommand = cli.Command{
 				},
 			}
 
-			key, err := loadSigningKey(cfg)
+			key, err := loadSigningKey(&cfg)
 			if err != nil {
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
@@ -326,12 +326,12 @@ var PipelineUploadCommand = cli.Command{
 
 			switch cfg.DryRunFormat {
 			case "json":
-				enc := json.NewEncoder(os.Stdout)
+				enc := json.NewEncoder(c.App.Writer)
 				enc.SetIndent("", "  ")
 				encode = enc.Encode
 
 			case "yaml":
-				encode = yaml.NewEncoder(os.Stdout).Encode
+				encode = yaml.NewEncoder(c.App.Writer).Encode
 
 			default:
 				return fmt.Errorf("unknown output format %q", cfg.DryRunFormat)
@@ -423,8 +423,21 @@ func searchForSecrets(
 	return nil
 }
 
-func loadSigningKey(cfg PipelineUploadConfig) (jwk.Key, error) {
-	jwksFile, err := os.Open(cfg.JWKSFilePath)
+type signingKeyConfigurer interface {
+	jwksFilePath() string
+	signingKeyId() string
+}
+
+func (cfg *PipelineUploadConfig) jwksFilePath() string {
+	return cfg.JWKSFilePath
+}
+
+func (cfg *PipelineUploadConfig) signingKeyId() string {
+	return cfg.SigningKeyID
+}
+
+func loadSigningKey(cfg signingKeyConfigurer) (jwk.Key, error) {
+	jwksFile, err := os.Open(cfg.jwksFilePath())
 	if err != nil {
 		return nil, fmt.Errorf("opening JWKS file: %v", err)
 	}
@@ -440,17 +453,17 @@ func loadSigningKey(cfg PipelineUploadConfig) (jwk.Key, error) {
 		return nil, fmt.Errorf("parsing JWKS file: %v", err)
 	}
 
-	if cfg.SigningKeyID == "" {
+	if cfg.signingKeyId() == "" {
 		return nil, fmt.Errorf("signing key ID is required when using JWKS")
 	}
 
-	key, found := jwks.LookupKeyID(cfg.SigningKeyID)
+	key, found := jwks.LookupKeyID(cfg.signingKeyId())
 	if !found {
-		return nil, fmt.Errorf("couldn't find signing key ID %q in JWKS", cfg.SigningKeyID)
+		return nil, fmt.Errorf("couldn't find signing key ID %q in JWKS", cfg.signingKeyId())
 	}
 
 	if err := validateJWK(key); err != nil {
-		return nil, fmt.Errorf("signing key ID %s is invalid: %v", cfg.SigningKeyID, err)
+		return nil, fmt.Errorf("signing key ID %s is invalid: %v", cfg.signingKeyId(), err)
 	}
 
 	return key, nil
