@@ -117,7 +117,7 @@ var PipelineUploadCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-interpolation",
-			Usage:  "Skip variable interpolation the pipeline when uploaded",
+			Usage:  "Skip variable interpolation into the pipeline prior to upload",
 			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
 		},
 		cli.BoolFlag{
