@@ -28,6 +28,7 @@ const (
 	JobAPI                     = "job-api"
 	KubernetesExec             = "kubernetes-exec"
 	NormalisedUploadPaths      = "normalised-upload-paths"
+	PTYRaw                     = "pty-raw"
 	PolyglotHooks              = "polyglot-hooks"
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
 	AvoidRecursiveTrap         = "avoid-recursive-trap"

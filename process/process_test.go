@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 )
@@ -35,11 +36,11 @@ func TestProcessOutput(t *testing.T) {
 		t.Fatalf("p.Run(ctx) = %v", err)
 	}
 
-	if got, want := stdout.String(), "llamas1llamas2"; got != want {
+	if got, want := stdout.String(), "llamas1\nllamas2\r\n"; got != want {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if got, want := stderr.String(), "alpacas1alpacas2"; got != want {
+	if got, want := stderr.String(), "alpacas1\ralpacas2\n"; got != want {
 		t.Errorf("stderr.String() = %q, want %q", got, want)
 	}
 
@@ -55,7 +56,8 @@ func TestProcessOutputPTY(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 
-	p := process.New(logger.Discard, process.Config{
+	logger := logger.NewBuffer()
+	p := process.New(logger, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=output"},
 		PTY:    true,
@@ -67,8 +69,48 @@ func TestProcessOutputPTY(t *testing.T) {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
-	if got, want := stdout.String(), "llamas1alpacas1llamas2alpacas2"; got != want {
+	// PTY by default maps LF (\n) to CR LF (\r\n); see experiments.PTYRaw
+	if got, want := stdout.String(), "llamas1\r\nalpacas1\rllamas2\r\r\nalpacas2\r\n"; got != want {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
+	}
+
+	for _, line := range logger.Messages {
+		t.Logf("Process.logger: %q\n", line)
+	}
+
+	assertProcessDoesntExist(t, p)
+}
+
+func TestProcessOutputPTY_PTYRawExperiment(t *testing.T) {
+	ctx, _ := experiments.Enable(context.Background(), experiments.PTYRaw)
+
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("PTY not supported on windows")
+	}
+
+	stdout := &bytes.Buffer{}
+
+	logger := logger.NewBuffer()
+	p := process.New(logger, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=output"},
+		PTY:    true,
+		Stdout: stdout,
+	})
+
+	// wait for the process to finish
+	if err := p.Run(ctx); err != nil {
+		t.Fatalf("p.Run() = %v", err)
+	}
+
+	if got, want := stdout.String(), "llamas1\nalpacas1\rllamas2\r\nalpacas2\n"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
+	}
+
+	for _, line := range logger.Messages {
+		t.Logf("Process.logger: %q\n", line)
 	}
 
 	assertProcessDoesntExist(t, p)
