@@ -3,8 +3,11 @@ package redact
 
 import (
 	"path"
+	"sort"
+	"strings"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"golang.org/x/exp/maps"
 )
 
 // LengthMin is the shortest string length that will be considered a
@@ -42,6 +45,7 @@ func Values(logger shell.Logger, patterns []string, environment map[string]strin
 func Vars(logger shell.Logger, patterns []string, environment map[string]string) map[string]string {
 	// Lifted out of Bootstrap.setupRedactors to facilitate testing
 	vars := make(map[string]string)
+	shortVars := make(map[string]struct{})
 
 	for name, val := range environment {
 		for _, pattern := range patterns {
@@ -57,7 +61,7 @@ func Vars(logger shell.Logger, patterns []string, environment map[string]string)
 			}
 			if len(val) < LengthMin {
 				if len(val) > 0 {
-					logger.Warningf("Value of %s below minimum length (%d bytes) and will not be redacted", name, LengthMin)
+					shortVars[name] = struct{}{}
 				}
 				continue
 			}
@@ -67,5 +71,11 @@ func Vars(logger shell.Logger, patterns []string, environment map[string]string)
 		}
 	}
 
+	if len(shortVars) > 0 {
+		// TODO: Use stdlib maps when it gets a Keys function (Go 1.22?)
+		vars := maps.Keys(shortVars)
+		sort.Strings(vars)
+		logger.Warningf("Some variables have values below minimum length (%d bytes) and will not be redacted: %s", LengthMin, strings.Join(vars, ", "))
+	}
 	return vars
 }
