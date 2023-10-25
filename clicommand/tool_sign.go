@@ -33,7 +33,7 @@ type ToolSignConfig struct {
 
 var ErrNoPipeline = errors.New("no pipeline file found")
 
-var SignCommand = cli.Command{
+var ToolSignCommand = cli.Command{
 	Name:  "sign",
 	Usage: "Sign pipeline steps",
 	Description: `Usage:
