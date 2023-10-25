@@ -117,3 +117,15 @@ The new glob library should resolve a few issues experienced with the old librar
 The new library should handle all syntax supported by the old library, but because of the chance of incompatibilities and bugs, we're providing it via experiment only for now.
 
 **Status:** Since using the old library causes problems, we hope to promote this to be the default soon™️.
+
+### `pty-raw`
+
+Set PTY to raw mode, to avoid mapping LF (\n) to CR,LF (\r\n) in job command output.
+These extra newline characters are normally not noticed, but can make raw logs appear double-spaced
+in some circumstances.
+
+We run commands in a PTY mostly (entirely?) so that the program detects a PTY and behaves like it's
+running in a terminal, using ANSI escapes to provide colours, progress meters etc. But we don't need
+the PTY to modify the stream. (Or do we? That's why this is an experiment)
+
+**Status:** Experimental for some opt-in testing before being promoted to always-on.

@@ -24,10 +24,10 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 
 	case "output":
-		fmt.Fprintf(os.Stdout, "llamas1")
-		fmt.Fprintf(os.Stderr, "alpacas1")
-		fmt.Fprintf(os.Stdout, "llamas2")
-		fmt.Fprintf(os.Stderr, "alpacas2")
+		fmt.Fprintf(os.Stdout, "llamas1\n")
+		fmt.Fprintf(os.Stderr, "alpacas1\r")
+		fmt.Fprintf(os.Stdout, "llamas2\r\n")
+		fmt.Fprintf(os.Stderr, "alpacas2\n")
 		os.Exit(0)
 
 	// don't handle the signals so that we can detect the process was signaled
