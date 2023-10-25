@@ -11,6 +11,8 @@ type PipelineInvariants struct {
 	Repository       string
 }
 
+var _ SignedFielder = (*CommandStepWithPipelineInvariants)(nil)
+
 type CommandStepWithPipelineInvariants struct {
 	CommandStep
 	PipelineInvariants
