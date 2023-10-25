@@ -42,7 +42,7 @@ var ToolSignCommand = cli.Command{
 
 Description:
 
-This (experimental!) command takes a pipeline in YAML or JSON format as input, and annotates the
+This (experimental!) command takes a pipeline in YAML format as input, and annotates the
 appropriate parts of the pipeline with signatures. This can then be input into the YAML steps
 editor in the Buildkite UI so that the agents running these steps can verify the signatures.`,
 	Flags: []cli.Flag{
