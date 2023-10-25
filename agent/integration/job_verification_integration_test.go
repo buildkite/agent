@@ -607,6 +607,8 @@ func symmetricJWKFor(t *testing.T, payload string) jwk.Key {
 }
 
 func jwksFromKeys(t *testing.T, jwkes ...jwk.Key) jwk.Set {
+	t.Helper()
+
 	set := jwk.NewSet()
 	for _, jwk := range jwkes {
 		err := set.AddKey(jwk)
