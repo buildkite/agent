@@ -43,6 +43,17 @@ func TestSignVerify(t *testing.T) {
 		"MISC":    "llama drama",
 	}
 
+	pInv := &PipelineInvariants{
+		OrganizationSlug: "dummy-org",
+		PipelineSlug:     "dummy-pipeline",
+		Repository:       "dummy-repo",
+	}
+
+	stepWithInvariants := &CommandStepWithPipelineInvariants{
+		CommandStep:        *step,
+		PipelineInvariants: *pInv,
+	}
+
 	cases := []struct {
 		name                           string
 		generateSigner                 func(alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error)
@@ -55,7 +66,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS256,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..F8xH79r8o7GbKKyYViKsbKhMtSGsAXbGIZJfoH9cWS8",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..zD66ZJ_8iSNnNuHxRi9xlF0vDWLtNjH33KAR-kidsuY",
 		},
 		{
 			name: "HMAC-SHA384",
@@ -63,7 +74,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS384,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..nykiFmX1mQUAU8jCkmEFTudWXuQiR9mfQKEwWcH5Vc59aL5dOqfk5IWlKxNGYB9v",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..fPdqyD_9Zh853ZO-tz-zo1kPjEMJBS3kTaMbcL5zYmhgjvv-u2Wf_hY8h2JF9QGo",
 		},
 		{
 			name: "HMAC-SHA512",
@@ -71,7 +82,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS512,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..3iFiqkOS0M5uptlFNBf_KABj6RHBugwPHCld_LH2U5H4Peiv-cxqr2EWTfy19j_iRkyr-LGHt-lqUuiC27t2Qw",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..dBvlfDXXIeCmdAXn4z6p0GJKzUHUrZsbkimgDhFKoX9iVhe4gfkEx7FZR5DAVszsNQV_46-pZ6Xk9WlxchIVig",
 		},
 		{
 			name:           "RSA-PSS 256",
@@ -124,7 +135,7 @@ func TestSignVerify(t *testing.T) {
 				t.Fatalf("signer.Key(0) = _, false, want true")
 			}
 
-			sig, err := Sign(signEnv, step, key)
+			sig, err := Sign(signEnv, stepWithInvariants, key)
 			if err != nil {
 				t.Fatalf("Sign(CommandStep, signer) error = %v", err)
 			}
@@ -142,7 +153,7 @@ func TestSignVerify(t *testing.T) {
 				}
 			}
 
-			if err := sig.Verify(verifyEnv, step, verifier); err != nil {
+			if err := sig.Verify(verifyEnv, stepWithInvariants, verifier); err != nil {
 				t.Errorf("sig.Verify(CommandStep, verifier) = %v", err)
 			}
 		})
@@ -237,7 +248,11 @@ func TestUnknownAlgorithm(t *testing.T) {
 
 	key.Set(jwk.AlgorithmKey, "rot13")
 
-	if _, err := Sign(nil, &CommandStep{Command: "llamas"}, key); err == nil {
+	if _, err := Sign(
+		nil,
+		&CommandStepWithPipelineInvariants{CommandStep: CommandStep{Command: "llamas"}},
+		key,
+	); err == nil {
 		t.Errorf("Sign(nil, CommandStep, signer) = %v, want non-nil error", err)
 	}
 }
@@ -245,9 +260,7 @@ func TestUnknownAlgorithm(t *testing.T) {
 func TestVerifyBadSignature(t *testing.T) {
 	t.Parallel()
 
-	cs := &CommandStep{
-		Command: "llamas",
-	}
+	cs := &CommandStepWithPipelineInvariants{CommandStep: CommandStep{Command: "llamas"}}
 
 	sig := &Signature{
 		Algorithm:    "HS256",
@@ -293,10 +306,11 @@ func TestSignVerifyEnv(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name        string
-		step        *CommandStep
-		pipelineEnv map[string]string
-		verifyEnv   map[string]string
+		name               string
+		step               *CommandStep
+		pipelineInvariants *PipelineInvariants
+		pipelineEnv        map[string]string
+		verifyEnv          map[string]string
 	}{
 		{
 			name: "step env only",
@@ -307,6 +321,7 @@ func TestSignVerifyEnv(t *testing.T) {
 					"DEPLOY":  "0",
 				},
 			},
+			pipelineInvariants: &PipelineInvariants{},
 			verifyEnv: map[string]string{
 				"CONTEXT": "cats",
 				"DEPLOY":  "0",
@@ -322,6 +337,7 @@ func TestSignVerifyEnv(t *testing.T) {
 				"CONTEXT": "cats",
 				"DEPLOY":  "0",
 			},
+			pipelineInvariants: &PipelineInvariants{},
 			verifyEnv: map[string]string{
 				"CONTEXT": "cats",
 				"DEPLOY":  "0",
@@ -337,6 +353,7 @@ func TestSignVerifyEnv(t *testing.T) {
 					"DEPLOY":  "0",
 				},
 			},
+			pipelineInvariants: &PipelineInvariants{},
 			pipelineEnv: map[string]string{
 				"CONTEXT": "dogs",
 				"DEPLOY":  "1",
@@ -364,12 +381,17 @@ func TestSignVerifyEnv(t *testing.T) {
 				t.Fatalf("signer.Key(0) = _, false, want true")
 			}
 
-			sig, err := Sign(tc.pipelineEnv, tc.step, key)
+			stepWithInvariants := &CommandStepWithPipelineInvariants{
+				CommandStep:        *tc.step,
+				PipelineInvariants: *tc.pipelineInvariants,
+			}
+
+			sig, err := Sign(tc.pipelineEnv, stepWithInvariants, key)
 			if err != nil {
 				t.Fatalf("Sign(CommandStep, signer) error = %v", err)
 			}
 
-			if err := sig.Verify(tc.verifyEnv, tc.step, verifier); err != nil {
+			if err := sig.Verify(tc.verifyEnv, stepWithInvariants, verifier); err != nil {
 				t.Errorf("sig.Verify(CommandStep, verifier) = %v", err)
 			}
 		})
@@ -394,6 +416,11 @@ func TestSignatureStability(t *testing.T) {
 			Config: pluginCfg,
 		}},
 	}
+	pInv := &PipelineInvariants{}
+	stepWithInvariants := &CommandStepWithPipelineInvariants{
+		CommandStep:        *step,
+		PipelineInvariants: *pInv,
+	}
 	env := make(map[string]string)
 
 	// there are n! permutations of n items, but only one is correct
@@ -415,12 +442,12 @@ func TestSignatureStability(t *testing.T) {
 		t.Fatalf("signer.Key(0) = _, false, want true")
 	}
 
-	sig, err := Sign(env, step, key)
+	sig, err := Sign(env, stepWithInvariants, key)
 	if err != nil {
 		t.Fatalf("Sign(env, CommandStep, signer) error = %v", err)
 	}
 
-	if err := sig.Verify(env, step, verifier); err != nil {
+	if err := sig.Verify(env, stepWithInvariants, verifier); err != nil {
 		t.Errorf("sig.Verify(env, CommandStep, verifier) = %v", err)
 	}
 }
