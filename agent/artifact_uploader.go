@@ -110,22 +110,85 @@ func isDir(path string) bool {
 	return fi.IsDir()
 }
 
-func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifact, err error) {
+func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
 	}
 
-	// file paths are deduplicated after resolving globs etc
-	seenPaths := make(map[string]bool)
+	workCh := make(chan string)
+	var wg sync.WaitGroup
 
+	ac := &artifactCollector{
+		ArtifactUploader: a,
+		wd:               wd,
+		seenPaths:        make(map[string]bool),
+	}
+
+	// Start N workers in a new context
+	wctx, cancel := context.WithCancelCause(ctx)
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			if err := ac.worker(wctx, workCh); err != nil {
+				cancel(err)
+			}
+		}()
+	}
+	if err := context.Cause(wctx); err != nil {
+		return nil, err
+	}
+
+	// Push work into the workers
 	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
 		globPath = strings.TrimSpace(globPath)
 		if globPath == "" {
 			continue
 		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
 
-		a.logger.Debug("Searching for %s", globPath)
+		case workCh <- globPath:
+		}
+	}
+	close(workCh)
+
+	// Wait for workers to complete
+	wg.Wait()
+
+	return ac.artifacts, nil
+}
+
+// artifactCollector processes glob patterns into files.
+type artifactCollector struct {
+	*ArtifactUploader
+	wd string
+
+	mu        sync.Mutex
+	seenPaths map[string]bool
+	artifacts []*api.Artifact
+}
+
+func (c *artifactCollector) worker(ctx context.Context, workCh <-chan string) error {
+	for {
+		// Either read work from workCh until it is closed, or bail if the
+		// context is finished.
+		var globPath string
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case gp, open := <-workCh:
+			if !open {
+				return nil
+			}
+			globPath = gp
+		}
+
+		c.logger.Debug("Searching for %s", globPath)
 
 		// Resolve the globs (with * and ** in them)
 		var files []string
@@ -133,64 +196,75 @@ func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifa
 			// New zzglob library.
 			pattern, err := zzglob.Parse(globPath)
 			if err != nil {
-				return nil, fmt.Errorf("invalid glob pattern: %w", err)
+				return fmt.Errorf("invalid glob pattern: %w", err)
 			}
 
 			walkDirFunc := func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
-					a.logger.Warn("Couldn't walk path %s", path)
+					c.logger.Warn("Couldn't walk path %s", path)
 					return nil
 				}
 				if d != nil && d.IsDir() {
-					a.logger.Warn("Glob pattern %s matched a directory %s", globPath, path)
+					c.logger.Warn("Glob pattern %s matched a directory %s", globPath, path)
 					return nil
 				}
 				files = append(files, path)
 				return nil
 			}
-			err = pattern.Glob(walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
+			err = pattern.Glob(walkDirFunc, zzglob.TraverseSymlinks(c.conf.GlobResolveFollowSymlinks))
 			if err != nil {
-				return nil, fmt.Errorf("globbing pattern: %w", err)
+				return fmt.Errorf("globbing pattern: %w", err)
 			}
 		} else {
 			// Old go-zglob library.
 			globfunc := zglob.Glob
-			if a.conf.GlobResolveFollowSymlinks {
+			if c.conf.GlobResolveFollowSymlinks {
 				// Follow symbolic links for files & directories while expanding globs
 				globfunc = zglob.GlobFollowSymlinks
 			}
-			files, err = globfunc(globPath)
+			fs, err := globfunc(globPath)
 			if errors.Is(err, os.ErrNotExist) {
-				a.logger.Info("File not found: %s", globPath)
+				c.logger.Info("File not found: %s", globPath)
 				continue
 			}
 			if err != nil {
-				return nil, fmt.Errorf("resolving glob: %w", err)
+				return fmt.Errorf("resolving glob: %w", err)
 			}
+			files = fs
 		}
 
 		// Process each glob match into an api.Artifact
 		for _, file := range files {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			absolutePath, err := filepath.Abs(file)
 			if err != nil {
-				return nil, fmt.Errorf("resolving absolute path for file %s: %w", file, err)
+				return fmt.Errorf("resolving absolute path for file %s: %w", file, err)
 			}
 
 			// dedupe based on resolved absolutePath
-			if _, ok := seenPaths[absolutePath]; ok {
-				a.logger.Debug("Skipping duplicate path %s", file)
+			c.mu.Lock()
+			seen := c.seenPaths[absolutePath]
+			c.seenPaths[absolutePath] = true
+			c.mu.Unlock()
+
+			if seen {
+				c.logger.Debug("Skipping duplicate path %s", file)
 				continue
 			}
-			seenPaths[absolutePath] = true
 
 			// Ignore directories, we only want files
 			if isDir(absolutePath) {
-				a.logger.Debug("Skipping directory %s", file)
+				c.logger.Debug("Skipping directory %s", file)
 				continue
 			}
 
-			if a.conf.UploadSkipSymlinks && isSymlink(absolutePath) {
-				a.logger.Debug("Skipping symlink %s", file)
+			if c.conf.UploadSkipSymlinks && isSymlink(absolutePath) {
+				c.logger.Debug("Skipping symlink %s", file)
 				continue
 			}
 
@@ -199,17 +273,17 @@ func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifa
 			// This is possibly weird and crazy, this logic dates back to
 			// https://github.com/buildkite/agent/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
 			// from 2014, so I'm replicating it here to avoid breaking things
+			basepath := c.wd
 			if filepath.IsAbs(globPath) {
+				basepath = "/"
 				if runtime.GOOS == "windows" {
-					wd = filepath.VolumeName(absolutePath) + "/"
-				} else {
-					wd = "/"
+					basepath = filepath.VolumeName(absolutePath) + "/"
 				}
 			}
 
-			path, err := filepath.Rel(wd, absolutePath)
+			path, err := filepath.Rel(basepath, absolutePath)
 			if err != nil {
-				return nil, fmt.Errorf("resolving relative path for file %s: %w", file, err)
+				return fmt.Errorf("resolving relative path for file %s: %w", file, err)
 			}
 
 			if experiments.IsEnabled(ctx, experiments.NormalisedUploadPaths) {
@@ -218,16 +292,16 @@ func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifa
 			}
 
 			// Build an artifact object using the paths we have.
-			artifact, err := a.build(path, absolutePath, globPath)
+			artifact, err := c.build(path, absolutePath, globPath)
 			if err != nil {
-				return nil, fmt.Errorf("building artifact: %w", err)
+				return fmt.Errorf("building artifact: %w", err)
 			}
 
-			artifacts = append(artifacts, artifact)
+			c.mu.Lock()
+			c.artifacts = append(c.artifacts, artifact)
+			c.mu.Unlock()
 		}
 	}
-
-	return artifacts, nil
 }
 
 func (a *ArtifactUploader) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
