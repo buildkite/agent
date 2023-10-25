@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
-	"time"
 
 	"github.com/gowebpki/jcs"
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -25,96 +23,22 @@ type Signature struct {
 	Value        string   `json:"value" yaml:"value"`
 }
 
-type PipelineInvariants struct {
-	OrganizationSlug string
-	PipelineSlug     string
-	Repository       string
-}
+// SignedFielder describes types that can be signed and have signatures
+// verified.
+// Converting non-string fields into strings (in a stable, canonical way) is an
+// exercise left to the implementer.
+type SignedFielder interface {
+	// SignedFields returns the default set of fields to sign, and their values.
+	// This is called by Sign.
+	SignedFields() (map[string]any, error)
 
-type BuildInvariants struct {
-	Id     string
-	Number string
-	Branch string
-	Tag    string
-	Commit string
-}
-
-type TimeInvariants struct {
-	Expiry time.Time
-}
-
-type Invariants struct {
-	Pipeline PipelineInvariants
-	Build    BuildInvariants
-	Time     TimeInvariants
-}
-
-type CommandStepWithInvariants struct {
-	CommandStep
-	Invariants
-}
-
-// SignedFields returns the default fields for signing.
-func (c *CommandStepWithInvariants) SignedFields() (map[string]any, error) {
-	return map[string]any{
-		"command":    c.Command,
-		"env":        c.Env,
-		"plugins":    c.Plugins,
-		"matrix":     c.Matrix,
-		"invariants": c.Invariants,
-	}, nil
-}
-
-// ValuesForFields returns the contents of fields to sign.
-func (c *CommandStepWithInvariants) ValuesForFields(fields []string) (map[string]any, error) {
-	// Make a set of required fields. As fields is processed, mark them off by
-	// deleting them.
-	required := map[string]struct{}{
-		"command":    {},
-		"env":        {},
-		"plugins":    {},
-		"matrix":     {},
-		"invariants": {},
-	}
-
-	out := make(map[string]any, len(fields))
-	for _, f := range fields {
-		delete(required, f)
-
-		switch f {
-		case "command":
-			out["command"] = c.Command
-
-		case "env":
-			out["env"] = c.Env
-
-		case "plugins":
-			out["plugins"] = c.Plugins
-
-		case "matrix":
-			out["matrix"] = c.Matrix
-
-		case "invariants":
-			out["invariants"] = c.Invariants
-
-		default:
-			// All env:: values come from outside the step.
-			if strings.HasPrefix(f, EnvNamespacePrefix) {
-				break
-			}
-
-			return nil, fmt.Errorf("unknown or unsupported field for signing %q", f)
-		}
-	}
-
-	if len(required) > 0 {
-		missing := make([]string, 0, len(required))
-		for k := range required {
-			missing = append(missing, k)
-		}
-		return nil, fmt.Errorf("one or more required fields are not present: %v", missing)
-	}
-	return out, nil
+	// ValuesForFields looks up each field and produces a map of values. This is
+	// called by Verify. The set of fields might differ from the default, e.g.
+	// when verifying older signatures computed with fewer fields or deprecated
+	// field names. signedFielder implementations should reject requests for
+	// values if "mandatory" fields are missing (e.g. signing a command step
+	// should always sign the command).
+	ValuesForFields([]string) (map[string]any, error)
 }
 
 // Sign computes a new signature for an environment (env) combined with an
@@ -244,24 +168,6 @@ func canonicalPayload(alg string, values map[string]any) ([]byte, error) {
 		return nil, fmt.Errorf("canonicalising JSON: %w", err)
 	}
 	return payload, nil
-}
-
-// SignedFielder describes types that can be signed and have signatures
-// verified.
-// Converting non-string fields into strings (in a stable, canonical way) is an
-// exercise left to the implementer.
-type SignedFielder interface {
-	// SignedFields returns the default set of fields to sign, and their values.
-	// This is called by Sign.
-	SignedFields() (map[string]any, error)
-
-	// ValuesForFields looks up each field and produces a map of values. This is
-	// called by Verify. The set of fields might differ from the default, e.g.
-	// when verifying older signatures computed with fewer fields or deprecated
-	// field names. signedFielder implementations should reject requests for
-	// values if "mandatory" fields are missing (e.g. signing a command step
-	// should always sign the command).
-	ValuesForFields([]string) (map[string]any, error)
 }
 
 // requireKeys returns a copy of a map containing only keys from a []string.

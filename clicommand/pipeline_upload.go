@@ -291,23 +291,10 @@ var PipelineUploadCommand = cli.Command{
 				return fmt.Errorf("couldn't parse expire-after duration: %w", err)
 			}
 
-			inv := &pipeline.Invariants{
-				Pipeline: pipeline.PipelineInvariants{
-					OrganizationSlug: environ.GetStringDefaultEmpty("BUILDKITE_ORGANIZATION_SLUG"),
-					PipelineSlug:     environ.GetStringDefaultEmpty("BUILDKITE_PIPELINE_SLUG"),
-					Repository:       environ.GetStringDefaultEmpty("BUILDKITE_REPO"),
-				},
-				Build: pipeline.BuildInvariants{
-					Id:     environ.GetStringDefaultEmpty("BUILDKITE_BUILD_ID"),
-					Number: environ.GetStringDefaultEmpty("BUILDKITE_BUILD_NUMBER"),
-					Branch: environ.GetStringDefaultEmpty("BUILDKITE_BRANCH"),
-					Tag:    environ.GetStringDefaultEmpty("BUILDKITE_TAG"),
-					Commit: environ.GetStringDefaultEmpty("BUILDKITE_COMMIT"),
-				},
-				Time: pipeline.TimeInvariants{
-					// TODO: find a place to store expiry in the backend
-					// Expiry: time.Now().Add(expireAfter),
-				},
+			pInv := &pipeline.PipelineInvariants{
+				OrganizationSlug: environ.GetStringDefaultEmpty("BUILDKITE_ORGANIZATION_SLUG"),
+				PipelineSlug:     environ.GetStringDefaultEmpty("BUILDKITE_PIPELINE_SLUG"),
+				Repository:       environ.GetStringDefaultEmpty("BUILDKITE_REPO"),
 			}
 
 			key, err := loadSigningKey(&cfg)
@@ -315,7 +302,7 @@ var PipelineUploadCommand = cli.Command{
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
 
-			if err := result.Sign(key, inv); err != nil {
+			if err := result.Sign(key, pInv); err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
 		}

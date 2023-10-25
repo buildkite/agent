@@ -127,14 +127,10 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 
 		l.Debug("Pipeline parsed successfully: %v", result)
 
-		inv := &pipeline.Invariants{
-			Pipeline: pipeline.PipelineInvariants{
-				OrganizationSlug: cfg.OrganizationSlug,
-				PipelineSlug:     cfg.PipelineSlug,
-				Repository:       cfg.Repository,
-			},
-			Build: pipeline.BuildInvariants{},
-			Time:  pipeline.TimeInvariants{},
+		pInv := &pipeline.PipelineInvariants{
+			OrganizationSlug: cfg.OrganizationSlug,
+			PipelineSlug:     cfg.PipelineSlug,
+			Repository:       cfg.Repository,
 		}
 
 		key, err := loadSigningKey(&cfg)
@@ -142,7 +138,7 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 			return fmt.Errorf("couldn't read the signing key file: %w", err)
 		}
 
-		if err := result.Sign(key, inv); err != nil {
+		if err := result.Sign(key, pInv); err != nil {
 			return fmt.Errorf("couldn't sign pipeline: %w", err)
 		}
 

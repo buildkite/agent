@@ -166,6 +166,8 @@ func (m testFields) ValuesForFields(fields []string) (map[string]any, error) {
 }
 
 func TestSignConcatenatedFields(t *testing.T) {
+	t.Parallel()
+
 	// Tests that Sign is resilient to concatenation.
 	// Specifically, these maps should all have distinct "content". (If you
 	// simply wrote the strings one after the other, they could be equal.)
@@ -221,6 +223,8 @@ func TestSignConcatenatedFields(t *testing.T) {
 }
 
 func TestUnknownAlgorithm(t *testing.T) {
+	t.Parallel()
+
 	signer, _, err := jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", jwa.HS256)
 	if err != nil {
 		t.Fatalf("NewSymmetricKeyPairFromString(alpacas) error = %v", err)
@@ -239,6 +243,8 @@ func TestUnknownAlgorithm(t *testing.T) {
 }
 
 func TestVerifyBadSignature(t *testing.T) {
+	t.Parallel()
+
 	cs := &CommandStep{
 		Command: "llamas",
 	}
@@ -260,6 +266,8 @@ func TestVerifyBadSignature(t *testing.T) {
 }
 
 func TestSignUnknownStep(t *testing.T) {
+	t.Parallel()
+
 	steps := Steps{
 		&UnknownStep{
 			Contents: "secret third thing",
@@ -276,12 +284,14 @@ func TestSignUnknownStep(t *testing.T) {
 		t.Fatalf("signer.Key(0) = _, false, want true")
 	}
 
-	if err := steps.sign(nil, key); !errors.Is(err, errSigningRefusedUnknownStepType) {
+	if err := steps.sign(key, nil, nil); !errors.Is(err, errSigningRefusedUnknownStepType) {
 		t.Errorf("steps.sign(signer) = %v, want %v", err, errSigningRefusedUnknownStepType)
 	}
 }
 
 func TestSignVerifyEnv(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name        string
 		step        *CommandStep

@@ -57,31 +57,18 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 		return ErrNoSignature
 	}
 
-	stepWithInvariants := &pipeline.CommandStepWithInvariants{
+	stepWithInvariants := &pipeline.CommandStepWithPipelineInvariants{
 		CommandStep: step,
-		Invariants: pipeline.Invariants{
-			Pipeline: pipeline.PipelineInvariants{
-				OrganizationSlug: r.conf.Job.Env["BUILDKITE_ORGANIZATION_SLUG"],
-				PipelineSlug:     r.conf.Job.Env["BUILDKITE_PIPELINE_SLUG"],
-				Repository:       r.conf.Job.Env["BUILDKITE_REPO"],
-			},
-			Build: pipeline.BuildInvariants{
-				Id:     r.conf.Job.Env["BUILDKITE_BUILD_ID"],
-				Number: r.conf.Job.Env["BUILDKITE_BUILD_NUMBER"],
-				Branch: r.conf.Job.Env["BUILDKITE_BRANCH"],
-				Tag:    r.conf.Job.Env["BUILDKITE_TAG"],
-				Commit: r.conf.Job.Env["BUILDKITE_COMMIT"],
-			},
-			Time: pipeline.TimeInvariants{
-				// TODO: populate expiry from backend
-				// Expiry: ,
-			},
+		PipelineInvariants: pipeline.PipelineInvariants{
+			OrganizationSlug: r.conf.Job.Env["BUILDKITE_ORGANIZATION_SLUG"],
+			PipelineSlug:     r.conf.Job.Env["BUILDKITE_PIPELINE_SLUG"],
+			Repository:       r.conf.Job.Env["BUILDKITE_REPO"],
 		},
 	}
 
 	// Verify the signature
 	if err := step.Signature.Verify(r.conf.Job.Env, stepWithInvariants, r.conf.JWKS); err != nil {
-		r.logger.Debug("verifyJob: step.Signature.Verify(Job.Env, &step, JWKS) = %v", err)
+		r.logger.Debug("verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
 		return newInvalidSignatureError(ErrVerificationFailed)
 	}
 
@@ -201,8 +188,9 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 		case "matrix": // compared indirectly through other fields
 			continue
 
-		case "invariants":
-			// TODO: compare invariants
+		case "pipeline_invariants":
+			// These were sourced from the job itself, not the step when the signature was verified.
+			// So, we don't need to compare that the values in the job are the same as those in the step.
 			continue
 
 		default:
