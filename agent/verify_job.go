@@ -67,7 +67,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	}
 
 	// Verify the signature
-	if err := step.Signature.Verify(r.conf.Job.Env, stepWithInvariants, r.conf.JWKS); err != nil {
+	if err := step.Signature.Verify(r.conf.JWKS, r.conf.Job.Env, stepWithInvariants); err != nil {
 		r.logger.Debug("verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
 		return newInvalidSignatureError(ErrVerificationFailed)
 	}

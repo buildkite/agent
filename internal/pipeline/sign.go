@@ -44,9 +44,9 @@ type SignedFielder interface {
 // Sign computes a new signature for an environment (env) combined with an
 // object containing values (sf) using a given key.
 func Sign(
+	key jwk.Key,
 	env map[string]string,
 	sf SignedFielder,
-	key jwk.Key,
 ) (*Signature, error) {
 	values, err := sf.SignedFields()
 	if err != nil {
@@ -102,9 +102,9 @@ func Sign(
 // Verify verifies an existing signature against environment (env) combined with
 // an object containing values (sf) using keys from a keySet.
 func (s *Signature) Verify(
+	keySet jwk.Set,
 	env map[string]string,
 	sf SignedFielder,
-	keySet jwk.Set,
 ) error {
 	if len(s.SignedFields) == 0 {
 		return errors.New("signature covers no fields")

@@ -146,7 +146,7 @@ func (s Steps) sign(key jwk.Key, env map[string]string, pInv *PipelineInvariants
 				PipelineInvariants: *pInv,
 			}
 
-			sig, err := Sign(env, stepWithInvariants, key)
+			sig, err := Sign(key, env, stepWithInvariants)
 			if err != nil {
 				return fmt.Errorf("signing step with command %q: %w", step.Command, err)
 			}
