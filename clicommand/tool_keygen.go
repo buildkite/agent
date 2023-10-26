@@ -13,7 +13,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type KeygenConfig struct {
+type ToolKeygenConfig struct {
 	Alg                   string `cli:"alg" validate:"required"`
 	KeyID                 string `cli:"key-id"`
 	PrivateKeySetFilename string `cli:"private-keyset-filename" normalize:"filepath"`
@@ -27,7 +27,7 @@ type KeygenConfig struct {
 }
 
 // TODO: Add docs link when there is one.
-var KeygenCommand = cli.Command{
+var ToolKeygenCommand = cli.Command{
 	Name:  "keygen",
 	Usage: "Generate a new JWS key pair, used for signing and verifying jobs in Buildkite",
 	Description: `Usage:
@@ -71,7 +71,7 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
-		_, cfg, l, _, done := setupLoggerAndConfig[KeygenConfig](context.Background(), c)
+		_, cfg, l, _, done := setupLoggerAndConfig[ToolKeygenConfig](context.Background(), c)
 		defer done()
 
 		l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
