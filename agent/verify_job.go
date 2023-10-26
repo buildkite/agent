@@ -189,7 +189,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			continue
 
 		case "pipeline_invariants":
-			// These were sourced from the job itself, not the step when the signature was verified.
+			// These were sourced from the job itself, not the step, when the signature was verified.
 			// So, we don't need to compare that the values in the job are the same as those in the step.
 			continue
 
