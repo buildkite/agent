@@ -206,6 +206,36 @@ var (
 			"object":   "world",
 		},
 	}
+
+	jobWithPipelineInvariantsInEnv = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND":           "echo hello world",
+			"BUILDKITE_ORGANIZATION_SLUG": "buildkite",
+			"BUILDKITE_PIPELINE_SLUG":     "agent",
+			"BUILDKITE_REPO":              "https://github.com/buildkite/agent.git",
+			"DEPLOY":                      "0",
+		},
+	}
+
+	jobWithInvalidPipelineInvariantsInEnv = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND":           "echo hello world",
+			"BUILDKITE_ORGANIZATION_SLUG": "buildkite",
+			"BUILDKITE_PIPELINE_SLUG":     "agent",
+			"BUILDKITE_REPO":              "https://github.com/haxors/agent.git",
+			"DEPLOY":                      "0",
+		},
+	}
 )
 
 func TestJobVerification(t *testing.T) {
@@ -216,6 +246,7 @@ func TestJobVerification(t *testing.T) {
 		name                     string
 		agentConf                agent.AgentConfiguration
 		job                      api.Job
+		pipelineInvariants       pipeline.PipelineInvariants
 		signingKey               jwk.Key
 		verificationJWKS         jwk.Set
 		mockBootstrapExpectation func(*bintest.Mock)
@@ -227,6 +258,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when job signature is invalid, and JobVerificationFailureBehaviour is block, it refuses the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas), // different signing and verification keys
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyAlpacas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -238,6 +270,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when job signature is invalid, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourWarn},
 			job:                      job,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas), // different signing and verification keys
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyAlpacas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
@@ -248,6 +281,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when job signature is valid, it runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
@@ -258,6 +292,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when job signature is valid and there are no plugins, it runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithNoPlugins,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
@@ -268,6 +303,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when job signature is valid and plugins is null, it runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithNullPlugins,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
@@ -278,6 +314,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when job signature is missing, and JobVerificationFailureBehaviour is block, it refuses the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               nil,
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, "this one is the naughty one")),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -289,6 +326,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when job signature is missing, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourWarn},
 			job:                      job,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               nil,
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
@@ -299,6 +337,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step signature matches, but the job doesn't match the step, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedStepAndJob,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -313,6 +352,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step signature matches, but the plugins are missing from the job, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMissingPlugins,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -327,6 +367,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step signature matches, but the plugins doesn't match the step, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedPlugins,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -341,6 +382,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step has a signature, but the JobRunner doesn't have a verification key, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{},
 			job:                      job,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         nil,
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -355,6 +397,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step has a signature, but the env does not match, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedEnv,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -369,6 +412,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step has a signature, but the step env is not in the job env, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithStepEnvButNoCorrespondingJobEnv,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -383,6 +427,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step has a signature, but the pipeline env is not in the job env, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithPipelineEnvButNoCorrespondingJobEnv,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -397,6 +442,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when job signature is valid, and there is a valid matrix permutation, it runs the job",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMatrix,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
@@ -407,6 +453,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step signature matches, but the matrix permutation isn't valid, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithInvalidMatrixPermutation,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -421,6 +468,7 @@ func TestJobVerification(t *testing.T) {
 			name:                     "when the step signature matches, but the post-matrix env doesn't match, it fails signature verification",
 			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMatrixMismatch,
+			pipelineInvariants:       pipeline.PipelineInvariants{},
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
@@ -429,6 +477,40 @@ func TestJobVerification(t *testing.T) {
 			expectLogsContain: []string{
 				"⚠️ ERROR",
 				"job does not match signed step",
+			},
+		},
+		{
+			name:      "when job has pipeline invariants and the sigature is valid, it runs the job",
+			agentConf: agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:       jobWithPipelineInvariantsInEnv,
+			pipelineInvariants: pipeline.PipelineInvariants{
+				OrganizationSlug: "buildkite",
+				PipelineSlug:     "agent",
+				Repository:       "https://github.com/buildkite/agent.git",
+			},
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+		},
+		{
+			name:      "when job has invalid pipeline invariants, it fails the job",
+			agentConf: agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:       jobWithInvalidPipelineInvariantsInEnv,
+			pipelineInvariants: pipeline.PipelineInvariants{
+				OrganizationSlug: "buildkite",
+				PipelineSlug:     "agent",
+				Repository:       "https://github.com/buildkite/agent.git",
+			},
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
+			expectedExitStatus:       "-1",
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
+			expectLogsContain: []string{
+				"⚠️ ERROR",
+				"signature verification failed",
 			},
 		},
 	}
@@ -447,7 +529,12 @@ func TestJobVerification(t *testing.T) {
 			tc.mockBootstrapExpectation(mb)
 			defer mb.CheckAndClose(t)
 
-			tc.job.Step = signStep(t, pipelineUploadEnv, tc.job.Step, tc.signingKey)
+			stepWithInvariants := pipeline.CommandStepWithPipelineInvariants{
+				CommandStep:        tc.job.Step,
+				PipelineInvariants: tc.pipelineInvariants,
+			}
+
+			tc.job.Step = signStep(t, tc.signingKey, pipelineUploadEnv, stepWithInvariants)
 			runJob(t, ctx, testRunJobConfig{
 				job:              &tc.job,
 				server:           server,
@@ -520,6 +607,8 @@ func symmetricJWKFor(t *testing.T, payload string) jwk.Key {
 }
 
 func jwksFromKeys(t *testing.T, jwkes ...jwk.Key) jwk.Set {
+	t.Helper()
+
 	set := jwk.NewSet()
 	for _, jwk := range jwkes {
 		err := set.AddKey(jwk)
@@ -531,18 +620,23 @@ func jwksFromKeys(t *testing.T, jwkes ...jwk.Key) jwk.Set {
 	return set
 }
 
-func signStep(t *testing.T, env map[string]string, step pipeline.CommandStep, key jwk.Key) pipeline.CommandStep {
+func signStep(
+	t *testing.T,
+	key jwk.Key,
+	env map[string]string,
+	stepWithInvariants pipeline.CommandStepWithPipelineInvariants,
+) pipeline.CommandStep {
 	t.Helper()
 
 	t.Logf("%s: signing step with key: %v", t.Name(), key)
 	if key == nil {
-		return step
+		return stepWithInvariants.CommandStep
 	}
 
-	signature, err := pipeline.Sign(env, &step, key)
+	signature, err := pipeline.Sign(key, env, &stepWithInvariants)
 	if err != nil {
 		t.Fatalf("signing step: %v", err)
 	}
-	step.Signature = signature
-	return step
+	stepWithInvariants.CommandStep.Signature = signature
+	return stepWithInvariants.CommandStep
 }

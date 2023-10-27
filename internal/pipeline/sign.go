@@ -23,9 +23,31 @@ type Signature struct {
 	Value        string   `json:"value" yaml:"value"`
 }
 
+// SignedFielder describes types that can be signed and have signatures
+// verified.
+// Converting non-string fields into strings (in a stable, canonical way) is an
+// exercise left to the implementer.
+type SignedFielder interface {
+	// SignedFields returns the default set of fields to sign, and their values.
+	// This is called by Sign.
+	SignedFields() (map[string]any, error)
+
+	// ValuesForFields looks up each field and produces a map of values. This is
+	// called by Verify. The set of fields might differ from the default, e.g.
+	// when verifying older signatures computed with fewer fields or deprecated
+	// field names. signedFielder implementations should reject requests for
+	// values if "mandatory" fields are missing (e.g. signing a command step
+	// should always sign the command).
+	ValuesForFields([]string) (map[string]any, error)
+}
+
 // Sign computes a new signature for an environment (env) combined with an
 // object containing values (sf) using a given key.
-func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, error) {
+func Sign(
+	key jwk.Key,
+	env map[string]string,
+	sf SignedFielder,
+) (*Signature, error) {
 	values, err := sf.SignedFields()
 	if err != nil {
 		return nil, err
@@ -79,7 +101,11 @@ func Sign(env map[string]string, sf SignedFielder, key jwk.Key) (*Signature, err
 
 // Verify verifies an existing signature against environment (env) combined with
 // an object containing values (sf) using keys from a keySet.
-func (s *Signature) Verify(env map[string]string, sf SignedFielder, keySet jwk.Set) error {
+func (s *Signature) Verify(
+	keySet jwk.Set,
+	env map[string]string,
+	sf SignedFielder,
+) error {
 	if len(s.SignedFields) == 0 {
 		return errors.New("signature covers no fields")
 	}
@@ -142,24 +168,6 @@ func canonicalPayload(alg string, values map[string]any) ([]byte, error) {
 		return nil, fmt.Errorf("canonicalising JSON: %w", err)
 	}
 	return payload, nil
-}
-
-// SignedFielder describes types that can be signed and have signatures
-// verified.
-// Converting non-string fields into strings (in a stable, canonical way) is an
-// exercise left to the implementer.
-type SignedFielder interface {
-	// SignedFields returns the default set of fields to sign, and their values.
-	// This is called by Sign.
-	SignedFields() (map[string]any, error)
-
-	// ValuesForFields looks up each field and produces a map of values. This is
-	// called by Verify. The set of fields might differ from the default, e.g.
-	// when verifying older signatures computed with fewer fields or deprecated
-	// field names. signedFielder implementations should reject requests for
-	// values if "mandatory" fields are missing (e.g. signing a command step
-	// should always sign the command).
-	ValuesForFields([]string) (map[string]any, error)
 }
 
 // requireKeys returns a copy of a map containing only keys from a []string.
