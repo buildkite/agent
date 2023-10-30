@@ -187,7 +187,7 @@ func (r *JobRunner) prependTimestampForLogs(s string, args ...any) []byte {
 
 func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
 	l := r.logger.WithFields(logger.StringField("jobID", r.conf.Job.ID), logger.StringField("error", err.Error()))
-	prefix := "~~~ ⚠️"
+	prefix := "+++ ⚠️"
 	if behavior == VerificationBehaviourBlock {
 		prefix = "+++ ⛔"
 	}
