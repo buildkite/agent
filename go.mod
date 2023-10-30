@@ -14,7 +14,7 @@ require (
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/roko v1.1.1
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
-	github.com/creack/pty v1.1.18
+	github.com/creack/pty v1.1.20
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
