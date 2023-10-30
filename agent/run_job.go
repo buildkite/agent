@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
@@ -24,6 +25,14 @@ const (
 	SignalReasonSignatureRejected = "signature_rejected"
 	SignalReasonProcessRunError   = "process_run_error"
 )
+
+type missingKeyError struct {
+	signature string
+}
+
+func (e *missingKeyError) Error() string {
+	return fmt.Sprintf("job was signed with signature %q, but no verification key was provided", e.signature)
+}
 
 // Runs the job
 func (r *JobRunner) Run(ctx context.Context) error {
@@ -77,8 +86,8 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	if r.conf.JWKS == nil && job.Step.Signature != nil {
 		r.verificationFailureLogs(
-			fmt.Errorf("job %q was signed with signature %q, but no verification key was provided, so the job can't be verified", job.ID, job.Step.Signature.Value),
 			VerificationBehaviourBlock,
+			&missingKeyError{signature: job.Step.Signature.Value},
 		)
 		exit.Status = -1
 		exit.SignalReason = SignalReasonSignatureRejected
@@ -89,7 +98,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		ise := &invalidSignatureError{}
 		switch err := r.verifyJob(r.conf.JWKS); {
 		case errors.Is(err, ErrNoSignature) || errors.As(err, &ise):
-			r.verificationFailureLogs(err, r.VerificationFailureBehavior)
+			r.verificationFailureLogs(r.VerificationFailureBehavior, err)
 			if r.VerificationFailureBehavior == VerificationBehaviourBlock {
 				exit.Status = -1
 				exit.SignalReason = SignalReasonSignatureRejected
@@ -97,7 +106,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			}
 
 		case err != nil: // some other error
-			r.verificationFailureLogs(err, VerificationBehaviourBlock) // errors in verification are always fatal
+			r.verificationFailureLogs(VerificationBehaviourBlock, err) // errors in verification are always fatal
 			exit.Status = -1
 			exit.SignalReason = SignalReasonSignatureRejected
 			return nil
@@ -153,6 +162,50 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	exit = r.runJob(cctx)
 
 	return nil
+}
+
+func (r *JobRunner) prependTimestampForLogs(s string, args ...any) []byte {
+	switch {
+	case r.conf.AgentConfiguration.ANSITimestamps:
+		return []byte(fmt.Sprintf(
+			"\x1b_bk;t=%d\x07%s",
+			time.Now().UnixNano()/int64(time.Millisecond),
+			fmt.Sprintf(s, args...),
+		))
+	case r.conf.AgentConfiguration.TimestampLines:
+		return []byte(fmt.Sprintf(
+			"[%s] %s",
+			time.Now().UTC().Format(time.RFC3339),
+			fmt.Sprintf(s, args...),
+		))
+	default:
+		return []byte(fmt.Sprintf(s, args...))
+	}
+}
+
+func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
+	l := r.logger.WithFields(logger.StringField("jobID", r.conf.Job.ID), logger.StringField("error", err.Error()))
+	prefix := "~~~ ⚠️"
+	if behavior == VerificationBehaviourBlock {
+		prefix = "+++ ⛔"
+	}
+
+	l.Warn("Job verification failed")
+	r.logStreamer.Process([]byte(r.prependTimestampForLogs("%s Job verification failed\n", prefix)))
+	r.logStreamer.Process([]byte(r.prependTimestampForLogs("error: %s\n", err)))
+
+	if errors.Is(err, ErrNoSignature) {
+		r.logStreamer.Process([]byte(r.prependTimestampForLogs("no signature in job\n")))
+	} else if ise := new(invalidSignatureError); errors.As(err, &ise) {
+		r.logStreamer.Process([]byte(r.prependTimestampForLogs("signature: %s\n", r.conf.Job.Step.Signature.Value)))
+	} else if mke := new(missingKeyError); errors.As(err, &mke) {
+		r.logStreamer.Process([]byte(r.prependTimestampForLogs("signature: %s\n", mke.signature)))
+	}
+
+	if behavior == VerificationBehaviourWarn {
+		r.logger.Warn("Job will be run whether or not it can be verified - this is not recommended. You can change this behavior with the `job-verification-failure-behavior` agent configuration option.")
+		r.logStreamer.Process(r.prependTimestampForLogs("Job will be run without verification\n"))
+	}
 }
 
 type processExit struct {

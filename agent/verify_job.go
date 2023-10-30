@@ -34,21 +34,6 @@ func (e *invalidSignatureError) Unwrap() error {
 	return e.underlying
 }
 
-func (r *JobRunner) verificationFailureLogs(err error, behavior string) {
-	label := "WARNING"
-	if behavior == VerificationBehaviourBlock {
-		label = "ERROR"
-	}
-
-	r.logger.Warn("Job verification failed: %s", err.Error())
-	r.logStreamer.Process([]byte(fmt.Sprintf("+++ ⚠️ %s: Job verification failed: %s\n", label, err.Error())))
-
-	if behavior == VerificationBehaviourWarn {
-		r.logger.Warn("Job will be run whether or not it can be verified - this is not recommended. You can change this behavior with the `job-verification-failure-behavior` agent configuration option.")
-		r.logStreamer.Process([]byte(fmt.Sprintf("⚠️ %s: Job will be run without verification\n", label)))
-	}
-}
-
 func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	step := r.conf.Job.Step
 
