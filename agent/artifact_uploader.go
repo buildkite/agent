@@ -110,124 +110,182 @@ func isDir(path string) bool {
 	return fi.IsDir()
 }
 
-func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifact, err error) {
+func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
 	}
 
-	// file paths are deduplicated after resolving globs etc
-	seenPaths := make(map[string]bool)
+	var wg sync.WaitGroup
 
+	ac := &artifactCollector{
+		ArtifactUploader: a,
+		wd:               wd,
+		seenPaths:        make(map[string]bool),
+	}
+
+	wctx, cancel := context.WithCancelCause(ctx)
 	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
-		globPath = strings.TrimSpace(globPath)
+		globPath := strings.TrimSpace(globPath)
 		if globPath == "" {
 			continue
 		}
 
-		a.logger.Debug("Searching for %s", globPath)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		// Resolve the globs (with * and ** in them)
-		var files []string
-		if experiments.IsEnabled(ctx, experiments.UseZZGlob) {
-			// New zzglob library.
-			pattern, err := zzglob.Parse(globPath)
-			if err != nil {
-				return nil, fmt.Errorf("invalid glob pattern: %w", err)
+			if err := ac.worker(wctx, globPath); err != nil {
+				cancel(err)
 			}
-
-			walkDirFunc := func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					a.logger.Warn("Couldn't walk path %s", path)
-					return nil
-				}
-				if d != nil && d.IsDir() {
-					a.logger.Warn("Glob pattern %s matched a directory %s", globPath, path)
-					return nil
-				}
-				files = append(files, path)
-				return nil
-			}
-			err = pattern.Glob(walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
-			if err != nil {
-				return nil, fmt.Errorf("globbing pattern: %w", err)
-			}
-		} else {
-			// Old go-zglob library.
-			globfunc := zglob.Glob
-			if a.conf.GlobResolveFollowSymlinks {
-				// Follow symbolic links for files & directories while expanding globs
-				globfunc = zglob.GlobFollowSymlinks
-			}
-			files, err = globfunc(globPath)
-			if errors.Is(err, os.ErrNotExist) {
-				a.logger.Info("File not found: %s", globPath)
-				continue
-			}
-			if err != nil {
-				return nil, fmt.Errorf("resolving glob: %w", err)
-			}
-		}
-
-		// Process each glob match into an api.Artifact
-		for _, file := range files {
-			absolutePath, err := filepath.Abs(file)
-			if err != nil {
-				return nil, fmt.Errorf("resolving absolute path for file %s: %w", file, err)
-			}
-
-			// dedupe based on resolved absolutePath
-			if _, ok := seenPaths[absolutePath]; ok {
-				a.logger.Debug("Skipping duplicate path %s", file)
-				continue
-			}
-			seenPaths[absolutePath] = true
-
-			// Ignore directories, we only want files
-			if isDir(absolutePath) {
-				a.logger.Debug("Skipping directory %s", file)
-				continue
-			}
-
-			if a.conf.UploadSkipSymlinks && isSymlink(absolutePath) {
-				a.logger.Debug("Skipping symlink %s", file)
-				continue
-			}
-
-			// If a glob is absolute, we need to make it relative to the root so that
-			// it can be combined with the download destination to make a valid path.
-			// This is possibly weird and crazy, this logic dates back to
-			// https://github.com/buildkite/agent/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
-			// from 2014, so I'm replicating it here to avoid breaking things
-			if filepath.IsAbs(globPath) {
-				if runtime.GOOS == "windows" {
-					wd = filepath.VolumeName(absolutePath) + "/"
-				} else {
-					wd = "/"
-				}
-			}
-
-			path, err := filepath.Rel(wd, absolutePath)
-			if err != nil {
-				return nil, fmt.Errorf("resolving relative path for file %s: %w", file, err)
-			}
-
-			if experiments.IsEnabled(ctx, experiments.NormalisedUploadPaths) {
-				// Convert any Windows paths to Unix/URI form
-				path = filepath.ToSlash(path)
-			}
-
-			// Build an artifact object using the paths we have.
-			artifact, err := a.build(path, absolutePath, globPath)
-			if err != nil {
-				return nil, fmt.Errorf("building artifact: %w", err)
-			}
-
-			artifacts = append(artifacts, artifact)
-		}
+		}()
+	}
+	if err := context.Cause(wctx); err != nil {
+		return nil, err
 	}
 
-	return artifacts, nil
+	// Wait for workers to complete
+	wg.Wait()
+
+	return ac.artifacts, nil
+}
+
+// artifactCollector processes glob patterns into files.
+type artifactCollector struct {
+	*ArtifactUploader
+	wd string
+
+	mu        sync.Mutex
+	seenPaths map[string]bool
+	artifacts []*api.Artifact
+}
+
+func (c *artifactCollector) worker(ctx context.Context, globPath string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	c.logger.Debug("Searching for %s", globPath)
+
+	// Resolve the globs (with * and ** in them)
+	var files []string
+	if experiments.IsEnabled(ctx, experiments.UseZZGlob) {
+		// New zzglob library.
+		pattern, err := zzglob.Parse(globPath)
+		if err != nil {
+			return fmt.Errorf("invalid glob pattern: %w", err)
+		}
+
+		walkDirFunc := func(path string, d fs.DirEntry, err error) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			if err != nil {
+				c.logger.Warn("Couldn't walk path %s", path)
+				return nil
+			}
+			if d != nil && d.IsDir() {
+				c.logger.Warn("Glob pattern %s matched a directory %s", globPath, path)
+				return nil
+			}
+			files = append(files, path)
+			return nil
+		}
+		err = pattern.Glob(walkDirFunc, zzglob.TraverseSymlinks(c.conf.GlobResolveFollowSymlinks))
+		if err != nil {
+			return fmt.Errorf("globbing pattern: %w", err)
+		}
+	} else {
+		// Old go-zglob library.
+		globfunc := zglob.Glob
+		if c.conf.GlobResolveFollowSymlinks {
+			// Follow symbolic links for files & directories while expanding globs
+			globfunc = zglob.GlobFollowSymlinks
+		}
+		fs, err := globfunc(globPath)
+		if errors.Is(err, os.ErrNotExist) {
+			c.logger.Info("File not found: %s", globPath)
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("resolving glob: %w", err)
+		}
+		files = fs
+	}
+
+	// Process each glob match into an api.Artifact
+	for _, file := range files {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		absolutePath, err := filepath.Abs(file)
+		if err != nil {
+			return fmt.Errorf("resolving absolute path for file %s: %w", file, err)
+		}
+
+		// dedupe based on resolved absolutePath
+		c.mu.Lock()
+		seen := c.seenPaths[absolutePath]
+		c.seenPaths[absolutePath] = true
+		c.mu.Unlock()
+
+		if seen {
+			c.logger.Debug("Skipping duplicate path %s", file)
+			continue
+		}
+
+		// Ignore directories, we only want files
+		if isDir(absolutePath) {
+			c.logger.Debug("Skipping directory %s", file)
+			continue
+		}
+
+		if c.conf.UploadSkipSymlinks && isSymlink(absolutePath) {
+			c.logger.Debug("Skipping symlink %s", file)
+			continue
+		}
+
+		// If a glob is absolute, we need to make it relative to the root so that
+		// it can be combined with the download destination to make a valid path.
+		// This is possibly weird and crazy, this logic dates back to
+		// https://github.com/buildkite/agent/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
+		// from 2014, so I'm replicating it here to avoid breaking things
+		basepath := c.wd
+		if filepath.IsAbs(globPath) {
+			basepath = "/"
+			if runtime.GOOS == "windows" {
+				basepath = filepath.VolumeName(absolutePath) + "/"
+			}
+		}
+
+		path, err := filepath.Rel(basepath, absolutePath)
+		if err != nil {
+			return fmt.Errorf("resolving relative path for file %s: %w", file, err)
+		}
+
+		if experiments.IsEnabled(ctx, experiments.NormalisedUploadPaths) {
+			// Convert any Windows paths to Unix/URI form
+			path = filepath.ToSlash(path)
+		}
+
+		// Build an artifact object using the paths we have.
+		artifact, err := c.build(path, absolutePath, globPath)
+		if err != nil {
+			return fmt.Errorf("building artifact: %w", err)
+		}
+
+		c.mu.Lock()
+		c.artifacts = append(c.artifacts, artifact)
+		c.mu.Unlock()
+	}
+	return nil
 }
 
 func (a *ArtifactUploader) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
