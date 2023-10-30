@@ -114,7 +114,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		default: // no error, all good, keep going
 			l := r.logger.WithFields(logger.StringField("jobID", job.ID), logger.StringField("signature", job.Step.Signature.Value))
 			l.Info("Successfully verified job")
-			r.logStreamer.Process(r.prependTimestampForLogs("~~~ ✅ Job verified\n"))
+			r.logStreamer.Process(r.prependTimestampForLogs("~~~ ✅ Job signature verified\n"))
 			r.logStreamer.Process(r.prependTimestampForLogs("signature: %s\n", job.Step.Signature.Value))
 		}
 	}
@@ -193,7 +193,7 @@ func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
 	}
 
 	l.Warn("Job verification failed")
-	r.logStreamer.Process([]byte(r.prependTimestampForLogs("%s Job verification failed\n", prefix)))
+	r.logStreamer.Process([]byte(r.prependTimestampForLogs("%s Job signature verification failed\n", prefix)))
 	r.logStreamer.Process([]byte(r.prependTimestampForLogs("error: %s\n", err)))
 
 	if errors.Is(err, ErrNoSignature) {
