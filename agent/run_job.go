@@ -112,8 +112,10 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			return nil
 
 		default: // no error, all good, keep going
-			r.logger.Info("Successfully verified job %s with signature %s", job.ID, job.Step.Signature.Value)
-			r.logStreamer.Process([]byte(fmt.Sprintf("✅ Verified job with signature %s\n", job.Step.Signature.Value)))
+			l := r.logger.WithFields(logger.StringField("jobID", job.ID), logger.StringField("signature", job.Step.Signature.Value))
+			l.Info("Successfully verified job")
+			r.logStreamer.Process(r.prependTimestampForLogs("~~~ ✅ Job verified\n"))
+			r.logStreamer.Process(r.prependTimestampForLogs("signature: %s\n", job.Step.Signature.Value))
 		}
 	}
 
