@@ -321,6 +321,13 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", shortCommitHash),
 	}
 	tester.RunAndCheck(t, env...)
+
+	// Check state of the build directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+
+	assert.Equal(t, checkoutRepoCommit, commitHash)
 }
 
 func TestCheckoutErrorIsRetried(t *testing.T) {
