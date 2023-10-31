@@ -25,6 +25,7 @@ const (
 	gitErrorFetch
 	gitErrorFetchRetryClean
 	gitErrorFetchBadObject
+	gitErrorFetchBadReference
 	gitErrorClean
 	gitErrorCleanSubmodules
 )
@@ -158,7 +159,13 @@ func gitFetch(
 	}
 
 	const badObject = "fatal: bad object"
-	if o, err := sh.RunWithOlfactor(ctx, []string{badObject}, "git", commandArgs...); err != nil {
+	const badReference = "fatal: couldn't find remote ref"
+	if o, err := sh.RunWithOlfactor(
+		ctx,
+		[]string{badObject, badReference},
+		"git",
+		commandArgs...,
+	); err != nil {
 		// "fatal: bad object" can happen when the local repo in the checkout
 		// directory is corrupted, not just the remote or the mirror.
 		// When using git mirrors, the existing checkout directory might have a
@@ -167,6 +174,11 @@ func gitFetch(
 		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
 		if o.Smelt(badObject) {
 			return &gitError{error: err, Type: gitErrorFetchBadObject}
+		}
+
+		// "fatal: couldn't find remote ref" can happen when the just the short commit hash is given.
+		if o.Smelt(badReference) {
+			return &gitError{error: err, Type: gitErrorFetchBadReference}
 		}
 
 		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
