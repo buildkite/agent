@@ -116,8 +116,6 @@ func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error)
 		return nil, fmt.Errorf("getting working directory: %w", err)
 	}
 
-	var wg sync.WaitGroup
-
 	ac := &artifactCollector{
 		ArtifactUploader: a,
 		wd:               wd,
@@ -125,6 +123,7 @@ func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error)
 	}
 
 	wctx, cancel := context.WithCancelCause(ctx)
+	var wg sync.WaitGroup
 	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
 		globPath := strings.TrimSpace(globPath)
 		if globPath == "" {
@@ -140,12 +139,11 @@ func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error)
 			}
 		}()
 	}
+	wg.Wait()
+
 	if err := context.Cause(wctx); err != nil {
 		return nil, err
 	}
-
-	// Wait for workers to complete
-	wg.Wait()
 
 	return ac.artifacts, nil
 }
