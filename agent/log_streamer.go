@@ -71,7 +71,11 @@ type LogStreamerChunk struct {
 }
 
 // Creates a new instance of the log streamer
-func NewLogStreamer(l logger.Logger, cb func(context.Context, *LogStreamerChunk) error, c LogStreamerConfig) *LogStreamer {
+func NewLogStreamer(
+	l logger.Logger,
+	cb func(context.Context, *LogStreamerChunk) error,
+	c LogStreamerConfig,
+) *LogStreamer {
 	return &LogStreamer{
 		logger:   l,
 		conf:     c,
@@ -153,7 +157,7 @@ func (ls *LogStreamer) Process(output []byte) {
 }
 
 // Waits for all the chunks to be uploaded, then shuts down all the workers
-func (ls *LogStreamer) Stop() error {
+func (ls *LogStreamer) Stop() {
 	ls.logger.Debug("[LogStreamer] Waiting for all the chunks to be uploaded")
 
 	ls.chunkWaitGroup.Wait()
@@ -163,8 +167,6 @@ func (ls *LogStreamer) Stop() error {
 	for n := 0; n < ls.conf.Concurrency; n++ {
 		ls.queue <- nil
 	}
-
-	return nil
 }
 
 // The actual log streamer worker
