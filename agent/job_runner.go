@@ -118,8 +118,8 @@ type JobRunner struct {
 	// How the JobRunner should respond when job verification fails (one of `block` or `warn`)
 	VerificationFailureBehavior string
 
-	// The logger to use
-	logger logger.Logger
+	// agentLogger is a agentLogger that outputs to the agent logs
+	agentLogger logger.Logger
 
 	// The APIClient that will be used when updating the job
 	apiClient APIClient
@@ -133,8 +133,11 @@ type JobRunner struct {
 	// The internal header time streamer
 	headerTimesStreamer *headerTimesStreamer
 
-	// The internal log streamer
+	// The internal log streamer. Don't write to this directly, use `jobLogs` instead
 	logStreamer *LogStreamer
+
+	// jobLogs is a logger that outputs to the job logs
+	jobLogs io.Writer
 
 	// If the job is being cancelled
 	cancelled bool
@@ -166,9 +169,9 @@ var _ jobRunner = (*JobRunner)(nil)
 // Initializes the job runner
 func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
 	r := &JobRunner{
-		logger:    l,
-		conf:      conf,
-		apiClient: apiClient,
+		agentLogger: l,
+		conf:        conf,
+		apiClient:   apiClient,
 	}
 
 	var err error
@@ -186,15 +189,15 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	if r.conf.Job.Token != "" {
 		clientConf := r.apiClient.Config()
 		clientConf.Token = r.conf.Job.Token
-		r.apiClient = api.NewClient(r.logger, clientConf)
+		r.apiClient = api.NewClient(r.agentLogger, clientConf)
 	}
 
 	// Create our header times struct
-	r.headerTimesStreamer = newHeaderTimesStreamer(r.logger, r.onUploadHeaderTime)
+	r.headerTimesStreamer = newHeaderTimesStreamer(r.agentLogger, r.onUploadHeaderTime)
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
-	r.logStreamer = NewLogStreamer(r.logger, r.onUploadChunk, LogStreamerConfig{
+	r.logStreamer = NewLogStreamer(r.agentLogger, r.onUploadChunk, LogStreamerConfig{
 		Concurrency:       3,
 		MaxChunkSizeBytes: r.conf.Job.ChunksMaxSizeBytes,
 		MaxSizeBytes:      r.conf.Job.LogMaxSizeBytes,
@@ -213,7 +216,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.conf.Job.ID)); err != nil {
 		return r, err
 	} else {
-		r.logger.Debug("[JobRunner] Created env file: %s", file.Name())
+		r.agentLogger.Debug("[JobRunner] Created env file: %s", file.Name())
 		r.envFile = file
 	}
 
@@ -237,7 +240,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		jobLogDir := ""
 		if conf.AgentConfiguration.JobLogPath != "" {
 			jobLogDir = conf.AgentConfiguration.JobLogPath
-			r.logger.Debug("[JobRunner] Job Log Path: %s", jobLogDir)
+			r.agentLogger.Debug("[JobRunner] Job Log Path: %s", jobLogDir)
 		}
 		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
@@ -270,7 +273,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 
 		go func() {
 			// Use a scanner to process output line by line
-			err := process.NewScanner(r.logger).ScanLines(pr, func(line string) {
+			err := process.NewScanner(r.agentLogger).ScanLines(pr, func(line string) {
 				// Send to our header streamer and determine if it's a header
 				// or header expansion.
 				isHeaderOrExpansion := r.headerTimesStreamer.Scan(line)
@@ -284,7 +287,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 				_, _ = outputWriter.Write([]byte(line + "\n"))
 			})
 			if err != nil {
-				r.logger.Error("[JobRunner] Encountered error %v", err)
+				r.agentLogger.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
 
@@ -297,11 +300,11 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 
 		// Use a scanner to process output for headers only
 		go func() {
-			err := process.NewScanner(r.logger).ScanLines(pr, func(line string) {
+			err := process.NewScanner(r.agentLogger).ScanLines(pr, func(line string) {
 				r.headerTimesStreamer.Scan(line)
 			})
 			if err != nil {
-				r.logger.Error("[JobRunner] Encountered error %v", err)
+				r.agentLogger.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
 	}
@@ -322,7 +325,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	}
 
 	// The writer that output from the process goes into
-	processWriter := io.MultiWriter(allWriters...)
+	r.jobLogs = io.MultiWriter(allWriters...)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -336,10 +339,10 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
 		}
-		r.process = kubernetes.New(r.logger, kubernetes.Config{
+		r.process = kubernetes.New(r.agentLogger, kubernetes.Config{
 			AccessToken: r.apiClient.Config().Token,
-			Stdout:      processWriter,
-			Stderr:      processWriter,
+			Stdout:      r.jobLogs,
+			Stderr:      r.jobLogs,
 			ClientCount: containerCount,
 		})
 	} else {
@@ -349,14 +352,14 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 			return nil, fmt.Errorf("splitting bootstrap-script (%q) into tokens: %w", conf.AgentConfiguration.BootstrapScript, err)
 		}
 
-		r.process = process.New(r.logger, process.Config{
+		r.process = process.New(r.agentLogger, process.Config{
 			Path:              cmd[0],
 			Args:              cmd[1:],
 			Dir:               conf.AgentConfiguration.BuildPath,
 			Env:               processEnv,
 			PTY:               conf.AgentConfiguration.RunInPty,
-			Stdout:            processWriter,
-			Stderr:            processWriter,
+			Stdout:            r.jobLogs,
+			Stderr:            r.jobLogs,
 			InterruptSignal:   conf.CancelSignal,
 			SignalGracePeriod: conf.AgentConfiguration.SignalGracePeriod,
 		})
@@ -366,11 +369,11 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	go func() {
 		<-r.process.Done()
 		if err := pw.Close(); err != nil {
-			r.logger.Error("%v", err)
+			r.agentLogger.Error("%v", err)
 		}
 		if tmpFile != nil {
 			if err := os.Remove(tmpFile.Name()); err != nil {
-				r.logger.Error("%v", err)
+				r.agentLogger.Error("%v", err)
 			}
 		}
 	}()
@@ -520,8 +523,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	}
 
 	// see documentation for BuildkiteMessageMax
-	if err := truncateEnv(r.logger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
-		r.logger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)
+	if err := truncateEnv(r.agentLogger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
+		r.agentLogger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)
 		// attempt to continue anyway
 	}
 
@@ -597,7 +600,7 @@ func (r *JobRunner) checkPlugins(ctx context.Context) error {
 }
 
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
-	r.logger.Info("Running pre-bootstrap hook %q", hook)
+	r.agentLogger.Info("Running pre-bootstrap hook %q", hook)
 
 	sh, err := shell.New()
 	if err != nil {
@@ -609,16 +612,16 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
 	sh.Writer = LogWriter{
-		l: r.logger,
+		l: r.agentLogger,
 	}
 
 	if err := sh.RunWithoutPrompt(ctx, hook); err != nil {
 		fmt.Printf("err: %s\n", err)
-		r.logger.Error("Finished pre-bootstrap hook %q: job rejected", hook)
+		r.agentLogger.Error("Finished pre-bootstrap hook %q: job rejected", hook)
 		return false, err
 	}
 
-	r.logger.Info("Finished pre-bootstrap hook %q: job accepted", hook)
+	r.agentLogger.Info("Finished pre-bootstrap hook %q: job accepted", hook)
 	return true, nil
 }
 
@@ -637,11 +640,11 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 
 		if err != nil {
 			if response != nil && api.IsRetryableStatus(response) {
-				r.logger.Warn("%s (%s)", err, rtr)
+				r.agentLogger.Warn("%s (%s)", err, rtr)
 			} else if api.IsRetryableError(err) {
-				r.logger.Warn("%s (%s)", err, rtr)
+				r.agentLogger.Warn("%s (%s)", err, rtr)
 			} else {
-				r.logger.Warn("Buildkite rejected the call to start the job (%s)", err)
+				r.agentLogger.Warn("Buildkite rejected the call to start the job (%s)", err)
 				rtr.Break()
 			}
 		}
@@ -662,7 +665,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		// Mark this routine as done in the wait group
 		wg.Done()
 
-		r.logger.Debug("[JobRunner] Routine that refreshes the job has finished")
+		r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
 	}()
 
 	select {
@@ -679,10 +682,10 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		if err != nil {
 			// We don't really care if it fails, we'll just
 			// try again soon anyway
-			r.logger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
+			r.agentLogger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
 		} else if jobState.State == "canceling" || jobState.State == "canceled" {
 			if err := r.Cancel(); err != nil {
-				r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
+				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}
 
@@ -707,10 +710,10 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 		response, err := r.apiClient.SaveHeaderTimes(ctx, r.conf.Job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
-				r.logger.Warn("Buildkite rejected the header times (%s)", err)
+				r.agentLogger.Warn("Buildkite rejected the header times (%s)", err)
 				retrier.Break()
 			} else {
-				r.logger.Warn("%s (%s)", err, retrier)
+				r.agentLogger.Warn("%s (%s)", err, retrier)
 			}
 		}
 
@@ -745,10 +748,10 @@ func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) 
 		})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
-				r.logger.Warn("Buildkite rejected the chunk upload (%s)", err)
+				r.agentLogger.Warn("Buildkite rejected the chunk upload (%s)", err)
 				retrier.Break()
 			} else {
-				r.logger.Warn("%s (%s)", err, retrier)
+				r.agentLogger.Warn("%s (%s)", err, retrier)
 			}
 		}
 

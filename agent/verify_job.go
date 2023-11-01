@@ -38,7 +38,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	step := r.conf.Job.Step
 
 	if step.Signature == nil {
-		r.logger.Debug("verifyJob: Job.Step.Signature == nil")
+		r.agentLogger.Debug("verifyJob: Job.Step.Signature == nil")
 		return ErrNoSignature
 	}
 
@@ -53,14 +53,14 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 
 	// Verify the signature
 	if err := step.Signature.Verify(r.conf.JWKS, r.conf.Job.Env, stepWithInvariants); err != nil {
-		r.logger.Debug("verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
+		r.agentLogger.Debug("verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
 		return newInvalidSignatureError(ErrVerificationFailed)
 	}
 
 	// Interpolate the matrix permutation (validating the permutation in the
 	// process).
 	if err := step.InterpolateMatrixPermutation(r.conf.Job.MatrixPermutation); err != nil {
-		r.logger.Debug("verifyJob: step.InterpolateMatrixPermutation(% #v) = %v", r.conf.Job.MatrixPermutation, err)
+		r.agentLogger.Debug("verifyJob: step.InterpolateMatrixPermutation(% #v) = %v", r.conf.Job.MatrixPermutation, err)
 		return newInvalidSignatureError(ErrInvalidJob)
 	}
 
@@ -112,7 +112,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 		case "command": // compare directly
 			jobCommand := r.conf.Job.Env["BUILDKITE_COMMAND"]
 			if step.Command != jobCommand {
-				r.logger.Debug("verifyJob: BUILDKITE_COMMAND = %q != %q = step.Command", jobCommand, step.Command)
+				r.agentLogger.Debug("verifyJob: BUILDKITE_COMMAND = %q != %q = step.Command", jobCommand, step.Command)
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
@@ -122,11 +122,11 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			for name, stepEnvValue := range step.Env {
 				jobEnvValue, has := r.conf.Job.Env[name]
 				if !has {
-					r.logger.Debug("verifyJob: %q missing from Job.Env; step.Env[%q] = %q", name, name, stepEnvValue)
+					r.agentLogger.Debug("verifyJob: %q missing from Job.Env; step.Env[%q] = %q", name, name, stepEnvValue)
 					return newInvalidSignatureError(ErrInvalidJob)
 				}
 				if jobEnvValue != stepEnvValue {
-					r.logger.Debug("verifyJob: Job.Env[%q] = %q != %q = step.Env[%q]", name, jobEnvValue, stepEnvValue, name)
+					r.agentLogger.Debug("verifyJob: Job.Env[%q] = %q != %q = step.Env[%q]", name, jobEnvValue, stepEnvValue, name)
 					return newInvalidSignatureError(ErrInvalidJob)
 				}
 			}
@@ -140,33 +140,33 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			emptyJobPlugins := (jobPluginsJSON == "" || jobPluginsJSON == "null" || jobPluginsJSON == "[]")
 
 			if emptyStepPlugins && emptyJobPlugins {
-				r.logger.Debug("verifyJob: both BUILDKITE_PLUGINS and step.Plugins are empty/null")
+				r.agentLogger.Debug("verifyJob: both BUILDKITE_PLUGINS and step.Plugins are empty/null")
 				continue // both empty
 			}
 			if emptyStepPlugins != emptyJobPlugins {
 				// one is empty but the other is not
-				r.logger.Debug("verifyJob: emptyJobPlugins = %t != %t = emptyStepPlugins", emptyJobPlugins, emptyStepPlugins)
+				r.agentLogger.Debug("verifyJob: emptyJobPlugins = %t != %t = emptyStepPlugins", emptyJobPlugins, emptyStepPlugins)
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
 			stepPluginsJSON, err := json.Marshal(step.Plugins)
 			if err != nil {
-				r.logger.Debug("verifyJob: json.Marshal(step.Plugins) = %v", err)
+				r.agentLogger.Debug("verifyJob: json.Marshal(step.Plugins) = %v", err)
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 			stepPluginsNorm, err := jcs.Transform(stepPluginsJSON)
 			if err != nil {
-				r.logger.Debug("verifyJob: jcs.Transform(stepPluginsJSON) = %v", err)
+				r.agentLogger.Debug("verifyJob: jcs.Transform(stepPluginsJSON) = %v", err)
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 			jobPluginsNorm, err := jcs.Transform([]byte(jobPluginsJSON))
 			if err != nil {
-				r.logger.Debug("verifyJob: jcs.Transform(jobPluginsJSON) = %v", err)
+				r.agentLogger.Debug("verifyJob: jcs.Transform(jobPluginsJSON) = %v", err)
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
 			if !bytes.Equal(jobPluginsNorm, stepPluginsNorm) {
-				r.logger.Debug("verifyJob: jobPluginsNorm = %q != %q = stepPluginsNorm", jobPluginsNorm, stepPluginsNorm)
+				r.agentLogger.Debug("verifyJob: jobPluginsNorm = %q != %q = stepPluginsNorm", jobPluginsNorm, stepPluginsNorm)
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
@@ -183,7 +183,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 			if name, isEnv := strings.CutPrefix(field, pipeline.EnvNamespacePrefix); isEnv {
 				if _, has := r.conf.Job.Env[name]; !has {
 					// A pipeline env var that is now missing.
-					r.logger.Debug("verifyJob: %q missing from Job.Env", name)
+					r.agentLogger.Debug("verifyJob: %q missing from Job.Env", name)
 					return newInvalidSignatureError(ErrInvalidJob)
 				}
 				// The env var is present. Signature.Verify used the value from
@@ -193,7 +193,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 
 			// We don't know this field, so we cannot ensure it is consistent
 			// with the job.
-			r.logger.Debug("verifyJob: mystery signed field %q", field)
+			r.agentLogger.Debug("verifyJob: mystery signed field %q", field)
 			return newInvalidSignatureError(ErrInvalidJob)
 		}
 	}
