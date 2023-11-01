@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.58.0](https://github.com/buildkite/agent/tree/v3.58.0) (2023-11-02)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.57.0...v3.58.0)
+
+### Added
+- Add allowed-plugin param to enable plugins allow-list [#2471](https://github.com/buildkite/agent/pull/2471) (@jakubm-canva)
+- New experiment: `pty-raw` avoids LF→CRLF mapping by setting PTY to raw mode [#2453](https://github.com/buildkite/agent/pull/2453) (@pda)
+- Experimental: Signed Pipelines
+  - Add some pipeline invariants to the signature and create a cli subcommand to sign a pipeline [#2457](https://github.com/buildkite/agent/pull/2457) (@triarius)
+  - Add log group headers and timestamps to job verification success and failure logs [#2461](https://github.com/buildkite/agent/pull/2461) (@triarius)
+
+### Fixed
+- Fix checkout of short commit hashes [#2465](https://github.com/buildkite/agent/pull/2465) (@triarius)
+- Parallelise artifact collection [#2456](https://github.com/buildkite/agent/pull/2456) (@DrJosh9000), [#2477](https://github.com/buildkite/agent/pull/2477) (@DrJosh9000)
+- Log warning about short vars once [#2454](https://github.com/buildkite/agent/pull/2454) (@DrJosh9000)
+
+### Internal
+- Reduce header regexps [#2135](https://github.com/buildkite/agent/pull/2135) (@DrJosh9000)
+- Various dependency updates: [#2469](https://github.com/buildkite/agent/pull/2469), [#2468](https://github.com/buildkite/agent/pull/2468), [#2467](https://github.com/buildkite/agent/pull/2467), [#2463](https://github.com/buildkite/agent/pull/2463), [#2450](https://github.com/buildkite/agent/pull/2450), [#2460](https://github.com/buildkite/agent/pull/2460), [#2459](https://github.com/buildkite/agent/pull/2459), [#2458](https://github.com/buildkite/agent/pull/2458) (@dependabot[bot])
+
 ## [v3.57.0](https://github.com/buildkite/agent/tree/v3.57.0) (2023-10-19)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.56.0...v3.57.0)
 
@@ -18,7 +37,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   - Fix verifying jobs with no plugins [#2419](https://github.com/buildkite/agent/pull/2419) (@DrJosh9000)
   - Use canonicalised JSON as signature payload [#2416](https://github.com/buildkite/agent/pull/2416) (@DrJosh9000)
   - Add utility for generating signing and verification keys [#2415](https://github.com/buildkite/agent/pull/2415) [#2422](https://github.com/buildkite/agent/pull/2422) (@moskyb)
-
 
 ### Changed
 - Revert "Upgrade pre-installed packages in docker images" and Pin docker images by digest [#2430](https://github.com/buildkite/agent/pull/2430) (@triarius)
