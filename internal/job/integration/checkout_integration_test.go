@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/bintest/v3"
+	"gotest.tools/v3/assert"
 )
 
 // Example commit info:
@@ -272,6 +273,61 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
+	assert.NilError(t, err)
+	defer tester.Close()
+
+	// Do one checkout
+	tester.RunAndCheck(t)
+
+	// Create another commit on the same branch in the remote repo
+	err = tester.Repo.ExecuteAll([][]string{
+		{"commit", "--allow-empty", "-m", "Another commit"},
+	})
+	assert.NilError(t, err)
+
+	commitHash, err := tester.Repo.RevParse("HEAD")
+	assert.NilError(t, err)
+	shortCommitHash := commitHash[:7]
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// Git should attempt to fetch the shortHash, but fail. Then fallback to fetching
+	// all the heads and tags and checking out the short hash.
+	git.ExpectAll([][]any{
+		{"remote", "get-url", "origin"},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", shortCommitHash},
+		{"config", "remote.origin.fetch"},
+		{"fetch", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
+		{"checkout", "-f", shortCommitHash},
+		{"clean", "-ffxdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
+
+	env := []string{
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", shortCommitHash),
+	}
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+
+	assert.Equal(t, checkoutRepoCommit, commitHash)
 }
 
 func TestCheckoutErrorIsRetried(t *testing.T) {
