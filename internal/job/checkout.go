@@ -532,6 +532,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			switch gerr.Type {
 			case gitErrorFetchRetryClean, gitErrorFetchBadObject:
 				return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
+			case gitErrorFetchBadReference:
+				// fallback to fetching all heads and tags
 			}
 		}
 

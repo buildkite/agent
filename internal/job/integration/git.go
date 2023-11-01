@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+type gitRepository struct {
+	Path string
+}
+
 func createTestGitRespository() (*gitRepository, error) {
 	repo, err := newGitRepository()
 	if err != nil {
@@ -64,10 +68,6 @@ func createTestGitRespository() (*gitRepository, error) {
 	}
 
 	return repo, nil
-}
-
-type gitRepository struct {
-	Path string
 }
 
 func newGitRepository() (*gitRepository, error) {
