@@ -205,7 +205,7 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	exit := processExit{}
 	// Run the process. This will block until it finishes.
 	if err := r.process.Run(ctx); err != nil {
-		// Send the error as to job logs
+		// Send the error to job logs
 		fmt.Fprintf(r.jobLogs, "Error running job: %s\n", err)
 
 		// The process did not run at all, so make sure it fails

@@ -136,7 +136,7 @@ type JobRunner struct {
 	// The internal log streamer. Don't write to this directly, use `jobLogs` instead
 	logStreamer *LogStreamer
 
-	// jobLogs is a logger that outputs to the job logs
+	// jobLogs is an io.Writer that sends data to the job logs
 	jobLogs io.Writer
 
 	// If the job is being cancelled
