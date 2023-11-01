@@ -158,7 +158,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	// Kick off log streaming and job status checking when the process starts.
 	wg.Add(2)
-	go r.jobLogStreamer(cctx, &wg)
+	go r.streamJobLogsAfterProcessStart(cctx, &wg)
 	go r.jobCancellationChecker(cctx, &wg)
 
 	exit = r.runJob(cctx)
@@ -167,7 +167,10 @@ func (r *JobRunner) Run(ctx context.Context) error {
 }
 
 func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
-	l := r.agentLogger.WithFields(logger.StringField("jobID", r.conf.Job.ID), logger.StringField("error", err.Error()))
+	l := r.agentLogger.WithFields(
+		logger.StringField("jobID", r.conf.Job.ID),
+		logger.StringField("error", err.Error()),
+	)
 	prefix := "+++ ⚠️"
 	if behavior == VerificationBehaviourBlock {
 		prefix = "+++ ⛔"
@@ -248,6 +251,10 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 
 func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit processExit) {
 	finishedAt := time.Now()
+
+	// Flush the job logs. These should have been flushed already if the process started, but if it
+	// never started, then logs from prior to the attempt to start the process will still be buffered.
+	r.logStreamer.Process(r.output.ReadAndTruncate())
 
 	// Stop the header time streamer. This will block until all the chunks have been uploaded
 	r.headerTimesStreamer.Stop()
@@ -333,9 +340,9 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit pr
 	})
 }
 
-// jobLogStreamer waits for the process to start, then grabs the job output
+// streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
 // every few seconds and sends it back to Buildkite.
-func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
+func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync.WaitGroup) {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Log Streamer")
 	defer done()
 	setStat("🏃 Starting...")
@@ -371,6 +378,7 @@ func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
 
 	// The final output after the process has finished is processed in Run().
 }
+
 func (r *JobRunner) CancelAndStop() error {
 	r.cancelLock.Lock()
 	r.stopped = true
