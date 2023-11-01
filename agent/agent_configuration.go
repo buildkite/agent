@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -24,7 +25,8 @@ type AgentConfiguration struct {
 	GitCleanFlags         string
 	GitFetchFlags         string
 	GitSubmodules         bool
-	AllowedRepositories   []string
+	AllowedRepositories   []*regexp.Regexp
+	AllowedPlugins        []*regexp.Regexp
 	SSHKeyscan            bool
 	CommandEval           bool
 	PluginsEnabled        bool

@@ -108,13 +108,20 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		}
 	}
 
-	// Validate the repository if the list of allowed repositories is set
-	allowedRepos := r.conf.AgentConfiguration.AllowedRepositories
-	pipelineRepo := job.Env["BUILDKITE_REPO"]
-	err := validateRepository(allowedRepos, pipelineRepo)
+	// Validate the repository if the list of allowed repositories is set.
+	err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])
 	if err != nil {
 		r.logStreamer.Process([]byte(fmt.Sprintf("%s", err)))
-		r.logger.Error("%s", err)
+		r.logger.Error("Repo %s", err)
+		exit.Status = -1
+		exit.SignalReason = SignalReasonAgentRefused
+		return nil
+	}
+	// Validate the plugins if the list of allowed plugins is set.
+	err = r.checkPlugins(ctx)
+	if err != nil {
+		r.logStreamer.Process([]byte(fmt.Sprintf("%s", err)))
+		r.logger.Error("Plugin %s", err)
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
 		return nil
