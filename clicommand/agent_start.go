@@ -22,6 +22,7 @@ import (
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/logger"
@@ -129,6 +130,8 @@ type AgentStartConfig struct {
 
 	NoSSHKeyscan        bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval       bool     `cli:"no-command-eval"`
+	CommandMode         string   `cli:"command-mode"`
+	CommandRepoOnly     bool     `cli:"command-repo-only"`
 	NoLocalHooks        bool     `cli:"no-local-hooks"`
 	NoPlugins           bool     `cli:"no-plugins"`
 	NoPluginValidation  bool     `cli:"no-plugin-validation"`
@@ -511,8 +514,19 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-command-eval",
-			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
+			Usage:  "Don't allow this agent to run arbitrary console commands; also disables plugins by default - can only be used with command-mode 'legacy'",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
+		},
+		cli.StringFlag{
+			Name:   "command-mode",
+			Value:  job.CommandModeLegacy,
+			Usage:  "Specifies how the agent should run commands - can be 'legacy', 'shell' or 'program'",
+			EnvVar: "BUILDKITE_COMMAND_MODE",
+		},
+		cli.BoolTFlag{
+			Name:   "command-repo-only",
+			Usage:  "Command must refer to a program in the repo - only used if 'command-mode' is 'program'",
+			EnvVar: "BUILDKITE_COMMAND_REPO_ONLY",
 		},
 		cli.BoolFlag{
 			Name:   "no-plugins",
@@ -709,6 +723,14 @@ var AgentStartCommand = cli.Command{
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
 		}
 
+		if !slices.Contains(job.CommandModes, cfg.CommandMode) {
+			return fmt.Errorf("unknown command-mode '%s'", cfg.CommandMode)
+		}
+
+		if cfg.NoCommandEval && cfg.CommandMode != job.CommandModeLegacy {
+			return fmt.Errorf("can't set no-command-eval unless command-mode is 'legacy'")
+		}
+
 		isSetNoPlugins := c.IsSet("no-plugins")
 		if configFile != nil {
 			if _, exists := configFile.Config["no-plugins"]; exists {
@@ -847,6 +869,8 @@ var AgentStartCommand = cli.Command{
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			SSHKeyscan:                      !cfg.NoSSHKeyscan,
 			CommandEval:                     !cfg.NoCommandEval,
+			CommandMode:                     cfg.CommandMode,
+			CommandRepoOnly:                 cfg.CommandRepoOnly,
 			PluginsEnabled:                  !cfg.NoPlugins,
 			PluginValidation:                !cfg.NoPluginValidation,
 			LocalHooksEnabled:               !cfg.NoLocalHooks,

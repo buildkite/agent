@@ -34,6 +34,17 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
+const (
+	// command will be evaluated via configured shell using legacy method
+	CommandModeLegacy = "legacy"
+	// command will be evaluated via configured shell
+	CommandModeShell = "shell"
+	// command will be run directly (not via shell) as a binary executable or text file starting with shebang
+	CommandModeProgram = "program"
+)
+
+var CommandModes = []string{CommandModeLegacy, CommandModeShell, CommandModeProgram}
+
 // Executor represents the phases of execution in a Buildkite Job. It's run as
 // a sub-process of the buildkite-agent and finishes at the conclusion of a job.
 //
@@ -692,8 +703,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
 	// It's important to do this before checking out plugins, in case you want
-	// to use the global environment hook to whitelist the plugins that are
-	// allowed to be used.
+	// to use the global environment hook to allow-list plugins.
 	err = e.executeGlobalHook(ctx, "environment")
 	return err
 }
@@ -859,19 +869,143 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (e *Executor) defaultCommandPhase(ctx context.Context) error {
+	// Make sure we actually have a command to run
+	if strings.TrimSpace(e.Command) == "" {
+		return fmt.Errorf("The command phase has no `command` to execute. Provide a `command` field in your step configuration, or define a `command` hook in a step plug-in, your repository `.buildkite/hooks`, or agent `hooks-path`.")
+	}
+
+	redactors := e.setupRedactors()
+	defer redactors.Flush()
+
+	switch e.ExecutorConfig.CommandMode {
+	case CommandModeLegacy:
+		return e.executeLegacyCommands(ctx)
+	case CommandModeShell:
+		return e.executeShellCommands(ctx)
+	case CommandModeProgram:
+		for _, command := range strings.Split(e.Command, "\n") {
+			err := e.executeProgramCommands(ctx, command)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		e.shell.Errorf("Unknown command-mode '%s'", e.ExecutorConfig.CommandMode)
+		return fmt.Errorf("unknown command-mode '%s'", e.ExecutorConfig.CommandMode)
+	}
+}
+
+func (e *Executor) executeProgramCommands(ctx context.Context, command string) error {
 	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
-		"hook.name": "command",
-		"hook.type": "default",
+		"hook.name":         "command",
+		"hook.type":         "default",
+		"hook.command-mode": "program",
 	})
 
-	// Make sure we actually have a command to run
-	if strings.TrimSpace(e.Command) == "" {
-		return fmt.Errorf("The command phase has no `command` to execute. Provide a `command` field in your step configuration, or define a `command` hook in a step plug-in, your repository `.buildkite/hooks`, or agent `hooks-path`.")
+	cmdTokens, err := shellwords.Split(command)
+
+	path := cmdTokens[0]
+	if !filepath.IsAbs(path) {
+		path, err = filepath.Abs(filepath.Join(e.shell.Getwd(), path))
+		if err != nil {
+			return fmt.Errorf("can't get absolute path of command %q: %v", command, err)
+		}
 	}
+
+	if e.ExecutorConfig.CommandRepoOnly && !strings.HasPrefix(path, e.shell.Getwd()+string(os.PathSeparator)) {
+		return fmt.Errorf("command must refer to a program in the repo")
+	}
+
+	args := cmdTokens[1:]
+
+	e.shell.Headerf("Running program")
+
+	if e.Debug {
+		e.shell.Promptf("%s", process.FormatCommand(path, args))
+	} else {
+		e.shell.Promptf("%s", command)
+	}
+
+	err = e.shell.RunWithoutPrompt(ctx, path, args...)
+	return err
+}
+
+func (e *Executor) executeShellCommands(ctx context.Context) error {
+	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
+	span.AddAttributes(map[string]string{
+		"hook.name":         "command",
+		"hook.type":         "default",
+		"hook.command-mode": "shell",
+	})
+
+	// The shell gets parsed based on the operating system
+	shell, err := shellwords.Split(e.Shell)
+	if err != nil {
+		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", e.Shell, err)
+	}
+
+	if len(shell) == 0 {
+		return fmt.Errorf("No shell set for job")
+	}
+
+	var cmdToExec string
+
+	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
+	// a batch script so that it works, but we don't like it
+	if strings.ToUpper(filepath.Base(shell[0])) == "CMD.EXE" {
+		e.shell.Headerf("Running batch script")
+		batchScript, err := e.writeBatchScript(e.Command)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(batchScript)
+
+		if e.Debug {
+			contents, err := os.ReadFile(batchScript)
+			if err != nil {
+				return err
+			}
+			e.shell.Commentf("Wrote batch script %s\n%s", batchScript, contents)
+		}
+
+		cmdToExec = batchScript
+	} else {
+		e.shell.Headerf("Running shell command")
+		cmdToExec = e.Command
+	}
+
+	var cmd []string
+	cmd = append(cmd, shell...)
+	cmd = append(cmd, cmdToExec)
+
+	if e.Debug {
+		e.shell.Promptf("%s", process.FormatCommand(cmd[0], cmd[1:]))
+	} else {
+		e.shell.Promptf("%s", cmdToExec)
+	}
+
+	err = e.shell.RunWithoutPrompt(ctx, cmd[0], cmd[1:]...)
+	return err
+}
+
+func (e *Executor) executeLegacyCommands(ctx context.Context) error {
+	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
+	span.AddAttributes(map[string]string{
+		"hook.name":         "command",
+		"hook.type":         "default",
+		"hook.command-mode": "legacy",
+	})
 
 	scriptFileName := strings.Replace(e.Command, "\n", "", -1)
 	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
@@ -994,9 +1128,6 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	if !experiments.IsEnabled(ctx, experiments.AvoidRecursiveTrap) && !commandIsScript && shellscript.IsPOSIXShell(e.Shell) {
 		cmdToExec = fmt.Sprintf("trap 'kill -- $$' INT TERM QUIT; %s", cmdToExec)
 	}
-
-	redactors := e.setupRedactors()
-	defer redactors.Flush()
 
 	var cmd []string
 	cmd = append(cmd, shell...)

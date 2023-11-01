@@ -95,6 +95,12 @@ type ExecutorConfig struct {
 	// Are arbitrary commands allowed to be executed
 	CommandEval bool
 
+	// How to execute commands
+	CommandMode string
+
+	// Should program commands have to be in the repo
+	CommandRepoOnly bool
+
 	// Are plugins enabled?
 	PluginsEnabled bool
 

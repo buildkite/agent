@@ -51,28 +51,30 @@ const (
 // Certain env can only be set by agent configuration.
 // We show the user a warning in the bootstrap if they use any of these at a job level.
 var ProtectedEnv = map[string]struct{}{
-	"BUILDKITE_AGENT_ENDPOINT":           {},
 	"BUILDKITE_AGENT_ACCESS_TOKEN":       {},
 	"BUILDKITE_AGENT_DEBUG":              {},
+	"BUILDKITE_AGENT_ENDPOINT":           {},
 	"BUILDKITE_AGENT_PID":                {},
 	"BUILDKITE_BIN_PATH":                 {},
-	"BUILDKITE_CONFIG_PATH":              {},
 	"BUILDKITE_BUILD_PATH":               {},
+	"BUILDKITE_COMMAND_EVAL":             {},
+	"BUILDKITE_COMMAND_REPO_ONLY":        {},
+	"BUILDKITE_COMMAND_MODE":             {},
+	"BUILDKITE_CONFIG_PATH":              {},
+	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
+	"BUILDKITE_GIT_CLONE_FLAGS":          {},
+	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
+	"BUILDKITE_GIT_FETCH_FLAGS":          {},
+	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
 	"BUILDKITE_GIT_MIRRORS_PATH":         {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":  {},
-	"BUILDKITE_HOOKS_PATH":               {},
-	"BUILDKITE_PLUGINS_PATH":             {},
-	"BUILDKITE_SSH_KEYSCAN":              {},
 	"BUILDKITE_GIT_SUBMODULES":           {},
-	"BUILDKITE_COMMAND_EVAL":             {},
-	"BUILDKITE_PLUGINS_ENABLED":          {},
+	"BUILDKITE_HOOKS_PATH":               {},
 	"BUILDKITE_LOCAL_HOOKS_ENABLED":      {},
-	"BUILDKITE_GIT_CLONE_FLAGS":          {},
-	"BUILDKITE_GIT_FETCH_FLAGS":          {},
-	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
-	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
-	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
+	"BUILDKITE_PLUGINS_ENABLED":          {},
+	"BUILDKITE_PLUGINS_PATH":             {},
 	"BUILDKITE_SHELL":                    {},
+	"BUILDKITE_SSH_KEYSCAN":              {},
 }
 
 type JobRunnerConfig struct {
@@ -463,6 +465,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.SSHKeyscan)
 	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitSubmodules)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandEval)
+	env["BUILDKITE_COMMAND_MODE"] = r.conf.AgentConfiguration.CommandMode
+	env["BUILDKITE_COMMAND_REPO_ONLY"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandRepoOnly)
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags

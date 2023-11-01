@@ -2,14 +2,20 @@ package job
 
 import (
 	"context"
+	"os"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/shellwords"
 	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 )
 
@@ -122,4 +128,212 @@ func TestStartTracing_Datadog(t *testing.T) {
 
 	assert.Equal(t, spanImpl.Span, opentracing.SpanFromContext(ctx))
 	stopper()
+}
+
+func TestDefaultCommandPhase_LegacyMode(t *testing.T) {
+	var err error
+
+	bashString := "/bin/bash -e -c"
+	bashTokens, _ := shellwords.Split(bashString)
+
+	cfg := ExecutorConfig{
+		CommandMode: CommandModeLegacy,
+		Shell:       bashString,
+	}
+	e := New(cfg)
+	e.shell, err = shell.New()
+	assert.NoError(t, err)
+
+	// don't pollute the test output
+	e.shell.Logger = shell.DiscardLogger
+
+	// the directory where we expect to find repo files
+	e.shell.Chdir("/tmp")
+
+	// we have to create the test file as legacy mode actually checks for its existence and outputs commands differently
+	os.Create("/tmp/dummy")
+	defer os.Remove("/tmp/dummy")
+
+	trapCtx := context.Background()
+	noTrapCtx, _ := experiments.Enable(trapCtx, experiments.AvoidRecursiveTrap)
+
+	// the error to expect if CommandEval is false and the first token in the command:
+	// - doesn't refer to a file under shell.wd
+	// - has more than one token, e.g. arguments
+	noEvalError := "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
+
+	type test struct {
+		context       context.Context
+		command       string
+		expect        string
+		expectedError string
+		commandEval   bool
+	}
+
+	tests := []test{
+		// eval allowed
+		{context: noTrapCtx, command: "echo 'hello'", expect: "echo 'hello'", commandEval: true},
+		{context: noTrapCtx, command: "dummy", expect: "./dummy", commandEval: true},
+		{context: noTrapCtx, command: "dummy 1", expect: "dummy 1", commandEval: true},
+		{context: noTrapCtx, command: "dummy\ndummier", expect: "dummy\ndummier", commandEval: true},
+		{context: noTrapCtx, command: "/bin/date", expect: "/bin/date", commandEval: true},
+		// eval not allowed
+		{context: noTrapCtx, command: "echo 'hello'", expectedError: noEvalError, commandEval: false},
+		{context: noTrapCtx, command: "dummy", expect: "./dummy", commandEval: false},
+		{context: noTrapCtx, command: "dummy 1", expectedError: noEvalError, commandEval: false},
+		{context: noTrapCtx, command: "dummy\ndummier", expectedError: noEvalError, commandEval: false},
+		{context: noTrapCtx, command: "/bin/date", expectedError: noEvalError, commandEval: false},
+		// recursive trap
+		{context: trapCtx, command: "echo 'hello'", expect: "trap 'kill -- $$' INT TERM QUIT; echo 'hello'", commandEval: true},
+		{context: trapCtx, command: "dummy", expect: "./dummy", commandEval: true},
+		{context: trapCtx, command: "dummy 1", expect: "trap 'kill -- $$' INT TERM QUIT; dummy 1", commandEval: true},
+		{context: trapCtx, command: "dummy\ndummier", expect: "trap 'kill -- $$' INT TERM QUIT; dummy\ndummier", commandEval: true},
+		{context: trapCtx, command: "/bin/date", expect: "trap 'kill -- $$' INT TERM QUIT; /bin/date", commandEval: true},
+	}
+
+	var got []string
+	e.shell.NewProcess = func(l logger.Logger, c process.Config) shell.ProcessRunner {
+		got = append([]string{c.Path}, c.Args...)
+		return &mockProcessRunner{}
+	}
+
+	for _, tc := range tests {
+		e.Command = tc.command
+		e.CommandEval = tc.commandEval
+		err = e.defaultCommandPhase(tc.context)
+
+		if len(tc.expectedError) > 0 {
+			require.EqualError(t, err, tc.expectedError)
+		} else {
+			assert.Equal(t, append(bashTokens, tc.expect), got)
+			require.NoError(t, err)
+		}
+	}
+}
+
+func TestDefaultCommandPhase_ShellMode(t *testing.T) {
+	var err error
+
+	bashString := "/bin/bash -e -c"
+	bashTokens, _ := shellwords.Split(bashString)
+
+	cfg := ExecutorConfig{
+		CommandMode: CommandModeShell,
+		Shell:       bashString,
+	}
+	e := New(cfg)
+	e.shell, err = shell.New()
+	assert.NoError(t, err)
+
+	// don't pollute the test output
+	e.shell.Logger = shell.DiscardLogger
+
+	var got []string
+	e.shell.NewProcess = func(l logger.Logger, c process.Config) shell.ProcessRunner {
+		got = append([]string{c.Path}, c.Args...)
+		return &mockProcessRunner{}
+	}
+
+	tests := []string{
+		"echo 'hello'",
+		"dummy",
+		"dummy 1",
+		"dummy\ndummier",
+		"/bin/date",
+	}
+
+	for _, tc := range tests {
+		e.Command = tc
+		err = e.defaultCommandPhase(context.Background())
+		assert.Equal(t, append(bashTokens, tc), got)
+		require.NoError(t, err)
+	}
+}
+
+func TestDefaultCommandPhase_ProgramMode(t *testing.T) {
+	var err error
+
+	cfg := ExecutorConfig{
+		CommandMode: CommandModeProgram,
+	}
+	e := New(cfg)
+	e.shell, err = shell.New()
+	assert.NoError(t, err)
+
+	e.shell.Chdir("/tmp")
+
+	// don't pollute the test output
+	e.shell.Logger = shell.DiscardLogger
+
+	var got [][]string
+	e.shell.NewProcess = func(l logger.Logger, c process.Config) shell.ProcessRunner {
+		got = append(got, append([]string{c.Path}, c.Args...))
+		return &mockProcessRunner{}
+	}
+
+	type test struct {
+		command       string
+		expect        [][]string
+		expectedError string
+		repoOnly      bool
+	}
+
+	repoOnlyError := "command must refer to a program in the repo"
+
+	tests := []test{
+		// any program
+		{command: "echo 'hello'", expect: [][]string{{"/tmp/echo", "hello"}}},
+		{command: "dummy", expect: [][]string{{"/tmp/dummy"}}},
+		{command: "dummy 1", expect: [][]string{{"/tmp/dummy", "1"}}},
+		{command: "dummy\ndummier", expect: [][]string{{"/tmp/dummy"}, {"/tmp/dummier"}}},
+		{command: "/bin/date", expect: [][]string{{"/bin/date"}}},
+		// repo only
+		{command: "echo 'hello'", expect: [][]string{{"/tmp/echo", "hello"}}, repoOnly: true},
+		{command: "dummy", expect: [][]string{{"/tmp/dummy"}}, repoOnly: true},
+		{command: "dummy 1", expect: [][]string{{"/tmp/dummy", "1"}}, repoOnly: true},
+		{command: "dummy\ndummier", expect: [][]string{{"/tmp/dummy"}, {"/tmp/dummier"}}, repoOnly: true},
+		{command: "/bin/date", expectedError: repoOnlyError, repoOnly: true},
+	}
+
+	for _, tc := range tests {
+		got = [][]string{}
+
+		e.Command = tc.command
+		e.CommandRepoOnly = tc.repoOnly
+
+		err = e.defaultCommandPhase(context.Background())
+
+		if len(tc.expectedError) > 0 {
+			require.EqualError(t, err, tc.expectedError)
+		} else {
+			assert.Equal(t, tc.expect, got)
+			require.NoError(t, err)
+		}
+	}
+}
+
+var _ shell.ProcessRunner = (*mockProcessRunner)(nil)
+
+// mockProcessRunner implements shell.ProcessRunner for testing expected calls.
+type mockProcessRunner struct {
+}
+
+func (r *mockProcessRunner) Run(_ context.Context) error {
+	return nil
+}
+
+func (r *mockProcessRunner) Interrupt() error {
+	return nil
+}
+
+func (r *mockProcessRunner) Terminate() error {
+	return nil
+}
+
+func (r *mockProcessRunner) WaitResult() error {
+	return nil
+}
+
+func (r *mockProcessRunner) WaitStatus() process.WaitStatus {
+	return nil
 }
