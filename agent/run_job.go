@@ -254,11 +254,11 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit proces
 	// were left behind because the uploader goroutine exited before it could flush them.
 	r.logStreamer.Process(r.output.ReadAndTruncate())
 
-	// Stop the header time streamer. This will block until all the chunks have been uploaded
-	r.headerTimesStreamer.Stop()
-
 	// Stop the log streamer. This will block until all the chunks have been uploaded
 	r.logStreamer.Stop()
+
+	// Stop the header time streamer. This will block until all the chunks have been uploaded
+	r.headerTimesStreamer.Stop()
 
 	// Warn about failed chunks
 	if count := r.logStreamer.FailedChunks(); count > 0 {
