@@ -951,8 +951,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		if len(cfg.AllowedRepositories) > 0 {
-			agentConf.AllowedRepositories = []*regexp.Regexp{}
-			l.Info("Repositories allow list is enabled.")
+			agentConf.AllowedRepositories = make([]*regexp.Regexp, 0, len(cfg.AllowedRepositories))
 			for _, v := range cfg.AllowedRepositories {
 				r, err := regexp.Compile(v)
 				if err != nil {
@@ -963,12 +962,11 @@ var AgentStartCommand = cli.Command{
 		}
 
 		if len(cfg.AllowedPlugins) > 0 {
-			agentConf.AllowedPlugins = []*regexp.Regexp{}
-			l.Info("Plugins allow list is enabled.")
+			agentConf.AllowedPlugins = make([]*regexp.Regexp, 0, len(cfg.AllowedPlugins))
 			for _, v := range cfg.AllowedPlugins {
 				r, err := regexp.Compile(v)
 				if err != nil {
-					l.Fatal("Regex %s is allowed-plugins failed to compile: %v", v, err)
+					l.Fatal("Regex %s in allowed-plugins failed to compile: %v", v, err)
 				}
 				agentConf.AllowedPlugins = append(agentConf.AllowedPlugins, r)
 			}
