@@ -322,7 +322,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	}
 	tester.RunAndCheck(t, env...)
 
-	// Check state of the build directory
+	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
 	assert.NilError(t, err)
