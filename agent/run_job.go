@@ -225,9 +225,6 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 		)
 	}
 
-	// Add the final output to the streamer
-	r.jobLogs.Write(r.output.ReadAndTruncate())
-
 	// Collect the finished process' exit status
 	exit.Status = r.process.WaitStatus().ExitStatus()
 
@@ -252,8 +249,9 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit processExit) {
 	finishedAt := time.Now()
 
-	// Flush the job logs. These should have been flushed already if the process started, but if it
-	// never started, then logs from prior to the attempt to start the process will still be buffered.
+	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
+	// start the process will still be buffered. Also, there may still be logs in the buffer that
+	// were left behind because the uploader goroutine exited before it could flush them.
 	r.logStreamer.Process(r.output.ReadAndTruncate())
 
 	// Stop the header time streamer. This will block until all the chunks have been uploaded
