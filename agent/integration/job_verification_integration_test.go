@@ -264,7 +264,7 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain:        []string{"⚠️ ERROR"},
+			expectLogsContain:        []string{"+++ ⛔"},
 		},
 		{
 			name:                     "when job signature is invalid, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
@@ -275,7 +275,7 @@ func TestJobVerification(t *testing.T) {
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyAlpacas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
 			expectedExitStatus:       "0",
-			expectLogsContain:        []string{"⚠️ WARNING"},
+			expectLogsContain:        []string{"+++ ⚠️"},
 		},
 		{
 			name:                     "when job signature is valid, it runs the job",
@@ -320,7 +320,7 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain:        []string{"⚠️ ERROR"},
+			expectLogsContain:        []string{"+++ ⛔"},
 		},
 		{
 			name:                     "when job signature is missing, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
@@ -331,7 +331,7 @@ func TestJobVerification(t *testing.T) {
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
 			expectedExitStatus:       "0",
-			expectLogsContain:        []string{"⚠️ WARNING"},
+			expectLogsContain:        []string{"+++ ⚠️"},
 		},
 		{
 			name:                     "when the step signature matches, but the job doesn't match the step, it fails signature verification",
@@ -344,7 +344,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"job does not match signed step",
 			},
 		},
@@ -359,7 +359,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"job does not match signed step",
 			},
 		},
@@ -374,7 +374,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"job does not match signed step",
 			},
 		},
@@ -389,8 +389,8 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
-				"but no verification key was provided, so the job can't be verified",
+				"+++ ⛔",
+				"but no verification key was provided",
 			},
 		},
 		{
@@ -404,7 +404,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"signature verification failed",
 			},
 		},
@@ -419,7 +419,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"job does not match signed step",
 			},
 		},
@@ -434,7 +434,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"signature verification failed",
 			},
 		},
@@ -460,7 +460,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"job does not match signed step",
 			},
 		},
@@ -475,7 +475,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"job does not match signed step",
 			},
 		},
@@ -509,7 +509,7 @@ func TestJobVerification(t *testing.T) {
 			expectedExitStatus:       "-1",
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
-				"⚠️ ERROR",
+				"+++ ⛔",
 				"signature verification failed",
 			},
 		},
