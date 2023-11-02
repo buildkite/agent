@@ -281,6 +281,8 @@ var PipelineUploadCommand = cli.Command{
 			pInv := &pipeline.PipelineInvariants{
 				OrganizationSlug: os.Getenv("BUILDKITE_ORGANIZATION_SLUG"),
 				PipelineSlug:     os.Getenv("BUILDKITE_PIPELINE_SLUG"),
+				OrganizationUUID: os.Getenv("BUILDKITE_ORGANIZATION_UUID"),
+				PipelineUUID:     os.Getenv("BUILDKITE_PIPELINE_UUID"),
 				Repository:       os.Getenv("BUILDKITE_REPO"),
 			}
 

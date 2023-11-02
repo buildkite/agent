@@ -5,14 +5,19 @@ import (
 	"strings"
 )
 
+// PipelineInvariants store invariats that are not part of steps and are invariant for every build
+// in a pipeline. These will be signed.
 type PipelineInvariants struct {
+	OrganizationUUID string
 	OrganizationSlug string
+	PipelineUUID     string
 	PipelineSlug     string
 	Repository       string
 }
 
 var _ SignedFielder = (*CommandStepWithPipelineInvariants)(nil)
 
+// CommandStepWithPipelineInvariants is a CommandStep with PipelineInvariants.
 type CommandStepWithPipelineInvariants struct {
 	CommandStep
 	PipelineInvariants
