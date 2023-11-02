@@ -52,6 +52,7 @@ var (
 	)
 	ErrNeedsGraphQLToken = errors.New("can't update pipeline online without a GraphQL token")
 	ErrNoGraphQLID       = errors.New("invalid pipeline GraphQL ID")
+	ErrNotFound          = errors.New("pipeline not found")
 )
 
 var ToolSignCommand = cli.Command{
@@ -288,6 +289,15 @@ func parserInputsFromGraphQL(
 	resp, err := bkgql.GetPipeline(ctx, client, orgPipelineSlug)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't retrieve pipeline: %w", err)
+	}
+
+	if resp.Pipeline.Id == "" {
+		return nil, fmt.Errorf(
+			"%w: organization-slug: %s, pipeline-slug: %s",
+			ErrNotFound,
+			cfg.OrganizationSlug,
+			cfg.PipelineSlug,
+		)
 	}
 
 	l.Debug("Pipeline retrieved successfully: %#v", resp)
