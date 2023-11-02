@@ -8,6 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0
 	github.com/DataDog/datadog-go/v5 v5.3.0
 	github.com/DrJosh9000/zzglob v0.0.17
+	github.com/Khan/genqlient v0.6.0
 	github.com/aws/aws-sdk-go v1.47.4
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.2.0
@@ -17,6 +18,7 @@ require (
 	github.com/creack/pty v1.1.20
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
+	github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/gofrs/flock v0.8.1
@@ -51,8 +53,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
 )
-
-require github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2
 
 require (
 	cloud.google.com/go/compute v1.23.1 // indirect
@@ -104,6 +104,7 @@ require (
 	github.com/secure-systems-lab/go-securesystemslib v0.7.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/tinylib/msgp v1.1.8 // indirect
+	github.com/vektah/gqlparser/v2 v2.5.8 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel/metric v1.19.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
