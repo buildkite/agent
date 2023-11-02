@@ -295,6 +295,39 @@ func signWithGraphQL(
 	signedPipelineYaml := signedPipelineYamlBuilder.String()
 	l.Info("Replacing pipeline with signed version:\n%s", strings.TrimSpace(signedPipelineYaml))
 
+	cont, err := promptContinue(c, "Are you sure you want to update the pipeline online?")
+	if err != nil {
+		return fmt.Errorf("couldn't read user input: %w", err)
+	}
+
+	if !cont {
+		l.Info("Aborting without updateing pipeline")
+		return nil
+	}
+
 	_, err = bkgql.UpdatePipeline(ctx, client, resp.Pipeline.Id, signedPipelineYaml)
-	return err
+	if err != nil {
+		return err
+	}
+
+	l.Info("Pipeline updated successfully")
+
+	return nil
+}
+
+func promptContinue(c *cli.Context, message string) (bool, error) {
+	if _, err := c.App.Writer.Write([]byte(message + " [y/N] ")); err != nil {
+		return false, err
+	}
+	var input string
+	if _, err := fmt.Fscanln(os.Stdin, &input); err != nil {
+		return false, err
+	}
+	input = strings.ToLower(input)
+	switch input {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
 }
