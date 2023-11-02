@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -229,7 +230,7 @@ func signWithGraphQL(
 	cfg *ToolSignConfig,
 ) error {
 	orgPipelineSlug := fmt.Sprintf("%s/%s", cfg.OrganizationSlug, cfg.PipelineSlug)
-	l = l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
+	debugL := l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
 
 	l.Info("Retrieving pipeline from the GraphQL API")
 
@@ -249,7 +250,7 @@ func signWithGraphQL(
 		)
 	}
 
-	l.Debug("Pipeline retrieved successfully: %#v", resp)
+	debugL.Debug("Pipeline retrieved successfully: %#v", resp)
 
 	pipelineInvariants := pipeline.PipelineInvariants{
 		OrganizationUUID: resp.Pipeline.Organization.Uuid,
@@ -259,13 +260,20 @@ func signWithGraphQL(
 		Repository:       resp.Pipeline.Repository.Url,
 	}
 
+	prettyPipelineInvariants, err := json.MarshalIndent(pipelineInvariants, "", "  ")
+	if err != nil {
+		return fmt.Errorf("couldn't marshal pipeline invariants: %w", err)
+	}
+
+	l.Info("Signing pipeline with invariants:\n%s", prettyPipelineInvariants)
+
 	pipelineYaml := strings.NewReader(resp.Pipeline.Steps.Yaml)
 	parsedPipeline, err := pipeline.Parse(pipelineYaml)
 	if err != nil {
 		return fmt.Errorf("pipeline parsing failed: %v", err)
 	}
 
-	l.Debug("Pipeline parsed successfully: %v", parsedPipeline)
+	debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
 
 	if err := parsedPipeline.Sign(key, &pipelineInvariants); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
@@ -277,15 +285,16 @@ func signWithGraphQL(
 		return enc.Encode(parsedPipeline)
 	}
 
-	l.Info("Updating pipeline online")
-
-	signedPipelineYAML := &strings.Builder{}
-	enc := yaml.NewEncoder(signedPipelineYAML)
+	signedPipelineYamlBuilder := &strings.Builder{}
+	enc := yaml.NewEncoder(signedPipelineYamlBuilder)
 	enc.SetIndent(yamlIndent)
 	if err := enc.Encode(parsedPipeline); err != nil {
 		return fmt.Errorf("couldn't encode signed pipeline: %w", err)
 	}
 
-	_, err = bkgql.UpdatePipeline(ctx, client, resp.Pipeline.Id, signedPipelineYAML.String())
+	signedPipelineYaml := signedPipelineYamlBuilder.String()
+	l.Info("Replacing pipeline with signed version:\n%s", strings.TrimSpace(signedPipelineYaml))
+
+	_, err = bkgql.UpdatePipeline(ctx, client, resp.Pipeline.Id, signedPipelineYaml)
 	return err
 }
