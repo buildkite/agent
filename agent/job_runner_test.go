@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -19,21 +20,35 @@ func TestTruncateEnv(t *testing.T) {
 	assert.Equal(t, 64, len(fmt.Sprintf("FOO=%s\000", env["FOO"])))
 }
 
-func TestValidateRepository(t *testing.T) {
-	pipelineRepo := "github.com/buildkite/test"
-	allowedRepos := []string{}
+func TestValidateJobValue(t *testing.T) {
+	bkTarget := "github.com/buildkite/test"
+	bkTargetRe := regexp.MustCompile("^github.com/buildkite/.*")
+	ghTargetRe := regexp.MustCompile("^github.com/nope/.*")
 
-	// empty allow list
-	err := validateRepository(allowedRepos, pipelineRepo)
-	require.NoError(t, err)
+	tests := []struct {
+		name           string
+		allowedTargets []*regexp.Regexp
+		pipelineTarget string
+		wantErr        bool
+	}{{
+		name:           "No error. Allowed targets no configured.",
+		allowedTargets: []*regexp.Regexp{},
+		pipelineTarget: bkTarget,
+	}, {
+		name:           "No pipeline target match",
+		allowedTargets: []*regexp.Regexp{ghTargetRe},
+		pipelineTarget: bkTarget,
+		wantErr:        true,
+	}, {
+		name:           "Pipeline target match",
+		allowedTargets: []*regexp.Regexp{ghTargetRe, bkTargetRe},
+		pipelineTarget: bkTarget,
+	}}
 
-	// not allowed
-	allowedRepos = append(allowedRepos, "^github.com/nope/.*")
-	err = validateRepository(allowedRepos, pipelineRepo)
-	require.Error(t, err)
-
-	// allowed
-	allowedRepos = append(allowedRepos, "^github.com/buildkite/.*")
-	err = validateRepository(allowedRepos, pipelineRepo)
-	require.NoError(t, err)
+	for _, tc := range tests {
+		err := validateJobValue(tc.allowedTargets, tc.pipelineTarget)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("validateJobValue() error = %v, wantErr = %v", err, tc.wantErr)
+		}
+	}
 }

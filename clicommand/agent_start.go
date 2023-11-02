@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -134,6 +135,7 @@ type AgentStartConfig struct {
 	NoPluginValidation  bool     `cli:"no-plugin-validation"`
 	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
 	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
+	AllowedPlugins      []string `cli:"allowed-plugins" normalize:"list"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -209,6 +211,10 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 
 	if len(asc.AllowedRepositories) > 0 {
 		features = append(features, "allowed-repositories")
+	}
+
+	if len(asc.AllowedPlugins) > 0 {
+		features = append(features, "allowed-plugins")
 	}
 
 	for _, exp := range experiments.Enabled(ctx) {
@@ -542,8 +548,14 @@ var AgentStartCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "allowed-repositories",
 			Value:  &cli.StringSlice{},
-			Usage:  "A comma-separated list of regular expressions representing repositories the agent is allowed to clone (for example, \"^git@github.com:buildkite/.*\" or \"^https://github.com/buildkite/.*\")",
+			Usage:  `A comma-separated list of regular expressions representing repositories the agent is allowed to clone (for example, "^git@github.com:buildkite/.*" or "^https://github.com/buildkite/.*")`,
 			EnvVar: "BUILDKITE_ALLOWED_REPOSITORIES",
+		},
+		cli.StringSliceFlag{
+			Name:   "allowed-plugins",
+			Value:  &cli.StringSlice{},
+			Usage:  `A comma-separated list of regular expressions representing plugins the agent is allowed to use (for example, "^buildkite-plugins/.*$" or "^/var/lib/buildkite-plugins/.*")`,
+			EnvVar: "BUILDKITE_PLUGINSS",
 		},
 		cli.BoolFlag{
 			Name:   "metrics-datadog",
@@ -850,7 +862,6 @@ var AgentStartCommand = cli.Command{
 			PluginsEnabled:                  !cfg.NoPlugins,
 			PluginValidation:                !cfg.NoPluginValidation,
 			LocalHooksEnabled:               !cfg.NoLocalHooks,
-			AllowedRepositories:             cfg.AllowedRepositories,
 			StrictSingleHooks:               cfg.StrictSingleHooks,
 			RunInPty:                        !cfg.NoPTY,
 			ANSITimestamps:                  !cfg.NoANSITimestamps,
@@ -937,6 +948,28 @@ var AgentStartCommand = cli.Command{
 
 		if agentConf.DisconnectAfterIdleTimeout > 0 {
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
+		}
+
+		if len(cfg.AllowedRepositories) > 0 {
+			agentConf.AllowedRepositories = make([]*regexp.Regexp, 0, len(cfg.AllowedRepositories))
+			for _, v := range cfg.AllowedRepositories {
+				r, err := regexp.Compile(v)
+				if err != nil {
+					l.Fatal("Regex %s is allowed-repositories failed to compile: %v", v, err)
+				}
+				agentConf.AllowedRepositories = append(agentConf.AllowedRepositories, r)
+			}
+		}
+
+		if len(cfg.AllowedPlugins) > 0 {
+			agentConf.AllowedPlugins = make([]*regexp.Regexp, 0, len(cfg.AllowedPlugins))
+			for _, v := range cfg.AllowedPlugins {
+				r, err := regexp.Compile(v)
+				if err != nil {
+					l.Fatal("Regex %s in allowed-plugins failed to compile: %v", v, err)
+				}
+				agentConf.AllowedPlugins = append(agentConf.AllowedPlugins, r)
+			}
 		}
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
