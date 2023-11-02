@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
@@ -25,9 +26,17 @@ const (
 	SignalReasonProcessRunError   = "process_run_error"
 )
 
+type missingKeyError struct {
+	signature string
+}
+
+func (e *missingKeyError) Error() string {
+	return fmt.Sprintf("job was signed with signature %q, but no verification key was provided", e.signature)
+}
+
 // Runs the job
 func (r *JobRunner) Run(ctx context.Context) error {
-	r.logger.Info("Starting job %s", r.conf.Job.ID)
+	r.agentLogger.Info("Starting job %s", r.conf.Job.ID)
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
 	defer done()
@@ -46,7 +55,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	if r.conf.Job.RunnableAt != "" {
 		runnableAt, err := time.Parse(time.RFC3339Nano, r.conf.Job.RunnableAt)
 		if err != nil {
-			r.logger.Error("Metric submission failed to parse %s", r.conf.Job.RunnableAt)
+			r.agentLogger.Error("Metric submission failed to parse %s", r.conf.Job.RunnableAt)
 		} else {
 			r.conf.MetricsScope.Timing("queue.duration", r.startedAt.Sub(runnableAt))
 		}
@@ -77,8 +86,8 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	if r.conf.JWKS == nil && job.Step.Signature != nil {
 		r.verificationFailureLogs(
-			fmt.Errorf("job %q was signed with signature %q, but no verification key was provided, so the job can't be verified", job.ID, job.Step.Signature.Value),
 			VerificationBehaviourBlock,
+			&missingKeyError{signature: job.Step.Signature.Value},
 		)
 		exit.Status = -1
 		exit.SignalReason = SignalReasonSignatureRejected
@@ -89,7 +98,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		ise := &invalidSignatureError{}
 		switch err := r.verifyJob(r.conf.JWKS); {
 		case errors.Is(err, ErrNoSignature) || errors.As(err, &ise):
-			r.verificationFailureLogs(err, r.VerificationFailureBehavior)
+			r.verificationFailureLogs(r.VerificationFailureBehavior, err)
 			if r.VerificationFailureBehavior == VerificationBehaviourBlock {
 				exit.Status = -1
 				exit.SignalReason = SignalReasonSignatureRejected
@@ -97,22 +106,24 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			}
 
 		case err != nil: // some other error
-			r.verificationFailureLogs(err, VerificationBehaviourBlock) // errors in verification are always fatal
+			r.verificationFailureLogs(VerificationBehaviourBlock, err) // errors in verification are always fatal
 			exit.Status = -1
 			exit.SignalReason = SignalReasonSignatureRejected
 			return nil
 
 		default: // no error, all good, keep going
-			r.logger.Info("Successfully verified job %s with signature %s", job.ID, job.Step.Signature.Value)
-			r.logStreamer.Process([]byte(fmt.Sprintf("✅ Verified job with signature %s\n", job.Step.Signature.Value)))
+			l := r.agentLogger.WithFields(logger.StringField("jobID", job.ID), logger.StringField("signature", job.Step.Signature.Value))
+			l.Info("Successfully verified job")
+			fmt.Fprintln(r.jobLogs, "~~~ ✅ Job signature verified")
+			fmt.Fprintf(r.jobLogs, "signature: %s\n", job.Step.Signature.Value)
 		}
 	}
 
 	// Validate the repository if the list of allowed repositories is set.
 	err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])
 	if err != nil {
-		r.logStreamer.Process([]byte(fmt.Sprintf("%s", err)))
-		r.logger.Error("Repo %s", err)
+		fmt.Fprintln(r.jobLogs, err.Error())
+		r.agentLogger.Error("Failed to validate repo: %s", err)
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
 		return nil
@@ -120,8 +131,8 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	// Validate the plugins if the list of allowed plugins is set.
 	err = r.checkPlugins(ctx)
 	if err != nil {
-		r.logStreamer.Process([]byte(fmt.Sprintf("%s", err)))
-		r.logger.Error("Plugin %s", err)
+		fmt.Fprintln(r.jobLogs, err.Error())
+		r.agentLogger.Error("Failed to validate plugins: %s", err)
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
 		return nil
@@ -134,9 +145,9 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		ok, err := r.executePreBootstrapHook(ctx, hook)
 		if !ok {
 			// Ensure the Job UI knows why this job resulted in failure
-			r.logStreamer.Process([]byte("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details"))
+			fmt.Fprintln(r.jobLogs, "pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details")
 			// But disclose more information in the agent logs
-			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
+			r.agentLogger.Error("pre-bootstrap hook rejected this job: %s", err)
 
 			exit.Status = -1
 			exit.SignalReason = SignalReasonAgentRefused
@@ -147,12 +158,41 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	// Kick off log streaming and job status checking when the process starts.
 	wg.Add(2)
-	go r.jobLogStreamer(cctx, &wg)
+	go r.streamJobLogsAfterProcessStart(cctx, &wg)
 	go r.jobCancellationChecker(cctx, &wg)
 
 	exit = r.runJob(cctx)
 
 	return nil
+}
+
+func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
+	l := r.agentLogger.WithFields(
+		logger.StringField("jobID", r.conf.Job.ID),
+		logger.StringField("error", err.Error()),
+	)
+	prefix := "+++ ⚠️"
+	if behavior == VerificationBehaviourBlock {
+		prefix = "+++ ⛔"
+	}
+
+	l.Warn("Job verification failed")
+	fmt.Fprintf(r.jobLogs, "%s Job signature verification failed\n", prefix)
+	fmt.Fprintf(r.jobLogs, "error: %s\n", err)
+
+	if errors.Is(err, ErrNoSignature) {
+		fmt.Fprintln(r.jobLogs, "no signature in job")
+	} else if ise := new(invalidSignatureError); errors.As(err, &ise) {
+		fmt.Fprintf(r.jobLogs, "signature: %s\n", r.conf.Job.Step.Signature.Value)
+	} else if mke := new(missingKeyError); errors.As(err, &mke) {
+		fmt.Fprintf(r.jobLogs, "signature: %s\n", mke.signature)
+	}
+
+	if behavior == VerificationBehaviourWarn {
+		l.Warn("Job will be run whether or not it can be verified - this is not recommended.")
+		l.Warn("You can change this behavior with the `job-verification-failure-behavior` agent configuration option.")
+		fmt.Fprintln(r.jobLogs, "Job will be run without verification")
+	}
 }
 
 type processExit struct {
@@ -165,8 +205,8 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	exit := processExit{}
 	// Run the process. This will block until it finishes.
 	if err := r.process.Run(ctx); err != nil {
-		// Send the error as output
-		r.logStreamer.Process([]byte(err.Error()))
+		// Send the error to job logs
+		fmt.Fprintf(r.jobLogs, "Error running job: %s\n", err)
 
 		// The process did not run at all, so make sure it fails
 		return processExit{
@@ -179,13 +219,11 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	// to the user as they may be the caused by errors in the pipeline definition.
 	k8sProcess, ok := r.process.(*kubernetes.Runner)
 	if ok && r.cancelled && !r.stopped && k8sProcess.ClientStateUnknown() {
-		r.logStreamer.Process([]byte(
+		fmt.Fprintln(
+			r.jobLogs,
 			"Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.",
-		))
+		)
 	}
-
-	// Add the final output to the streamer
-	r.logStreamer.Process(r.output.ReadAndTruncate())
 
 	// Collect the finished process' exit status
 	exit.Status = r.process.WaitStatus().ExitStatus()
@@ -211,27 +249,32 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit processExit) {
 	finishedAt := time.Now()
 
-	// Stop the header time streamer. This will block until all the chunks have been uploaded
-	r.headerTimesStreamer.Stop()
+	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
+	// start the process will still be buffered. Also, there may still be logs in the buffer that
+	// were left behind because the uploader goroutine exited before it could flush them.
+	r.logStreamer.Process(r.output.ReadAndTruncate())
 
 	// Stop the log streamer. This will block until all the chunks have been uploaded
 	r.logStreamer.Stop()
 
+	// Stop the header time streamer. This will block until all the chunks have been uploaded
+	r.headerTimesStreamer.Stop()
+
 	// Warn about failed chunks
 	if count := r.logStreamer.FailedChunks(); count > 0 {
-		r.logger.Warn("%d chunks failed to upload for this job", count)
+		r.agentLogger.Warn("%d chunks failed to upload for this job", count)
 	}
 
 	// Wait for the routines that we spun up to finish
-	r.logger.Debug("[JobRunner] Waiting for all other routines to finish")
+	r.agentLogger.Debug("[JobRunner] Waiting for all other routines to finish")
 	wg.Wait()
 
 	// Remove the env file, if any
 	if r.envFile != nil {
 		if err := os.Remove(r.envFile.Name()); err != nil {
-			r.logger.Warn("[JobRunner] Error cleaning up env file: %s", err)
+			r.agentLogger.Warn("[JobRunner] Error cleaning up env file: %s", err)
 		}
-		r.logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
+		r.agentLogger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
 
 	// Write some metrics about the job run
@@ -249,7 +292,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit proces
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
 	r.finishJob(ctx, finishedAt, exit, r.logStreamer.FailedChunks())
 
-	r.logger.Info("Finished job %s", r.conf.Job.ID)
+	r.agentLogger.Info("Finished job %s", r.conf.Job.ID)
 }
 
 // finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
@@ -261,7 +304,7 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit pr
 	r.conf.Job.SignalReason = exit.SignalReason
 	r.conf.Job.ChunksFailedCount = failedChunkCount
 
-	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
+	r.agentLogger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
 		r.conf.Job.ExitStatus, r.conf.Job.Signal, r.conf.Job.SignalReason)
 
 	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
@@ -284,10 +327,10 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit pr
 			// to finish the job forever so we'll just bail out and
 			// go find some more work to do.
 			if response != nil && response.StatusCode == 422 {
-				r.logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
+				r.agentLogger.Warn("Buildkite rejected the call to finish the job (%s)", err)
 				retrier.Break()
 			} else {
-				r.logger.Warn("%s (%s)", err, retrier)
+				r.agentLogger.Warn("%s (%s)", err, retrier)
 			}
 		}
 
@@ -295,16 +338,16 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit pr
 	})
 }
 
-// jobLogStreamer waits for the process to start, then grabs the job output
+// streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
 // every few seconds and sends it back to Buildkite.
-func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
+func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync.WaitGroup) {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Log Streamer")
 	defer done()
 	setStat("🏃 Starting...")
 
 	defer func() {
 		wg.Done()
-		r.logger.Debug("[JobRunner] Routine that processes the log has finished")
+		r.agentLogger.Debug("[JobRunner] Routine that processes the log has finished")
 	}()
 
 	select {
@@ -316,17 +359,8 @@ func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		setStat("📨 Sending process output to log streamer")
 
-		// Send the output of the process to the log streamer
-		// for processing
-		chunk := r.output.ReadAndTruncate()
-		if err := r.logStreamer.Process(chunk); err != nil {
-			r.logger.Error("Could not stream the log output: %v", err)
-			// So far, the only error from logStreamer.Process is if the log has
-			// reached the limit.
-			// Since we're not writing any more, close the buffer, which will
-			// cause future Writes to return an error.
-			r.output.Close()
-		}
+		// Send the output of the process to the log streamer for processing
+		r.logStreamer.Process(r.output.ReadAndTruncate())
 
 		setStat("😴 Sleeping for a bit")
 
@@ -342,6 +376,7 @@ func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
 
 	// The final output after the process has finished is processed in Run().
 }
+
 func (r *JobRunner) CancelAndStop() error {
 	r.cancelLock.Lock()
 	r.stopped = true
@@ -358,7 +393,7 @@ func (r *JobRunner) Cancel() error {
 	}
 
 	if r.process == nil {
-		r.logger.Error("No process to kill")
+		r.agentLogger.Error("No process to kill")
 		return nil
 	}
 
@@ -367,7 +402,12 @@ func (r *JobRunner) Cancel() error {
 		reason = "(agent stopping)"
 	}
 
-	r.logger.Info("Canceling job %s with a grace period of %ds %s", r.conf.Job.ID, r.conf.AgentConfiguration.CancelGracePeriod, reason)
+	r.agentLogger.Info(
+		"Canceling job %s with a grace period of %ds %s",
+		r.conf.Job.ID,
+		r.conf.AgentConfiguration.CancelGracePeriod,
+		reason,
+	)
 
 	r.cancelled = true
 
@@ -379,7 +419,7 @@ func (r *JobRunner) Cancel() error {
 	select {
 	// Grace period for cancelling
 	case <-time.After(time.Second * time.Duration(r.conf.AgentConfiguration.CancelGracePeriod)):
-		r.logger.Info("Job %s hasn't stopped in time, terminating", r.conf.Job.ID)
+		r.agentLogger.Info("Job %s hasn't stopped in time, terminating", r.conf.Job.ID)
 
 		// Terminate the process as we've exceeded our context
 		return r.process.Terminate()

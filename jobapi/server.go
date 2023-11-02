@@ -57,7 +57,8 @@ func (s *Server) Start() error {
 		return fmt.Errorf("starting socket server: %w", err)
 	}
 
-	s.Logger.Commentf("Job API server listening on %s", s.SocketPath)
+	s.Logger.Printf("~~~ Job API")
+	s.Logger.Printf("Server listening on %s", s.SocketPath)
 
 	return nil
 }
