@@ -8,11 +8,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent/v3/internal/bkgql"
 	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
 )
@@ -50,9 +50,7 @@ var (
 		"either provide the pipeline YAML, organization UUID, pipeline UUID, and the repository URL, " +
 			"or provide a GraphQL token to allow them to be retrieved",
 	)
-	ErrNeedsGraphQLToken = errors.New("can't update pipeline online without a GraphQL token")
-	ErrNoGraphQLID       = errors.New("invalid pipeline GraphQL ID")
-	ErrNotFound          = errors.New("pipeline not found")
+	ErrNotFound = errors.New("pipeline not found")
 )
 
 var ToolSignCommand = cli.Command{
@@ -138,74 +136,16 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](context.Background(), c)
 		defer done()
 
-		var (
-			parserInput *pipelineParserInput
-			client      graphql.Client
-			err         error
-		)
-		if cfg.GraphQLToken == "" {
-			parserInput, err = parserInputsFromArgsOrStdin(l, &cfg)
-			if err != nil {
-				return err
-			}
-		} else {
-			client = bkgql.NewClient(cfg.GraphQLToken)
-			parserInput, err = parserInputsFromGraphQL(ctx, l, client, &cfg)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Parse the pipeline
-		parsedPipeline, err := pipeline.Parse(parserInput.reader)
-		if err != nil {
-			return fmt.Errorf("pipeline parsing of %q failed: %v", parserInput.source, err)
-		}
-
-		l.Debug("Pipeline parsed successfully: %v", parsedPipeline)
-
 		key, err := loadSigningKey(&cfg)
 		if err != nil {
 			return fmt.Errorf("couldn't read the signing key file: %w", err)
 		}
 
-		if err := parsedPipeline.Sign(key, &parserInput.pipelineInvariants); err != nil {
-			return fmt.Errorf("couldn't sign pipeline: %w", err)
+		if cfg.GraphQLToken == "" {
+			return signOffline(c, l, key, &cfg)
 		}
 
-		if !cfg.UpdateOnline {
-			enc := yaml.NewEncoder(c.App.Writer)
-			enc.SetIndent(yamlIndent)
-			return enc.Encode(parsedPipeline)
-		}
-
-		if client == nil {
-			return ErrNeedsGraphQLToken
-		}
-
-		if parserInput.pipelineGraphQLID == "" {
-			return ErrUseGraphQL
-		}
-
-		l.Info("Updating pipeline online")
-
-		signedPipelineYAML := &strings.Builder{}
-		enc := yaml.NewEncoder(signedPipelineYAML)
-		enc.SetIndent(yamlIndent)
-		if err := enc.Encode(parsedPipeline); err != nil {
-			return fmt.Errorf("couldn't encode signed pipeline: %w", err)
-		}
-
-		if _, err := bkgql.UpdatePipeline(
-			ctx,
-			client,
-			parserInput.pipelineGraphQLID,
-			signedPipelineYAML.String(),
-		); err != nil {
-			return fmt.Errorf("couldn't update pipeline online: %w", err)
-		}
-
-		return nil
+		return signWithGraphQL(ctx, c, l, key, &cfg)
 	},
 }
 
@@ -217,19 +157,22 @@ func (cfg *ToolSignConfig) signingKeyId() string {
 	return cfg.SigningKeyID
 }
 
-type pipelineParserInput struct {
-	reader             io.Reader
-	source             string
-	pipelineGraphQLID  string
-	pipelineInvariants pipeline.PipelineInvariants
-}
-
-func parserInputsFromArgsOrStdin(
+func signOffline(
+	c *cli.Context,
 	l logger.Logger,
+	key jwk.Key,
 	cfg *ToolSignConfig,
-) (*pipelineParserInput, error) {
+) error {
 	if cfg.OrganizationUUID == "" || cfg.PipelineUUID == "" || cfg.Repository == "" {
-		return nil, ErrUseGraphQL
+		return ErrUseGraphQL
+	}
+
+	pipelineInvariants := pipeline.PipelineInvariants{
+		OrganizationUUID: cfg.OrganizationUUID,
+		OrganizationSlug: cfg.OrganizationSlug,
+		PipelineUUID:     cfg.PipelineUUID,
+		PipelineSlug:     cfg.PipelineSlug,
+		Repository:       cfg.Repository,
 	}
 
 	// Find the pipeline either from STDIN or the first argument
@@ -244,7 +187,7 @@ func parserInputsFromArgsOrStdin(
 
 		file, err := os.Open(cfg.FilePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read file: %w", err)
+			return fmt.Errorf("failed to read file: %w", err)
 		}
 		defer file.Close()
 
@@ -254,45 +197,50 @@ func parserInputsFromArgsOrStdin(
 	case stdin.IsReadable():
 		l.Info("Reading pipeline config from STDIN")
 
-		// Actually read the file from STDIN
 		input = os.Stdin
 		filename = "(stdin)"
 
 	default:
-		return nil, ErrNoPipeline
+		return ErrNoPipeline
 	}
 
-	return &pipelineParserInput{
-		reader: input,
-		source: filename,
-		pipelineInvariants: pipeline.PipelineInvariants{
-			OrganizationUUID: cfg.OrganizationUUID,
-			OrganizationSlug: cfg.OrganizationSlug,
-			PipelineUUID:     cfg.PipelineUUID,
-			PipelineSlug:     cfg.PipelineSlug,
-			Repository:       cfg.Repository,
-		},
-	}, nil
+	parsedPipeline, err := pipeline.Parse(input)
+	if err != nil {
+		return fmt.Errorf("pipeline parsing of %q failed: %v", filename, err)
+	}
+
+	l.Debug("Pipeline parsed successfully: %v", parsedPipeline)
+
+	if err := parsedPipeline.Sign(key, &pipelineInvariants); err != nil {
+		return fmt.Errorf("couldn't sign pipeline: %w", err)
+	}
+
+	enc := yaml.NewEncoder(c.App.Writer)
+	enc.SetIndent(yamlIndent)
+	return enc.Encode(parsedPipeline)
 }
 
-func parserInputsFromGraphQL(
+func signWithGraphQL(
 	ctx context.Context,
+	c *cli.Context,
 	l logger.Logger,
-	client graphql.Client,
+	key jwk.Key,
 	cfg *ToolSignConfig,
-) (*pipelineParserInput, error) {
-	l.Info("Retrieving pipeline from the GraphQL API")
-
+) error {
 	orgPipelineSlug := fmt.Sprintf("%s/%s", cfg.OrganizationSlug, cfg.PipelineSlug)
 	l = l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
 
+	l.Info("Retrieving pipeline from the GraphQL API")
+
+	client := bkgql.NewClient(cfg.GraphQLToken)
+
 	resp, err := bkgql.GetPipeline(ctx, client, orgPipelineSlug)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't retrieve pipeline: %w", err)
+		return fmt.Errorf("couldn't retrieve pipeline: %w", err)
 	}
 
 	if resp.Pipeline.Id == "" {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"%w: organization-slug: %s, pipeline-slug: %s",
 			ErrNotFound,
 			cfg.OrganizationSlug,
@@ -302,16 +250,41 @@ func parserInputsFromGraphQL(
 
 	l.Debug("Pipeline retrieved successfully: %#v", resp)
 
-	return &pipelineParserInput{
-		reader:            strings.NewReader(resp.Pipeline.Steps.Yaml),
-		source:            "(graphql)",
-		pipelineGraphQLID: resp.Pipeline.Id,
-		pipelineInvariants: pipeline.PipelineInvariants{
-			OrganizationUUID: resp.Pipeline.Organization.Uuid,
-			OrganizationSlug: cfg.PipelineSlug,
-			PipelineUUID:     resp.Pipeline.Uuid,
-			PipelineSlug:     cfg.PipelineSlug,
-			Repository:       resp.Pipeline.Repository.Url,
-		},
-	}, nil
+	pipelineInvariants := pipeline.PipelineInvariants{
+		OrganizationUUID: resp.Pipeline.Organization.Uuid,
+		OrganizationSlug: cfg.OrganizationSlug,
+		PipelineUUID:     resp.Pipeline.Uuid,
+		PipelineSlug:     cfg.PipelineSlug,
+		Repository:       resp.Pipeline.Repository.Url,
+	}
+
+	pipelineYaml := strings.NewReader(resp.Pipeline.Steps.Yaml)
+	parsedPipeline, err := pipeline.Parse(pipelineYaml)
+	if err != nil {
+		return fmt.Errorf("pipeline parsing failed: %v", err)
+	}
+
+	l.Debug("Pipeline parsed successfully: %v", parsedPipeline)
+
+	if err := parsedPipeline.Sign(key, &pipelineInvariants); err != nil {
+		return fmt.Errorf("couldn't sign pipeline: %w", err)
+	}
+
+	if !cfg.UpdateOnline {
+		enc := yaml.NewEncoder(c.App.Writer)
+		enc.SetIndent(yamlIndent)
+		return enc.Encode(parsedPipeline)
+	}
+
+	l.Info("Updating pipeline online")
+
+	signedPipelineYAML := &strings.Builder{}
+	enc := yaml.NewEncoder(signedPipelineYAML)
+	enc.SetIndent(yamlIndent)
+	if err := enc.Encode(parsedPipeline); err != nil {
+		return fmt.Errorf("couldn't encode signed pipeline: %w", err)
+	}
+
+	_, err = bkgql.UpdatePipeline(ctx, client, resp.Pipeline.Id, signedPipelineYAML.String())
+	return err
 }
