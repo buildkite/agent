@@ -216,7 +216,9 @@ var (
 		Env: map[string]string{
 			"BUILDKITE_COMMAND":           "echo hello world",
 			"BUILDKITE_ORGANIZATION_SLUG": "buildkite",
+			"BUILDKITE_ORGANIZATION_UUID": "fake-org-uuid",
 			"BUILDKITE_PIPELINE_SLUG":     "agent",
+			"BUILDKITE_PIPELINE_UUID":     "fake-pipeline-uuid",
 			"BUILDKITE_REPO":              "https://github.com/buildkite/agent.git",
 			"DEPLOY":                      "0",
 		},
@@ -231,10 +233,20 @@ var (
 		Env: map[string]string{
 			"BUILDKITE_COMMAND":           "echo hello world",
 			"BUILDKITE_ORGANIZATION_SLUG": "buildkite",
+			"BUILDKITE_ORGANIZATION_UUID": "fake-org-uuid",
 			"BUILDKITE_PIPELINE_SLUG":     "agent",
+			"BUILDKITE_PIPELINE_UUID":     "fake-pipeline-uuid",
 			"BUILDKITE_REPO":              "https://github.com/haxors/agent.git",
 			"DEPLOY":                      "0",
 		},
+	}
+
+	defaultPipelineInvariants = pipeline.PipelineInvariants{
+		OrganizationUUID: "fake-org-uuid",
+		OrganizationSlug: "buildkite",
+		PipelineSlug:     "agent",
+		PipelineUUID:     "fake-pipeline-uuid",
+		Repository:       "https://github.com/buildkite/agent.git",
 	}
 )
 
@@ -480,14 +492,10 @@ func TestJobVerification(t *testing.T) {
 			},
 		},
 		{
-			name:      "when job has pipeline invariants and the sigature is valid, it runs the job",
-			agentConf: agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
-			job:       jobWithPipelineInvariantsInEnv,
-			pipelineInvariants: pipeline.PipelineInvariants{
-				OrganizationSlug: "buildkite",
-				PipelineSlug:     "agent",
-				Repository:       "https://github.com/buildkite/agent.git",
-			},
+			name:                     "when job has pipeline invariants and the sigature is valid, it runs the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithPipelineInvariantsInEnv,
+			pipelineInvariants:       defaultPipelineInvariants,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
@@ -495,14 +503,10 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     "",
 		},
 		{
-			name:      "when job has invalid pipeline invariants, it fails the job",
-			agentConf: agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
-			job:       jobWithInvalidPipelineInvariantsInEnv,
-			pipelineInvariants: pipeline.PipelineInvariants{
-				OrganizationSlug: "buildkite",
-				PipelineSlug:     "agent",
-				Repository:       "https://github.com/buildkite/agent.git",
-			},
+			name:                     "when job has invalid pipeline invariants, it fails the job",
+			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithInvalidPipelineInvariantsInEnv,
+			pipelineInvariants:       defaultPipelineInvariants,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
 			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
