@@ -20,10 +20,13 @@ import (
 type ToolSignConfig struct {
 	FilePath string `cli:"arg:0" label:"upload paths"`
 
-	UpdateOnline bool `cli:"update-online"`
-
+	// These are required to do anything
 	JWKSFilePath string `cli:"jwks-file-path"`
 	SigningKeyID string `cli:"signing-key-id"`
+
+	// These change the behaviour
+	GraphQLToken string `cli:"graphql-token"`
+	UpdateOnline bool   `cli:"update-online"`
 
 	// Pipeline invariants
 	OrganizationSlug string `cli:"organization-slug"`
@@ -31,8 +34,6 @@ type ToolSignConfig struct {
 	PipelineSlug     string `cli:"pipeline-slug"`
 	PipelineUUID     string `cli:"pipeline-uuid"`
 	Repository       string `cli:"repo"`
-
-	GraphQLToken string `cli:"graphql-token"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -66,12 +67,19 @@ This (experimental!) command takes a pipeline in YAML format as input, and annot
 appropriate parts of the pipeline with signatures. This can then be input into the YAML steps
 editor in the Buildkite UI so that the agents running these steps can verify the signatures.`,
 	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:     "graphql-token",
+			Usage:    "A token for the buildkite graphql API. This will be used to populate the pipeline invariants if they are not provided.",
+			EnvVar:   "BUILDKITE_GRAPHQL_TOKEN",
+			Required: false,
+		},
 		cli.BoolFlag{
 			Name:   "update-online",
 			Usage:  "Update the pipeline online after signing it. This can only be used if the GraphQL token is provided.",
 			EnvVar: "BUILDKITE_TOOL_SIGN_UPDATE_ONLINE",
 		},
 
+		// These are required to do anything
 		cli.StringFlag{
 			Name:     "jwks-file-path",
 			Usage:    "Path to a file containing a JWKS.",
@@ -114,13 +122,6 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 			Name:     "repo",
 			Usage:    "The URL of the pipeline's repository, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
 			EnvVar:   "BUILDKITE_REPO",
-			Required: false,
-		},
-
-		cli.StringFlag{
-			Name:     "graphql-token",
-			Usage:    "A token for the buildkite graphql API. This will be used to populate the pipeline invariants if they are not provided.",
-			EnvVar:   "BUILDKITE_GRAPHQL_TOKEN",
 			Required: false,
 		},
 
