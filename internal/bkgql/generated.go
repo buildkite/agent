@@ -14,9 +14,6 @@ import (
 // A pipeline
 type GetPipelinePipeline struct {
 	Id string `json:"id"`
-	// The UUID of the pipeline
-	Uuid         string                          `json:"uuid"`
-	Organization GetPipelinePipelineOrganization `json:"organization"`
 	// The repository for this pipeline
 	Repository GetPipelinePipelineRepository `json:"repository"`
 	Steps      GetPipelinePipelineSteps      `json:"steps"`
@@ -25,31 +22,11 @@ type GetPipelinePipeline struct {
 // GetId returns GetPipelinePipeline.Id, and is useful for accessing the field via an interface.
 func (v *GetPipelinePipeline) GetId() string { return v.Id }
 
-// GetUuid returns GetPipelinePipeline.Uuid, and is useful for accessing the field via an interface.
-func (v *GetPipelinePipeline) GetUuid() string { return v.Uuid }
-
-// GetOrganization returns GetPipelinePipeline.Organization, and is useful for accessing the field via an interface.
-func (v *GetPipelinePipeline) GetOrganization() GetPipelinePipelineOrganization {
-	return v.Organization
-}
-
 // GetRepository returns GetPipelinePipeline.Repository, and is useful for accessing the field via an interface.
 func (v *GetPipelinePipeline) GetRepository() GetPipelinePipelineRepository { return v.Repository }
 
 // GetSteps returns GetPipelinePipeline.Steps, and is useful for accessing the field via an interface.
 func (v *GetPipelinePipeline) GetSteps() GetPipelinePipelineSteps { return v.Steps }
-
-// GetPipelinePipelineOrganization includes the requested fields of the GraphQL type Organization.
-// The GraphQL type's documentation follows.
-//
-// An organization
-type GetPipelinePipelineOrganization struct {
-	// The public UUID for this organization
-	Uuid string `json:"uuid"`
-}
-
-// GetUuid returns GetPipelinePipelineOrganization.Uuid, and is useful for accessing the field via an interface.
-func (v *GetPipelinePipelineOrganization) GetUuid() string { return v.Uuid }
 
 // GetPipelinePipelineRepository includes the requested fields of the GraphQL type Repository.
 // The GraphQL type's documentation follows.
@@ -167,10 +144,6 @@ const GetPipeline_Operation = `
 query GetPipeline ($orgPipelineSlug: ID!) {
 	pipeline(slug: $orgPipelineSlug) {
 		id
-		uuid
-		organization {
-			uuid
-		}
 		repository {
 			url
 		}
