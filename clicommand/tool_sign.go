@@ -282,7 +282,9 @@ func signWithGraphQL(
 	signedPipelineYaml := strings.TrimSpace(signedPipelineYamlBuilder.String())
 	l.Info("Replacing pipeline with signed version:\n%s", signedPipelineYaml)
 
-	updatePipeline, err := promptConfirm(c, cfg, "\n\x1b[1mAre you sure you want to update the pipeline? This may break your builds!\x1b[0m")
+	updatePipeline, err := promptConfirm(
+		c, cfg, "\n\x1b[1mAre you sure you want to update the pipeline? This may break your builds!\x1b[0m",
+	)
 	if err != nil {
 		return fmt.Errorf("couldn't read user input: %w", err)
 	}
