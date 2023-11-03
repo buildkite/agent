@@ -28,6 +28,7 @@ type ToolSignConfig struct {
 	// These change the behaviour
 	GraphQLToken string `cli:"graphql-token"`
 	UpdateOnline bool   `cli:"update-online"`
+	NoConfirm    bool   `cli:"no-confirm"`
 
 	// Pipeline invariants
 	OrganizationSlug string `cli:"organization-slug"`
@@ -78,6 +79,11 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 			Name:   "update-online",
 			Usage:  "Update the pipeline online after signing it. This can only be used if the GraphQL token is provided.",
 			EnvVar: "BUILDKITE_TOOL_SIGN_UPDATE_ONLINE",
+		},
+		cli.BoolFlag{
+			Name:   "no-confirm",
+			Usage:  "Show confirmation prompts before updating the pipeline online.",
+			EnvVar: "BUILDKITE_TOOL_SIGN_NO_CONFIRM",
 		},
 
 		// These are required to do anything
@@ -288,15 +294,15 @@ func signWithGraphQL(
 		return fmt.Errorf("couldn't encode signed pipeline: %w", err)
 	}
 
-	signedPipelineYaml := signedPipelineYamlBuilder.String()
-	l.Info("Replacing pipeline with signed version:\n%s", strings.TrimSpace(signedPipelineYaml))
+	signedPipelineYaml := strings.TrimSpace(signedPipelineYamlBuilder.String())
+	l.Info("Replacing pipeline with signed version:\n%s", signedPipelineYaml)
 
-	cont, err := promptContinue(c, "\nAre you sure you want to update the pipeline online?")
+	updatePipeline, err := promptConfirm(c, cfg, "\n\x1b[1mAre you sure you want to update the pipeline online?\x1b[0m")
 	if err != nil {
 		return fmt.Errorf("couldn't read user input: %w", err)
 	}
 
-	if !cont {
+	if !updatePipeline {
 		l.Info("Aborting without updating pipeline")
 		return nil
 	}
@@ -311,15 +317,21 @@ func signWithGraphQL(
 	return nil
 }
 
-func promptContinue(c *cli.Context, message string) (bool, error) {
-	if _, err := c.App.Writer.Write([]byte(message + " [y/N] ")); err != nil {
+func promptConfirm(c *cli.Context, cfg *ToolSignConfig, message string) (bool, error) {
+	if cfg.NoConfirm {
+		return true, nil
+	}
+
+	if _, err := fmt.Fprintf(c.App.Writer, "%s [y/N]: ", message); err != nil {
 		return false, err
 	}
+
 	var input string
 	if _, err := fmt.Fscanln(os.Stdin, &input); err != nil {
 		return false, err
 	}
 	input = strings.ToLower(input)
+
 	switch input {
 	case "y", "yes":
 		return true, nil
