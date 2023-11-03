@@ -50,7 +50,7 @@ var (
 	ErrNoPipeline = errors.New("no pipeline file found")
 	ErrUseGraphQL = errors.New(
 		"either provide the pipeline YAML, organization UUID, pipeline UUID, and the repository URL, " +
-			"or provide a GraphQL token to allow them to be retrieved",
+			"or provide a GraphQL token to allow them to be retrieved from the Buildkite API",
 	)
 	ErrNotFound = errors.New("pipeline not found")
 )
@@ -295,13 +295,13 @@ func signWithGraphQL(
 	signedPipelineYaml := signedPipelineYamlBuilder.String()
 	l.Info("Replacing pipeline with signed version:\n%s", strings.TrimSpace(signedPipelineYaml))
 
-	cont, err := promptContinue(c, "Are you sure you want to update the pipeline online?")
+	cont, err := promptContinue(c, "\nAre you sure you want to update the pipeline online?")
 	if err != nil {
 		return fmt.Errorf("couldn't read user input: %w", err)
 	}
 
 	if !cont {
-		l.Info("Aborting without updateing pipeline")
+		l.Info("Aborting without updating pipeline")
 		return nil
 	}
 
