@@ -26,7 +26,7 @@ type ToolSignConfig struct {
 
 	// These change the behaviour
 	GraphQLToken string `cli:"graphql-token"`
-	UpdateOnline bool   `cli:"update-online"`
+	Update       bool   `cli:"update"`
 	NoConfirm    bool   `cli:"no-confirm"`
 
 	// Needed for to use GraphQL API
@@ -75,9 +75,9 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 			Required: false,
 		},
 		cli.BoolFlag{
-			Name:   "update-online",
+			Name:   "update",
 			Usage:  "Update the pipeline online after signing it. This can only be used if the GraphQL token is provided.",
-			EnvVar: "BUILDKITE_TOOL_SIGN_UPDATE_ONLINE",
+			EnvVar: "BUILDKITE_TOOL_SIGN_UPDATE",
 		},
 		cli.BoolFlag{
 			Name:   "no-confirm",
@@ -252,7 +252,7 @@ func signWithGraphQL(
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
-	if !cfg.UpdateOnline {
+	if !cfg.Update {
 		enc := yaml.NewEncoder(c.App.Writer)
 		enc.SetIndent(yamlIndent)
 		return enc.Encode(parsedPipeline)
