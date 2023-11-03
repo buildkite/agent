@@ -198,7 +198,14 @@ func signOffline(
 		return fmt.Errorf("pipeline parsing of %q failed: %v", filename, err)
 	}
 
-	l.Debug("Pipeline parsed successfully: %v", parsedPipeline)
+	if cfg.Debug {
+		enc := yaml.NewEncoder(c.App.Writer)
+		enc.SetIndent(yamlIndent)
+		if err := enc.Encode(parsedPipeline); err != nil {
+			return fmt.Errorf("couldn't encode pipeline: %w", err)
+		}
+		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
+	}
 
 	if err := parsedPipeline.Sign(key, cfg.Repository); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
@@ -246,7 +253,14 @@ func signWithGraphQL(
 		return fmt.Errorf("pipeline parsing failed: %v", err)
 	}
 
-	debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
+	if cfg.Debug {
+		enc := yaml.NewEncoder(c.App.Writer)
+		enc.SetIndent(yamlIndent)
+		if err := enc.Encode(parsedPipeline); err != nil {
+			return fmt.Errorf("couldn't encode pipeline: %w", err)
+		}
+		debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
+	}
 
 	if err := parsedPipeline.Sign(key, resp.Pipeline.Repository.Url); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
