@@ -29,12 +29,12 @@ type ToolSignConfig struct {
 	UpdateOnline bool   `cli:"update-online"`
 	NoConfirm    bool   `cli:"no-confirm"`
 
-	// Pipeline invariants
+	// Needed for to use GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
-	OrganizationUUID string `cli:"organization-uuid"`
 	PipelineSlug     string `cli:"pipeline-slug"`
-	PipelineUUID     string `cli:"pipeline-uuid"`
-	Repository       string `cli:"repo"`
+
+	// Added to signature
+	Repository string `cli:"repo"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -49,8 +49,8 @@ const yamlIndent = 2
 var (
 	ErrNoPipeline = errors.New("no pipeline file found")
 	ErrUseGraphQL = errors.New(
-		"either provide the pipeline YAML, organization UUID, pipeline UUID, and the repository URL, " +
-			"or provide a GraphQL token to allow them to be retrieved from the Buildkite API",
+		"either provide the pipeline YAML, and the repository URL, " +
+			"or provide a GraphQL token to allow them to be retrieved from the Buildkite",
 	)
 	ErrNotFound = errors.New("pipeline not found")
 )
@@ -99,31 +99,21 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 			Required: true,
 		},
 
-		// Pipeline invariants
+		// These are required to use the GraphQL API
 		cli.StringFlag{
 			Name:     "organization-slug",
 			Usage:    "The organization slug to use when signing the pipeline.",
 			EnvVar:   "BUILDKITE_ORGANIZATION_SLUG",
-			Required: true,
-		},
-		cli.StringFlag{
-			Name:     "organization-uuid",
-			Usage:    "The UUID of the organization, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
-			EnvVar:   "BUILDKITE_ORGANIZATION_UUID",
 			Required: false,
 		},
 		cli.StringFlag{
 			Name:     "pipeline-slug",
 			Usage:    "The pipeline slug to use when signing the pipeline.",
 			EnvVar:   "BUILDKITE_PIPELINE_SLUG",
-			Required: true,
-		},
-		cli.StringFlag{
-			Name:     "pipeline-uuid",
-			Usage:    "The UUID of the pipeline, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
-			EnvVar:   "BUILDKITE_PIPELINE_UUID",
 			Required: false,
 		},
+
+		// Added to signature
 		cli.StringFlag{
 			Name:     "repo",
 			Usage:    "The URL of the pipeline's repository, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
@@ -170,7 +160,7 @@ func signOffline(
 	key jwk.Key,
 	cfg *ToolSignConfig,
 ) error {
-	if cfg.OrganizationUUID == "" || cfg.PipelineUUID == "" || cfg.Repository == "" {
+	if cfg.Repository == "" {
 		return ErrUseGraphQL
 	}
 
@@ -278,7 +268,7 @@ func signWithGraphQL(
 	signedPipelineYaml := strings.TrimSpace(signedPipelineYamlBuilder.String())
 	l.Info("Replacing pipeline with signed version:\n%s", signedPipelineYaml)
 
-	updatePipeline, err := promptConfirm(c, cfg, "\n\x1b[1mAre you sure you want to update the pipeline online?\x1b[0m")
+	updatePipeline, err := promptConfirm(c, cfg, "\n\x1b[1mAre you sure you want to update the pipeline? This may break your builds!\x1b[0m")
 	if err != nil {
 		return fmt.Errorf("couldn't read user input: %w", err)
 	}
