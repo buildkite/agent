@@ -243,8 +243,6 @@ var (
 
 	defaultPipelineInvariants = pipeline.PipelineInvariants{
 		OrganizationUUID: "fake-org-uuid",
-		OrganizationSlug: "buildkite",
-		PipelineSlug:     "agent",
 		PipelineUUID:     "fake-pipeline-uuid",
 		Repository:       "https://github.com/buildkite/agent.git",
 	}

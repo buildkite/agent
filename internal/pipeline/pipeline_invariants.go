@@ -9,9 +9,7 @@ import (
 // in a pipeline. These will be signed.
 type PipelineInvariants struct {
 	OrganizationUUID string
-	OrganizationSlug string
 	PipelineUUID     string
-	PipelineSlug     string
 	Repository       string
 }
 

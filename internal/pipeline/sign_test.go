@@ -44,9 +44,9 @@ func TestSignVerify(t *testing.T) {
 	}
 
 	pInv := &PipelineInvariants{
-		OrganizationSlug: "dummy-org",
-		PipelineSlug:     "dummy-pipeline",
-		Repository:       "dummy-repo",
+		OrganizationUUID: "fake-org-uuid",
+		PipelineUUID:     "fake-pipeline-uuid",
+		Repository:       "fake-repo",
 	}
 
 	stepWithInvariants := &CommandStepWithPipelineInvariants{
@@ -66,7 +66,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS256,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..KuHj6cP5rukGDZXED-WV_gUwEfuwz8O2TdaaGQ561ck",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..IFBv0t8CPDVJya5u4_7-o6Ug0HaY160RNypsLDmD60Q",
 		},
 		{
 			name: "HMAC-SHA384",
@@ -74,7 +74,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS384,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..RsUutmyASiroPPLTrU6Z9XrWK2yivAUTAQFc8JK4QhwFECm3uT-ecjAd_8WSbvzJ",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzM4NCIsImtpZCI6ImNoYXJ0cmV1c2UifQ..KjmP9B1uYxiqu64EaBCTM3IzdNSDas2iGbEc1MkVN8fl_rFW-10YXjhBc96o0-aN",
 		},
 		{
 			name: "HMAC-SHA512",
@@ -82,7 +82,7 @@ func TestSignVerify(t *testing.T) {
 				return jwkutil.NewSymmetricKeyPairFromString(keyID, "alpacas", alg)
 			},
 			alg:                            jwa.HS512,
-			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..9wOLeTecFAe3BgyFpoGABaSTgBwfkeacFziPJIP9AjQSUSvj4Xm1fb15HfW9Q0KhaIMU9r11BV2cHu5lKmzAOQ",
+			expectedDeterministicSignature: "eyJhbGciOiJIUzUxMiIsImtpZCI6ImNoYXJ0cmV1c2UifQ..NRxT7Dngrho1EV8iyDnkZZejpjbuEkOCgbx_BNsc5AiireEQvN9Dhzy3KQwbF48F7JfksKd7MDpf5RYDBWQxcw",
 		},
 		{
 			name:           "RSA-PSS 256",

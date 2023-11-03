@@ -279,8 +279,6 @@ var PipelineUploadCommand = cli.Command{
 
 			// we populate this with env vars whether or not interpolation is enabled, so we can't use `environ`
 			pInv := &pipeline.PipelineInvariants{
-				OrganizationSlug: os.Getenv("BUILDKITE_ORGANIZATION_SLUG"),
-				PipelineSlug:     os.Getenv("BUILDKITE_PIPELINE_SLUG"),
 				OrganizationUUID: os.Getenv("BUILDKITE_ORGANIZATION_UUID"),
 				PipelineUUID:     os.Getenv("BUILDKITE_PIPELINE_UUID"),
 				Repository:       os.Getenv("BUILDKITE_REPO"),

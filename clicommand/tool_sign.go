@@ -171,9 +171,7 @@ func signOffline(
 
 	pipelineInvariants := pipeline.PipelineInvariants{
 		OrganizationUUID: cfg.OrganizationUUID,
-		OrganizationSlug: cfg.OrganizationSlug,
 		PipelineUUID:     cfg.PipelineUUID,
-		PipelineSlug:     cfg.PipelineSlug,
 		Repository:       cfg.Repository,
 	}
 
@@ -254,9 +252,7 @@ func signWithGraphQL(
 
 	pipelineInvariants := pipeline.PipelineInvariants{
 		OrganizationUUID: resp.Pipeline.Organization.Uuid,
-		OrganizationSlug: cfg.OrganizationSlug,
 		PipelineUUID:     resp.Pipeline.Uuid,
-		PipelineSlug:     cfg.PipelineSlug,
 		Repository:       resp.Pipeline.Repository.Url,
 	}
 

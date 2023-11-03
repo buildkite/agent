@@ -45,9 +45,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	stepWithInvariants := &pipeline.CommandStepWithPipelineInvariants{
 		CommandStep: step,
 		PipelineInvariants: pipeline.PipelineInvariants{
-			OrganizationSlug: r.conf.Job.Env["BUILDKITE_ORGANIZATION_SLUG"],
 			OrganizationUUID: r.conf.Job.Env["BUILDKITE_ORGANIZATION_UUID"],
-			PipelineSlug:     r.conf.Job.Env["BUILDKITE_PIPELINE_SLUG"],
 			PipelineUUID:     r.conf.Job.Env["BUILDKITE_PIPELINE_UUID"],
 			Repository:       r.conf.Job.Env["BUILDKITE_REPO"],
 		},
