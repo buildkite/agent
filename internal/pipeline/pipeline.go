@@ -126,6 +126,6 @@ func (p *Pipeline) interpolateEnvBlock(envMap *env.Environment) error {
 // plugin configurations and the pipeline "env". Parts of the pipeline are
 // mutated directly, so an error part-way through may leave some steps
 // un-signed.
-func (p *Pipeline) Sign(key jwk.Key, inv *PipelineInvariants) error {
-	return p.Steps.sign(key, p.Env.ToMap(), inv)
+func (p *Pipeline) Sign(key jwk.Key, repo string) error {
+	return p.Steps.sign(key, p.Env.ToMap(), repo)
 }

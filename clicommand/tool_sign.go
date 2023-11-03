@@ -2,7 +2,6 @@ package clicommand
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -175,12 +174,6 @@ func signOffline(
 		return ErrUseGraphQL
 	}
 
-	pipelineInvariants := pipeline.PipelineInvariants{
-		OrganizationUUID: cfg.OrganizationUUID,
-		PipelineUUID:     cfg.PipelineUUID,
-		Repository:       cfg.Repository,
-	}
-
 	// Find the pipeline either from STDIN or the first argument
 	var (
 		input    io.Reader
@@ -217,7 +210,7 @@ func signOffline(
 
 	l.Debug("Pipeline parsed successfully: %v", parsedPipeline)
 
-	if err := parsedPipeline.Sign(key, &pipelineInvariants); err != nil {
+	if err := parsedPipeline.Sign(key, cfg.Repository); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
@@ -255,19 +248,7 @@ func signWithGraphQL(
 	}
 
 	debugL.Debug("Pipeline retrieved successfully: %#v", resp)
-
-	pipelineInvariants := pipeline.PipelineInvariants{
-		OrganizationUUID: resp.Pipeline.Organization.Uuid,
-		PipelineUUID:     resp.Pipeline.Uuid,
-		Repository:       resp.Pipeline.Repository.Url,
-	}
-
-	prettyPipelineInvariants, err := json.MarshalIndent(pipelineInvariants, "", "  ")
-	if err != nil {
-		return fmt.Errorf("couldn't marshal pipeline invariants: %w", err)
-	}
-
-	l.Info("Signing pipeline with invariants:\n%s", prettyPipelineInvariants)
+	l.Info("Signing pipeline with the repository URL:\n%s", resp.Pipeline.Repository.Url)
 
 	pipelineYaml := strings.NewReader(resp.Pipeline.Steps.Yaml)
 	parsedPipeline, err := pipeline.Parse(pipelineYaml)
@@ -277,7 +258,7 @@ func signWithGraphQL(
 
 	debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
 
-	if err := parsedPipeline.Sign(key, &pipelineInvariants); err != nil {
+	if err := parsedPipeline.Sign(key, resp.Pipeline.Repository.Url); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
