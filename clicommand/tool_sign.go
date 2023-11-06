@@ -133,6 +133,8 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](context.Background(), c)
 		defer done()
 
+		l.Warn("Pipeline signing is experimental and the user interface might change!")
+
 		key, err := loadSigningKey(&cfg)
 		if err != nil {
 			return fmt.Errorf("couldn't read the signing key file: %w", err)

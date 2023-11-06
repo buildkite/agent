@@ -275,7 +275,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if cfg.JWKSFilePath != "" {
-			l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
+			l.Warn("Pipeline signing is experimental and the user interface might change!")
 
 			key, err := loadSigningKey(&cfg)
 			if err != nil {
