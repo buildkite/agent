@@ -102,13 +102,13 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 		// These are required to use the GraphQL API
 		cli.StringFlag{
 			Name:     "organization-slug",
-			Usage:    "The organization slug to use to talk to the GraphQL API.",
+			Usage:    "The organization slug. Used to connect to the GraphQL API.",
 			EnvVar:   "BUILDKITE_ORGANIZATION_SLUG",
 			Required: false,
 		},
 		cli.StringFlag{
 			Name:     "pipeline-slug",
-			Usage:    "The pipeline slug to use when to talk to the GraphQL API.",
+			Usage:    "The pipeline slug. Used to connect to the GraphQL API.",
 			EnvVar:   "BUILDKITE_PIPELINE_SLUG",
 			Required: false,
 		},
