@@ -16,7 +16,7 @@ import (
 type ToolKeygenConfig struct {
 	Alg               string `cli:"alg" validate:"required"`
 	KeyID             string `cli:"key-id"`
-	PrivateKeySetFile string `cli:"private-keyset-file" normalize:"filepath"`
+	PrivateKeysetFile string `cli:"private-keyset-file" normalize:"filepath"`
 	PublicKeysetFile  string `cli:"public-keyset-file" normalize:"filepath"`
 
 	NoColor     bool     `cli:"no-color"`
@@ -93,21 +93,21 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 			l.Fatal("Failed to generate key pair: %v", err)
 		}
 
-		if cfg.PrivateKeySetFile == "" {
-			cfg.PrivateKeySetFile = fmt.Sprintf("./%s-%s-private.json", cfg.Alg, cfg.KeyID)
+		if cfg.PrivateKeysetFile == "" {
+			cfg.PrivateKeysetFile = fmt.Sprintf("./%s-%s-private.json", cfg.Alg, cfg.KeyID)
 		}
 
 		if cfg.PublicKeysetFile == "" {
 			cfg.PublicKeysetFile = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
 		}
 
-		l.Info("Writing private key set to %s...", cfg.PrivateKeySetFile)
+		l.Info("Writing private key set to %s...", cfg.PrivateKeysetFile)
 		pKey, err := json.Marshal(priv)
 		if err != nil {
 			l.Fatal("Failed to marshal private key: %v", err)
 		}
 
-		err = writeIfNotExists(cfg.PrivateKeySetFile, pKey)
+		err = writeIfNotExists(cfg.PrivateKeysetFile, pKey)
 		if err != nil {
 			l.Fatal("Failed to write private key file: %v", err)
 		}
