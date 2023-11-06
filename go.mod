@@ -10,7 +10,7 @@ require (
 	github.com/DrJosh9000/zzglob v0.0.17
 	github.com/aws/aws-sdk-go v1.47.0
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
-	github.com/buildkite/bintest/v3 v3.1.1
+	github.com/buildkite/bintest/v3 v3.2.0
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/roko v1.1.1
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
