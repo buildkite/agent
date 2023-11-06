@@ -190,7 +190,7 @@ func signOffline(
 
 	parsedPipeline, err := pipeline.Parse(input)
 	if err != nil {
-		return fmt.Errorf("pipeline parsing of %q failed: %v", filename, err)
+		return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
 	}
 
 	if cfg.Debug {
