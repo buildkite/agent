@@ -55,7 +55,7 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 		},
 		cli.StringFlag{
 			Name:   "private-keyset-filename",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_KEY_FILENAME",
+			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_KEYSET_FILENAME",
 			Usage:  "The filename to write the private key to. Defaults to a name based on the key id in the current directory",
 		},
 		cli.StringFlag{
