@@ -14,10 +14,10 @@ import (
 )
 
 type ToolKeygenConfig struct {
-	Alg                   string `cli:"alg" validate:"required"`
-	KeyID                 string `cli:"key-id"`
-	PrivateKeySetFilename string `cli:"private-keyset-filename" normalize:"filepath"`
-	PublicKeysetFilename  string `cli:"public-keyset-filename" normalize:"filepath"`
+	Alg               string `cli:"alg" validate:"required"`
+	KeyID             string `cli:"key-id"`
+	PrivateKeySetFile string `cli:"private-keyset-file" normalize:"filepath"`
+	PublicKeysetFile  string `cli:"public-keyset-file" normalize:"filepath"`
 
 	NoColor     bool     `cli:"no-color"`
 	Debug       bool     `cli:"debug"`
@@ -54,13 +54,13 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 			Usage:  "The ID to use for the keys generated. If none is provided, a random one will be generated",
 		},
 		cli.StringFlag{
-			Name:   "private-keyset-filename",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_KEYSET_FILENAME",
+			Name:   "private-keyset-file",
+			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_KEYSET_FILE",
 			Usage:  "The filename to write the private key to. Defaults to a name based on the key id in the current directory",
 		},
 		cli.StringFlag{
-			Name:   "public-keyset-filename",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_PUBLIC_KEYSET_FILENAME",
+			Name:   "public-keyset-file",
+			EnvVar: "BUILDKITE_AGENT_KEYGEN_PUBLIC_KEYSET_FILE",
 			Usage:  "The filename to write the public keyset to. Defaults to a name based on the key id in the current directory",
 		},
 
@@ -93,32 +93,32 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 			l.Fatal("Failed to generate key pair: %v", err)
 		}
 
-		if cfg.PrivateKeySetFilename == "" {
-			cfg.PrivateKeySetFilename = fmt.Sprintf("./%s-%s-private.json", cfg.Alg, cfg.KeyID)
+		if cfg.PrivateKeySetFile == "" {
+			cfg.PrivateKeySetFile = fmt.Sprintf("./%s-%s-private.json", cfg.Alg, cfg.KeyID)
 		}
 
-		if cfg.PublicKeysetFilename == "" {
-			cfg.PublicKeysetFilename = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
+		if cfg.PublicKeysetFile == "" {
+			cfg.PublicKeysetFile = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
 		}
 
-		l.Info("Writing private key set to %s...", cfg.PrivateKeySetFilename)
+		l.Info("Writing private key set to %s...", cfg.PrivateKeySetFile)
 		pKey, err := json.Marshal(priv)
 		if err != nil {
 			l.Fatal("Failed to marshal private key: %v", err)
 		}
 
-		err = writeIfNotExists(cfg.PrivateKeySetFilename, pKey)
+		err = writeIfNotExists(cfg.PrivateKeySetFile, pKey)
 		if err != nil {
 			l.Fatal("Failed to write private key file: %v", err)
 		}
 
-		l.Info("Writing public key set to %s...", cfg.PublicKeysetFilename)
+		l.Info("Writing public key set to %s...", cfg.PublicKeysetFile)
 		pubKey, err := json.Marshal(pub)
 		if err != nil {
 			l.Fatal("Failed to marshal private key: %v", err)
 		}
 
-		err = writeIfNotExists(cfg.PublicKeysetFilename, pubKey)
+		err = writeIfNotExists(cfg.PublicKeysetFile, pubKey)
 		if err != nil {
 			l.Fatal("Failed to write private key file: %v", err)
 		}
