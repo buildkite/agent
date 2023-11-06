@@ -265,7 +265,7 @@ func TestJobVerification(t *testing.T) {
 	}{
 		{
 			name:                     "when job signature is invalid, and JobVerificationFailureBehaviour is block, it refuses the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas), // different signing and verification keys
@@ -277,7 +277,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is invalid, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourWarn},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourWarn},
 			job:                      job,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas), // different signing and verification keys
@@ -288,7 +288,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is valid, it runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -299,7 +299,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is valid and there are no plugins, it runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithNoPlugins,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -310,7 +310,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is valid and plugins is null, it runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithNullPlugins,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -321,7 +321,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is missing, and JobVerificationFailureBehaviour is block, it refuses the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               nil,
@@ -333,7 +333,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is missing, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourWarn},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourWarn},
 			job:                      job,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               nil,
@@ -344,7 +344,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step signature matches, but the job doesn't match the step, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedStepAndJob,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -359,7 +359,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step signature matches, but the plugins are missing from the job, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMissingPlugins,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -374,7 +374,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step signature matches, but the plugins doesn't match the step, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedPlugins,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -404,7 +404,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step has a signature, but the env does not match, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMismatchedEnv,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -419,7 +419,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step has a signature, but the step env is not in the job env, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithStepEnvButNoCorrespondingJobEnv,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -434,7 +434,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step has a signature, but the pipeline env is not in the job env, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithPipelineEnvButNoCorrespondingJobEnv,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -449,7 +449,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job signature is valid, and there is a valid matrix permutation, it runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMatrix,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -460,7 +460,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step signature matches, but the matrix permutation isn't valid, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithInvalidMatrixPermutation,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -475,7 +475,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step signature matches, but the post-matrix env doesn't match, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithMatrixMismatch,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -490,7 +490,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job has pipeline invariants and the sigature is valid, it runs the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithPipelineInvariantsInEnv,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -501,7 +501,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when job has invalid pipeline invariants, it fails the job",
-			agentConf:                agent.AgentConfiguration{JobVerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithInvalidPipelineInvariantsInEnv,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),

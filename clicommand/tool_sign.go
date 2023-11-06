@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/bkgql"
+	"github.com/buildkite/agent/v3/internal/jwkutil"
 	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
@@ -18,16 +19,16 @@ import (
 )
 
 type ToolSignConfig struct {
-	FilePath string `cli:"arg:0" label:"upload paths"`
-
-	// These are required to do anything
-	JWKSFilePath string `cli:"jwks-file-path"`
-	SigningKeyID string `cli:"signing-key-id"`
+	PipelineFile string `cli:"arg:0" label:"pipeline file"`
 
 	// These change the behaviour
 	GraphQLToken string `cli:"graphql-token"`
 	Update       bool   `cli:"update"`
 	NoConfirm    bool   `cli:"no-confirm"`
+
+	// Used for signing
+	JWKSFile  string `cli:"jwks-file"`
+	JWKSKeyID string `cli:"jwks-key-id"`
 
 	// Needed for to use GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
@@ -85,18 +86,18 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 			EnvVar: "BUILDKITE_TOOL_SIGN_NO_CONFIRM",
 		},
 
-		// These are required to do anything
+		// Used for signing
 		cli.StringFlag{
-			Name:     "jwks-file-path",
+			Name:     "jwks-file",
 			Usage:    "Path to a file containing a JWKS.",
-			EnvVar:   "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
+			EnvVar:   "BUILDKITE_AGENT_JWKS_FILE",
 			Required: true,
 		},
 		cli.StringFlag{
-			Name:     "signing-key-id",
-			Usage:    "The JWKS key ID to use when signing the pipeline.",
-			EnvVar:   "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
-			Required: true,
+			Name:     "jwks-key-id",
+			Usage:    "The JWKS key ID to use when signing the pipeline. If none is provided and the JWKS file contains only one key, that key will be used.",
+			EnvVar:   "BUILDKITE_AGENT_JWKS_KEY_ID",
+			Required: false,
 		},
 
 		// These are required to use the GraphQL API
@@ -135,7 +136,7 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 
 		l.Warn("Pipeline signing is experimental and the user interface might change!")
 
-		key, err := loadSigningKey(&cfg)
+		key, err := jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
 		if err != nil {
 			return fmt.Errorf("couldn't read the signing key file: %w", err)
 		}
@@ -146,14 +147,6 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 
 		return signWithGraphQL(ctx, c, l, key, &cfg)
 	},
-}
-
-func (cfg *ToolSignConfig) jwksFilePath() string {
-	return cfg.JWKSFilePath
-}
-
-func (cfg *ToolSignConfig) signingKeyId() string {
-	return cfg.SigningKeyID
 }
 
 func signOffline(
@@ -173,17 +166,17 @@ func signOffline(
 	)
 
 	switch {
-	case cfg.FilePath != "":
-		l.Info("Reading pipeline config from %q", cfg.FilePath)
+	case cfg.PipelineFile != "":
+		l.Info("Reading pipeline config from %q", cfg.PipelineFile)
 
-		file, err := os.Open(cfg.FilePath)
+		file, err := os.Open(cfg.PipelineFile)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
 		defer file.Close()
 
 		input = file
-		filename = cfg.FilePath
+		filename = cfg.PipelineFile
 
 	case stdin.IsReadable():
 		l.Info("Reading pipeline config from STDIN")

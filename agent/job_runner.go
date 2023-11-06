@@ -175,7 +175,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	}
 
 	var err error
-	r.VerificationFailureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.JobVerificationFailureBehaviour)
+	r.VerificationFailureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.VerificationFailureBehaviour)
 	if err != nil {
 		return nil, fmt.Errorf("setting no signature behavior: %w", err)
 	}
@@ -498,12 +498,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	}
 
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
-	if r.conf.AgentConfiguration.JobSigningJWKSPath != "" {
-		env["BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH"] = r.conf.AgentConfiguration.JobSigningJWKSPath
+	if r.conf.AgentConfiguration.SigningJWKSFile != "" {
+		env["BUILDKITE_AGENT_JWKS_FILE"] = r.conf.AgentConfiguration.SigningJWKSFile
 	}
 
-	if r.conf.AgentConfiguration.JobSigningKeyID != "" {
-		env["BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID"] = r.conf.AgentConfiguration.JobSigningKeyID
+	if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
+		env["BUILDKITE_AGENT_JWKS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKeyID
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation

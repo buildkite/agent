@@ -43,9 +43,10 @@ as for signing, and the public for verification. The keysets are written in JWKS
 For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:   "alg",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_ALG",
-			Usage:  fmt.Sprintf("The JWS signing algorithm to use for the key pair. Valid algorithms are: %v", ValidSigningAlgorithms),
+			Name:     "alg",
+			EnvVar:   "BUILDKITE_AGENT_KEYGEN_ALG",
+			Usage:    fmt.Sprintf("The JWS signing algorithm to use for the key pair. Valid algorithms are: %v", jwkutil.ValidSigningAlgorithms),
+			Required: true,
 		},
 		cli.StringFlag{
 			Name:   "key-id",
@@ -83,8 +84,8 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 
 		sigAlg := jwa.SignatureAlgorithm(cfg.Alg)
 
-		if !slices.Contains(ValidSigningAlgorithms, sigAlg) {
-			l.Fatal("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, ValidSigningAlgorithms)
+		if !slices.Contains(jwkutil.ValidSigningAlgorithms, sigAlg) {
+			l.Fatal("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
 		}
 
 		priv, pub, err := jwkutil.NewKeyPair(cfg.KeyID, sigAlg)
@@ -124,7 +125,7 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 
 		l.Info("Done! Enjoy your new keys ^_^")
 
-		if slices.Contains(ValidOctetAlgorithms, sigAlg) {
+		if slices.Contains(jwkutil.ValidOctetAlgorithms, sigAlg) {
 			l.Info("Note: Because you're using the %s algorithm, which is symmetric, the public and private keys are identical", sigAlg)
 		}
 	},

@@ -74,11 +74,11 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
-	JobSigningJWKSPath string `cli:"job-signing-jwks-path" normalize:"filepath"`
-	JobSigningKeyID    string `cli:"job-signing-key-id"`
+	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
+	SigningJWKSKeyID string `cli:"signing-jwks-key-id"`
 
-	JobVerificationJWKSPath        string `cli:"job-verification-jwks-path" normalize:"filepath"`
-	JobVerificationFailureBehavior string `cli:"job-verification-failure-behavior"`
+	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
+	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
 
 	AcquireJob                 string `cli:"acquire-job"`
 	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
@@ -605,22 +605,22 @@ var AgentStartCommand = cli.Command{
 			Value:  "buildkite-agent",
 		},
 		cli.StringFlag{
-			Name:   "job-verification-jwks-path",
+			Name:   "verification-jwks-file",
 			Usage:  "EXPERIMENTAL: Path to a file containing a JSON Web Key Set (JWKS), used to verify job signatures. ",
-			EnvVar: "BUILDKITE_AGENT_JWKS_FILE_PATH",
+			EnvVar: "BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
 		},
 		cli.StringFlag{
-			Name:   "job-signing-jwks-path",
+			Name:   "signing-jwks-file",
 			Usage:  "EXPERIMENTAL: Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_FILE",
 		},
 		cli.StringFlag{
-			Name:   "job-signing-key-id",
-			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
+			Name:   "signing-jwks-key-id",
+			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. If ommitted, and the signing JWKS conatins only one key, that key will be used.",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID",
 		},
 		cli.StringFlag{
-			Name:   "job-verification-failure-behavior",
+			Name:   "verification-failure-behavior",
 			Value:  agent.VerificationBehaviourBlock,
 			Usage:  fmt.Sprintf("EXPERIMENTAL: The behavior when a job is received without a signature. One of: %v. Defaults to %s", verificationFailureBehaviors, agent.VerificationBehaviourBlock),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
@@ -697,11 +697,11 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("failed to unset config from environment: %w", err)
 		}
 
-		if cfg.JobVerificationJWKSPath != "" {
-			if !slices.Contains(verificationFailureBehaviors, cfg.JobVerificationFailureBehavior) {
+		if cfg.VerificationJWKSFile != "" {
+			if !slices.Contains(verificationFailureBehaviors, cfg.VerificationFailureBehavior) {
 				return fmt.Errorf(
 					"invalid job verification no signature behavior %q. Must be one of: %v",
-					cfg.JobVerificationFailureBehavior,
+					cfg.VerificationFailureBehavior,
 					verificationFailureBehaviors,
 				)
 			}
@@ -825,17 +825,17 @@ var AgentStartCommand = cli.Command{
 		}
 
 		var verificationJWKS jwk.Set
-		if cfg.JobVerificationJWKSPath != "" {
+		if cfg.VerificationJWKSFile != "" {
 			var err error
-			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.JobVerificationJWKSPath)
+			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
 			if err != nil {
 				l.Fatal("Verification JWKS failed validation: %v", err)
 			}
 		}
 
-		if cfg.JobSigningJWKSPath != "" {
+		if cfg.SigningJWKSFile != "" {
 			// The actual JWKS itself doesn't get used until `buildkite-agent pipeline upload` is called, but validate it here anyway
-			_, err := parseAndValidateJWKS(ctx, "signing", cfg.JobSigningJWKSPath)
+			_, err := parseAndValidateJWKS(ctx, "signing", cfg.SigningJWKSFile)
 			if err != nil {
 				l.Fatal("Signing JWKS failed validation: %v", err)
 			}
@@ -843,48 +843,48 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:                 cfg.BootstrapScript,
-			BuildPath:                       cfg.BuildPath,
-			SocketsPath:                     cfg.SocketsPath,
-			GitMirrorsPath:                  cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:           cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:            cfg.GitMirrorsSkipUpdate,
-			HooksPath:                       cfg.HooksPath,
-			PluginsPath:                     cfg.PluginsPath,
-			GitCheckoutFlags:                cfg.GitCheckoutFlags,
-			GitCloneFlags:                   cfg.GitCloneFlags,
-			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
-			GitCleanFlags:                   cfg.GitCleanFlags,
-			GitFetchFlags:                   cfg.GitFetchFlags,
-			GitSubmodules:                   !cfg.NoGitSubmodules,
-			SSHKeyscan:                      !cfg.NoSSHKeyscan,
-			CommandEval:                     !cfg.NoCommandEval,
-			PluginsEnabled:                  !cfg.NoPlugins,
-			PluginValidation:                !cfg.NoPluginValidation,
-			LocalHooksEnabled:               !cfg.NoLocalHooks,
-			StrictSingleHooks:               cfg.StrictSingleHooks,
-			RunInPty:                        !cfg.NoPTY,
-			ANSITimestamps:                  !cfg.NoANSITimestamps,
-			TimestampLines:                  cfg.TimestampLines,
-			DisconnectAfterJob:              cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:      cfg.DisconnectAfterIdleTimeout,
-			CancelGracePeriod:               cfg.CancelGracePeriod,
-			SignalGracePeriod:               signalGracePeriod,
-			EnableJobLogTmpfile:             cfg.EnableJobLogTmpfile,
-			JobLogPath:                      cfg.JobLogPath,
-			WriteJobLogsToStdout:            cfg.WriteJobLogsToStdout,
-			LogFormat:                       cfg.LogFormat,
-			Shell:                           cfg.Shell,
-			RedactedVars:                    cfg.RedactedVars,
-			AcquireJob:                      cfg.AcquireJob,
-			TracingBackend:                  cfg.TracingBackend,
-			TracingServiceName:              cfg.TracingServiceName,
-			JobVerificationFailureBehaviour: cfg.JobVerificationFailureBehavior,
+			BootstrapScript:              cfg.BootstrapScript,
+			BuildPath:                    cfg.BuildPath,
+			SocketsPath:                  cfg.SocketsPath,
+			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
+			HooksPath:                    cfg.HooksPath,
+			PluginsPath:                  cfg.PluginsPath,
+			GitCheckoutFlags:             cfg.GitCheckoutFlags,
+			GitCloneFlags:                cfg.GitCloneFlags,
+			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                cfg.GitCleanFlags,
+			GitFetchFlags:                cfg.GitFetchFlags,
+			GitSubmodules:                !cfg.NoGitSubmodules,
+			SSHKeyscan:                   !cfg.NoSSHKeyscan,
+			CommandEval:                  !cfg.NoCommandEval,
+			PluginsEnabled:               !cfg.NoPlugins,
+			PluginValidation:             !cfg.NoPluginValidation,
+			LocalHooksEnabled:            !cfg.NoLocalHooks,
+			StrictSingleHooks:            cfg.StrictSingleHooks,
+			RunInPty:                     !cfg.NoPTY,
+			ANSITimestamps:               !cfg.NoANSITimestamps,
+			TimestampLines:               cfg.TimestampLines,
+			DisconnectAfterJob:           cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:   cfg.DisconnectAfterIdleTimeout,
+			CancelGracePeriod:            cfg.CancelGracePeriod,
+			SignalGracePeriod:            signalGracePeriod,
+			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
+			JobLogPath:                   cfg.JobLogPath,
+			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
+			LogFormat:                    cfg.LogFormat,
+			Shell:                        cfg.Shell,
+			RedactedVars:                 cfg.RedactedVars,
+			AcquireJob:                   cfg.AcquireJob,
+			TracingBackend:               cfg.TracingBackend,
+			TracingServiceName:           cfg.TracingServiceName,
+			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
 
-			JobSigningJWKSPath: cfg.JobSigningJWKSPath,
-			JobSigningKeyID:    cfg.JobSigningKeyID,
+			SigningJWKSFile:  cfg.SigningJWKSFile,
+			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
 
-			JobVerificationJWKS: verificationJWKS,
+			VerificationJWKS: verificationJWKS,
 		}
 
 		if configFile != nil {
