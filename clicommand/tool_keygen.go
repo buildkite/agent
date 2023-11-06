@@ -14,10 +14,10 @@ import (
 )
 
 type ToolKeygenConfig struct {
-	Alg               string `cli:"alg" validate:"required"`
-	KeyID             string `cli:"key-id"`
-	PrivateKeysetFile string `cli:"private-keyset-file" normalize:"filepath"`
-	PublicKeysetFile  string `cli:"public-keyset-file" normalize:"filepath"`
+	Alg             string `cli:"alg" validate:"required"`
+	KeyID           string `cli:"key-id"`
+	PrivateJWKSFile string `cli:"private-jwks-file" normalize:"filepath"`
+	PublicJWKSFile  string `cli:"public-jwks-file" normalize:"filepath"`
 
 	NoColor     bool     `cli:"no-color"`
 	Debug       bool     `cli:"debug"`
@@ -36,11 +36,15 @@ var ToolKeygenCommand = cli.Command{
 
 Description:
 
-This (experimental!) command generates a new JWS key pair, used for signing and verifying jobs in Buildkite.
-The key pair is written to two files, a private keyset and a public keyset. The private keyset should be used
-as for signing, and the public for verification. The keysets are written in JWKS format.
+This (experimental!) command generates a new JWS key pair, used for signing and
+verifying jobs in Buildkite.
 
-For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
+The pair is written as a JSON Web Key Set (JWKS) to two files, a private JWKS
+file and a public JWKS file. The private JWKS should be used as for signing,
+and the public JWKS for verification.
+
+For more information about JWS, see https://tools.ietf.org/html/rfc7515 and
+for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:     "alg",
@@ -54,13 +58,13 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 			Usage:  "The ID to use for the keys generated. If none is provided, a random one will be generated",
 		},
 		cli.StringFlag{
-			Name:   "private-keyset-file",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_KEYSET_FILE",
+			Name:   "private-jwks-file",
+			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_JWKS_FILE",
 			Usage:  "The filename to write the private key to. Defaults to a name based on the key id in the current directory",
 		},
 		cli.StringFlag{
-			Name:   "public-keyset-file",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_PUBLIC_KEYSET_FILE",
+			Name:   "public-jwks-file",
+			EnvVar: "BUILDKITE_AGENT_KEYGEN_PUBLIC_JWKS_FILE",
 			Usage:  "The filename to write the public keyset to. Defaults to a name based on the key id in the current directory",
 		},
 
@@ -93,32 +97,32 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 			l.Fatal("Failed to generate key pair: %v", err)
 		}
 
-		if cfg.PrivateKeysetFile == "" {
-			cfg.PrivateKeysetFile = fmt.Sprintf("./%s-%s-private.json", cfg.Alg, cfg.KeyID)
+		if cfg.PrivateJWKSFile == "" {
+			cfg.PrivateJWKSFile = fmt.Sprintf("./%s-%s-private.json", cfg.Alg, cfg.KeyID)
 		}
 
-		if cfg.PublicKeysetFile == "" {
-			cfg.PublicKeysetFile = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
+		if cfg.PublicJWKSFile == "" {
+			cfg.PublicJWKSFile = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
 		}
 
-		l.Info("Writing private key set to %s...", cfg.PrivateKeysetFile)
+		l.Info("Writing private key set to %s...", cfg.PrivateJWKSFile)
 		pKey, err := json.Marshal(priv)
 		if err != nil {
 			l.Fatal("Failed to marshal private key: %v", err)
 		}
 
-		err = writeIfNotExists(cfg.PrivateKeysetFile, pKey)
+		err = writeIfNotExists(cfg.PrivateJWKSFile, pKey)
 		if err != nil {
 			l.Fatal("Failed to write private key file: %v", err)
 		}
 
-		l.Info("Writing public key set to %s...", cfg.PublicKeysetFile)
+		l.Info("Writing public key set to %s...", cfg.PublicJWKSFile)
 		pubKey, err := json.Marshal(pub)
 		if err != nil {
 			l.Fatal("Failed to marshal private key: %v", err)
 		}
 
-		err = writeIfNotExists(cfg.PublicKeysetFile, pubKey)
+		err = writeIfNotExists(cfg.PublicJWKSFile, pubKey)
 		if err != nil {
 			l.Fatal("Failed to write private key file: %v", err)
 		}
