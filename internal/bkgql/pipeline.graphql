@@ -1,0 +1,22 @@
+query GetPipeline($orgPipelineSlug: ID!) {
+  pipeline(slug: $orgPipelineSlug) {
+    id
+    repository {
+      url
+    }
+    steps {
+      yaml
+    }
+  }
+}
+
+mutation UpdatePipeline($id: ID!, $yaml: String!) {
+  pipelineUpdate(input: {id: $id, steps: {yaml: $yaml}}) {
+    clientMutationId
+    pipeline {
+      steps {
+        yaml
+      }
+    }
+  }
+}

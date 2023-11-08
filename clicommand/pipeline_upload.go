@@ -275,21 +275,14 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if cfg.JWKSFilePath != "" {
-			l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
-
-			// we populate this with env vars whether or not interpolation is enabled, so we can't use `environ`
-			pInv := &pipeline.PipelineInvariants{
-				OrganizationSlug: os.Getenv("BUILDKITE_ORGANIZATION_SLUG"),
-				PipelineSlug:     os.Getenv("BUILDKITE_PIPELINE_SLUG"),
-				Repository:       os.Getenv("BUILDKITE_REPO"),
-			}
+			l.Warn("Pipeline signing is experimental and the user interface might change!")
 
 			key, err := loadSigningKey(&cfg)
 			if err != nil {
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
 
-			if err := result.Sign(key, pInv); err != nil {
+			if err := result.Sign(key, os.Getenv("BUILDKITE_REPO")); err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
 		}

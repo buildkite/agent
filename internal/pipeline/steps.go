@@ -137,13 +137,13 @@ func stepByKeyInference(o *ordered.MapSA) (Step, error) {
 // sign adds signatures to each command step (and recursively to any command
 // steps that are within group steps. The steps are mutated directly, so an
 // error part-way through may leave some steps un-signed.
-func (s Steps) sign(key jwk.Key, env map[string]string, pInv *PipelineInvariants) error {
+func (s Steps) sign(key jwk.Key, env map[string]string, repoURL string) error {
 	for _, step := range s {
 		switch step := step.(type) {
 		case *CommandStep:
-			stepWithInvariants := &CommandStepWithPipelineInvariants{
-				CommandStep:        *step,
-				PipelineInvariants: *pInv,
+			stepWithInvariants := &CommandStepWithInvariants{
+				CommandStep:   *step,
+				RepositoryURL: repoURL,
 			}
 
 			sig, err := Sign(key, env, stepWithInvariants)
@@ -153,7 +153,7 @@ func (s Steps) sign(key jwk.Key, env map[string]string, pInv *PipelineInvariants
 			step.Signature = sig
 
 		case *GroupStep:
-			if err := step.Steps.sign(key, env, pInv); err != nil {
+			if err := step.Steps.sign(key, env, repoURL); err != nil {
 				return fmt.Errorf("signing group step: %w", err)
 			}
 

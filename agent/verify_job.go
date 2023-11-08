@@ -42,13 +42,9 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 		return ErrNoSignature
 	}
 
-	stepWithInvariants := &pipeline.CommandStepWithPipelineInvariants{
-		CommandStep: step,
-		PipelineInvariants: pipeline.PipelineInvariants{
-			OrganizationSlug: r.conf.Job.Env["BUILDKITE_ORGANIZATION_SLUG"],
-			PipelineSlug:     r.conf.Job.Env["BUILDKITE_PIPELINE_SLUG"],
-			Repository:       r.conf.Job.Env["BUILDKITE_REPO"],
-		},
+	stepWithInvariants := &pipeline.CommandStepWithInvariants{
+		CommandStep:   step,
+		RepositoryURL: r.conf.Job.Env["BUILDKITE_REPO"],
 	}
 
 	// Verify the signature
@@ -173,9 +169,9 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 		case "matrix": // compared indirectly through other fields
 			continue
 
-		case "pipeline_invariants":
-			// These were sourced from the job itself, not the step, when the signature was verified.
-			// So, we don't need to compare that the values in the job are the same as those in the step.
+		case "repository_url":
+			// This was sourced from the job itself, not the step, when the signature was verified.
+			// So, we don't need to confirm that the values in the job are the same as those in the step.
 			continue
 
 		default:

@@ -74,7 +74,7 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and for 
 		_, cfg, l, _, done := setupLoggerAndConfig[ToolKeygenConfig](context.Background(), c)
 		defer done()
 
-		l.Warn("Pipeline signing is experimental and the user interface might change! Also it might not work, it might sign the pipeline only partially, or it might eat your pet dog. You have been warned!")
+		l.Warn("Pipeline signing is experimental and the user interface might change!")
 
 		if cfg.KeyID == "" {
 			cfg.KeyID = petname.Generate(2, "-")
