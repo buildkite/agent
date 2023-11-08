@@ -75,7 +75,7 @@ update the pipeline definition with the signed version using the GraphQL API too
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "graphql-token",
-			Usage:  "A token for the buildkite graphql API. This will be used to populate the value of the repository URL, and download the pipeline definition. Both ′repo′ and ′pipeline-file′ will be ignored in preferance of values from the GraphQL API if the token in provided.",
+			Usage:  "A token for the buildkite graphql API. This will be used to populate the value of the repository URL, and download the pipeline definition. Both ′repo′ and ′pipeline-file′ will be ignored in preference of values from the GraphQL API if the token in provided.",
 			EnvVar: "BUILDKITE_GRAPHQL_TOKEN",
 		},
 		cli.BoolFlag{
