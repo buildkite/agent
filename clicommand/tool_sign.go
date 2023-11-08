@@ -50,7 +50,7 @@ var (
 	ErrNoPipeline = errors.New("no pipeline file found")
 	ErrUseGraphQL = errors.New(
 		"either provide the pipeline YAML, and the repository URL, " +
-			"or provide a GraphQL token to allow them to be retrieved from the Buildkite",
+			"or provide a GraphQL token to allow them to be retrieved from Buildkite",
 	)
 	ErrNotFound = errors.New("pipeline not found")
 )
