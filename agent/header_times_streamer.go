@@ -49,7 +49,12 @@ func newHeaderTimesStreamer(l logger.Logger, upload func(context.Context, int, i
 		logger:         l,
 		uploadCallback: upload,
 		// Receive is blocked during uploadCallback, so timesCh is buffered.
-		timesCh:         make(chan string, 100),
+		// Capacity of 1000 is a guess at the maximum number of header times a
+		// reasonable job would generate during a typical uploadCallback
+		// (~x00 milliseconds). If it generates headers more rapidly, or
+		// uploadCallback takes a long time, Scan will block, delaying later
+		// header times.
+		timesCh:         make(chan string, 1000),
 		streamingDoneCh: make(chan struct{}),
 	}
 }
