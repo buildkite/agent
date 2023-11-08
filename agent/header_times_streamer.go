@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strconv"
 	"sync"
@@ -28,81 +29,103 @@ type headerTimesStreamer struct {
 	// upload
 	uploadCallback func(context.Context, int, int, map[string]string)
 
-	// The times that have found while scanning lines
-	times      []string
-	timesMutex sync.Mutex
+	// Closed when the upload loop has ended.
+	streamingDoneCh chan struct{}
 
-	// Every time we get a new time, we increment the wait group, and
-	// decrement it after it has been uploaded.
-	uploadWaitGroup sync.WaitGroup
+	// Guards timesCh and streaming bool. Prevents concurrently sending and
+	// closing the channel.
+	streamingMu sync.Mutex
+	streaming   bool // track if we're currently streaming header times
 
-	// Every time we go to scan a line, we increment the wait group, then
-	// decrement after it's finished scanning. That way when we stop the
-	// streamer, we can wait for all the lines to finish scanning first.
-	scanWaitGroup sync.WaitGroup
-
-	// A boolean to keep track if we're currently streaming header times
-	streaming      bool
-	streamingMutex sync.Mutex
-
-	// We store the last index we uploaded to, so we don't have to keep
-	// uploading the same times
-	cursor int
+	// The header times that have been found while scanning lines.
+	//  - Channel sends in Scan (jobRunner.Run goroutine)
+	//  - Channel close in Stop (jobRunner.Run goroutine)
+	//  - Channel receive in Upload (headerTimesStreamer.Run goroutine)
+	timesCh chan string
 }
 
 func newHeaderTimesStreamer(l logger.Logger, upload func(context.Context, int, int, map[string]string)) *headerTimesStreamer {
 	return &headerTimesStreamer{
-		logger:         l,
-		uploadCallback: upload,
+		logger:          l,
+		uploadCallback:  upload,
+		timesCh:         make(chan string),
+		streamingDoneCh: make(chan struct{}),
 	}
 }
 
+// Run runs the header times streamer (specifically, the part that receives
+// header times, batches them, and then uploads them to Buildkite).
+// Do not call Run after calling Stop.
 func (h *headerTimesStreamer) Run(ctx context.Context) {
 	ctx, setStatus, done := status.AddSimpleItem(ctx, "Header Times Streamer")
 	defer done()
 	setStatus("🏃 Starting...")
 
-	h.streamingMutex.Lock()
+	h.streamingMu.Lock()
 	h.streaming = true
-	h.streamingMutex.Unlock()
+	h.streamingMu.Unlock()
+
+	defer close(h.streamingDoneCh)
 
 	h.logger.Debug("[HeaderTimesStreamer] Streamer has started...")
 
-	for {
-		// Break out of streaming if it's finished. We also
-		// need to acquire a read lock on the flag because it
-		// can be modified by other routines.
-		h.streamingMutex.Lock()
-		if !h.streaming {
-			break
+	nextIndex := 0
+	chanOpen := true
+
+	// Upload loop
+	for chanOpen {
+		setStatus("⌚️ Waiting 1 second for new header times to put into upload batch...")
+		var times []string
+		timeout := time.NewTimer(1 * time.Second)
+		defer timeout.Stop()
+
+	batchLoop:
+		for {
+			select {
+			case t, open := <-h.timesCh:
+				chanOpen = open
+				if !open { // timesCh is closed
+					break batchLoop
+				}
+				times = append(times, t)
+
+			case <-timeout.C: // waited long enough for times
+				break batchLoop
+
+			case <-ctx.Done(): // pack it all up
+				h.logger.Debug("[HeaderTimesStreamer] %v", ctx.Err())
+				return
+			}
 		}
-		h.streamingMutex.Unlock()
 
-		setStatus("📡 Uploading any pending header times")
-
-		// Upload any pending header times
-		h.Upload(ctx)
-
-		setStatus("😴 Sleeping for a bit")
-
-		// Sleep for a second and try upload some more later
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(1 * time.Second):
+		// Do we even have some times to upload?
+		if len(times) == 0 {
+			continue
 		}
+
+		// Construct the payload to send to the server
+		payload := map[string]string{}
+		for i, t := range times {
+			payload[strconv.Itoa(nextIndex+i)] = t
+		}
+		startIdx := nextIndex
+		nextIndex += len(times)
+
+		// Call our callback with the times for upload
+		setStatus(fmt.Sprintf("📡 Uploading %d header times", len(times)))
+
+		h.logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", startIdx, nextIndex-1)
+		h.uploadCallback(ctx, startIdx, nextIndex, payload)
+		h.logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", startIdx, nextIndex-1)
 	}
 
+	setStatus("👋 Finished!")
 	h.logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
 }
 
 // Scan takes a line of log output and tracks a time if it's a header.
 // Returns true for header lines or header expansion lines.
 func (h *headerTimesStreamer) Scan(line string) bool {
-	// Keep track of how many line scans we need to do
-	h.scanWaitGroup.Add(1)
-	defer h.scanWaitGroup.Done()
-
 	// Make sure all ANSI colours are removed from the string before we
 	// check to see if it's a header (sometimes a colour escape sequence may
 	// be the first thing on the line, which will cause the regex to ignore it)
@@ -115,64 +138,28 @@ func (h *headerTimesStreamer) Scan(line string) bool {
 
 	h.logger.Debug("[HeaderTimesStreamer] Found header %q", line)
 
-	// Acquire a lock on the times and then add the current time to
-	// our times slice.
-	h.timesMutex.Lock()
-	h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
-	h.timesMutex.Unlock()
+	// Use mutex to prevent concurrently sending and closing the channel.
+	h.streamingMu.Lock()
+	defer h.streamingMu.Unlock()
 
-	// Add the time to the wait group
-	h.uploadWaitGroup.Add(1)
+	if h.streaming {
+		h.timesCh <- time.Now().UTC().Format(time.RFC3339Nano)
+	}
 	return true
 }
 
-func (h *headerTimesStreamer) Upload(ctx context.Context) {
-	// Store the current cursor value
-	c := h.cursor
-
-	// Grab only the times that we haven't uploaded yet. We need to acquire
-	// a lock since other routines may be adding to it.
-	h.timesMutex.Lock()
-	length := len(h.times)
-	times := h.times[h.cursor:length]
-	h.timesMutex.Unlock()
-
-	// Construct the payload to send to the server
-	payload := map[string]string{}
-	for index, time := range times {
-		payload[strconv.Itoa(h.cursor+index)] = time
-	}
-
-	// Save the cursor we're up to
-	h.cursor = length
-
-	// How many times are we uploading this time
-	timesToUpload := len(times)
-
-	// Do we even have some times to upload
-	if timesToUpload == 0 {
+// Stop stops the header time streamer. This should only be called after the
+// logs have stopped being generated (the process has ended).
+func (h *headerTimesStreamer) Stop() {
+	h.streamingMu.Lock()
+	if !h.streaming {
+		// Already stopped, or never started.
+		h.streamingMu.Unlock()
 		return
 	}
-
-	// Call our callback with the times for upload
-	h.logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
-	h.uploadCallback(ctx, c, length, payload)
-	h.logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
-
-	// Decrement the wait group for every time we've uploaded.
-	h.uploadWaitGroup.Add(timesToUpload * -1)
-}
-
-func (h *headerTimesStreamer) Stop() {
-	h.logger.Debug("[HeaderTimesStreamer] Waiting for all the lines to be scanned")
-	h.scanWaitGroup.Wait()
+	close(h.timesCh)
+	h.streamingMu.Unlock()
 
 	h.logger.Debug("[HeaderTimesStreamer] Waiting for all the header times to be uploaded")
-	h.uploadWaitGroup.Wait()
-
-	// Since we're modifying the waitGroup and the streaming flag, we need
-	// to acquire a write lock.
-	h.streamingMutex.Lock()
-	h.streaming = false
-	h.streamingMutex.Unlock()
+	<-h.streamingDoneCh
 }
