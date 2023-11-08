@@ -14,6 +14,8 @@ import (
 
 const symmetricKeyLength = 2048
 
+// NewKeyPair generates a new key pair for the given algorithm and gives it the kid specified in
+// `keyID`. The returned key sets contain the public and private keys and an error in that order.
 func NewKeyPair(keyID string, alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 	switch alg {
 	case jwa.HS256, jwa.HS384, jwa.HS512:
@@ -53,6 +55,8 @@ func NewKeyPair(keyID string, alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, err
 	}
 }
 
+// NewSymmetricKeyPairFromString creates a symmetric key pair from the given key string and gives it
+// the kid specified in `keyID`. Both returned jwk.Set values are the same symmetric key.
 func NewSymmetricKeyPairFromString(id, key string, alg jwa.SignatureAlgorithm) (jwk.Set, jwk.Set, error) {
 	return newSymmetricKeyPair(id, []byte(key), alg)
 }

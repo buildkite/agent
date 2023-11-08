@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/bkgql"
+	"github.com/buildkite/agent/v3/internal/jwkutil"
 	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
@@ -18,16 +19,16 @@ import (
 )
 
 type ToolSignConfig struct {
-	FilePath string `cli:"arg:0" label:"upload paths"`
-
-	// These are required to do anything
-	JWKSFilePath string `cli:"jwks-file-path"`
-	SigningKeyID string `cli:"signing-key-id"`
+	PipelineFile string `cli:"arg:0" label:"pipeline file"`
 
 	// These change the behaviour
 	GraphQLToken string `cli:"graphql-token"`
 	Update       bool   `cli:"update"`
 	NoConfirm    bool   `cli:"no-confirm"`
+
+	// Used for signing
+	JWKSFile  string `cli:"jwks-file"`
+	JWKSKeyID string `cli:"jwks-key-id"`
 
 	// Needed for to use GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
@@ -60,65 +61,63 @@ var ToolSignCommand = cli.Command{
 	Usage: "Sign pipeline steps",
 	Description: `Usage:
 
-    buildkite-agent tool sign-pipeline [options...]
+    buildkite-agent tool sign-pipeline [options...] [pipeline-file]
 
 Description:
 
 This (experimental!) command takes a pipeline in YAML format as input, and annotates the
 appropriate parts of the pipeline with signatures. This can then be input into the YAML steps
-editor in the Buildkite UI so that the agents running these steps can verify the signatures.`,
+editor in the Buildkite UI so that the agents running these steps can verify the signatures.
+
+If a token is provided using the ′graphql-token′ flag, the tool will attempt to retrieve the
+pipeline definition and repo using the Buildkite GraphQL API. If ′update′ is also set, it will
+update the pipeline definition with the signed version using the GraphQL API too.`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:     "graphql-token",
-			Usage:    "A token for the buildkite graphql API. This will be used to populate the pipeline invariants if they are not provided.",
-			EnvVar:   "BUILDKITE_GRAPHQL_TOKEN",
-			Required: false,
+			Name:   "graphql-token",
+			Usage:  "A token for the buildkite graphql API. This will be used to populate the value of the repository URL, and download the pipeline definition. Both ′repo′ and ′pipeline-file′ will be ignored in preference of values from the GraphQL API if the token in provided.",
+			EnvVar: "BUILDKITE_GRAPHQL_TOKEN",
 		},
 		cli.BoolFlag{
 			Name:   "update",
-			Usage:  "Update the pipeline online after signing it. This can only be used if the GraphQL token is provided.",
+			Usage:  "Update the pipeline using the GraphQL API after signing it. This can only be used if ′graphql-token′ is provided.",
 			EnvVar: "BUILDKITE_TOOL_SIGN_UPDATE",
 		},
 		cli.BoolFlag{
 			Name:   "no-confirm",
-			Usage:  "Show confirmation prompts before updating the pipeline online.",
+			Usage:  "Show confirmation prompts before updating the pipeline with the GraphQL API.",
 			EnvVar: "BUILDKITE_TOOL_SIGN_NO_CONFIRM",
 		},
 
-		// These are required to do anything
+		// Used for signing
 		cli.StringFlag{
-			Name:     "jwks-file-path",
-			Usage:    "Path to a file containing a JWKS.",
-			EnvVar:   "BUILDKITE_PIPELINE_UPLOAD_JWKS_FILE_PATH",
-			Required: true,
+			Name:   "jwks-file",
+			Usage:  "Path to a file containing a JWKS.",
+			EnvVar: "BUILDKITE_AGENT_JWKS_FILE",
 		},
 		cli.StringFlag{
-			Name:     "signing-key-id",
-			Usage:    "The JWKS key ID to use when signing the pipeline.",
-			EnvVar:   "BUILDKITE_PIPELINE_UPLOAD_SIGNING_KEY_ID",
-			Required: true,
+			Name:   "jwks-key-id",
+			Usage:  "The JWKS key ID to use when signing the pipeline. If none is provided and the JWKS file contains only one key, that key will be used.",
+			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
 		},
 
-		// These are required to use the GraphQL API
+		// These are required for GraphQL
 		cli.StringFlag{
-			Name:     "organization-slug",
-			Usage:    "The organization slug. Used to connect to the GraphQL API.",
-			EnvVar:   "BUILDKITE_ORGANIZATION_SLUG",
-			Required: false,
+			Name:   "organization-slug",
+			Usage:  "The organization slug. Required to connect to the GraphQL API.",
+			EnvVar: "BUILDKITE_ORGANIZATION_SLUG",
 		},
 		cli.StringFlag{
-			Name:     "pipeline-slug",
-			Usage:    "The pipeline slug. Used to connect to the GraphQL API.",
-			EnvVar:   "BUILDKITE_PIPELINE_SLUG",
-			Required: false,
+			Name:   "pipeline-slug",
+			Usage:  "The pipeline slug. Required to connect to the GraphQL API.",
+			EnvVar: "BUILDKITE_PIPELINE_SLUG",
 		},
 
 		// Added to signature
 		cli.StringFlag{
-			Name:     "repo",
-			Usage:    "The URL of the pipeline's repository, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
-			EnvVar:   "BUILDKITE_REPO",
-			Required: false,
+			Name:   "repo",
+			Usage:  "The URL of the pipeline's repository, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
+			EnvVar: "BUILDKITE_REPO",
 		},
 
 		// Global flags
@@ -135,7 +134,7 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 
 		l.Warn("Pipeline signing is experimental and the user interface might change!")
 
-		key, err := loadSigningKey(&cfg)
+		key, err := jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
 		if err != nil {
 			return fmt.Errorf("couldn't read the signing key file: %w", err)
 		}
@@ -146,14 +145,6 @@ editor in the Buildkite UI so that the agents running these steps can verify the
 
 		return signWithGraphQL(ctx, c, l, key, &cfg)
 	},
-}
-
-func (cfg *ToolSignConfig) jwksFilePath() string {
-	return cfg.JWKSFilePath
-}
-
-func (cfg *ToolSignConfig) signingKeyId() string {
-	return cfg.SigningKeyID
 }
 
 func signOffline(
@@ -173,17 +164,17 @@ func signOffline(
 	)
 
 	switch {
-	case cfg.FilePath != "":
-		l.Info("Reading pipeline config from %q", cfg.FilePath)
+	case cfg.PipelineFile != "":
+		l.Info("Reading pipeline config from %q", cfg.PipelineFile)
 
-		file, err := os.Open(cfg.FilePath)
+		file, err := os.Open(cfg.PipelineFile)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
 		defer file.Close()
 
 		input = file
-		filename = cfg.FilePath
+		filename = cfg.PipelineFile
 
 	case stdin.IsReadable():
 		l.Info("Reading pipeline config from STDIN")
@@ -197,7 +188,7 @@ func signOffline(
 
 	parsedPipeline, err := pipeline.Parse(input)
 	if err != nil {
-		return fmt.Errorf("pipeline parsing of %q failed: %v", filename, err)
+		return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
 	}
 
 	if cfg.Debug {
@@ -249,10 +240,9 @@ func signWithGraphQL(
 	debugL.Debug("Pipeline retrieved successfully: %#v", resp)
 	l.Info("Signing pipeline with the repository URL:\n%s", resp.Pipeline.Repository.Url)
 
-	pipelineYaml := strings.NewReader(resp.Pipeline.Steps.Yaml)
-	parsedPipeline, err := pipeline.Parse(pipelineYaml)
+	parsedPipeline, err := pipeline.Parse(strings.NewReader(resp.Pipeline.Steps.Yaml))
 	if err != nil {
-		return fmt.Errorf("pipeline parsing failed: %v", err)
+		return fmt.Errorf("pipeline parsing failed: %w", err)
 	}
 
 	if cfg.Debug {

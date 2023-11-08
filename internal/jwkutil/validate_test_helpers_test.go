@@ -1,4 +1,4 @@
-package clicommand
+package jwkutil
 
 import (
 	"crypto/ecdsa"
