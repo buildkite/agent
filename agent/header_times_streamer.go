@@ -32,8 +32,8 @@ type headerTimesStreamer struct {
 	// Closed when the upload loop has ended.
 	streamingDoneCh chan struct{}
 
-	// Guards timesCh and streaming bool. Prevents concurrently sending and
-	// closing the channel.
+	// streamingMu guards timesCh and streaming bool.
+	// It prevents concurrently sending and closing timesCh.
 	streamingMu sync.Mutex
 	streaming   bool // track if we're currently streaming header times
 
@@ -46,9 +46,10 @@ type headerTimesStreamer struct {
 
 func newHeaderTimesStreamer(l logger.Logger, upload func(context.Context, int, int, map[string]string)) *headerTimesStreamer {
 	return &headerTimesStreamer{
-		logger:          l,
-		uploadCallback:  upload,
-		timesCh:         make(chan string),
+		logger:         l,
+		uploadCallback: upload,
+		// Receive is blocked during uploadCallback, so timesCh is buffered.
+		timesCh:         make(chan string, 100),
 		streamingDoneCh: make(chan struct{}),
 	}
 }
