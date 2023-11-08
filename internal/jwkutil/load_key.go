@@ -16,9 +16,12 @@ var (
 	ErrNoFirstKey = errors.New(
 		"could not retrieve first key from a JWKS that has exactly one signing key. Maybe the JWKS file is corrupt?",
 	)
-	ErrCounldNotFindKeyByID = errors.New("could not be found in JWKS")
+	ErrCouldNotFindKeyByID = errors.New("could not be found in JWKS")
 )
 
+// LoadKey parses a JSON Web Key Set from a file path and returns the JSON Web
+// Key identified by `keyID`. If the `keyID` is empty and the JSON Web Key Set
+// is a singleton, it returns the only key in the key set.
 func LoadKey(path, keyID string) (jwk.Key, error) {
 	jwksFile, err := os.Open(path)
 	if err != nil {
@@ -48,8 +51,8 @@ func LoadKey(path, keyID string) (jwk.Key, error) {
 	return key, nil
 }
 
-// fromIdOrOnlyKey looks up the key by ID if the ID is not empty.
-// It falls back to returning the first key if the ID is empty.
+// fromIdOrOnlyKey looks up the key by ID. If the `keyID` is empty and the JSON Web Key Set
+// is a singleton, it returns the only key in the key set.
 func fromIdOrOnlyKey(jwks jwk.Set, keyID string) (jwk.Key, string, error) {
 	if keyID == "" {
 		if jwks.Len() != 1 {
@@ -66,7 +69,7 @@ func fromIdOrOnlyKey(jwks jwk.Set, keyID string) (jwk.Key, string, error) {
 
 	key, found := jwks.LookupKeyID(keyID)
 	if !found {
-		return nil, "", fmt.Errorf("signing key ID %q %w", keyID, ErrCounldNotFindKeyByID)
+		return nil, "", fmt.Errorf("signing key ID %q %w", keyID, ErrCouldNotFindKeyByID)
 	}
 
 	return key, keyID, nil
