@@ -245,7 +245,7 @@ func signWithGraphQL(
 	pipelineYaml := strings.NewReader(resp.Pipeline.Steps.Yaml)
 	parsedPipeline, err := pipeline.Parse(pipelineYaml)
 	if err != nil {
-		return fmt.Errorf("pipeline parsing failed: %v", err)
+		return fmt.Errorf("pipeline parsing failed: %w", err)
 	}
 
 	if cfg.Debug {
