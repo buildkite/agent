@@ -242,8 +242,7 @@ func signWithGraphQL(
 	debugL.Debug("Pipeline retrieved successfully: %#v", resp)
 	l.Info("Signing pipeline with the repository URL:\n%s", resp.Pipeline.Repository.Url)
 
-	pipelineYaml := strings.NewReader(resp.Pipeline.Steps.Yaml)
-	parsedPipeline, err := pipeline.Parse(pipelineYaml)
+	parsedPipeline, err := pipeline.Parse(strings.NewReader(resp.Pipeline.Steps.Yaml))
 	if err != nil {
 		return fmt.Errorf("pipeline parsing failed: %w", err)
 	}
