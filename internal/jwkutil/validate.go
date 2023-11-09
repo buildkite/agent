@@ -31,6 +31,10 @@ var (
 )
 
 func Validate(key jwk.Key) error {
+	if err := key.Validate(); err != nil {
+		return err
+	}
+
 	validKeyTypes := []jwa.KeyType{jwa.RSA, jwa.EC, jwa.OctetSeq, jwa.OKP}
 	if !slices.Contains(validKeyTypes, key.KeyType()) {
 		return fmt.Errorf(
