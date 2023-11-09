@@ -10,7 +10,7 @@ fi
 export GOOS=${1}
 export GOARCH=${2}
 
-BUILD_VERSION=${3}
+BUILD_NUMBER=${3}
 NAME="buildkite-agent"
 
 if [[ "$GOOS" = "dragonflybsd" ]]; then
@@ -32,7 +32,7 @@ echo "GOARCH=$GOARCH"
 if [[ -n "$GOARM" ]]; then
   echo "GOARM=$GOARM"
 fi
-echo "BUILD_VERSION=$BUILD_VERSION"
+echo "BUILD_NUMBER=$BUILD_NUMBER"
 echo ""
 
 # Add .exe for Windows builds
@@ -47,7 +47,7 @@ export CGO_ENABLED=0
 "$(dirname $0)"/generate-acknowledgements.sh
 
 mkdir -p $BUILD_PATH
-go build -v -ldflags "-X github.com/buildkite/agent/v3/version.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME .
+go build -v -ldflags "-X github.com/buildkite/agent/v3/version.buildNumber=$BUILD_NUMBER" -o $BUILD_PATH/$BINARY_FILENAME .
 
 chmod +x $BUILD_PATH/$BINARY_FILENAME
 
