@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.59.0](https://github.com/buildkite/agent/tree/v3.59.0) (2023-11-09)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.58.0...v3.59.0)
+
+### Security
+- This release is built with Go 1.20.11, which includes fixes for two vulnerabilities in file path handling on Windows (CVE-2023-45283, CVE-2023-45284). [#2486](https://github.com/buildkite/agent/pull/2486) (@dependabot[bot])
+
+### Changed
+- Experimental: Signed Pipelines
+  - Allow omitting the key ID when signing pipelines [#2481](https://github.com/buildkite/agent/pull/2481) (@triarius)
+  - Remove Org and Pipeline slugs from pipeline invariants and update the signing tool to use the GraphQL API [#2479](https://github.com/buildkite/agent/pull/2479) (@triarius)
+  - Add key.Validate call [#2488](https://github.com/buildkite/agent/pull/2488) (@DrJosh9000)
+- Use zzglob.MultiGlob to process multiple globs simultaneously, and stop sending GlobPath with artifact upload [#2472](https://github.com/buildkite/agent/pull/2472) (@DrJosh9000)
+
+### Internal
+- Migrate usage of internal/{pipeline,ordered,jwkutil} to go-pipeline [#2489](https://github.com/buildkite/agent/pull/2489) (@moskyb)
+- Update bintest to v3.2.0 to resolve ETXTBSY race condition in tests [#2480](https://github.com/buildkite/agent/pull/2480) (@DrJosh9000)
+- Fix race in header times streamer [#2485](https://github.com/buildkite/agent/pull/2485), [#2487](https://github.com/buildkite/agent/pull/2487) (@DrJosh9000)
+- Various dependency updates [#2484](https://github.com/buildkite/agent/pull/2484), [#2482](https://github.com/buildkite/agent/pull/2482) (@dependabot[bot])
+
 ## [v3.58.0](https://github.com/buildkite/agent/tree/v3.58.0) (2023-11-02)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.57.0...v3.58.0)
 
