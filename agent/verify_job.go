@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/pipeline"
+	"github.com/buildkite/go-pipeline/signature"
 	"github.com/gowebpki/jcs"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
@@ -42,13 +42,13 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 		return ErrNoSignature
 	}
 
-	stepWithInvariants := &pipeline.CommandStepWithInvariants{
+	stepWithInvariants := &signature.CommandStepWithInvariants{
 		CommandStep:   step,
 		RepositoryURL: r.conf.Job.Env["BUILDKITE_REPO"],
 	}
 
 	// Verify the signature
-	if err := step.Signature.Verify(r.conf.JWKS, r.conf.Job.Env, stepWithInvariants); err != nil {
+	if err := signature.Verify(step.Signature, r.conf.JWKS, r.conf.Job.Env, stepWithInvariants); err != nil {
 		r.agentLogger.Debug("verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
 		return newInvalidSignatureError(ErrVerificationFailed)
 	}
@@ -176,7 +176,7 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 
 		default:
 			// env:: - skip any that were verified with Verify.
-			if name, isEnv := strings.CutPrefix(field, pipeline.EnvNamespacePrefix); isEnv {
+			if name, isEnv := strings.CutPrefix(field, signature.EnvNamespacePrefix); isEnv {
 				if _, has := r.conf.Job.Env[name]; !has {
 					// A pipeline env var that is now missing.
 					r.agentLogger.Debug("verifyJob: %q missing from Job.Env", name)

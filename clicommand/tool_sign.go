@@ -9,10 +9,11 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/bkgql"
-	"github.com/buildkite/agent/v3/internal/jwkutil"
-	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/go-pipeline"
+	"github.com/buildkite/go-pipeline/jwkutil"
+	"github.com/buildkite/go-pipeline/signature"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
@@ -200,7 +201,7 @@ func signOffline(
 		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
 	}
 
-	if err := parsedPipeline.Sign(key, cfg.Repository); err != nil {
+	if err := signature.SignPipeline(parsedPipeline, key, cfg.Repository); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
@@ -254,7 +255,7 @@ func signWithGraphQL(
 		debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
 	}
 
-	if err := parsedPipeline.Sign(key, resp.Pipeline.Repository.Url); err != nil {
+	if err := signature.SignPipeline(parsedPipeline, key, resp.Pipeline.Repository.Url); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 

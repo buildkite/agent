@@ -3,8 +3,8 @@ package clicommand
 import (
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/go-pipeline"
 	"gotest.tools/v3/assert"
 )
 

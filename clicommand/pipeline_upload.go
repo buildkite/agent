@@ -17,12 +17,15 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/jwkutil"
-	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/go-pipeline"
+	"github.com/buildkite/go-pipeline/jwkutil"
+	"github.com/buildkite/go-pipeline/ordered"
+	"github.com/buildkite/go-pipeline/signature"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
 )
@@ -235,10 +238,10 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
-		var environ *env.Environment
+		environ := env.FromSlice(os.Environ())
+
 		if !cfg.NoInterpolation {
 			// Load environment to pass into parser
-			environ = env.FromSlice(os.Environ())
 
 			// resolve BUILDKITE_COMMIT based on the local git repo
 			if commitRef, ok := environ.Get("BUILDKITE_COMMIT"); ok {
@@ -264,7 +267,13 @@ var PipelineUploadCommand = cli.Command{
 			return fmt.Errorf("pipeline parsing of %q failed: %v", src, err)
 		}
 		if !cfg.NoInterpolation {
-			if err := result.Interpolate(environ); err != nil {
+			if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
+				if result.Env == nil {
+					result.Env = ordered.NewMap[string, string](1)
+				}
+				result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
+			}
+			if err := result.Interpolate(environ.Dump()); err != nil {
 				return fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 			}
 		}
@@ -272,8 +281,7 @@ var PipelineUploadCommand = cli.Command{
 		if len(cfg.RedactedVars) > 0 {
 			// Secret detection uses the original environment, since
 			// Interpolate merges the pipeline's env block into `environ`.
-			envMap := env.FromSlice(os.Environ()).Dump()
-			searchForSecrets(l, &cfg, envMap, result, src)
+			searchForSecrets(l, &cfg, environ.Dump(), result, src)
 		}
 
 		if cfg.JWKSFile != "" {
@@ -284,7 +292,7 @@ var PipelineUploadCommand = cli.Command{
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
 
-			if err := result.Sign(key, os.Getenv("BUILDKITE_REPO")); err != nil {
+			if err := signature.SignPipeline(result, key, os.Getenv("BUILDKITE_REPO")); err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
 		}

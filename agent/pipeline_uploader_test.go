@@ -12,8 +12,8 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/go-pipeline"
 	"github.com/stretchr/testify/assert"
 )
 
