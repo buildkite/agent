@@ -39,7 +39,6 @@ func TestCollect(t *testing.T) {
 		Name         string
 		Path         []string
 		AbsolutePath string
-		GlobPath     string
 		FileSize     int
 		Sha1Sum      string
 		Sha256Sum    string
@@ -48,7 +47,6 @@ func TestCollect(t *testing.T) {
 			Name:         "Mr Freeze.jpg",
 			Path:         []string{"test", "fixtures", "artifacts", "Mr Freeze.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "Mr Freeze.jpg"),
-			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     362371,
 			Sha1Sum:      "f5bc7bc9f5f9c3e543dde0eb44876c6f9acbfb6b",
 			Sha256Sum:    "0c657a363d92093e68224e0716ed8b8b5d4bbc3dfe9b026e32b241fc9b369d47",
@@ -57,7 +55,6 @@ func TestCollect(t *testing.T) {
 			Name:         "Commando.jpg",
 			Path:         []string{"test", "fixtures", "artifacts", "folder", "Commando.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "folder", "Commando.jpg"),
-			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     113000,
 			Sha1Sum:      "811d7cb0317582e22ebfeb929d601cdabea4b3c0",
 			Sha256Sum:    "fcfbe62fd7b6638165a61e8de901ac9df93fc1389906f2772bdefed5de115426",
@@ -66,7 +63,6 @@ func TestCollect(t *testing.T) {
 			Name:         "The Terminator.jpg",
 			Path:         []string{"test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
-			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     47301,
 			Sha1Sum:      "ed76566ede9cb6edc975fcadca429665aad8785a",
 			Sha256Sum:    "5b4228a4bbef3d9f676e0a2e8cf6ea06759124ef0fbdb27a6c35df8759fcd39d",
@@ -75,7 +71,6 @@ func TestCollect(t *testing.T) {
 			Name:         "Smile.gif",
 			Path:         []string{rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
-			GlobPath:     filepath.Join(root, "test", "fixtures", "artifacts", "**", "*.gif"),
 			FileSize:     2038453,
 			Sha1Sum:      "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd",
 			Sha256Sum:    "fc5e8608c7772e4ae834fbc47eec3d902099eb3599f5191e40d9e3d9b3764b0e",
@@ -127,7 +122,6 @@ func TestCollect(t *testing.T) {
 
 			assert.Equal(t, filepath.Join(tc.Path...), a.Path)
 			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
-			assert.Equal(t, tc.GlobPath, a.GlobPath)
 			assert.Equal(t, tc.FileSize, int(a.FileSize))
 			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
 			assert.Equal(t, tc.Sha256Sum, a.Sha256Sum)
@@ -151,7 +145,6 @@ func TestCollect(t *testing.T) {
 
 			assert.Equal(t, forwardSlashed, a.Path)
 			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
-			assert.Equal(t, tc.GlobPath, a.GlobPath)
 			assert.Equal(t, tc.FileSize, int(a.FileSize))
 			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
 			assert.Equal(t, tc.Sha256Sum, a.Sha256Sum)
@@ -362,7 +355,6 @@ func TestCollect_WithZZGlob(t *testing.T) {
 		Name         string
 		Path         []string
 		AbsolutePath string
-		GlobPath     string
 		FileSize     int
 		Sha1Sum      string
 		Sha256Sum    string
@@ -371,7 +363,6 @@ func TestCollect_WithZZGlob(t *testing.T) {
 			Name:         "Mr Freeze.jpg",
 			Path:         []string{"test", "fixtures", "artifacts", "Mr Freeze.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "Mr Freeze.jpg"),
-			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     362371,
 			Sha1Sum:      "f5bc7bc9f5f9c3e543dde0eb44876c6f9acbfb6b",
 			Sha256Sum:    "0c657a363d92093e68224e0716ed8b8b5d4bbc3dfe9b026e32b241fc9b369d47",
@@ -380,7 +371,6 @@ func TestCollect_WithZZGlob(t *testing.T) {
 			Name:         "Commando.jpg",
 			Path:         []string{"test", "fixtures", "artifacts", "folder", "Commando.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "folder", "Commando.jpg"),
-			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     113000,
 			Sha1Sum:      "811d7cb0317582e22ebfeb929d601cdabea4b3c0",
 			Sha256Sum:    "fcfbe62fd7b6638165a61e8de901ac9df93fc1389906f2772bdefed5de115426",
@@ -389,7 +379,6 @@ func TestCollect_WithZZGlob(t *testing.T) {
 			Name:         "The Terminator.jpg",
 			Path:         []string{"test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
-			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     47301,
 			Sha1Sum:      "ed76566ede9cb6edc975fcadca429665aad8785a",
 			Sha256Sum:    "5b4228a4bbef3d9f676e0a2e8cf6ea06759124ef0fbdb27a6c35df8759fcd39d",
@@ -398,7 +387,6 @@ func TestCollect_WithZZGlob(t *testing.T) {
 			Name:         "Smile.gif",
 			Path:         []string{rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
-			GlobPath:     filepath.Join(root, "test", "fixtures", "artifacts", "**", "*.gif"),
 			FileSize:     2038453,
 			Sha1Sum:      "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd",
 			Sha256Sum:    "fc5e8608c7772e4ae834fbc47eec3d902099eb3599f5191e40d9e3d9b3764b0e",
@@ -450,7 +438,6 @@ func TestCollect_WithZZGlob(t *testing.T) {
 
 			assert.Equal(t, filepath.Join(tc.Path...), a.Path)
 			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
-			assert.Equal(t, tc.GlobPath, a.GlobPath)
 			assert.Equal(t, tc.FileSize, int(a.FileSize))
 			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
 			assert.Equal(t, tc.Sha256Sum, a.Sha256Sum)
@@ -474,7 +461,6 @@ func TestCollect_WithZZGlob(t *testing.T) {
 
 			assert.Equal(t, forwardSlashed, a.Path)
 			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
-			assert.Equal(t, tc.GlobPath, a.GlobPath)
 			assert.Equal(t, tc.FileSize, int(a.FileSize))
 			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
 			assert.Equal(t, tc.Sha256Sum, a.Sha256Sum)
