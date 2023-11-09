@@ -14,6 +14,9 @@ import (
 var (
 	//go:embed VERSION
 	baseVersion string
+
+	// buildNumber is filled in by scripts/build-binary.sh by passing -ldflags
+	// "-X github.com/buildkite/agent/v3/version.buildNumber=${BUILDKITE_BUILD_NUMBER}"
 	buildNumber = "x"
 )
 
