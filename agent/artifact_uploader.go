@@ -122,23 +122,30 @@ func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error)
 		seenPaths:        make(map[string]bool),
 	}
 
+	filesCh := make(chan string)
+
+	// Create a few workers to process files as they are found.
+	// Because a single glob could match many many files, a fixed number of
+	// workers will avoid slamming the runtime (as could happen with a
+	// goroutine per file).
 	wctx, cancel := context.WithCancelCause(ctx)
 	var wg sync.WaitGroup
-	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
-		globPath := strings.TrimSpace(globPath)
-		if globPath == "" {
-			continue
-		}
-
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			if err := ac.worker(wctx, globPath); err != nil {
+			if err := ac.worker(wctx, filesCh); err != nil {
 				cancel(err)
 			}
 		}()
 	}
+
+	// Start resolving globs into files.
+	if err := a.glob(wctx, filesCh); err != nil {
+		cancel(err)
+	}
+
 	wg.Wait()
 
 	if err := context.Cause(wctx); err != nil {
@@ -158,69 +165,91 @@ type artifactCollector struct {
 	artifacts []*api.Artifact
 }
 
-func (c *artifactCollector) worker(ctx context.Context, globPath string) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
+// glob resolves the globs (patterns with * and ** in them).
+func (a *ArtifactUploader) glob(ctx context.Context, filesCh chan<- string) error {
+	// glob is solely responsible for writing to the channel.
+	defer close(filesCh)
 
-	c.logger.Debug("Searching for %s", globPath)
-
-	// Resolve the globs (with * and ** in them)
-	var files []string
 	if experiments.IsEnabled(ctx, experiments.UseZZGlob) {
-		// New zzglob library.
-		pattern, err := zzglob.Parse(globPath)
-		if err != nil {
-			return fmt.Errorf("invalid glob pattern: %w", err)
+		// New zzglob library. Do all globs at once with MultiGlob, which takes
+		// care of any necessary parallelism under the hood.
+		a.logger.Debug("Searching for %s", a.conf.Paths)
+		var patterns []*zzglob.Pattern
+		for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
+			globPath := strings.TrimSpace(globPath)
+			if globPath == "" {
+				continue
+			}
+			pattern, err := zzglob.Parse(globPath)
+			if err != nil {
+				return fmt.Errorf("invalid glob pattern %q: %w", globPath, err)
+			}
+			patterns = append(patterns, pattern)
 		}
 
 		walkDirFunc := func(path string, d fs.DirEntry, err error) error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
 			if err != nil {
-				c.logger.Warn("Couldn't walk path %s", path)
+				a.logger.Warn("Couldn't walk path %s", path)
 				return nil
 			}
 			if d != nil && d.IsDir() {
-				c.logger.Warn("Glob pattern %s matched a directory %s", globPath, path)
+				a.logger.Warn("One of the glob patterns matched a directory: %s", path)
 				return nil
 			}
-			files = append(files, path)
+			filesCh <- path
 			return nil
 		}
-		err = pattern.Glob(walkDirFunc, zzglob.TraverseSymlinks(c.conf.GlobResolveFollowSymlinks))
+		err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
 		if err != nil {
-			return fmt.Errorf("globbing pattern: %w", err)
+			return fmt.Errorf("globbing patterns: %w", err)
 		}
-	} else {
-		// Old go-zglob library.
-		globfunc := zglob.Glob
-		if c.conf.GlobResolveFollowSymlinks {
-			// Follow symbolic links for files & directories while expanding globs
-			globfunc = zglob.GlobFollowSymlinks
-		}
-		fs, err := globfunc(globPath)
-		if errors.Is(err, os.ErrNotExist) {
-			c.logger.Info("File not found: %s", globPath)
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("resolving glob: %w", err)
-		}
-		files = fs
+		return nil
 	}
 
-	// Process each glob match into an api.Artifact
-	for _, file := range files {
+	// Old go-zglob library. Do each glob one at a time.
+	// go-zglob uses fastwalk under the hood to parallelise directory walking.
+	globfunc := zglob.Glob
+	if a.conf.GlobResolveFollowSymlinks {
+		// Follow symbolic links for files & directories while expanding globs
+		globfunc = zglob.GlobFollowSymlinks
+	}
+	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
+		globPath := strings.TrimSpace(globPath)
+		if globPath == "" {
+			continue
+		}
+		files, err := globfunc(globPath)
+		if errors.Is(err, os.ErrNotExist) {
+			a.logger.Info("File not found: %s", globPath)
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("resolving glob %s: %w", globPath, err)
+		}
+		for _, path := range files {
+			filesCh <- path
+		}
+	}
+	return nil
+}
+
+// worker processes each glob match into an api.Artifact
+func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	for {
+		var file string
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+
+		case f, open := <-filesCh:
+			if !open {
+				return nil
+			}
+			file = f
 		}
 
 		absolutePath, err := filepath.Abs(file)
@@ -250,13 +279,13 @@ func (c *artifactCollector) worker(ctx context.Context, globPath string) error {
 			continue
 		}
 
-		// If a glob is absolute, we need to make it relative to the root so that
+		// If a path is absolute, we need to make it relative to the root so that
 		// it can be combined with the download destination to make a valid path.
 		// This is possibly weird and crazy, this logic dates back to
 		// https://github.com/buildkite/agent/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
 		// from 2014, so I'm replicating it here to avoid breaking things
 		basepath := c.wd
-		if filepath.IsAbs(globPath) {
+		if filepath.IsAbs(file) {
 			basepath = "/"
 			if runtime.GOOS == "windows" {
 				basepath = filepath.VolumeName(absolutePath) + "/"
@@ -274,7 +303,7 @@ func (c *artifactCollector) worker(ctx context.Context, globPath string) error {
 		}
 
 		// Build an artifact object using the paths we have.
-		artifact, err := c.build(path, absolutePath, globPath)
+		artifact, err := c.build(path, absolutePath)
 		if err != nil {
 			return fmt.Errorf("building artifact: %w", err)
 		}
@@ -283,26 +312,23 @@ func (c *artifactCollector) worker(ctx context.Context, globPath string) error {
 		c.artifacts = append(c.artifacts, artifact)
 		c.mu.Unlock()
 	}
-	return nil
 }
 
-func (a *ArtifactUploader) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
-	// Temporarily open the file to get its size
+func (a *ArtifactUploader) build(path string, absolutePath string) (*api.Artifact, error) {
+	// Open the file to hash its contents.
 	file, err := os.Open(absolutePath)
 	if err != nil {
 		return nil, fmt.Errorf("opening file %s: %w", absolutePath, err)
 	}
 	defer file.Close()
 
-	// Grab its file info (which includes its file size)
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("getting file info for %s: %w", absolutePath, err)
-	}
-
-	// Generate a SHA-1 and SHA-256 checksums for the file
+	// Generate a SHA-1 and SHA-256 checksums for the file.
+	// Writing to hashes never errors, but reading from the file might.
 	hash1, hash256 := sha1.New(), sha256.New()
-	io.Copy(io.MultiWriter(hash1, hash256), file)
+	size, err := io.Copy(io.MultiWriter(hash1, hash256), file)
+	if err != nil {
+		return nil, fmt.Errorf("reading contents of %s: %w", absolutePath, err)
+	}
 	sha1sum := fmt.Sprintf("%040x", hash1.Sum(nil))
 	sha256sum := fmt.Sprintf("%064x", hash256.Sum(nil))
 
@@ -322,8 +348,7 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	artifact := &api.Artifact{
 		Path:         path,
 		AbsolutePath: absolutePath,
-		GlobPath:     globPath,
-		FileSize:     fileInfo.Size(),
+		FileSize:     size,
 		Sha1Sum:      sha1sum,
 		Sha256Sum:    sha256sum,
 		ContentType:  contentType,
