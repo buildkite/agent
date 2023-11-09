@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/internal/jwkutil"
+	"github.com/buildkite/go-pipeline/jwkutil"
 	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/urfave/cli"

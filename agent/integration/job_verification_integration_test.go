@@ -7,8 +7,9 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/pipeline"
 	"github.com/buildkite/bintest/v3"
+	"github.com/buildkite/go-pipeline"
+	"github.com/buildkite/go-pipeline/signature"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
@@ -530,7 +531,7 @@ func TestJobVerification(t *testing.T) {
 			tc.mockBootstrapExpectation(mb)
 			defer mb.CheckAndClose(t)
 
-			stepWithInvariants := pipeline.CommandStepWithInvariants{
+			stepWithInvariants := signature.CommandStepWithInvariants{
 				CommandStep:   tc.job.Step,
 				RepositoryURL: tc.repositoryURL,
 			}
@@ -625,7 +626,7 @@ func signStep(
 	t *testing.T,
 	key jwk.Key,
 	env map[string]string,
-	stepWithInvariants pipeline.CommandStepWithInvariants,
+	stepWithInvariants signature.CommandStepWithInvariants,
 ) pipeline.CommandStep {
 	t.Helper()
 
@@ -634,7 +635,7 @@ func signStep(
 		return stepWithInvariants.CommandStep
 	}
 
-	signature, err := pipeline.Sign(key, env, &stepWithInvariants)
+	signature, err := signature.Sign(key, env, &stepWithInvariants)
 	if err != nil {
 		t.Fatalf("signing step: %v", err)
 	}

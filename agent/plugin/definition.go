@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/ordered"
+	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/qri-io/jsonschema"
 	"gopkg.in/yaml.v3"
 )
