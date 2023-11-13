@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/embedded"
 )
 
 // TestOpenTracingSpan is a simple opentracing-compatible span to help test.
@@ -43,6 +44,8 @@ func newTestOpenTracingSpan() *OpenTracingSpan {
 }
 
 type TestOtelSpan struct {
+	embedded.Span
+
 	finished       bool
 	err            error
 	events         []string
@@ -53,6 +56,8 @@ type TestOtelSpan struct {
 	attributes     []attribute.KeyValue
 	tracerProvider trace.TracerProvider
 }
+
+var _ trace.Span = (*TestOtelSpan)(nil)
 
 func (t *TestOtelSpan) End(options ...trace.SpanEndOption)            { t.finished = true }
 func (t *TestOtelSpan) IsRecording() bool                             { return !t.finished }
