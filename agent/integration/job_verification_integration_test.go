@@ -48,6 +48,27 @@ var (
 		},
 	}
 
+	jobWithNoPluginConfig = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+			Plugins: pipeline.Plugins{{
+				Source: "some#v1.0.0",
+				Config: nil,
+			}},
+			Env: map[string]string{
+				"DEPLOY": "1",
+			},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_PLUGINS": `[{"github.com/buildkite-plugins/some-buildkite-plugin#v1.0.0":null}]`,
+			"BUILDKITE_REPO":    defaultRepositoryURL,
+			"DEPLOY":            "1", // step env overrides pipeline env
+		},
+	}
+
 	jobWithNoPlugins = api.Job{
 		ChunksMaxSizeBytes: 1024,
 		ID:                 defaultJobID,
@@ -357,6 +378,18 @@ func TestJobVerification(t *testing.T) {
 				"+++ ⛔",
 				"job does not match signed step",
 			},
+		},
+		{
+			name:                     "when the step signature matches, and the plugins have null config",
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithNoPluginConfig,
+			repositoryURL:            defaultRepositoryURL,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+			expectLogsContain:        []string{"✅"},
 		},
 		{
 			name:                     "when the step signature matches, but the plugins are missing from the job, it fails signature verification",
