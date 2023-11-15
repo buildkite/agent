@@ -54,6 +54,9 @@ type LogStreamer struct {
 
 	// Only allow processing one at a time
 	processMutex sync.Mutex
+
+	// Have we logged a warning about the size?
+	warnedAboutSize bool
 }
 
 type LogStreamerChunk struct {
@@ -111,18 +114,16 @@ func (ls *LogStreamer) Process(output []byte) {
 	ls.processMutex.Lock()
 	defer ls.processMutex.Unlock()
 
-	warnedAboutSize := false
-
 	for len(output) > 0 {
 		// Have we exceeded the max size?
 		// (This check is also performed on the server side.)
-		if ls.bytes > ls.conf.MaxSizeBytes && !warnedAboutSize {
+		if ls.bytes > ls.conf.MaxSizeBytes && !ls.warnedAboutSize {
 			ls.logger.Warn("The job log has reached %s in size, which has "+
 				"exceeded the maximum size (%s). Further logs may be dropped "+
 				"by the server, and a future version of the agent will stop "+
 				"sending logs at this point.",
 				humanize.Bytes(ls.bytes), humanize.Bytes(ls.conf.MaxSizeBytes))
-			warnedAboutSize = true
+			ls.warnedAboutSize = true
 			// In a future version, this will error out, e.g.:
 			//return fmt.Errorf("job log has exceeded max job log size (%d > %d)", ls.bytes, ls.conf.MaxSizeBytes)
 		}
