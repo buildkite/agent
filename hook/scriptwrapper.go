@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
-	"github.com/buildkite/agent/v3/internal/utils"
 )
 
 const (
@@ -223,21 +223,25 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	}
 	script := buf.String()
 
-	// Write the hook script to the runner then close the file so we can run it
-	if _, err = scriptFile.WriteString(script); err != nil {
-		return nil, err
+	if wrap.os == "linux" {
+		// On linux, we write the script in a sub process so that its file
+		// descriptor does not leak into the parent process. This can then leak
+		// across threads an leave the file descriptor open when we try to execute
+		// the script, causing a "text file busy" error. See https://github.com/golang/go/issues/22315
+		// TODO: replace with an agent subcommand
+		if err := exec.Command(
+			"sh",
+			"-c",
+			fmt.Sprintf("echo %q > %q && chmod +x %q", script, wrap.wrapperPath, wrap.wrapperPath),
+		).Run(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := os.WriteFile(wrap.wrapperPath, []byte(script), 0o700); err != nil {
+			return nil, err
+		}
 	}
 
-	// Make script executable
-	if err := utils.ChmodExecutable(wrap.wrapperPath); err != nil {
-		return nil, err
-	}
-
-	// the defered close attempt will discard any errors,
-	// and attempting to execute a unclosed script will fail with ETXTBSY
-	if err := scriptFile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close script file: %w", err)
-	}
 	return wrap, nil
 }
 
