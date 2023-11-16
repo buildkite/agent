@@ -272,7 +272,7 @@ func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
 }
 
 func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper *ScriptWrapper) {
-	file, err := os.Open(wrapper.scriptFile.Name())
+	file, err := os.Open(wrapper.wrapperPath)
 	assert.NoError(t, err)
 
 	defer file.Close()
@@ -280,7 +280,7 @@ func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper
 	wrapperScriptContents, err := io.ReadAll(file)
 	assert.NoError(t, err)
 
-	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvFile.Name(), hookFileName, wrapper.afterEnvFile.Name())
+	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvPath, hookFileName, wrapper.afterEnvPath)
 
 	assert.Equal(t, expected, string(wrapperScriptContents))
 }

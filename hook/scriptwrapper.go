@@ -99,9 +99,9 @@ type scriptWrapperOpt func(*ScriptWrapper)
 type ScriptWrapper struct {
 	hookPath      string
 	os            string
-	scriptFile    *os.File
-	beforeEnvFile *os.File
-	afterEnvFile  *os.File
+	wrapperPath   string
+	beforeEnvPath string
+	afterEnvPath  string
 }
 
 func WithHookPath(path string) scriptWrapperOpt {
@@ -170,33 +170,32 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	}
 
 	// Create a temporary file that we'll put the hook runner code in
-	wrap.scriptFile, err = shell.TempFileWithExtension(scriptFileName)
+	scriptFile, err := shell.TempFileWithExtension(scriptFileName)
 	if err != nil {
 		return nil, err
 	}
-	defer wrap.scriptFile.Close()
+	defer scriptFile.Close()
+	wrap.wrapperPath = scriptFile.Name()
 
 	// We'll pump the ENV before the hook into this temp file
-	wrap.beforeEnvFile, err = shell.TempFileWithExtension(
-		"buildkite-agent-bootstrap-hook-env-before",
-	)
+	beforeEnvFile, err := shell.TempFileWithExtension("buildkite-agent-bootstrap-hook-env-before")
 	if err != nil {
 		return nil, err
 	}
-	if err := wrap.beforeEnvFile.Close(); err != nil {
+	if err := beforeEnvFile.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close before env file: %w", err)
 	}
+	wrap.beforeEnvPath = beforeEnvFile.Name()
 
 	// We'll then pump the ENV _after_ the hook into this temp file
-	wrap.afterEnvFile, err = shell.TempFileWithExtension(
-		"buildkite-agent-bootstrap-hook-env-after",
-	)
+	afterEnvFile, err := shell.TempFileWithExtension("buildkite-agent-bootstrap-hook-env-after")
 	if err != nil {
 		return nil, err
 	}
-	if err := wrap.afterEnvFile.Close(); err != nil {
+	if err := afterEnvFile.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close after env file: %w", err)
 	}
+	wrap.afterEnvPath = afterEnvFile.Name()
 
 	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
@@ -205,8 +204,8 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 
 	tmplInput := scriptTemplateInput{
 		ShebangLine:       shebang,
-		BeforeEnvFileName: wrap.beforeEnvFile.Name(),
-		AfterEnvFileName:  wrap.afterEnvFile.Name(),
+		BeforeEnvFileName: wrap.beforeEnvPath,
+		AfterEnvFileName:  wrap.afterEnvPath,
 		PathToHook:        absolutePathToHook,
 	}
 
@@ -225,20 +224,18 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	script := buf.String()
 
 	// Write the hook script to the runner then close the file so we can run it
-	_, err = wrap.scriptFile.WriteString(script)
-	if err != nil {
+	if _, err = scriptFile.WriteString(script); err != nil {
 		return nil, err
 	}
 
 	// Make script executable
-	err = utils.ChmodExecutable(wrap.scriptFile.Name())
-	if err != nil {
+	if err := utils.ChmodExecutable(wrap.wrapperPath); err != nil {
 		return nil, err
 	}
 
 	// the defered close attempt will discard any errors,
 	// and attempting to execute a unclosed script will fail with ETXTBSY
-	if err := wrap.scriptFile.Close(); err != nil {
+	if err := scriptFile.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close script file: %w", err)
 	}
 	return wrap, nil
@@ -246,26 +243,26 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 
 // Path returns the path to the wrapper script, this is the one that should be executed
 func (wrap *ScriptWrapper) Path() string {
-	return wrap.scriptFile.Name()
+	return wrap.wrapperPath
 }
 
 // Close cleans up the wrapper script and the environment files
 func (wrap *ScriptWrapper) Close() {
-	os.Remove(wrap.scriptFile.Name())
-	os.Remove(wrap.beforeEnvFile.Name())
-	os.Remove(wrap.afterEnvFile.Name())
+	_ = os.Remove(wrap.wrapperPath)
+	_ = os.Remove(wrap.beforeEnvPath)
+	_ = os.Remove(wrap.afterEnvPath)
 }
 
 // Changes returns the changes in the environment and working dir after the hook script runs
 func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
-	beforeEnvContents, err := os.ReadFile(wrap.beforeEnvFile.Name())
+	beforeEnvContents, err := os.ReadFile(wrap.beforeEnvPath)
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.beforeEnvFile.Name(), err)
+		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.beforeEnvPath, err)
 	}
 
-	afterEnvContents, err := os.ReadFile(wrap.afterEnvFile.Name())
+	afterEnvContents, err := os.ReadFile(wrap.afterEnvPath)
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.afterEnvFile.Name(), err)
+		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.afterEnvPath, err)
 	}
 
 	// An empty afterEnvFile indicates that the hook early-exited from within the
