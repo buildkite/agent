@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"text/template"
 
 	"github.com/buildkite/agent/v3/env"
@@ -169,12 +167,24 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 		scriptFileName += ".bat"
 	}
 
+	var tmpl *template.Template
+	switch {
+	case isWindows && !isPOSIXHook && !isPwshHook:
+		tmpl = batchScriptTmpl
+	case isWindows && isPwshHook:
+		tmpl = powershellScriptTmpl
+	default:
+		tmpl = posixShellScriptTmpl
+	}
+
 	// Create a temporary file that we'll put the hook runner code in
 	scriptFile, err := shell.TempFileWithExtension(scriptFileName)
 	if err != nil {
 		return nil, err
 	}
-	defer scriptFile.Close()
+	if err := scriptFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close script file: %w", err)
+	}
 	wrap.wrapperPath = scriptFile.Name()
 
 	// We'll pump the ENV before the hook into this temp file
@@ -202,47 +212,33 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
-	tmplInput := scriptTemplateInput{
-		ShebangLine:       shebang,
-		BeforeEnvFileName: wrap.beforeEnvPath,
-		AfterEnvFileName:  wrap.afterEnvPath,
-		PathToHook:        absolutePathToHook,
-	}
-
-	// Create the hook runner code
-	buf := &strings.Builder{}
-	switch {
-	case isWindows && !isPOSIXHook && !isPwshHook:
-		batchScriptTmpl.Execute(buf, tmplInput)
-
-	case isWindows && isPwshHook:
-		powershellScriptTmpl.Execute(buf, tmplInput)
-
-	default:
-		posixShellScriptTmpl.Execute(buf, tmplInput)
-	}
-	script := buf.String()
-
-	if wrap.os == "linux" {
-		// On linux, we write the script in a sub process so that its file
-		// descriptor does not leak into the parent process. This can then leak
-		// across threads an leave the file descriptor open when we try to execute
-		// the script, causing a "text file busy" error. See https://github.com/golang/go/issues/22315
-		// TODO: replace with an agent subcommand
-		if err := exec.Command(
-			"sh",
-			"-c",
-			fmt.Sprintf("echo %q > %q && chmod +x %q", script, wrap.wrapperPath, wrap.wrapperPath),
-		).Run(); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := os.WriteFile(wrap.wrapperPath, []byte(script), 0o700); err != nil {
-			return nil, err
-		}
+	if err := WriteScriptWrapper(
+		tmpl,
+		scriptTemplateInput{
+			ShebangLine:       shebang,
+			BeforeEnvFileName: wrap.beforeEnvPath,
+			AfterEnvFileName:  wrap.afterEnvPath,
+			PathToHook:        absolutePathToHook,
+		},
+		scriptFileName,
+	); err != nil {
+		return nil, err
 	}
 
 	return wrap, nil
+}
+
+func WriteScriptWrapper(
+	tmpl *template.Template,
+	input scriptTemplateInput,
+	scriptWrapperPath string,
+) error {
+	f, err := os.OpenFile(scriptWrapperPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o700)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return tmpl.Execute(f, input)
 }
 
 // Path returns the path to the wrapper script, this is the one that should be executed
