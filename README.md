@@ -176,14 +176,12 @@ like systems, as well as Windows.
   - CentOS 8
 - Amazon Linux 2
 - macOS [^1]
-  - 10.13 (High Sierra)
-  - 10.14 (Mojave)
   - 10.15 (Catalina)
   - 11 (Big Sur)
   - 12 (Monterey)
   - 13 (Ventura)
+  - 14 (Sonoma)
 - Windows Server
-  - 2012 R2
   - 2016
   - 2019
   - 2022
