@@ -13,9 +13,17 @@ const (
 	allRWX     = 0o777
 )
 
-// KeepExtension creates a temporary file that copies the extension of the provided filename
+// KeepExtension creates a temporary file that with the same extension as the provided filename.
+// It will be created in the subdirectory "buildkite-agent" inside the system temp directory.
 func KeepExtension(filename string) (*os.File, error) {
 	return KeepExtensionWithMode("buildkite-agent", filename, userOnlyRW)
+}
+
+// KeepExtensionAndClose creates a temporary file that with the same extension as the provided
+// filename and closes it. It will be created in the subdirectory `dir` inside the system temp
+// directory.
+func KeepExtensionAndClose(dir, filename string) (string, error) {
+	return KeepExtensionWithModeAndClose(dir, filename, userOnlyRW)
 }
 
 // KeepExtensionWithMode creates a temporary file with the same extension of the

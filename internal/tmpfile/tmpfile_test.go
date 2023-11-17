@@ -24,6 +24,16 @@ func TestKeepExtension(t *testing.T) {
 	assert.Check(t, filepath.Ext(f.Name()) == ".txt")
 }
 
+func TestKeepExtensionAndClose(t *testing.T) {
+	t.Parallel()
+
+	filename, err := tmpfile.KeepExtensionAndClose("buildkite-agent", "foo.txt")
+	assert.NilError(t, err, `KeepExtension("foo.txt") = %v`, err)
+
+	assert.Check(t, strings.HasPrefix(filename, os.TempDir()))
+	assert.Check(t, filepath.Ext(filename) == ".txt")
+}
+
 func TestKeepExtensionWithMode(t *testing.T) {
 	t.Parallel()
 

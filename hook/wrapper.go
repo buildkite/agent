@@ -180,20 +180,12 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		tmpl = PosixShellWrapperTmpl
 	}
 
-	wrap.beforeEnvPath, err = tmpfile.KeepExtensionWithModeAndClose(
-		hookWrapperDir,
-		"hook-before-env",
-		0o600,
-	)
+	wrap.beforeEnvPath, err = tmpfile.KeepExtensionAndClose(hookWrapperDir, "hook-before-env")
 	if err != nil {
 		return nil, err
 	}
 
-	wrap.afterEnvPath, err = tmpfile.KeepExtensionWithModeAndClose(
-		hookWrapperDir,
-		"hook-after-env",
-		0o600,
-	)
+	wrap.afterEnvPath, err = tmpfile.KeepExtensionAndClose(hookWrapperDir, "hook-after-env")
 	if err != nil {
 		return nil, err
 	}
