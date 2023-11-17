@@ -150,7 +150,7 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 
 	var isPOSIXHook, isPwshHook bool
 
-	scriptFileName := "buildkite-agent-bootstrap-hook-runner"
+	scriptFileName := "hook-script-wrapper"
 	isWindows := wrap.os == "windows"
 
 	// we use bash hooks for scripts with no extension, otherwise on windows
@@ -177,35 +177,22 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 		tmpl = posixShellScriptTmpl
 	}
 
-	// Create a temporary file that we'll put the hook runner code in
-	scriptFile, err := shell.TempFileWithExtension(scriptFileName)
-	if err != nil {
-		return nil, err
-	}
-	if err := scriptFile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close script file: %w", err)
-	}
-	wrap.wrapperPath = scriptFile.Name()
+	const prefix = "buildkite-agent-bootstrap-hook"
 
-	// We'll pump the ENV before the hook into this temp file
-	beforeEnvFile, err := shell.TempFileWithExtension("buildkite-agent-bootstrap-hook-env-before")
+	wrap.wrapperPath, err = shell.ClosedTempFileWithExtensionAndMode(prefix, scriptFileName, 0o700)
 	if err != nil {
 		return nil, err
 	}
-	if err := beforeEnvFile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close before env file: %w", err)
-	}
-	wrap.beforeEnvPath = beforeEnvFile.Name()
 
-	// We'll then pump the ENV _after_ the hook into this temp file
-	afterEnvFile, err := shell.TempFileWithExtension("buildkite-agent-bootstrap-hook-env-after")
+	wrap.beforeEnvPath, err = shell.ClosedTempFileWithExtensionAndMode(prefix, "hook-before-env", 0o600)
 	if err != nil {
 		return nil, err
 	}
-	if err := afterEnvFile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close after env file: %w", err)
+
+	wrap.afterEnvPath, err = shell.ClosedTempFileWithExtensionAndMode(prefix, "hook-after-env", 0o600)
+	if err != nil {
+		return nil, err
 	}
-	wrap.afterEnvPath = afterEnvFile.Name()
 
 	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
@@ -220,7 +207,7 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 			AfterEnvFileName:  wrap.afterEnvPath,
 			PathToHook:        absolutePathToHook,
 		},
-		scriptFileName,
+		wrap.wrapperPath,
 	); err != nil {
 		return nil, err
 	}
