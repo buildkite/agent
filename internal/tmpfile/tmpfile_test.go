@@ -3,6 +3,7 @@ package tmpfile_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -37,6 +38,10 @@ func TestKeepExtensionAndClose(t *testing.T) {
 func TestKeepExtensionWithMode(t *testing.T) {
 	t.Parallel()
 
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows doesn't support or need checking if chmod worked")
+	}
+
 	f, err := tmpfile.KeepExtensionWithMode("buildkite-agent", "foo.txt", 0o644)
 	assert.NilError(t, err, `KeepExtensionWithMode("buildkite-agent", "foo.txt", 0o644) = %v`, err)
 	defer func() {
@@ -54,6 +59,10 @@ func TestKeepExtensionWithMode(t *testing.T) {
 
 func TestKeepExtensionWithModeAndClose(t *testing.T) {
 	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows doesn't support or need checking if chmod worked")
+	}
 
 	filename, err := tmpfile.KeepExtensionWithModeAndClose("buildkite-agent", "foo.txt", 0o644)
 	assert.NilError(t, err, `KeepExtensionWithModeAndClose("buildkite-agent", "foo.txt", 0o644) = %v`, err)
