@@ -79,7 +79,7 @@ func (e *HookExitError) Error() string {
 	return fmt.Sprintf("Hook %q early exited, could not record after environment or working directory", e.hookPath)
 }
 
-type scriptWrapperOpt func(*ScriptWrapper)
+type ScriptWrapperOpt func(*ScriptWrapper)
 
 // Hooks get "sourced" into the bootstrap in the sense that they get the
 // environment set for them and then we capture any extra environment variables
@@ -102,21 +102,21 @@ type ScriptWrapper struct {
 	afterEnvPath  string
 }
 
-func WithHookPath(path string) scriptWrapperOpt {
+func WithHookPath(path string) ScriptWrapperOpt {
 	return func(wrap *ScriptWrapper) {
 		wrap.hookPath = path
 	}
 }
 
-func WithOS(os string) scriptWrapperOpt {
+func WithOS(o string) ScriptWrapperOpt {
 	return func(wrap *ScriptWrapper) {
-		wrap.os = os
+		wrap.os = o
 	}
 }
 
 // NewScriptWrapper creates and configures a ScriptWrapper.
 // Writes temporary files to the filesystem.
-func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
+func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 	wrap := &ScriptWrapper{
 		os: runtime.GOOS,
 	}
