@@ -232,12 +232,16 @@ func WriteScriptWrapper(
 	tmpl *template.Template,
 	input scriptTemplateInput,
 	scriptWrapperPath string,
-) error {
+) (err error) {
 	f, err := os.OpenFile(scriptWrapperPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o700)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			err = fmt.Errorf("closing file: %w, other: %w", cerr, err)
+		}
+	}()
 	return tmpl.Execute(f, input)
 }
 
