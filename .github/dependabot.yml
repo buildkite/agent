@@ -1,43 +1,43 @@
 version: 2
 updates:
-  - package-ecosystem: "docker"
+  - package-ecosystem: docker
     directory: /packaging/docker/alpine
     schedule:
-      interval: "monthly"
-  - package-ecosystem: "docker"
+      interval: weekly
+  - package-ecosystem: docker
     directory: /packaging/docker/alpine-k8s
     schedule:
-      interval: "monthly"
-  - package-ecosystem: "docker"
+      interval: weekly
+  - package-ecosystem: docker
     directory: /packaging/docker/sidecar
     schedule:
-      interval: "monthly"
-  - package-ecosystem: "docker"
+      interval: weekly
+  - package-ecosystem: docker
     directory: /packaging/docker/ubuntu-18.04
     schedule:
-      interval: "monthly"
+      interval: weekly
     ignore:
       - dependency-name: ubuntu
-  - package-ecosystem: "docker"
+  - package-ecosystem: docker
     directory: /packaging/docker/ubuntu-20.04
     schedule:
-      interval: "monthly"
+      interval: weekly
     ignore:
       - dependency-name: ubuntu
-  - package-ecosystem: "docker"
+  - package-ecosystem: docker
     directory: /packaging/docker/ubuntu-22.04
     schedule:
-      interval: "monthly"
+      interval: weekly
     ignore:
       - dependency-name: ubuntu
-  - package-ecosystem: "docker"
+  - package-ecosystem: docker
     directory: /.buildkite
     schedule:
-      interval: "monthly"
-  - package-ecosystem: "gomod"
+      interval: weekly
+  - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: "weekly"
+      interval: weekly
     open-pull-requests-limit: 10
     groups:
       otel:
