@@ -1,4 +1,4 @@
-package shell
+package tmpfile
 
 import (
 	"fmt"
@@ -8,15 +8,20 @@ import (
 	"strings"
 )
 
-// TempFileWithExtension creates a temporary file that copies the extension of the provided filename
-func TempFileWithExtension(filename string) (*os.File, error) {
-	return SystemTempFileWithExtensionAndMode("", filename, 0o600)
+const (
+	userOnlyRW = 0o600
+	allRWX     = 0o777
+)
+
+// KeepExtension creates a temporary file that copies the extension of the provided filename
+func KeepExtension(filename string) (*os.File, error) {
+	return KeepExtensionWithMode("buildkite-agent", filename, userOnlyRW)
 }
 
-// SystemTempFileWithExtensionAndMode creates a temporary file with the same extension of the
+// KeepExtensionWithMode creates a temporary file with the same extension of the
 // provided `filename` and sets its permissions to `perm`. The file will be created in the
 // subdirectory `dir` inside the system temp directory.
-func SystemTempFileWithExtensionAndMode(dir, filename string, perm fs.FileMode) (*os.File, error) {
+func KeepExtensionWithMode(dir, filename string, perm fs.FileMode) (*os.File, error) {
 	extension := filepath.Ext(filename)
 	basename := strings.TrimSuffix(filename, extension)
 	tempDir := filepath.Join(os.TempDir(), dir)
@@ -24,7 +29,7 @@ func SystemTempFileWithExtensionAndMode(dir, filename string, perm fs.FileMode) 
 	// Best effort ensure tempDir exists
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		// umask will make perms more reasonable
-		if err := os.MkdirAll(tempDir, 0o777); err != nil {
+		if err := os.MkdirAll(tempDir, allRWX); err != nil {
 			return nil, err
 		}
 	}
@@ -41,11 +46,11 @@ func SystemTempFileWithExtensionAndMode(dir, filename string, perm fs.FileMode) 
 	return tempFile, nil
 }
 
-// ClosedSystemTempFileWithExtensionAndMode creates a temporary file with the same extension of the
+// KeepExtensionWithModeAndClose creates a temporary file with the same extension of the
 // provided `filename` and sets its permissions to `perm`. The file will be created in the
 // subdirectory `dir` inside the system temp directory. It closes the file after creating it.
-func ClosedSystemTempFileWithExtensionAndMode(dir, filename string, perm fs.FileMode) (string, error) {
-	f, err := SystemTempFileWithExtensionAndMode(dir, filename, perm)
+func KeepExtensionWithModeAndClose(dir, filename string, perm fs.FileMode) (string, error) {
+	f, err := KeepExtensionWithMode(dir, filename, perm)
 	if err != nil {
 		return "", err
 	}

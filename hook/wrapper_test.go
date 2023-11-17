@@ -13,6 +13,7 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/tmpfile"
 	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -87,7 +88,7 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := shell.TempFileWithExtension("hookName.bat")
+	hookFile, err := tmpfile.KeepExtension("hookName.bat")
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, "echo Hello There!")
@@ -120,7 +121,7 @@ EXIT %%BUILDKITE_HOOK_EXIT_STATUS%%`
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := shell.TempFileWithExtension("hookName.ps1")
+	hookFile, err := tmpfile.KeepExtension("hookName.ps1")
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, `Write-Output "Hello There!"`)
@@ -150,7 +151,7 @@ exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := shell.TempFileWithExtension("hookName")
+	hookFile, err := tmpfile.KeepExtension("hookName")
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, "#!/bin/dash\necho 'Hello There!'")
@@ -255,7 +256,7 @@ func newTestScriptWrapper(t *testing.T, script []string) *Wrapper {
 		hookName += ".bat"
 	}
 
-	hookFile, err := shell.TempFileWithExtension(hookName)
+	hookFile, err := tmpfile.KeepExtension(hookName)
 	assert.NoError(t, err)
 
 	for _, line := range script {
@@ -337,7 +338,7 @@ func mockAgent() (*bintest.Mock, func(), error) {
 func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := shell.TempFileWithExtension("hookName")
+	hookFile, err := tmpfile.KeepExtension("hookName")
 	assert.NoError(t, err)
 
 	script := strings.Join([]string{

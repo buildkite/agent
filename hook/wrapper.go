@@ -10,8 +10,8 @@ import (
 	"text/template"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
+	"github.com/buildkite/agent/v3/internal/tmpfile"
 )
 
 const (
@@ -180,7 +180,7 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		tmpl = PosixShellWrapperTmpl
 	}
 
-	wrap.beforeEnvPath, err = shell.ClosedSystemTempFileWithExtensionAndMode(
+	wrap.beforeEnvPath, err = tmpfile.KeepExtensionWithModeAndClose(
 		hookWrapperDir,
 		"hook-before-env",
 		0o600,
@@ -189,7 +189,7 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		return nil, err
 	}
 
-	wrap.afterEnvPath, err = shell.ClosedSystemTempFileWithExtensionAndMode(
+	wrap.afterEnvPath, err = tmpfile.KeepExtensionWithModeAndClose(
 		hookWrapperDir,
 		"hook-after-env",
 		0o600,
@@ -224,7 +224,7 @@ func WriteHookWrapper(
 	input WrapperTemplateInput,
 	hookWrapperName string,
 ) (name string, err error) {
-	f, err := shell.SystemTempFileWithExtensionAndMode(hookWrapperDir, hookWrapperName, 0o700)
+	f, err := tmpfile.KeepExtensionWithMode(hookWrapperDir, hookWrapperName, 0o700)
 	if err != nil {
 		return "", err
 	}
