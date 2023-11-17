@@ -19,7 +19,7 @@ const (
 	hookWorkingDirEnv = "BUILDKITE_HOOK_WORKING_DIR"
 	hookWrapperDir    = "buildkite-agent-hook-wrapper"
 
-	batchScript = `@echo off
+	batchWrapper = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
 buildkite-agent env dump > "{{.BeforeEnvFileName}}"
 CALL "{{.PathToHook}}"
@@ -28,7 +28,7 @@ SET BUILDKITE_HOOK_WORKING_DIR=%CD%
 buildkite-agent env dump > "{{.AfterEnvFileName}}"
 EXIT %BUILDKITE_HOOK_EXIT_STATUS%`
 
-	powershellScript = `$ErrorActionPreference = "STOP"
+	powershellWrapper = `$ErrorActionPreference = "STOP"
 buildkite-agent env dump | Set-Content "{{.BeforeEnvFileName}}"
 {{.PathToHook}}
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
@@ -36,7 +36,7 @@ $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
 buildkite-agent env dump | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
-	posixShellScript = `{{if .ShebangLine}}{{.ShebangLine}}
+	posixShellWrapper = `{{if .ShebangLine}}{{.ShebangLine}}
 {{end -}}
 buildkite-agent env dump > "{{.BeforeEnvFileName}}"
 . "{{.PathToHook}}"
@@ -47,24 +47,26 @@ exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 
 var (
-	batchScriptTmpl      = template.Must(template.New("batch").Parse(batchScript))
-	powershellScriptTmpl = template.Must(template.New("pwsh").Parse(powershellScript))
-	posixShellScriptTmpl = template.Must(template.New("bash").Parse(posixShellScript))
+	batchWrapperTmpl      = template.Must(template.New("batch").Parse(batchWrapper))
+	powershellWrapperTmpl = template.Must(template.New("pwsh").Parse(powershellWrapper))
+	PosixShellWrapperTmpl = template.Must(template.New("bash").Parse(posixShellWrapper))
+
+	ErrNoHookPath = errors.New("hook path was not provided")
 )
 
-type scriptTemplateInput struct {
+type WrapperTemplateInput struct {
 	ShebangLine       string
 	BeforeEnvFileName string
 	AfterEnvFileName  string
 	PathToHook        string
 }
 
-type HookScriptChanges struct {
+type EnvChanges struct {
 	Diff    env.Diff
 	afterWd string
 }
 
-func (changes *HookScriptChanges) GetAfterWd() (string, error) {
+func (changes *EnvChanges) GetAfterWd() (string, error) {
 	if changes.afterWd == "" {
 		return "", fmt.Errorf("%q was not present in the hook after environment", hookWorkingDirEnv)
 	}
@@ -72,15 +74,15 @@ func (changes *HookScriptChanges) GetAfterWd() (string, error) {
 	return changes.afterWd, nil
 }
 
-type HookExitError struct {
+type ExitError struct {
 	hookPath string
 }
 
-func (e *HookExitError) Error() string {
+func (e *ExitError) Error() string {
 	return fmt.Sprintf("Hook %q early exited, could not record after environment or working directory", e.hookPath)
 }
 
-type ScriptWrapperOpt func(*ScriptWrapper)
+type WrapperOpt func(*Wrapper)
 
 // Hooks get "sourced" into the bootstrap in the sense that they get the
 // environment set for them and then we capture any extra environment variables
@@ -92,10 +94,10 @@ type ScriptWrapperOpt func(*ScriptWrapper)
 // Then we can use the diff of the two to figure out what changes to make to the
 // bootstrap. Horrible, but effective.
 
-// ScriptWrapper wraps a hook script with env collection and then provides
+// Wrapper wraps a hook script with env collection and then provides
 // a way to get the difference between the environment before the hook is run and
 // after it
-type ScriptWrapper struct {
+type Wrapper struct {
 	hookPath      string
 	os            string
 	wrapperPath   string
@@ -103,22 +105,22 @@ type ScriptWrapper struct {
 	afterEnvPath  string
 }
 
-func WithHookPath(path string) ScriptWrapperOpt {
-	return func(wrap *ScriptWrapper) {
+func WithHookPath(path string) WrapperOpt {
+	return func(wrap *Wrapper) {
 		wrap.hookPath = path
 	}
 }
 
-func WithOS(o string) ScriptWrapperOpt {
-	return func(wrap *ScriptWrapper) {
+func WithOS(o string) WrapperOpt {
+	return func(wrap *Wrapper) {
 		wrap.os = o
 	}
 }
 
-// NewScriptWrapper creates and configures a ScriptWrapper.
+// NewWrapper creates and configures a hook.Wrapper.
 // Writes temporary files to the filesystem.
-func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
-	wrap := &ScriptWrapper{
+func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
+	wrap := &Wrapper{
 		os: runtime.GOOS,
 	}
 
@@ -127,7 +129,7 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 	}
 
 	if wrap.hookPath == "" {
-		return nil, errors.New("hook path was not provided")
+		return nil, ErrNoHookPath
 	}
 
 	// Extract any shebang line from the hook to copy into the wrapper.
@@ -171,11 +173,11 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 	var tmpl *template.Template
 	switch {
 	case isWindows && !isPOSIXHook && !isPwshHook:
-		tmpl = batchScriptTmpl
+		tmpl = batchWrapperTmpl
 	case isWindows && isPwshHook:
-		tmpl = powershellScriptTmpl
+		tmpl = powershellWrapperTmpl
 	default:
-		tmpl = posixShellScriptTmpl
+		tmpl = PosixShellWrapperTmpl
 	}
 
 	wrap.beforeEnvPath, err = shell.ClosedSystemTempFileWithExtensionAndMode(
@@ -201,9 +203,9 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
-	if err := wrap.wrapperPath, err = WriteHookWrapper(
+	if wrap.wrapperPath, err = WriteHookWrapper(
 		tmpl,
-		scriptTemplateInput{
+		WrapperTemplateInput{
 			ShebangLine:       shebang,
 			BeforeEnvFileName: wrap.beforeEnvPath,
 			AfterEnvFileName:  wrap.afterEnvPath,
@@ -219,7 +221,7 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 
 func WriteHookWrapper(
 	tmpl *template.Template,
-	input scriptTemplateInput,
+	input WrapperTemplateInput,
 	hookWrapperName string,
 ) (name string, err error) {
 	f, err := shell.SystemTempFileWithExtensionAndMode(hookWrapperDir, hookWrapperName, 0o700)
@@ -235,34 +237,35 @@ func WriteHookWrapper(
 }
 
 // Path returns the path to the wrapper script, this is the one that should be executed
-func (wrap *ScriptWrapper) Path() string {
-	return wrap.wrapperPath
+func (w *Wrapper) Path() string {
+	return w.wrapperPath
 }
 
-// Close cleans up the wrapper script and the environment files
-func (wrap *ScriptWrapper) Close() {
-	_ = os.Remove(wrap.wrapperPath)
-	_ = os.Remove(wrap.beforeEnvPath)
-	_ = os.Remove(wrap.afterEnvPath)
+// Close cleans up the wrapper script and the environment files. Ignores errors, in
+// particular the error from os.Remove if the file doesn't exist.
+func (w *Wrapper) Close() {
+	_ = os.Remove(w.wrapperPath)
+	_ = os.Remove(w.beforeEnvPath)
+	_ = os.Remove(w.afterEnvPath)
 }
 
 // Changes returns the changes in the environment and working dir after the hook script runs
-func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
-	beforeEnvContents, err := os.ReadFile(wrap.beforeEnvPath)
+func (w *Wrapper) Changes() (EnvChanges, error) {
+	beforeEnvContents, err := os.ReadFile(w.beforeEnvPath)
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.beforeEnvPath, err)
+		return EnvChanges{}, fmt.Errorf("reading file %q: %w", w.beforeEnvPath, err)
 	}
 
-	afterEnvContents, err := os.ReadFile(wrap.afterEnvPath)
+	afterEnvContents, err := os.ReadFile(w.afterEnvPath)
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("reading file %q: %w", wrap.afterEnvPath, err)
+		return EnvChanges{}, fmt.Errorf("reading file %q: %w", w.afterEnvPath, err)
 	}
 
 	// An empty afterEnvFile indicates that the hook early-exited from within the
 	// ScriptWrapper, so the working directory and environment changes weren't
 	// captured.
 	if len(afterEnvContents) == 0 {
-		return HookScriptChanges{}, &HookExitError{hookPath: wrap.hookPath}
+		return EnvChanges{}, &ExitError{hookPath: w.hookPath}
 	}
 
 	var (
@@ -272,12 +275,12 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 
 	err = json.Unmarshal(beforeEnvContents, &beforeEnv)
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %s", err, string(beforeEnvContents))
+		return EnvChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %s", err, string(beforeEnvContents))
 	}
 
 	err = json.Unmarshal(afterEnvContents, &afterEnv)
 	if err != nil {
-		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %s", err, string(afterEnvContents))
+		return EnvChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %s", err, string(afterEnvContents))
 	}
 
 	diff := afterEnv.Diff(beforeEnv)
@@ -296,5 +299,5 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	// Bash sets this, but we don't care about it
 	diff.Remove("_")
 
-	return HookScriptChanges{Diff: diff, afterWd: afterWd}, nil
+	return EnvChanges{Diff: diff, afterWd: afterWd}, nil
 }

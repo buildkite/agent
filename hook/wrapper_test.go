@@ -95,7 +95,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 
 	hookFile.Close()
 
-	wrapper, err := NewScriptWrapper(
+	wrapper, err := NewWrapper(
 		WithHookPath(hookFile.Name()),
 		WithOS("windows"),
 	)
@@ -128,7 +128,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 
 	hookFile.Close()
 
-	wrapper, err := NewScriptWrapper(
+	wrapper, err := NewWrapper(
 		WithHookPath(hookFile.Name()),
 		WithOS("windows"),
 	)
@@ -158,7 +158,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 
 	hookFile.Close()
 
-	wrapper, err := NewScriptWrapper(
+	wrapper, err := NewWrapper(
 		WithHookPath(hookFile.Name()),
 		WithOS("linux"),
 	)
@@ -249,7 +249,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	}
 }
 
-func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
+func newTestScriptWrapper(t *testing.T, script []string) *Wrapper {
 	hookName := "hookwrapper"
 	if runtime.GOOS == "windows" {
 		hookName += ".bat"
@@ -265,13 +265,13 @@ func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
 
 	hookFile.Close()
 
-	wrapper, err := NewScriptWrapper(WithHookPath(hookFile.Name()))
+	wrapper, err := NewWrapper(WithHookPath(hookFile.Name()))
 	assert.NoError(t, err)
 
 	return wrapper
 }
 
-func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper *ScriptWrapper) {
+func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper *Wrapper) {
 	file, err := os.Open(wrapper.wrapperPath)
 	assert.NoError(t, err)
 
@@ -350,7 +350,7 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 
 	hookFile.Close()
 
-	_, err = NewScriptWrapper(
+	_, err = NewWrapper(
 		WithHookPath(hookFile.Name()),
 		WithOS("linux"),
 	)

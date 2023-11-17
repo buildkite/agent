@@ -394,7 +394,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	redactors := e.setupRedactors()
 	defer redactors.Flush()
 
-	script, err := hook.NewScriptWrapper(hook.WithHookPath(hookCfg.Path))
+	script, err := hook.NewWrapper(hook.WithHookPath(hookCfg.Path))
 	if err != nil {
 		e.shell.Errorf("Error creating hook script: %v", err)
 		return err
@@ -465,7 +465,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		// for some reason...
 
 		switch err.(type) {
-		case *hook.HookExitError:
+		case *hook.ExitError:
 			// ...because the hook called exit(), tsk we ignore any changes
 			// since we can't discern them but continue on with the job
 			break
@@ -482,7 +482,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	return nil
 }
 
-func (e *Executor) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors replacer.Mux) {
+func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges, redactors replacer.Mux) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != e.shell.Getwd() {
 			_ = e.shell.Chdir(afterWd)
