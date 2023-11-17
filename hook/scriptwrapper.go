@@ -17,6 +17,7 @@ import (
 const (
 	hookExitStatusEnv = "BUILDKITE_HOOK_EXIT_STATUS"
 	hookWorkingDirEnv = "BUILDKITE_HOOK_WORKING_DIR"
+	hookWrapperDir    = "buildkite-agent-hook-wrapper"
 
 	batchScript = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
@@ -177,19 +178,20 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 		tmpl = posixShellScriptTmpl
 	}
 
-	const prefix = "buildkite-agent-bootstrap-hook"
-
-	wrap.wrapperPath, err = shell.ClosedTempFileWithExtensionAndMode(prefix, scriptFileName, 0o700)
+	wrap.beforeEnvPath, err = shell.ClosedSystemTempFileWithExtensionAndMode(
+		hookWrapperDir,
+		"hook-before-env",
+		0o600,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	wrap.beforeEnvPath, err = shell.ClosedTempFileWithExtensionAndMode(prefix, "hook-before-env", 0o600)
-	if err != nil {
-		return nil, err
-	}
-
-	wrap.afterEnvPath, err = shell.ClosedTempFileWithExtensionAndMode(prefix, "hook-after-env", 0o600)
+	wrap.afterEnvPath, err = shell.ClosedSystemTempFileWithExtensionAndMode(
+		hookWrapperDir,
+		"hook-after-env",
+		0o600,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +201,7 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
-	if err := WriteScriptWrapper(
+	if err := wrap.wrapperPath, err = WriteHookWrapper(
 		tmpl,
 		scriptTemplateInput{
 			ShebangLine:       shebang,
@@ -207,7 +209,7 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 			AfterEnvFileName:  wrap.afterEnvPath,
 			PathToHook:        absolutePathToHook,
 		},
-		wrap.wrapperPath,
+		scriptFileName,
 	); err != nil {
 		return nil, err
 	}
@@ -215,21 +217,21 @@ func NewScriptWrapper(opts ...ScriptWrapperOpt) (*ScriptWrapper, error) {
 	return wrap, nil
 }
 
-func WriteScriptWrapper(
+func WriteHookWrapper(
 	tmpl *template.Template,
 	input scriptTemplateInput,
-	scriptWrapperPath string,
-) (err error) {
-	f, err := os.OpenFile(scriptWrapperPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o700)
+	hookWrapperName string,
+) (name string, err error) {
+	f, err := shell.SystemTempFileWithExtensionAndMode(hookWrapperDir, hookWrapperName, 0o700)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() {
 		if cerr := f.Close(); cerr != nil {
 			err = fmt.Errorf("closing file: %w, other: %w", cerr, err)
 		}
 	}()
-	return tmpl.Execute(f, input)
+	return f.Name(), tmpl.Execute(f, input)
 }
 
 // Path returns the path to the wrapper script, this is the one that should be executed
