@@ -1,4 +1,4 @@
-package tmpfile
+package tempfile
 
 import (
 	"fmt"
@@ -10,47 +10,47 @@ import (
 
 const allRWX = 0o777
 
-type tempFileRequest struct {
+type request struct {
 	filename      string
 	dir           string
 	perm          fs.FileMode
 	keepExtension bool
 }
 
-type TempFileOpts func(*tempFileRequest)
+type Opts func(*request)
 
 // WithName sets the filename of the temporary file.
-func WithName(filename string) TempFileOpts {
-	return func(tf *tempFileRequest) {
+func WithName(filename string) Opts {
+	return func(tf *request) {
 		tf.filename = filename
 	}
 }
 
 // WithDir sets the subdirectory of the temporary file within the system temp directory.
-func WithDir(dir string) TempFileOpts {
-	return func(tf *tempFileRequest) {
+func WithDir(dir string) Opts {
+	return func(tf *request) {
 		tf.dir = dir
 	}
 }
 
 // WithPerms sets the permissions of the temporary file.
-func WithPerms(perms fs.FileMode) TempFileOpts {
-	return func(tf *tempFileRequest) {
+func WithPerms(perms fs.FileMode) Opts {
+	return func(tf *request) {
 		tf.perm = perms
 	}
 }
 
 // KeepingExtension ensures the extension of the filename is preserved when creating the temporary
 // file. It has not affect if `WithName` is not also used.
-func KeepingExtension() TempFileOpts {
-	return func(tf *tempFileRequest) {
+func KeepingExtension() Opts {
+	return func(tf *request) {
 		tf.keepExtension = true
 	}
 }
 
 // New creates a temporary file with the provided options.
-func New(opts ...TempFileOpts) (*os.File, error) {
-	req := &tempFileRequest{}
+func New(opts ...Opts) (*os.File, error) {
+	req := &request{}
 
 	for _, opt := range opts {
 		opt(req)
@@ -88,7 +88,7 @@ func New(opts ...TempFileOpts) (*os.File, error) {
 }
 
 // NewClosed creates a temporary file with the provided options and closes it.
-func NewClosed(opts ...TempFileOpts) (string, error) {
+func NewClosed(opts ...Opts) (string, error) {
 	f, err := New(opts...)
 	if err != nil {
 		return "", err

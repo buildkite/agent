@@ -11,7 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/shellscript"
-	"github.com/buildkite/agent/v3/internal/tmpfile"
+	"github.com/buildkite/agent/v3/internal/tempfile"
 )
 
 const (
@@ -180,16 +180,16 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		tmpl = PosixShellWrapperTmpl
 	}
 
-	if wrap.beforeEnvPath, err = tmpfile.NewClosed(
-		tmpfile.WithDir(hookWrapperDir),
-		tmpfile.WithName("hook-before-env"),
+	if wrap.beforeEnvPath, err = tempfile.NewClosed(
+		tempfile.WithDir(hookWrapperDir),
+		tempfile.WithName("hook-before-env"),
 	); err != nil {
 		return nil, err
 	}
 
-	if wrap.afterEnvPath, err = tmpfile.NewClosed(
-		tmpfile.WithDir(hookWrapperDir),
-		tmpfile.WithName("hook-after-env"),
+	if wrap.afterEnvPath, err = tempfile.NewClosed(
+		tempfile.WithDir(hookWrapperDir),
+		tempfile.WithName("hook-after-env"),
 	); err != nil {
 		return nil, err
 	}
@@ -220,11 +220,11 @@ func WriteHookWrapper(
 	input WrapperTemplateInput,
 	hookWrapperName string,
 ) (string, error) {
-	f, err := tmpfile.New(
-		tmpfile.WithDir(hookWrapperDir),
-		tmpfile.WithName(hookWrapperName),
-		tmpfile.KeepingExtension(),
-		tmpfile.WithPerms(0o700),
+	f, err := tempfile.New(
+		tempfile.WithDir(hookWrapperDir),
+		tempfile.WithName(hookWrapperName),
+		tempfile.KeepingExtension(),
+		tempfile.WithPerms(0o700),
 	)
 	if err != nil {
 		return "", err

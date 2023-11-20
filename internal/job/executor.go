@@ -26,7 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/shellscript"
-	"github.com/buildkite/agent/v3/internal/tmpfile"
+	"github.com/buildkite/agent/v3/internal/tempfile"
 	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
@@ -1044,7 +1044,7 @@ func shouldCallBatchLine(line string) bool {
 }
 
 func (e *Executor) writeBatchScript(cmd string) (string, error) {
-	scriptFile, err := tmpfile.New(tmpfile.WithName("buildkite-script.bat"), tmpfile.KeepingExtension())
+	scriptFile, err := tempfile.New(tempfile.WithName("buildkite-script.bat"), tempfile.KeepingExtension())
 	if err != nil {
 		return "", err
 	}

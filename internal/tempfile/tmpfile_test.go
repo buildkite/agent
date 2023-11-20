@@ -1,4 +1,4 @@
-package tmpfile_test
+package tempfile_test
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/tmpfile"
+	"github.com/buildkite/agent/v3/internal/tempfile"
 	"gotest.tools/v3/assert"
 )
 
@@ -16,25 +16,25 @@ func TestNew(t *testing.T) {
 
 	for _, test := range []struct {
 		name  string
-		opts  []tmpfile.TempFileOpts
+		opts  []tempfile.Opts
 		check func(t *testing.T, f *os.File)
 	}{
 		{
 			name:  "default",
-			opts:  []tmpfile.TempFileOpts{},
+			opts:  []tempfile.Opts{},
 			check: func(t *testing.T, f *os.File) {},
 		},
 		{
 			name: "with filename",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.WithFilename("foo.txt"),
+			opts: []tempfile.Opts{
+				tempfile.WithName("foo.txt"),
 			},
 			check: func(t *testing.T, f *os.File) {},
 		},
 		{
 			name: "with dir",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.WithDir("foo"),
+			opts: []tempfile.Opts{
+				tempfile.WithDir("foo"),
 			},
 			check: func(t *testing.T, f *os.File) {
 				assert.Check(t, strings.HasPrefix(f.Name(), filepath.Join(os.TempDir(), "foo")))
@@ -42,8 +42,8 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "with perms",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.WithPerms(0o600),
+			opts: []tempfile.Opts{
+				tempfile.WithPerms(0o600),
 			},
 			check: func(t *testing.T, f *os.File) {
 				if runtime.GOOS == "windows" {
@@ -57,9 +57,9 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "with filename and keep extension",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.WithFilename("foo.txt"),
-				tmpfile.KeepingExtension(),
+			opts: []tempfile.Opts{
+				tempfile.WithName("foo.txt"),
+				tempfile.KeepingExtension(),
 			},
 			check: func(t *testing.T, f *os.File) {
 				assert.Check(t, filepath.Ext(f.Name()) == ".txt")
@@ -67,8 +67,8 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name: "without filename and keep extension",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.KeepingExtension(),
+			opts: []tempfile.Opts{
+				tempfile.KeepingExtension(),
 			},
 			check: func(t *testing.T, f *os.File) {},
 		},
@@ -78,7 +78,7 @@ func TestNew(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			f, err := tmpfile.New(test.opts...)
+			f, err := tempfile.New(test.opts...)
 			assert.NilError(t, err, `New(%v) = %v`, test.opts, err)
 
 			t.Cleanup(func() {
@@ -97,25 +97,25 @@ func TestNewClosed(t *testing.T) {
 
 	for _, test := range []struct {
 		name  string
-		opts  []tmpfile.TempFileOpts
+		opts  []tempfile.Opts
 		check func(t *testing.T, filename string)
 	}{
 		{
 			name:  "default",
-			opts:  []tmpfile.TempFileOpts{},
+			opts:  []tempfile.Opts{},
 			check: func(t *testing.T, filename string) {},
 		},
 		{
 			name: "with filename",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.WithFilename("foo.txt"),
+			opts: []tempfile.Opts{
+				tempfile.WithName("foo.txt"),
 			},
 			check: func(t *testing.T, filename string) {},
 		},
 		{
 			name: "with dir",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.WithDir("foo"),
+			opts: []tempfile.Opts{
+				tempfile.WithDir("foo"),
 			},
 			check: func(t *testing.T, filename string) {
 				assert.Check(t, strings.HasPrefix(filename, filepath.Join(os.TempDir(), "foo")))
@@ -123,8 +123,8 @@ func TestNewClosed(t *testing.T) {
 		},
 		{
 			name: "with perms",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.WithPerms(0o600),
+			opts: []tempfile.Opts{
+				tempfile.WithPerms(0o600),
 			},
 			check: func(t *testing.T, filename string) {
 				if runtime.GOOS == "windows" {
@@ -138,9 +138,9 @@ func TestNewClosed(t *testing.T) {
 		},
 		{
 			name: "with filename and keep extension",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.WithFilename("foo.txt"),
-				tmpfile.KeepingExtension(),
+			opts: []tempfile.Opts{
+				tempfile.WithName("foo.txt"),
+				tempfile.KeepingExtension(),
 			},
 			check: func(t *testing.T, filename string) {
 				assert.Check(t, filepath.Ext(filename) == ".txt")
@@ -148,8 +148,8 @@ func TestNewClosed(t *testing.T) {
 		},
 		{
 			name: "without filename and keep extension",
-			opts: []tmpfile.TempFileOpts{
-				tmpfile.KeepingExtension(),
+			opts: []tempfile.Opts{
+				tempfile.KeepingExtension(),
 			},
 			check: func(t *testing.T, filename string) {},
 		},
@@ -159,7 +159,7 @@ func TestNewClosed(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			filename, err := tmpfile.NewClosed(test.opts...)
+			filename, err := tempfile.NewClosed(test.opts...)
 			assert.NilError(t, err, `New(%v) = %v`, test.opts, err)
 
 			t.Cleanup(func() {
