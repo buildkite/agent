@@ -215,17 +215,19 @@ func WriteHookWrapper(
 	tmpl *template.Template,
 	input WrapperTemplateInput,
 	hookWrapperName string,
-) (name string, err error) {
+) (string, error) {
 	f, err := tmpfile.KeepExtensionWithMode(hookWrapperDir, hookWrapperName, 0o700)
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			err = fmt.Errorf("closing file: %w, other: %w", cerr, err)
-		}
-	}()
-	return f.Name(), tmpl.Execute(f, input)
+	defer f.Close()
+	if err := tmpl.Execute(f, input); err != nil {
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // Path returns the path to the wrapper script, this is the one that should be executed
