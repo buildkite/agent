@@ -11,66 +11,163 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func TestKeepExtension(t *testing.T) {
+func TestNew(t *testing.T) {
 	t.Parallel()
 
-	f, err := tmpfile.KeepExtension("foo.txt")
-	assert.NilError(t, err, `KeepExtension("foo.txt") = %v`, err)
-	defer func() {
-		assert.NilError(t, f.Close(), "failed to close file: %s", f.Name())
-		assert.NilError(t, os.Remove(f.Name()), "failed to remove file: %s", f.Name())
-	}()
+	for _, test := range []struct {
+		name  string
+		opts  []tmpfile.TempFileOpts
+		check func(t *testing.T, f *os.File)
+	}{
+		{
+			name:  "default",
+			opts:  []tmpfile.TempFileOpts{},
+			check: func(t *testing.T, f *os.File) {},
+		},
+		{
+			name: "with filename",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.WithFilename("foo.txt"),
+			},
+			check: func(t *testing.T, f *os.File) {},
+		},
+		{
+			name: "with dir",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.WithDir("foo"),
+			},
+			check: func(t *testing.T, f *os.File) {
+				assert.Check(t, strings.HasPrefix(f.Name(), filepath.Join(os.TempDir(), "foo")))
+			},
+		},
+		{
+			name: "with perms",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.WithPerms(0o600),
+			},
+			check: func(t *testing.T, f *os.File) {
+				if runtime.GOOS == "windows" {
+					t.Skip("Windows doesn't support or need checking if chmod worked")
+				}
 
-	assert.Check(t, strings.HasPrefix(f.Name(), os.TempDir()))
-	assert.Check(t, filepath.Ext(f.Name()) == ".txt")
-}
+				fi, err := os.Stat(f.Name())
+				assert.NilError(t, err, "os.Stat(%q) = %s", f.Name(), err)
+				assert.Check(t, fi.Mode().Perm() == os.FileMode(0o600))
+			},
+		},
+		{
+			name: "with filename and keep extension",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.WithFilename("foo.txt"),
+				tmpfile.KeepingExtension(),
+			},
+			check: func(t *testing.T, f *os.File) {
+				assert.Check(t, filepath.Ext(f.Name()) == ".txt")
+			},
+		},
+		{
+			name: "without filename and keep extension",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.KeepingExtension(),
+			},
+			check: func(t *testing.T, f *os.File) {},
+		},
+	} {
+		test := test
 
-func TestKeepExtensionAndClose(t *testing.T) {
-	t.Parallel()
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	filename, err := tmpfile.KeepExtensionAndClose("buildkite-agent", "foo.txt")
-	assert.NilError(t, err, `KeepExtension("foo.txt") = %v`, err)
+			f, err := tmpfile.New(test.opts...)
+			assert.NilError(t, err, `New(%v) = %v`, test.opts, err)
 
-	assert.Check(t, strings.HasPrefix(filename, os.TempDir()))
-	assert.Check(t, filepath.Ext(filename) == ".txt")
-}
+			t.Cleanup(func() {
+				assert.NilError(t, f.Close(), "failed to close file: %s", f.Name())
+				assert.NilError(t, os.Remove(f.Name()), "failed to remove file: %s", f.Name())
+			})
 
-func TestKeepExtensionWithMode(t *testing.T) {
-	t.Parallel()
-
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows doesn't support or need checking if chmod worked")
+			assert.Check(t, strings.HasPrefix(f.Name(), os.TempDir()))
+			test.check(t, f)
+		})
 	}
-
-	f, err := tmpfile.KeepExtensionWithMode("buildkite-agent", "foo.txt", 0o644)
-	assert.NilError(t, err, `KeepExtensionWithMode("buildkite-agent", "foo.txt", 0o644) = %v`, err)
-	defer func() {
-		assert.NilError(t, f.Close(), "failed to close file: %s", f.Name())
-		assert.NilError(t, os.Remove(f.Name()), "failed to remove file: %s", f.Name())
-	}()
-
-	fi, err := os.Stat(f.Name())
-	assert.NilError(t, err, "os.Stat(%q) = %s", f.Name(), err)
-
-	assert.Check(t, strings.HasPrefix(f.Name(), filepath.Join(os.TempDir(), "buildkite-agent")))
-	assert.Check(t, filepath.Ext(f.Name()) == ".txt")
-	assert.Check(t, fi.Mode().Perm() == os.FileMode(0o644))
 }
 
-func TestKeepExtensionWithModeAndClose(t *testing.T) {
+func TestNewClosed(t *testing.T) {
 	t.Parallel()
 
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows doesn't support or need checking if chmod worked")
+	for _, test := range []struct {
+		name  string
+		opts  []tmpfile.TempFileOpts
+		check func(t *testing.T, filename string)
+	}{
+		{
+			name:  "default",
+			opts:  []tmpfile.TempFileOpts{},
+			check: func(t *testing.T, filename string) {},
+		},
+		{
+			name: "with filename",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.WithFilename("foo.txt"),
+			},
+			check: func(t *testing.T, filename string) {},
+		},
+		{
+			name: "with dir",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.WithDir("foo"),
+			},
+			check: func(t *testing.T, filename string) {
+				assert.Check(t, strings.HasPrefix(filename, filepath.Join(os.TempDir(), "foo")))
+			},
+		},
+		{
+			name: "with perms",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.WithPerms(0o600),
+			},
+			check: func(t *testing.T, filename string) {
+				if runtime.GOOS == "windows" {
+					t.Skip("Windows doesn't support or need checking if chmod worked")
+				}
+
+				fi, err := os.Stat(filename)
+				assert.NilError(t, err, "os.Stat(%q) = %s", filename, err)
+				assert.Check(t, fi.Mode().Perm() == os.FileMode(0o600))
+			},
+		},
+		{
+			name: "with filename and keep extension",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.WithFilename("foo.txt"),
+				tmpfile.KeepingExtension(),
+			},
+			check: func(t *testing.T, filename string) {
+				assert.Check(t, filepath.Ext(filename) == ".txt")
+			},
+		},
+		{
+			name: "without filename and keep extension",
+			opts: []tmpfile.TempFileOpts{
+				tmpfile.KeepingExtension(),
+			},
+			check: func(t *testing.T, filename string) {},
+		},
+	} {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			filename, err := tmpfile.NewClosed(test.opts...)
+			assert.NilError(t, err, `New(%v) = %v`, test.opts, err)
+
+			t.Cleanup(func() {
+				assert.NilError(t, os.Remove(filename), "failed to remove file: %s", filename)
+			})
+
+			assert.Check(t, strings.HasPrefix(filename, os.TempDir()))
+			test.check(t, filename)
+		})
 	}
-
-	filename, err := tmpfile.KeepExtensionWithModeAndClose("buildkite-agent", "foo.txt", 0o644)
-	assert.NilError(t, err, `KeepExtensionWithModeAndClose("buildkite-agent", "foo.txt", 0o644) = %v`, err)
-
-	fi, err := os.Stat(filename)
-	assert.NilError(t, err, "os.Stat(%q) = %s", filename, err)
-
-	assert.Check(t, strings.HasPrefix(filename, filepath.Join(os.TempDir(), "buildkite-agent")))
-	assert.Check(t, filepath.Ext(filename) == ".txt")
-	assert.Check(t, fi.Mode().Perm() == os.FileMode(0o644))
 }

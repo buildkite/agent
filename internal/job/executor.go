@@ -1044,9 +1044,7 @@ func shouldCallBatchLine(line string) bool {
 }
 
 func (e *Executor) writeBatchScript(cmd string) (string, error) {
-	scriptFile, err := tmpfile.KeepExtension(
-		"buildkite-script.bat",
-	)
+	scriptFile, err := tmpfile.New(tmpfile.WithName("buildkite-script.bat"), tmpfile.KeepingExtension())
 	if err != nil {
 		return "", err
 	}

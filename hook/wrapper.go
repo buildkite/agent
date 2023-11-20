@@ -180,13 +180,17 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		tmpl = PosixShellWrapperTmpl
 	}
 
-	wrap.beforeEnvPath, err = tmpfile.KeepExtensionAndClose(hookWrapperDir, "hook-before-env")
-	if err != nil {
+	if wrap.beforeEnvPath, err = tmpfile.NewClosed(
+		tmpfile.WithDir(hookWrapperDir),
+		tmpfile.WithName("hook-before-env"),
+	); err != nil {
 		return nil, err
 	}
 
-	wrap.afterEnvPath, err = tmpfile.KeepExtensionAndClose(hookWrapperDir, "hook-after-env")
-	if err != nil {
+	if wrap.afterEnvPath, err = tmpfile.NewClosed(
+		tmpfile.WithDir(hookWrapperDir),
+		tmpfile.WithName("hook-after-env"),
+	); err != nil {
 		return nil, err
 	}
 
@@ -216,7 +220,12 @@ func WriteHookWrapper(
 	input WrapperTemplateInput,
 	hookWrapperName string,
 ) (string, error) {
-	f, err := tmpfile.KeepExtensionWithMode(hookWrapperDir, hookWrapperName, 0o700)
+	f, err := tmpfile.New(
+		tmpfile.WithDir(hookWrapperDir),
+		tmpfile.WithName(hookWrapperName),
+		tmpfile.KeepingExtension(),
+		tmpfile.WithPerms(0o700),
+	)
 	if err != nil {
 		return "", err
 	}

@@ -20,6 +20,8 @@ import (
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	var script []string
 
@@ -88,7 +90,7 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := tmpfile.KeepExtension("hookName.bat")
+	hookFile, err := tmpfile.New(tmpfile.WithName("hookName.bat"), tmpfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, "echo Hello There!")
@@ -121,7 +123,7 @@ EXIT %%BUILDKITE_HOOK_EXIT_STATUS%%`
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := tmpfile.KeepExtension("hookName.ps1")
+	hookFile, err := tmpfile.New(tmpfile.WithName("hookName.ps1"), tmpfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, `Write-Output "Hello There!"`)
@@ -151,7 +153,7 @@ exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := tmpfile.KeepExtension("hookName")
+	hookFile, err := tmpfile.New(tmpfile.WithName("hookName"), tmpfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, "#!/bin/dash\necho 'Hello There!'")
@@ -256,7 +258,7 @@ func newTestScriptWrapper(t *testing.T, script []string) *Wrapper {
 		hookName += ".bat"
 	}
 
-	hookFile, err := tmpfile.KeepExtension(hookName)
+	hookFile, err := tmpfile.New(tmpfile.WithName(hookName), tmpfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	for _, line := range script {
@@ -338,7 +340,7 @@ func mockAgent() (*bintest.Mock, func(), error) {
 func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := tmpfile.KeepExtension("hookName")
+	hookFile, err := tmpfile.New(tmpfile.WithName("hookName"), tmpfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	script := strings.Join([]string{

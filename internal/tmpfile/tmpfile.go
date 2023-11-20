@@ -8,54 +8,88 @@ import (
 	"strings"
 )
 
-const (
-	userOnlyRW = 0o600
-	allRWX     = 0o777
-)
+const allRWX = 0o777
 
-// KeepExtension creates a temporary file that with the same extension as the provided `filename`.
-// It will be created in the subdirectory "buildkite-agent" inside the system temp directory.
-func KeepExtension(filename string) (*os.File, error) {
-	return KeepExtensionWithMode("buildkite-agent", filename, userOnlyRW)
+type tempFileRequest struct {
+	filename      string
+	dir           string
+	perm          fs.FileMode
+	keepExtension bool
 }
 
-// KeepExtensionAndClose creates a temporary file that with the same extension as the provided
-// filename and closes it. It will be created in the subdirectory `dir` inside the system temp
-// directory.
-func KeepExtensionAndClose(dir, filename string) (string, error) {
-	return KeepExtensionWithModeAndClose(dir, filename, userOnlyRW)
+type TempFileOpts func(*tempFileRequest)
+
+// WithName sets the filename of the temporary file.
+func WithName(filename string) TempFileOpts {
+	return func(tf *tempFileRequest) {
+		tf.filename = filename
+	}
 }
 
-// KeepExtensionWithMode creates a temporary file with the same extension as the provided `filename`
-// and sets its permissions to `perm`. The file will be created in the subdirectory `dir` inside the
-// system temp directory.
-func KeepExtensionWithMode(dir, filename string, perm fs.FileMode) (*os.File, error) {
-	extension := filepath.Ext(filename)
-	basename := strings.TrimSuffix(filename, extension)
-	tempDir := filepath.Join(os.TempDir(), dir)
+// WithDir sets the subdirectory of the temporary file within the system temp directory.
+func WithDir(dir string) TempFileOpts {
+	return func(tf *tempFileRequest) {
+		tf.dir = dir
+	}
+}
+
+// WithPerms sets the permissions of the temporary file.
+func WithPerms(perms fs.FileMode) TempFileOpts {
+	return func(tf *tempFileRequest) {
+		tf.perm = perms
+	}
+}
+
+// KeepingExtension ensures the extension of the filename is preserved when creating the temporary
+// file. It has not affect if `WithName` is not also used.
+func KeepingExtension() TempFileOpts {
+	return func(tf *tempFileRequest) {
+		tf.keepExtension = true
+	}
+}
+
+// New creates a temporary file with the provided options.
+func New(opts ...TempFileOpts) (*os.File, error) {
+	req := &tempFileRequest{}
+
+	for _, opt := range opts {
+		opt(req)
+	}
+
+	tempDir := os.TempDir()
+	if req.dir != "" {
+		tempDir = filepath.Join(tempDir, req.dir)
+	}
 
 	// umask will make perms more reasonable
 	if err := os.MkdirAll(tempDir, allRWX); err != nil {
 		return nil, fmt.Errorf("failed to create temporary directory %q: %w", tempDir, err)
 	}
 
-	tempFile, err := os.CreateTemp(tempDir, basename+"-*"+extension)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temporary file %q: %w", filename, err)
+	tempFileName := req.filename
+	if req.keepExtension {
+		extension := filepath.Ext(req.filename)
+		basename := strings.TrimSuffix(req.filename, extension)
+		tempFileName = basename + "-*" + extension
 	}
 
-	if err := tempFile.Chmod(perm); err != nil {
-		return nil, fmt.Errorf("failed to chmod temporary file %q: %w", tempFile.Name(), err)
+	tempFile, err := os.CreateTemp(tempDir, tempFileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary file %q: %w", req.filename, err)
+	}
+
+	if req.perm != 0 {
+		if err := tempFile.Chmod(req.perm); err != nil {
+			return nil, fmt.Errorf("failed to chmod temporary file %q: %w", tempFile.Name(), err)
+		}
 	}
 
 	return tempFile, nil
 }
 
-// KeepExtensionWithModeAndClose creates a temporary file with the same extension of the
-// provided `filename` and sets its permissions to `perm`. The file will be created in the
-// subdirectory `dir` inside the system temp directory. It closes the file after creating it.
-func KeepExtensionWithModeAndClose(dir, filename string, perm fs.FileMode) (string, error) {
-	f, err := KeepExtensionWithMode(dir, filename, perm)
+// NewClosed creates a temporary file with the provided options and closes it.
+func NewClosed(opts ...TempFileOpts) (string, error) {
+	f, err := New(opts...)
 	if err != nil {
 		return "", err
 	}
