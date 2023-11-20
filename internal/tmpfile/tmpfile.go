@@ -34,12 +34,9 @@ func KeepExtensionWithMode(dir, filename string, perm fs.FileMode) (*os.File, er
 	basename := strings.TrimSuffix(filename, extension)
 	tempDir := filepath.Join(os.TempDir(), dir)
 
-	// Best effort ensure tempDir exists
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		// umask will make perms more reasonable
-		if err := os.MkdirAll(tempDir, allRWX); err != nil {
-			return nil, err
-		}
+	// umask will make perms more reasonable
+	if err := os.MkdirAll(tempDir, allRWX); err != nil {
+		return nil, fmt.Errorf("failed to create temporary directory %q: %w", tempDir, err)
 	}
 
 	tempFile, err := os.CreateTemp(tempDir, basename+"-*"+extension)
