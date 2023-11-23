@@ -122,7 +122,7 @@ func (ls *LogStreamer) Process(output []byte) {
 				"exceeded the maximum size (%s). Further logs may be dropped "+
 				"by the server, and a future version of the agent will stop "+
 				"sending logs at this point.",
-				humanize.Bytes(ls.bytes), humanize.Bytes(ls.conf.MaxSizeBytes))
+				humanize.IBytes(ls.bytes), humanize.IBytes(ls.conf.MaxSizeBytes))
 			ls.warnedAboutSize = true
 			// In a future version, this will error out, e.g.:
 			//return fmt.Errorf("job log has exceeded max job log size (%d > %d)", ls.bytes, ls.conf.MaxSizeBytes)

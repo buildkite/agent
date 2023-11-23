@@ -153,7 +153,7 @@ func (d Download) try(ctx context.Context) error {
 		return fmt.Errorf("Error when copying data %s (%T: %v)", d.conf.URL, err, err)
 	}
 
-	d.logger.Info("Successfully downloaded \"%s\" %s", d.conf.Path, humanize.Bytes(uint64(bytes)))
+	d.logger.Info("Successfully downloaded \"%s\" %s", d.conf.Path, humanize.IBytes(uint64(bytes)))
 
 	return nil
 }
