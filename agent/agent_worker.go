@@ -320,26 +320,32 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 		}
 
 		// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout)
-		if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
-			idleDeadline := lastActionTime.Add(time.Second *
-				time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
-
-			if time.Now().After(idleDeadline) {
-				// Let other agents know this agent is now idle and termination
-				// is possible
-				idleMonitor.MarkIdle(a.agent.UUID)
-
-				// But only terminate if everyone else is also idle
-				if idleMonitor.Idle() {
-					a.logger.Info("All agents have been idle for %d seconds. Disconnecting...",
-						a.agentConfiguration.DisconnectAfterIdleTimeout)
-					return nil
-				}
-				a.logger.Debug(
-					"Agent has been idle for %.f seconds, but other agents haven't",
-					time.Since(lastActionTime).Seconds(),
-				)
+		if a.agentConfiguration.DisconnectAfterIdleTimeout == 0 {
+			if !a.continueAfterSleep(ctx, pingTicker) {
+				return nil
 			}
+			continue
+		}
+
+		idleDeadline := lastActionTime.Add(
+			time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout) * time.Second,
+		)
+		if time.Now().After(idleDeadline) {
+			// Let other agents know this agent is now idle and termination is possible
+			idleMonitor.MarkIdle(a.agent.UUID)
+
+			// But only terminate if everyone else is also idle
+			if idleMonitor.Idle() {
+				a.logger.Info(
+					"All agents have been idle for %d seconds. Disconnecting...",
+					a.agentConfiguration.DisconnectAfterIdleTimeout,
+				)
+				return nil
+			}
+			a.logger.Debug(
+				"Agent has been idle for %.f seconds, but other agents haven't",
+				time.Since(lastActionTime).Seconds(),
+			)
 		}
 
 		if !a.continueAfterSleep(ctx, pingTicker) {
