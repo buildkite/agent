@@ -328,10 +328,11 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 						a.logger.Info("All agents have been idle for %d seconds. Disconnecting...",
 							a.agentConfiguration.DisconnectAfterIdleTimeout)
 						return nil
-					} else {
-						a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
-							time.Since(lastActionTime).Seconds())
 					}
+					a.logger.Debug(
+						"Agent has been idle for %.f seconds, but other agents haven't",
+						time.Since(lastActionTime).Seconds(),
+					)
 				}
 			}
 		}
