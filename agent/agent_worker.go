@@ -282,41 +282,52 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 
 		setStat("📡 Pinging Buildkite for work")
 		job, err := a.Ping(ctx)
-		if err != nil {
+		switch {
+		case err != nil:
 			if errors.Is(err, &errUnrecoverable{}) {
-				a.logger.Error("%v", err)
+				a.logger.Error("Ping failed: %v", err)
 			} else {
-				a.logger.Warn("%v", err)
+				a.logger.Warn("Ping failed: %v", err)
 			}
-		} else if job != nil {
+			setStat("❌ Ping failed")
+
+		case job == nil:
+			setStat("✅ No job")
+
+		default:
 			// Let other agents know this agent is now busy and
 			// not to idle terminate
 			idleMonitor.MarkBusy(a.agent.UUID)
 			setStat("💼 Accepting job")
 
 			// Runs the job, only errors if something goes wrong
-			if runErr := a.AcceptAndRunJob(ctx, job); runErr != nil {
-				a.logger.Error("%v", runErr)
-			} else {
-				if a.agentConfiguration.DisconnectAfterJob {
-					a.logger.Info("Job finished. Disconnecting...")
+			if err := a.AcceptAndRunJob(ctx, job); err != nil {
+				a.logger.Error("%v", err)
+				if !a.continueAfterSleep(ctx, pingTicker) {
 					return nil
 				}
-				lastActionTime = time.Now()
-
-				// Observation: jobs are rarely the last within a pipeline,
-				// thus if this worker just completed a job,
-				// there is likely another immediately available.
-				// Skip waiting for the ping interval until
-				// a ping without a job has occurred,
-				// but in exchange, ensure the next ping must wait a full
-				// pingInterval to avoid too much server load.
-
-				pingTicker.Reset(pingInterval)
-
 				continue
 			}
+
 			setStat("✅ Finished job")
+
+			if a.agentConfiguration.DisconnectAfterJob {
+				a.logger.Info("Job finished. Disconnecting...")
+				return nil
+			}
+			lastActionTime = time.Now()
+
+			// Observation: jobs are rarely the last within a pipeline,
+			// thus if this worker just completed a job,
+			// there is likely another immediately available.
+			// Skip waiting for the ping interval until
+			// a ping without a job has occurred,
+			// but in exchange, ensure the next ping must wait a full
+			// pingInterval to avoid too much server load.
+
+			pingTicker.Reset(pingInterval)
+
+			continue
 		}
 
 		// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout)
