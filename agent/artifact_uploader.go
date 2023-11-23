@@ -531,7 +531,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 
 		p.Spawn(func() {
 			// Show a nice message that we're starting to upload the file
-			a.logger.Info("Uploading artifact %s %s (%s)", artifact.ID, artifact.Path, humanize.Bytes(uint64(artifact.FileSize)))
+			a.logger.Info("Uploading artifact %s %s (%s)", artifact.ID, artifact.Path, humanize.IBytes(uint64(artifact.FileSize)))
 
 			var state string
 
