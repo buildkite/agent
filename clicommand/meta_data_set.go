@@ -113,8 +113,9 @@ var MetaDataSetCommand = cli.Command{
 
 		// Set the meta data
 		if err := roko.NewRetrier(
+			// 10x2 sec -> 2, 3, 5, 8, 13, 21, 34, 55, 89 seconds (total delay: 233 seconds)
 			roko.WithMaxAttempts(10),
-			roko.WithStrategy(roko.Constant(5*time.Second)),
+			roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			resp, err := client.SetMetaData(ctx, cfg.Job, metaData)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
