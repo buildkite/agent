@@ -252,7 +252,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit proces
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
 	// start the process will still be buffered. Also, there may still be logs in the buffer that
 	// were left behind because the uploader goroutine exited before it could flush them.
-	r.logStreamer.Process(r.output.ReadAndTruncate())
+	r.logStreamer.Process(ctx, r.output.ReadAndTruncate())
 
 	// Stop the log streamer. This will block until all the chunks have been uploaded
 	r.logStreamer.Stop()
@@ -360,7 +360,16 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 		setStat("📨 Sending process output to log streamer")
 
 		// Send the output of the process to the log streamer for processing
-		r.logStreamer.Process(r.output.ReadAndTruncate())
+		if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
+			r.agentLogger.Error("Could not stream the log output: %v", err)
+			// LogStreamer.Process only returns an error when it can no longer
+			// accept logs (maybe Stop was called, or a hard limit was reached).
+			// Since we can no longer send logs, Close the buffer, which causes
+			// future Writes to return io.ErrClosedPipe, typically SIGPIPE-ing
+			// the running process (if it is still running).
+			r.output.Close()
+			return
+		}
 
 		setStat("😴 Sleeping for a bit")
 
