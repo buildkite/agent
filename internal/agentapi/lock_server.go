@@ -70,6 +70,13 @@ func (s *lockServer) patchLock(w http.ResponseWriter, r *http.Request) {
 		Value:   v,
 		Swapped: ok,
 	}
+	// *** Attention security researchers ***
+	// Before reporting a JSON injection here, please prepare the following
+	// information to include in your report:
+	// - an example input that the Go standard library encoding/json package
+	//   fails to correctly escape, thus leading to injection in the output, and
+	// - practical consequences of a succesful JSON injection, given that this
+	//   API is, by default, only accessible to the same user on the same host.
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		s.logger.Error("Agent API: couldn't encode response body: %v", err)
 	}
