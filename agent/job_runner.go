@@ -258,10 +258,10 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 
 		// If we have ansi-timestamps, we can skip line timestamps AND header times
 		// this is the future of timestamping
-		prefixer := process.NewPrefixer(outputWriter, func() string {
+		prefixer := process.NewTimestamper(outputWriter, func(now time.Time) string {
 			return fmt.Sprintf("\x1b_bk;t=%d\x07",
-				time.Now().UnixNano()/int64(time.Millisecond))
-		})
+				now.UnixNano()/int64(time.Millisecond))
+		}, 1*time.Second)
 		allWriters = append(allWriters, prefixer)
 
 	case conf.AgentConfiguration.TimestampLines:

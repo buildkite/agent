@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/process"
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestPrefixer(t *testing.T) {
+func TestTimestamper(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input, want string
 	}{
@@ -44,10 +47,10 @@ func TestPrefixer(t *testing.T) {
 			var lineCounter int32
 			out := &bytes.Buffer{}
 
-			pw := process.NewPrefixer(out, func() string {
+			pw := process.NewTimestamper(out, func(time.Time) string {
 				lineNumber := atomic.AddInt32(&lineCounter, 1)
 				return fmt.Sprintf("#%d: ", lineNumber)
-			})
+			}, 1*time.Second)
 
 			n, err := pw.Write([]byte(tc.input))
 			if err != nil {
@@ -59,8 +62,38 @@ func TestPrefixer(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(out.String(), tc.want); diff != "" {
-				t.Errorf("prefixer output diff (-got +want):\n%s", diff)
+				t.Errorf("timestamper output diff (-got +want):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestTimestamper_WithTimeout(t *testing.T) {
+	t.Parallel()
+
+	out := &bytes.Buffer{}
+	pw := process.NewTimestamper(out, func(time.Time) string {
+		return "..."
+	}, 10*time.Millisecond)
+
+	if _, err := pw.Write([]byte("I see you ")); err != nil {
+		t.Fatalf("pw.Write(`I see you `) error = %v", err)
+	}
+
+	// Another write on the same line immediately should _not_ trigger a new
+	// timestamp
+	if _, err := pw.Write([]byte("shiver with antici")); err != nil {
+		t.Fatalf("pw.Write(`shiver with antici`) error = %v", err)
+	}
+
+	// A write on the same line some time later should trigger a new timestamp
+	time.Sleep(100 * time.Millisecond)
+	if _, err := pw.Write([]byte("pation")); err != nil {
+		t.Fatalf("pw.Write(`pation`) error = %v", err)
+	}
+
+	want := "...I see you shiver with antici...pation"
+	if diff := cmp.Diff(out.String(), want); diff != "" {
+		t.Errorf("timestamper output diff (-got +want):\n%s", diff)
 	}
 }
