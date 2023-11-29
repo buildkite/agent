@@ -14,7 +14,7 @@ import (
 )
 
 type ToolKeygenConfig struct {
-	Alg             string `cli:"alg" validate:"required"`
+	Alg             string `cli:"alg"`
 	KeyID           string `cli:"key-id"`
 	PrivateJWKSFile string `cli:"private-jwks-file" normalize:"filepath"`
 	PublicJWKSFile  string `cli:"public-jwks-file" normalize:"filepath"`
@@ -47,10 +47,9 @@ For more information about JWS, see https://tools.ietf.org/html/rfc7515 and
 for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:     "alg",
-			EnvVar:   "BUILDKITE_AGENT_KEYGEN_ALG",
-			Usage:    fmt.Sprintf("The JWS signing algorithm to use for the key pair. Valid algorithms are: %v", jwkutil.ValidSigningAlgorithms),
-			Required: true,
+			Name:   "alg",
+			EnvVar: "BUILDKITE_AGENT_KEYGEN_ALG",
+			Usage:  fmt.Sprintf("The JWS signing algorithm to use for the key pair. Defaults to 'EdDSA'. Valid algorithms are: %v", jwkutil.ValidSigningAlgorithms),
 		},
 		cli.StringFlag{
 			Name:   "key-id",
@@ -80,6 +79,11 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 		defer done()
 
 		l.Warn("Pipeline signing is experimental and the user interface might change!")
+
+		if cfg.Alg == "" {
+			cfg.Alg = "EdDSA"
+			l.Info("No algorithm provided, using %s", cfg.Alg)
+		}
 
 		if cfg.KeyID == "" {
 			cfg.KeyID = petname.Generate(2, "-")
