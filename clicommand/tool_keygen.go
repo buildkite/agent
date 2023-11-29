@@ -132,10 +132,6 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 		}
 
 		l.Info("Done! Enjoy your new keys ^_^")
-
-		if slices.Contains(jwkutil.ValidOctetAlgorithms, sigAlg) {
-			l.Info("Note: Because you're using the %s algorithm, which is symmetric, the public and private keys are identical", sigAlg)
-		}
 	},
 }
 
