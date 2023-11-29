@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.60.0](https://github.com/buildkite/agent/tree/v3.60.0) (2023-11-29)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.59.0...v3.60.0)
+
+Signed pipelines is now GA! Check out the docs [here](https://buildkite.com/docs/agent/v3/signed-pipelines) if you want a little more zero-trust mixed into your pipelines.
+
+### Added
+- Signed Pipelines goes GA! 🎉 [#2492](https://github.com/buildkite/agent/pull/2492) [#2521](https://github.com/buildkite/agent/pull/2521) [#2522](https://github.com/buildkite/agent/pull/2522) (@moskyb + @triarius)
+
+### Changed
+- Insert extra timestamps after a timeout [#2447](https://github.com/buildkite/agent/pull/2447) (@DrJosh9000)
+- Log the max size warning once [#2497](https://github.com/buildkite/agent/pull/2497) (@DrJosh9000)
+- MetaDataSetCommand: retry longer (exponential backoff) [#2514](https://github.com/buildkite/agent/pull/2514) (@pda)
+- Humanize bytes to IEC (1024 → KiB etc) not SI (1000 → KB etc) [#2513](https://github.com/buildkite/agent/pull/2513) (@pda)
+
+### Internal
+- More log streamer cleanups [#2498](https://github.com/buildkite/agent/pull/2498) (@DrJosh9000)
+- Add a helpful note to security researchers [#2520](https://github.com/buildkite/agent/pull/2520) (@DrJosh9000)
+- Update Go to 1.21 [#2284](https://github.com/buildkite/agent/pull/2284) (@triarius + @moskyb)
+- Dependabot's making us all look bad at our jobs: [#2501](https://github.com/buildkite/agent/pull/2501) [#2499](https://github.com/buildkite/agent/pull/2499) [#2515](https://github.com/buildkite/agent/pull/2515) [#2509](https://github.com/buildkite/agent/pull/2509) [#2502](https://github.com/buildkite/agent/pull/2502) [#2516](https://github.com/buildkite/agent/pull/2516) [#2517](https://github.com/buildkite/agent/pull/2517) [#2496](https://github.com/buildkite/agent/pull/2496) [#2493](https://github.com/buildkite/agent/pull/2493) [#2495](https://github.com/buildkite/agent/pull/2495) [#2494](https://github.com/buildkite/agent/pull/2494) [#2504](https://github.com/buildkite/agent/pull/2504)
+
 ## [v3.59.0](https://github.com/buildkite/agent/tree/v3.59.0) (2023-11-09)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.58.0...v3.59.0)
 
