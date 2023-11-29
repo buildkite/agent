@@ -14,6 +14,22 @@ import (
 	"github.com/buildkite/agent/v3/internal/tempfile"
 )
 
+type TemplateType int
+
+const (
+	// BatchTemplateType indicates to WriteHookWrapper to write a batch file
+	// for the hook wrapper
+	BatchTemplateType TemplateType = iota
+
+	// PowershellTemplateType indicates to WriteHookWrapper to write a Powershell
+	// file for the hook wrapper
+	PowershellTemplateType
+
+	// PosixShellTemplateType indicates to WriteHookWrapper to write a POSIX shell
+	// script for the hook wrapper
+	PosixShellTemplateType
+)
+
 const (
 	hookExitStatusEnv = "BUILDKITE_HOOK_EXIT_STATUS"
 	hookWorkingDirEnv = "BUILDKITE_HOOK_WORKING_DIR"
@@ -49,7 +65,7 @@ exit $BUILDKITE_HOOK_EXIT_STATUS`
 var (
 	batchWrapperTmpl      = template.Must(template.New("batch").Parse(batchWrapper))
 	powershellWrapperTmpl = template.Must(template.New("pwsh").Parse(powershellWrapper))
-	PosixShellWrapperTmpl = template.Must(template.New("bash").Parse(posixShellWrapper))
+	posixShellWrapperTmpl = template.Must(template.New("bash").Parse(posixShellWrapper))
 
 	ErrNoHookPath = errors.New("hook path was not provided")
 )
@@ -170,14 +186,14 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		scriptFileName += ".bat"
 	}
 
-	var tmpl *template.Template
+	var templateType TemplateType
 	switch {
 	case isWindows && !isPOSIXHook && !isPwshHook:
-		tmpl = batchWrapperTmpl
+		templateType = BatchTemplateType
 	case isWindows && isPwshHook:
-		tmpl = powershellWrapperTmpl
+		templateType = PowershellTemplateType
 	default:
-		tmpl = PosixShellWrapperTmpl
+		templateType = PosixShellTemplateType
 	}
 
 	if wrap.beforeEnvPath, err = tempfile.NewClosed(
@@ -200,7 +216,7 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 	}
 
 	if wrap.wrapperPath, err = WriteHookWrapper(
-		tmpl,
+		templateType,
 		WrapperTemplateInput{
 			ShebangLine:       shebang,
 			BeforeEnvFileName: wrap.beforeEnvPath,
@@ -215,8 +231,11 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 	return wrap, nil
 }
 
+// WriteHookWrapper will write a hook wrapper script to a temporary file with the same extension as,
+// `hookWrapperName`. It will return the name of the temporary file. The file will be executable.
+// It will be created from the template specified by `templateType` with data from `input`.
 func WriteHookWrapper(
-	tmpl *template.Template,
+	templateType TemplateType,
 	input WrapperTemplateInput,
 	hookWrapperName string,
 ) (string, error) {
@@ -230,6 +249,17 @@ func WriteHookWrapper(
 		return "", err
 	}
 	defer f.Close()
+
+	var tmpl *template.Template
+	switch templateType {
+	case BatchTemplateType:
+		tmpl = batchWrapperTmpl
+	case PowershellTemplateType:
+		tmpl = powershellWrapperTmpl
+	case PosixShellTemplateType:
+		tmpl = posixShellWrapperTmpl
+	}
+
 	if err := tmpl.Execute(f, input); err != nil {
 		return "", err
 	}
