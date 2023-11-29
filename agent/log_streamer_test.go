@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sort"
+	"sync"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
@@ -19,9 +21,12 @@ func TestLogStreamer(t *testing.T) {
 		func(c int) { t.Errorf("exit(%d)", c) },
 	)
 
+	var mu sync.Mutex
 	var got []*LogStreamerChunk
 	callback := func(ctx context.Context, chunk *LogStreamerChunk) error {
+		mu.Lock()
 		got = append(got, chunk)
+		mu.Unlock()
 		return nil
 	}
 
@@ -74,6 +79,10 @@ func TestLogStreamer(t *testing.T) {
 			Size:   6,
 		},
 	}
+
+	sort.Slice(got, func(i, j int) bool {
+		return got[i].Order < got[j].Order
+	})
 
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("LogStreamer chunks diff (-got +want):\n%s", diff)
