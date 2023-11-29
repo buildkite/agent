@@ -33,11 +33,15 @@ func (p *Process) postStart() error {
 }
 
 func (p *Process) terminateProcessGroup() error {
+	// Note: terminateProcessGroup is called from within p.Terminate, which
+	// holds p.mu.
 	p.logger.Debug("[Process] Sending signal SIGKILL to PGID: %d", p.pid)
 	return syscall.Kill(-p.pid, syscall.SIGKILL)
 }
 
 func (p *Process) interruptProcessGroup() error {
+	// Note: interruptProcessGroup is called from within p.Interrupt, which
+	// holds p.mu.
 	intSignal := p.conf.InterruptSignal
 
 	// TODO: this should be SIGINT, but will be a breaking change

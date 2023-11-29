@@ -201,7 +201,7 @@ func TestProcessTerminatesWhenContextDone(t *testing.T) {
 		}
 	}()
 
-	waitUntilReady(t, stdoutr)
+	waitUntilReady(t, p, stdoutr)
 
 	cancel()
 
@@ -243,7 +243,7 @@ func TestProcessWithSlowHandlerKilledWhenContextDone(t *testing.T) {
 		}
 	}()
 
-	waitUntilReady(t, stdoutr)
+	waitUntilReady(t, p, stdoutr)
 
 	cancel()
 
@@ -270,6 +270,8 @@ func TestProcessInterrupts(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
+	ctx := context.Background()
+
 	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
@@ -281,12 +283,12 @@ func TestProcessInterrupts(t *testing.T) {
 
 	go func() {
 		defer stdoutw.Close()
-		if err := p.Run(context.Background()); err != nil {
-			t.Errorf("p.Run(context.Background()) = %v", err)
+		if err := p.Run(ctx); err != nil {
+			t.Errorf("p.Run(ctx) = %v", err)
 		}
 	}()
 
-	waitUntilReady(t, stdoutr)
+	waitUntilReady(t, p, stdoutr)
 
 	if err := p.Interrupt(); err != nil {
 		t.Fatalf("p.Interrupt() = %v", err)
@@ -311,6 +313,8 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
+	ctx := context.Background()
+
 	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
@@ -323,12 +327,12 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 
 	go func() {
 		defer stdoutw.Close()
-		if err := p.Run(context.Background()); err != nil {
-			t.Errorf("p.Run(context.Background()) = %v", err)
+		if err := p.Run(ctx); err != nil {
+			t.Errorf("p.Run(ctx) = %v", err)
 		}
 	}()
 
-	waitUntilReady(t, stdoutr)
+	waitUntilReady(t, p, stdoutr)
 
 	if err := p.Interrupt(); err != nil {
 		t.Fatalf("p.Interrupt() = %v", err)
@@ -390,10 +394,12 @@ func BenchmarkProcess(b *testing.B) {
 	}
 }
 
-// waitUntilReady reads "Ready\n" from the pipe reader, and fails the test if
-// it cannot or the string it reads is different.
-func waitUntilReady(t *testing.T, stdoutr *io.PipeReader) {
+// waitUntilReady waits for the process to start, then reads "Ready\n" from the
+// pipe reader, and fails the test if it cannot or the string it reads is
+// different.
+func waitUntilReady(t *testing.T, p *process.Process, stdoutr *io.PipeReader) {
 	t.Helper()
+	<-p.Started()
 	wantReady := "Ready\n"
 	buf := make([]byte, len(wantReady))
 	if _, err := io.ReadFull(stdoutr, buf); err != nil {
