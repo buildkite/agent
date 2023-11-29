@@ -285,8 +285,6 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if cfg.JWKSFile != "" {
-			l.Warn("Pipeline signing is experimental and the user interface might change!")
-
 			key, err := jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
 			if err != nil {
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
