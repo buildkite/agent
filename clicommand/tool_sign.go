@@ -66,9 +66,9 @@ var ToolSignCommand = cli.Command{
 
 Description:
 
-This (experimental!) command takes a pipeline in YAML format as input, and annotates the
-appropriate parts of the pipeline with signatures. This can then be input into the YAML steps
-editor in the Buildkite UI so that the agents running these steps can verify the signatures.
+This command takes a pipeline in YAML format as input, and annotates the appropriate parts of
+the pipeline with signatures. This can then be input into the YAML steps editor in the Buildkite
+UI so that the agents running these steps can verify the signatures.
 
 If a token is provided using the ′graphql-token′ flag, the tool will attempt to retrieve the
 pipeline definition and repo using the Buildkite GraphQL API. If ′update′ is also set, it will
@@ -132,8 +132,6 @@ update the pipeline definition with the signed version using the GraphQL API too
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](context.Background(), c)
 		defer done()
-
-		l.Warn("Pipeline signing is experimental and the user interface might change!")
 
 		key, err := jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
 		if err != nil {

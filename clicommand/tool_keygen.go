@@ -36,8 +36,8 @@ var ToolKeygenCommand = cli.Command{
 
 Description:
 
-This (experimental!) command generates a new JWS key pair, used for signing and
-verifying jobs in Buildkite.
+This command generates a new JWS key pair, used for signing and verifying jobs
+in Buildkite.
 
 The pair is written as a JSON Web Key Set (JWKS) to two files, a private JWKS
 file and a public JWKS file. The private JWKS should be used as for signing,
@@ -77,8 +77,6 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 	Action: func(c *cli.Context) {
 		_, cfg, l, _, done := setupLoggerAndConfig[ToolKeygenConfig](context.Background(), c)
 		defer done()
-
-		l.Warn("Pipeline signing is experimental and the user interface might change!")
 
 		if cfg.Alg == "" {
 			cfg.Alg = "EdDSA"
@@ -132,10 +130,6 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 		}
 
 		l.Info("Done! Enjoy your new keys ^_^")
-
-		if slices.Contains(jwkutil.ValidOctetAlgorithms, sigAlg) {
-			l.Info("Note: Because you're using the %s algorithm, which is symmetric, the public and private keys are identical", sigAlg)
-		}
 	},
 }
 
