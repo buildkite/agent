@@ -11,109 +11,170 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-type testCase struct {
-	name  string
-	opts  []tempfile.Opts
-	check func(t *testing.T, filename string)
-}
-
-var testCases = []testCase{
-	{
-		name:  "default",
-		opts:  []tempfile.Opts{},
-		check: func(t *testing.T, filename string) {},
-	},
-	{
-		name: "with filename",
-		opts: []tempfile.Opts{
-			tempfile.WithName("foo.txt"),
-		},
-		check: func(t *testing.T, filename string) {},
-	},
-	{
-		name: "with dir",
-		opts: []tempfile.Opts{
-			tempfile.WithDir("foo"),
-		},
-		check: func(t *testing.T, filename string) {
-			assert.Check(t, strings.HasPrefix(filename, filepath.Join(os.TempDir(), "foo")))
-		},
-	},
-	{
-		name: "with perms",
-		opts: []tempfile.Opts{
-			tempfile.WithPerms(0o600),
-		},
-		check: func(t *testing.T, filename string) {
-			if runtime.GOOS == "windows" {
-				t.Skip("Windows doesn't support or need checking if chmod worked")
-			}
-
-			fi, err := os.Stat(filename)
-			assert.NilError(t, err, "os.Stat(%q) = %s", filename, err)
-			assert.Check(t, fi.Mode().Perm() == os.FileMode(0o600))
-		},
-	},
-	{
-		name: "with filename and keep extension",
-		opts: []tempfile.Opts{
-			tempfile.WithName("foo.txt"),
-			tempfile.KeepingExtension(),
-		},
-		check: func(t *testing.T, filename string) {
-			assert.Check(t, filepath.Ext(filename) == ".txt")
-		},
-	},
-	{
-		name: "without filename and keep extension",
-		opts: []tempfile.Opts{
-			tempfile.KeepingExtension(),
-		},
-		check: func(t *testing.T, filename string) {},
-	},
-}
-
 func TestNew(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range testCases {
-		tc := tc
+	f, err := tempfile.New()
+	assert.NilError(t, err, `New() = %v`, err)
 
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	t.Cleanup(func() {
+		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
+		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+	})
 
-			f, err := tempfile.New(tc.opts...)
-			assert.NilError(t, err, `New(%v) = %v`, tc.opts, err)
+	assert.Assert(t, strings.HasPrefix(f.Name(), os.TempDir()))
+}
 
-			t.Cleanup(func() {
-				assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-				assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
-			})
+func TestNewWithFilename(t *testing.T) {
+	t.Parallel()
 
-			assert.Check(t, strings.HasPrefix(f.Name(), os.TempDir()))
-			tc.check(t, f.Name())
-		})
+	f, err := tempfile.New(tempfile.WithName("foo.txt"))
+	assert.NilError(t, err, `New(WithName("foo.txt")) = %v`, err)
+
+	t.Cleanup(func() {
+		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
+		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+	})
+
+	assert.Assert(t, strings.HasPrefix(f.Name(), os.TempDir()))
+}
+
+func TestNewWithDir(t *testing.T) {
+	t.Parallel()
+
+	f, err := tempfile.New(tempfile.WithDir("foo"))
+	assert.NilError(t, err, `New(WithDir("foo")) = %v`, err)
+
+	t.Cleanup(func() {
+		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
+		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+	})
+
+	assert.Assert(t, strings.HasPrefix(f.Name(), filepath.Join(os.TempDir(), "foo")))
+}
+
+func TestNewWithPerms(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows doesn't support or need checking if chmod worked")
 	}
+
+	f, err := tempfile.New(tempfile.WithPerms(0o600))
+	assert.NilError(t, err, `New(WithPerms(0o600)) = %v`, err)
+
+	t.Cleanup(func() {
+		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
+		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+	})
+
+	fi, err := os.Stat(f.Name())
+	assert.NilError(t, err, "os.Stat(%q) = %s", f.Name(), err)
+
+	assert.Assert(t, fi.Mode().Perm() == os.FileMode(0o600))
+}
+
+func TestNewWithFilenameAndKeepExtension(t *testing.T) {
+	t.Parallel()
+
+	f, err := tempfile.New(tempfile.WithName("foo.txt"), tempfile.KeepingExtension())
+	assert.NilError(t, err, `New(WithName("foo.txt"), KeepingExtension()) = %v`, err)
+
+	t.Cleanup(func() {
+		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
+		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+	})
+
+	assert.Assert(t, filepath.Ext(f.Name()) == ".txt")
+}
+
+func TestNewWithoutFilenameAndKeepExtension(t *testing.T) {
+	t.Parallel()
+
+	f, err := tempfile.New(tempfile.KeepingExtension())
+	assert.NilError(t, err, `New(KeepingExtension()) = %v`, err)
+
+	assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
+	assert.NilError(t, os.Remove(f.Name()), "failed to remove file: %s", f.Name())
 }
 
 func TestNewClosed(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range testCases {
-		tc := tc
+	filename, err := tempfile.NewClosed()
+	assert.NilError(t, err, `NewClosed() = %v`, err)
 
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	t.Cleanup(func() {
+		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+	})
 
-			filename, err := tempfile.NewClosed(tc.opts...)
-			assert.NilError(t, err, `NewClosed(%v) = %v`, tc.opts, err)
+	assert.Assert(t, strings.HasPrefix(filename, os.TempDir()))
+}
 
-			t.Cleanup(func() {
-				assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
-			})
+func TestNewClosedWithFilename(t *testing.T) {
+	t.Parallel()
 
-			assert.Check(t, strings.HasPrefix(filename, os.TempDir()))
-			tc.check(t, filename)
-		})
+	filename, err := tempfile.NewClosed(tempfile.WithName("foo.txt"))
+	assert.NilError(t, err, `NewClosed(WithName("foo.txt")) = %v`, err)
+
+	t.Cleanup(func() {
+		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+	})
+
+	assert.Assert(t, strings.HasPrefix(filename, os.TempDir()))
+}
+
+func TestNewClosedWithDir(t *testing.T) {
+	t.Parallel()
+
+	filename, err := tempfile.NewClosed(tempfile.WithDir("foo"))
+	assert.NilError(t, err, `NewClosed(WithDir("foo")) = %v`, err)
+
+	t.Cleanup(func() {
+		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+	})
+
+	assert.Assert(t, strings.HasPrefix(filename, filepath.Join(os.TempDir(), "foo")))
+}
+
+func TestNewClosedWithPerms(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows doesn't support or need checking if chmod worked")
 	}
+
+	filename, err := tempfile.NewClosed(tempfile.WithPerms(0o600))
+	assert.NilError(t, err, `NewClosed(WithPerms(0o600)) = %v`, err)
+
+	t.Cleanup(func() {
+		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+	})
+
+	fi, err := os.Stat(filename)
+	assert.NilError(t, err, "os.Stat(%q) = %s", filename, err)
+
+	assert.Assert(t, fi.Mode().Perm() == os.FileMode(0o600))
+}
+
+func TestNewClosedWithFilenameAndKeepExtension(t *testing.T) {
+	t.Parallel()
+
+	filename, err := tempfile.NewClosed(tempfile.WithName("foo.txt"), tempfile.KeepingExtension())
+	assert.NilError(t, err, `NewClosed(WithName("foo.txt"), KeepingExtension()) = %v`, err)
+
+	t.Cleanup(func() {
+		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+	})
+
+	assert.Assert(t, filepath.Ext(filename) == ".txt")
+}
+
+func TestNewClosedWithoutFilenameAndKeepExtension(t *testing.T) {
+	t.Parallel()
+
+	filename, err := tempfile.NewClosed(tempfile.KeepingExtension())
+	assert.NilError(t, err, `NewClosed(KeepingExtension()) = %v`, err)
+
+	assert.NilError(t, os.Remove(filename), "failed to remove file: %s", filename)
 }
