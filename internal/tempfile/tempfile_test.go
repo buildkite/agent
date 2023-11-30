@@ -82,8 +82,8 @@ func TestNew(t *testing.T) {
 			assert.NilError(t, err, `New(%v) = %v`, test.opts, err)
 
 			t.Cleanup(func() {
-				assert.NilError(t, f.Close(), "failed to close file: %s", f.Name())
-				assert.NilError(t, os.Remove(f.Name()), "failed to remove file: %s", f.Name())
+				assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
+				assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
 			})
 
 			assert.Check(t, strings.HasPrefix(f.Name(), os.TempDir()))
@@ -163,7 +163,7 @@ func TestNewClosed(t *testing.T) {
 			assert.NilError(t, err, `New(%v) = %v`, test.opts, err)
 
 			t.Cleanup(func() {
-				assert.NilError(t, os.Remove(filename), "failed to remove file: %s", filename)
+				assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
 			})
 
 			assert.Check(t, strings.HasPrefix(filename, os.TempDir()))
