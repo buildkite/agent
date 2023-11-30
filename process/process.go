@@ -89,13 +89,14 @@ type Config struct {
 
 // Process is an operating system level process
 type Process struct {
-	waitResult    error
-	status        syscall.WaitStatus
-	pid           int
-	conf          Config
-	logger        logger.Logger
-	command       *exec.Cmd
+	waitResult error
+	status     syscall.WaitStatus
+	conf       Config
+	logger     logger.Logger
+	command    *exec.Cmd
+
 	mu            sync.Mutex
+	pid           int
 	started, done chan struct{}
 
 	winJobHandle uintptr
@@ -111,6 +112,8 @@ func New(l logger.Logger, c Config) *Process {
 
 // Pid is the pid of the running process
 func (p *Process) Pid() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	return p.pid
 }
 
@@ -187,7 +190,9 @@ func (p *Process) Run(ctx context.Context) error {
 			}
 		}
 
+		p.mu.Lock()
 		p.pid = p.command.Process.Pid
+		p.mu.Unlock()
 
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
@@ -228,7 +233,10 @@ func (p *Process) Run(ctx context.Context) error {
 		if err := p.postStart(); err != nil {
 			p.logger.Error("[Process] postStart failed: %v", err)
 		}
+
+		p.mu.Lock()
 		p.pid = p.command.Process.Pid
+		p.mu.Unlock()
 
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
@@ -368,16 +376,16 @@ func (p *Process) Terminate() error {
 
 func timeoutWait(waitGroup *sync.WaitGroup) error {
 	// Make a chanel that we'll use as a timeout
-	c := make(chan int, 1)
+	ch := make(chan struct{})
 
 	// Start waiting for the routines to finish
 	go func() {
 		waitGroup.Wait()
-		c <- 1
+		close(ch)
 	}()
 
 	select {
-	case _ = <-c:
+	case <-ch:
 		return nil
 	case <-time.After(10 * time.Second):
 		return errors.New("Timeout")
