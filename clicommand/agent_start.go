@@ -561,7 +561,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "allowed-environment-variables",
 			Value:  &cli.StringSlice{},
-			Usage:  "A comma-separated list of regular expressions representing environment variables the agent is allowed to use (e.g. \"^BUILDKITE_.*$\" or \"BUILDKITE_.*\")",
+			Usage:  `A comma-separated list of regular expressions representing environment variables the agent will pass to jobs (for example or "^MYAPP_.*$"). Environment variables set by Buildkite will always be allowed.`,
 			EnvVar: "BUILDKITE_ALLOWED_ENVIRONMENT_VARIABLES",
 		},
 		cli.StringSliceFlag{
