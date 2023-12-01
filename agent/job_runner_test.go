@@ -52,3 +52,68 @@ func TestValidateJobValue(t *testing.T) {
 		}
 	}
 }
+
+func TestAllowedEnvironmentVariables(t *testing.T) {
+	testCases := []struct {
+		name                         string
+		environmentVariables         map[string]string
+		allowedEnvironmentVariables  []*regexp.Regexp
+		expectedEnvironmentVariables map[string]string
+		expectedDeniedVariables      []string
+	}{{
+		name: "Allow list without regex",
+		environmentVariables: map[string]string{
+			"CI":    "True",
+			"SHELL": "/bin/sh",
+		},
+		allowedEnvironmentVariables: []*regexp.Regexp{
+			regexp.MustCompile("CI"),
+		},
+		expectedEnvironmentVariables: map[string]string{
+			"CI": "True",
+		},
+		expectedDeniedVariables: []string{"SHELL"},
+	}, {
+		name: "Allow list with regex (anchored)",
+		environmentVariables: map[string]string{
+			"CI":                 "True",
+			"BUILDKITE_METADATA": "Some data...",
+			"BUILDKITE_AGENT_ID": "SOME_AGENT",
+			"SHELL":              "/bin/sh",
+		},
+		allowedEnvironmentVariables: []*regexp.Regexp{
+			regexp.MustCompile("CI"),
+			regexp.MustCompile("^BUILDKITE_.*$"),
+		},
+		expectedEnvironmentVariables: map[string]string{
+			"CI":                 "True",
+			"BUILDKITE_METADATA": "Some data...",
+			"BUILDKITE_AGENT_ID": "SOME_AGENT",
+		},
+		expectedDeniedVariables: []string{"SHELL"},
+	}, {
+		name: "Allow list with regex (non-anchored)",
+		environmentVariables: map[string]string{
+			"CI":                 "True",
+			"BUILDKITE_METADATA": "Some data...",
+			"BUILDKITE_AGENT_ID": "SOME_AGENT",
+			"SHELL":              "/bin/sh",
+		},
+		allowedEnvironmentVariables: []*regexp.Regexp{
+			regexp.MustCompile("CI"),
+			regexp.MustCompile("BUILDKITE_.*"),
+		},
+		expectedEnvironmentVariables: map[string]string{
+			"CI":                 "True",
+			"BUILDKITE_METADATA": "Some data...",
+			"BUILDKITE_AGENT_ID": "SOME_AGENT",
+		},
+		expectedDeniedVariables: []string{"SHELL"},
+	}}
+
+	for _, testCase := range testCases {
+		t.Logf("Running test case: %s", testCase.name)
+		assert.ElementsMatch(t, testCase.expectedDeniedVariables, filterEnv(testCase.environmentVariables, testCase.allowedEnvironmentVariables))
+		assert.Equal(t, testCase.expectedEnvironmentVariables, testCase.environmentVariables)
+	}
+}

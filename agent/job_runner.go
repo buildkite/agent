@@ -392,6 +392,29 @@ func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, erro
 	}
 }
 
+// filterEnv removes the keys from the map that don't exist in the slice.
+func filterEnv(env map[string]string, allowedVariables []*regexp.Regexp) []string {
+	// Filter out if the user has unlisted environment variables
+	// It adds environment variable to denied list and removes if it finds matching regex
+	var deniedVariables []string
+	for k := range env {
+		deniedVariables = append(deniedVariables, k)
+		for _, v := range allowedVariables {
+			if isMatch := v.MatchString(k); isMatch {
+				deniedVariables = deniedVariables[:len(deniedVariables)-1]
+				break
+			}
+		}
+	}
+
+	// Delete denied variables from environment variables list
+	for _, v := range deniedVariables {
+		delete(env, v)
+	}
+
+	return deniedVariables
+}
+
 // Creates the environment variables that will be used in the process and writes a flat environment file
 func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// Create a clone of our jobs environment. We'll then set the

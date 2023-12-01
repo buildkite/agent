@@ -58,6 +58,12 @@ Example:
 
 var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
+var alwaysAllowedEnvironmentVariables = []*regexp.Regexp{
+	regexp.MustCompile("^BUILDKITE$"),
+	regexp.MustCompile("^BUILDKITE_.*$"),
+	regexp.MustCompile("^CI$"),
+}
+
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
 // - As a flag in the AgentStartCommand (with matching env)
@@ -128,14 +134,15 @@ type AgentStartConfig struct {
 	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
 
-	NoSSHKeyscan        bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval       bool     `cli:"no-command-eval"`
-	NoLocalHooks        bool     `cli:"no-local-hooks"`
-	NoPlugins           bool     `cli:"no-plugins"`
-	NoPluginValidation  bool     `cli:"no-plugin-validation"`
-	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
-	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
-	AllowedPlugins      []string `cli:"allowed-plugins" normalize:"list"`
+	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval               bool     `cli:"no-command-eval"`
+	NoLocalHooks                bool     `cli:"no-local-hooks"`
+	NoPlugins                   bool     `cli:"no-plugins"`
+	NoPluginValidation          bool     `cli:"no-plugin-validation"`
+	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
+	AllowedRepositories         []string `cli:"allowed-repositories" normalize:"list"`
+	AllowedPlugins              []string `cli:"allowed-plugins" normalize:"list"`
+	AllowedEnvironmentVariables []string `cli:"allowed-environment-variables" normalize:"list"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -552,6 +559,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_ALLOWED_REPOSITORIES",
 		},
 		cli.StringSliceFlag{
+			Name:   "allowed-environment-variables",
+			Value:  &cli.StringSlice{},
+			Usage:  "A comma-separated list of regular expressions representing environment variables the agent is allowed to use (e.g. \"^BUILDKITE_.*$\" or \"BUILDKITE_.*\")",
+			EnvVar: "BUILDKITE_ALLOWED_ENVIRONMENT_VARIABLES",
+		},
+		cli.StringSliceFlag{
 			Name:   "allowed-plugins",
 			Value:  &cli.StringSlice{},
 			Usage:  `A comma-separated list of regular expressions representing plugins the agent is allowed to use (for example, "^buildkite-plugins/.*$" or "^/var/lib/buildkite-plugins/.*")`,
@@ -841,6 +854,19 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		var allowedEnvironmentVariables []*regexp.Regexp
+		if len(cfg.AllowedEnvironmentVariables) > 0 {
+			allowedEnvironmentVariables = make([]*regexp.Regexp, len(cfg.AllowedEnvironmentVariables)+len(alwaysAllowedEnvironmentVariables))
+			allowedEnvironmentVariables = append(alwaysAllowedEnvironmentVariables, allowedEnvironmentVariables...)
+			for _, v := range cfg.AllowedEnvironmentVariables {
+				if regex, err := regexp.Compile(v); err != nil {
+					l.Fatal("Regex %s in allowed-environment-variables failed to compile: %v", v, err)
+				} else {
+					allowedEnvironmentVariables = append(allowedEnvironmentVariables, regex)
+				}
+			}
+		}
+
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
 			BootstrapScript:              cfg.BootstrapScript,
@@ -862,6 +888,7 @@ var AgentStartCommand = cli.Command{
 			PluginsEnabled:               !cfg.NoPlugins,
 			PluginValidation:             !cfg.NoPluginValidation,
 			LocalHooksEnabled:            !cfg.NoLocalHooks,
+			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			RunInPty:                     !cfg.NoPTY,
 			ANSITimestamps:               !cfg.NoANSITimestamps,
