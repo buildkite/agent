@@ -124,6 +124,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	if err != nil {
 		fmt.Fprintln(r.jobLogs, err.Error())
 		r.agentLogger.Error("Failed to validate repo: %s", err)
+
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
 		return nil
@@ -133,6 +134,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	if err != nil {
 		fmt.Fprintln(r.jobLogs, err.Error())
 		r.agentLogger.Error("Failed to validate plugins: %s", err)
+
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
 		return nil
@@ -141,7 +143,11 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	// Check if environment variables are allowed
 	if len(r.conf.AgentConfiguration.AllowedEnvironmentVariables) > 0 {
 		if deniedVariables := filterEnv(job.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables); len(deniedVariables) > 0 {
-			r.agentLogger.Error("Failed to validate environment variables. Denied variable(s): %s", deniedVariables)
+			msg := fmt.Sprintf("Failed to validate environment variables. Denied variable(s): %s", deniedVariables)
+
+			fmt.Fprintln(r.jobLogs, msg)
+			r.agentLogger.Error(msg)
+
 			exit.Status = -1
 			exit.SignalReason = SignalReasonAgentRefused
 			return nil
