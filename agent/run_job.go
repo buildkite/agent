@@ -138,6 +138,16 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// Check if environment variables are allowed
+	if len(r.conf.AgentConfiguration.AllowedEnvironmentVariables) > 0 {
+		if deniedVariables := filterEnv(job.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables); len(deniedVariables) > 0 {
+			r.agentLogger.Error("Failed to validate environment variables. Denied variable(s): %s", deniedVariables)
+			exit.Status = -1
+			exit.SignalReason = SignalReasonAgentRefused
+			return nil
+		}
+	}
+
 	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for
 	// it to tell us whether it is happy to proceed.
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
