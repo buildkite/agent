@@ -13,12 +13,15 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/tempfile"
 	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	var script []string
 
@@ -87,7 +90,7 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := shell.TempFileWithExtension("hookName.bat")
+	hookFile, err := tempfile.New(tempfile.WithName("hookName.bat"), tempfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, "echo Hello There!")
@@ -95,7 +98,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 
 	hookFile.Close()
 
-	wrapper, err := NewScriptWrapper(
+	wrapper, err := NewWrapper(
 		WithHookPath(hookFile.Name()),
 		WithOS("windows"),
 	)
@@ -120,7 +123,7 @@ EXIT %%BUILDKITE_HOOK_EXIT_STATUS%%`
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := shell.TempFileWithExtension("hookName.ps1")
+	hookFile, err := tempfile.New(tempfile.WithName("hookName.ps1"), tempfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, `Write-Output "Hello There!"`)
@@ -128,7 +131,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 
 	hookFile.Close()
 
-	wrapper, err := NewScriptWrapper(
+	wrapper, err := NewWrapper(
 		WithHookPath(hookFile.Name()),
 		WithOS("windows"),
 	)
@@ -150,7 +153,7 @@ exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := shell.TempFileWithExtension("hookName")
+	hookFile, err := tempfile.New(tempfile.WithName("hookName"), tempfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	_, err = fmt.Fprintln(hookFile, "#!/bin/dash\necho 'Hello There!'")
@@ -158,7 +161,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 
 	hookFile.Close()
 
-	wrapper, err := NewScriptWrapper(
+	wrapper, err := NewWrapper(
 		WithHookPath(hookFile.Name()),
 		WithOS("linux"),
 	)
@@ -249,13 +252,13 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	}
 }
 
-func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
+func newTestScriptWrapper(t *testing.T, script []string) *Wrapper {
 	hookName := "hookwrapper"
 	if runtime.GOOS == "windows" {
 		hookName += ".bat"
 	}
 
-	hookFile, err := shell.TempFileWithExtension(hookName)
+	hookFile, err := tempfile.New(tempfile.WithName(hookName), tempfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	for _, line := range script {
@@ -265,14 +268,14 @@ func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
 
 	hookFile.Close()
 
-	wrapper, err := NewScriptWrapper(WithHookPath(hookFile.Name()))
+	wrapper, err := NewWrapper(WithHookPath(hookFile.Name()))
 	assert.NoError(t, err)
 
 	return wrapper
 }
 
-func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper *ScriptWrapper) {
-	file, err := os.Open(wrapper.scriptFile.Name())
+func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper *Wrapper) {
+	file, err := os.Open(wrapper.wrapperPath)
 	assert.NoError(t, err)
 
 	defer file.Close()
@@ -280,7 +283,7 @@ func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper
 	wrapperScriptContents, err := io.ReadAll(file)
 	assert.NoError(t, err)
 
-	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvFile.Name(), hookFileName, wrapper.afterEnvFile.Name())
+	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvPath, hookFileName, wrapper.afterEnvPath)
 
 	assert.Equal(t, expected, string(wrapperScriptContents))
 }
@@ -337,7 +340,7 @@ func mockAgent() (*bintest.Mock, func(), error) {
 func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := shell.TempFileWithExtension("hookName")
+	hookFile, err := tempfile.New(tempfile.WithName("hookName"), tempfile.KeepingExtension())
 	assert.NoError(t, err)
 
 	script := strings.Join([]string{
@@ -350,7 +353,7 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 
 	hookFile.Close()
 
-	_, err = NewScriptWrapper(
+	_, err = NewWrapper(
 		WithHookPath(hookFile.Name()),
 		WithOS("linux"),
 	)

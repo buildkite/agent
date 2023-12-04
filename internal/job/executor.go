@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/shellscript"
+	"github.com/buildkite/agent/v3/internal/tempfile"
 	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
@@ -394,7 +395,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	redactors := e.setupRedactors()
 	defer redactors.Flush()
 
-	script, err := hook.NewScriptWrapper(hook.WithHookPath(hookCfg.Path))
+	script, err := hook.NewWrapper(hook.WithHookPath(hookCfg.Path))
 	if err != nil {
 		e.shell.Errorf("Error creating hook script: %v", err)
 		return err
@@ -465,7 +466,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		// for some reason...
 
 		switch err.(type) {
-		case *hook.HookExitError:
+		case *hook.ExitError:
 			// ...because the hook called exit(), tsk we ignore any changes
 			// since we can't discern them but continue on with the job
 			break
@@ -482,7 +483,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	return nil
 }
 
-func (e *Executor) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors replacer.Mux) {
+func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges, redactors replacer.Mux) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != e.shell.Getwd() {
 			_ = e.shell.Chdir(afterWd)
@@ -1043,9 +1044,7 @@ func shouldCallBatchLine(line string) bool {
 }
 
 func (e *Executor) writeBatchScript(cmd string) (string, error) {
-	scriptFile, err := shell.TempFileWithExtension(
-		"buildkite-script.bat",
-	)
+	scriptFile, err := tempfile.New(tempfile.WithName("buildkite-script.bat"), tempfile.KeepingExtension())
 	if err != nil {
 		return "", err
 	}
