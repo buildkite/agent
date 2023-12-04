@@ -42,15 +42,17 @@ func TestNewWithFilename(t *testing.T) {
 func TestNewWithDir(t *testing.T) {
 	t.Parallel()
 
-	f, err := tempfile.New(tempfile.WithDir("foo"))
-	assert.NilError(t, err, `New(WithDir("foo")) = %v`, err)
+	f, err := tempfile.New(tempfile.WithDir("TestNewWithDir"))
+	assert.NilError(t, err, `New(WithDir("TestNewWithDir")) = %v`, err)
+
+	dir := filepath.Join(os.TempDir(), "TestNewWithDir")
 
 	t.Cleanup(func() {
 		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+		assert.Check(t, os.RemoveAll(dir) == nil, "failed to remove file: %s", f.Name())
 	})
 
-	assert.Assert(t, strings.HasPrefix(f.Name(), filepath.Join(os.TempDir(), "foo")))
+	assert.Assert(t, strings.HasPrefix(f.Name(), dir))
 }
 
 func TestNewWithPerms(t *testing.T) {
@@ -127,14 +129,16 @@ func TestNewClosedWithFilename(t *testing.T) {
 func TestNewClosedWithDir(t *testing.T) {
 	t.Parallel()
 
-	filename, err := tempfile.NewClosed(tempfile.WithDir("foo"))
-	assert.NilError(t, err, `NewClosed(WithDir("foo")) = %v`, err)
+	filename, err := tempfile.NewClosed(tempfile.WithDir("TestNewClosedWithDir"))
+	assert.NilError(t, err, `NewClosed(WithDir("TestNewClosedWithDir")) = %v`, err)
+
+	dir := filepath.Join(os.TempDir(), "TestNewClosedWithDir")
 
 	t.Cleanup(func() {
-		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+		assert.Check(t, os.RemoveAll(dir) == nil, "failed to remove file: %s", filename)
 	})
 
-	assert.Assert(t, strings.HasPrefix(filename, filepath.Join(os.TempDir(), "foo")))
+	assert.Assert(t, strings.HasPrefix(filename, dir))
 }
 
 func TestNewClosedWithPerms(t *testing.T) {
