@@ -568,7 +568,7 @@ var AgentStartCommand = cli.Command{
 			Name:   "allowed-plugins",
 			Value:  &cli.StringSlice{},
 			Usage:  `A comma-separated list of regular expressions representing plugins the agent is allowed to use (for example, "^buildkite-plugins/.*$" or "^/var/lib/buildkite-plugins/.*")`,
-			EnvVar: "BUILDKITE_PLUGINSS",
+			EnvVar: "BUILDKITE_ALLOWED_PLUGINS",
 		},
 		cli.BoolFlag{
 			Name:   "metrics-datadog",
