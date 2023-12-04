@@ -49,7 +49,7 @@ func TestNewWithDir(t *testing.T) {
 
 	t.Cleanup(func() {
 		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-		assert.Check(t, os.RemoveAll(dir) == nil, "failed to remove file: %s", f.Name())
+		assert.Check(t, os.RemoveAll(dir) == nil, "failed to remove dir: %s", dir)
 	})
 
 	assert.Assert(t, strings.HasPrefix(f.Name(), dir))
@@ -135,7 +135,7 @@ func TestNewClosedWithDir(t *testing.T) {
 	dir := filepath.Join(os.TempDir(), "TestNewClosedWithDir")
 
 	t.Cleanup(func() {
-		assert.Check(t, os.RemoveAll(dir) == nil, "failed to remove file: %s", filename)
+		assert.Check(t, os.RemoveAll(dir) == nil, "failed to remove dir: %s", dir)
 	})
 
 	assert.Assert(t, strings.HasPrefix(filename, dir))
