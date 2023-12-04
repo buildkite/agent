@@ -27,7 +27,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-querystring v1.1.0
 	github.com/gowebpki/jcs v1.0.1
-	github.com/lestrrat-go/jwx/v2 v2.0.17
+	github.com/lestrrat-go/jwx/v2 v2.0.18
 	github.com/mattn/go-zglob v0.0.4
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/oleiade/reflections v1.0.1
@@ -46,11 +46,11 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
 	go.opentelemetry.io/otel/sdk v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
-	golang.org/x/crypto v0.15.0
+	golang.org/x/crypto v0.16.0
 	golang.org/x/exp v0.0.0-20231108232855-2478ac86f678
 	golang.org/x/oauth2 v0.14.0
-	golang.org/x/sys v0.14.0
-	golang.org/x/term v0.14.0
+	golang.org/x/sys v0.15.0
+	golang.org/x/term v0.15.0
 	google.golang.org/api v0.151.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.58.0
 	gopkg.in/yaml.v3 v3.0.1
