@@ -56,13 +56,15 @@ Example:
 
     $ buildkite-agent start --token xxx`
 
-var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+var (
+	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
-var alwaysAllowedEnvironmentVariables = []*regexp.Regexp{
-	regexp.MustCompile("^BUILDKITE$"),
-	regexp.MustCompile("^BUILDKITE_.*$"),
-	regexp.MustCompile("^CI$"),
-}
+	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
+		regexp.MustCompile("^BUILDKITE$"),
+		regexp.MustCompile("^BUILDKITE_.*$"),
+		regexp.MustCompile("^CI$"),
+	}
+)
 
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
@@ -134,15 +136,17 @@ type AgentStartConfig struct {
 	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
 
-	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval               bool     `cli:"no-command-eval"`
-	NoLocalHooks                bool     `cli:"no-local-hooks"`
-	NoPlugins                   bool     `cli:"no-plugins"`
-	NoPluginValidation          bool     `cli:"no-plugin-validation"`
-	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
-	AllowedRepositories         []string `cli:"allowed-repositories" normalize:"list"`
-	AllowedPlugins              []string `cli:"allowed-plugins" normalize:"list"`
-	AllowedEnvironmentVariables []string `cli:"allowed-environment-variables" normalize:"list"`
+	NoSSHKeyscan        bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval       bool     `cli:"no-command-eval"`
+	NoLocalHooks        bool     `cli:"no-local-hooks"`
+	NoPlugins           bool     `cli:"no-plugins"`
+	NoPluginValidation  bool     `cli:"no-plugin-validation"`
+	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
+	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
+	AllowedPlugins      []string `cli:"allowed-plugins" normalize:"list"`
+
+	EnableEnvironmentVariableAllowList bool     `cli:"enable-environment-variable-allowlist"`
+	AllowedEnvironmentVariables        []string `cli:"allowed-environment-variables" normalize:"list"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -558,10 +562,15 @@ var AgentStartCommand = cli.Command{
 			Usage:  `A comma-separated list of regular expressions representing repositories the agent is allowed to clone (for example, "^git@github.com:buildkite/.*" or "^https://github.com/buildkite/.*")`,
 			EnvVar: "BUILDKITE_ALLOWED_REPOSITORIES",
 		},
+		cli.BoolFlag{
+			Name:   "enable-environment-variable-allowlist",
+			Usage:  "Only run jobs where all environment variables are allowed by the allowed-environment-variables option, or have been set by Buildkite",
+			EnvVar: "BUILDKITE_ENABLE_ENVIRONMENT_VARIABLE_ALLOWLIST",
+		},
 		cli.StringSliceFlag{
 			Name:   "allowed-environment-variables",
 			Value:  &cli.StringSlice{},
-			Usage:  `A comma-separated list of regular expressions representing environment variables the agent will pass to jobs (for example or "^MYAPP_.*$"). Environment variables set by Buildkite will always be allowed.`,
+			Usage:  `A comma-separated list of regular expressions representing environment variables the agent will pass to jobs (for example or "^MYAPP_.*$"). Environment variables set by Buildkite will always be allowed. Requires --enable-environment-variable-allowlist to be set`,
 			EnvVar: "BUILDKITE_ALLOWED_ENVIRONMENT_VARIABLES",
 		},
 		cli.StringSliceFlag{
@@ -854,16 +863,21 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		if len(cfg.AllowedEnvironmentVariables) > 0 && !cfg.EnableEnvironmentVariableAllowList {
+			l.Fatal("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
+		}
+
 		var allowedEnvironmentVariables []*regexp.Regexp
-		if len(cfg.AllowedEnvironmentVariables) > 0 {
-			allowedEnvironmentVariables = make([]*regexp.Regexp, len(cfg.AllowedEnvironmentVariables)+len(alwaysAllowedEnvironmentVariables))
-			allowedEnvironmentVariables = append(alwaysAllowedEnvironmentVariables, allowedEnvironmentVariables...)
+		if cfg.EnableEnvironmentVariableAllowList {
+			allowedEnvironmentVariables = append(allowedEnvironmentVariables, buildkiteSetEnvironmentVariables...)
+
 			for _, v := range cfg.AllowedEnvironmentVariables {
-				if regex, err := regexp.Compile(v); err != nil {
+				re, err := regexp.Compile(v)
+				if err != nil {
 					l.Fatal("Regex %s in allowed-environment-variables failed to compile: %v", v, err)
-				} else {
-					allowedEnvironmentVariables = append(allowedEnvironmentVariables, regex)
 				}
+
+				allowedEnvironmentVariables = append(allowedEnvironmentVariables, re)
 			}
 		}
 
