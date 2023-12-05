@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.60.1](https://github.com/buildkite/agent/tree/v3.60.1) (2023-12-06)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.60.0...v3.60.1)
+
+### Fixed
+- Fix typo in environment variable name for allowed-plugins [#2526](https://github.com/buildkite/agent/pull/2526) (@moskyb)
+- Fix environment variable interpolation into command step labels [#2540](https://github.com/buildkite/agent/pull/2540) (@triarius)
+
+### Internal
+- Refactor hook wrapper writing [#2505](https://github.com/buildkite/agent/pull/2505) (@triarius)
+- Use os.RemoveAll in cleanup [#2538](https://github.com/buildkite/agent/pull/2538) (@DrJosh9000)
+- Dependencies [#2537](https://github.com/buildkite/agent/pull/2537) [#2536](https://github.com/buildkite/agent/pull/2536) [#2500](https://github.com/buildkite/agent/pull/2500) [#2528](https://github.com/buildkite/agent/pull/2528) [#2529](https://github.com/buildkite/agent/pull/2529) [#2533](https://github.com/buildkite/agent/pull/2533) [#2532](https://github.com/buildkite/agent/pull/2532) [#2534](https://github.com/buildkite/agent/pull/2534) [#2535](https://github.com/buildkite/agent/pull/2535) (@dependabot[bot])
+
+
 ## [v3.60.0](https://github.com/buildkite/agent/tree/v3.60.0) (2023-11-29)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.59.0...v3.60.0)
 
