@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [v3.60.1](https://github.com/buildkite/agent/tree/v3.60.1) (2023-12-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.60.0...v3.60.1)
 
+### Security
+- Bump docker/library/golang from 1.21.4 to 1.21.5 in /.buildkite [#2542](https://github.com/buildkite/agent/pull/2542) (@dependabot[bot])
+
 ### Fixed
 - Fix typo in environment variable name for allowed-plugins [#2526](https://github.com/buildkite/agent/pull/2526) (@moskyb)
 - Fix environment variable interpolation into command step labels [#2540](https://github.com/buildkite/agent/pull/2540) (@triarius)
