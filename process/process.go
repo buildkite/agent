@@ -170,12 +170,14 @@ func (p *Process) Run(ctx context.Context) error {
 
 	// Toggle between running in a pty
 	if p.conf.PTY {
+		p.logger.Debug("[Process] Running with a PTY")
+
 		// Commands like tput expect a TERM value for a PTY
 		p.command.Env = append(p.command.Env, "TERM="+termType)
 
 		pty, err := StartPTY(p.command)
 		if err != nil {
-			return err
+			return fmt.Errorf("error starting pty: %w", err)
 		}
 
 		// Make sure to close the pty at the end.
@@ -202,32 +204,37 @@ func (p *Process) Run(ctx context.Context) error {
 		go func() {
 			p.logger.Debug("[Process] Starting to copy PTY to the buffer")
 
-			// Copy the pty to our writer. This will block until it
-			// EOF's or something breaks.
+			// Copy the pty to our writer. This will block until it EOFs or something breaks.
 			_, err = io.Copy(p.conf.Stdout, pty)
-			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
-				// We can safely ignore this error, because
-				// it's just the PTY telling us that it closed
-				// successfully.  See:
-				// https://github.com/buildkite/agent/pull/34#issuecomment-46080419
-				err = nil
-			}
+			switch {
+			case errors.Is(err, syscall.EIO):
+				// We can safely ignore syscall.EIO errors, at least on linux
+				// because it's just the PTY telling us that it closed
+				// successfully.
+				//
+				// See: https://github.com/buildkite/agent/pull/34#issuecomment-46080419
+				//
+				// We will still log the error to aid debugging on other platforms.
+				p.logger.Debug("[Process] PTY has finished being copied to the buffer: %v", err)
 
-			if err != nil {
-				p.logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
-			} else {
+			case err == nil:
 				p.logger.Debug("[Process] PTY has finished being copied to the buffer")
+
+			default:
+				p.logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
 			}
 
 			waitGroup.Done()
 		}()
 	} else {
+		p.logger.Debug("[Process] Running without a PTY")
+
 		p.command.Stdin = p.conf.Stdin
 		p.command.Stdout = p.conf.Stdout
 		p.command.Stderr = p.conf.Stderr
 
 		if err := p.command.Start(); err != nil {
-			return err
+			return fmt.Errorf("error starting command: %w", err)
 		}
 
 		if err := p.postStart(); err != nil {
