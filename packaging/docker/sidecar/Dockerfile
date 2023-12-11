@@ -12,6 +12,6 @@ RUN mkdir /buildkite \
 COPY buildkite-agent.cfg /buildkite/
 COPY buildkite-agent-$TARGETOS-$TARGETARCH /buildkite/bin/buildkite-agent
 
-FROM public.ecr.aws/docker/library/busybox:1-musl@sha256:f553b7484625f0c73bfa3888e013e70e99ec6ae1c424ee0e8a85052bd135a28a
+FROM public.ecr.aws/docker/library/busybox:1-musl@sha256:d74cbb242cfc9c317552bfa74c166a9816b121181991b69805bc98124108b08b
 COPY --from=0 /buildkite /buildkite
 VOLUME /buildkite
