@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM public.ecr.aws/ubuntu/ubuntu:22.04@sha256:ddbc99ca01a315623712cd173a804c4df5827a5866f863fb87ec2d2ee8c506bd
+FROM public.ecr.aws/ubuntu/ubuntu:22.04@sha256:c05fa788338c682486f7c353fc1741f8b9b1f2287cbcc86319b2c6f228c2d6f3
 
 ARG TARGETOS
 ARG TARGETARCH
