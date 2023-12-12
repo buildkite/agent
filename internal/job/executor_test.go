@@ -55,8 +55,9 @@ func TestValuesToRedact(t *testing.T) {
 	}
 	environment := map[string]string{
 		"BUILDKITE_PIPELINE": "unit-test",
-		"DATABASE_USERNAME":  "AzureDiamond",
-		"DATABASE_PASSWORD":  "hunter2",
+		// These are example values, and are not leaked credentials
+		"DATABASE_USERNAME": "AzureDiamond",
+		"DATABASE_PASSWORD": "hunter2",
 	}
 
 	got := redact.Values(shell.DiscardLogger, redactConfig, environment)
