@@ -2,6 +2,7 @@ $installDir = "C:\buildkite-agent"
 $beta = $env:buildkiteAgentBeta
 $token = $env:buildkiteAgentToken
 $tags = $env:buildkiteAgentTags
+$url = $env:buildkiteAgentUrl
 
 if ($(Get-ComputerInfo -Property OsArchitecture).OsArchitecture -eq "ARM 64-bit Processor") {
   $arch = "arm64"
@@ -34,26 +35,28 @@ if($elevated -eq $false) {
     throw "In order to install services, please run this script elevated."
 }
 
-$releaseInfoUrl = "https://buildkite.com/agent/releases/latest?platform=windows&arch=$arch"
-if($beta) {
-    $releaseInfoUrl = $releaseInfoUrl + "&prerelease=true"
-}
+if ([string]::IsNullOrEmpty($url)) {
+    $releaseInfoUrl = "https://buildkite.com/agent/releases/$version?platform=windows&arch=$arch"
+    if($beta) {
+        $releaseInfoUrl = $releaseInfoUrl + "&prerelease=true"
+    }
+    Write-Host "Finding latest release"
 
-Write-Host "Finding latest release"
+    $resp = Invoke-WebRequest -Uri "$releaseInfoUrl" -UseBasicParsing -Method GET
 
-$resp = Invoke-WebRequest -Uri "$releaseInfoUrl" -UseBasicParsing -Method GET
-
-$releaseInfo = @{}
-foreach ($line in $resp.Content.Split("`n")) {
-    $info = $line -split "="
-    $releaseInfo.add($info[0],$info[1])
+    $releaseInfo = @{}
+    foreach ($line in $resp.Content.Split("`n")) {
+        $info = $line -split "="
+        $releaseInfo.add($info[0],$info[1])
+    }
+    $url = $releaseInfo.url
 }
 
 # Github requires TLS1.2
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-Write-Host "Downloading $($releaseInfo.url)"
-Invoke-WebRequest -Uri $releaseInfo.url -OutFile 'buildkite-agent.zip'
+Write-Host "Downloading $url"
+Invoke-WebRequest -Uri $url -OutFile 'buildkite-agent.zip'
 
 if (Test-Path -Path $installDir) {
     $permissions = (Get-Acl $installDir).Access |
