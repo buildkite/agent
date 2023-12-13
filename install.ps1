@@ -41,7 +41,7 @@ if ([string]::IsNullOrEmpty($url)) {
     if($null -eq $version){
       $version = "latest"
     }
-    $releaseInfoUrl = "https://buildkite.com/agent/releases/$version?platform=windows&arch=$arch"
+    $releaseInfoUrl = "https://buildkite.com/agent/releases/$($version)?platform=windows&arch=$arch"
     if($beta) {
         $releaseInfoUrl = $releaseInfoUrl + "&prerelease=true"
     }
