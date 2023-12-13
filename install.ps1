@@ -3,6 +3,8 @@ $beta = $env:buildkiteAgentBeta
 $token = $env:buildkiteAgentToken
 $tags = $env:buildkiteAgentTags
 $url = $env:buildkiteAgentUrl
+$version = $env:buildkiteAgentVersion
+
 
 if ($(Get-ComputerInfo -Property OsArchitecture).OsArchitecture -eq "ARM 64-bit Processor") {
   $arch = "arm64"
@@ -36,7 +38,10 @@ if($elevated -eq $false) {
 }
 
 if ([string]::IsNullOrEmpty($url)) {
-    $releaseInfoUrl = "https://buildkite.com/agent/releases/$version?platform=windows&arch=$arch"
+    if($null -eq $version){
+      $version = "latest"
+    }
+    $releaseInfoUrl = "https://buildkite.com/agent/releases/$($version)?platform=windows&arch=$arch"
     if($beta) {
         $releaseInfoUrl = $releaseInfoUrl + "&prerelease=true"
     }
