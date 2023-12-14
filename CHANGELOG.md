@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.61.0](https://github.com/buildkite/agent/tree/v3.61.0) (2023-12-14)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.60.1...v3.61.0)
+
+### Added
+- Add more debug logging and error wrapping for running processes [#2543](https://github.com/buildkite/agent/pull/2543) (@triarius)
+- Enable overriding buildkite-agent url in `install.ps1` [#1805](https://github.com/buildkite/agent/pull/1805) (@staticfloat)
+
+### Fixed
+- Buildkite build script is broken due to missing version default value [#2559](https://github.com/buildkite/agent/pull/2559) (@amir-khatibzadeh)
+- Update go-pipeline to v0.3.2 (fixes parsing pipelines that contain YAML aliases used as mapping keys) [#2560](https://github.com/buildkite/agent/pull/2560) (@DrJosh9000)
+
+### Changed
+- Alpine image updated from 3.18.5 to 3.19.0 [#2545](https://github.com/buildkite/agent/pull/2545), [#2549](https://github.com/buildkite/agent/pull/2549), [#2550](https://github.com/buildkite/agent/pull/2550), [#2551](https://github.com/buildkite/agent/pull/2551) (@dependabot[bot])
+
+### Internal
+- Make it clear these are not leaked credentials [#2554](https://github.com/buildkite/agent/pull/2554) (@sj26)
+- Various other @dependabot[bot] updates [#2553](https://github.com/buildkite/agent/pull/2553), [#2544](https://github.com/buildkite/agent/pull/2544), [#2548](https://github.com/buildkite/agent/pull/2548), [#2552](https://github.com/buildkite/agent/pull/2552), [#2547](https://github.com/buildkite/agent/pull/2547)
+
+
 ## [v3.60.1](https://github.com/buildkite/agent/tree/v3.60.1) (2023-12-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.60.0...v3.60.1)
 
