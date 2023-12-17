@@ -381,25 +381,33 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 	isWindows := runtime.GOOS == "windows"
 	isPwsh := filepath.Ext(path) == ".ps1"
 
+	var err error
 	switch {
 	case isWindows && isSh:
 		if s.Debug {
 			s.Commentf("Attempting to run %s with Bash for Windows", path)
 		}
 		// Find Bash, either part of Cygwin or MSYS. Must be in the path
-		bashPath, err := s.AbsolutePath("bash.exe")
+		command, err = s.AbsolutePath("bash.exe")
 		if err != nil {
-			return fmt.Errorf("Error finding bash.exe, needed to run scripts: %v. "+
-				"Is Git for Windows installed and correctly in your PATH variable?", err)
+			return fmt.Errorf(
+				"error finding bash.exe, needed to run scripts: %w. Is Git for Windows installed and correctly in your PATH variable?",
+				err,
+			)
 		}
-		command = bashPath
 		args = []string{filepath.ToSlash(path)}
 
 	case isWindows && isPwsh:
 		if s.Debug {
 			s.Commentf("Attempting to run %s with Powershell", path)
 		}
-		command = "powershell.exe"
+		command, err = s.AbsolutePath("powershell.exe")
+		if err != nil {
+			return fmt.Errorf(
+				"error finding powershell.exe, needed to run scripts: %w. Is powershell installed and correctly in your PATH variable?",
+				err,
+			)
+		}
 		args = []string{"-file", path}
 
 	case !isWindows && isSh:
