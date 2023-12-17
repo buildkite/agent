@@ -144,7 +144,7 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	// Use our custom lookPath that takes a specific path
 	absolutePath, err := LookPath(executable, envPath, fileExtensions)
 	if err != nil {
-		return "", fmt.Errorf("looking up path: %s ext: %s: %w", envPath, fileExtensions, err)
+		return "", fmt.Errorf("looking up path: %s exts: %s, env: %q: %w", envPath, fileExtensions, s.Env.ToSlice(), err)
 	}
 
 	// Since the path returned by LookPath is relative to the current working
