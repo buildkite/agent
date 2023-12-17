@@ -31,10 +31,9 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		}
 	} else {
 		script = []string{
-			"@echo off",
-			"set LLAMAS=rock",
-			"set Alpacas=are ok",
-			"echo hello world",
+			`$env:LLAMAS = "rock"`,
+			`$env:Alpacas = "are ok"`,
+			`echo "hello world"`,
 		}
 	}
 
@@ -201,7 +200,6 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		}
 	} else {
 		script = []string{
-			"@echo off",
 			"mkdir mysubdir",
 			"cd mysubdir",
 			"echo hello world",
@@ -252,7 +250,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
 	hookName := "hookwrapper"
 	if runtime.GOOS == "windows" {
-		hookName += ".bat"
+		hookName += ".ps1"
 	}
 
 	hookFile, err := shell.TempFileWithExtension(hookName)
