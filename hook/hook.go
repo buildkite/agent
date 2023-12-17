@@ -22,7 +22,7 @@ func Find(hookDir string, name string) (string, error) {
 			return p, nil
 		}
 	}
-	// otherwise chech for th default shell script
+	// otherwise check for the default shell script
 	if p := filepath.Join(hookDir, name); utils.FileExists(p) {
 		return p, nil
 	}

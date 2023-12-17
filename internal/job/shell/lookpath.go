@@ -5,7 +5,7 @@
 //
 // https://github.com/golang/go/blob/master/src/os/exec/lp.go
 //
-// Their implemenations are exactly the same, however in this version - the
+// Their implementations are exactly the same, however in this version - the
 // paths to search in (along with file extensions to look at) can be
 // customized.
 
@@ -23,7 +23,7 @@ func findExecutable(file string) error {
 	if err != nil {
 		return err
 	}
-	if m := d.Mode(); !m.IsDir() && m&0111 != 0 {
+	if m := d.Mode(); !m.IsDir() && m&0o111 != 0 {
 		return nil
 	}
 	return os.ErrPermission

@@ -2,7 +2,7 @@
 //
 // https://github.com/golang/go/blob/master/src/os/exec/lp_windows.go
 //
-// Their implemenations are exactly the same, however in this version - the
+// Their implementations are exactly the same, however in this version - the
 // paths to search in (along with file extensions to look at) can be
 // customized.
 
