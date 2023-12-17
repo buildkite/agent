@@ -144,7 +144,7 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	// Use our custom lookPath that takes a specific path
 	absolutePath, err := LookPath(executable, envPath, fileExtensions)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("looking up path: %s ext: %s: %w", envPath, fileExtensions, err)
 	}
 
 	// Since the path returned by LookPath is relative to the current working
@@ -391,7 +391,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 		command, err = s.AbsolutePath("bash.exe")
 		if err != nil {
 			return fmt.Errorf(
-				"error finding bash.exe, needed to run scripts: %w. Is Git for Windows installed and correctly in your PATH variable?",
+				"absolute path error: %w. Is Git for Windows installed and correctly in your PATH variable?",
 				err,
 			)
 		}
@@ -404,7 +404,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 		command, err = s.AbsolutePath("powershell.exe")
 		if err != nil {
 			return fmt.Errorf(
-				"error finding powershell.exe, needed to run scripts: %w. Is powershell installed and correctly in your PATH variable?",
+				"absolute path error: %w. Is Powershell installed and correctly in your PATH variable?",
 				err,
 			)
 		}
