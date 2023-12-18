@@ -14,6 +14,13 @@ var BuildkiteAgentCommands = []cli.Command{
 		},
 	},
 	{
+		Name:  "secret",
+		Usage: "Get a secret",
+		Subcommands: []cli.Command{
+			SecretGetCommand,
+		},
+	},
+	{
 		Name:  "artifact",
 		Usage: "Upload/download artifacts from Buildkite jobs",
 		Subcommands: []cli.Command{
