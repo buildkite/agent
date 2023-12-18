@@ -2,12 +2,10 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +19,6 @@ import (
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
-	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -564,39 +561,6 @@ type LogWriter struct {
 func (w LogWriter) Write(bytes []byte) (int, error) {
 	w.l.Info("%s", bytes)
 	return len(bytes), nil
-}
-
-// validateJobValue returns an error if a job value doesn't match
-// any allowed patterns.
-func validateJobValue(allowedPatterns []*regexp.Regexp, jobValue string) error {
-	if len(allowedPatterns) == 0 {
-		return nil
-	}
-
-	for _, re := range allowedPatterns {
-		if match := re.MatchString(jobValue); match {
-			return nil
-		}
-	}
-	return fmt.Errorf("%s has no match in %s", jobValue, allowedPatterns)
-}
-
-// checkPlugins unmarshal and validates the plugins, if the list of allowed plugins is set.
-// Disabled plugins or errors in json.Unmarshal will by-pass the plugin verification.
-func (r *JobRunner) checkPlugins(ctx context.Context) error {
-	if !r.conf.AgentConfiguration.PluginsEnabled {
-		return nil
-	}
-	var ps pipeline.Plugins
-	pluginsVar := r.conf.Job.Env["BUILDKITE_PLUGINS"]
-	if err := json.Unmarshal([]byte(pluginsVar), &ps); len(pluginsVar) > 0 && err == nil {
-		for _, plugin := range ps {
-			if err := validateJobValue(r.conf.AgentConfiguration.AllowedPlugins, plugin.Source); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {

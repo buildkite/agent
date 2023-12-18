@@ -2,19 +2,23 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/roko"
 )
 
@@ -120,19 +124,10 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Validate the repository if the list of allowed repositories is set.
-	err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])
-	if err != nil {
+	if err := r.validateConfigAllowlists(job); err != nil {
 		fmt.Fprintln(r.jobLogs, err.Error())
-		r.agentLogger.Error("Failed to validate repo: %s", err)
-		exit.Status = -1
-		exit.SignalReason = SignalReasonAgentRefused
-		return nil
-	}
-	// Validate the plugins if the list of allowed plugins is set.
-	err = r.checkPlugins(ctx)
-	if err != nil {
-		fmt.Fprintln(r.jobLogs, err.Error())
-		r.agentLogger.Error("Failed to validate plugins: %s", err)
+		r.agentLogger.Error(err.Error())
+
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
 		return nil
@@ -162,6 +157,85 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	go r.jobCancellationChecker(cctx, &wg)
 
 	exit = r.runJob(cctx)
+
+	return nil
+}
+
+func (r *JobRunner) validateConfigAllowlists(job *api.Job) error {
+	validations := map[string]func() error{
+		"repo": func() error {
+			return validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])
+		},
+		"environment variables": func() error {
+			return validateEnv(job.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
+		},
+		"plugins": r.validatePlugins,
+	}
+
+	for name, validation := range validations {
+		if err := validation(); err != nil {
+			return fmt.Errorf("failed to validate %s: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// validateEnv checks if the environment variables are allowed by ensuring their names match at least one of the regular
+// expressions in the allowedVariablePatterns list. The error message will contain all of the variables that aren't are
+// invalid.
+func validateEnv(env map[string]string, allowedVariablePatterns []*regexp.Regexp) error {
+	if len(allowedVariablePatterns) == 0 {
+		return nil
+	}
+
+	for k := range env {
+		if err := validateJobValue(allowedVariablePatterns, k); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateJobValue returns an error if a job value doesn't match
+// any allowed patterns.
+func validateJobValue(allowedPatterns []*regexp.Regexp, jobValue string) error {
+	if len(allowedPatterns) == 0 {
+		return nil
+	}
+
+	for _, re := range allowedPatterns {
+		if match := re.MatchString(jobValue); match {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("%s has no match in %s", jobValue, allowedPatterns)
+}
+
+// validatePlugins unmarshal and validates the plugins, if the list of allowed plugins is set.
+// Disabled plugins or errors in json.Unmarshal will by-pass the plugin verification.
+func (r *JobRunner) validatePlugins() error {
+	if !r.conf.AgentConfiguration.PluginsEnabled {
+		return nil
+	}
+
+	pluginsVar := []byte(r.conf.Job.Env["BUILDKITE_PLUGINS"])
+	if len(pluginsVar) == 0 {
+		return nil
+	}
+
+	var ps pipeline.Plugins
+	if err := json.Unmarshal(pluginsVar, &ps); err != nil {
+		return fmt.Errorf("failed to unmarshal plugins for validation: %w", err)
+	}
+
+	for _, plugin := range ps {
+		if err := validateJobValue(r.conf.AgentConfiguration.AllowedPlugins, plugin.FullSource()); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

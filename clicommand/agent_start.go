@@ -56,7 +56,15 @@ Example:
 
     $ buildkite-agent start --token xxx`
 
-var verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+var (
+	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+
+	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
+		regexp.MustCompile("^BUILDKITE$"),
+		regexp.MustCompile("^BUILDKITE_.*$"),
+		regexp.MustCompile("^CI$"),
+	}
+)
 
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
@@ -136,6 +144,9 @@ type AgentStartConfig struct {
 	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
 	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
 	AllowedPlugins      []string `cli:"allowed-plugins" normalize:"list"`
+
+	EnableEnvironmentVariableAllowList bool     `cli:"enable-environment-variable-allowlist"`
+	AllowedEnvironmentVariables        []string `cli:"allowed-environment-variables" normalize:"list"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -551,6 +562,17 @@ var AgentStartCommand = cli.Command{
 			Usage:  `A comma-separated list of regular expressions representing repositories the agent is allowed to clone (for example, "^git@github.com:buildkite/.*" or "^https://github.com/buildkite/.*")`,
 			EnvVar: "BUILDKITE_ALLOWED_REPOSITORIES",
 		},
+		cli.BoolFlag{
+			Name:   "enable-environment-variable-allowlist",
+			Usage:  "Only run jobs where all environment variables are allowed by the allowed-environment-variables option, or have been set by Buildkite",
+			EnvVar: "BUILDKITE_ENABLE_ENVIRONMENT_VARIABLE_ALLOWLIST",
+		},
+		cli.StringSliceFlag{
+			Name:   "allowed-environment-variables",
+			Value:  &cli.StringSlice{},
+			Usage:  `A comma-separated list of regular expressions representing environment variables the agent will pass to jobs (for example or "^MYAPP_.*$"). Environment variables set by Buildkite will always be allowed. Requires --enable-environment-variable-allowlist to be set`,
+			EnvVar: "BUILDKITE_ALLOWED_ENVIRONMENT_VARIABLES",
+		},
 		cli.StringSliceFlag{
 			Name:   "allowed-plugins",
 			Value:  &cli.StringSlice{},
@@ -841,6 +863,24 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		if len(cfg.AllowedEnvironmentVariables) > 0 && !cfg.EnableEnvironmentVariableAllowList {
+			l.Fatal("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
+		}
+
+		var allowedEnvironmentVariables []*regexp.Regexp
+		if cfg.EnableEnvironmentVariableAllowList {
+			allowedEnvironmentVariables = append(allowedEnvironmentVariables, buildkiteSetEnvironmentVariables...)
+
+			for _, v := range cfg.AllowedEnvironmentVariables {
+				re, err := regexp.Compile(v)
+				if err != nil {
+					l.Fatal("Regex %s in allowed-environment-variables failed to compile: %v", v, err)
+				}
+
+				allowedEnvironmentVariables = append(allowedEnvironmentVariables, re)
+			}
+		}
+
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
 			BootstrapScript:              cfg.BootstrapScript,
@@ -862,6 +902,7 @@ var AgentStartCommand = cli.Command{
 			PluginsEnabled:               !cfg.NoPlugins,
 			PluginValidation:             !cfg.NoPluginValidation,
 			LocalHooksEnabled:            !cfg.NoLocalHooks,
+			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			RunInPty:                     !cfg.NoPTY,
 			ANSITimestamps:               !cfg.NoANSITimestamps,
