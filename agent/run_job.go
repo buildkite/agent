@@ -397,10 +397,13 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit pr
 			// sometimes mean that Buildkite has cancelled the job
 			// before we get a chance to send the final API call
 			// (maybe this agent took too long to kill the
-			// process). In that case, we don't want to keep trying
+			// process).
+			// The API may also return a 401 when job tokens
+			// are enabled.
+			// In either case, we don't want to keep trying
 			// to finish the job forever so we'll just bail out and
 			// go find some more work to do.
-			if response != nil && response.StatusCode == 422 {
+			if response != nil && (response.StatusCode == 422 || response.StatusCode == 401) {
 				r.agentLogger.Warn("Buildkite rejected the call to finish the job (%s)", err)
 				retrier.Break()
 			} else {
