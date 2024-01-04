@@ -313,6 +313,9 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 				logger.StringField("pipeline", r.conf.Job.Env["BUILDKITE_PIPELINE_SLUG"]),
 				logger.StringField("branch", r.conf.Job.Env["BUILDKITE_BRANCH"]),
 				logger.StringField("queue", r.conf.Job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
+				logger.StringField("build_id", r.conf.Job.Env["BUILDKITE_BUILD_ID"]),
+				logger.StringField("build_number", r.conf.Job.Env["BUILDKITE_BUILD_NUMBER"]),
+				logger.StringField("job_url", fmt.Sprintf("%s#%s", r.conf.Job.Env["BUILDKITE_BUILD_URL"], r.conf.Job.ID)),
 				logger.StringField("job_id", r.conf.Job.ID),
 			)
 			allWriters = append(allWriters, log)
