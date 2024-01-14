@@ -21,7 +21,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2
-	github.com/gliderlabs/ssh v0.3.5
+	github.com/gliderlabs/ssh v0.3.6
 	github.com/go-chi/chi/v5 v5.0.11
 	github.com/gofrs/flock v0.8.1
 	github.com/google/go-cmp v0.6.0
