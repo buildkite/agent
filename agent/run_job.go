@@ -385,9 +385,10 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit pr
 	defer cancel()
 
 	return roko.NewRetrier(
-		roko.TryForever(),
+		// retry for ~a day with exponential backoff
+		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
+		roko.WithMaxAttempts(20),
 		roko.WithJitter(),
-		roko.WithStrategy(roko.Constant(1*time.Second)),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.FinishJob(ctx, r.conf.Job)
 		if err != nil {
