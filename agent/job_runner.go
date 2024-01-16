@@ -703,8 +703,9 @@ func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) 
 	defer cancel()
 
 	return roko.NewRetrier(
-		roko.TryForever(),
-		roko.WithStrategy(roko.Constant(5*time.Second)),
+		// retry for ~a day with exponential backoff
+		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
+		roko.WithMaxAttempts(20),
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.UploadChunk(ctx, r.conf.Job.ID, &api.Chunk{
