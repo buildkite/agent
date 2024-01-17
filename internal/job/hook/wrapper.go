@@ -121,7 +121,7 @@ type Wrapper struct {
 	afterEnvPath  string
 }
 
-func WithHookPath(path string) WrapperOpt {
+func WithPath(path string) WrapperOpt {
 	return func(wrap *Wrapper) {
 		wrap.hookPath = path
 	}
