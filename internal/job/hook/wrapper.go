@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/template"
 
 	"github.com/buildkite/agent/v3/env"
@@ -224,6 +226,34 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 	buildkiteAgent, err := os.Executable()
 	if err != nil {
 		return nil, err
+	}
+
+	if runtime.GOOS == "linux" {
+		// On linux, write the wrapper script in a subprocess to avoid an ETXTBSY
+		//
+		// This error is the result of a race condition where one thread can keep
+		// a file open while another thread tries to execute it after closing it.
+		// Even if all of this happens in the same goroutine (as is that case here),
+		// they can be paused and restarted on different threads, so we need to
+		// prevent the open file descriptor from existing in the thread that
+		// executes the script. To do this, we write the script in a subprocess.
+		// See https://github.com/golang/go/issues/22315
+		cmd := exec.Command(
+			buildkiteAgent, "job", "write-hook-wrapper",
+			"--shebang-line", shebang,
+			"--before-env-file", wrap.beforeEnvPath,
+			"--after-env-file", wrap.afterEnvPath,
+			"--hook-file", absolutePathToHook,
+			scriptFileName,
+		)
+
+		scriptFilePath, err := cmd.Output()
+		if err != nil {
+			return nil, err
+		}
+
+		wrap.wrapperPath = strings.TrimSpace(string(scriptFilePath))
+		return wrap, nil
 	}
 
 	templateInput := WrapperTemplateInput{

@@ -51,6 +51,12 @@ func TestMain(m *testing.M) {
 				clicommand.EnvDumpCommand,
 			},
 		},
+		{
+			Name: "job",
+			Subcommands: []cli.Command{
+				clicommand.JobWriteHookWrapperCommand,
+			},
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
