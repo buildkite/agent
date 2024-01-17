@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/job/hook"
+	"gotest.tools/v3/assert"
 )
 
 type testCase struct {
@@ -19,6 +20,8 @@ type testCase struct {
 }
 
 func noErr(t *testing.T, err error) bool {
+	t.Helper()
+
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return true
@@ -27,6 +30,8 @@ func noErr(t *testing.T, err error) bool {
 }
 
 func isNotExist(t *testing.T, err error) bool {
+	t.Helper()
+
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("expected os.ErrNotExist, got %v", err)
 		return true
@@ -36,33 +41,37 @@ func isNotExist(t *testing.T, err error) bool {
 }
 
 func TestHookType(t *testing.T) {
-	// The test working dir is at $REPO_ROOT/hook, but the fixtures are in $REPO_ROOT/test/fixtures/hook, so we need to
-	// go up a directory to get to the root
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
+	t.Parallel()
+
+	// The test working dir is at $REPO_ROOT/internal/job/hook, but the fixtures are in
+	// $REPO_ROOT/test/fixtures/hook, so we need to go up to get to the root
+	wd, err := os.Getwd()
+	assert.NilError(t, err)
+
+	rootDir := filepath.Join(wd, "..", "..", "..")
 
 	cases := []testCase{
 		{
 			name:             "non-shell script with shebang",
-			hookPath:         hookFixture(root, "hook.rb"),
+			hookPath:         hookFixture(rootDir, "hook.rb"),
 			expectedHookType: hook.TypeScript,
 			errCheck:         noErr,
 		},
 		{
 			name:             "shell script with shebang",
-			hookPath:         hookFixture(root, "shebanged.sh"),
+			hookPath:         hookFixture(rootDir, "shebanged.sh"),
 			expectedHookType: hook.TypeShell,
 			errCheck:         noErr,
 		},
 		{
 			name:             "shell script without shebang",
-			hookPath:         hookFixture(root, "un-shebanged.sh"),
+			hookPath:         hookFixture(rootDir, "un-shebanged.sh"),
 			expectedHookType: hook.TypeShell,
 			errCheck:         noErr,
 		},
 		{
 			name:             "non-existent hook",
-			hookPath:         hookFixture(root, "some", "path", "that", "doesnt", "exist"),
+			hookPath:         hookFixture(rootDir, "some", "path", "that", "doesnt", "exist"),
 			expectedHookType: hook.TypeUnknown,
 			errCheck:         isNotExist,
 		},
@@ -70,10 +79,9 @@ func TestHookType(t *testing.T) {
 
 	for _, operatingSystem := range []string{"linux", "darwin", "windows"} {
 		for _, arch := range []string{"amd64", "arm64"} {
-
 			binaryName := fmt.Sprintf("test-binary-%s-%s", operatingSystem, arch)
 			binaryPath := filepath.Join(os.TempDir(), binaryName)
-			sourcePath := hookFixture(root)
+			sourcePath := hookFixture(rootDir)
 
 			cmd := exec.Command("go", "build", "-o", binaryPath, sourcePath)
 			extraEnv := []string{
@@ -86,7 +94,7 @@ func TestHookType(t *testing.T) {
 
 			output, err := cmd.CombinedOutput()
 			if err != nil {
-				t.Fatalf("Failed to build test-binary-hook: %v, output: %s", err, string(output))
+				t.Fatalf("Failed to build test-binary-hook: %v, output: %s", err, output)
 			}
 
 			cases = append(cases, testCase{
