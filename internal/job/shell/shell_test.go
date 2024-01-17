@@ -200,7 +200,7 @@ func TestInterrupt(t *testing.T) {
 	}()
 
 	if err := sh.Run(ctx, sleepCmd.Path); err == nil {
-		t.Errorf("sh.Run(ctx, sleep) = %v, want non-nil error", err)
+		t.Errorf("sh.Run(ctx, %q), want non-nil error", sleepCmd.Path)
 	}
 }
 

@@ -397,7 +397,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 
 	case isWindows && isPwsh:
 		if s.Debug {
-			s.Commentf("Attempting to run %s with Powershell", path)
+			s.Commentf("Attempting to run %q with Powershell", path)
 		}
 		command = "powershell.exe"
 		args = []string{"-file", path}
@@ -440,7 +440,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 	cmd, err := s.buildCommand(command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
-		return err
+		return fmt.Errorf("error building command: %w", err)
 	}
 
 	// Combine the two slices of env, let the latter overwrite the former
