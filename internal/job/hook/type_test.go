@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/internal/job/hook"
 )
 
 type testCase struct {
