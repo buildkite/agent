@@ -20,7 +20,7 @@ import (
 )
 
 type ToolSignConfig struct {
-	PipelineFile string `cli:"arg:0" label:"pipeline file"`
+	PipelineFile string `cli:"arg:0" label:"pipeline-file"`
 
 	// These change the behaviour
 	GraphQLToken string `cli:"graphql-token"`
