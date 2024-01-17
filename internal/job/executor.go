@@ -421,7 +421,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 
 	const maxHookRetry = 3
 
-	// Run the wrapper script
+	// Run the hook wrapper script
 	if err := roko.NewRetrier(
 		roko.WithStrategy(roko.Constant(time.Second)),
 		roko.WithMaxAttempts(maxHookRetry),
@@ -435,7 +435,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		return err
 	}); err != nil {
 		exitCode := shell.GetExitCode(err)
-		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
+		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
 
 		// If the hook exited with a non-zero exit code, then we should pass that back to the executor
 		// so it may inform the Buildkite API
