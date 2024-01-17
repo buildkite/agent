@@ -21,9 +21,8 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"gotest.tools/v3/assert"
-
 	"github.com/buildkite/bintest/v3"
+	"gotest.tools/v3/assert"
 )
 
 // ExecutorTester invokes a buildkite-agent bootstrap script with a temporary environment
@@ -203,7 +202,12 @@ func (e *ExecutorTester) MockAgent(t *testing.T) *bintest.Mock {
 }
 
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
-func (e *ExecutorTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
+func (e *ExecutorTester) writeHookScript(
+	m *bintest.Mock,
+	name string,
+	dir string,
+	args ...string,
+) (string, error) {
 	hookScript := filepath.Join(dir, name)
 	body := ""
 
@@ -257,7 +261,7 @@ func (e *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
 }
 
 // Run the bootstrap and return any errors
-func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
+func (e *ExecutorTester) Run(t *testing.T, environ ...string) error {
 	t.Helper()
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -288,7 +292,7 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 		e.cmd.Stderr = buf
 	}
 
-	e.cmd.Env = append(e.Env, env...)
+	e.cmd.Env = append(e.Env, environ...)
 
 	err = e.cmd.Start()
 	if err != nil {
@@ -331,10 +335,10 @@ func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 }
 
 // Run the bootstrap and then check the mocks
-func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
+func (e *ExecutorTester) RunAndCheck(t *testing.T, environ ...string) {
 	t.Helper()
 
-	if err := e.Run(t, env...); shell.GetExitCode(err) != 0 {
+	if err := e.Run(t, environ...); shell.GetExitCode(err) != 0 {
 		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
 	}
 

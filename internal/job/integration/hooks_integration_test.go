@@ -38,7 +38,11 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0700); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(tester.HooksDir, filename),
+		[]byte(strings.Join(script, "\n")),
+		0o700,
+	); err != nil {
 		t.Fatalf("os.WriteFile(%q, script, 0700) = %v", filename, err)
 	}
 
@@ -157,6 +161,8 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 }
 
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
@@ -603,16 +609,17 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 
 	// We build a binary as part of this test so that we can produce a binary hook
 	// Forgive me for my sins, RSC, but it's better than the alternatives.
-	// The code that we're building is in ./test-binary-hook/main.go, it's pretty straightforward.
+	// The code that we're building is in test/fixtures/hook/main.go, it's pretty straightforward.
 
-	fmt.Println("Building test-binary-hook")
 	hookPath := filepath.Join(tester.HooksDir, "environment")
 
 	if runtime.GOOS == "windows" {
 		hookPath += ".exe"
 	}
 
-	output, err := exec.Command("go", "build", "-o", hookPath, "./test-binary-hook").CombinedOutput()
+	output, err := exec.Command(
+		"go", "build", "-o", hookPath, "../../../test/fixtures/hook",
+	).CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to build test-binary-hook: %v, output: %s", err, string(output))
 	}
