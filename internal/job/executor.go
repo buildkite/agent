@@ -19,9 +19,9 @@ import (
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/file"
+	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
@@ -145,7 +145,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		return shell.GetExitCode(err)
 	}
 
-	var includePhase = func(phase string) bool {
+	includePhase := func(phase string) bool {
 		if len(e.Phases) == 0 {
 			return true
 		}
@@ -371,7 +371,6 @@ func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
 		procPath, err := file.OpenedBy(l, debug, path)
 		if err != nil {
 			l.Errorf("The %s hook failed to run because it was already open. We couldn't find out what process had the hook open", hookName)
-
 		} else {
 			l.Errorf("The %s hook failed to run the %s process has the hook file open", hookName, procPath)
 		}
@@ -1050,7 +1049,7 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 	}
 	defer scriptFile.Close()
 
-	var scriptContents = []string{"@echo off"}
+	scriptContents := []string{"@echo off"}
 
 	for _, line := range strings.Split(cmd, "\n") {
 		if line != "" {
@@ -1069,7 +1068,6 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 	}
 
 	return scriptFile.Name(), nil
-
 }
 
 // Check for ignored env variables from the job runner. Some
