@@ -126,6 +126,10 @@ our Go dependencies. Dependencies are not
 [vendored](https://go.dev/ref/mod#go-mod-vendor) into the repository unless
 necessary.
 
+The go module published by this repo (ie the one you could use by adding `import "github.com/buildkite/agent/v3"` to your code)
+is **not considered to be versioned using semantic versioning**. Breaking changes may be introduced in minor releases. Use
+the agent as a runtime depedency of your Go app at your own risk.
+
 ## Platform Support
 
 We provide support for security and bug fixes on the current major release
