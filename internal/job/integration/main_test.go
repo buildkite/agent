@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/clicommand"
@@ -19,39 +20,40 @@ import (
 var mainCtx = context.Background()
 
 func TestMain(m *testing.M) {
-	// If we are passed "bootstrap", execute like the bootstrap cli
-	if len(os.Args) > 1 && os.Args[1] == "bootstrap" {
-		app := cli.NewApp()
-		app.Name = "buildkite-agent"
-		app.Version = version.Version()
-		app.Commands = []cli.Command{
-			clicommand.BootstrapCommand,
+	if len(os.Args) <= 1 || strings.HasPrefix(os.Args[1], "-test.") {
+		if os.Getenv("BINTEST_DEBUG") == "1" {
+			bintest.Debug = true
 		}
 
-		if err := app.Run(os.Args); err != nil {
-			os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
+		// Support running the test suite against a given experiment
+		if exp := os.Getenv("TEST_EXPERIMENT"); exp != "" {
+			mainCtx, _ = experiments.Enable(mainCtx, exp)
+			fmt.Fprintf(os.Stderr, "!!! Enabling experiment %q for test suite\n", exp)
 		}
 
-		return
+		// Start a server to share
+		if _, err := bintest.StartServer(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting server: %v", err)
+			os.Exit(1)
+		}
+
+		os.Exit(m.Run())
 	}
 
-	if os.Getenv("BINTEST_DEBUG") == "1" {
-		bintest.Debug = true
+	app := cli.NewApp()
+	app.Name = "buildkite-agent"
+	app.Version = version.Version()
+	app.Commands = []cli.Command{
+		clicommand.BootstrapCommand,
+		{
+			Name: "env",
+			Subcommands: []cli.Command{
+				clicommand.EnvDumpCommand,
+			},
+		},
 	}
 
-	// Support running the test suite against a given experiment
-	if exp := os.Getenv("TEST_EXPERIMENT"); exp != "" {
-		mainCtx, _ = experiments.Enable(mainCtx, exp)
-		fmt.Printf("!!! Enabling experiment %q for test suite\n", exp)
+	if err := app.Run(os.Args); err != nil {
+		os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
 	}
-
-	// Start a server to share
-	_, err := bintest.StartServer()
-	if err != nil {
-		fmt.Printf("Error starting server: %v", err)
-		os.Exit(1)
-	}
-
-	code := m.Run()
-	os.Exit(code)
 }
