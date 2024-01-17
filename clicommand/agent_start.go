@@ -21,7 +21,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
