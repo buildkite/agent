@@ -395,7 +395,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	redactors := e.setupRedactors()
 	defer redactors.Flush()
 
-	script, err := hook.NewWrapper(hook.WithHookPath(hookCfg.Path))
+	script, err := hook.NewWrapper(hook.WithPath(hookCfg.Path))
 	if err != nil {
 		e.shell.Errorf("Error creating hook script: %v", err)
 		return err
