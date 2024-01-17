@@ -99,7 +99,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	hookFile.Close()
 
 	wrapper, err := NewWrapper(
-		WithHookPath(hookFile.Name()),
+		WithPath(hookFile.Name()),
 		WithOS("windows"),
 	)
 	assert.NoError(t, err)
@@ -132,7 +132,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 	hookFile.Close()
 
 	wrapper, err := NewWrapper(
-		WithHookPath(hookFile.Name()),
+		WithPath(hookFile.Name()),
 		WithOS("windows"),
 	)
 	assert.NoError(t, err)
@@ -162,7 +162,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 	hookFile.Close()
 
 	wrapper, err := NewWrapper(
-		WithHookPath(hookFile.Name()),
+		WithPath(hookFile.Name()),
 		WithOS("linux"),
 	)
 	assert.NoError(t, err)
@@ -268,7 +268,7 @@ func newTestScriptWrapper(t *testing.T, script []string) *Wrapper {
 
 	hookFile.Close()
 
-	wrapper, err := NewWrapper(WithHookPath(hookFile.Name()))
+	wrapper, err := NewWrapper(WithPath(hookFile.Name()))
 	assert.NoError(t, err)
 
 	return wrapper
@@ -354,7 +354,7 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 	hookFile.Close()
 
 	_, err = NewWrapper(
-		WithHookPath(hookFile.Name()),
+		WithPath(hookFile.Name()),
 		WithOS("linux"),
 	)
 	assert.Error(t, err, `scriptwrapper tried to wrap hook with invalid shebang: "#!/usr/bin/env ruby"`)
