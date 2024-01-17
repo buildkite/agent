@@ -20,7 +20,6 @@ import (
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
@@ -365,31 +364,6 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, hookName string, hookCf
 	return e.shell.RunWithEnv(ctx, environ, hookCfg.Path)
 }
 
-func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
-	switch {
-	case runtime.GOOS == "linux":
-		procPath, err := file.OpenedBy(l, debug, path)
-		if err != nil {
-			l.Errorf("The %s hook failed to run because it was already open. We couldn't find out what process had the hook open", hookName)
-		} else {
-			l.Errorf("The %s hook failed to run the %s process has the hook file open", hookName, procPath)
-		}
-	case utils.FileExists("/dev/fd"):
-		isOpened, err := file.IsOpened(l, debug, path)
-		if err == nil {
-			if isOpened {
-				l.Errorf("The %s hook failed to run because it was opened by this buildkite-agent")
-			} else {
-				l.Errorf("The %s hook failed to run because it was opened by another process")
-			}
-			break
-		}
-		fallthrough
-	default:
-		l.Errorf("The %s hook failed to run because it was opened", hookName)
-	}
-}
-
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	redactors := e.setupRedactors()
 	defer redactors.Flush()
@@ -419,21 +393,8 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		e.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
 	}
 
-	const maxHookRetry = 3
-
 	// Run the hook wrapper script
-	if err := roko.NewRetrier(
-		roko.WithStrategy(roko.Constant(time.Second)),
-		roko.WithMaxAttempts(maxHookRetry),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		// Run the script and only retry on fork/exec errors
-		err := e.shell.RunScript(ctx, script.Path(), hookCfg.Env)
-		if perr := new(os.PathError); errors.As(err, &perr) && perr.Op == "fork/exec" {
-			return err
-		}
-		r.Break()
-		return err
-	}); err != nil {
+	if err := e.shell.RunScript(ctx, script.Path(), hookCfg.Env); err != nil {
 		exitCode := shell.GetExitCode(err)
 		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
 
@@ -444,12 +405,6 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 				Code:    exitCode,
 				Message: fmt.Sprintf("The %s hook exited with status %d", hookName, exitCode),
 			}
-		}
-
-		// If the error is from fork/exec, then inspect the file to see why it failed to be executed,
-		// even after the retry
-		if perr := new(os.PathError); errors.As(err, &perr) && perr.Op == "fork/exec" {
-			logOpenedHookInfo(e.shell.Logger, e.Debug, hookName, perr.Path)
 		}
 
 		return err

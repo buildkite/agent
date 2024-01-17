@@ -27,6 +27,7 @@ var commandConfigPairs = []configCommandPair{
 	{Config: EnvGetConfig{}, Command: EnvGetCommand},
 	{Config: EnvSetConfig{}, Command: EnvSetCommand},
 	{Config: EnvUnsetConfig{}, Command: EnvUnsetCommand},
+	{Config: JobWriteHookWrapperConfig{}, Command: JobWriteHookWrapperCommand},
 	{Config: LockAcquireConfig{}, Command: LockAcquireCommand},
 	{Config: LockDoConfig{}, Command: LockDoCommand},
 	{Config: LockDoneConfig{}, Command: LockDoneCommand},

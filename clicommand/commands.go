@@ -78,6 +78,13 @@ var BuildkiteAgentCommands = []cli.Command{
 	},
 	BootstrapCommand,
 	{
+		Name:  "job",
+		Usage: "Commands invoked as part of a Buildkite job. Typically, these are called automatically by the agent, and not by a user directly",
+		Subcommands: []cli.Command{
+			JobWriteHookWrapperCommand,
+		},
+	},
+	{
 		Name:  "tool",
 		Usage: "Utility commands, intended for users and operators of the agent to run directly on their machines, and not as part of a Buildkite job",
 		Subcommands: []cli.Command{
