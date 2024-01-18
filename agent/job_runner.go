@@ -645,11 +645,18 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		setStat("📡 Fetching job state from Buildkite")
 
 		// Re-get the job and check its status to see if it's been cancelled
-		jobState, _, err := r.apiClient.GetJobState(ctx, r.conf.Job.ID)
+		jobState, response, err := r.apiClient.GetJobState(ctx, r.conf.Job.ID)
+
 		if err != nil {
-			// We don't really care if it fails, we'll just
-			// try again soon anyway
-			r.agentLogger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
+			if response != nil && response.StatusCode == 401 {
+				r.agentLogger.Error("Invalid access token, cancelling job %s", r.conf.Job.ID)
+				if err := r.Cancel(); err != nil {
+					r.agentLogger.Error("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
+				}
+			} else {
+				// We don't really care if it fails, we'll just try again soon anyway
+				r.agentLogger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
+			}
 		} else if jobState.State == "canceling" || jobState.State == "canceled" {
 			if err := r.Cancel(); err != nil {
 				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
