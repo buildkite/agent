@@ -646,8 +646,9 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
+				r.agentLogger.Error("Invalid access token, cancelling job %s", r.conf.Job.ID)
 				if err := r.Cancel(); err != nil {
-					r.agentLogger.Error("Invalid access token: an error occurred in the canceling process (job: %s) (err: %s)", r.conf.Job.ID, err)
+					r.agentLogger.Error("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
 				}
 			} else {
 				// We don't really care if it fails, we'll just try again soon anyway
