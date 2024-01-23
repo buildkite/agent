@@ -75,7 +75,7 @@ var ArtifactDownloadCommand = cli.Command{
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
-			Usage: "Scope the search to a particular step by using either its name or job ID",
+			Usage: "Scope the search to a particular step. Can be the step's key or label, or a Job ID",
 		},
 		cli.StringFlag{
 			Name:   "build",
