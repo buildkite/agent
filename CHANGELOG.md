@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.62.0](https://github.com/buildkite/agent/tree/v3.62.0) (2024-01-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.61.0...v3.62.0)
+
+### Added
+- Add more fields to job logger [#2578](https://github.com/buildkite/agent/pull/2578) (@ChrisBr)
+- Environment Variable allowlisting [#2539](https://github.com/buildkite/agent/pull/2539) (@moskyb, originally @CheeseStick)
+
+### Fixed
+- When the server returns a 401, stop retrying and bail out [#2569](https://github.com/buildkite/agent/pull/2569) (@SorchaAbel)
+- Retry for 24 hours instead of forever [#2588](https://github.com/buildkite/agent/pull/2588) (@tessereth)
+- Documentation updates [#2590](https://github.com/buildkite/agent/pull/2590) (@moskyb), [#2591](https://github.com/buildkite/agent/pull/2591) (@moskyb), [#2589](https://github.com/buildkite/agent/pull/2589) (@moskyb)
+
+### Internal
+- Various @dependabot[bot] updates [#2587](https://github.com/buildkite/agent/pull/2587), [#2594](https://github.com/buildkite/agent/pull/2594), [#2596](https://github.com/buildkite/agent/pull/2596), [#2595](https://github.com/buildkite/agent/pull/2595), [#2593](https://github.com/buildkite/agent/pull/2593), [#2592](https://github.com/buildkite/agent/pull/2592), [#2585](https://github.com/buildkite/agent/pull/2585), [#2584](https://github.com/buildkite/agent/pull/2584), [#2583](https://github.com/buildkite/agent/pull/2583), [#2573](https://github.com/buildkite/agent/pull/2573), [#2582](https://github.com/buildkite/agent/pull/2582), [#2572](https://github.com/buildkite/agent/pull/2572), [#2571](https://github.com/buildkite/agent/pull/2571), [#2575](https://github.com/buildkite/agent/pull/2575), [#2580](https://github.com/buildkite/agent/pull/2580), [#2567](https://github.com/buildkite/agent/pull/2567), [#2566](https://github.com/buildkite/agent/pull/2566), [#2563](https://github.com/buildkite/agent/pull/2563), [#2562](https://github.com/buildkite/agent/pull/2562), [#2564](https://github.com/buildkite/agent/pull/2564), [#2565](https://github.com/buildkite/agent/pull/2565)
+
 ## [v3.61.0](https://github.com/buildkite/agent/tree/v3.61.0) (2023-12-14)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.60.1...v3.61.0)
 
