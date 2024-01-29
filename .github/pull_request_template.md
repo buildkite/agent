@@ -21,6 +21,7 @@ Can skip if changes are simple or clear from the commit messages.
 
 ### Testing
 - [ ] Tests have run locally (with `go test ./...`). Buildkite employees may check this if the pipeline has run automatically.
+- [ ] Code is formatted (with `go fmt ./...`)
 
 <!--
 Note: if the tests fail to run locally, please let us know!
