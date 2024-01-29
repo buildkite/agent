@@ -8,7 +8,7 @@
 ### Context
 
 <!--
-For example, a link to a github issue or an an Buildkite internal document such as Linear, Coda, Slack, Basecamp.
+For example, a link to a GitHub issue or a Buildkite internal document such as Linear, Coda, Slack, Basecamp.
 -->
 
 ### Changes
