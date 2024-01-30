@@ -58,11 +58,11 @@ exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	posixShellWrapper = `{{if .ShebangLine}}{{.ShebangLine}}
 {{end -}}
-{{.AgentBinary}} env dump > "{{.BeforeEnvFileName}}"
+"{{.AgentBinary}}" env dump > "{{.BeforeEnvFileName}}"
 . "{{.PathToHook}}"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
-{{.AgentBinary}} env dump > "{{.AfterEnvFileName}}"
+"{{.AgentBinary}}" env dump > "{{.AfterEnvFileName}}"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 

@@ -45,8 +45,8 @@ echo hello world
 	}
 
 	if runtime.GOOS == "windows" {
-		testCases = []hookTestCase{
-			{
+		testCases = append(testCases,
+			hookTestCase{
 				name: "hook.bat",
 				os:   "windows",
 				hook: `@echo off
@@ -55,7 +55,7 @@ set Alpacas=are ok
 echo hello world
 `,
 			},
-			{
+			hookTestCase{
 				name: "hook.ps1",
 				os:   "windows",
 				hook: `$env:LLAMAS = "rock"
@@ -63,7 +63,7 @@ $env:Alpacas = "are ok"
 echo "hello world"
 `,
 			},
-		}
+		)
 	}
 
 	for _, tc := range testCases {
