@@ -582,9 +582,8 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 		l: r.agentLogger,
 	}
 
-	if err := sh.RunWithoutPrompt(ctx, hook); err != nil {
-		fmt.Printf("err: %s\n", err)
-		r.agentLogger.Error("Finished pre-bootstrap hook %q: job rejected", hook)
+	if err := sh.RunScript(ctx, hook, nil); err != nil {
+		r.agentLogger.Error("Finished pre-bootstrap hook %q: job rejected: %s", hook, err)
 		return false, err
 	}
 
