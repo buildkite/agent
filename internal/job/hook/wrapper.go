@@ -37,28 +37,32 @@ const (
 
 	batchWrapper = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-buildkite-agent env dump > "{{.BeforeEnvFileName}}"
+{{.AgentBinary}} env dump > "{{.BeforeEnvFileName}}"
 CALL "{{.PathToHook}}"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%CD%
-buildkite-agent env dump > "{{.AfterEnvFileName}}"
+{{.AgentBinary}} env dump > "{{.AfterEnvFileName}}"
 EXIT %BUILDKITE_HOOK_EXIT_STATUS%`
 
 	powershellWrapper = `$ErrorActionPreference = "STOP"
-buildkite-agent env dump | Set-Content "{{.BeforeEnvFileName}}"
-{{.PathToHook}}
-if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
+{{.AgentBinary}} env dump | Set-Content "{{.BeforeEnvFileName}}"
+. {{.PathToHook}}
+if ($LASTEXITCODE -eq $null) {
+  $Env:BUILDKITE_HOOK_EXIT_STATUS = 0
+} else {
+  $Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE
+}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-buildkite-agent env dump | Set-Content "{{.AfterEnvFileName}}"
+{{.AgentBinary}} env dump | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	posixShellWrapper = `{{if .ShebangLine}}{{.ShebangLine}}
 {{end -}}
-buildkite-agent env dump > "{{.BeforeEnvFileName}}"
+"{{.AgentBinary}}" env dump > "{{.BeforeEnvFileName}}"
 . "{{.PathToHook}}"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
-buildkite-agent env dump > "{{.AfterEnvFileName}}"
+"{{.AgentBinary}}" env dump > "{{.AfterEnvFileName}}"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 
@@ -71,6 +75,7 @@ var (
 )
 
 type WrapperTemplateInput struct {
+	AgentBinary       string
 	ShebangLine       string
 	BeforeEnvFileName string
 	AfterEnvFileName  string
@@ -95,7 +100,7 @@ type ExitError struct {
 }
 
 func (e *ExitError) Error() string {
-	return fmt.Sprintf("Hook %q early exited, could not record after environment or working directory", e.hookPath)
+	return fmt.Sprintf("hook %q early exited", e.hookPath)
 }
 
 type WrapperOpt func(*Wrapper)
@@ -161,7 +166,8 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 	// responsibility of the job executor.
 	//
 	// But if the shebang specifies something weird like Ruby 🤪
-	// the wrapper won't work. We do support ruby (and other interpreted) hooks via polyglot hooks (see: https://github.com/buildkite/agent/pull/2040),
+	// the wrapper won't work. We do support ruby (and other interpreted) hooks via polyglot hooks
+	// (see: https://github.com/buildkite/agent/pull/2040),
 	// but they should never be wrapped, and if they have been, something has gone wrong.
 	if shebang != "" && !shellscript.IsPOSIXShell(shebang) {
 		return nil, fmt.Errorf("scriptwrapper tried to wrap hook with invalid shebang: %q", shebang)
@@ -215,14 +221,22 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
+	buildkiteAgent, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+
+	templateInput := WrapperTemplateInput{
+		AgentBinary:       buildkiteAgent,
+		ShebangLine:       shebang,
+		BeforeEnvFileName: wrap.beforeEnvPath,
+		AfterEnvFileName:  wrap.afterEnvPath,
+		PathToHook:        absolutePathToHook,
+	}
+
 	if wrap.wrapperPath, err = WriteHookWrapper(
 		templateType,
-		WrapperTemplateInput{
-			ShebangLine:       shebang,
-			BeforeEnvFileName: wrap.beforeEnvPath,
-			AfterEnvFileName:  wrap.afterEnvPath,
-			PathToHook:        absolutePathToHook,
-		},
+		templateInput,
 		scriptFileName,
 	); err != nil {
 		return nil, err
@@ -306,14 +320,20 @@ func (w *Wrapper) Changes() (EnvChanges, error) {
 		afterEnv  *env.Environment
 	)
 
-	err = json.Unmarshal(beforeEnvContents, &beforeEnv)
-	if err != nil {
-		return EnvChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %s", err, string(beforeEnvContents))
+	if err := json.Unmarshal(beforeEnvContents, &beforeEnv); err != nil {
+		return EnvChanges{}, fmt.Errorf(
+			"failed to unmarshal before env file: %w, file contents: %s",
+			err,
+			beforeEnvContents,
+		)
 	}
 
-	err = json.Unmarshal(afterEnvContents, &afterEnv)
-	if err != nil {
-		return EnvChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %s", err, string(afterEnvContents))
+	if err := json.Unmarshal(afterEnvContents, &afterEnv); err != nil {
+		return EnvChanges{}, fmt.Errorf(
+			"failed to unmarshal after env file: %w, file contents: %s",
+			err,
+			afterEnvContents,
+		)
 	}
 
 	diff := afterEnv.Diff(beforeEnv)
