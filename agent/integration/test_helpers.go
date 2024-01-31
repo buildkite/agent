@@ -163,8 +163,8 @@ func mockPreBootstrap(t *testing.T, hooksDir string) *bintest.Mock {
 	}
 
 	hookScript := filepath.Join(hooksDir, "pre-bootstrap")
-	body := ""
 
+	var body string
 	if runtime.GOOS == "windows" {
 		// You may be tempted to change this to `@%q`, but please do not. bintest doesn't like it when things change.
 		// (%q escapes backslashes, which are windows path separators and leads to this test failing on windows)

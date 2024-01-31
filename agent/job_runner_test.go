@@ -12,6 +12,8 @@ import (
 )
 
 func TestTruncateEnv(t *testing.T) {
+	t.Parallel()
+
 	l := logger.NewBuffer()
 	env := map[string]string{"FOO": strings.Repeat("a", 100)}
 	err := truncateEnv(l, env, "FOO", 64)
@@ -21,9 +23,11 @@ func TestTruncateEnv(t *testing.T) {
 }
 
 func TestValidateJobValue(t *testing.T) {
+	t.Parallel()
+
 	bkTarget := "github.com/buildkite/test"
-	bkTargetRe := regexp.MustCompile("^github.com/buildkite/.*")
-	ghTargetRe := regexp.MustCompile("^github.com/nope/.*")
+	bkTargetRe := regexp.MustCompile(`^github\.com/buildkite/.*`)
+	ghTargetRe := regexp.MustCompile(`^github\.com/nope/.*`)
 
 	tests := []struct {
 		name           string
@@ -46,9 +50,14 @@ func TestValidateJobValue(t *testing.T) {
 	}}
 
 	for _, tc := range tests {
-		err := validateJobValue(tc.allowedTargets, tc.pipelineTarget)
-		if (err != nil) != tc.wantErr {
-			t.Errorf("validateJobValue() error = %v, wantErr = %v", err, tc.wantErr)
-		}
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateJobValue(tc.allowedTargets, tc.pipelineTarget)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("validateJobValue() error = %v, wantErr = %v", err, tc.wantErr)
+			}
+		})
 	}
 }
