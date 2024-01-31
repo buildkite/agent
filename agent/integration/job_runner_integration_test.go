@@ -4,13 +4,116 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/bintest/v3"
+	"gotest.tools/v3/assert"
 )
+
+func TestPreBootstrapHookScripts(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name     string
+		contents string
+		ext      string
+		allowed  bool
+	}
+
+	testCases := []testCase{
+		{
+			name:     "sh_success",
+			contents: "#!/bin/sh\necho hello from a pre-bootstrap hook!\n",
+			ext:      "",
+			allowed:  true,
+		},
+		{
+			name:     "sh_failure",
+			contents: "#!/bin/sh\nexit 1\n",
+			ext:      "",
+			allowed:  false,
+		},
+	}
+
+	if runtime.GOOS == "windows" {
+		testCases = append(
+			testCases,
+			testCase{
+				name:     "bat_success",
+				contents: "exit 0",
+				ext:      ".bat",
+				allowed:  true,
+			},
+			testCase{
+				name:     "bat_failure",
+				contents: "exit 1",
+				ext:      ".bat",
+				allowed:  false,
+			},
+			testCase{
+				name:     "powershell_failure",
+				contents: "Exit 0",
+				ext:      ".ps1",
+				allowed:  true,
+			},
+			testCase{
+				name:     "powershell_failure",
+				contents: "Exit 1",
+				ext:      ".ps1",
+				allowed:  false,
+			},
+		)
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+
+			hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
+			assert.NilError(t, err, "making bootstrap-hooks directory: %v", err)
+			t.Cleanup(func() { _ = os.RemoveAll(hooksDir) })
+
+			err = os.WriteFile(filepath.Join(hooksDir, "pre-bootstrap"+tc.ext), []byte(tc.contents), 0o755)
+			assert.NilError(t, err)
+
+			// create a mock agent API
+			e := createTestAgentEndpoint()
+			server := e.server("my-job-id")
+			t.Cleanup(server.Close)
+
+			j := &api.Job{
+				ID:                 "my-job-id",
+				ChunksMaxSizeBytes: 1024,
+				Env: map[string]string{
+					"BUILDKITE_COMMAND": "echo hello world",
+				},
+			}
+
+			mb := mockBootstrap(t)
+			if tc.allowed {
+				mb.Expect().Once().AndExitWith(0)
+			} else {
+				mb.Expect().NotCalled()
+			}
+			runJob(t, ctx, testRunJobConfig{
+				job:           j,
+				server:        server,
+				agentCfg:      agent.AgentConfiguration{HooksPath: hooksDir},
+				mockBootstrap: mb,
+			})
+
+			mb.CheckAndClose(t)
+		})
+	}
+}
 
 func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	t.Parallel()
