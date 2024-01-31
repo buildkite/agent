@@ -1,268 +1,242 @@
-package hook
+package hook_test
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/tempfile"
-	"github.com/buildkite/bintest/v3"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"gotest.tools/v3/assert"
 )
+
+type hookTestCase struct {
+	name, os, hook string
+}
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-	var script []string
-
-	if runtime.GOOS != "windows" {
-		script = []string{
-			"#!/bin/bash",
-			"export LLAMAS=rock",
-			"export Alpacas=\"are ok\"",
-			"echo hello world",
-		}
-	} else {
-		script = []string{
-			"@echo off",
-			"set LLAMAS=rock",
-			"set Alpacas=are ok",
-			"echo hello world",
-		}
-	}
-
-	agent, cleanup, err := mockAgent()
-	require.NoError(t, err)
-
-	defer cleanup()
-
-	wrapper := newTestScriptWrapper(t, script)
-	defer os.Remove(wrapper.Path())
-
-	sh := shell.NewTestShell(t)
-
-	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
-		t.Fatalf("sh.RunScript(ctx, %q, nil) = %v", wrapper.Path(), err)
-	}
-
-	changes, err := wrapper.Changes()
-	if err != nil {
-		t.Fatalf("wrapper.Changes() error = %v", err)
-	}
-
-	// Windows’ batch 'SET >' normalises environment variables case so we apply
-	// the 'expected' and 'actual' diffs to a blank Environment which handles
-	// case normalisation for us
-	expected := env.New()
-	expected.Apply(env.Diff{
-		Added: map[string]string{
-			"LLAMAS":  "rock",
-			"Alpacas": "are ok",
+	testCases := []hookTestCase{
+		{
+			name: "hook",
+			os:   "linux",
+			hook: `#!/bin/sh
+export LLAMAS=rock
+export Alpacas='are ok'
+echo hello world
+`,
 		},
-		Changed: map[string]env.DiffPair{},
-		Removed: map[string]struct{}{},
-	})
+		{
+			name: "hook.sh",
+			os:   "linux",
+			hook: `#!/bin/sh
+export LLAMAS=rock
+export Alpacas='are ok'
+echo hello world
+`,
+		},
+	}
 
-	actual := env.New()
-	actual.Apply(changes.Diff)
+	if runtime.GOOS == "windows" {
+		testCases = append(testCases,
+			hookTestCase{
+				name: "hook.bat",
+				os:   "windows",
+				hook: `@echo off
+set LLAMAS=rock
+set Alpacas=are ok
+echo hello world
+`,
+			},
+			hookTestCase{
+				name: "hook.ps1",
+				os:   "windows",
+				hook: `$env:LLAMAS = "rock"
+$env:Alpacas = "are ok"
+echo "hello world"
+`,
+			},
+		)
+	}
 
-	// The strict equals check here also ensures we aren't bubbling up the
-	// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
-	// environment variables
-	assert.Equal(t, expected.Dump(), actual.Dump())
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	if runtime.GOOS != "windows" {
-		err = agent.CheckAndClose(t)
-		require.NoError(t, err)
+			ctx := context.Background()
+
+			hookFilename := writeTestHook(t, tc.name, tc.hook)
+			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
+			assert.NilError(t, err, "failed to create hook wrapper: %v", err)
+
+			sh := shell.NewTestShell(t)
+
+			err = sh.RunScript(ctx, wrapper.Path(), nil)
+			assert.NilError(t, err, "sh.RunScript(context.Background(), %q, nil) = %v", wrapper.Path(), err)
+
+			changes, err := wrapper.Changes()
+			assert.NilError(t, err, "wrapper.Changes() = %v", err)
+
+			// Windows’ batch 'SET >' normalises environment variables case so we apply
+			// the 'expected' and 'actual' diffs to a blank Environment which handles
+			// case normalisation for us
+			expected := env.New()
+			expected.Apply(env.Diff{
+				Added: map[string]string{
+					"LLAMAS":  "rock",
+					"Alpacas": "are ok",
+				},
+				Changed: map[string]env.DiffPair{},
+				Removed: map[string]struct{}{},
+			})
+
+			actual := env.New()
+			actual.Apply(changes.Diff)
+
+			// The strict equals check here also ensures we aren't bubbling up the
+			// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
+			// environment variables
+			assert.DeepEqual(t, expected.Dump(), actual.Dump())
+		})
 	}
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
-	agent, cleanup, err := mockAgent()
-	require.NoError(t, err)
+	t.Parallel()
 
-	defer cleanup()
-
-	tempDir, err := os.MkdirTemp("", "hookwrapperdir")
-	if err != nil {
-		t.Fatalf(`os.MkdirTemp("", "hookwrapperdir") error = %v`, err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	ctx := context.Background()
-	var script []string
-
-	if runtime.GOOS != "windows" {
-		script = []string{
-			"#!/bin/bash",
-			"mkdir mysubdir",
-			"cd mysubdir",
-			"echo hello world",
-		}
-	} else {
-		script = []string{
-			"@echo off",
-			"mkdir mysubdir",
-			"cd mysubdir",
-			"echo hello world",
-		}
+	testCases := []hookTestCase{
+		{
+			name: "hook",
+			os:   "linux",
+			hook: `#!/bin/sh
+mkdir changed-working-dir
+cd changed-working-dir
+echo hello world
+`,
+		},
+		{
+			name: "hook.sh",
+			os:   "linux",
+			hook: `#!/bin/sh
+mkdir changed-working-dir
+cd changed-working-dir
+echo hello world
+`,
+		},
 	}
 
-	wrapper := newTestScriptWrapper(t, script)
-	defer os.Remove(wrapper.Path())
-
-	sh := shell.NewTestShell(t)
-	if err := sh.Chdir(tempDir); err != nil {
-		t.Fatalf("sh.Chdir(%q) = %v", tempDir, err)
-	}
-
-	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
-		t.Fatalf("sh.RunScript(ctx, %q, nil) = %v", wrapper.Path(), err)
-	}
-
-	changes, err := wrapper.Changes()
-	if err != nil {
-		t.Fatalf("wrapper.Changes() error = %v", err)
-	}
-
-	wantChangesDir, err := filepath.EvalSymlinks(filepath.Join(tempDir, "mysubdir"))
-	if err != nil {
-		t.Fatalf("filepath.EvalSymlinks(mysubdir) error = %v", err)
-	}
-
-	afterWd, err := changes.GetAfterWd()
-	if err != nil {
-		t.Fatalf("changes.GetAfterWd() error = %v", err)
-	}
-
-	changesDir, err := filepath.EvalSymlinks(afterWd)
-	if err != nil {
-		t.Fatalf("filepath.EvalSymlinks(%q) error = %v", afterWd, err)
-	}
-
-	if changesDir != wantChangesDir {
-		t.Fatalf("changesDir = %q, want %q", changesDir, wantChangesDir)
-	}
-
-	if err := agent.CheckAndClose(t); err != nil {
-		t.Errorf("agent.CheckAndClose(t) = %v", err)
-	}
-}
-
-func newTestScriptWrapper(t *testing.T, script []string) *Wrapper {
-	hookName := "hookwrapper"
 	if runtime.GOOS == "windows" {
-		hookName += ".bat"
-	}
-
-	hookFile, err := tempfile.New(tempfile.WithName(hookName), tempfile.KeepingExtension())
-	assert.NoError(t, err)
-
-	for _, line := range script {
-		_, err = fmt.Fprintln(hookFile, line)
-		assert.NoError(t, err)
-	}
-
-	hookFile.Close()
-
-	wrapper, err := NewWrapper(WithPath(hookFile.Name()))
-	assert.NoError(t, err)
-
-	return wrapper
-}
-
-func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper *Wrapper) {
-	file, err := os.Open(wrapper.wrapperPath)
-	assert.NoError(t, err)
-
-	defer file.Close()
-
-	wrapperScriptContents, err := io.ReadAll(file)
-	assert.NoError(t, err)
-
-	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvPath, hookFileName, wrapper.afterEnvPath)
-
-	assert.Equal(t, expected, string(wrapperScriptContents))
-}
-
-func mockAgent() (*bintest.Mock, func(), error) {
-	tmpPathDir, err := os.MkdirTemp("", "scriptwrapper-path")
-	if err != nil {
-		return nil, func() {}, err
-	}
-
-	oldPath := os.Getenv("PATH")
-	os.Setenv("PATH", tmpPathDir+string(os.PathListSeparator)+oldPath)
-
-	cleanup := func() {
-		err := os.Setenv("PATH", oldPath)
-		if err != nil {
-			panic(err)
-		}
-
-		err = os.RemoveAll(tmpPathDir)
-		if err != nil {
-			panic(err)
+		testCases = []hookTestCase{
+			{
+				name: "hook.bat",
+				os:   "windows",
+				hook: `@echo off
+mkdir changed-working-dir
+cd changed-working-dir
+echo hello world
+`,
+			},
+			{
+				name: "hook.ps1",
+				os:   "windows",
+				hook: `mkdir changed-working-dir
+cd changed-working-dir
+echo hello world
+`,
+			},
 		}
 	}
 
-	agent, err := bintest.NewMock(filepath.Join(tmpPathDir, "buildkite-agent"))
-	if err != nil {
-		return nil, func() {}, err
-	}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	agent.Expect("env", "dump").
-		Exactly(2).
-		AndCallFunc(func(c *bintest.Call) {
-			envMap := map[string]string{}
+			ctx := context.Background()
 
-			for _, e := range c.Env {
-				k, v, _ := env.Split(e)
-				envMap[k] = v
-			}
+			hookFilename := writeTestHook(t, tc.name, tc.hook)
+			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
+			assert.NilError(t, err, "failed to create hook wrapper: %v", err)
 
-			envJSON, err := json.Marshal(envMap)
-			if err != nil {
-				fmt.Println("Failed to marshal env map in mocked agent call:", err)
-				c.Exit(1)
-			}
+			sh := shell.NewTestShell(t)
 
-			c.Stdout.Write(envJSON)
-			c.Exit(0)
+			hookWorkingDir, err := os.MkdirTemp("", "test-hook-working-dir")
+			assert.NilError(t, err, `os.MkdirTemp("", "test-hook-working-dir") error = %v`, err)
+
+			err = sh.Chdir(hookWorkingDir)
+			assert.NilError(t, err, "sh.Chdir(%q) = %v", hookWorkingDir, err)
+
+			err = sh.RunScript(ctx, wrapper.Path(), nil)
+			assert.NilError(t, err, "sh.RunScript(context.Background(), %q, nil) = %v", wrapper.Path(), err)
+
+			changes, err := wrapper.Changes()
+			assert.NilError(t, err, "wrapper.Changes() = %v", err)
+
+			absWorkingDir := filepath.Join(hookWorkingDir, "changed-working-dir")
+
+			expectedWorkingDir, err := filepath.EvalSymlinks(absWorkingDir)
+			assert.NilError(t, err, "filepath.EvalSymlinks(%q) error = %v", absWorkingDir, err)
+
+			afterWd, err := changes.GetAfterWd()
+			assert.NilError(t, err, "changes.GetAfterWd() = %v", err)
+
+			actualWorkingDir, err := filepath.EvalSymlinks(afterWd)
+			assert.NilError(t, err, "filepath.EvalSymlinks(%q) error = %v", afterWd, err)
+
+			assert.Equal(t, expectedWorkingDir, actualWorkingDir)
 		})
-
-	return agent, cleanup, nil
+	}
 }
 
 func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 	t.Parallel()
 
-	hookFile, err := tempfile.New(tempfile.WithName("hookName"), tempfile.KeepingExtension())
-	assert.NoError(t, err)
+	hookFilename := writeTestHook(t, "hook", "#!/usr/bin/env ruby\nputs 'hello world'")
 
-	script := strings.Join([]string{
-		"#!/usr/bin/env ruby",
-		"puts 'Hello There!'",
-	}, "\n")
-
-	_, err = fmt.Fprintln(hookFile, script)
-	assert.NoError(t, err)
-
-	hookFile.Close()
-
-	_, err = NewWrapper(
-		WithPath(hookFile.Name()),
-		WithOS("linux"),
+	_, err := hook.NewWrapper(
+		hook.WithPath(hookFilename),
+		hook.WithOS("linux"),
 	)
 	assert.Error(t, err, `scriptwrapper tried to wrap hook with invalid shebang: "#!/usr/bin/env ruby"`)
+}
+
+func writeTestHook(t *testing.T, fileName, content string) string {
+	t.Helper()
+
+	tempFile, err := tempfile.New(
+		tempfile.WithName(fileName),
+		tempfile.KeepingExtension(),
+		tempfile.WithPerms(0o700),
+	)
+	assert.NilError(t, err, "failed to create temp file with name %q", fileName)
+
+	t.Cleanup(func() {
+		if tempFile == nil {
+			return
+		}
+
+		cerr := tempFile.Close()
+		if !errors.Is(cerr, os.ErrClosed) {
+			assert.Check(t, cerr == nil, "failed to close temp file %q: %v", tempFile.Name(), cerr)
+		}
+
+		rerr := os.Remove(tempFile.Name())
+		assert.Check(t, rerr == nil, "failed to remove temp file %q: %v", tempFile.Name(), rerr)
+	})
+
+	_, err = io.WriteString(tempFile, content)
+	assert.NilError(t, err, "failed to write to temp file %q", tempFile.Name())
+
+	err = tempFile.Close()
+	assert.NilError(t, err, "failed to close temp file %q", tempFile.Name())
+
+	return tempFile.Name()
 }
