@@ -40,10 +40,15 @@ func Register(ctx context.Context, l logger.Logger, ac APIClient, req api.AgentR
 	req.OS = osVersionDump
 
 	var registered *api.AgentRegisterResponse
-	var resp *api.Response
 
-	register := func(r *roko.Retrier) error {
-		reg, rsp, err := ac.Register(ctx, &req)
+	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(30),
+		roko.WithStrategy(roko.Constant(10*time.Second)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var resp *api.Response
+		var err error
+		registered, resp, err = ac.Register(ctx, &req)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
 				l.Warn("Buildkite rejected the registration (%s)", err)
@@ -53,15 +58,9 @@ func Register(ctx context.Context, l logger.Logger, ac APIClient, req api.AgentR
 			}
 			return err
 		}
-		registered, resp = reg, rsp
-		return nil
-	}
 
-	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
-	err := roko.NewRetrier(
-		roko.WithMaxAttempts(30),
-		roko.WithStrategy(roko.Constant(10*time.Second)),
-	).DoWithContext(ctx, register)
+		return nil
+	})
 	if err != nil {
 		return registered, err
 	}
