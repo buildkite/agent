@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/agent"
@@ -81,7 +83,13 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 			assert.NilError(t, err, "making bootstrap-hooks directory: %v", err)
 			t.Cleanup(func() { _ = os.RemoveAll(hooksDir) })
 
-			err = os.WriteFile(filepath.Join(hooksDir, "pre-bootstrap"+tc.ext), []byte(tc.contents), 0o755)
+			hookPath := filepath.Join(hooksDir, "pre-bootstrap"+tc.ext)
+			testMainPath, err := os.Executable()
+			assert.NilError(t, err)
+
+			cmd := exec.Command(testMainPath, "write-exec", hookPath)
+			cmd.Stdin = strings.NewReader(tc.contents)
+			err = cmd.Run()
 			assert.NilError(t, err)
 
 			// create a mock agent API
