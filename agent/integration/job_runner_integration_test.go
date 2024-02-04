@@ -87,18 +87,19 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 			testMainPath, err := os.Executable()
 			assert.NilError(t, err)
 
+			// Write pre-bootstrap hook in a subprocess to avoid intermittent ETXTBSY errors on Linux
 			cmd := exec.Command(testMainPath, "write-exec", hookPath)
 			cmd.Stdin = strings.NewReader(tc.contents)
 			err = cmd.Run()
 			assert.NilError(t, err)
 
-			// create a mock agent API
+			// Creates a mock agent API
 			e := createTestAgentEndpoint()
-			server := e.server("my-job-id")
+			server := e.server(defaultJobID)
 			t.Cleanup(server.Close)
 
 			j := &api.Job{
-				ID:                 "my-job-id",
+				ID:                 defaultJobID,
 				ChunksMaxSizeBytes: 1024,
 				Env: map[string]string{
 					"BUILDKITE_COMMAND": "echo hello world",
