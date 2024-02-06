@@ -11,6 +11,8 @@ import (
 
 // NewTestShell creates a minimal shell suitable for tests.
 func NewTestShell(t *testing.T) *Shell {
+	t.Helper()
+
 	sh, err := New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
@@ -27,7 +29,7 @@ func NewTestShell(t *testing.T) *Shell {
 	// Windows requires certain env variables to be present
 	if runtime.GOOS == "windows" {
 		sh.Env = env.FromMap(map[string]string{
-			//"PATH":        os.Getenv("PATH"),
+			"PATH":        os.Getenv("PATH"),
 			"SystemRoot":  os.Getenv("SystemRoot"),
 			"WINDIR":      os.Getenv("WINDIR"),
 			"COMSPEC":     os.Getenv("COMSPEC"),
