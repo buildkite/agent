@@ -71,11 +71,6 @@ output_steps_yaml() {
   fi
 }
 
-if [[ "${BUILDKITE_BRANCH}" != "main" && "${DRY_RUN}" != "true" && "${BUILDKITE_BRANCH}" != *-*-stable ]] ; then
-  echo "No release steps to be uploaded"
-  exit 0
-fi
-
 agent_version=$(buildkite-agent meta-data get "agent-version")
 build_version=$(buildkite-agent meta-data get "agent-version-build")
 full_agent_version=$(buildkite-agent meta-data get "agent-version-full")

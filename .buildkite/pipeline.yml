@@ -255,3 +255,4 @@ steps:
       - build-debian-packages
       - build-github-release
     command: ".buildkite/steps/upload-release-steps.sh"
+    if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable)$$/
