@@ -68,7 +68,7 @@ else
 
   info "Tarring up the files"
   cd "${TMP_RELEASE_DIRECTORY}"
-  tar cfvz "../${RELEASE_FILE_NAME}" .
+  tar cfvz "../${RELEASE_FILE_NAME}" ./*
 fi
 
 mkdir -p "${RELEASE_DIRECTORY}"
