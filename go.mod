@@ -11,7 +11,7 @@ require (
 	github.com/DataDog/datadog-go/v5 v5.4.0
 	github.com/DrJosh9000/zzglob v0.1.0
 	github.com/Khan/genqlient v0.6.0
-	github.com/aws/aws-sdk-go v1.50.0
+	github.com/aws/aws-sdk-go v1.50.10
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.2.0
 	github.com/buildkite/go-pipeline v0.3.2
@@ -51,7 +51,7 @@ require (
 	golang.org/x/oauth2 v0.16.0
 	golang.org/x/sys v0.16.0
 	golang.org/x/term v0.16.0
-	google.golang.org/api v0.157.0
+	google.golang.org/api v0.161.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.59.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
@@ -115,7 +115,7 @@ require (
 	github.com/tinylib/msgp v1.1.8 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.8 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.46.1 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.47.0 // indirect
 	go.opentelemetry.io/otel/metric v1.22.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
