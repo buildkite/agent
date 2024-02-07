@@ -521,7 +521,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges, redactors re
 	}
 	for k, v := range changes.Diff.Changed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
-			e.shell.Commentf("%s is now %q", k, v)
+			e.shell.Commentf("%s was %q and is now %q", k, v.Old, v.New)
 		} else {
 			e.shell.Commentf("%s changed", k)
 		}
