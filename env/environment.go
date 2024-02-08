@@ -105,9 +105,8 @@ func (e *Environment) Exists(key string) bool {
 }
 
 // Set sets a key in the environment
-func (e *Environment) Set(key string, value string) string {
+func (e *Environment) Set(key string, value string) {
 	e.underlying.Store(normalizeKeyName(key), value)
-	return value
 }
 
 // Remove a key from the Environment and return its value

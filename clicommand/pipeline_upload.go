@@ -273,7 +273,7 @@ var PipelineUploadCommand = cli.Command{
 				}
 				result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
 			}
-			if err := result.Interpolate(environ.Dump()); err != nil {
+			if err := result.Interpolate(environ); err != nil {
 				return fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 			}
 		}
