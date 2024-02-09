@@ -261,21 +261,9 @@ var PipelineUploadCommand = cli.Command{
 			src = "(stdin)"
 		}
 
-		// Parse the pipeline
-		result, err := pipeline.Parse(input)
+		result, err := cfg.parseAndInterpolate(src, input, environ)
 		if err != nil {
-			return fmt.Errorf("pipeline parsing of %q failed: %v", src, err)
-		}
-		if !cfg.NoInterpolation {
-			if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
-				if result.Env == nil {
-					result.Env = ordered.NewMap[string, string](1)
-				}
-				result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
-			}
-			if err := result.Interpolate(environ); err != nil {
-				return fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
-			}
+			return err
 		}
 
 		if len(cfg.RedactedVars) > 0 {
@@ -396,4 +384,23 @@ func searchForSecrets(
 	}
 
 	return nil
+}
+
+func (cfg *PipelineUploadConfig) parseAndInterpolate(src string, input io.Reader, environ *env.Environment) (*pipeline.Pipeline, error) {
+	result, err := pipeline.Parse(input)
+	if err != nil {
+		return nil, fmt.Errorf("pipeline parsing of %q failed: %w", src, err)
+	}
+	if !cfg.NoInterpolation {
+		if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
+			if result.Env == nil {
+				result.Env = ordered.NewMap[string, string](1)
+			}
+			result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
+		}
+		if err := result.Interpolate(environ); err != nil {
+			return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
+		}
+	}
+	return result, nil
 }
