@@ -60,10 +60,6 @@ github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf/go.mod h1:CeKhh8xSs3WZAc50xABMxu+FlfAAd5PNumo7NfOv7EE=
 github.com/buildkite/bintest/v3 v3.2.0 h1:1GqUILGGni5UViGPH/PbSq0MxB9gzY3J/P7vNVqCkX4=
 github.com/buildkite/bintest/v3 v3.2.0/go.mod h1:+AdQZcVlzCiW2UyZWeG63xeH5z011XUBW6kWcRdaMtU=
-github.com/buildkite/go-pipeline v0.3.2 h1:SW4EaXNwfjow7xDRPGgX0Rcx+dPj5C1kV9LKCLjWGtM=
-github.com/buildkite/go-pipeline v0.3.2/go.mod h1:iY5jzs3Afc8yHg6KDUcu3EJVkfaUkd9x/v/OH98qyUA=
-github.com/buildkite/go-pipeline v0.3.3-0.20240208112315-ccc810363dd8 h1:tIHPicEw9Ws9nszCfqN5SksWRHAHSOKke/kK6oadfnA=
-github.com/buildkite/go-pipeline v0.3.3-0.20240208112315-ccc810363dd8/go.mod h1:/8zdWlpn40HsxZql5iUbr00P8/Fm/yud9+Bqrar8S3s=
 github.com/buildkite/go-pipeline v0.4.0 h1:l5t8CpemEhsA/EWgIJlPzjlOpLJOK5yrdTLCoQvZrtE=
 github.com/buildkite/go-pipeline v0.4.0/go.mod h1:/8zdWlpn40HsxZql5iUbr00P8/Fm/yud9+Bqrar8S3s=
 github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251 h1:k6UDF1uPYOs0iy1HPeotNa155qXRWrzKnqAaGXHLZCE=
