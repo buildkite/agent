@@ -30,7 +30,7 @@ func New(concurrencyLimit int) *Pool {
 	wg := sync.WaitGroup{}
 	completionChan := make(chan bool, concurrencyLimit)
 
-	for i := 0; i < concurrencyLimit; i++ {
+	for range concurrencyLimit {
 		completionChan <- true
 	}
 

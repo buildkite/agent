@@ -383,7 +383,7 @@ func assertProcessDoesntExist(t *testing.T, p *process.Process) {
 }
 
 func BenchmarkProcess(b *testing.B) {
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		proc := process.New(logger.Discard, process.Config{
 			Path: os.Args[0],
 			Env:  []string{"TEST_MAIN=output"},

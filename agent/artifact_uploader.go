@@ -130,7 +130,7 @@ func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error)
 	// goroutine per file).
 	wctx, cancel := context.WithCancelCause(ctx)
 	var wg sync.WaitGroup
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+	for range runtime.GOMAXPROCS(0) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

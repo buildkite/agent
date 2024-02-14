@@ -42,7 +42,7 @@ func TestAsyncPipelineUpload(t *testing.T) {
 			state: "pending",
 			expectedSleeps: func() []time.Duration {
 				sleeps := make([]time.Duration, 0, 59)
-				for i := 0; i < 59; i++ {
+				for range 59 {
 					sleeps = append(sleeps, 5*time.Second)
 				}
 				return sleeps
@@ -138,7 +138,7 @@ func TestFallbackPipelineUpload(t *testing.T) {
 
 	genSleeps := func(n int, s time.Duration) []time.Duration {
 		sleeps := make([]time.Duration, 0, n)
-		for i := 0; i < n; i++ {
+		for range n {
 			sleeps = append(sleeps, s)
 		}
 		return sleeps

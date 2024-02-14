@@ -238,7 +238,7 @@ func TestReplacerMultiLine(t *testing.T) {
 func BenchmarkReplacer(b *testing.B) {
 	b.ResetTimer()
 	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redact)
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		fmt.Fprintln(r, bigLipsum)
 	}
 	r.Flush()

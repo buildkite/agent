@@ -86,7 +86,7 @@ func (d GSDownloader) destinationParts() []string {
 func escape(s string) string {
 	// See https://golang.org/src/net/url/url.go
 	hexCount := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if shouldEscape(c) {
 			hexCount++
@@ -99,7 +99,7 @@ func escape(s string) string {
 
 	t := make([]byte, len(s)+2*hexCount)
 	j := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		switch c := s[i]; {
 		case shouldEscape(c):
 			t[j] = '%'

@@ -10,7 +10,7 @@ import (
 func BenchmarkBMRedactor(b *testing.B) {
 	b.ResetTimer()
 	r := NewBMRedactor(io.Discard, "[REDACTED]", bigLipsumSecrets)
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		fmt.Fprintln(r, bigLipsum)
 	}
 	r.Flush()
