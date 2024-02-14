@@ -139,6 +139,14 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 	}()
 
+	if env, ok := e.shell.Env.Get("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS"); ok && env == "true" {
+		err := e.configureGitCredentialHelper(ctx)
+		if err != nil {
+			e.shell.Errorf("Error configuring git credential helper: %v", err)
+			return shell.GetExitCode(err)
+		}
+	}
+
 	// Initialize the environment, a failure here will still call the tearDown
 	if err = e.setUp(ctx); err != nil {
 		e.shell.Errorf("Error setting up job executor: %v", err)

@@ -16,6 +16,35 @@ import (
 	"github.com/buildkite/roko"
 )
 
+// configureGitCredentialHelper sets up the agent to use a git credential helper that calls the Buildkite Agent API
+// asking for a Github App token to use when cloning. This feature is turned on serverside
+func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
+	// credential.useHttpPath is a git config setting that tells git to tell the credential helper the full URL of the repo
+	// this means that we can pass the repo being cloned up to the BK API, which can then choose (or not, if it's not permitted)
+	// to return a token for that repo.
+	//
+	// This is important for the case where a user clones multiple repos in a step - ie, if we always crammed
+	// os.Getenv("BUILDKITE_REPO") into credential helper, we'd only ever get a token for the repo that the step is running
+	// in, and not for any other repos that the step might clone.
+	err := e.shell.RunWithoutPrompt(ctx, "git", "config", "--global", "credential.useHttpPath", "true")
+	if err != nil {
+		return fmt.Errorf("enabling git credential.useHttpPath: %v", err)
+	}
+
+	buildkiteAgent, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("getting executable path: %v", err)
+	}
+
+	helper := fmt.Sprintf(`%s git-credentials-helper`, buildkiteAgent)
+	err = e.shell.RunWithoutPrompt(ctx, "git", "config", "--global", "credential.helper", helper)
+	if err != nil {
+		return fmt.Errorf("configuring git credential.helper: %v", err)
+	}
+
+	return nil
+}
+
 func (e *Executor) removeCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
