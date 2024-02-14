@@ -101,7 +101,6 @@ func TestCreateFromJSON(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.jsonText, func(t *testing.T) {
 			t.Parallel()
 
@@ -139,7 +138,6 @@ func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 
@@ -209,7 +207,6 @@ func TestPluginNameParsedFromLocation(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.location, func(t *testing.T) {
 			t.Parallel()
 			plugin := &Plugin{Location: tc.location}
@@ -249,7 +246,6 @@ func TestIdentifier(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.location, func(t *testing.T) {
 			t.Parallel()
 			plugin := &Plugin{Location: tc.location}
@@ -309,7 +305,6 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.plugin.Label(), func(t *testing.T) {
 			t.Parallel()
 			repo, err := tc.plugin.Repository()
@@ -350,7 +345,6 @@ func TestRespositoryAndSubdirectoryErrors(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.location, func(t *testing.T) {
 			t.Parallel()
 
@@ -489,7 +483,6 @@ func TestConfigurationToEnvironment(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.configJSON, func(t *testing.T) {
 			t.Parallel()
 			plugin, err := pluginFromConfig(tc.configJSON)

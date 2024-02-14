@@ -73,7 +73,6 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -183,7 +182,6 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 
 	exits := []int{0, 1, 2, 3}
 	for _, exit := range exits {
-		exit := exit
 		t.Run(fmt.Sprintf("exit-%d", exit), func(t *testing.T) {
 			t.Parallel()
 

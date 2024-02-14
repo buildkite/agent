@@ -525,10 +525,6 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 	}()
 
 	for _, artifact := range artifacts {
-		// Create new instance of the artifact for the goroutine
-		// See: http://golang.org/doc/effective_go.html#channels
-		artifact := artifact
-
 		p.Spawn(func() {
 			// Show a nice message that we're starting to upload the file
 			a.logger.Info("Uploading artifact %s %s (%s)", artifact.ID, artifact.Path, humanize.IBytes(uint64(artifact.FileSize)))

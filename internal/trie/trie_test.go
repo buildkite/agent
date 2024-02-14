@@ -67,7 +67,6 @@ func TestTrieExists(t *testing.T) {
 			checks: []check{{"veni", false}, {"vidi", false}, {"vici", false}, {"veni vidi vici", true}},
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -137,7 +136,6 @@ func TestTriePrefixExists(t *testing.T) {
 			checks: []check{{"veni", true}, {"vidi", false}, {"vici", false}, {"veni vidi vici", true}},
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -181,7 +179,6 @@ func TestTrieSizeAndContent(t *testing.T) {
 			insert: []string{"veni", "vidi", "vici", "veni", "vidi", "vici"},
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 

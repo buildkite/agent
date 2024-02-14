@@ -80,7 +80,6 @@ func TestClientDo(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.method+" "+test.url, func(t *testing.T) {
 			t.Parallel()
 			var got messageResponse
@@ -147,7 +146,6 @@ func TestClientDoErrors(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.method+" "+test.url, func(t *testing.T) {
 			t.Parallel()
 			var dummy messageResponse

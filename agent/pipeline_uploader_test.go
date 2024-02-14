@@ -50,8 +50,6 @@ func TestAsyncPipelineUpload(t *testing.T) {
 			err: errors.New("Failed to upload and process pipeline: Pipeline upload not yet applied: pending"),
 		},
 	} {
-		// reassign loop variable to ensure it gets the old value when run concurrently (due to t.Parrallel below)
-		test := test
 		t.Run(test.state, func(t *testing.T) {
 			t.Parallel()
 
@@ -177,7 +175,6 @@ func TestFallbackPipelineUpload(t *testing.T) {
 			errStatus:       529,
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 

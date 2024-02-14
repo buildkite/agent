@@ -41,7 +41,6 @@ func TestK8sTags(t *testing.T) {
 			},
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			actualTags, err := agent.K8sTagsFromEnv(test.env)

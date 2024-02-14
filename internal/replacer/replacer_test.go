@@ -93,7 +93,6 @@ func TestReplacerLoremIpsum(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		// Write input in a single Write call
 		t.Run("One write;"+test.desc, func(t *testing.T) {
 			t.Parallel()
@@ -159,7 +158,6 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 			var buf strings.Builder
