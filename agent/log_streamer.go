@@ -106,7 +106,7 @@ func (ls *LogStreamer) Start(ctx context.Context) error {
 	}
 
 	ls.workerWG.Add(ls.conf.Concurrency)
-	for i := 0; i < ls.conf.Concurrency; i++ {
+	for i := range ls.conf.Concurrency {
 		go ls.worker(ctx, i)
 	}
 

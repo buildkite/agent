@@ -52,7 +52,6 @@ func TestParseGittableURL(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.url, func(t *testing.T) {
 			t.Parallel()
 			u, err := parseGittableURL(test.url)
@@ -143,7 +142,6 @@ func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.alias, func(t *testing.T) {
 			t.Parallel()
 			if got := resolveGitHost(ctx, sh, test.alias); got != test.want {
@@ -172,8 +170,6 @@ func TestGitCheckRefFormat(t *testing.T) {
 		"@":              false,
 		"back\\slash":    false,
 	} {
-		ref := ref
-		want := want
 		t.Run(ref, func(t *testing.T) {
 			t.Parallel()
 			if got := gitCheckRefFormat(ref); got != want {

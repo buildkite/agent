@@ -436,7 +436,6 @@ func TestRunWithOlfactor(t *testing.T) {
 			smellsInOutput: []string{"how"},
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -510,7 +509,6 @@ func TestRound(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.wantStr, func(t *testing.T) {
 			t.Parallel()
 			got := shell.Round(tt.in)

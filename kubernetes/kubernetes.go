@@ -30,7 +30,7 @@ func New(l logger.Logger, c Config) *Runner {
 		c.SocketPath = defaultSocketPath
 	}
 	clients := make(map[int]*clientResult, c.ClientCount)
-	for i := 0; i < c.ClientCount; i++ {
+	for i := range c.ClientCount {
 		clients[i] = &clientResult{}
 	}
 	return &Runner{

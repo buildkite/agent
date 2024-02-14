@@ -176,7 +176,7 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 	values := reflect.ValueOf(c).Elem()
 
 	// Iterate over all available fields and read the tag value
-	for i := 0; i < fields.NumField(); i++ {
+	for i := range fields.NumField() {
 		f := fields.Field(i)
 		v := values.Field(i)
 

@@ -22,7 +22,7 @@ func (e *Executor) removeCheckoutDir() error {
 	// on windows, sometimes removing large dirs can fail for various reasons
 	// for instance having files open
 	// see https://github.com/golang/go/issues/20841
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		e.shell.Commentf("Removing %s", checkoutPath)
 		if err := os.RemoveAll(checkoutPath); err != nil {
 			e.shell.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)

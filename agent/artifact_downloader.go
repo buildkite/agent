@@ -90,10 +90,6 @@ func (a *ArtifactDownloader) Download(ctx context.Context) error {
 	}
 
 	for _, artifact := range artifacts {
-		// Create new instance of the artifact for the goroutine
-		// See: http://golang.org/doc/effective_go.html#channels
-		artifact := artifact
-
 		p.Spawn(func() {
 			// Convert windows paths to slashes, otherwise we get a literal
 			// download of "dir/dir/file" vs sub-directories on non-windows agents

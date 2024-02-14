@@ -93,7 +93,6 @@ func TestReplacerLoremIpsum(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		// Write input in a single Write call
 		t.Run("One write;"+test.desc, func(t *testing.T) {
 			t.Parallel()
@@ -159,7 +158,6 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 			var buf strings.Builder
@@ -238,7 +236,7 @@ func TestReplacerMultiLine(t *testing.T) {
 func BenchmarkReplacer(b *testing.B) {
 	b.ResetTimer()
 	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redact)
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		fmt.Fprintln(r, bigLipsum)
 	}
 	r.Flush()

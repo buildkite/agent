@@ -98,7 +98,7 @@ func TestLocker(t *testing.T) {
 
 	var wg sync.WaitGroup
 	var locks int
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			l.Lock()
@@ -125,7 +125,7 @@ func TestDoOnce(t *testing.T) {
 
 	var wg sync.WaitGroup
 	var calls atomic.Int32
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			if err := cli.DoOnce(ctx, "once", func() {

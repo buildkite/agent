@@ -42,7 +42,7 @@ func TestAsyncPipelineUpload(t *testing.T) {
 			state: "pending",
 			expectedSleeps: func() []time.Duration {
 				sleeps := make([]time.Duration, 0, 59)
-				for i := 0; i < 59; i++ {
+				for range 59 {
 					sleeps = append(sleeps, 5*time.Second)
 				}
 				return sleeps
@@ -50,8 +50,6 @@ func TestAsyncPipelineUpload(t *testing.T) {
 			err: errors.New("Failed to upload and process pipeline: Pipeline upload not yet applied: pending"),
 		},
 	} {
-		// reassign loop variable to ensure it gets the old value when run concurrently (due to t.Parrallel below)
-		test := test
 		t.Run(test.state, func(t *testing.T) {
 			t.Parallel()
 
@@ -138,7 +136,7 @@ func TestFallbackPipelineUpload(t *testing.T) {
 
 	genSleeps := func(n int, s time.Duration) []time.Duration {
 		sleeps := make([]time.Duration, 0, n)
-		for i := 0; i < n; i++ {
+		for range n {
 			sleeps = append(sleeps, s)
 		}
 		return sleeps
@@ -177,7 +175,6 @@ func TestFallbackPipelineUpload(t *testing.T) {
 			errStatus:       529,
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 

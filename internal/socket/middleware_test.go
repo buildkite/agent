@@ -73,7 +73,6 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		c := c
 		t.Run(c.title, func(t *testing.T) {
 			t.Parallel()
 
