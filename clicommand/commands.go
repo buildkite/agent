@@ -23,6 +23,7 @@ var BuildkiteAgentCommands = []cli.Command{
 			ArtifactShasumCommand,
 		},
 	},
+	GitCredentialsHelperCommand,
 	{
 		Name:  "env",
 		Usage: "Process environment subcommands",
