@@ -21,6 +21,7 @@ type APIClient interface {
 	FinishJob(context.Context, *api.Job) (*api.Response, error)
 	FromAgentRegisterResponse(*api.AgentRegisterResponse) *api.Client
 	FromPing(*api.Ping) *api.Client
+	GenerateGithubCodeAccessToken(context.Context, string, string) (string, *api.Response, error)
 	GetJobState(context.Context, string) (*api.JobState, *api.Response, error)
 	GetMetaData(context.Context, string, string, string) (*api.MetaData, *api.Response, error)
 	Heartbeat(context.Context) (*api.Heartbeat, *api.Response, error)
