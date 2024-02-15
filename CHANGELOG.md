@@ -5,6 +5,106 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.63.0](https://github.com/buildkite/agent/tree/v3.63.0) (2024-02-14)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.62.0...v3.63.0)
+
+> [!WARNING]
+> This release has two potentially breaking changes in the way environment
+> variables are interpolated.
+
+* Interpolation on Windows should be done in a case-_in_sensitive manner to be
+  compatible with Batch scripts and Powershell. This was working correctly up
+  until some refactoring in v3.59.0.
+  
+  For example, this pipeline:
+
+  ```yaml
+  env:
+    FOO: bar
+  steps:
+  - command: echo $Foo $FOO
+  ```
+
+  should now be correctly interpolated on Windows as:
+
+  ```yaml
+  env:
+    FOO: bar
+  steps:
+  - command: echo bar bar
+  ```
+
+  Interpolation on other platforms is unchanged.
+
+* Our [documented interpolation rules](https://buildkite.com/docs/pipelines/environment-variables#environment-variable-precedence)
+  implies that variables from the agent environment have higher precedence than
+  variables defined by the job environment ("we merge in some of the variables
+  from the agent environment").
+
+  Suppose the agent environment contains `FOO=runtime_foo`. The pipeline
+
+  ```yaml
+  env:
+    BAR: $FOO
+    FOO: pipeline_foo
+  steps:
+  - command: echo hello world
+  ```
+
+  would in previous releases be interpolated as:
+
+  ```yaml
+  env:
+    BAR: runtime_foo
+    FOO: pipeline_foo
+  steps:
+  - command: echo hello world
+  ```
+
+  On the other hand, the pipeline
+
+  ```yaml
+  env:
+    FOO: pipeline_foo
+    BAR: $FOO
+  steps:
+  - command: echo hello world
+  ```
+
+  would be interpolated to become
+
+  ```yaml
+  env:
+    FOO: pipeline_foo
+    BAR: pipeline_foo
+  steps:
+  - command: echo hello world
+  ```
+
+  We think this is inconsistent with the agent environment taking precedence,
+  and if users would like to interpolate `$FOO` as the value of the pipeline
+  level definition of `FOO`, they should ensure the agent environment does not
+  contain `FOO`.
+
+### Added
+- BK github app git credentials helper [#2599](https://github.com/buildkite/agent/pull/2599) (@moskyb)
+
+### Fixed
+- Fix pipeline interpolation case sensitivity on Windows, and runtime environment variable precedence [#2624](https://github.com/buildkite/agent/pull/2624) (@triarius)
+- Fix environment variable changes in hooks logged incorrectly [#2621](https://github.com/buildkite/agent/pull/2621) (@triarius)
+- Fix Powershell hooks on windows [#2613](https://github.com/buildkite/agent/pull/2613) (@triarius)
+- Fix bug where unauthorised register was retrying erroneously [#2614](https://github.com/buildkite/agent/pull/2614) (@moskyb)
+- Fix docs for --allowed-environment-variables [#2598](https://github.com/buildkite/agent/pull/2598) (@tessereth)
+
+### Upgraded
+- The agent is now built with Go 1.22 [#2631](https://github.com/buildkite/agent/pull/2631) (@moskyb)
+
+### Internal
+- Add a PR template [#2601](https://github.com/buildkite/agent/pull/2601) (@triarius)
+- Move check from upload-release-steps.sh to pipeline.yml [#2617](https://github.com/buildkite/agent/pull/2617) (@DrJosh9000)
+- build-github-release.sh tidyups [#2619](https://github.com/buildkite/agent/pull/2619) (@DrJosh9000)
+- Various dependency updates [#2625](https://github.com/buildkite/agent/pull/2625), [#2630](https://github.com/buildkite/agent/pull/2630), [#2627](https://github.com/buildkite/agent/pull/2627), [#2626](https://github.com/buildkite/agent/pull/2626), [#2622](https://github.com/buildkite/agent/pull/2622), [#2605](https://github.com/buildkite/agent/pull/2605), [#2609](https://github.com/buildkite/agent/pull/2609), [#2603](https://github.com/buildkite/agent/pull/2603), [#2602](https://github.com/buildkite/agent/pull/2602), [#2604](https://github.com/buildkite/agent/pull/2604), [#2606](https://github.com/buildkite/agent/pull/2606), [#2616](https://github.com/buildkite/agent/pull/2616), [#2610](https://github.com/buildkite/agent/pull/2610), [#2611](https://github.com/buildkite/agent/pull/2611) (@dependabot[bot])
+
 ## [v3.62.0](https://github.com/buildkite/agent/tree/v3.62.0) (2024-01-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.61.0...v3.62.0)
 
