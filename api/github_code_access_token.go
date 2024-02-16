@@ -30,12 +30,12 @@ func (c *Client) GenerateGithubCodeAccessToken(ctx context.Context, repoURL, job
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	)
 
-	var g *GithubCodeAccessTokenResponse
+	var g GithubCodeAccessTokenResponse
 	var resp *Response
 
 	err = r.Do(func(r *roko.Retrier) error {
 		var err error
-		resp, err = c.doRequest(req, g)
+		resp, err = c.doRequest(req, &g)
 		if err == nil {
 			return nil
 		}

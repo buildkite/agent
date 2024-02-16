@@ -292,9 +292,11 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 			io.Copy(w, resp.Body)
 		} else {
 			if strings.Contains(req.Header.Get("Content-Type"), "application/msgpack") {
-				err = errors.New("Msgpack not supported")
-			} else {
-				err = json.NewDecoder(resp.Body).Decode(v)
+				return response, errors.New("Msgpack not supported")
+			}
+
+			if err = json.NewDecoder(resp.Body).Decode(v); err != nil {
+				return response, fmt.Errorf("failed to decode JSON response: %v", err)
 			}
 		}
 	}
