@@ -54,11 +54,12 @@ Example:
     $ ./script/dynamic_annotation_generator | buildkite-agent annotate --style "success"`
 
 type AnnotateConfig struct {
-	Body    string `cli:"arg:0" label:"annotation body"`
-	Style   string `cli:"style"`
-	Context string `cli:"context"`
-	Append  bool   `cli:"append"`
-	Job     string `cli:"job" validate:"required"`
+	Body     string `cli:"arg:0" label:"annotation body"`
+	Style    string `cli:"style"`
+	Context  string `cli:"context"`
+	Append   bool   `cli:"append"`
+	Priority int    `cli:"priority"`
+	Job      string `cli:"job" validate:"required"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -93,6 +94,11 @@ var AnnotateCommand = cli.Command{
 			Name:   "append",
 			Usage:  "Append to the body of an existing annotation",
 			EnvVar: "BUILDKITE_ANNOTATION_APPEND",
+		},
+		cli.IntFlag{
+			Name:   "priority",
+			Usage:  "Priority of the annotation (1 to 10), default is 3",
+			EnvVar: "BUILDKITE_ANNOTATION_PRIORITY",
 		},
 		cli.StringFlag{
 			Name:   "job",
@@ -153,10 +159,11 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 
 	// Create the annotation we'll send to the Buildkite API
 	annotation := &api.Annotation{
-		Body:    body,
-		Style:   cfg.Style,
-		Context: cfg.Context,
-		Append:  cfg.Append,
+		Body:     body,
+		Style:    cfg.Style,
+		Context:  cfg.Context,
+		Append:   cfg.Append,
+		Priority: cfg.Priority,
 	}
 
 	// Retry the annotation a few times before giving up
