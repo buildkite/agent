@@ -59,7 +59,7 @@ steps:
   - name: ":redhat: Publish Unstable RPM Package to Packagecloud"
     command: ".buildkite/steps/publish-rpm-packagecloud.sh"
     env:
-      REPOSITORY: "buildkite/agent-unstable"
+      REPOSITORY: "buildkite/agent-rpm-unstable"
       DISTRO_VERSION: rpm_any/rpm_any
     agents:
       queue: "deploy"
@@ -92,7 +92,7 @@ steps:
   - name: ":debian: Publish Unstable Debian Package to Packagecloud"
     command: ".buildkite/steps/publish-debian-packagecloud.sh"
     env:
-      REPOSITORY: "buildkite/agent-unstable"
+      REPOSITORY: "buildkite/agent-deb-unstable"
       DISTRO_VERSION: any/any
     agents:
       queue: "deploy"
