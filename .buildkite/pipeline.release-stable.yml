@@ -59,7 +59,7 @@ steps:
   - name: ":redhat: Publish RPM Package to Packagecloud"
     command: ".buildkite/steps/publish-rpm-packagecloud.sh"
     env:
-      REPOSITORY: "buildkite/agent"
+      REPOSITORY: "buildkite/agent-rpm"
       DISTRO_VERSION: rpm_any/rpm_any
     agents:
       queue: "deploy"
@@ -92,7 +92,7 @@ steps:
   - name: ":debian: Publish Debian Package to Packagecloud"
     command: ".buildkite/steps/publish-debian-packagecloud.sh"
     env:
-      REPOSITORY: "buildkite/agent"
+      REPOSITORY: "buildkite/agent-deb"
       DISTRO_VERSION: any/any
     agents:
       queue: "deploy"
