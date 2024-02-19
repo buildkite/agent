@@ -92,9 +92,10 @@ update the pipeline definition with the signed version using the GraphQL API too
 
 		// Used for signing
 		cli.StringFlag{
-			Name:   "jwks-file",
-			Usage:  "Path to a file containing a JWKS.",
-			EnvVar: "BUILDKITE_AGENT_JWKS_FILE",
+			Name:     "jwks-file",
+			Usage:    "Path to a file containing a JWKS.",
+			Required: true,
+			EnvVar:   "BUILDKITE_AGENT_JWKS_FILE",
 		},
 		cli.StringFlag{
 			Name:   "jwks-key-id",
