@@ -281,7 +281,7 @@ func defaultConfigFilePaths() (paths []string) {
 		}
 	}
 
-	return
+	return paths
 }
 
 var AgentStartCommand = cli.Command{
