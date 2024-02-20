@@ -121,12 +121,14 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	e.shell.Env = env.FromSlice(os.Environ())
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
-	cleanup, err := e.startJobAPI()
-	if err != nil {
-		e.shell.Errorf("Error setting up job API: %v", err)
-		return 1
+	if e.JobAPI {
+		cleanup, err := e.startJobAPI()
+		if err != nil {
+			e.shell.Errorf("Error setting up job API: %v", err)
+			return 1
+		}
+		defer cleanup()
 	}
-	defer cleanup()
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {

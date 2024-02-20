@@ -95,6 +95,7 @@ type BootstrapConfig struct {
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
+	JobAPI                       bool     `cli:"job-api"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -356,6 +357,11 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
 			Value:  "buildkite-agent",
 		},
+		cli.BoolTFlag{
+			Name:   "job-api",
+			Usage:  "Starts the job-api, giving the commands in the job some abilities to intropect and mutate the state of the job.",
+			EnvVar: "BUILDKITE_AGENT_JOB_API",
+		},
 		DebugFlag,
 		LogLevelFlag,
 		ExperimentsFlag,
@@ -440,6 +446,7 @@ var BootstrapCommand = cli.Command{
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
+			JobAPI:                       cfg.JobAPI,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
