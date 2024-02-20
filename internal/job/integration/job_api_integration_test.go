@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/bintest/v3"
 )
@@ -18,9 +17,7 @@ import (
 func TestBootstrapRunsJobAPI(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := experiments.Enable(mainCtx, experiments.JobAPI)
-
-	tester, err := NewBootstrapTester(ctx)
+	tester, err := NewBootstrapTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
