@@ -39,11 +39,11 @@ var commandConfigPairs = []configCommandPair{
 	{Config: MetaDataSetConfig{}, Command: MetaDataSetCommand},
 	{Config: OIDCTokenConfig{}, Command: OIDCRequestTokenCommand},
 	{Config: PipelineUploadConfig{}, Command: PipelineUploadCommand},
+	{Config: SecretGetConfig{}, Command: SecretGetCommand},
 	{Config: StepGetConfig{}, Command: StepGetCommand},
 	{Config: StepUpdateConfig{}, Command: StepUpdateCommand},
 	{Config: ToolKeygenConfig{}, Command: ToolKeygenCommand},
 	{Config: ToolSignConfig{}, Command: ToolSignCommand},
-	{Config: SecretGetConfig{}, Command: SecretGetCommand},
 }
 
 func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
@@ -87,6 +87,8 @@ func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
 }
 
 func TestAllCommandsAreTestedForConfigCompleteness(t *testing.T) {
+	t.Parallel()
+
 	allCommands := make([]cli.Command, 0, len(commandConfigPairs))
 	for _, command := range BuildkiteAgentCommands {
 		if len(command.Subcommands) > 0 {
