@@ -968,7 +968,7 @@ var AgentStartCommand = cli.Command{
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
 
 		if exps := experiments.KnownAndEnabled(ctx); len(exps) > 0 {
-			l.Info("The following experiments are enabled: %q", exps)
+			l.WithFields(logger.StringField("experiments", fmt.Sprintf("%v", exps))).Info("Experiments are enabled")
 		}
 
 		if !agentConf.SSHKeyscan {
