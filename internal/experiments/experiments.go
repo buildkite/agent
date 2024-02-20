@@ -127,6 +127,19 @@ func IsEnabled(ctx context.Context, key string) bool {
 	return state != nil && state.(bool)
 }
 
+// KnownAndEnabled returns the keys of all the known and enabled experiments.
+func KnownAndEnabled(ctx context.Context) []string {
+	allMu.Lock()
+	defer allMu.Unlock()
+	var keys []string
+	for key := range all {
+		if _, known := Available[key]; known && IsEnabled(ctx, key) {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
 // Enabled returns the keys of all the enabled experiments.
 func Enabled(ctx context.Context) []string {
 	allMu.Lock()

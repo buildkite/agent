@@ -967,6 +967,10 @@ var AgentStartCommand = cli.Command{
 		l.Debug("Hooks directory: %s", agentConf.HooksPath)
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
 
+		if exps := experiments.KnownAndEnabled(ctx); len(exps) > 0 {
+			l.Info("The following experiments are enabled: %q", exps)
+		}
+
 		if !agentConf.SSHKeyscan {
 			l.Info("Automatic ssh-keyscan has been disabled")
 		}
