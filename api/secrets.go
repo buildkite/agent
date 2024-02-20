@@ -2,21 +2,24 @@ package api
 
 import (
 	"context"
-	"fmt"
+	"net/url"
 )
 
-type SecretGetRequest struct {
-	Name string
+type GetSecretRequest struct {
+	Key string
 }
 
 type Secret struct {
-	Name  string `json:"name"`
+	Key   string `json:"name"`
 	Value string `json:"value"`
+	UUID  string `json:"uuid"`
 }
 
-func (c *Client) GetSecret(ctx context.Context, req *SecretGetRequest) (*Secret, *Response, error) {
-	u := fmt.Sprintf("secrets/%s", railsPathEscape(req.Name))
-	httpReq, err := c.newRequest(ctx, "GET", u, nil)
+func (c *Client) GetSecret(ctx context.Context, req *GetSecretRequest) (*Secret, *Response, error) {
+	u := url.URL{Path: "secrets"}
+	u.Query().Add("key", req.Key)
+
+	httpReq, err := c.newRequest(ctx, "GET", railsPathEscape(u.String()), nil)
 	if err != nil {
 		return nil, nil, err
 	}

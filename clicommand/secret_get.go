@@ -9,7 +9,7 @@ import (
 )
 
 type SecretGetConfig struct {
-	SecretPath string `cli:"arg:0"`
+	Key string `cli:"arg:0"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -50,7 +50,7 @@ var SecretGetCommand = cli.Command{
 
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-		secret, _, err := client.GetSecret(ctx, &api.SecretGetRequest{Name: cfg.SecretPath})
+		secret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: cfg.Key})
 		if err != nil {
 			l.Fatal("Failed to get secret: %v", err)
 		}

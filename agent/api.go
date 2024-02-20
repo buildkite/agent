@@ -24,7 +24,7 @@ type APIClient interface {
 	GenerateGithubCodeAccessToken(context.Context, string, string) (string, *api.Response, error)
 	GetJobState(context.Context, string) (*api.JobState, *api.Response, error)
 	GetMetaData(context.Context, string, string, string) (*api.MetaData, *api.Response, error)
-	GetSecret(context.Context, *api.SecretGetRequest) (*api.Secret, *api.Response, error)
+	GetSecret(context.Context, *api.GetSecretRequest) (*api.Secret, *api.Response, error)
 	Heartbeat(context.Context) (*api.Heartbeat, *api.Response, error)
 	MetaDataKeys(context.Context, string, string) ([]string, *api.Response, error)
 	OIDCToken(context.Context, *api.OIDCTokenRequest) (*api.OIDCToken, *api.Response, error)
