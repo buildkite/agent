@@ -2,7 +2,9 @@ package clicommand
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/urfave/cli"
@@ -24,6 +26,8 @@ type SecretGetConfig struct {
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
 }
+
+var errJobIDNotSet = errors.New("BUILDKITE_JOB_ID not set")
 
 var SecretGetCommand = cli.Command{
 	Name:        "get",
@@ -50,7 +54,12 @@ var SecretGetCommand = cli.Command{
 
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-		secret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: cfg.Key})
+		jobID := os.Getenv("BUILDKITE_JOB_ID")
+		if jobID == "" {
+			return NewExitError(1, errJobIDNotSet)
+		}
+
+		secret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: cfg.Key, JobID: jobID})
 		if err != nil {
 			return NewExitError(1, err)
 		}
