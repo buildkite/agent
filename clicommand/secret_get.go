@@ -43,7 +43,7 @@ var SecretGetCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[SecretGetConfig](ctx, c)
 		defer done()
@@ -52,9 +52,11 @@ var SecretGetCommand = cli.Command{
 
 		secret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: cfg.Key})
 		if err != nil {
-			l.Fatal("Failed to get secret: %v", err)
+			return NewExitError(1, err)
 		}
 
-		fmt.Println(secret.Value)
+		_, err = fmt.Fprintf(c.App.Writer, "%s\n", secret.Value)
+
+		return err
 	},
 }
