@@ -47,23 +47,6 @@ This will result in errors unless orchestrated in a similar manner to that proje
 
 **Status**: Being used in a preview release of agent-stack-k8s. As it has little applicability outside of Kubernetes, this will not be the default behaviour.
 
-### `job-api`
-
-Exposes a local API for the currently running job to introspect and mutate its state in the form of environment variables. This allows you to write scripts, hooks and plugins in languages other than bash, using them to interact with the agent.
-
-The API is exposed via a Unix Domain Socket, whose path is exposed to running jobs with the `BUILDKITE_AGENT_JOB_API_SOCKET` envar, and authenticated with a token exposed using the `BUILDKITE_AGENT_JOB_API_TOKEN` envar, using the `Bearer` HTTP Authorization scheme.
-
-The API exposes the following endpoints:
-- `GET /api/current-job/v0/env` - returns a JSON object of all environment variables for the current job
-- `PATCH /api/current-job/v0/env` - accepts a JSON object of environment variables to set for the current job
-- `DELETE /api/current-job/v0/env` - accepts a JSON array of environment variable names to unset for the current job
-
-See [jobapi/payloads.go](./jobapi/payloads.go) for the full API request/response definitions.
-
-The Job API is unavailable on windows agents running versions of windows prior to build 17063, as this was when windows added Unix Domain Socket support. Using this experiment on such agents will output a warning, and the API will be unavailable.
-
-**Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™️.
-
 ### `polyglot-hooks`
 
 Allows the agent to run hooks written in languages other than bash. This enables the agent to run hooks written in any language, as long as the language has a runtime available on the agent. Polyglot hooks can be in interpreted languages, so long as they have a valid shebang, and the interpreter specified in the shebang is installed on the agent.
@@ -78,10 +61,10 @@ Binary hooks are available on all platforms, but interpreted hooks are unfortuna
 
 ### `agent-api`
 
-Like `job-api`, this exposes a local API for interacting with the agent process.
+This exposes a local API for interacting with the agent process.
 ...with primitives that can be used to solve local concurrency problems (such as multiple agents handling some shared local resource).
 
-The API is exposed via a Unix Domain Socket. Unlike the `job-api`, the path to the socket is not available via a environment variable - rather, there is a single (configurable) path on the system.
+The API is exposed via a Unix Domain Socket. The path to the socket is not available via a environment variable - rather, there is a single (configurable) path on the system.
 
 **Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™.
 
