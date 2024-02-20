@@ -27,8 +27,8 @@ type SecretGetConfig struct {
 
 var SecretGetCommand = cli.Command{
 	Name:        "get",
-	Usage:       "Get a secret",
-	Description: "🤫",
+	Usage:       "Get a secret by its key",
+	Description: "Get a secret by key from Buildkite and print it to stdout.",
 	Flags: []cli.Flag{
 		// API Flags
 		AgentAccessTokenFlag,
