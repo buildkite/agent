@@ -250,7 +250,7 @@ func DefaultShell() string {
 }
 
 func defaultConfigFilePaths() (paths []string) {
-	// Toggle beetwen windows and *nix paths
+	// Toggle between windows and *nix paths
 	if runtime.GOOS == "windows" {
 		paths = []string{
 			"C:\\buildkite-agent\\buildkite-agent.cfg",
@@ -281,7 +281,7 @@ func defaultConfigFilePaths() (paths []string) {
 		}
 	}
 
-	return
+	return paths
 }
 
 var AgentStartCommand = cli.Command{
@@ -966,6 +966,10 @@ var AgentStartCommand = cli.Command{
 		l.Debug("Build path: %s", agentConf.BuildPath)
 		l.Debug("Hooks directory: %s", agentConf.HooksPath)
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
+
+		if exps := experiments.KnownAndEnabled(ctx); len(exps) > 0 {
+			l.WithFields(logger.StringField("experiments", fmt.Sprintf("%v", exps))).Info("Experiments are enabled")
+		}
 
 		if !agentConf.SSHKeyscan {
 			l.Info("Automatic ssh-keyscan has been disabled")
