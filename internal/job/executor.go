@@ -124,10 +124,12 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	if e.JobAPI {
 		cleanup, err := e.startJobAPI()
 		if err != nil {
-			e.shell.Errorf("Error setting up job API: %v", err)
+			e.shell.Errorf("Error setting up Job API: %v", err)
 			return 1
 		}
 		defer cleanup()
+	} else {
+		e.shell.Warningf("The Job API has been disabled.")
 	}
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
