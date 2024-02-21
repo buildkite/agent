@@ -21,7 +21,7 @@ type Secret struct {
 // GetSecret reads a secret from the Buildkite Agent API.
 func (c *Client) GetSecret(ctx context.Context, req *GetSecretRequest) (*Secret, *Response, error) {
 	// the endpoint is /jobs/:job_id/secrets?key=:key
-	httpReq, err := c.newRequest(ctx, "GET", path.Join("jobs", req.JobID, "secrets"), nil)
+	httpReq, err := c.newRequest(ctx, "GET", path.Join("jobs", railsPathEscape(req.JobID), "secrets"), nil)
 	if err != nil {
 		return nil, nil, err
 	}
