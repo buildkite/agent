@@ -5,18 +5,22 @@ import (
 	"path"
 )
 
+// GetSecretRequest represents a request to read a secret from the Buildkite Agent API.
 type GetSecretRequest struct {
 	Key   string
 	JobID string
 }
 
+// Secret represents a secret read from the Buildkite Agent API.
 type Secret struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 	UUID  string `json:"uuid"`
 }
 
+// GetSecret reads a secret from the Buildkite Agent API.
 func (c *Client) GetSecret(ctx context.Context, req *GetSecretRequest) (*Secret, *Response, error) {
+	// the endpoint is /jobs/:job_id/secrets?key=:key
 	httpReq, err := c.newRequest(ctx, "GET", path.Join("jobs", req.JobID, "secrets"), nil)
 	if err != nil {
 		return nil, nil, err
