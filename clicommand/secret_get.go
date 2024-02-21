@@ -64,7 +64,7 @@ var SecretGetCommand = cli.Command{
 			return NewExitError(1, err)
 		}
 
-		_, err = fmt.Fprintf(c.App.Writer, "%s\n", secret.Value)
+		_, err = fmt.Fprintln(c.App.Writer, secret.Value)
 
 		return err
 	},
