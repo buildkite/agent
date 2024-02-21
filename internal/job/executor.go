@@ -129,7 +129,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 		defer cleanup()
 	} else {
-		e.shell.Warningf("The Job API has been disabled.")
+		e.shell.Warningf("The Job API has been disabled. Features like automatic redaction of secrets and polyglot hooks will either not work or have degraded functionality")
 	}
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
