@@ -1050,10 +1050,9 @@ var AgentStartCommand = cli.Command{
 				return strings.HasPrefix(strings.TrimSpace(s), "queue=")
 			})
 			if i != -1 {
-				tags[i] = fmt.Sprintf("queue=%s", cfg.Queue)
-			} else {
-				tags = append(tags, fmt.Sprintf("queue=%s", cfg.Queue))
+				l.Fatal("Queue must be present in only one of the --tags or the --queue flags")
 			}
+			tags = append(tags, "queue="+cfg.Queue)
 		}
 
 		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
