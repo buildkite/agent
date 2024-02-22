@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.64.0](https://github.com/buildkite/agent/tree/v3.64.0) (2024-02-21)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.63.1...v3.64.0)
+
+### Added
+- De-experimentify Job API [#2646](https://github.com/buildkite/agent/pull/2646) (@triarius)
+- Add explicit queue flag to the agent [#2648](https://github.com/buildkite/agent/pull/2648) (@moskyb)
+- Add an info log of which experiments are known and enabled on agent start [#2645](https://github.com/buildkite/agent/pull/2645) (@triarius)
+
+### Fixed
+- YAML marshaling of `wait`, `block`, and `input` scalar steps (when using `tool sign` or `pipeline upload --format=yaml`) [#2640](https://github.com/buildkite/agent/pull/2640) (@DrJosh9000)
+- Packaging: Use separate repos for each package type [#2636](https://github.com/buildkite/agent/pull/2636) (@sj26)
+
+### Internal
+- Various dependency updates: [#2643](https://github.com/buildkite/agent/pull/2643), [#2642](https://github.com/buildkite/agent/pull/2642) [#2641](https://github.com/buildkite/agent/pull/2641), [#2638](https://github.com/buildkite/agent/pull/2638), [#2640](https://github.com/buildkite/agent/pull/2640), [#2639](https://github.com/buildkite/agent/pull/2639), [#2637](https://github.com/buildkite/agent/pull/2637) (@dependabot[bot])
+
 ## [v3.63.1](https://github.com/buildkite/agent/tree/v3.63.1) (2024-02-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.63.0...v3.63.1)
 
