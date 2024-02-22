@@ -58,6 +58,9 @@ type Executor struct {
 
 	// A channel to track cancellation
 	cancelCh chan struct{}
+
+	// redactors from each hook
+	redactors replacer.Mux
 }
 
 // New returns a new executor instance
@@ -415,8 +418,8 @@ func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
 }
 
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
-	redactors := e.setupRedactors()
-	defer redactors.Flush()
+	cleanup := e.setupRedactors()
+	defer cleanup(e)
 
 	script, err := hook.NewWrapper(hook.WithPath(hookCfg.Path))
 	if err != nil {
@@ -500,13 +503,13 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	} else {
 		// Hook exited successfully (and not early!) We have an environment and
 		// wd change we can apply to our subsequent phases
-		e.applyEnvironmentChanges(changes, redactors)
+		e.applyEnvironmentChanges(changes)
 	}
 
 	return nil
 }
 
-func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges, redactors replacer.Mux) {
+func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != e.shell.Getwd() {
 			_ = e.shell.Chdir(afterWd)
@@ -521,7 +524,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges, redactors re
 	e.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	redactors.Reset(redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump()))
+	e.redactors.Reset(redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump()))
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
@@ -994,8 +997,8 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		return err
 	}
 
-	redactors := e.setupRedactors()
-	defer redactors.Flush()
+	cleanup := e.setupRedactors()
+	defer cleanup(e)
 
 	var cmd []string
 	cmd = append(cmd, shell...)
@@ -1069,45 +1072,32 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 	return scriptFile.Name(), nil
 }
 
-// Check for ignored env variables from the job runner. Some
-// env (for example, BUILDKITE_BUILD_PATH) can only be set from config or by hooks.
-// If these env are set at a pipeline level, we rewrite them to BUILDKITE_X_BUILD_PATH
-// and warn on them here so that users know what is going on
-func (e *Executor) ignoredEnv() []string {
-	var ignored []string
-	for _, env := range os.Environ() {
-		if strings.HasPrefix(env, "BUILDKITE_X_") {
-			ignored = append(ignored, fmt.Sprintf("BUILDKITE_%s",
-				strings.TrimPrefix(env, "BUILDKITE_X_")))
-		}
-	}
-	return ignored
-}
-
-// setupRedactors wraps shell output and logging in Redactor if any redaction
+// setupRedactors wraps shell output and logging in Redactors if any redaction
 // is necessary based on RedactedVars configuration and the existence of
-// matching environment vars.
-// redactor.Mux (possibly empty) is returned so the caller can `defer redactor.Flush()`
-func (e *Executor) setupRedactors() replacer.Mux {
+// matching environment vars. It will store the redactors in the Executor so
+// that they may be updated when the environment changes.
+//
+// The returned method will remove the redactors from the Executor flush them.
+func (e *Executor) setupRedactors() func(*Executor) {
 	valuesToRedact := redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())
 	if len(valuesToRedact) == 0 {
-		return nil
+		return func(*Executor) {}
 	}
 
 	if e.Debug {
 		e.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
 	}
 
-	var mux replacer.Mux
+	currentRedactors := make([]*replacer.Replacer, 0, 2)
 
 	// If the shell Writer is already a Replacer, reset the values to redact.
 	if rdc, ok := e.shell.Writer.(*replacer.Replacer); ok {
 		rdc.Reset(valuesToRedact)
-		mux = append(mux, rdc)
+		currentRedactors = append(currentRedactors, rdc)
 	} else {
 		rdc := replacer.New(e.shell.Writer, valuesToRedact, redact.Redact)
 		e.shell.Writer = rdc
-		mux = append(mux, rdc)
+		currentRedactors = append(currentRedactors, rdc)
 	}
 
 	// If the shell.Logger is already a redacted WriterLogger, reset the values to redact.
@@ -1123,14 +1113,20 @@ func (e *Executor) setupRedactors() replacer.Mux {
 	}
 	if rdc := shellLoggerRedactor; rdc != nil {
 		rdc.Reset(valuesToRedact)
-		mux = append(mux, rdc)
+		currentRedactors = append(currentRedactors, rdc)
 	} else if shellWriterLogger != nil {
 		rdc := replacer.New(e.shell.Writer, valuesToRedact, redact.Redact)
 		shellWriterLogger.Writer = rdc
-		mux = append(mux, rdc)
+		currentRedactors = append(currentRedactors, rdc)
 	}
 
-	return mux
+	for _, rdc := range currentRedactors {
+		e.redactors[rdc] = struct{}{}
+	}
+
+	return func(e *Executor) {
+		e.redactors.Remove(currentRedactors...)
+	}
 }
 
 func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *kubernetes.Client) error {

@@ -5,25 +5,21 @@ import (
 )
 
 // Mux contains multiple replacers
-type Mux []*Replacer
-
-// Flush flushes all replacers.
-func (mux Mux) Flush() error {
-	var errs []error
-	for _, r := range mux {
-		if err := r.Flush(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if len(errs) != 0 {
-		return errors.Join(errs...)
-	}
-	return nil
-}
+type Mux map[*Replacer]struct{}
 
 // Reset resets all replacers with new needles (secrets).
 func (mux Mux) Reset(needles []string) {
-	for _, r := range mux {
+	for r := range mux {
 		r.Reset(needles)
 	}
+}
+
+// Remove removes the given replacers from the mux. They will be flushed.
+func (mux Mux) Remove(rs ...*Replacer) error {
+	errs := make([]error, 0, len(rs))
+	for _, r := range rs {
+		delete(mux, r)
+		errs = append(errs, r.Flush())
+	}
+	return errors.Join(errs...)
 }
