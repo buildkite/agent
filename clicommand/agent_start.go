@@ -112,6 +112,7 @@ type AgentStartConfig struct {
 	NoANSITimestamps bool `cli:"no-ansi-timestamps"`
 	TimestampLines   bool `cli:"timestamp-lines"`
 
+	Queue                     string   `cli:"queue"`
 	Tags                      []string `cli:"tags" normalize:"list"`
 	TagsFromEC2MetaData       bool     `cli:"tags-from-ec2-meta-data"`
 	TagsFromEC2MetaDataPaths  []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
@@ -345,6 +346,11 @@ var AgentStartCommand = cli.Command{
 			Value:  DefaultShell(),
 			Usage:  "The shell command used to interpret build commands, e.g /bin/bash -e -c",
 			EnvVar: "BUILDKITE_SHELL",
+		},
+		cli.StringFlag{
+			Name:   "queue",
+			Usage:  "The queue the agent will listen to for jobs. If not set, the agent will use the default queue. Overwrites the queue tag in the agent's tags",
+			EnvVar: "BUILDKITE_AGENT_QUEUE",
 		},
 		cli.StringSliceFlag{
 			Name:   "tags",
@@ -1022,6 +1028,33 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
+		tags := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
+			Tags:                      cfg.Tags,
+			TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
+			TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
+			TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
+			TagsFromECSMetaData:       cfg.TagsFromECSMetaData,
+			TagsFromGCPMetaData:       (cfg.TagsFromGCPMetaData || cfg.TagsFromGCP),
+			TagsFromGCPMetaDataPaths:  cfg.TagsFromGCPMetaDataPaths,
+			TagsFromGCPLabels:         cfg.TagsFromGCPLabels,
+			TagsFromHost:              cfg.TagsFromHost,
+			WaitForEC2TagsTimeout:     ec2TagTimeout,
+			WaitForEC2MetaDataTimeout: ec2MetaDataTimeout,
+			WaitForECSMetaDataTimeout: ecsMetaDataTimeout,
+			WaitForGCPLabelsTimeout:   gcpLabelsTimeout,
+		})
+
+		// Munge the value from --queue (if it exists) into the tags slice
+		if cfg.Queue != "" {
+			i := slices.IndexFunc(tags, func(s string) bool {
+				return strings.HasPrefix(strings.TrimSpace(s), "queue=")
+			})
+			if i != -1 {
+				l.Fatal("Queue must be present in only one of the --tags or the --queue flags")
+			}
+			tags = append(tags, "queue="+cfg.Queue)
+		}
+
 		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
 		// so we may as well check that'll work now and fail early if it's a problem
 		if !utils.FileExists(agentConf.BuildPath) {
@@ -1040,21 +1073,7 @@ var AgentStartCommand = cli.Command{
 			Name:              cfg.Name,
 			Priority:          cfg.Priority,
 			ScriptEvalEnabled: !cfg.NoCommandEval,
-			Tags: agent.FetchTags(ctx, l, agent.FetchTagsConfig{
-				Tags:                      cfg.Tags,
-				TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
-				TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
-				TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
-				TagsFromECSMetaData:       cfg.TagsFromECSMetaData,
-				TagsFromGCPMetaData:       (cfg.TagsFromGCPMetaData || cfg.TagsFromGCP),
-				TagsFromGCPMetaDataPaths:  cfg.TagsFromGCPMetaDataPaths,
-				TagsFromGCPLabels:         cfg.TagsFromGCPLabels,
-				TagsFromHost:              cfg.TagsFromHost,
-				WaitForEC2TagsTimeout:     ec2TagTimeout,
-				WaitForEC2MetaDataTimeout: ec2MetaDataTimeout,
-				WaitForECSMetaDataTimeout: ecsMetaDataTimeout,
-				WaitForGCPLabelsTimeout:   gcpLabelsTimeout,
-			}),
+			Tags:              tags,
 			// We only want this agent to be ingored in Buildkite
 			// dispatches if it's being booted to acquire a
 			// specific job.
