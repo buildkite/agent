@@ -1125,7 +1125,9 @@ func (e *Executor) setupRedactors() func(*Executor) {
 	}
 
 	return func(e *Executor) {
-		e.redactors.Remove(currentRedactors...)
+		if err := e.redactors.Remove(currentRedactors...); err != nil && e.Debug {
+			e.shell.Logger.Errorf("Failed to remove redactors: %v", err)
+		}
 	}
 }
 
