@@ -8,8 +8,8 @@ import (
 	"sync"
 )
 
-// Replacer is a straightforward streaming string replacer and replacer,
-// suitable for detecting or redacting secrets in a stream.
+// Replacer is a straightforward streaming string replacer suitable for
+// detecting or redacting secrets in a stream.
 //
 // The algorithm is intended to be easier to maintain than certain
 // high-performance multi-string search algorithms, and also geared towards
