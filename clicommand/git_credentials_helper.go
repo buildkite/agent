@@ -77,20 +77,14 @@ var GitCredentialsHelperCommand = cli.Command{
 		ctx, cfg, l, _, done := setupLoggerAndConfig[GitCredentialsHelperConfig](ctx, c)
 		defer done()
 
-		if cfg.Action != "get" {
-			// other actions are store and erase, which we don't support
-			// see: https://git-scm.com/docs/gitcredentials#Documentation/gitcredentials.txt-codegetcode
-			return nil
-		}
-
-		l.Info("Authenticating checkout using Buildkite Github App Credentials...")
-
 		// ie, if the flags are from the command line rather than from the environment, which is how they should be passed
 		// to this process when it's called through the job executor
 		if os.Getenv("BUILDKITE_JOB_ID") == "" {
 			l.Warn("📎💬 It looks like you're calling this command directly in a step, rather than having the agent automatically call it")
 			l.Warn("This command is intended to be used as a git credential helper, and not called directly.")
 		}
+
+		l.Debug("Action: %s", cfg.Action)
 
 		// git passes the details of the current clone process to the credential helper via stdin
 		// we need to parse this to get the repo URL
@@ -99,6 +93,16 @@ var GitCredentialsHelperCommand = cli.Command{
 		if err != nil {
 			return handleAuthError(c, l, fmt.Errorf("failed to read stdin: %v", err))
 		}
+
+		l.Debug("Git credential input:\n%s\n", string(stdin))
+
+		if cfg.Action != "get" {
+			// other actions are store and erase, which we don't support
+			// see: https://git-scm.com/docs/gitcredentials#Documentation/gitcredentials.txt-codegetcode
+			return nil
+		}
+
+		l.Debug("Authenticating checkout using Buildkite Github App Credentials...")
 
 		repo, err := parseGitURLFromCredentialInput(string(stdin))
 		if err != nil {
@@ -115,7 +119,7 @@ var GitCredentialsHelperCommand = cli.Command{
 		fmt.Fprintln(c.App.Writer, "password="+tok)
 		fmt.Fprintln(c.App.Writer, "")
 
-		l.Info("Authentication successful! 🎉")
+		l.Debug("Authentication successful!")
 
 		return nil
 	},
