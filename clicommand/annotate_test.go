@@ -33,6 +33,7 @@ func TestAnnotate(t *testing.T) {
 		Job:              "jobid",
 		AgentAccessToken: "agentaccesstoken",
 		Endpoint:         server.URL,
+		Priority:         1,
 	}
 	l := logger.NewBuffer()
 
