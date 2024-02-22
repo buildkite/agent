@@ -592,7 +592,6 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 
 	ctx := mainCtx
 	ctx, _ = experiments.Enable(ctx, experiments.PolyglotHooks)
-	ctx, _ = experiments.Enable(ctx, experiments.JobAPI)
 
 	tester, err := NewBootstrapTester(ctx)
 	if err != nil {
@@ -604,7 +603,7 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 	// Forgive me for my sins, RSC, but it's better than the alternatives.
 	// The code that we're building is in ./test-binary-hook/main.go, it's pretty straightforward.
 
-	fmt.Println("Building test-binary-hook")
+	t.Logf("Building test-binary-hook")
 	hookPath := filepath.Join(tester.HooksDir, "environment")
 
 	if runtime.GOOS == "windows" {

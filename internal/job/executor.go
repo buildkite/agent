@@ -121,13 +121,16 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	e.shell.Env = env.FromSlice(os.Environ())
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
-	cleanup, err := e.startJobAPI(ctx)
-	if err != nil {
-		e.shell.Errorf("Error setting up job API: %v", err)
-		return 1
+	if e.JobAPI {
+		cleanup, err := e.startJobAPI()
+		if err != nil {
+			e.shell.Errorf("Error setting up Job API: %v", err)
+			return 1
+		}
+		defer cleanup()
+	} else {
+		e.shell.Warningf("The Job API has been disabled. Features like automatic redaction of secrets and polyglot hooks will either not work or have degraded functionality")
 	}
-
-	defer cleanup()
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {

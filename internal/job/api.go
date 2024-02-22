@@ -1,23 +1,17 @@
 package job
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
 )
 
-// startJobAPI starts the job API server, iff the job API experiment is enabled, and the OS of the box supports it
-// otherwise it returns a noop cleanup function
-// It also sets the BUILDKITE_AGENT_JOB_API_SOCKET and BUILDKITE_AGENT_JOB_API_TOKEN environment variables
-func (e *Executor) startJobAPI(ctx context.Context) (cleanup func(), err error) {
+// startJobAPI starts the job API server, iff the OS of the box supports it otherwise it returns a
+// noop cleanup function. It also sets the BUILDKITE_AGENT_JOB_API_SOCKET and
+// BUILDKITE_AGENT_JOB_API_TOKEN environment variables
+func (e *Executor) startJobAPI() (cleanup func(), err error) {
 	cleanup = func() {}
-
-	if !experiments.IsEnabled(ctx, experiments.JobAPI) {
-		return cleanup, nil
-	}
 
 	if !socket.Available() {
 		e.shell.Warningf("The Job API isn't available on this machine, as it's running an unsupported version of Windows")

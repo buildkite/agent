@@ -25,7 +25,6 @@ const (
 	// Available experiments
 	AgentAPI                   = "agent-api"
 	DescendingSpawnPrioity     = "descending-spawn-priority"
-	JobAPI                     = "job-api"
 	KubernetesExec             = "kubernetes-exec"
 	NormalisedUploadPaths      = "normalised-upload-paths"
 	PTYRaw                     = "pty-raw"
@@ -40,13 +39,13 @@ const (
 	FlockFileLocks    = "flock-file-locks"
 	GitMirrors        = "git-mirrors"
 	InbuiltStatusPage = "inbuilt-status-page"
+	JobAPI            = "job-api"
 )
 
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                   {},
 		DescendingSpawnPrioity:     {},
-		JobAPI:                     {},
 		KubernetesExec:             {},
 		NormalisedUploadPaths:      {},
 		PolyglotHooks:              {},
@@ -61,6 +60,7 @@ var (
 		FlockFileLocks:    standardPromotionMsg(FlockFileLocks, "v3.48.0"),
 		GitMirrors:        standardPromotionMsg(GitMirrors, "v3.47.0"),
 		InbuiltStatusPage: standardPromotionMsg(InbuiltStatusPage, "v3.48.0"),
+		JobAPI:            standardPromotionMsg(JobAPI, "v3.64.0"),
 	}
 
 	// Used to track experiments possibly in use.

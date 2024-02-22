@@ -164,6 +164,9 @@ type ExecutorConfig struct {
 
 	// Service name to use when reporting traces.
 	TracingServiceName string
+
+	// Whether to start the JobAPI
+	JobAPI bool
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
