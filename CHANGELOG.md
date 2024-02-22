@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - De-experimentify Job API [#2646](https://github.com/buildkite/agent/pull/2646) (@triarius)
 - Add explicit queue flag to the agent [#2648](https://github.com/buildkite/agent/pull/2648) (@moskyb)
 - Add an info log of which experiments are known and enabled on agent start [#2645](https://github.com/buildkite/agent/pull/2645) (@triarius)
+- Add cli command to read from Pipelines Secrets [Not available to customers yet] [#2647](https://github.com/buildkite/agent/pull/2647) (@triarius)
 
 ### Fixed
 - YAML marshaling of `wait`, `block`, and `input` scalar steps (when using `tool sign` or `pipeline upload --format=yaml`) [#2640](https://github.com/buildkite/agent/pull/2640) (@DrJosh9000)
