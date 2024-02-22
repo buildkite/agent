@@ -31,7 +31,8 @@ if the pipeline has this feature enabled. All hosted compute jobs automatically 
 This command is intended to be used as a git credential helper, and not called directly.`
 
 type GitCredentialsHelperConfig struct {
-	JobID string `cli:"job-id" validate:"required"`
+	JobID  string `cli:"job-id" validate:"required"`
+	Action string `cli:"arg:0"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -75,6 +76,12 @@ var GitCredentialsHelperCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[GitCredentialsHelperConfig](ctx, c)
 		defer done()
+
+		if cfg.Action != "get" {
+			// other actions are store and erase, which we don't support
+			// see: https://git-scm.com/docs/gitcredentials#Documentation/gitcredentials.txt-codegetcode
+			return nil
+		}
 
 		l.Info("Authenticating checkout using Buildkite Github App Credentials...")
 
