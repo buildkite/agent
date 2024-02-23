@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/google/go-cmp/cmp"
+	"gotest.tools/v3/assert"
 )
 
 type fakeServer struct {
@@ -126,9 +127,10 @@ func TestClient_NoSocket(t *testing.T) {
 	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(canc)
 
-	if _, err := NewDefaultClient(ctx); err == nil {
-		t.Errorf("NewDefaultClient(ctx) error = %v, want nil", err)
-	}
+	// This may be set if the test is being run by a buildkite agent!
+	os.Unsetenv("BUILDKITE_AGENT_JOB_API_SOCKET")
+	_, err := NewDefaultClient(ctx)
+	assert.ErrorIs(t, err, errNoSocketEnv, "NewDefaultClient() error = %v, want %v", err, errNoSocketEnv)
 }
 
 func TestClientEnvGet(t *testing.T) {
