@@ -68,6 +68,7 @@ func New(conf ExecutorConfig) *Executor {
 	return &Executor{
 		ExecutorConfig: conf,
 		cancelCh:       make(chan struct{}),
+		redactors:      make(replacer.Mux),
 	}
 }
 
