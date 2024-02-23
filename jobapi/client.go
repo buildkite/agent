@@ -10,6 +10,8 @@ import (
 
 const envURL = "http://job/api/current-job/v0/env"
 
+var errNoSocketEnv = errors.New("BUILDKITE_AGENT_JOB_API_SOCKET empty or undefined")
+
 // Client connects to the Job API.
 type Client struct {
 	client *socket.Client
@@ -30,11 +32,11 @@ func NewDefaultClient(ctx context.Context) (*Client, error) {
 func DefaultSocketPath() (path, token string, err error) {
 	path = os.Getenv("BUILDKITE_AGENT_JOB_API_SOCKET")
 	if path == "" {
-		return "", "", errors.New("BUILDKITE_AGENT_JOB_API_SOCKET empty or undefined")
+		return "", "", errNoSocketEnv
 	}
 	token = os.Getenv("BUILDKITE_AGENT_JOB_API_TOKEN")
 	if token == "" {
-		return "", "", errors.New("BUILDKITE_AGENT_JOB_API_TOKEN empty or undefined")
+		return "", "", errNoSocketEnv
 	}
 	return path, token, nil
 }
