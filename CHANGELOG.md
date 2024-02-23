@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.64.1](https://github.com/buildkite/agent/tree/v3.64.1) (2024-02-22)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.64.0...v3.64.1)
+
+### Added
+- Add flag for setting annotation priority [#2644](https://github.com/buildkite/agent/pull/2644) (@matthewborden)
+
+### Changed
+- Chill out credential helper logging [#2650](https://github.com/buildkite/agent/pull/2650) (@moskyb)
+
+### Internal
+- Fix test of JobAPI requiring socket set [#2651](https://github.com/buildkite/agent/pull/2651) (@triarius)
+
 ## [v3.64.0](https://github.com/buildkite/agent/tree/v3.64.0) (2024-02-21)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.63.1...v3.64.0)
 
