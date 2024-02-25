@@ -70,6 +70,10 @@ func New(conf ExecutorConfig) *Executor {
 
 // Run the job and return the exit code
 func (e *Executor) Run(ctx context.Context) (exitCode int) {
+	// Create a context to use for cancelation of the job
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// Check if not nil to allow for tests to overwrite shell
 	if e.shell == nil {
 		var err error
@@ -102,21 +106,17 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	defer stopper()
 	defer func() { span.FinishWithError(err) }()
 
-	// Create a context to use for cancelation of the job
-	cancelCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	// kind of a weird series of events - wrap a context in a cancellation (at the top of the func), then pull the cancellation
+	// out again, but some of the stuff we need to do in the executor (namely the teardown) needs to be able to "survive"
+	// a cancellation so we need to be able to pass a cancellable context to the non-teardown stuff, and an uncancellable
+	// context to the teardown stuff
+	nonCancelCtx := context.WithoutCancel(ctx)
 
 	// Listen for cancellation
 	go func() {
-		select {
-		case <-ctx.Done():
-			return
-
-		case <-e.cancelCh:
-			e.shell.Commentf("Received cancellation signal, interrupting")
-			e.shell.Interrupt()
-			cancel()
-		}
+		<-e.cancelCh
+		e.shell.Commentf("Received cancellation signal, interrupting")
+		cancel()
 	}()
 
 	// Create an empty env for us to keep track of our env changes in
@@ -136,7 +136,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
-		if err = e.tearDown(ctx); err != nil {
+		if err = e.tearDown(nonCancelCtx); err != nil {
 			e.shell.Errorf("Error tearing down job executor: %v", err)
 
 			// this gets passed back via the named return
@@ -195,7 +195,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	}
 
 	if phaseErr == nil && includePhase("checkout") {
-		phaseErr = e.CheckoutPhase(cancelCtx)
+		phaseErr = e.CheckoutPhase(ctx)
 	} else {
 		checkoutDir, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 		if exists {
@@ -239,7 +239,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			e.shell.Errorf("%v", err)
 
 			if commandErr != nil {
-				// Both command, and upload have errored.
+				// Both command and upload have errored.
 				//
 				// Ignore the agent upload error, rely on the phase and command
 				// error reporting below.
