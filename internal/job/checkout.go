@@ -45,6 +45,14 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 	return nil
 }
 
+// Disables SSH keyscan and configures git to use HTTPS instead of SSH for github.
+// We may later expand this for other SCMs.
+func (e *Executor) configureHTTPSInsteadOfSSH(ctx context.Context) error {
+	return e.shell.RunWithoutPrompt(ctx,
+		"git", "config", "--global", "url.https://github.com/.insteadOf", "git@github.com:",
+	)
+}
+
 func (e *Executor) removeCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
