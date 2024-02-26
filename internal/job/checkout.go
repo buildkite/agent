@@ -42,6 +42,12 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 		return fmt.Errorf("configuring git credential.helper: %v", err)
 	}
 
+	// so that the new credential helper will be used for all github urls
+	err = e.shell.RunWithoutPrompt(ctx, "git", "config", "--global", "url.https://github.com/.insteadOf", "git@github.com:")
+	if err != nil {
+		return fmt.Errorf("enabling git rewrite: %v", err)
+	}
+
 	return nil
 }
 
