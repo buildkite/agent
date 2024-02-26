@@ -143,6 +143,12 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	}()
 
 	if env, ok := e.shell.Env.Get("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS"); ok && env == "true" {
+		// On hosted compute, we are not going to use SSH keys, so we don't need to scan for SSH keys.
+		//
+		// TODO: This may break non-GitHub SSH checkout for other SCMs on self-hosted compute.
+		// So we need to revise this before enabling the code access app on self-hosted agents.
+		e.SSHKeyscan = false
+
 		err := e.configureGitCredentialHelper(ctx)
 		if err != nil {
 			e.shell.Errorf("Error configuring git credential helper: %v", err)
