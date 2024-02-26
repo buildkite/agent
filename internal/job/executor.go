@@ -148,6 +148,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			e.shell.Errorf("Error configuring git credential helper: %v", err)
 			return shell.GetExitCode(err)
 		}
+
+		// so that the new credential helper will be used for all github urls
+		err = e.configureHTTPSInsteadOfSSH(ctx)
+		if err != nil {
+			e.shell.Errorf("Error configuring https instead of ssh: %v", err)
+			return shell.GetExitCode(err)
+		}
 	}
 
 	// Initialize the environment, a failure here will still call the tearDown
