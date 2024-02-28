@@ -16,8 +16,11 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/redact"
+	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/google/go-cmp/cmp"
+	"gotest.tools/v3/assert"
 )
 
 func pt(s string) *string {
@@ -32,13 +35,12 @@ func testEnviron() *env.Environment {
 	return e
 }
 
-func testServer(t *testing.T, e *env.Environment) (*jobapi.Server, string, error) {
+func testServer(t *testing.T, e *env.Environment, mux *replacer.Mux) (*jobapi.Server, string, error) {
 	sockName, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
 		return nil, "", fmt.Errorf("creating socket path: %w", err)
 	}
-
-	return jobapi.NewServer(shell.TestingLogger{T: t}, sockName, e)
+	return jobapi.NewServer(shell.TestingLogger{T: t}, sockName, e, mux)
 }
 
 func testSocketClient(socketPath string) *http.Client {
@@ -51,11 +53,46 @@ func testSocketClient(socketPath string) *http.Client {
 	}
 }
 
+func testAPI[Req, Resp any](t *testing.T, env *env.Environment, req *http.Request, client *http.Client, testCase apiTestCase[Req, Resp]) {
+	t.Helper()
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("expected no error for client.Do(req) (got %v)", err)
+	}
+
+	if resp.StatusCode != testCase.expectedStatus {
+		t.Fatalf("expected status code %d (got %d)", testCase.expectedStatus, resp.StatusCode)
+	}
+
+	if testCase.expectedResponseBody != nil {
+		var got Resp
+		assert.NilError(t, json.NewDecoder(resp.Body).Decode(&got))
+		if !cmp.Equal(testCase.expectedResponseBody, &got) {
+			t.Fatalf("\n\texpected response: % #v\n\tgot: % #v\n\tdiff = %s)", *testCase.expectedResponseBody, got, cmp.Diff(testCase.expectedResponseBody, &got))
+		}
+	}
+
+	if testCase.expectedError != nil {
+		var got jobapi.ErrorResponse
+		assert.NilError(t, json.NewDecoder(resp.Body).Decode(&got))
+		if got.Error != testCase.expectedError.Error {
+			t.Fatalf("expected error %q (got %q)", testCase.expectedError.Error, got.Error)
+		}
+	}
+
+	if testCase.expectedEnv != nil {
+		if !cmp.Equal(testCase.expectedEnv, env.Dump()) {
+			t.Fatalf("\n\texpected env: % #v\n\tgot: % #v\n\tdiff = %s)", testCase.expectedEnv, env, cmp.Diff(testCase.expectedEnv, env))
+		}
+	}
+}
+
 func TestServerStartStop(t *testing.T) {
 	t.Parallel()
 
 	env := testEnviron()
-	srv, _, err := testServer(t, env)
+	srv, _, err := testServer(t, env, replacer.NewMux())
 	if err != nil {
 		t.Fatalf("testServer(t, env) error = %v", err)
 	}
@@ -100,12 +137,14 @@ func TestServerStartStop(t *testing.T) {
 }
 
 func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("socket collision detection isn't support on windows. If the current go version is >1.23, it might be worth re-enabling this test, because hopefully the bug (https://github.com/golang/go/issues/33357) is fixed")
 	}
 
 	sockName := filepath.Join(os.TempDir(), "test-socket-collision.sock")
-	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New())
+	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), replacer.NewMux())
 	if err != nil {
 		t.Fatalf("expected initial server creation to succeed, got %v", err)
 	}
@@ -117,7 +156,7 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	defer srv1.Stop()
 
 	expectedErr := fmt.Sprintf("creating socket server: file already exists at socket path %s", sockName)
-	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New())
+	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), replacer.NewMux())
 	if err == nil {
 		t.Fatalf("expected second server creation to fail with %s, got nil", expectedErr)
 	}
@@ -172,7 +211,7 @@ func TestDeleteEnv(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(t, environ)
+			srv, token, err := testServer(t, environ, replacer.NewMux())
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}
@@ -268,7 +307,7 @@ func TestPatchEnv(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(t, environ)
+			srv, token, err := testServer(t, environ, replacer.NewMux())
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}
@@ -310,7 +349,7 @@ func TestGetEnv(t *testing.T) {
 	t.Parallel()
 
 	env := testEnviron()
-	srv, token, err := testServer(t, env)
+	srv, token, err := testServer(t, env, replacer.NewMux())
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -361,35 +400,57 @@ func TestGetEnv(t *testing.T) {
 	})
 }
 
-func testAPI[Req, Resp any](t *testing.T, env *env.Environment, req *http.Request, client *http.Client, testCase apiTestCase[Req, Resp]) {
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("expected no error for client.Do(req) (got %v)", err)
+func TestCreateRedaction(t *testing.T) {
+	t.Parallel()
+
+	const (
+		alreadyRedacted = "Guayaquil"
+		toRedact        = "Quito"
+	)
+
+	writeBuf := &bytes.Buffer{}
+	rdc := replacer.New(writeBuf, []string{alreadyRedacted}, redact.Redact)
+	mux := replacer.NewMux(rdc)
+
+	env := testEnviron()
+	srv, token, err := testServer(t, env, mux)
+	assert.NilError(t, err)
+
+	// write some stuff that won't be redacted
+	_, err = rdc.Write([]byte("Go from Guayaquil, until you get to Quito.\n"))
+	assert.NilError(t, err)
+
+	assert.NilError(t, srv.Start())
+	t.Cleanup(func() {
+		assert.NilError(t, srv.Stop())
+	})
+
+	client := testSocketClient(srv.SocketPath)
+
+	tc := apiTestCase[jobapi.RedactionCreateRequest, jobapi.RedactionCreateResponse]{
+		expectedStatus:       http.StatusCreated,
+		requestBody:          &jobapi.RedactionCreateRequest{Redact: toRedact},
+		expectedResponseBody: &jobapi.RedactionCreateResponse{Redacted: toRedact},
 	}
 
-	if resp.StatusCode != testCase.expectedStatus {
-		t.Fatalf("expected status code %d (got %d)", testCase.expectedStatus, resp.StatusCode)
-	}
+	buf := &bytes.Buffer{}
+	assert.NilError(t, json.NewEncoder(buf).Encode(tc.requestBody))
 
-	if testCase.expectedResponseBody != nil {
-		var got Resp
-		json.NewDecoder(resp.Body).Decode(&got)
-		if !cmp.Equal(testCase.expectedResponseBody, &got) {
-			t.Fatalf("\n\texpected response: % #v\n\tgot: % #v\n\tdiff = %s)", *testCase.expectedResponseBody, got, cmp.Diff(testCase.expectedResponseBody, &got))
-		}
-	}
+	req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/redactions", buf)
+	assert.NilError(t, err)
 
-	if testCase.expectedError != nil {
-		var got jobapi.ErrorResponse
-		json.NewDecoder(resp.Body).Decode(&got)
-		if got.Error != testCase.expectedError.Error {
-			t.Fatalf("expected error %q (got %q)", testCase.expectedError.Error, got.Error)
-		}
-	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	testAPI(t, env, req, client, tc)
 
-	if testCase.expectedEnv != nil {
-		if !cmp.Equal(testCase.expectedEnv, env.Dump()) {
-			t.Fatalf("\n\texpected env: % #v\n\tgot: % #v\n\tdiff = %s)", testCase.expectedEnv, env, cmp.Diff(testCase.expectedEnv, env))
-		}
-	}
+	// now when we write it, it should be redacted
+	_, err = rdc.Write([]byte("From Quito, go back to Guayaquil.\n"))
+	assert.NilError(t, err)
+
+	mux.Flush()
+
+	assert.Equal(
+		t,
+		writeBuf.String(),
+		"Go from [REDACTED], until you get to Quito.\nFrom [REDACTED], go back to [REDACTED].\n",
+	)
 }
