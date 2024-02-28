@@ -307,6 +307,24 @@ func (r *Replacer) Reset(needles []string) {
 	}
 }
 
+// Add add more needles to be matched by the replacer. It is not necessary to
+// Flush beforehand, but:
+//   - any previous strings which have begun matching will continue matching
+//     (until they reach a terminal state), and
+//   - any new strings will not be compared against existing buffer content,
+//     only data passed to Write calls after Add.
+func (r *Replacer) Add(needles ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, s := range needles {
+		if len(s) == 0 {
+			continue
+		}
+		r.needlesByFirstByte[s[0]] = append(r.needlesByFirstByte[s[0]], s)
+	}
+}
+
 // partialMatch tracks how far through one of the needles we have matched.
 type partialMatch struct {
 	needle  string
