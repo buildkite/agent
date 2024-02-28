@@ -12,7 +12,7 @@ import (
 //
 // The algorithm is intended to be easier to maintain than certain
 // high-performance multi-string search algorithms, and also geared towards
-// ensuring secrets don't escape (for instance, by matching overlaps), at the
+// ensuring strings don't escape (for instance, by matching overlaps), at the
 // expense of ultimate efficiency.
 type Replacer struct {
 	// The replacement callback.
@@ -33,8 +33,8 @@ type Replacer struct {
 	// Intermediate buffer to account for partially-written data.
 	buf []byte
 
-	// Current redaction partialMatches - if we have begun redacting a potential
-	// secret there will be at least one of these.
+	// Current redaction partialMatches - if we have begun matching a potential
+	// needle there will be at least one of these.
 	// nextMatches is the next set of partialMatches.
 	// Write alternates between these two, rather than creating a new slice to
 	// hold the next set of matches for every byte of the input.
@@ -78,7 +78,7 @@ func New(dst io.Writer, needles []string, replacement func([]byte) []byte) *Repl
 	return r
 }
 
-// Write searches the stream for needles (strings, secrets, ...), calls the
+// Write searches the stream for needles (e.g. strings, secrets, ...), calls the
 // replacement callback to obtain any replacements, and forwards the output to
 // the destination writer.
 func (r *Replacer) Write(b []byte) (int, error) {
@@ -98,7 +98,7 @@ func (r *Replacer) Write(b []byte) (int, error) {
 	//    matches.
 	//
 	// Step 2 is complicated by the fact that each Write could contain a partial
-	// secret at the start or the end. So a buffer is needed to hold onto any
+	// needle at the start or the end. So a buffer is needed to hold onto any
 	// incomplete matches (in case they _don't_ match), as well as some extra
 	// state (r.partialMatches) for tracking where we are in each incomplete
 	// match.
@@ -286,11 +286,11 @@ func (r *Replacer) flushUpTo(limit int) error {
 	return nil
 }
 
-// Reset replaces the secrets to redact with a new set of secrets. It is not
+// Reset removes all current needes and sets new set of needles. It is not
 // necessary to Flush beforehand, but:
-//   - any previous secrets which have begun matching will continue matching
+//   - any previous needles which have begun matching will continue matching
 //     (until they reach a terminal state), and
-//   - any new secrets will not be compared against existing buffer content,
+//   - any new needles will not be compared against existing buffer content,
 //     only data passed to Write calls after Reset.
 func (r *Replacer) Reset(needles []string) {
 	r.mu.Lock()
