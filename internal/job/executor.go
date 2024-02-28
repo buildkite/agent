@@ -1121,9 +1121,7 @@ func (e *Executor) setupRedactors() func(*Executor) {
 		currentRedactors = append(currentRedactors, rdc)
 	}
 
-	for _, rdc := range currentRedactors {
-		e.redactors[rdc] = struct{}{}
-	}
+	e.redactors.Append(currentRedactors...)
 
 	return func(e *Executor) {
 		if err := e.redactors.Remove(currentRedactors...); err != nil && e.Debug {
