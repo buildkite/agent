@@ -18,6 +18,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Usage: "Get a secret",
 		Subcommands: []cli.Command{
 			SecretGetCommand,
+			SecretRedactCommand,
 		},
 	},
 	{
