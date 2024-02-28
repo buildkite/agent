@@ -29,6 +29,8 @@ func (s *Server) router() chi.Router {
 		r.Get("/env", s.getEnv)
 		r.Patch("/env", s.patchEnv)
 		r.Delete("/env", s.deleteEnv)
+
+		r.Post("/redactions", s.createRedaction)
 	})
 
 	return r

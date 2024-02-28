@@ -48,3 +48,13 @@ type EnvDeleteResponse struct {
 func (e EnvDeleteResponse) Normalize() {
 	sort.Strings(e.Deleted)
 }
+
+// RedactionCreateRequest is the request body for the POST /redactions endpoint
+type RedactionCreateRequest struct {
+	Redact string `json:"redact"`
+}
+
+// RedactionCreateResponse is the response body for the POST /redactions endpoint
+type RedactionCreateResponse struct {
+	Redacted string `json:"redacted"`
+}

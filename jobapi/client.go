@@ -3,12 +3,16 @@ package jobapi
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 
 	"github.com/buildkite/agent/v3/internal/socket"
 )
 
-const envURL = "http://job/api/current-job/v0/env"
+const (
+	envURL        = "http://job/api/current-job/v0/env"
+	redactionsURL = "http://job/api/current-job/v0/redactions"
+)
 
 var errNoSocketEnv = errors.New("BUILDKITE_AGENT_JOB_API_SOCKET empty or undefined")
 
@@ -80,4 +84,16 @@ func (c *Client) EnvDelete(ctx context.Context, del []string) (deleted []string,
 	}
 	resp.Normalize()
 	return resp.Deleted, nil
+}
+
+// RedactionCreate creates a redaction in the job executor.
+func (c *Client) RedactionCreate(ctx context.Context, text string) (string, error) {
+	req := RedactionCreateRequest{
+		Redact: text,
+	}
+	var resp RedactionCreateResponse
+	if err := c.client.Do(ctx, http.MethodPost, redactionsURL, &req, &resp); err != nil {
+		return "", err
+	}
+	return resp.Redacted, nil
 }
