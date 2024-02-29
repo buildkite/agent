@@ -19,14 +19,14 @@ import (
 // Note: if you add a new format string, make sure to add it to `secretsFormats`
 // and update the usage string in SecretRedactCommand
 const (
-	formatStringJSON = "json"
-	formatStringNone = "none"
+	FormatStringJSON = "json"
+	FormatStringNone = "none"
 	// TODO: we should parse .env files
 	// TODO: we should parse ssh private keys. The format is in https://datatracker.ietf.org/doc/html/rfc7468
 )
 
 var (
-	secretsFormats = []string{formatStringJSON, formatStringNone}
+	secretsFormats = []string{FormatStringJSON, FormatStringNone}
 
 	errSecretParse   = errors.New("failed to parse secrets")
 	errSecretRedact  = errors.New("failed to redact secrets")
@@ -63,7 +63,7 @@ var SecretRedactCommand = cli.Command{
 				secretsFormats,
 			),
 			EnvVar: "BUILDKITE_AGENT_SECRET_REDACT_ENV_FORMAT",
-			Value:  formatStringNone,
+			Value:  FormatStringNone,
 		},
 
 		// API Flags
@@ -135,7 +135,7 @@ func ParseSecrets(
 	secretsReader io.Reader,
 ) ([]string, error) {
 	switch cfg.Format {
-	case formatStringJSON:
+	case FormatStringJSON:
 		secrets := &map[string]string{}
 		if err := json.NewDecoder(secretsReader).Decode(&secrets); err != nil {
 			return nil, fmt.Errorf("failed to parse as string valued JSON: %w", err)
@@ -148,7 +148,7 @@ func ParseSecrets(
 
 		return parsedSecrets, nil
 
-	case formatStringNone:
+	case FormatStringNone:
 		readSecret, err := io.ReadAll(secretsReader)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read secret: %w", err)
