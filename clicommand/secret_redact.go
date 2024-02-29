@@ -21,7 +21,8 @@ import (
 const (
 	formatStringJSON = "json"
 	formatStringNone = "none"
-	// TODO: we should have a an `env` format that parses .env files
+	// TODO: we should parse .env files
+	// TODO: we should parse ssh private keys. The format is in https://datatracker.ietf.org/doc/html/rfc7468
 )
 
 var (
