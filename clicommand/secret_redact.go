@@ -27,8 +27,9 @@ const (
 var (
 	secretsFormats = []string{formatStringJSON, formatStringNone}
 
-	errSecretParseOrRedact = errors.New("failed to parse or redact secret")
-	errUnknownFormat       = errors.New("unknown format")
+	errSecretParse   = errors.New("failed to parse secrets")
+	errSecretRedact  = errors.New("failed to redact secrets")
+	errUnknownFormat = errors.New("unknown format")
 )
 
 type SecretRedactConfig struct {
@@ -103,58 +104,73 @@ var SecretRedactCommand = cli.Command{
 
 		l.Info("Reading secrets from %s for redaction", fileName)
 
+		secrets, err := ParseSecrets(l, cfg, secretsReader)
+		if err != nil {
+			if cfg.Debug {
+				return err
+			}
+			return errSecretParse
+		}
+
 		client, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create Job API client: %w", err)
 		}
 
-		if err := ParseAndRedactSecret(ctx, l, cfg, client, secretsReader); err != nil {
+		if err := RedactSecrets(ctx, l, client, secrets); err != nil {
 			if cfg.Debug {
 				return err
 			}
-			return errSecretParseOrRedact
+			return errSecretRedact
 		}
 
 		return nil
 	},
 }
 
-func ParseAndRedactSecret(
-	ctx context.Context,
+func ParseSecrets(
 	l logger.Logger,
 	cfg SecretRedactConfig,
-	client *jobapi.Client,
 	secretsReader io.Reader,
-) error {
+) ([]string, error) {
 	switch cfg.Format {
 	case formatStringJSON:
 		secrets := &map[string]string{}
 		if err := json.NewDecoder(secretsReader).Decode(&secrets); err != nil {
-			return fmt.Errorf("failed to parse as string valued JSON: %w", err)
+			return nil, fmt.Errorf("failed to parse as string valued JSON: %w", err)
 		}
 
+		parsedSecrets := make([]string, 0, len(*secrets))
 		for _, secret := range *secrets {
-			if _, err := client.RedactionCreate(ctx, secret); err != nil {
-				return fmt.Errorf("failed to add secret to the redactor: %w", err)
-			}
+			parsedSecrets = append(parsedSecrets, secret)
 		}
 
-		return nil
+		return parsedSecrets, nil
 
 	case formatStringNone:
 		readSecret, err := io.ReadAll(secretsReader)
 		if err != nil {
-			return fmt.Errorf("failed to read secret: %w", err)
+			return nil, fmt.Errorf("failed to read secret: %w", err)
 		}
 
-		toRedact := strings.TrimSpace(string(readSecret))
-		if _, err := client.RedactionCreate(ctx, toRedact); err != nil {
-			return fmt.Errorf("failed to add secret to the redactor: %w", err)
-		}
-
-		return nil
+		return []string{strings.TrimSpace(string(readSecret))}, nil
 
 	default:
-		return fmt.Errorf("%s: %w", cfg.Format, errUnknownFormat)
+		return nil, fmt.Errorf("%s: %w", cfg.Format, errUnknownFormat)
 	}
+}
+
+func RedactSecrets(
+	ctx context.Context,
+	l logger.Logger,
+	client *jobapi.Client,
+	secrets []string,
+) error {
+	for _, secret := range secrets {
+		if _, err := client.RedactionCreate(ctx, secret); err != nil {
+			return fmt.Errorf("failed to add secret to the redactor: %w", err)
+		}
+	}
+
+	return nil
 }
