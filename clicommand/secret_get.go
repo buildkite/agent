@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/urfave/cli"
 )
 
@@ -59,9 +60,16 @@ var SecretGetCommand = cli.Command{
 			return NewExitError(1, errJobIDNotSet)
 		}
 
-		secret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: cfg.Key, JobID: jobID})
+		jobClient, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
-			return NewExitError(1, err)
+			return fmt.Errorf("failed to create Job API client: %w", err)
+		}
+
+		if err := RedactSecrets(ctx, l, jobClient, secret.Value); err != nil {
+			if cfg.Debug {
+				return err
+			}
+			return errSecretRedact
 		}
 
 		_, err = fmt.Fprintln(c.App.Writer, secret.Value)

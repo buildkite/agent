@@ -118,7 +118,7 @@ var SecretRedactCommand = cli.Command{
 			return fmt.Errorf("failed to create Job API client: %w", err)
 		}
 
-		if err := RedactSecrets(ctx, l, client, secrets); err != nil {
+		if err := RedactSecrets(ctx, l, client, secrets...); err != nil {
 			if cfg.Debug {
 				return err
 			}
@@ -165,7 +165,7 @@ func RedactSecrets(
 	ctx context.Context,
 	l logger.Logger,
 	client *jobapi.Client,
-	secrets []string,
+	secrets ...string,
 ) error {
 	for _, secret := range secrets {
 		if _, err := client.RedactionCreate(ctx, secret); err != nil {
