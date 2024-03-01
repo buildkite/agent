@@ -4,53 +4,43 @@ import (
 	"errors"
 )
 
-type unit struct{}
-
 // Mux contains multiple replacers
-type Mux map[*Replacer]unit
+type Mux struct {
+	underlying []*Replacer
+}
 
 // NewMux returns a new mux with the given replacers.
 func NewMux(rs ...*Replacer) *Mux {
-	m := Mux{}
-	m.Append(rs...)
-	return &m
+	m := &Mux{
+		underlying: make([]*Replacer, 0, len(rs)),
+	}
+	m.underlying = append(m.underlying, rs...)
+	return m
 }
 
 // Reset resets all replacers with new needles (secrets).
-func (mux Mux) Reset(needles []string) {
-	for r := range mux {
+func (m *Mux) Reset(needles []string) {
+	for _, r := range m.underlying {
 		r.Reset(needles)
 	}
 }
 
-// Add adds needles to all replacers in the mux.
-func (mux Mux) Add(needles ...string) {
-	for r := range mux {
+// Add adds needles to all replacers.
+func (m *Mux) Add(needles ...string) {
+	for _, r := range m.underlying {
 		r.Add(needles...)
 	}
 }
 
-// Flush flushes all replacers in the mux.
-func (mux Mux) Flush() error {
-	errs := make([]error, 0, len(mux))
-	for r := range mux {
-		errs = append(errs, r.Flush())
-	}
-	return errors.Join(errs...)
+// Append adds a replacer to the Mux.
+func (m *Mux) Append(r *Replacer) {
+	m.underlying = append(m.underlying, r)
 }
 
-// Append appends the given replacers to the mux.
-func (mux Mux) Append(rs ...*Replacer) {
-	for _, r := range rs {
-		mux[r] = unit{}
-	}
-}
-
-// Remove removes the given replacers from the mux. They will be flushed.
-func (mux Mux) Remove(rs ...*Replacer) error {
-	errs := make([]error, 0, len(rs))
-	for _, r := range rs {
-		delete(mux, r)
+// Flush flushes all replacers.
+func (m *Mux) Flush() error {
+	errs := make([]error, 0, len(m.underlying))
+	for _, r := range m.underlying {
 		errs = append(errs, r.Flush())
 	}
 	return errors.Join(errs...)
