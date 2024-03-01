@@ -7,6 +7,8 @@ import (
 	"sync"
 )
 
+type unit struct{}
+
 // Replacer is a straightforward streaming string replacer suitable for
 // detecting or redacting secrets in a stream.
 //
@@ -22,7 +24,7 @@ type Replacer struct {
 	// organised by first byte.
 	// Why first byte? Because looking up needles by the first byte is a lot
 	// faster than _filtering_ all the needles by first byte.
-	needlesByFirstByte [256][]string
+	needlesByFirstByte [256]map[string]unit
 
 	// For synchronising writes. Each write can touch everything below.
 	mu sync.Mutex
@@ -143,7 +145,7 @@ func (r *Replacer) Write(b []byte) (int, error) {
 		}
 
 		// Start matching something?
-		for _, s := range r.needlesByFirstByte[c] {
+		for s, _ := range r.needlesByFirstByte[c] {
 			if len(s) == 1 {
 				// A pathological case; in practice we don't redact secrets
 				// smaller than RedactLengthMin.
@@ -286,6 +288,29 @@ func (r *Replacer) flushUpTo(limit int) error {
 	return nil
 }
 
+// Size returns the number of needles
+func (r *Replacer) Size() int {
+	sum := 0
+	for _, n := range r.needlesByFirstByte {
+		sum += len(n)
+	}
+	return sum
+}
+
+// Needle returns the current needles
+func (r *Replacer) Needles() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	needles := make([]string, 0, r.Size())
+	for _, m := range r.needlesByFirstByte {
+		for n := range m {
+			needles = append(needles, n)
+		}
+	}
+	return needles
+}
+
 // Reset removes all current needes and sets new set of needles. It is not
 // necessary to Flush beforehand, but:
 //   - any previous needles which have begun matching will continue matching
@@ -299,15 +324,11 @@ func (r *Replacer) Reset(needles []string) {
 	for i := range r.needlesByFirstByte {
 		r.needlesByFirstByte[i] = nil
 	}
-	for _, s := range needles {
-		if len(s) == 0 {
-			continue
-		}
-		r.needlesByFirstByte[s[0]] = append(r.needlesByFirstByte[s[0]], s)
-	}
+
+	r.unsafeAdd(needles)
 }
 
-// Add add more needles to be matched by the replacer. It is not necessary to
+// Add adds more needles to be matched by the replacer. It is not necessary to
 // Flush beforehand, but:
 //   - any previous strings which have begun matching will continue matching
 //     (until they reach a terminal state), and
@@ -317,11 +338,19 @@ func (r *Replacer) Add(needles ...string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	r.unsafeAdd(needles)
+}
+
+func (r *Replacer) unsafeAdd(needles []string) {
 	for _, s := range needles {
 		if len(s) == 0 {
 			continue
 		}
-		r.needlesByFirstByte[s[0]] = append(r.needlesByFirstByte[s[0]], s)
+		if r.needlesByFirstByte[s[0]] == nil {
+			r.needlesByFirstByte[s[0]] = map[string]unit{s: {}}
+			continue
+		}
+		r.needlesByFirstByte[s[0]][s] = unit{}
 	}
 }
 

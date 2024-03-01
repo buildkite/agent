@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/google/go-cmp/cmp"
+	"gotest.tools/v3/assert"
 )
 
 const lipsum = "Lorem ipsum dolor sit amet"
@@ -231,6 +233,36 @@ func TestReplacerMultiLine(t *testing.T) {
 	if diff := cmp.Diff(buf.String(), want); diff != "" {
 		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
 	}
+}
+
+func TestAddingNeedles(t *testing.T) {
+	t.Parallel()
+
+	needles := []string{"secret1111", "secret2222"}
+	afterAddExpectedNeedles := []string{"secret1111", "secret2222", "pre-secret3333"}
+
+	var buf strings.Builder
+	replacer := replacer.New(&buf, needles, redact.Redact)
+	actualNeedles := replacer.Needles()
+
+	slices.Sort(needles)
+	slices.Sort(actualNeedles)
+	assert.DeepEqual(t, actualNeedles, needles)
+
+	_, err := replacer.Write([]byte("redact secret1111 and secret2222 but not pre-secret3333\n"))
+	assert.NilError(t, err)
+
+	replacer.Add("pre-secret3333")
+	actualNeedles = replacer.Needles()
+	slices.Sort(actualNeedles)
+	slices.Sort(afterAddExpectedNeedles)
+	assert.DeepEqual(t, actualNeedles, afterAddExpectedNeedles)
+
+	_, err = replacer.Write([]byte("now redact secret1111, secret2222, and pre-secret3333\n"))
+	assert.NilError(t, err)
+	assert.NilError(t, replacer.Flush())
+
+	assert.Equal(t, buf.String(), "redact [REDACTED] and [REDACTED] but not pre-secret3333\nnow redact [REDACTED], [REDACTED], and [REDACTED]\n")
 }
 
 func BenchmarkReplacer(b *testing.B) {
