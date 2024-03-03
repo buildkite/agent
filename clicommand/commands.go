@@ -3,22 +3,18 @@ package clicommand
 import "github.com/urfave/cli"
 
 var BuildkiteAgentCommands = []cli.Command{
-	AcknowledgementsCommand,
+	// These commands are special. The have a different lifecycle to the others
 	AgentStartCommand,
+	BootstrapCommand,
+
+	// These are in alphabetical order
+	AcknowledgementsCommand,
 	AnnotateCommand,
 	{
 		Name:  "annotation",
 		Usage: "Make changes to an annotation on the currently running build",
 		Subcommands: []cli.Command{
 			AnnotationRemoveCommand,
-		},
-	},
-	{
-		Name:  "secret",
-		Usage: "Get a secret",
-		Subcommands: []cli.Command{
-			SecretGetCommand,
-			SecretRedactCommand,
 		},
 	},
 	{
@@ -31,7 +27,6 @@ var BuildkiteAgentCommands = []cli.Command{
 			ArtifactShasumCommand,
 		},
 	},
-	GitCredentialsHelperCommand,
 	{
 		Name:  "env",
 		Usage: "Process environment subcommands",
@@ -42,6 +37,7 @@ var BuildkiteAgentCommands = []cli.Command{
 			EnvUnsetCommand,
 		},
 	},
+	GitCredentialsHelperCommand,
 	{
 		Name:  "lock",
 		Usage: "Process lock subcommands",
@@ -51,6 +47,13 @@ var BuildkiteAgentCommands = []cli.Command{
 			LockDoneCommand,
 			LockGetCommand,
 			LockReleaseCommand,
+		},
+	},
+	{
+		Name:  "log",
+		Usage: "Interact with Job Logs",
+		Subcommands: []cli.Command{
+			LogRedactCommand,
 		},
 	},
 	{
@@ -78,6 +81,13 @@ var BuildkiteAgentCommands = []cli.Command{
 		},
 	},
 	{
+		Name:  "secret",
+		Usage: "Interact with Pipelines Secrets",
+		Subcommands: []cli.Command{
+			SecretGetCommand,
+		},
+	},
+	{
 		Name:  "step",
 		Usage: "Get or update an attribute of a build step",
 		Subcommands: []cli.Command{
@@ -85,7 +95,6 @@ var BuildkiteAgentCommands = []cli.Command{
 			StepUpdateCommand,
 		},
 	},
-	BootstrapCommand,
 	{
 		Name:  "tool",
 		Usage: "Utility commands, intended for users and operators of the agent to run directly on their machines, and not as part of a Buildkite job",

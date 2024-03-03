@@ -67,7 +67,7 @@ var SecretGetCommand = cli.Command{
 			return fmt.Errorf("failed to create Job API client: %w", err)
 		}
 
-		if err := RedactSecrets(ctx, l, jobClient, secret.Value); err != nil {
+		if err := AddToRedactor(ctx, l, jobClient, secret.Value); err != nil {
 			if cfg.Debug {
 				return err
 			}

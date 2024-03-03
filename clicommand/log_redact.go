@@ -17,7 +17,7 @@ import (
 )
 
 // Note: if you add a new format string, make sure to add it to `secretsFormats`
-// and update the usage string in SecretRedactCommand
+// and update the usage string in LogRedactCommand
 const (
 	FormatStringJSON = "json"
 	FormatStringNone = "none"
@@ -33,7 +33,7 @@ var (
 	errUnknownFormat = errors.New("unknown format")
 )
 
-type SecretRedactConfig struct {
+type LogRedactConfig struct {
 	File   string `cli:"arg:0"`
 	Format string `cli:"format"`
 
@@ -51,10 +51,10 @@ type SecretRedactConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 }
 
-var SecretRedactCommand = cli.Command{
+var LogRedactCommand = cli.Command{
 	Name:        "redact",
-	Usage:       "Add to the agent's list of redacted strings in log output",
-	Description: "Add lines in a file to the agent's list of redacted strings in log output",
+	Usage:       "Add values to redact from a job's log output",
+	Description: "This may be used to parse a file for values to redact from a running job's log output. If you dynamically fetch secrets during a job, it is recommended that you use this command to ensure they will be redacted from subsequent logs. Secrects fetched with the builtin ′secret get′ command do not require the use of this command, they will be redacted automatically.",
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name: "format",
@@ -81,7 +81,7 @@ var SecretRedactCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-		ctx, cfg, l, _, done := setupLoggerAndConfig[SecretRedactConfig](ctx, c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[LogRedactConfig](ctx, c)
 		defer done()
 
 		if !slices.Contains(secretsFormats, cfg.Format) {
@@ -118,7 +118,7 @@ var SecretRedactCommand = cli.Command{
 			return fmt.Errorf("failed to create Job API client: %w", err)
 		}
 
-		if err := RedactSecrets(ctx, l, client, secrets...); err != nil {
+		if err := AddToRedactor(ctx, l, client, secrets...); err != nil {
 			if cfg.Debug {
 				return err
 			}
@@ -131,7 +131,7 @@ var SecretRedactCommand = cli.Command{
 
 func ParseSecrets(
 	l logger.Logger,
-	cfg SecretRedactConfig,
+	cfg LogRedactConfig,
 	secretsReader io.Reader,
 ) ([]string, error) {
 	switch cfg.Format {
@@ -161,7 +161,7 @@ func ParseSecrets(
 	}
 }
 
-func RedactSecrets(
+func AddToRedactor(
 	ctx context.Context,
 	l logger.Logger,
 	client *jobapi.Client,
@@ -172,6 +172,5 @@ func RedactSecrets(
 			return fmt.Errorf("failed to add secret to the redactor: %w", err)
 		}
 	}
-
 	return nil
 }
