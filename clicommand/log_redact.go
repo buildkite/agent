@@ -62,7 +62,7 @@ var LogRedactCommand = cli.Command{
 				"The format for the input, one of: %s. ′none′ will add the entire input as a to the redactor, save for leading and trailing whitespace, ′json′ will parse it a string valued JSON Object, where each value of each key will be added to the redactor.",
 				secretsFormats,
 			),
-			EnvVar: "BUILDKITE_AGENT_SECRET_REDACT_ENV_FORMAT",
+			EnvVar: "BUILDKITE_AGENT_LOG_REDACT_ENV_FORMAT",
 			Value:  FormatStringNone,
 		},
 
