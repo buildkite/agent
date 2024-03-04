@@ -59,7 +59,8 @@ type Executor struct {
 	// A channel to track cancellation
 	cancelCh chan struct{}
 
-	// redactors from each hook
+	// redactors for the job logs. The will be populated with values both from environment variable and through the Job API.
+	// In order for the latter to happen, a reference is passed into the the Job API server as well
 	redactors *replacer.Mux
 }
 
