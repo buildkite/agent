@@ -634,23 +634,23 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "verification-jwks-file",
-			Usage:  "EXPERIMENTAL: Path to a file containing a JSON Web Key Set (JWKS), used to verify job signatures. ",
+			Usage:  "Path to a file containing a JSON Web Key Set (JWKS), used to verify job signatures. ",
 			EnvVar: "BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
 		},
 		cli.StringFlag{
 			Name:   "signing-jwks-file",
-			Usage:  "EXPERIMENTAL: Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
+			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_FILE",
 		},
 		cli.StringFlag{
 			Name:   "signing-jwks-key-id",
-			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. If ommitted, and the signing JWKS conatins only one key, that key will be used.",
+			Usage:  "The JWKS key ID to use when signing the pipeline. If ommitted, and the signing JWKS conatins only one key, that key will be used.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID",
 		},
 		cli.StringFlag{
 			Name:   "verification-failure-behavior",
 			Value:  agent.VerificationBehaviourBlock,
-			Usage:  fmt.Sprintf("EXPERIMENTAL: The behavior when a job is received without a signature. One of: %v. Defaults to %s", verificationFailureBehaviors, agent.VerificationBehaviourBlock),
+			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v. Defaults to %s", verificationFailureBehaviors, agent.VerificationBehaviourBlock),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
 

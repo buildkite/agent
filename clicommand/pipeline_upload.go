@@ -131,12 +131,12 @@ var PipelineUploadCommand = cli.Command{
 		// in the job runner. At the momenet, that's at agent/job_runner.go:500-507
 		cli.StringFlag{
 			Name:   "jwks-file",
-			Usage:  "EXPERIMENTAL: Path to a file containing a JWKS. Passing this flag enables pipeline signing",
+			Usage:  "Path to a file containing a JWKS. Passing this flag enables pipeline signing",
 			EnvVar: "BUILDKITE_AGENT_JWKS_FILE",
 		},
 		cli.StringFlag{
 			Name:   "jwks-key-id",
-			Usage:  "EXPERIMENTAL: The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
+			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
 		},
 
