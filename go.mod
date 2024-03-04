@@ -35,7 +35,7 @@ require (
 	github.com/pborman/uuid v1.2.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.14
 	go.opentelemetry.io/contrib/propagators/aws v1.23.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.23.0
