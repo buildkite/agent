@@ -43,7 +43,7 @@ func TestParseSecrets(t *testing.T) {
 			t.Parallel()
 
 			input := strings.NewReader(tc.inputData)
-			secrets, err := clicommand.ParseSecrets(logger.Discard, clicommand.LogRedactConfig{Format: tc.formatString}, input)
+			secrets, err := clicommand.ParseSecrets(logger.Discard, clicommand.RedactorAddConfig{Format: tc.formatString}, input)
 			if tc.errorTextContains != "" {
 				assert.ErrorContains(t, err, tc.errorTextContains)
 				return

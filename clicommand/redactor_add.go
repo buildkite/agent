@@ -33,7 +33,7 @@ var (
 	errUnknownFormat = errors.New("unknown format")
 )
 
-type LogRedactConfig struct {
+type RedactorAddConfig struct {
 	File   string `cli:"arg:0"`
 	Format string `cli:"format"`
 
@@ -51,8 +51,8 @@ type LogRedactConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 }
 
-var LogRedactCommand = cli.Command{
-	Name:        "redact",
+var RedactorAddCommand = cli.Command{
+	Name:        "add",
 	Usage:       "Add values to redact from a job's log output",
 	Description: "This may be used to parse a file for values to redact from a running job's log output. If you dynamically fetch secrets during a job, it is recommended that you use this command to ensure they will be redacted from subsequent logs. Secrects fetched with the builtin ′secret get′ command do not require the use of this command, they will be redacted automatically.",
 	Flags: []cli.Flag{
@@ -62,7 +62,7 @@ var LogRedactCommand = cli.Command{
 				"The format for the input, one of: %s. ′none′ will add the entire input as a to the redactor, save for leading and trailing whitespace, ′json′ will parse it a string valued JSON Object, where each value of each key will be added to the redactor.",
 				secretsFormats,
 			),
-			EnvVar: "BUILDKITE_AGENT_LOG_REDACT_ENV_FORMAT",
+			EnvVar: "BUILDKITE_AGENT_REDACT_ADD_FORMAT",
 			Value:  FormatStringNone,
 		},
 
@@ -81,7 +81,7 @@ var LogRedactCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-		ctx, cfg, l, _, done := setupLoggerAndConfig[LogRedactConfig](ctx, c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[RedactorAddConfig](ctx, c)
 		defer done()
 
 		if !slices.Contains(secretsFormats, cfg.Format) {
@@ -131,7 +131,7 @@ var LogRedactCommand = cli.Command{
 
 func ParseSecrets(
 	l logger.Logger,
-	cfg LogRedactConfig,
+	cfg RedactorAddConfig,
 	secretsReader io.Reader,
 ) ([]string, error) {
 	switch cfg.Format {

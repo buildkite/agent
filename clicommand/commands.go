@@ -50,10 +50,10 @@ var BuildkiteAgentCommands = []cli.Command{
 		},
 	},
 	{
-		Name:  "log",
-		Usage: "Interact with Job Logs",
+		Name:  "redactor",
+		Usage: "Redact sensitive information from logs",
 		Subcommands: []cli.Command{
-			LogRedactCommand,
+			RedactorAddCommand,
 		},
 	},
 	{
