@@ -12,12 +12,22 @@ import (
 	"github.com/buildkite/agent/v3/internal/socket"
 )
 
+// ServerOpts provides a way to configure a Server
+type ServerOpts func(*Server)
+
+func WithDebug() ServerOpts {
+	return func(s *Server) {
+		s.debug = true
+	}
+}
+
 // Server is a Job API server. It provides an HTTP API with which to interact with the job currently running in the buildkite agent
 // and allows jobs to introspect and mutate their own state
 type Server struct {
 	// SocketPath is the path to the socket that the server is (or will be) listening on
 	SocketPath string
 	Logger     shell.Logger
+	debug      bool
 
 	mtx     sync.RWMutex
 	environ *env.Environment
@@ -29,7 +39,12 @@ type Server struct {
 // NewServer creates a new Job API server
 // socketPath is the path to the socket on which the server will listen
 // environ is the environment which the server will mutate and inspect as part of its operation
-func NewServer(logger shell.Logger, socketPath string, environ *env.Environment) (server *Server, token string, err error) {
+func NewServer(
+	logger shell.Logger,
+	socketPath string,
+	environ *env.Environment,
+	opts ...ServerOpts,
+) (server *Server, token string, err error) {
 	token, err = socket.GenerateToken(32)
 	if err != nil {
 		return nil, "", fmt.Errorf("generating token: %w", err)
@@ -40,6 +55,10 @@ func NewServer(logger shell.Logger, socketPath string, environ *env.Environment)
 		Logger:     logger,
 		environ:    environ,
 		token:      token,
+	}
+
+	for _, o := range opts {
+		o(s)
 	}
 
 	svr, err := socket.NewServer(socketPath, s.router())
