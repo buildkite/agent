@@ -10,8 +10,9 @@ import (
 )
 
 type SecretGetConfig struct {
-	Key string `cli:"arg:0"`
-	Job string `cli:"job" validate:"required"`
+	Key           string `cli:"arg:0"`
+	Job           string `cli:"job" validate:"required"`
+	SkipRedaction bool   `cli:"skip-redaction"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -36,6 +37,11 @@ var SecretGetCommand = cli.Command{
 			Name:   "job",
 			Usage:  "Which job should should the secret be for",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.BoolFlag{
+			Name:   "skip-redaction",
+			Usage:  "Skip redacting the retrieved secret from the logs. Then, the command will print the secret to the Job's logs if called directly.",
+			EnvVar: "BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION",
 		},
 
 		// API Flags
@@ -67,11 +73,13 @@ var SecretGetCommand = cli.Command{
 			return fmt.Errorf("failed to create Job API client: %w", err)
 		}
 
-		if err := AddToRedactor(ctx, l, jobClient, secret.Value); err != nil {
-			if cfg.Debug {
-				return err
+		if !cfg.SkipRedaction {
+			if err := AddToRedactor(ctx, l, jobClient, secret.Value); err != nil {
+				if cfg.Debug {
+					return err
+				}
+				return errSecretRedact
 			}
-			return errSecretRedact
 		}
 
 		_, err = fmt.Fprintln(c.App.Writer, secret.Value)
