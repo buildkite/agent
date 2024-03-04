@@ -25,7 +25,11 @@ func (e *Executor) startJobAPI() (cleanup func(), err error) {
 		return cleanup, fmt.Errorf("creating job API socket path: %v", err)
 	}
 
-	srv, token, err := jobapi.NewServer(e.shell.Logger, socketPath, e.shell.Env)
+	jobAPIOpts := []jobapi.ServerOpts{}
+	if e.ExecutorConfig.Debug {
+		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
+	}
+	srv, token, err := jobapi.NewServer(e.shell.Logger, socketPath, e.shell.Env, jobAPIOpts...)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API server: %v", err)
 	}
