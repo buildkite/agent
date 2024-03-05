@@ -25,42 +25,42 @@ const (
 	// Available experiments
 	AgentAPI                   = "agent-api"
 	DescendingSpawnPrioity     = "descending-spawn-priority"
+	IsolatedPluginCheckout     = "isolated-plugin-checkout"
 	KubernetesExec             = "kubernetes-exec"
 	NormalisedUploadPaths      = "normalised-upload-paths"
 	PTYRaw                     = "pty-raw"
 	PolyglotHooks              = "polyglot-hooks"
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
-	AvoidRecursiveTrap         = "avoid-recursive-trap"
-	IsolatedPluginCheckout     = "isolated-plugin-checkout"
 	UseZZGlob                  = "use-zzglob"
 
 	// Promoted experiments
-	ANSITimestamps    = "ansi-timestamps"
-	FlockFileLocks    = "flock-file-locks"
-	GitMirrors        = "git-mirrors"
-	InbuiltStatusPage = "inbuilt-status-page"
-	JobAPI            = "job-api"
+	ANSITimestamps     = "ansi-timestamps"
+	AvoidRecursiveTrap = "avoid-recursive-trap"
+	FlockFileLocks     = "flock-file-locks"
+	GitMirrors         = "git-mirrors"
+	InbuiltStatusPage  = "inbuilt-status-page"
+	JobAPI             = "job-api"
 )
 
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                   {},
 		DescendingSpawnPrioity:     {},
+		IsolatedPluginCheckout:     {},
 		KubernetesExec:             {},
 		NormalisedUploadPaths:      {},
 		PolyglotHooks:              {},
 		ResolveCommitAfterCheckout: {},
-		AvoidRecursiveTrap:         {},
-		IsolatedPluginCheckout:     {},
 		UseZZGlob:                  {},
 	}
 
 	Promoted = map[string]string{
-		ANSITimestamps:    standardPromotionMsg(ANSITimestamps, "v3.48.0"),
-		FlockFileLocks:    standardPromotionMsg(FlockFileLocks, "v3.48.0"),
-		GitMirrors:        standardPromotionMsg(GitMirrors, "v3.47.0"),
-		InbuiltStatusPage: standardPromotionMsg(InbuiltStatusPage, "v3.48.0"),
-		JobAPI:            standardPromotionMsg(JobAPI, "v3.64.0"),
+		ANSITimestamps:     standardPromotionMsg(ANSITimestamps, "v3.48.0"),
+		AvoidRecursiveTrap: standardPromotionMsg(AvoidRecursiveTrap, "v3.66.0"),
+		FlockFileLocks:     standardPromotionMsg(FlockFileLocks, "v3.48.0"),
+		GitMirrors:         standardPromotionMsg(GitMirrors, "v3.47.0"),
+		InbuiltStatusPage:  standardPromotionMsg(InbuiltStatusPage, "v3.48.0"),
+		JobAPI:             standardPromotionMsg(JobAPI, "v3.64.0"),
 	}
 
 	// Used to track experiments possibly in use.
