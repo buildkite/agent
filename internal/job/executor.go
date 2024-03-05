@@ -852,10 +852,9 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 
 	isExitError := shell.IsExitError(commandErr)
 	isExitSignaled := shell.IsExitSignaled(commandErr)
-	avoidRecursiveTrap := experiments.IsEnabled(ctx, experiments.AvoidRecursiveTrap)
 
 	switch {
-	case isExitError && isExitSignaled && avoidRecursiveTrap:
+	case isExitError && isExitSignaled:
 		// The recursive trap created a segfault that we were previously inadvertently suppressing
 		// in the next branch. Once the experiment is promoted, we should keep this branch in case
 		// to show the error to users.
@@ -863,12 +862,6 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 
 		// although error is an exit error, it's not returned. (seems like a bug)
 		// TODO: investigate phasing this out under a experiment
-		return nil, nil
-	case isExitError && isExitSignaled && !avoidRecursiveTrap:
-		// TODO: remove this branch when the experiment is promoted
-		e.shell.Errorf("The command was interrupted by a signal")
-
-		// although error is an exit error, it's not returned. (seems like a bug)
 		return nil, nil
 	case isExitError && !isExitSignaled:
 		e.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandErr))
@@ -999,24 +992,6 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		}
 		err = runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
 		return err
-	}
-
-	// We added the `trap` below because we used to think that:
-	//
-	// If we aren't running a script, try and detect if we are using a posix shell
-	// and if so add a trap so that the intermediate shell doesn't swallow signals
-	// from cancellation
-	//
-	// But on further investigation:
-	// 1. The trap is recursive and leads to an infinite loop of signals and a segfault.
-	// 2. It just signals the intermediate shell again. If the intermediate shell swallowed signals
-	//    in the first place then signaling it again won't change that.
-	// 3. Propogating signals to child processes is handled by signalling their process group
-	//    elsewhere in the agent.
-	//
-	// Therefore, we are phasing it out under an experiment.
-	if !experiments.IsEnabled(ctx, experiments.AvoidRecursiveTrap) && !commandIsScript && shellscript.IsPOSIXShell(e.Shell) {
-		cmdToExec = fmt.Sprintf("trap 'kill -- $$' INT TERM QUIT; %s", cmdToExec)
 	}
 
 	redactors := e.setupRedactors()
