@@ -68,20 +68,6 @@ The API is exposed via a Unix Domain Socket. The path to the socket is not avail
 
 **Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™.
 
-### `avoid-recursive-trap`
-
-Some jobs are run as a bash script of the form:
-
-```shell
-trap "kill -- $$" INT TERM QUIT; <command>
-```
-
-We now understand this causes a bug, and we want to avoid it. Enabling this experiment removes the `trap` that surrounds non-script commands.
-
-https://github.com/buildkite/agent/blob/40b8a5f3794b04bd64da6e2527857add849a35bd/internal/job/executor.go#L1980-L1993
-
-**Status:** Since the default behaviour is buggy, we will be promoting this to non-experiment soon™️.
-
 ### `isolated-plugin-checkout`
 
 Checks out each plugin to an directory that that is namespaced by the agent name. Thus each agent worker will have an isolated copy of the plugin. This removes the need to lock the plugin checkout directories in a single agent process with spawned workers. However, if your plugin directory is shared between multiple agent processes *with the same agent name* , you may run into race conditions. This is just one reason we recommend you ensure agents have unique names.
