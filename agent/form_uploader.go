@@ -20,6 +20,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/version"
 )
 
 var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
@@ -180,6 +181,8 @@ func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request
 
 	// Setup the content type and length that s3 requires
 	req.Header.Add("Content-Type", streamer.ContentType)
+	// Letting the server know the agent version can be helpful for debugging
+	req.Header.Add("User-Agent", version.UserAgent())
 	req.ContentLength = streamer.Len()
 
 	return req, nil
