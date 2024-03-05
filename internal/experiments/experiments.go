@@ -25,21 +25,21 @@ const (
 	// Available experiments
 	AgentAPI                   = "agent-api"
 	DescendingSpawnPrioity     = "descending-spawn-priority"
+	IsolatedPluginCheckout     = "isolated-plugin-checkout"
 	KubernetesExec             = "kubernetes-exec"
 	NormalisedUploadPaths      = "normalised-upload-paths"
 	PTYRaw                     = "pty-raw"
 	PolyglotHooks              = "polyglot-hooks"
 	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
-	IsolatedPluginCheckout     = "isolated-plugin-checkout"
 	UseZZGlob                  = "use-zzglob"
 
 	// Promoted experiments
 	ANSITimestamps     = "ansi-timestamps"
+	AvoidRecursiveTrap = "avoid-recursive-trap"
 	FlockFileLocks     = "flock-file-locks"
 	GitMirrors         = "git-mirrors"
 	InbuiltStatusPage  = "inbuilt-status-page"
 	JobAPI             = "job-api"
-	AvoidRecursiveTrap = "avoid-recursive-trap"
 )
 
 var (
