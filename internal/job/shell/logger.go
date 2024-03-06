@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"slices"
 	"testing"
 )
 
@@ -29,6 +30,9 @@ type Logger interface {
 	// Warningf shows a buildkite bootstrap warning
 	Warningf(format string, v ...any)
 
+	// OptionalWarningf shows a warning, but only if it hasn't been explicitly disabled by the user
+	OptionalWarningf(id, format string, v ...any)
+
 	// Promptf prints a shell prompt
 	Promptf(format string, v ...any)
 }
@@ -46,8 +50,9 @@ var DiscardLogger = &WriterLogger{
 
 // WriterLogger provides a logger that writes to an io.Writer
 type WriterLogger struct {
-	Writer io.Writer
-	Ansi   bool
+	Writer             io.Writer
+	Ansi               bool
+	DisabledWarningIDs []string
 }
 
 func (wl *WriterLogger) Write(b []byte) (int, error) {
@@ -89,6 +94,15 @@ func (wl *WriterLogger) Warningf(format string, v ...any) {
 		wl.Printf("⚠️ Warning: %s", fmt.Sprintf(format, v...))
 	}
 	wl.Printf("^^^ +++")
+}
+
+func (wl *WriterLogger) OptionalWarningf(id, format string, v ...any) {
+	if slices.Contains(wl.DisabledWarningIDs, id) {
+		return
+	}
+
+	warningFormatWithDisable := format + fmt.Sprintf(". You can disable this warning by passing the `--no-warn-for %s` flag", id)
+	wl.Warningf(warningFormatWithDisable, v...)
 }
 
 func (wl *WriterLogger) Promptf(format string, v ...any) {
@@ -134,6 +148,11 @@ func (tl TestingLogger) Errorf(format string, v ...any) {
 
 func (tl TestingLogger) Warningf(format string, v ...any) {
 	tl.Logf("⚠️ Warning: %s", fmt.Sprintf(format, v...))
+}
+
+func (tl TestingLogger) OptionalWarningf(_id, format string, v ...any) {
+	// We don't care about optionality for test logging
+	tl.Warningf(format, v...)
 }
 
 func (tl TestingLogger) Promptf(format string, v ...any) {

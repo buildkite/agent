@@ -74,19 +74,33 @@ type Shell struct {
 	SignalGracePeriod time.Duration
 }
 
+type newShellOpt func(*Shell)
+
+func WithLogger(l Logger) newShellOpt {
+	return func(s *Shell) {
+		s.Logger = l
+	}
+}
+
 // New returns a new Shell
-func New() (*Shell, error) {
+func New(opts ...newShellOpt) (*Shell, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find current working directory: %w", err)
 	}
 
-	return &Shell{
+	shell := &Shell{
 		Logger: StderrLogger,
 		Env:    env.FromSlice(os.Environ()),
 		Writer: os.Stdout,
 		wd:     wd,
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(shell)
+	}
+
+	return shell, nil
 }
 
 // WithStdin returns a copy of the Shell with the provided io.Reader set as the

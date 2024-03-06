@@ -522,6 +522,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
 	}
 
+	env["BUILDKITE_AGENT_NO_WARN_FOR"] = strings.Join(r.conf.AgentConfiguration.NoWarnFor, ",")
+
 	// see documentation for BuildkiteMessageMax
 	if err := truncateEnv(r.agentLogger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
 		r.agentLogger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)

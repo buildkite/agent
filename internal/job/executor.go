@@ -73,7 +73,9 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if e.shell == nil {
 		var err error
-		e.shell, err = shell.New()
+		logger := shell.StderrLogger
+		logger.DisabledWarningIDs = e.DisabledWarnings
+		e.shell, err = shell.New(shell.WithLogger(logger))
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
