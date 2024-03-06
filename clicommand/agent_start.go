@@ -99,7 +99,7 @@ type AgentStartConfig struct {
 
 	LogFormat            string   `cli:"log-format"`
 	WriteJobLogsToStdout bool     `cli:"write-job-logs-to-stdout"`
-	NoWarnFor            []string `cli:"no-warn-for" normalize:"list"`
+	DisableWarningsFor   []string `cli:"disable-warnings-for" normalize:"list"`
 
 	BuildPath   string `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath   string `cli:"hooks-path" normalize:"filepath"`
@@ -655,9 +655,9 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
 		cli.StringSliceFlag{
-			Name:   "no-warn-for",
+			Name:   "disable-warnings-for",
 			Usage:  "A list of warning IDs to disable",
-			EnvVar: "BUILDKITE_AGENT_NO_WARN_FOR",
+			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
 		},
 
 		// API Flags
@@ -939,7 +939,7 @@ var AgentStartCommand = cli.Command{
 
 			VerificationJWKS: verificationJWKS,
 
-			NoWarnFor: cfg.NoWarnFor,
+			DisableWarningsFor: cfg.DisableWarningsFor,
 		}
 
 		if configFile != nil {

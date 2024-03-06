@@ -98,10 +98,11 @@ func (wl *WriterLogger) Warningf(format string, v ...any) {
 
 func (wl *WriterLogger) OptionalWarningf(id, format string, v ...any) {
 	if slices.Contains(wl.DisabledWarningIDs, id) {
+		wl.Printf(format, v...)
 		return
 	}
 
-	warningFormatWithDisable := format + fmt.Sprintf(". You can disable this warning by passing the `--no-warn-for %s` flag", id)
+	warningFormatWithDisable := format + fmt.Sprintf(". You can disable this warning by passing the `--disable-warnings-for %s` flag", id)
 	wl.Warningf(warningFormatWithDisable, v...)
 }
 

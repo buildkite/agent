@@ -59,5 +59,5 @@ type AgentConfiguration struct {
 	AcquireJob                 string
 	TracingBackend             string
 	TracingServiceName         string
-	NoWarnFor                  []string
+	DisableWarningsFor         []string
 }
