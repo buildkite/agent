@@ -14,9 +14,9 @@ func (e *Executor) startJobAPI() (cleanup func(), err error) {
 	cleanup = func() {}
 
 	if !socket.Available() {
-		e.shell.Warningf("The Job API isn't available on this machine, as it's running an unsupported version of Windows")
-		e.shell.Warningf("The Job API is available on Unix agents, and agents running Windows versions after build 17063")
-		e.shell.Warningf("We'll continue to run your job, but you won't be able to use the Job API")
+		e.shell.OptionalWarningf("job-api-unavailable", `The Job API isn't available on this machine, as it's running an unsupported version of Windows.
+The Job API is available on Unix agents, and agents running Windows versions after build 17063
+We'll continue to run your job, but you won't be able to use the Job API`)
 		return cleanup, nil
 	}
 
