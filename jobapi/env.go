@@ -12,7 +12,7 @@ import (
 
 func (s *Server) getEnv(w http.ResponseWriter, _ *http.Request) {
 	s.mtx.RLock()
-	normalizedEnv := s.environ.Dump()
+	normalizedEnv := s.env.Dump()
 	s.mtx.RUnlock()
 
 	resp := EnvGetResponse{Env: normalizedEnv}
@@ -71,12 +71,12 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 
 	s.mtx.Lock()
 	for k, v := range req.Env {
-		if _, ok := s.environ.Get(k); ok {
+		if _, ok := s.env.Get(k); ok {
 			updated = append(updated, k)
 		} else {
 			added = append(added, k)
 		}
-		s.environ.Set(k, *v)
+		s.env.Set(k, *v)
 	}
 	s.mtx.Unlock()
 
@@ -121,9 +121,9 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	s.mtx.Lock()
 	deleted := make([]string, 0, len(req.Keys))
 	for _, k := range req.Keys {
-		if _, ok := s.environ.Get(k); ok {
+		if _, ok := s.env.Get(k); ok {
 			deleted = append(deleted, k)
-			s.environ.Remove(k)
+			s.env.Remove(k)
 		}
 	}
 	s.mtx.Unlock()

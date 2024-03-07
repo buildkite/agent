@@ -25,11 +25,12 @@ func (e *Executor) startJobAPI() (cleanup func(), err error) {
 		return cleanup, fmt.Errorf("creating job API socket path: %v", err)
 	}
 
-	jobAPIOpts := []jobapi.ServerOpts{}
-	if e.ExecutorConfig.Debug {
-		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
-	}
-	srv, token, err := jobapi.NewServer(e.shell.Logger, socketPath, e.shell.Env, e.redactors, jobAPIOpts...)
+	srv, token, err := jobapi.NewServer(
+		jobapi.WithLogger(e.shell.Logger, e.ExecutorConfig.Debug),
+		jobapi.WithSocketPath(socketPath),
+		jobapi.WithEnvironment(e.shell.Env),
+		jobapi.WithRedactors(e.redactors),
+	)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API server: %v", err)
 	}

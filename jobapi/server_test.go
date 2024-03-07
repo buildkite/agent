@@ -40,7 +40,12 @@ func testServer(t *testing.T, e *env.Environment, mux *replacer.Mux) (*jobapi.Se
 	if err != nil {
 		return nil, "", fmt.Errorf("creating socket path: %w", err)
 	}
-	return jobapi.NewServer(shell.TestingLogger{T: t}, sockName, e, mux)
+	return jobapi.NewServer(
+		jobapi.WithLogger(shell.TestingLogger{T: t}, true),
+		jobapi.WithSocketPath(sockName),
+		jobapi.WithEnvironment(e),
+		jobapi.WithRedactors(mux),
+	)
 }
 
 func testSocketClient(socketPath string) *http.Client {
@@ -144,7 +149,10 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	}
 
 	sockName := filepath.Join(os.TempDir(), "test-socket-collision.sock")
-	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), replacer.NewMux())
+	srv1, _, err := jobapi.NewServer(
+		jobapi.WithLogger(shell.TestingLogger{T: t}, true),
+		jobapi.WithSocketPath(sockName),
+	)
 	if err != nil {
 		t.Fatalf("expected initial server creation to succeed, got %v", err)
 	}
@@ -156,7 +164,10 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	defer srv1.Stop()
 
 	expectedErr := fmt.Sprintf("creating socket server: file already exists at socket path %s", sockName)
-	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), replacer.NewMux())
+	_, _, err = jobapi.NewServer(
+		jobapi.WithLogger(shell.TestingLogger{T: t}, true),
+		jobapi.WithSocketPath(sockName),
+	)
 	if err == nil {
 		t.Fatalf("expected second server creation to fail with %s, got nil", expectedErr)
 	}

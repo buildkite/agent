@@ -16,14 +16,44 @@ import (
 // ServerOpts provides a way to configure a Server
 type ServerOpts func(*Server)
 
-func WithDebug() ServerOpts {
+// WithLogger sets the logger for the server
+func WithLogger(logger shell.Logger, debug bool) ServerOpts {
 	return func(s *Server) {
-		s.debug = true
+		s.Logger = logger
+		s.debug = debug
 	}
 }
 
-// Server is a Job API server. It provides an HTTP API with which to interact with the job currently running in the buildkite agent
-// and allows jobs to introspect and mutate their own state
+// WithSocketPath sets the socket path for the server
+func WithSocketPath(socketPath string) ServerOpts {
+	return func(s *Server) {
+		s.SocketPath = socketPath
+	}
+}
+
+// WithEnviron sets the environment for the server
+func WithEnvironment(e *env.Environment) ServerOpts {
+	return func(s *Server) {
+		s.env = e
+	}
+}
+
+// WithRedactors sets the redactors for the server
+func WithRedactors(r *replacer.Mux) ServerOpts {
+	return func(s *Server) {
+		s.redactors = r
+	}
+}
+
+// WithToken sets the token for the server. If not set, a random token will be generated
+func WithToken(token string) ServerOpts {
+	return func(s *Server) {
+		s.token = token
+	}
+}
+
+// Server is a Job API server. It provides an HTTP API with which to interact with the job currently
+// running in the buildkite agent and allows jobs to introspect and mutate their own state
 type Server struct {
 	// SocketPath is the path to the socket that the server is (or will be) listening on
 	SocketPath string
@@ -31,7 +61,7 @@ type Server struct {
 	debug      bool
 
 	mtx       sync.RWMutex
-	environ   *env.Environment
+	env       *env.Environment
 	redactors *replacer.Mux
 
 	token   string
@@ -41,37 +71,40 @@ type Server struct {
 // NewServer creates a new Job API server
 // socketPath is the path to the socket on which the server will listen
 // environ is the environment which the server will mutate and inspect as part of its operation
-func NewServer(
-	logger shell.Logger,
-	socketPath string,
-	environ *env.Environment,
-	redactors *replacer.Mux,
-	opts ...ServerOpts,
-) (server *Server, token string, err error) {
+func NewServer(opts ...ServerOpts) (server *Server, token string, err error) {
 	token, err = socket.GenerateToken(32)
 	if err != nil {
 		return nil, "", fmt.Errorf("generating token: %w", err)
 	}
 
-	s := &Server{
-		SocketPath: socketPath,
-		Logger:     logger,
-		environ:    environ,
-		redactors:  redactors,
-		token:      token,
-	}
+	s := &Server{token: token}
 
 	for _, o := range opts {
 		o(s)
 	}
 
-	svr, err := socket.NewServer(socketPath, s.router())
-	if err != nil {
-		return nil, "", fmt.Errorf("creating socket server: %w", err)
+	if s.Logger == nil {
+		return nil, "", errors.New("logger is required")
 	}
-	s.sockSvr = svr
+	if s.SocketPath == "" {
+		return nil, "", errors.New("socket path is required")
+	}
+	if s.env == nil {
+		s.env = env.New()
+	}
+	if s.redactors == nil {
+		s.redactors = replacer.NewMux()
+	}
 
-	return s, token, err
+	if s.sockSvr == nil {
+		svr, err := socket.NewServer(s.SocketPath, s.router())
+		if err != nil {
+			return nil, "", fmt.Errorf("creating socket server: %w", err)
+		}
+		s.sockSvr = svr
+	}
+
+	return s, s.token, err
 }
 
 // Start starts the server in a goroutine, returning an error if the server can't be started
@@ -86,8 +119,8 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stop gracefully shuts the server down, blocking until all requests have been served or the grace period has expired
-// It returns an error if the server has not been started
+// Stop gracefully shuts the server down, blocking until all requests have been served or the grace
+// period has expired. It returns an error if the server has not been started
 func (s *Server) Stop() error {
 	// Shutdown signal with grace period of 10 seconds
 	shutdownCtx, serverStopCtx := context.WithTimeout(context.Background(), 10*time.Second)
