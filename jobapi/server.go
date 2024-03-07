@@ -18,25 +18,21 @@ type ServerOption interface {
 	apply(*Server)
 }
 
-type loggerOpt struct {
-	logger shell.Logger
-	debug  bool
+type debugOpt bool
+
+func (o debugOpt) apply(s *Server) {
+	s.debug = bool(o)
 }
 
-func (o *loggerOpt) apply(s *Server) {
-	s.Logger = o.logger
-	s.debug = o.debug
-}
-
-// WithLogger sets the logger for the server
-func WithLogger(logger shell.Logger, debug bool) *loggerOpt {
-	return &loggerOpt{logger: logger, debug: debug}
+// WithDebug sets sever to debug mode
+func WithDebug(debug bool) debugOpt {
+	return debugOpt(debug)
 }
 
 type socketPathOpt string
 
 func (o socketPathOpt) apply(s *Server) {
-	s.SocketPath = string(o)
+	s.socketPath = string(o)
 }
 
 // WithSocketPath sets the socket path for the server
@@ -84,10 +80,11 @@ func WithToken(token string) tokenOpt {
 // Server is a Job API server. It provides an HTTP API with which to interact with the job currently
 // running in the buildkite agent and allows jobs to introspect and mutate their own state
 type Server struct {
-	// SocketPath is the path to the socket that the server is (or will be) listening on
-	SocketPath string
-	Logger     shell.Logger
-	debug      bool
+	logger shell.Logger
+	debug  bool
+
+	// socketPath is the path to the socket that the server is (or will be) listening on
+	socketPath string
 
 	mtx       sync.RWMutex
 	env       *env.Environment
@@ -98,25 +95,18 @@ type Server struct {
 }
 
 // NewServer creates a new Job API server
-// socketPath is the path to the socket on which the server will listen
-// environ is the environment which the server will mutate and inspect as part of its operation
-func NewServer(opts ...ServerOption) (server *Server, token string, err error) {
-	token, err = socket.GenerateToken(32)
-	if err != nil {
-		return nil, "", fmt.Errorf("generating token: %w", err)
-	}
-
-	s := &Server{token: token}
+func NewServer(logger shell.Logger, opts ...ServerOption) (server *Server, err error) {
+	s := &Server{logger: logger}
 
 	for _, o := range opts {
 		o.apply(s)
 	}
 
-	if s.Logger == nil {
-		return nil, "", errors.New("logger is required")
-	}
-	if s.SocketPath == "" {
-		return nil, "", errors.New("socket path is required")
+	if s.token == "" {
+		s.token, err = socket.GenerateToken(32)
+		if err != nil {
+			return nil, fmt.Errorf("generating token: %w", err)
+		}
 	}
 	if s.env == nil {
 		s.env = env.New()
@@ -126,14 +116,14 @@ func NewServer(opts ...ServerOption) (server *Server, token string, err error) {
 	}
 
 	if s.sockSvr == nil {
-		svr, err := socket.NewServer(s.SocketPath, s.router())
+		svr, err := socket.NewServer(s.socketPath, s.router())
 		if err != nil {
-			return nil, "", fmt.Errorf("creating socket server: %w", err)
+			return nil, fmt.Errorf("creating socket server: %w", err)
 		}
 		s.sockSvr = svr
 	}
 
-	return s, s.token, err
+	return s, err
 }
 
 // Start starts the server in a goroutine, returning an error if the server can't be started
@@ -142,8 +132,8 @@ func (s *Server) Start() error {
 		return fmt.Errorf("starting socket server: %w", err)
 	}
 
-	s.Logger.Printf("~~~ Job API")
-	s.Logger.Printf("Server listening on %s", s.SocketPath)
+	s.logger.Printf("~~~ Job API")
+	s.logger.Printf("Server listening on %s", s.SocketPath)
 
 	return nil
 }
@@ -159,12 +149,20 @@ func (s *Server) Stop() error {
 	err := s.sockSvr.Shutdown(shutdownCtx)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			s.Logger.Warningf("Job API server shutdown timed out, server shutdown forced")
+			s.logger.Warningf("Job API server shutdown timed out, server shutdown forced")
 		}
 		return fmt.Errorf("shutting down Job API server: %w", err)
 	}
 
-	s.Logger.Commentf("Successfully shut down Job API server")
+	s.logger.Commentf("Successfully shut down Job API server")
 
 	return nil
+}
+
+func (s *Server) Token() string {
+	return s.token
+}
+
+func (s *Server) SocketPath() string {
+	return s.socketPath
 }

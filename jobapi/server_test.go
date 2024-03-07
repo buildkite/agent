@@ -35,13 +35,16 @@ func testEnviron() *env.Environment {
 	return e
 }
 
-func testServer(t *testing.T, e *env.Environment, mux *replacer.Mux) (*jobapi.Server, string, error) {
+func testServer(t *testing.T, e *env.Environment, mux *replacer.Mux) (*jobapi.Server, error) {
+	t.Helper()
+
 	sockName, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
-		return nil, "", fmt.Errorf("creating socket path: %w", err)
+		return nil, fmt.Errorf("creating socket path: %w", err)
 	}
+
 	return jobapi.NewServer(
-		jobapi.WithLogger(shell.TestingLogger{T: t}, true),
+		shell.TestingLogger{T: t},
 		jobapi.WithSocketPath(sockName),
 		jobapi.WithEnvironment(e),
 		jobapi.WithRedactors(mux),
@@ -97,7 +100,7 @@ func TestServerStartStop(t *testing.T) {
 	t.Parallel()
 
 	env := testEnviron()
-	srv, _, err := testServer(t, env, replacer.NewMux())
+	srv, err := testServer(t, env, replacer.NewMux())
 	if err != nil {
 		t.Fatalf("testServer(t, env) error = %v", err)
 	}
@@ -111,18 +114,18 @@ func TestServerStartStop(t *testing.T) {
 	// Note that os.ModeSocket might not be set on Windows.
 	// (https://github.com/golang/go/issues/33357)
 	if runtime.GOOS != "windows" {
-		fi, err := os.Stat(srv.SocketPath)
+		fi, err := os.Stat(srv.SocketPath())
 		if err != nil {
-			t.Fatalf("os.Stat(%q) = %v", srv.SocketPath, err)
+			t.Fatalf("os.Stat(%q) = %v", srv.SocketPath(), err)
 		}
 
 		if fi.Mode()&os.ModeSocket == 0 {
-			t.Fatalf("%q is not a socket", srv.SocketPath)
+			t.Fatalf("%q is not a socket", srv.SocketPath())
 		}
 	}
 
 	// Try to connect to the socket.
-	test, err := net.Dial("unix", srv.SocketPath)
+	test, err := net.Dial("unix", srv.SocketPath())
 	if err != nil {
 		t.Fatalf("socket test connection: %v", err)
 	}
@@ -135,9 +138,9 @@ func TestServerStartStop(t *testing.T) {
 	}
 
 	time.Sleep(100 * time.Millisecond) // Wait for the socket file to be unlinked
-	_, err = os.Stat(srv.SocketPath)
+	_, err = os.Stat(srv.SocketPath())
 	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected os.Stat(%s) = _, os.ErrNotExist, got %v", srv.SocketPath, err)
+		t.Fatalf("expected os.Stat(%s) = _, os.ErrNotExist, got %v", srv.SocketPath(), err)
 	}
 }
 
@@ -149,8 +152,8 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	}
 
 	sockName := filepath.Join(os.TempDir(), "test-socket-collision.sock")
-	srv1, _, err := jobapi.NewServer(
-		jobapi.WithLogger(shell.TestingLogger{T: t}, true),
+	srv1, err := jobapi.NewServer(
+		shell.TestingLogger{T: t},
 		jobapi.WithSocketPath(sockName),
 	)
 	if err != nil {
@@ -161,11 +164,15 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected initial server start to succeed, got %v", err)
 	}
-	defer srv1.Stop()
+	t.Cleanup(func() {
+		if err := srv1.Stop(); err != nil {
+			t.Fatalf("srv1.Stop() = %v", err)
+		}
+	})
 
 	expectedErr := fmt.Sprintf("creating socket server: file already exists at socket path %s", sockName)
-	_, _, err = jobapi.NewServer(
-		jobapi.WithLogger(shell.TestingLogger{T: t}, true),
+	_, err = jobapi.NewServer(
+		shell.TestingLogger{T: t},
 		jobapi.WithSocketPath(sockName),
 	)
 	if err == nil {
@@ -222,7 +229,7 @@ func TestDeleteEnv(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(t, environ, replacer.NewMux())
+			srv, err := testServer(t, environ, replacer.NewMux())
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}
@@ -232,14 +239,14 @@ func TestDeleteEnv(t *testing.T) {
 				t.Fatalf("starting server: %v", err)
 			}
 
-			client := testSocketClient(srv.SocketPath)
+			client := testSocketClient(srv.SocketPath())
 
-			defer func() {
+			t.Cleanup(func() {
 				err := srv.Stop()
 				if err != nil {
 					t.Fatalf("stopping server: %v", err)
 				}
-			}()
+			})
 
 			buf := bytes.NewBuffer(nil)
 			err = json.NewEncoder(buf).Encode(c.requestBody)
@@ -252,7 +259,7 @@ func TestDeleteEnv(t *testing.T) {
 				t.Fatalf("creating request: %v", err)
 			}
 
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", srv.Token()))
 
 			testAPI(t, environ, req, client, c) // Ignore arguments, dial socket
 		})
@@ -318,7 +325,7 @@ func TestPatchEnv(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(t, environ, replacer.NewMux())
+			srv, err := testServer(t, environ, replacer.NewMux())
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}
@@ -328,7 +335,7 @@ func TestPatchEnv(t *testing.T) {
 				t.Fatalf("starting server: %v", err)
 			}
 
-			client := testSocketClient(srv.SocketPath)
+			client := testSocketClient(srv.SocketPath())
 
 			defer func() {
 				err := srv.Stop()
@@ -348,7 +355,7 @@ func TestPatchEnv(t *testing.T) {
 				t.Fatalf("creating request: %v", err)
 			}
 
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", srv.Token()))
 
 			testAPI(t, environ, req, client, c)
 		})
@@ -360,7 +367,7 @@ func TestGetEnv(t *testing.T) {
 	t.Parallel()
 
 	env := testEnviron()
-	srv, token, err := testServer(t, env, replacer.NewMux())
+	srv, err := testServer(t, env, replacer.NewMux())
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -370,7 +377,7 @@ func TestGetEnv(t *testing.T) {
 		t.Fatalf("starting server: %v", err)
 	}
 
-	client := testSocketClient(srv.SocketPath)
+	client := testSocketClient(srv.SocketPath())
 
 	defer func() {
 		err := srv.Stop()
@@ -384,7 +391,7 @@ func TestGetEnv(t *testing.T) {
 		t.Fatalf("creating request: %v", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", srv.Token()))
 
 	testAPI(t, env, req, client, apiTestCase[any, jobapi.EnvGetResponse]{
 		expectedStatus: http.StatusOK,
@@ -424,7 +431,7 @@ func TestCreateRedaction(t *testing.T) {
 	mux := replacer.NewMux(rdc)
 
 	env := testEnviron()
-	srv, token, err := testServer(t, env, mux)
+	srv, err := testServer(t, env, mux)
 	assert.NilError(t, err)
 
 	// write some stuff that won't be redacted
@@ -436,7 +443,7 @@ func TestCreateRedaction(t *testing.T) {
 		assert.NilError(t, srv.Stop())
 	})
 
-	client := testSocketClient(srv.SocketPath)
+	client := testSocketClient(srv.SocketPath())
 
 	tc := apiTestCase[jobapi.RedactionCreateRequest, jobapi.RedactionCreateResponse]{
 		expectedStatus:       http.StatusCreated,
@@ -450,7 +457,7 @@ func TestCreateRedaction(t *testing.T) {
 	req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/redactions", buf)
 	assert.NilError(t, err)
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", srv.Token()))
 	testAPI(t, env, req, client, tc)
 
 	// now when we write it, it should be redacted

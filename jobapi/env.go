@@ -18,7 +18,7 @@ func (s *Server) getEnv(w http.ResponseWriter, _ *http.Request) {
 	resp := EnvGetResponse{Env: normalizedEnv}
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
+		s.logger.Errorf("Job API: couldn't encode or write response: %v", err)
 	}
 }
 
@@ -28,7 +28,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	if err != nil {
 		if err := socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest); err != nil {
-			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+			s.logger.Errorf("Job API: couldn't write error: %v", err)
 		}
 		return
 	}
@@ -44,7 +44,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
-			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+			s.logger.Errorf("Job API: couldn't write error: %v", err)
 		}
 		return
 	}
@@ -64,7 +64,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
-			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+			s.logger.Errorf("Job API: couldn't write error: %v", err)
 		}
 		return
 	}
@@ -89,7 +89,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
+		s.logger.Errorf("Job API: couldn't encode or write response: %v", err)
 	}
 }
 
@@ -100,7 +100,7 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err := socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest)
 		if err != nil {
-			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+			s.logger.Errorf("Job API: couldn't write error: %v", err)
 		}
 		return
 	}
@@ -113,7 +113,7 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
-			s.Logger.Errorf("Job API: couldn't write error: %v", err)
+			s.logger.Errorf("Job API: couldn't write error: %v", err)
 		}
 		return
 	}
@@ -133,7 +133,7 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
+		s.logger.Errorf("Job API: couldn't encode or write response: %v", err)
 	}
 }
 

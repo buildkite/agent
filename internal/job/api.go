@@ -25,8 +25,9 @@ func (e *Executor) startJobAPI() (cleanup func(), err error) {
 		return cleanup, fmt.Errorf("creating job API socket path: %v", err)
 	}
 
-	srv, token, err := jobapi.NewServer(
-		jobapi.WithLogger(e.shell.Logger, e.ExecutorConfig.Debug),
+	srv, err := jobapi.NewServer(
+		e.shell.Logger,
+		jobapi.WithDebug(e.ExecutorConfig.Debug),
 		jobapi.WithSocketPath(socketPath),
 		jobapi.WithEnvironment(e.shell.Env),
 		jobapi.WithRedactors(e.redactors),
@@ -36,7 +37,7 @@ func (e *Executor) startJobAPI() (cleanup func(), err error) {
 	}
 
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
-	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_TOKEN", token)
+	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_TOKEN", srv.Token())
 
 	if err := srv.Start(); err != nil {
 		return cleanup, fmt.Errorf("starting Job API server: %v", err)

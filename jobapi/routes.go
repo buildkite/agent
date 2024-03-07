@@ -12,14 +12,14 @@ import (
 func (s *Server) router() chi.Router {
 	middlewares := [](func(http.Handler) http.Handler){}
 	if s.debug {
-		middlewares = append(middlewares, socket.LoggerMiddleware("Job API", s.Logger.Commentf))
+		middlewares = append(middlewares, socket.LoggerMiddleware("Job API", s.logger.Commentf))
 	}
 	middlewares = append(middlewares,
 		middleware.Recoverer,
 
 		// All responses are in JSON.
 		socket.HeadersMiddleware(http.Header{"Content-Type": []string{"application/json"}}),
-		socket.AuthMiddleware(s.token, s.Logger.Errorf),
+		socket.AuthMiddleware(s.token, s.logger.Errorf),
 	)
 
 	r := chi.NewRouter()
