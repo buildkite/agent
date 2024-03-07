@@ -73,7 +73,9 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if e.shell == nil {
 		var err error
-		e.shell, err = shell.New()
+		logger := shell.StderrLogger
+		logger.DisabledWarningIDs = e.DisabledWarnings
+		e.shell, err = shell.New(shell.WithLogger(logger))
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
@@ -129,7 +131,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 		defer cleanup()
 	} else {
-		e.shell.Warningf("The Job API has been disabled. Features like automatic redaction of secrets and polyglot hooks will either not work or have degraded functionality")
+		e.shell.OptionalWarningf("job-api-disabled", "The Job API has been disabled. Features like automatic redaction of secrets and polyglot hooks will either not work or have degraded functionality")
 	}
 
 	// Tear down the environment (and fire pre-exit hook) before we exit

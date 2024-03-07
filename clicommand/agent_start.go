@@ -97,8 +97,9 @@ type AgentStartConfig struct {
 	EnableJobLogTmpfile bool   `cli:"enable-job-log-tmpfile"`
 	JobLogPath          string `cli:"job-log-path" normalize:"filepath"`
 
-	LogFormat            string `cli:"log-format"`
-	WriteJobLogsToStdout bool   `cli:"write-job-logs-to-stdout"`
+	LogFormat            string   `cli:"log-format"`
+	WriteJobLogsToStdout bool     `cli:"write-job-logs-to-stdout"`
+	DisableWarningsFor   []string `cli:"disable-warnings-for" normalize:"list"`
 
 	BuildPath   string `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath   string `cli:"hooks-path" normalize:"filepath"`
@@ -653,6 +654,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v. Defaults to %s", verificationFailureBehaviors, agent.VerificationBehaviourBlock),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
+		cli.StringSliceFlag{
+			Name:   "disable-warnings-for",
+			Usage:  "A list of warning IDs to disable",
+			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -932,6 +938,8 @@ var AgentStartCommand = cli.Command{
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
 
 			VerificationJWKS: verificationJWKS,
+
+			DisableWarningsFor: cfg.DisableWarningsFor,
 		}
 
 		if configFile != nil {

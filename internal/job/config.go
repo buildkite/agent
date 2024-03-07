@@ -167,6 +167,9 @@ type ExecutorConfig struct {
 
 	// Whether to start the JobAPI
 	JobAPI bool
+
+	// The warnings that have been disabled by the user
+	DisabledWarnings []string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map

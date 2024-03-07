@@ -96,6 +96,7 @@ type BootstrapConfig struct {
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
+	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -362,6 +363,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job.",
 			EnvVar: "BUILDKITE_AGENT_NO_JOB_API",
 		},
+		cli.StringSliceFlag{
+			Name:   "disable-warnings-for",
+			Usage:  "A list of warning IDs to disable",
+			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
+		},
 		DebugFlag,
 		LogLevelFlag,
 		ExperimentsFlag,
@@ -447,6 +453,7 @@ var BootstrapCommand = cli.Command{
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
 			JobAPI:                       !cfg.NoJobAPI,
+			DisabledWarnings:             cfg.DisableWarningsFor,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
