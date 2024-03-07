@@ -13,43 +13,72 @@ import (
 	"github.com/buildkite/agent/v3/internal/socket"
 )
 
-// ServerOpts provides a way to configure a Server
-type ServerOpts func(*Server)
+// ServerOption provides a way to configure a Server
+type ServerOption interface {
+	apply(*Server)
+}
+
+type loggerOpt struct {
+	logger shell.Logger
+	debug  bool
+}
+
+func (o *loggerOpt) apply(s *Server) {
+	s.Logger = o.logger
+	s.debug = o.debug
+}
 
 // WithLogger sets the logger for the server
-func WithLogger(logger shell.Logger, debug bool) ServerOpts {
-	return func(s *Server) {
-		s.Logger = logger
-		s.debug = debug
-	}
+func WithLogger(logger shell.Logger, debug bool) *loggerOpt {
+	return &loggerOpt{logger: logger, debug: debug}
+}
+
+type socketPathOpt string
+
+func (o socketPathOpt) apply(s *Server) {
+	s.SocketPath = string(o)
 }
 
 // WithSocketPath sets the socket path for the server
-func WithSocketPath(socketPath string) ServerOpts {
-	return func(s *Server) {
-		s.SocketPath = socketPath
-	}
+func WithSocketPath(socketPath string) socketPathOpt {
+	return socketPathOpt(socketPath)
+}
+
+type environOpt struct {
+	env *env.Environment
+}
+
+func (o environOpt) apply(s *Server) {
+	s.env = o.env
 }
 
 // WithEnviron sets the environment for the server
-func WithEnvironment(e *env.Environment) ServerOpts {
-	return func(s *Server) {
-		s.env = e
-	}
+func WithEnvironment(e *env.Environment) environOpt {
+	return environOpt{env: e}
+}
+
+type redactorsOpt struct {
+	redactors *replacer.Mux
+}
+
+func (o redactorsOpt) apply(s *Server) {
+	s.redactors = o.redactors
 }
 
 // WithRedactors sets the redactors for the server
-func WithRedactors(r *replacer.Mux) ServerOpts {
-	return func(s *Server) {
-		s.redactors = r
-	}
+func WithRedactors(r *replacer.Mux) redactorsOpt {
+	return redactorsOpt{redactors: r}
+}
+
+type tokenOpt string
+
+func (o tokenOpt) apply(s *Server) {
+	s.token = string(o)
 }
 
 // WithToken sets the token for the server. If not set, a random token will be generated
-func WithToken(token string) ServerOpts {
-	return func(s *Server) {
-		s.token = token
-	}
+func WithToken(token string) tokenOpt {
+	return tokenOpt(token)
 }
 
 // Server is a Job API server. It provides an HTTP API with which to interact with the job currently
@@ -71,7 +100,7 @@ type Server struct {
 // NewServer creates a new Job API server
 // socketPath is the path to the socket on which the server will listen
 // environ is the environment which the server will mutate and inspect as part of its operation
-func NewServer(opts ...ServerOpts) (server *Server, token string, err error) {
+func NewServer(opts ...ServerOption) (server *Server, token string, err error) {
 	token, err = socket.GenerateToken(32)
 	if err != nil {
 		return nil, "", fmt.Errorf("generating token: %w", err)
@@ -80,7 +109,7 @@ func NewServer(opts ...ServerOpts) (server *Server, token string, err error) {
 	s := &Server{token: token}
 
 	for _, o := range opts {
-		o(s)
+		o.apply(s)
 	}
 
 	if s.Logger == nil {
