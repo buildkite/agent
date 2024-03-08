@@ -726,7 +726,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
-const commitMetadataKey = "buildkite:git:commit"
+const CommitMetadataKey = "buildkite:git:commit"
 
 // sendCommitToBuildkite sends commit information (commit, author, subject, body) to Buildkite, as the BK backend doesn't
 // have access to user's VCSes. To do this, we set a special meta-data key in the build, but only if it isn't already present
@@ -735,7 +735,7 @@ const commitMetadataKey = "buildkite:git:commit"
 // note that we bail early if the key already exists, as we don't want to overwrite it
 func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	e.shell.Commentf("Checking to see if git commit information needs to be sent to Buildkite...")
-	if err := e.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", commitMetadataKey); err == nil {
+	if err := e.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", CommitMetadataKey); err == nil {
 		// Command exited 0, ie the key exists, so we don't need to send it again
 		e.shell.Commentf("Git commit information has already been sent to Buildkite")
 		return nil
@@ -767,7 +767,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	}
 
 	stdin := strings.NewReader(out)
-	if err := e.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", commitMetadataKey); err != nil {
+	if err := e.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", CommitMetadataKey); err != nil {
 		return fmt.Errorf("sending git commit information to Buildkite: %w", err)
 	}
 

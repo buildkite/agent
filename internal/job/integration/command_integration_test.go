@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -53,7 +54,7 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
 	preExitFunc := func(c *bintest.Call) {

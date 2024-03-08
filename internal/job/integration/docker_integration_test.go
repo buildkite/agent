@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -26,7 +27,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
 	env := []string{
@@ -59,7 +60,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
 	env := []string{
@@ -93,7 +94,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
 	env := []string{
@@ -132,7 +133,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
 	env := []string{
@@ -165,7 +166,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
 	env := []string{
@@ -205,7 +206,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
 	env := []string{
@@ -239,7 +240,7 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
 	env := []string{

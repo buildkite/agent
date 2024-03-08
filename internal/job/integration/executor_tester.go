@@ -20,6 +20,7 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"gotest.tools/v3/assert"
 
@@ -264,7 +265,7 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 	if !e.HasMock("buildkite-agent") {
 		agent := e.MockAgent(t)
 		agent.
-			Expect("meta-data", "exists", "buildkite:git:commit").
+			Expect("meta-data", "exists", job.CommitMetadataKey).
 			Optionally().
 			AndExitWith(0)
 	}

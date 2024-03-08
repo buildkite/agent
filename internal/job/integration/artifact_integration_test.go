@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -28,7 +29,7 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 	// Mock out the artifact calls
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 	agent.
 		Expect("artifact", "upload", "llamas.txt").
@@ -57,7 +58,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 	// Mock out the artifact calls
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 	agent.
 		Expect("artifact", "upload", "llamas.txt").
@@ -92,7 +93,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 	// Mock out the artifact calls
 	agent := tester.MockAgent(t)
 	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 	agent.
 		Expect("artifact", "upload", "llamas.txt").

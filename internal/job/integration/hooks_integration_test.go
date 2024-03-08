@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
+
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/bintest/v3"
 )
@@ -416,7 +418,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 
 			if tc.expectCheckout {
 				agent.
-					Expect("meta-data", "exists", "buildkite:git:commit").
+					Expect("meta-data", "exists", job.CommitMetadataKey).
 					Once().
 					AndExitWith(0)
 			}
