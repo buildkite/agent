@@ -62,7 +62,7 @@ var ToolSignCommand = cli.Command{
 	Usage: "Sign pipeline steps",
 	Description: `Usage:
 
-    buildkite-agent tool sign-pipeline [options...] [pipeline-file]
+    buildkite-agent tool sign [options...] [pipeline-file]
 
 Description:
 
