@@ -16,7 +16,7 @@ type Olfactor struct {
 }
 
 // New returns an io.Writer and an Olfactor. Writes to the writer will be
-// forwarded to `dst` and the returned Olfactor will recored whether the
+// forwarded to `dst` and the returned Olfactor will record whether the
 // elements of `smells` have been written to the io.Writer.
 //
 // If a smell is the empty string, we consider it to have been smelt, even if

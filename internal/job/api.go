@@ -29,7 +29,7 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	if e.ExecutorConfig.Debug {
 		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
 	}
-	srv, token, err := jobapi.NewServer(e.shell.Logger, socketPath, e.shell.Env, jobAPIOpts...)
+	srv, token, err := jobapi.NewServer(e.shell.Logger, socketPath, e.shell.Env, e.redactors, jobAPIOpts...)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API server: %v", err)
 	}

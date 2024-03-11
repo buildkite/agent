@@ -39,6 +39,7 @@ var commandConfigPairs = []configCommandPair{
 	{Config: MetaDataSetConfig{}, Command: MetaDataSetCommand},
 	{Config: OIDCTokenConfig{}, Command: OIDCRequestTokenCommand},
 	{Config: PipelineUploadConfig{}, Command: PipelineUploadCommand},
+	{Config: RedactorAddConfig{}, Command: RedactorAddCommand},
 	{Config: SecretGetConfig{}, Command: SecretGetCommand},
 	{Config: StepGetConfig{}, Command: StepGetCommand},
 	{Config: StepUpdateConfig{}, Command: StepUpdateCommand},

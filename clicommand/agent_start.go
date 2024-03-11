@@ -645,7 +645,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "signing-jwks-key-id",
-			Usage:  "The JWKS key ID to use when signing the pipeline. If ommitted, and the signing JWKS conatins only one key, that key will be used.",
+			Usage:  "The JWKS key ID to use when signing the pipeline. If omitted, and the signing JWKS contains only one key, that key will be used.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID",
 		},
 		cli.StringFlag{
@@ -1082,7 +1082,7 @@ var AgentStartCommand = cli.Command{
 			Priority:          cfg.Priority,
 			ScriptEvalEnabled: !cfg.NoCommandEval,
 			Tags:              tags,
-			// We only want this agent to be ingored in Buildkite
+			// We only want this agent to be ignored in Buildkite
 			// dispatches if it's being booted to acquire a
 			// specific job.
 			IgnoreInDispatches: cfg.AcquireJob != "",

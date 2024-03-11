@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/socket"
 )
 
@@ -29,8 +30,9 @@ type Server struct {
 	Logger     shell.Logger
 	debug      bool
 
-	mtx     sync.RWMutex
-	environ *env.Environment
+	mtx       sync.RWMutex
+	environ   *env.Environment
+	redactors *replacer.Mux
 
 	token   string
 	sockSvr *socket.Server
@@ -43,6 +45,7 @@ func NewServer(
 	logger shell.Logger,
 	socketPath string,
 	environ *env.Environment,
+	redactors *replacer.Mux,
 	opts ...ServerOpts,
 ) (server *Server, token string, err error) {
 	token, err = socket.GenerateToken(32)
@@ -54,6 +57,7 @@ func NewServer(
 		SocketPath: socketPath,
 		Logger:     logger,
 		environ:    environ,
+		redactors:  redactors,
 		token:      token,
 	}
 

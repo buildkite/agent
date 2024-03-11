@@ -101,7 +101,8 @@ func (c *Client) Do(ctx context.Context, method, url string, req, resp any) erro
 	defer hresp.Body.Close()
 	dec := json.NewDecoder(hresp.Body)
 
-	if hresp.StatusCode != http.StatusOK {
+	switch hresp.StatusCode / 100 {
+	case 4, 5:
 		var er ErrorResponse
 		if err := dec.Decode(&er); err != nil {
 			return fmt.Errorf("decoding error response: %w", err)

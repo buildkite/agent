@@ -2,18 +2,19 @@
 package replacer
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"sync"
 )
 
-// Replacer is a straightforward streaming string replacer and replacer,
-// suitable for detecting or redacting secrets in a stream.
+type unit struct{}
+
+// Replacer is a straightforward streaming string replacer suitable for
+// detecting or redacting secrets in a stream.
 //
 // The algorithm is intended to be easier to maintain than certain
 // high-performance multi-string search algorithms, and also geared towards
-// ensuring secrets don't escape (for instance, by matching overlaps), at the
+// ensuring strings don't escape (for instance, by matching overlaps), at the
 // expense of ultimate efficiency.
 type Replacer struct {
 	// The replacement callback.
@@ -23,7 +24,7 @@ type Replacer struct {
 	// organised by first byte.
 	// Why first byte? Because looking up needles by the first byte is a lot
 	// faster than _filtering_ all the needles by first byte.
-	needlesByFirstByte [256][]string
+	needlesByFirstByte [256]map[string]unit
 
 	// For synchronising writes. Each write can touch everything below.
 	mu sync.Mutex
@@ -34,8 +35,8 @@ type Replacer struct {
 	// Intermediate buffer to account for partially-written data.
 	buf []byte
 
-	// Current redaction partialMatches - if we have begun redacting a potential
-	// secret there will be at least one of these.
+	// Current redaction partialMatches - if we have begun matching a potential
+	// needle there will be at least one of these.
 	// nextMatches is the next set of partialMatches.
 	// Write alternates between these two, rather than creating a new slice to
 	// hold the next set of matches for every byte of the input.
@@ -79,7 +80,7 @@ func New(dst io.Writer, needles []string, replacement func([]byte) []byte) *Repl
 	return r
 }
 
-// Write searches the stream for needles (strings, secrets, ...), calls the
+// Write searches the stream for needles (e.g. strings, secrets, ...), calls the
 // replacement callback to obtain any replacements, and forwards the output to
 // the destination writer.
 func (r *Replacer) Write(b []byte) (int, error) {
@@ -99,7 +100,7 @@ func (r *Replacer) Write(b []byte) (int, error) {
 	//    matches.
 	//
 	// Step 2 is complicated by the fact that each Write could contain a partial
-	// secret at the start or the end. So a buffer is needed to hold onto any
+	// needle at the start or the end. So a buffer is needed to hold onto any
 	// incomplete matches (in case they _don't_ match), as well as some extra
 	// state (r.partialMatches) for tracking where we are in each incomplete
 	// match.
@@ -144,7 +145,7 @@ func (r *Replacer) Write(b []byte) (int, error) {
 		}
 
 		// Start matching something?
-		for _, s := range r.needlesByFirstByte[c] {
+		for s, _ := range r.needlesByFirstByte[c] {
 			if len(s) == 1 {
 				// A pathological case; in practice we don't redact secrets
 				// smaller than RedactLengthMin.
@@ -287,11 +288,34 @@ func (r *Replacer) flushUpTo(limit int) error {
 	return nil
 }
 
-// Reset replaces the secrets to redact with a new set of secrets. It is not
+// Size returns the number of needles
+func (r *Replacer) Size() int {
+	sum := 0
+	for _, n := range r.needlesByFirstByte {
+		sum += len(n)
+	}
+	return sum
+}
+
+// Needle returns the current needles
+func (r *Replacer) Needles() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	needles := make([]string, 0, r.Size())
+	for _, m := range r.needlesByFirstByte {
+		for n := range m {
+			needles = append(needles, n)
+		}
+	}
+	return needles
+}
+
+// Reset removes all current needes and sets new set of needles. It is not
 // necessary to Flush beforehand, but:
-//   - any previous secrets which have begun matching will continue matching
+//   - any previous needles which have begun matching will continue matching
 //     (until they reach a terminal state), and
-//   - any new secrets will not be compared against existing buffer content,
+//   - any new needles will not be compared against existing buffer content,
 //     only data passed to Write calls after Reset.
 func (r *Replacer) Reset(needles []string) {
 	r.mu.Lock()
@@ -300,11 +324,33 @@ func (r *Replacer) Reset(needles []string) {
 	for i := range r.needlesByFirstByte {
 		r.needlesByFirstByte[i] = nil
 	}
+
+	r.unsafeAdd(needles)
+}
+
+// Add adds more needles to be matched by the replacer. It is not necessary to
+// Flush beforehand, but:
+//   - any previous strings which have begun matching will continue matching
+//     (until they reach a terminal state), and
+//   - any new strings will not be compared against existing buffer content,
+//     only data passed to Write calls after Add.
+func (r *Replacer) Add(needles ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.unsafeAdd(needles)
+}
+
+func (r *Replacer) unsafeAdd(needles []string) {
 	for _, s := range needles {
 		if len(s) == 0 {
 			continue
 		}
-		r.needlesByFirstByte[s[0]] = append(r.needlesByFirstByte[s[0]], s)
+		if r.needlesByFirstByte[s[0]] == nil {
+			r.needlesByFirstByte[s[0]] = map[string]unit{s: {}}
+			continue
+		}
+		r.needlesByFirstByte[s[0]][s] = unit{}
 	}
 }
 
@@ -371,28 +417,4 @@ func mergeOverlaps(rs []subrange) []subrange {
 	rem := len(rs[j:]) // # of remaining ranges
 	copy(rs, rs[j:])
 	return rs[:rem]
-}
-
-// Mux contains multiple replacers
-type Mux []*Replacer
-
-// Flush flushes all replacers.
-func (mux Mux) Flush() error {
-	var errs []error
-	for _, r := range mux {
-		if err := r.Flush(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if len(errs) != 0 {
-		return errors.Join(errs...)
-	}
-	return nil
-}
-
-// Reset resets all replacers with new needles (secrets).
-func (mux Mux) Reset(needles []string) {
-	for _, r := range mux {
-		r.Reset(needles)
-	}
 }

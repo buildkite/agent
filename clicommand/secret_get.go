@@ -2,16 +2,17 @@ package clicommand
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/urfave/cli"
 )
 
 type SecretGetConfig struct {
-	Key string `cli:"arg:0"`
+	Key           string `cli:"arg:0"`
+	Job           string `cli:"job" validate:"required"`
+	SkipRedaction bool   `cli:"skip-redaction"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -27,13 +28,22 @@ type SecretGetConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 }
 
-var errJobIDNotSet = errors.New("BUILDKITE_JOB_ID not set")
-
 var SecretGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Get a secret by its key",
-	Description: "Get a secret by key from Buildkite and print it to stdout.",
+	Description: "Get a secret by key from Buildkite Pipelines Secrets and print it to stdout.",
 	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:   "job",
+			Usage:  "Which job should should the secret be for",
+			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.BoolFlag{
+			Name:   "skip-redaction",
+			Usage:  "Skip redacting the retrieved secret from the logs. Then, the command will print the secret to the Job's logs if called directly.",
+			EnvVar: "BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION",
+		},
+
 		// API Flags
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -52,16 +62,24 @@ var SecretGetCommand = cli.Command{
 		ctx, cfg, l, _, done := setupLoggerAndConfig[SecretGetConfig](ctx, c)
 		defer done()
 
-		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-
-		jobID := os.Getenv("BUILDKITE_JOB_ID")
-		if jobID == "" {
-			return NewExitError(1, errJobIDNotSet)
+		agentClient := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
+		secret, _, err := agentClient.GetSecret(ctx, &api.GetSecretRequest{Key: cfg.Key, JobID: cfg.Job})
+		if err != nil {
+			return err
 		}
 
-		secret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: cfg.Key, JobID: jobID})
+		jobClient, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
-			return NewExitError(1, err)
+			return fmt.Errorf("failed to create Job API client: %w", err)
+		}
+
+		if !cfg.SkipRedaction {
+			if err := AddToRedactor(ctx, l, jobClient, secret.Value); err != nil {
+				if cfg.Debug {
+					return err
+				}
+				return errSecretRedact
+			}
 		}
 
 		_, err = fmt.Fprintln(c.App.Writer, secret.Value)
