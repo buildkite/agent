@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.66.0](https://github.com/buildkite/agent/tree/v3.66.0) (2024-03-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.65.0...v3.66.0)
+
+### Added
+- Extend graceful cancellation to all job phases [#2654](https://github.com/buildkite/agent/pull/2654) (@david-poirier)
+- Add cli command to redact secrets and redact secrets from Pipelines Secrets [#2660](https://github.com/buildkite/agent/pull/2660) (@triarius)
+- Configurably optional warnings [#2674](https://github.com/buildkite/agent/pull/2674) (@moskyb)
+
+### Fixed
+- Update `tool sign` usage description to match actual command [#2677](https://github.com/buildkite/agent/pull/2677) (@CheeseStick)
+- Remove experimental callout on signing flags (it wasn't experimental) [#2668](https://github.com/buildkite/agent/pull/2668) (@moskyb)
+
+### Changed
+- Promote `avoid-recursive-trap` experiment [#2669](https://github.com/buildkite/agent/pull/2669) (@triarius)
+- Remove requests logging in the Job API unless if in debug mode [#2662](https://github.com/buildkite/agent/pull/2662) (@triarius)
+- Force GitHub URLs to use HTTPS if the agent's git-credential-helper if it is enabled [#2655](https://github.com/buildkite/agent/pull/2655) (@triarius)
+
+### Internal
+- @dependabot's been hard at work: [#2681](https://github.com/buildkite/agent/pull/2681) [#2686](https://github.com/buildkite/agent/pull/2686) [#2679](https://github.com/buildkite/agent/pull/2679) [#2685](https://github.com/buildkite/agent/pull/2685) [#2682](https://github.com/buildkite/agent/pull/2682) [#2678](https://github.com/buildkite/agent/pull/2678) [#2680](https://github.com/buildkite/agent/pull/2680) [#2684](https://github.com/buildkite/agent/pull/2684)
+- Update mime types [#2661](https://github.com/buildkite/agent/pull/2661) (@triarius)
+
 ## [v3.65.0](https://github.com/buildkite/agent/tree/v3.65.0) (2024-02-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.64.0...v3.65.0)
 
