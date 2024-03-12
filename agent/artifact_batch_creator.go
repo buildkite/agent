@@ -70,18 +70,14 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 
 		a.logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
-		var creation *api.ArtifactBatchCreateResponse
-		var resp *api.Response
-		var err error
-
 		timeout := a.conf.CreateArtifactsTimeout
 
 		// Retry the batch upload a couple of times
-		err = roko.NewRetrier(
+		r := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-
+		)
+		creation, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.ArtifactBatchCreateResponse, error) {
 			ctxTimeout := ctx
 			if timeout != 0 {
 				var cancel func()
@@ -89,7 +85,7 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 				defer cancel()
 			}
 
-			creation, resp, err = a.apiClient.CreateArtifacts(ctxTimeout, a.conf.JobID, batch)
+			creation, resp, err := a.apiClient.CreateArtifacts(ctxTimeout, a.conf.JobID, batch)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
@@ -106,7 +102,7 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 				timeout = 0
 			}
 
-			return err
+			return creation, err
 		})
 
 		// Did the batch creation eventually fail?

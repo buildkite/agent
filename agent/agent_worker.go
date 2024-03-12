@@ -417,26 +417,26 @@ func (a *AgentWorker) Connect(ctx context.Context) error {
 
 // Performs a heatbeat
 func (a *AgentWorker) Heartbeat(ctx context.Context) error {
-	var beat *api.Heartbeat
 
 	// Retry the heartbeat a few times
-	err := roko.NewRetrier(
+	r := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
+	)
+
+	beat, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.Heartbeat, error) {
 		b, resp, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
 			if resp != nil && !api.IsRetryableStatus(resp) {
 				a.Stop(false)
 				r.Break()
-				return &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
+				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
 			}
 
 			a.logger.Warn("%s (%s)", err, r)
-			return err
+			return nil, err
 		}
-		beat = b
-		return nil
+		return b, nil
 	})
 
 	a.stats.Lock()
@@ -550,29 +550,27 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 	// Acquire the job using the ID we were provided. We'll retry as best we can on non 422 error.
 	// Except for 423 errors, in which we exponentially back off under the direction of the API
 	// setting the Retry-After header
-	var acquiredJob *api.Job
-	err := roko.NewRetrier(
+	r := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(3*time.Second)),
 		roko.WithSleepFunc(a.retrySleepFunc),
-	).DoWithContext(timeoutCtx, func(r *roko.Retrier) error {
+	)
+
+	acquiredJob, err := roko.DoFunc(timeoutCtx, r, func(r *roko.Retrier) (*api.Job, error) {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
 		if a.stopping {
 			r.Break()
 		}
 
-		var err error
-		var response *api.Response
-
-		acquiredJob, response, err = a.apiClient.AcquireJob(
+		aj, resp, err := a.apiClient.AcquireJob(
 			timeoutCtx, jobId,
 			api.Header{Name: "X-Buildkite-Lock-Acquire-Job", Value: "1"},
 			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: fmt.Sprintf("%d", r.AttemptCount())},
 		)
 		if err != nil {
-			if response != nil {
-				switch response.StatusCode {
+			if resp != nil {
+				switch resp.StatusCode {
 				case http.StatusUnprocessableEntity:
 					// If the API returns with a 422, that means that we
 					// successfully *tried* to acquire the job, but
@@ -582,19 +580,19 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 				case http.StatusLocked:
 					// If the API returns with a 423, the job is in the waiting state
 					a.logger.Warn("The job is waiting for a dependency (%s)", err)
-					duration, errParseDuration := time.ParseDuration(response.Header.Get("Retry-After") + "s")
+					duration, errParseDuration := time.ParseDuration(resp.Header.Get("Retry-After") + "s")
 					if errParseDuration != nil {
 						duration = time.Second + time.Duration(rand.Int63n(int64(time.Second)))
 					}
 					r.SetNextInterval(duration)
-					return err
+					return nil, err
 				}
 			}
 			a.logger.Warn("%s (%s)", err, r)
-			return err
+			return nil, err
 		}
 
-		return nil
+		return aj, nil
 	})
 
 	// If `acquiredJob` is nil, then the job was never acquired
@@ -613,13 +611,13 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 	// Accept the job. We'll retry on connection related issues, but if
 	// Buildkite returns a 422 or 500 for example, we'll just bail out,
 	// re-ping, and try the whole process again.
-	var accepted *api.Job
-	err := roko.NewRetrier(
+	r := roko.NewRetrier(
 		roko.WithMaxAttempts(30),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		var err error
-		accepted, _, err = a.apiClient.AcceptJob(ctx, job)
+	)
+
+	accepted, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.Job, error) {
+		accepted, _, err := a.apiClient.AcceptJob(ctx, job)
 		if err != nil {
 			if api.IsRetryableError(err) {
 				a.logger.Warn("%s (%s)", err, r)
@@ -628,8 +626,7 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 				r.Break()
 			}
 		}
-
-		return err
+		return accepted, err
 	})
 
 	// If `accepted` is nil, then the job was never accepted

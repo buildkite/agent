@@ -31,19 +31,17 @@ func (c *Client) GenerateGithubCodeAccessToken(ctx context.Context, repoURL, job
 	)
 
 	var g GithubCodeAccessTokenResponse
-	var resp *Response
 
-	err = r.Do(func(r *roko.Retrier) error {
-		var err error
-		resp, err = c.doRequest(req, &g)
+	resp, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*Response, error) {
+		resp, err := c.doRequest(req, &g)
 		if err == nil {
-			return nil
+			return resp, nil
 		}
 
 		if resp != nil {
 			if !IsRetryableStatus(resp) {
 				r.Break()
-				return err
+				return resp, err
 			}
 
 			if resp.Header.Get("Retry-After") != "" {
@@ -54,7 +52,7 @@ func (c *Client) GenerateGithubCodeAccessToken(ctx context.Context, repoURL, job
 			}
 		}
 
-		return err
+		return resp, err
 	})
 
 	if err != nil {

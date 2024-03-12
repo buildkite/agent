@@ -102,29 +102,27 @@ var StepGetCommand = cli.Command{
 		}
 
 		// Find the step attribute
-		var resp *api.Response
-		var stepExportResponse *api.StepExportResponse
-		if err := roko.NewRetrier(
+		r := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			var err error
-			stepExportResponse, resp, err = client.StepExport(ctx, cfg.StepOrKey, stepExportRequest)
+		)
+		stepExportResponse, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.StepExportResponse, error) {
+			stepExportResponse, resp, err := client.StepExport(ctx, cfg.StepOrKey, stepExportRequest)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
-				return err
 			}
-			return nil
-		}); err != nil {
+			return stepExportResponse, err
+		})
+		if err != nil {
 			return fmt.Errorf("failed to get step: %w", err)
 		}
 
 		// Output the value to STDOUT
-		_, err := fmt.Fprintln(c.App.Writer, stepExportResponse.Output)
+		_, err = fmt.Fprintln(c.App.Writer, stepExportResponse.Output)
 		return err
 	},
 }
