@@ -155,29 +155,29 @@ query GetPipeline ($orgPipelineSlug: ID!) {
 `
 
 func GetPipeline(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	orgPipelineSlug string,
 ) (*GetPipelineResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "GetPipeline",
 		Query:  GetPipeline_Operation,
 		Variables: &__GetPipelineInput{
 			OrgPipelineSlug: orgPipelineSlug,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data GetPipelineResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ GetPipelineResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by UpdatePipeline.
@@ -195,12 +195,12 @@ mutation UpdatePipeline ($id: ID!, $yaml: String!) {
 `
 
 func UpdatePipeline(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	id string,
 	yaml string,
 ) (*UpdatePipelineResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "UpdatePipeline",
 		Query:  UpdatePipeline_Operation,
 		Variables: &__UpdatePipelineInput{
@@ -208,16 +208,16 @@ func UpdatePipeline(
 			Yaml: yaml,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data UpdatePipelineResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ UpdatePipelineResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
