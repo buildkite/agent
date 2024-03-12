@@ -111,13 +111,14 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 	ctx context.Context,
 	l logger.Logger,
 ) (*pipelineUploadAsyncResult, error) {
-	result := &pipelineUploadAsyncResult{}
 	// Retry the pipeline upload a few times before giving up
-	if err := roko.NewRetrier(
+
+	r := roko.NewRetrier(
 		roko.WithMaxAttempts(defaultAttempts),
 		roko.WithStrategy(roko.Constant(defaultSleepDuration)),
 		roko.WithSleepFunc(u.RetrySleepFunc),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
+	)
+	return roko.DoFunc(ctx, r, func(r *roko.Retrier) (*pipelineUploadAsyncResult, error) {
 		resp, err := u.Client.UploadPipeline(
 			ctx,
 			u.JobID,
@@ -133,26 +134,28 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 			if jsonerr := new(json.MarshalerError); errors.As(err, &jsonerr) {
 				l.Error("Unrecoverable error, skipping retries")
 				r.Break()
-				return err
+				return nil, err
 			}
 
 			// 422 responses will always fail no need to retry
 			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
 				l.Error("Unrecoverable error, skipping retries")
 				r.Break()
-				return err
+				return nil, err
 			}
 
 			// 529 or other non 2xx
-			return err
+			return nil, err
 		}
+
+		result := new(pipelineUploadAsyncResult)
 
 		// An API that has the async upload feature enabled will return 202 with a Location header.
 		// Otherwise, if there was no error, then the upload is done.
 		if resp.StatusCode == http.StatusAccepted {
 			result.apiIsAsync = true
 		} else {
-			return nil
+			return result, nil
 		}
 
 		// If the API supported async uploads, we need to extract the location to poll for the
@@ -163,15 +166,11 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 
 		if result.pipelineStatusURL, err = resp.Location(); err != nil {
 			l.Warn("%s (%s)", err, r)
-			return err
+			return nil, err
 		}
 
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+		return result, nil
+	})
 }
 
 func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l logger.Logger) error {

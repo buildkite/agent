@@ -87,8 +87,6 @@ var MetaDataGetCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data value
-		var metaData *api.MetaData
-		var resp *api.Response
 
 		scope := "job"
 		id := cfg.Job
@@ -98,23 +96,25 @@ var MetaDataGetCommand = cli.Command{
 			id = cfg.Build
 		}
 
-		if err := roko.NewRetrier(
+		r := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			var err error
-			metaData, resp, err = client.GetMetaData(ctx, scope, id, cfg.Key)
+		)
+		metaData, resp, err := roko.DoFunc2(ctx, r, func(r *roko.Retrier) (*api.MetaData, *api.Response, error) {
+			metaData, resp, err := client.GetMetaData(ctx, scope, id, cfg.Key)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				r.Break()
-				return err
+				return nil, resp, err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
-				return err
+				return nil, resp, err
 			}
-			return nil
-		}); err != nil {
+			return metaData, resp, nil
+		})
+
+		if err != nil {
 			// Buildkite returns a 404 if the key doesn't exist. If
 			// we get this status, and we've got a default - return
 			// that instead and bail early.
@@ -135,7 +135,7 @@ var MetaDataGetCommand = cli.Command{
 		}
 
 		// TODO: in the next agent magor version, we should terminate with a newline using fmt.FPrintln
-		_, err := fmt.Fprint(c.App.Writer, metaData.Value)
+		_, err = fmt.Fprint(c.App.Writer, metaData.Value)
 		return err
 	},
 }

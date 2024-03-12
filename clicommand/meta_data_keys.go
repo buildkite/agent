@@ -81,9 +81,6 @@ var MetaDataKeysCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data keys
-		var keys []string
-		var resp *api.Response
-
 		scope := "job"
 		id := cfg.Job
 
@@ -92,21 +89,21 @@ var MetaDataKeysCommand = cli.Command{
 			id = cfg.Build
 		}
 
-		if err := roko.NewRetrier(
+		r := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			var err error
-			keys, resp, err = client.MetaDataKeys(ctx, scope, id)
+		)
+		keys, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) ([]string, error) {
+			keys, resp, err := client.MetaDataKeys(ctx, scope, id)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
-				return err
 			}
-			return nil
-		}); err != nil {
+			return keys, err
+		})
+		if err != nil {
 			return fmt.Errorf("failed to find meta-data keys: %w", err)
 		}
 

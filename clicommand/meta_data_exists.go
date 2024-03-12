@@ -82,9 +82,6 @@ var MetaDataExistsCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data value
-		var exists *api.MetaDataExists
-		var resp *api.Response
-
 		scope := "job"
 		id := cfg.Job
 
@@ -93,21 +90,22 @@ var MetaDataExistsCommand = cli.Command{
 			id = cfg.Build
 		}
 
-		if err := roko.NewRetrier(
+		r := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			var err error
-			exists, resp, err = client.ExistsMetaData(ctx, scope, id, cfg.Key)
+		)
+		exists, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.MetaDataExists, error) {
+			exists, resp, err := client.ExistsMetaData(ctx, scope, id, cfg.Key)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
-				return err
+				return nil, err
 			}
-			return nil
-		}); err != nil {
+			return exists, nil
+		})
+		if err != nil {
 			return fmt.Errorf("failed to see if meta-data exists: %w", err)
 		}
 

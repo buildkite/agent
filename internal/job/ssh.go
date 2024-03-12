@@ -25,28 +25,29 @@ func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, erro
 
 	sshKeyScanPath := filepath.Join(toolsDir, "ssh-keyscan")
 	hostParts := strings.Split(host, ":")
-	sshKeyScanOutput := ""
 
-	err = roko.NewRetrier(
+	r := roko.NewRetrier(
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(sshKeyscanRetryInterval)),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
+	)
+	return roko.DoFunc(ctx, r, func(r *roko.Retrier) (string, error) {
+
+		sshKeyScanCommand := fmt.Sprintf("ssh-keyscan %q", host)
+		args := []string{host}
+
 		// `ssh-keyscan` needs `-p` when scanning a host with a port
-		var sshKeyScanCommand string
 		if len(hostParts) == 2 {
 			sshKeyScanCommand = fmt.Sprintf("ssh-keyscan -p %q %q", hostParts[1], hostParts[0])
-			sshKeyScanOutput, err = sh.RunAndCapture(ctx, sshKeyScanPath, "-p", hostParts[1], hostParts[0])
-		} else {
-			sshKeyScanCommand = fmt.Sprintf("ssh-keyscan %q", host)
-			sshKeyScanOutput, err = sh.RunAndCapture(ctx, sshKeyScanPath, host)
+			args = []string{"-p", hostParts[1], hostParts[0]}
 		}
 
+		out, err := sh.RunAndCapture(ctx, sshKeyScanPath, args...)
 		if err != nil {
 			keyScanError := fmt.Errorf("`%s` failed", sshKeyScanCommand)
 			sh.Warningf("%s (%s)", keyScanError, r)
-			return keyScanError
+			return "", keyScanError
 		}
-		if strings.TrimSpace(sshKeyScanOutput) == "" {
+		if strings.TrimSpace(out) == "" {
 			// Older versions of ssh-keyscan would exit 0 but not
 			// return anything, and we've observed newer versions
 			// of ssh-keyscan - just sometimes return no data
@@ -54,13 +55,11 @@ func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, erro
 			// response, means an error.
 			keyScanError := fmt.Errorf("`%s` returned nothing", sshKeyScanCommand)
 			sh.Warningf("%s (%s)", keyScanError, r)
-			return keyScanError
+			return "", keyScanError
 		}
 
-		return nil
+		return out, nil
 	})
-
-	return sshKeyScanOutput, err
 }
 
 // On Windows, there are many horrible different versions of the ssh tools. Our
