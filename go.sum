@@ -25,8 +25,8 @@ github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.48.1 h1:5nE6N3JSs2IG3
 github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.48.1/go.mod h1:Vc+snp0Bey4MrrJyiV2tVxxJb6BmLomPvN1RgAvjGaQ=
 github.com/DataDog/datadog-go/v5 v5.5.0 h1:G5KHeB8pWBNXT4Jtw0zAkhdxEAWSpWH00geHI6LDrKU=
 github.com/DataDog/datadog-go/v5 v5.5.0/go.mod h1:K9kcYBlxkcPP8tvvjZZKs/m1edNAUFzBbdpTUKfCsuw=
-github.com/DataDog/go-libddwaf/v2 v2.2.3 h1:LpKE8AYhVrEhlmlw6FGD41udtDf7zW/aMdLNbCXpegQ=
-github.com/DataDog/go-libddwaf/v2 v2.2.3/go.mod h1:8nX0SYJMB62+fbwYmx5J7zuCGEjiC/RxAo3+AuYJuFE=
+github.com/DataDog/go-libddwaf/v2 v2.3.1 h1:bujaT5+KnLDFQqVA5ilvVvW+evUSHow9FrTHRgUwN4A=
+github.com/DataDog/go-libddwaf/v2 v2.3.1/go.mod h1:gsCdoijYQfj8ce/T2bEDNPZFIYnmHluAgVDpuQOWMZE=
 github.com/DataDog/go-tuf v1.0.2-0.5.2 h1:EeZr937eKAWPxJ26IykAdWA4A0jQXJgkhUjqEI/w7+I=
 github.com/DataDog/go-tuf v1.0.2-0.5.2/go.mod h1:zBcq6f654iVqmkk8n2Cx81E1JnNTMOAx1UEO/wZR+P0=
 github.com/DataDog/gostackparse v0.7.0 h1:i7dLkXHvYzHV308hnkvVGDL3BR4FWl7IsXNPz/IGQh4=
@@ -99,8 +99,8 @@ github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkp
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2 h1:S6Dco8FtAhEI/qkg/00H6RdEGC+MCy5GPiQ+xweNRFE=
 github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2/go.mod h1:8AuBTZBRSFqEYBPYULd+NN474/zZBLP+6WeT5S9xlAc=
-github.com/ebitengine/purego v0.5.2 h1:r2MQEtkGzZ4LRtFZVAg5bjYKnUbxxloaeuGxH0t7qfs=
-github.com/ebitengine/purego v0.5.2/go.mod h1:ah1In8AOtksoNK6yk5z1HTJeUkC1Ez4Wk2idgGslMwQ=
+github.com/ebitengine/purego v0.6.0-alpha.5 h1:EYID3JOAdmQ4SNZYJHu9V6IqOeRQDBYxqKAg9PyoHFY=
+github.com/ebitengine/purego v0.6.0-alpha.5/go.mod h1:ah1In8AOtksoNK6yk5z1HTJeUkC1Ez4Wk2idgGslMwQ=
 github.com/envoyproxy/go-control-plane v0.9.0/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1mIlRU8Am5FuJP05cCM98=
@@ -429,8 +429,8 @@ google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQ
 google.golang.org/protobuf v1.28.0/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
 google.golang.org/protobuf v1.33.0 h1:uNO2rsAINq/JlFpSdYEKIZ0uKD/R9cpdv0T+yoGwGmI=
 google.golang.org/protobuf v1.33.0/go.mod h1:c6P6GXX6sHbq/GpV6MGZEdwhWPcYBgnhAHhKbcUYpos=
-gopkg.in/DataDog/dd-trace-go.v1 v1.60.3 h1:BbAk9qEUKTJcxDqwn7OGlTWTfKPNzt6jbhzmx4m33dw=
-gopkg.in/DataDog/dd-trace-go.v1 v1.60.3/go.mod h1:XF/Y0lFGnmgedNXnltCm6hXkt9iwyeVVVFbKhJvVwtY=
+gopkg.in/DataDog/dd-trace-go.v1 v1.61.0 h1:XKO91GwTjpIRhd56Xif/BZ2YgHkQufVTOvtkbRYSPi8=
+gopkg.in/DataDog/dd-trace-go.v1 v1.61.0/go.mod h1:NHKX1t9eKmajySb6H+zLdgZizCFzbt5iKvrTyxEyy8w=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
