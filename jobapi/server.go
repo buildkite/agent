@@ -104,7 +104,9 @@ func (s *Server) Stop() error {
 		return fmt.Errorf("shutting down Job API server: %w", err)
 	}
 
-	s.Logger.Commentf("Successfully shut down Job API server")
+	if s.debug {
+		s.Logger.Commentf("Successfully shut down Job API server")
+	}
 
 	return nil
 }
