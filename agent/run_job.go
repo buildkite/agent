@@ -264,7 +264,7 @@ func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
 
 	if behavior == VerificationBehaviourWarn {
 		l.Warn("Job will be run whether or not it can be verified - this is not recommended.")
-		l.Warn("You can change this behavior with the `job-verification-failure-behavior` agent configuration option.")
+		l.Warn("You can change this behavior with the `verification-failure-behavior` agent configuration option.")
 		fmt.Fprintln(r.jobLogs, "Job will be run without verification")
 	}
 }
