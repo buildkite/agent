@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -453,4 +454,93 @@ func TestCreateRedaction(t *testing.T) {
 		writeBuf.String(),
 		"Go from [REDACTED], until you get to Quito.\nFrom [REDACTED], go back to [REDACTED].\n",
 	)
+}
+
+func TestDebugLogging(t *testing.T) {
+	t.Parallel()
+
+	env := testEnviron()
+
+	sockName, err := jobapi.NewSocketPath(os.TempDir())
+	assert.NilError(t, err)
+
+	logBuf := &bytes.Buffer{}
+	logger := shell.WriterLogger{Writer: logBuf, Ansi: true}
+	srv, token, err := jobapi.NewServer(&logger, sockName, env, nil, jobapi.WithDebug())
+	assert.NilError(t, err)
+
+	assert.NilError(t, srv.Start())
+	t.Cleanup(func() { _ = srv.Stop() }) // ignore error that server is already stopped
+
+	client := testSocketClient(srv.SocketPath)
+
+	tc := apiTestCase[any, jobapi.EnvGetResponse]{
+		expectedStatus: http.StatusOK,
+		expectedResponseBody: &jobapi.EnvGetResponse{
+			Env: map[string]string{
+				"CAPITAL":  "quito",
+				"MOUNTAIN": "cotopaxi",
+			},
+		},
+	}
+
+	buf := &bytes.Buffer{}
+	assert.NilError(t, json.NewEncoder(buf).Encode(tc.requestBody))
+
+	req, err := http.NewRequest(http.MethodGet, "http://job/api/current-job/v0/env", buf)
+	assert.NilError(t, err)
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	testAPI(t, env, req, client, tc)
+
+	assert.NilError(t, srv.Stop())
+
+	logs := logBuf.String()
+	assert.Check(t, strings.Contains(logs, "~~~ Job API"), "logs: %q", logs)
+	assert.Check(t, strings.Contains(logs, "Server listening on"), "logs: %q", logs)
+	assert.Check(t, strings.Contains(logs, "/api/current-job/v0/env"), "logs: %q", logs)
+	assert.Check(t, strings.Contains(logs, "Successfully shut down Job API server"), "logs: %q", logs)
+}
+
+func TestNoLogging(t *testing.T) {
+	t.Parallel()
+
+	env := testEnviron()
+
+	sockName, err := jobapi.NewSocketPath(os.TempDir())
+	assert.NilError(t, err)
+
+	logBuf := &bytes.Buffer{}
+	logger := shell.WriterLogger{Writer: logBuf, Ansi: true}
+	srv, token, err := jobapi.NewServer(&logger, sockName, env, nil)
+	assert.NilError(t, err)
+
+	assert.NilError(t, srv.Start())
+	t.Cleanup(func() { _ = srv.Stop() }) // ignore error that server is already stopped
+
+	client := testSocketClient(srv.SocketPath)
+
+	tc := apiTestCase[any, jobapi.EnvGetResponse]{
+		expectedStatus: http.StatusOK,
+		expectedResponseBody: &jobapi.EnvGetResponse{
+			Env: map[string]string{
+				"CAPITAL":  "quito",
+				"MOUNTAIN": "cotopaxi",
+			},
+		},
+	}
+
+	buf := &bytes.Buffer{}
+	assert.NilError(t, json.NewEncoder(buf).Encode(tc.requestBody))
+
+	req, err := http.NewRequest(http.MethodGet, "http://job/api/current-job/v0/env", buf)
+	assert.NilError(t, err)
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	testAPI(t, env, req, client, tc)
+
+	assert.NilError(t, srv.Stop())
+
+	logs := logBuf.String()
+	assert.Assert(t, logs == "", "logs: %q", logs)
 }
