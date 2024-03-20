@@ -4,9 +4,7 @@ import "github.com/urfave/cli"
 
 const (
 	defaultCancelGracePeriod = 10
-
-	// This will be increased to 9 in a future release of the agent.
-	defaultSignalGracePeriod = 0
+	defaultSignalGracePeriod = 9
 )
 
 var (
