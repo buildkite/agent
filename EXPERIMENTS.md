@@ -68,12 +68,6 @@ The API is exposed via a Unix Domain Socket. The path to the socket is not avail
 
 **Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™.
 
-### `isolated-plugin-checkout`
-
-Checks out each plugin to an directory that that is namespaced by the agent name. Thus each agent worker will have an isolated copy of the plugin. This removes the need to lock the plugin checkout directories in a single agent process with spawned workers. However, if your plugin directory is shared between multiple agent processes *with the same agent name* , you may run into race conditions. This is just one reason we recommend you ensure agents have unique names.
-
-**Status:** Likely to be the default behaviour in the future.
-
 ### `use-zzglob`
 
 Uses a different library for resolving glob expressions used for `artifact upload`.
