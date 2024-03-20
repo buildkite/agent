@@ -12,8 +12,13 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
+)
+
+const (
+	headerUserAgent = "User-Agent"
 )
 
 type DownloadConfig struct {
@@ -109,6 +114,12 @@ func (d Download) try(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// If no user agent provided, use the agents default [eg buildkite-agent/3.63.0.8023 (linux; amd64)]
+	if _, ok := d.conf.Headers[headerUserAgent]; !ok {
+		request.Header.Add(headerUserAgent, version.UserAgent())
+	}
+
 	for k, v := range d.conf.Headers {
 		request.Header.Add(k, v)
 	}
