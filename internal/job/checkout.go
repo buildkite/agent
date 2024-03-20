@@ -219,7 +219,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 
 	err = e.sendCommitToBuildkite(ctx)
 	if err != nil {
-		return err
+		e.shell.OptionalWarningf("commit-metadata", err.Error())
 	}
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
