@@ -605,6 +605,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 	}
 
+	fmt.Printf("disabled warnings %q\n", e.DisabledWarnings)
+	writerLogger := e.shell.Logger.(*shell.WriterLogger)
+	fmt.Printf("disabled warnings %q\n", writerLogger.DisabledWarningIDs)
+
 	gitSubmodules := false
 	if hasGitSubmodules(e.shell) {
 		if e.GitSubmodules {
