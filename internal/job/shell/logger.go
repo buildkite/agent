@@ -55,6 +55,14 @@ type WriterLogger struct {
 	DisabledWarningIDs []string
 }
 
+func NewWriterLogger(writer io.Writer, ansi bool, disabledWarningIDs []string) *WriterLogger {
+	return &WriterLogger{
+		Writer:             writer,
+		Ansi:               ansi,
+		DisabledWarningIDs: disabledWarningIDs,
+	}
+}
+
 func (wl *WriterLogger) Write(b []byte) (int, error) {
 	wl.Printf("%s", b)
 	return len(b), nil

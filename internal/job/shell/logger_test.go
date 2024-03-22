@@ -12,7 +12,7 @@ import (
 
 func TestAnsiLogger(t *testing.T) {
 	got := &bytes.Buffer{}
-	l := shell.WriterLogger{Writer: got, Ansi: false}
+	l := shell.NewWriterLogger(got, false, nil)
 
 	l.Headerf("Testing header: %q", "llamas")
 	l.Printf("Testing print: %q", "llamas")
@@ -44,7 +44,7 @@ func TestAnsiLogger(t *testing.T) {
 
 func TestLoggerStreamer(t *testing.T) {
 	got := &bytes.Buffer{}
-	l := &shell.WriterLogger{Writer: got, Ansi: false}
+	l := shell.NewWriterLogger(got, false, nil)
 
 	streamer := shell.NewLoggerStreamer(l)
 	streamer.Prefix = "TEST>"

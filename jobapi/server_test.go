@@ -465,8 +465,8 @@ func TestDebugLogging(t *testing.T) {
 	assert.NilError(t, err)
 
 	logBuf := &bytes.Buffer{}
-	logger := shell.WriterLogger{Writer: logBuf, Ansi: true}
-	srv, token, err := jobapi.NewServer(&logger, sockName, env, nil, jobapi.WithDebug())
+	logger := shell.NewWriterLogger(logBuf, true, nil)
+	srv, token, err := jobapi.NewServer(logger, sockName, env, nil, jobapi.WithDebug())
 	assert.NilError(t, err)
 
 	assert.NilError(t, srv.Start())
@@ -511,8 +511,8 @@ func TestNoLogging(t *testing.T) {
 	assert.NilError(t, err)
 
 	logBuf := &bytes.Buffer{}
-	logger := shell.WriterLogger{Writer: logBuf, Ansi: true}
-	srv, token, err := jobapi.NewServer(&logger, sockName, env, nil)
+	logger := shell.NewWriterLogger(logBuf, true, nil)
+	srv, token, err := jobapi.NewServer(logger, sockName, env, nil)
 	assert.NilError(t, err)
 
 	assert.NilError(t, srv.Start())

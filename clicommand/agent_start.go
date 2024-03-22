@@ -1296,8 +1296,8 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 
 	// pipe from hook output to logger
 	r, w := io.Pipe()
-	sh.Logger = &shell.WriterLogger{Writer: w, Ansi: !cfg.NoColor} // for Promptf
-	sh.Writer = w                                                  // for stdout+stderr
+	sh.Logger = shell.NewWriterLogger(w, !cfg.NoColor, nil) // for Promptf
+	sh.Writer = w                                           // for stdout+stderr
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
