@@ -86,7 +86,9 @@ func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, err
 			}
 
 			creation, resp, err := a.apiClient.CreateArtifacts(ctxTimeout, a.conf.JobID, batch)
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
+			// the server returns a 403 code if the artifact has exceeded the service quota
+			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404) {
+				a.logger.Warn("Artifact creation failed with status code %d, breaking the retry loop", resp.StatusCode)
 				r.Break()
 			}
 			if err != nil {
