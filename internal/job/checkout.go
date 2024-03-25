@@ -217,6 +217,11 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 		}
 	}
 
+	err = e.sendCommitToBuildkite(ctx)
+	if err != nil {
+		e.shell.OptionalWarningf("git-commit-resolution-failed", err.Error())
+	}
+
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
 	previousCheckoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
@@ -718,38 +723,52 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		e.resolveCommit(ctx)
 	}
 
-	// Grab author and commit information and send it back to Buildkite. But before we do, we'll check
-	// to see if someone else has done it first.
-	e.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if err := e.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
-		e.shell.Commentf("Sending Git commit information back to Buildkite")
-		// Format:
-		//
-		// commit 0123456789abcdef0123456789abcdef01234567
-		// abbrev-commit 0123456789
-		// Author: John Citizen <john@example.com>
-		//
-		//    Subject of the commit message
-		//
-		//    Body of the commit message, which
-		//    may span multiple lines.
-		gitArgs := []string{
-			"--no-pager",
-			"log",
-			"-1",
-			"HEAD",
-			"-s", // --no-patch was introduced in v1.8.4 in 2013, but e.g. CentOS 7 isn't there yet
-			"--no-color",
-			"--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B",
-		}
-		out, err := e.shell.RunAndCapture(ctx, "git", gitArgs...)
-		if err != nil {
-			return fmt.Errorf("getting git commit information: %w", err)
-		}
-		stdin := strings.NewReader(out)
-		if err := e.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", "buildkite:git:commit"); err != nil {
-			return fmt.Errorf("sending git commit information to Buildkite: %w", err)
-		}
+	return nil
+}
+
+const CommitMetadataKey = "buildkite:git:commit"
+
+// sendCommitToBuildkite sends commit information (commit, author, subject, body) to Buildkite, as the BK backend doesn't
+// have access to user's VCSes. To do this, we set a special meta-data key in the build, but only if it isn't already present
+// Functionally, this means that the first job in a build (usually a pipeline upload or similar) will push the commit info
+// to buildkite, which uses this info to display commit info in the UI eg in the title for the build
+// note that we bail early if the key already exists, as we don't want to overwrite it
+func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
+	e.shell.Commentf("Checking to see if git commit information needs to be sent to Buildkite...")
+	if err := e.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", CommitMetadataKey); err == nil {
+		// Command exited 0, ie the key exists, so we don't need to send it again
+		e.shell.Commentf("Git commit information has already been sent to Buildkite")
+		return nil
+	}
+
+	e.shell.Commentf("Sending Git commit information back to Buildkite")
+	// Format:
+	//
+	// commit 0123456789abcdef0123456789abcdef01234567
+	// abbrev-commit 0123456789
+	// Author: John Citizen <john@example.com>
+	//
+	//    Subject of the commit message
+	//
+	//    Body of the commit message, which
+	//    may span multiple lines.
+	gitArgs := []string{
+		"--no-pager",
+		"log",
+		"-1",
+		"HEAD",
+		"-s", // --no-patch was introduced in v1.8.4 in 2013, but e.g. CentOS 7 isn't there yet
+		"--no-color",
+		"--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B",
+	}
+	out, err := e.shell.RunAndCapture(ctx, "git", gitArgs...)
+	if err != nil {
+		return fmt.Errorf("getting git commit information: %w", err)
+	}
+
+	stdin := strings.NewReader(out)
+	if err := e.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", CommitMetadataKey); err != nil {
+		return fmt.Errorf("sending git commit information to Buildkite: %w", err)
 	}
 
 	return nil
