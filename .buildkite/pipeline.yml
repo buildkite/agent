@@ -174,6 +174,17 @@ steps:
             - "ubuntu-22.04"
             - "sidecar"
 
+  - name: ":docker::technologist: Publish Development Docker Images"
+    key: publish-development-docker-images
+    if: build.branch !~ /^(main|.*-.*-stable)$$/
+    depends_on:
+      - build-docker
+    env:
+      CODENAME: "development"
+    command: ".buildkite/steps/publish-docker-images.sh"
+    agents:
+      queue: deploy
+
   - group: ":docker: Docker Image Tests"
     steps:
       - name: ":docker: {{matrix.variant}} amd64 image test"
