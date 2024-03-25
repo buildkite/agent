@@ -38,6 +38,7 @@ release_image() {
   local tag="$1"
   echo "--- :docker: Tagging ${target_image}:${tag}"
   dry_run skopeo copy --multi-arch all "docker://$source_image" "docker://docker.io/${target_image}:${tag}"
+  dry_run skopeo copy --multi-arch all "docker://$source_image" "docker://ghcr.io/buildkite/${target_image}:${tag}"
 }
 
 variant="${1:-}"
@@ -55,38 +56,42 @@ fi
 
 echo "Tagging docker images for $variant/$codename (version $version build $build)"
 
-# variants of edge/experimental
-if [[ "$codename" == "experimental" ]] ; then
-  release_image "edge-build-${build}${variant_suffix}"
-  release_image "edge${variant_suffix}"
-fi
+case "$codename" in
+  "development") # development builds, released on every build
+    release_image "dev-build-${build}-branch-${BUILDKITE_BRANCH}"
+    ;;
 
-# variants of stable - e.g 2.3.2
-if [[ "$codename" == "stable" ]] ; then
-  for tag in $(parse_version "$version") ; do
-    release_image "${tag}${variant_suffix}"
-  done
-  release_image "${variant}"
+  "experimental") # variants of edge/experimental
+    release_image "edge-build-${build}${variant_suffix}"
+    release_image "edge${variant_suffix}"
+    ;;
 
-  # publish bare 'ubuntu' only from ubuntu-22.04
-  if [[ "$variant" == "ubuntu-22.04" ]] ; then
+
+  "unstable") # variants of beta/unstable - e.g 3.0-beta.16
+    release_image "beta${variant_suffix}"
+    if [[ "$version" =~ -(alpha|beta|rc)\.[0-9]+$ ]] ; then
+      release_image "${version}${variant_suffix}"
+    fi
+    ;;
+
+  "stable") # variants of stable - e.g 2.3.2
     for tag in $(parse_version "$version") ; do
-      release_image "${tag}-ubuntu"
+      release_image "${tag}${variant_suffix}"
     done
-    release_image "ubuntu"
-  fi
+    release_image "${variant}"
 
-  # publish latest and stable only from alpine
-  if [[ "$variant" == "alpine" ]] ; then
-    release_image "latest"
-    release_image "stable"
-  fi
-fi
+    # publish bare 'ubuntu' only from ubuntu-22.04
+    if [[ "$variant" == "ubuntu-22.04" ]] ; then
+      for tag in $(parse_version "$version") ; do
+        release_image "${tag}-ubuntu"
+      done
+      release_image "ubuntu"
+    fi
 
-# variants of beta/unstable - e.g 3.0-beta.16
-if [[ "$codename" == "unstable" ]] ; then
-  release_image "beta${variant_suffix}"
-  if [[ "$version" =~ -(alpha|beta|rc)\.[0-9]+$ ]] ; then
-    release_image "${version}${variant_suffix}"
-  fi
-fi
+    # publish latest and stable only from alpine
+    if [[ "$variant" == "alpine" ]] ; then
+      release_image "latest"
+      release_image "stable"
+    fi
+    ;;
+esac
