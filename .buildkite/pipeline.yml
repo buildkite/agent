@@ -91,10 +91,6 @@ steps:
     - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
       command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
       key: build-binary
-      depends_on:
-        # don't wait for slower windows tests
-        - test-linux-amd64
-        - test-linux-arm64
       artifact_paths: "pkg/*"
       plugins:
         docker-compose#v4.14.0:
