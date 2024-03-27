@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.67.0](https://github.com/buildkite/agent/tree/v3.67.0) (2024-03-28)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.66.0...v3.67.0)
+
+### Changed
+- De-experiment isolated plugin checkout [#2694](https://github.com/buildkite/agent/pull/2694) (@triarius)
+- Always set git commit [#2676](https://github.com/buildkite/agent/pull/2676) (@moskyb)
+- Silence Job API Log Group [#2690](https://github.com/buildkite/agent/pull/2690), [#2695](https://github.com/buildkite/agent/pull/2695) (@triarius)
+- Set a user agent when downloading most artifacts [#2671](https://github.com/buildkite/agent/pull/2671) (@yob)
+- Extend default signal grace period to 9 seconds [#2696](https://github.com/buildkite/agent/pull/2696) (@triarius)
+
+### Fixed
+- Fix commit resolution error message [#2699](https://github.com/buildkite/agent/pull/2699) (@moskyb)
+- Update outdated option name [#2693](https://github.com/buildkite/agent/pull/2693) (@fruechel-canva)
+
+### Internal
+- Add a User-Agent header when uploading artifacts to Buildkite's default location [#2672](https://github.com/buildkite/agent/pull/2672) (@yob)
+- Break from artifact upload retry loop on more 4xx responses [#2697](https://github.com/buildkite/agent/pull/2697) (@SorchaAbel)
+- Use roko.DoFunc [#2689](https://github.com/buildkite/agent/pull/2689) (@DrJosh9000)
+- Dependabot up to its usual tricks: [#2704](https://github.com/buildkite/agent/pull/2704), [#2701](https://github.com/buildkite/agent/pull/2701), [#2702](https://github.com/buildkite/agent/pull/2702), [#2666](https://github.com/buildkite/agent/pull/2666), [#2691](https://github.com/buildkite/agent/pull/2691), [#2692](https://github.com/buildkite/agent/pull/2692) (@dependabot[bot])
+
 ## [v3.66.0](https://github.com/buildkite/agent/tree/v3.66.0) (2024-03-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.65.0...v3.66.0)
 
