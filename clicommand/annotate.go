@@ -97,8 +97,9 @@ var AnnotateCommand = cli.Command{
 		},
 		cli.IntFlag{
 			Name:   "priority",
-			Usage:  "Priority of the annotation (1 to 10). By default annotations have a priority of 3. Annotations with a priority of 10 will be shown first, and annotations with a priority of 1 will be shown last.",
+			Usage:  "Priority of the annotation (1 to 10). Annotations with a priority of 10 will be shown first, and annotations with a priority of 1 will be shown last.",
 			EnvVar: "BUILDKITE_ANNOTATION_PRIORITY",
+			Value:  1,
 		},
 		cli.StringFlag{
 			Name:   "job",
