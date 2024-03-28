@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -180,22 +181,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		return shell.GetExitCode(err)
 	}
 
-	includePhase := func(phase string) bool {
-		if len(e.Phases) == 0 {
-			return true
-		}
-		for _, include := range e.Phases {
-			if include == phase {
-				return true
-			}
-		}
-		return false
-	}
-
 	// Execute the job phases in order
 	var phaseErr error
 
-	if includePhase("plugin") {
+	if e.includePhase("plugin") {
 		phaseErr = e.preparePlugins()
 
 		if phaseErr == nil {
@@ -203,7 +192,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 	}
 
-	if phaseErr == nil && includePhase("checkout") {
+	if phaseErr == nil && e.includePhase("checkout") {
 		phaseErr = e.CheckoutPhase(ctx)
 	} else {
 		checkoutDir, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
@@ -212,11 +201,11 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 	}
 
-	if phaseErr == nil && includePhase("plugin") {
+	if phaseErr == nil && e.includePhase("plugin") {
 		phaseErr = e.VendoredPluginPhase(ctx)
 	}
 
-	if phaseErr == nil && includePhase("command") {
+	if phaseErr == nil && e.includePhase("command") {
 		var commandErr error
 		phaseErr, commandErr = e.CommandPhase(ctx)
 		/*
@@ -272,6 +261,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
+}
+
+func (e *Executor) includePhase(phase string) bool {
+	if len(e.Phases) == 0 {
+		return true
+	}
+	return slices.Contains(e.Phases, phase)
 }
 
 // Cancel interrupts any running shell processes and causes the job to stop
@@ -738,16 +734,24 @@ func (e *Executor) tearDown(ctx context.Context) error {
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-exit"); err != nil {
-		return err
-	}
+	// In vanilla agent usage, there's always a command phase.
+	// But over in agent-stack-k8s, which splits the agent phases among
+	// containers (the checkout phase happens in a separate container to the
+	// command phase), the two phases have different environments.
+	// Unfortunately pre-exit hooks are often not written with this split in
+	// mind.
+	if e.includePhase("command") {
+		if err = e.executeGlobalHook(ctx, "pre-exit"); err != nil {
+			return err
+		}
 
-	if err = e.executeLocalHook(ctx, "pre-exit"); err != nil {
-		return err
-	}
+		if err = e.executeLocalHook(ctx, "pre-exit"); err != nil {
+			return err
+		}
 
-	if err = e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts); err != nil {
-		return err
+		if err = e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts); err != nil {
+			return err
+		}
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
