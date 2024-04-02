@@ -322,6 +322,21 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 	tester.CheckMocks(t)
 }
 
+func TestPreExitHooksDoesNotFireWithoutCommandPhase(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	tester.ExpectGlobalHook("pre-exit").NotCalled()
+	tester.ExpectLocalHook("pre-exit").NotCalled()
+
+	tester.RunAndCheck(t, "BUILDKITE_BOOTSTRAP_PHASES=plugin,checkout")
+}
+
 func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 	t.Parallel()
 
