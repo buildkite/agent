@@ -188,7 +188,7 @@ func signOffline(
 
 	parsedPipeline, err := pipeline.Parse(input)
 	if w := warning.As(err); w != nil {
-		l.Warn("There were some issues with the pipeline input:\n%v", w)
+		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
 	} else if err != nil {
 		return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
 	}
@@ -244,7 +244,7 @@ func signWithGraphQL(
 
 	parsedPipeline, err := pipeline.Parse(strings.NewReader(resp.Pipeline.Steps.Yaml))
 	if w := warning.As(err); w != nil {
-		l.Warn("There were some issues with the pipeline input:\n%v", w)
+		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
 	} else if err != nil {
 		return fmt.Errorf("pipeline parsing failed: %w", err)
 	}

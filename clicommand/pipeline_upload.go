@@ -264,7 +264,7 @@ var PipelineUploadCommand = cli.Command{
 
 		result, err := cfg.parseAndInterpolate(src, input, environ)
 		if w := warning.As(err); w != nil {
-			l.Warn("There were some issues with the pipeline input:\n%v", w)
+			l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
 		} else if err != nil {
 			return err
 		}
