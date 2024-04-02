@@ -90,7 +90,7 @@ func TestRun(t *testing.T) {
 	sh := newShellForTest(t)
 	sh.PTY = false
 	sh.Writer = out
-	sh.Logger = &shell.WriterLogger{Writer: out, Ansi: false}
+	sh.Logger = shell.NewWriterLogger(out, false, nil)
 
 	go func() {
 		call := <-sshKeygen.Ch

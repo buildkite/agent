@@ -1154,18 +1154,19 @@ func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *
 		e.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
 		writer := io.MultiWriter(os.Stdout, kubernetesClient)
 		e.shell.Writer = writer
-		e.shell.Logger = &shell.WriterLogger{
-			Writer: writer,
-			Ansi:   true,
-		}
+		e.shell.Logger = shell.NewWriterLogger(writer, true, e.DisabledWarnings)
+
 		return nil
 	})
+
 	if err != nil {
 		return fmt.Errorf("error connecting to kubernetes runner: %w", err)
 	}
+
 	if err := kubernetesClient.Await(ctx, kubernetes.RunStateStart); err != nil {
 		return fmt.Errorf("error waiting for client to become ready: %w", err)
 	}
+
 	go func() {
 		if err := kubernetesClient.Await(ctx, kubernetes.RunStateInterrupt); err != nil {
 			e.shell.Errorf("Error waiting for client interrupt: %v", err)
