@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/signature"
+	"github.com/buildkite/go-pipeline/warning"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
@@ -186,7 +187,9 @@ func signOffline(
 	}
 
 	parsedPipeline, err := pipeline.Parse(input)
-	if err != nil {
+	if w := warning.As(err); w != nil {
+		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
+	} else if err != nil {
 		return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
 	}
 
@@ -240,7 +243,9 @@ func signWithGraphQL(
 	l.Info("Signing pipeline with the repository URL:\n%s", resp.Pipeline.Repository.Url)
 
 	parsedPipeline, err := pipeline.Parse(strings.NewReader(resp.Pipeline.Steps.Yaml))
-	if err != nil {
+	if w := warning.As(err); w != nil {
+		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
+	} else if err != nil {
 		return fmt.Errorf("pipeline parsing failed: %w", err)
 	}
 

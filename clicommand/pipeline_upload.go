@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/buildkite/go-pipeline/signature"
+	"github.com/buildkite/go-pipeline/warning"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
 )
@@ -262,7 +263,9 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		result, err := cfg.parseAndInterpolate(src, input, environ)
-		if err != nil {
+		if w := warning.As(err); w != nil {
+			l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
+		} else if err != nil {
 			return err
 		}
 
@@ -388,7 +391,7 @@ func searchForSecrets(
 
 func (cfg *PipelineUploadConfig) parseAndInterpolate(src string, input io.Reader, environ *env.Environment) (*pipeline.Pipeline, error) {
 	result, err := pipeline.Parse(input)
-	if err != nil {
+	if err != nil && !warning.Is(err) {
 		return nil, fmt.Errorf("pipeline parsing of %q failed: %w", src, err)
 	}
 	if !cfg.NoInterpolation {
@@ -402,5 +405,6 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(src string, input io.Reader
 			return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 		}
 	}
-	return result, nil
+	// err may be nil or a warning from pipeline.Parse
+	return result, err
 }
