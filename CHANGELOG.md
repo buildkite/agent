@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.68.0](https://github.com/buildkite/agent/tree/v3.68.0) (2024-04-04)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.67.0...v3.68.0)
+
+### Changed
+- Ensure that disabled warnings get passed to the logger in kubernetes agents [#2698](https://github.com/buildkite/agent/pull/2698) (@moskyb)
+- Handle warnings from go-pipeline `Parse` [#2675](https://github.com/buildkite/agent/pull/2675) (@DrJosh9000)
+- Don't run pre-exit hooks without command phase [#2707](https://github.com/buildkite/agent/pull/2707) (@DrJosh9000)
+
+### Internal
+- Dependabot updates [#2714](https://github.com/buildkite/agent/pull/2714), [#2712](https://github.com/buildkite/agent/pull/2712), [#2709](https://github.com/buildkite/agent/pull/2709), [#2708](https://github.com/buildkite/agent/pull/2708), [#2663](https://github.com/buildkite/agent/pull/2663) (@dependabot[bot])
+
+
 ## [v3.67.0](https://github.com/buildkite/agent/tree/v3.67.0) (2024-03-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.66.0...v3.67.0)
 
