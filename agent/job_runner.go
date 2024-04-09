@@ -430,6 +430,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 	}
 
+	cache := r.conf.Job.Step.Cache
+	if cache != nil && len(cache.Paths) > 0 {
+		env["BUILDKITE_AGENT_CACHE_PATHS"] = strings.Join(cache.Paths, ",")
+	}
+
 	// Set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings
 	if len(ignoredEnv) > 0 {
 		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
