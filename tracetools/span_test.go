@@ -53,6 +53,7 @@ type TestOtelSpan struct {
 	statusCode     codes.Code
 	statusDesc     string
 	name           string
+	links          []trace.Link
 	attributes     []attribute.KeyValue
 	tracerProvider trace.TracerProvider
 }
@@ -65,6 +66,7 @@ func (t *TestOtelSpan) RecordError(err error, _ ...trace.EventOption) { t.err = 
 func (t *TestOtelSpan) SpanContext() trace.SpanContext                { return t.spanContext }
 func (t *TestOtelSpan) SetName(name string)                           { t.name = name }
 func (t *TestOtelSpan) TracerProvider() trace.TracerProvider          { return t.tracerProvider }
+func (t *TestOtelSpan) AddLink(link trace.Link)                       { t.links = append(t.links, link) }
 
 func (t *TestOtelSpan) SetAttributes(kv ...attribute.KeyValue) {
 	t.attributes = append(t.attributes, kv...)
