@@ -19,5 +19,8 @@ packaging/docker/*/hooks/
 # Generated at build time by scripts/generate-acknowledgements.sh
 /clicommand/ACKNOWLEDGEMENTS.md.gz
 
+# So we can have a nice local config file in development
+.buildkite-agent.cfg
+
 .idea
 .vscode
