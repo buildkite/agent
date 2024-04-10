@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.69.0](https://github.com/buildkite/agent/tree/v3.69.0) (2024-04-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.68.0...v3.69.0)
+
+### Added
+- Environment variable to control cache volume mounting on hosted agents [#2720](https://github.com/buildkite/agent/pull/2720) [#2722](https://github.com/buildkite/agent/pull/2722) (@moskyb)
+
+### Internal
+
+- @dependabot, hard at work as usual [#2717](https://github.com/buildkite/agent/pull/2717) [#2721](https://github.com/buildkite/agent/pull/2721) [#2719](https://github.com/buildkite/agent/pull/2719) [#2718](https://github.com/buildkite/agent/pull/2718) [#2715](https://github.com/buildkite/agent/pull/2715) (@dependabot)
+
 ## [v3.68.0](https://github.com/buildkite/agent/tree/v3.68.0) (2024-04-04)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.67.0...v3.68.0)
 
