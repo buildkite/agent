@@ -36,8 +36,10 @@ parse_version() {
 
 release_image() {
   local tag="$1"
-  echo "--- :docker: Tagging ${target_image}:${tag}"
-  dry_run skopeo copy --multi-arch all "docker://$source_image" "docker://docker.io/${target_image}:${tag}"
+  echo "--- :docker: Copying ${target_image}:${tag} to Docker Hub"
+  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://docker.io/${target_image}:${tag}"
+  echo "--- :github: Copying ${target_image}:${tag} to GHCR"
+  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://ghcr.io/${target_image}:${tag}"
 }
 
 variant="${1:-}"

@@ -14,11 +14,35 @@ if [[ "$CODENAME" == "" ]]; then
   exit 1
 fi
 
-echo "--- Logging in to Docker Hub"
+echo "--- docker login to Docker Hub"
 
-dockerhub_user="$(aws ssm get-parameter --name /pipelines/agent/DOCKER_HUB_USER --with-decryption --output text --query Parameter.Value --region us-east-1)"
+dockerhub_user="$(aws ssm get-parameter \
+  --name /pipelines/agent/DOCKER_HUB_USER \
+  --with-decryption \
+  --output text \
+  --query Parameter.Value \
+  --region us-east-1\
+)"
 
-aws ssm get-parameter --name /pipelines/agent/DOCKER_HUB_PASSWORD --with-decryption --output text --query Parameter.Value --region us-east-1 | docker login --username="${dockerhub_user}" --password-stdin
+aws ssm get-parameter \
+  --name /pipelines/agent/DOCKER_HUB_PASSWORD \
+  --with-decryption \
+  --output text \
+  --query Parameter.Value \
+  --region us-east-1 \
+  | docker login --username="${dockerhub_user}" --password-stdin
+
+
+echo "--- docker login to GitHub"
+
+ghcr_user=buildkite-agent-releaser
+aws ssm get-parameter \
+  --name /pipelines/agent/GITHUB_RELEASE_ACCESS_TOKEN \
+  --with-decryption \
+  --output text \
+  --query Parameter.Value \
+  --region us-east-1 \
+  | docker login ghcr.io --username="${ghcr_user}" --password-stdin
 
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
