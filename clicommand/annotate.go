@@ -150,7 +150,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		body = string(stdin[:])
 	}
 
-	if bodySize := len(cfg.Body); bodySize > maxBodySize {
+	if bodySize := len(body); bodySize > maxBodySize {
 		return fmt.Errorf("annotation body size (%dB) exceeds maximum (%dB)", bodySize, maxBodySize)
 	}
 
