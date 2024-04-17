@@ -1102,7 +1102,7 @@ var AgentStartCommand = cli.Command{
 
 		if cfg.SpawnPerCPU > 0 {
 			if cfg.Spawn > 1 {
-				return errors.New("You can't specify spawn and spawn-per-cpu ath the same time")
+				return errors.New("You can't specify spawn and spawn-per-cpu at the same time")
 			}
 			cfg.Spawn = runtime.NumCPU() * cfg.SpawnPerCPU
 		}
