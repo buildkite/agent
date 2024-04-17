@@ -317,6 +317,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 				logger.StringField("build_number", r.conf.Job.Env["BUILDKITE_BUILD_NUMBER"]),
 				logger.StringField("job_url", fmt.Sprintf("%s#%s", r.conf.Job.Env["BUILDKITE_BUILD_URL"], r.conf.Job.ID)),
 				logger.StringField("job_id", r.conf.Job.ID),
+				logger.StringField("step_key", r.conf.Job.Env["BUILDKITE_STEP_KEY"]),
 			)
 			allWriters = append(allWriters, log)
 		} else {
