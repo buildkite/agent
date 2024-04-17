@@ -50,12 +50,11 @@ type Runner struct {
 	conf     Config
 	mu       sync.Mutex
 	listener net.Listener
-	started,
-	done,
-	interrupt chan struct{}
-	startedOnce,
-	closedOnce,
-	interruptOnce sync.Once
+
+	started, done, interrupt chan struct{}
+
+	startedOnce, closedOnce, interruptOnce sync.Once
+
 	server  *rpc.Server
 	mux     *http.ServeMux
 	clients map[int]*clientResult
@@ -352,7 +351,8 @@ func (c *Client) Await(ctx context.Context, desiredState RunState) error {
 			}
 			if current == desiredState {
 				return nil
-			} else if current == RunStateInterrupt {
+			}
+			if current == RunStateInterrupt {
 				return ErrInterrupt
 			}
 			time.Sleep(time.Second)
