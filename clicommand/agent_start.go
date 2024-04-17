@@ -78,6 +78,7 @@ type AgentStartConfig struct {
 	Name              string   `cli:"name"`
 	Priority          string   `cli:"priority"`
 	Spawn             int      `cli:"spawn"`
+	SpawnPerCPU       int      `cli:"spawn-per-cpu"`
 	SpawnWithPriority bool     `cli:"spawn-with-priority"`
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
@@ -610,13 +611,19 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.IntFlag{
 			Name:   "spawn",
-			Usage:  "The number of agents to spawn in parallel",
+			Usage:  "The number of agents to spawn in parallel (mutually exclusive with --spawn-per-cpu)",
 			Value:  1,
 			EnvVar: "BUILDKITE_AGENT_SPAWN",
 		},
+		cli.IntFlag{
+			Name:   "spawn-per-cpu",
+			Usage:  "The number of agents to spawn per cpu in parallel (mutually exclusive with --spawn)",
+			Value:  0,
+			EnvVar: "BUILDKITE_AGENT_SPAWN_PER_CPU",
+		},
 		cli.BoolFlag{
 			Name:   "spawn-with-priority",
-			Usage:  "Assign priorities to every spawned agent (when using --spawn) equal to the agent's index",
+			Usage:  "Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu) equal to the agent's index",
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
 		},
 		cancelSignalFlag,
@@ -1091,6 +1098,13 @@ var AgentStartCommand = cli.Command{
 			// specific job.
 			IgnoreInDispatches: cfg.AcquireJob != "",
 			Features:           cfg.Features(ctx),
+		}
+
+		if cfg.SpawnPerCPU > 0 {
+			if cfg.Spawn > 1 {
+				return errors.New("You can't specify spawn and spawn-per-cpu at the same time")
+			}
+			cfg.Spawn = runtime.NumCPU() * cfg.SpawnPerCPU
 		}
 
 		// Spawning multiple agents doesn't work if the agent is being
