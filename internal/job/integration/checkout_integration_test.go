@@ -468,6 +468,39 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	assert.Equal(t, checkoutRepoCommit, commitHash)
 }
 
+func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+
+	// Remove the branch ref to simulate this being a PR from a fork
+	_, err = tester.Repo.Execute("branch", "-D", "update-test-txt")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=forker:update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		"BUILDKITE_COMMIT=HEAD",
+	}
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
 func TestCheckoutErrorIsRetried(t *testing.T) {
 	t.Parallel()
 
