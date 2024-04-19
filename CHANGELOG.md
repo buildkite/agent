@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.70.0](https://github.com/buildkite/agent/tree/v3.70.0) (2024-04-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.69.0...v3.70.0)
+
+### Added
+- Add BUILDKITE_STEP_KEY as a json logger field [#2730](https://github.com/buildkite/agent/pull/2730) (@joeljeske)
+- New flag `--spawn-per-cpu` The number of agents to spawn per cpu in parallel (mutually exclusive with --spawn) [#2711](https://github.com/buildkite/agent/pull/2711) (@mmlb)
+- Upload agent images to GHCR [#2724](https://github.com/buildkite/agent/pull/2724) (@DrJosh9000)
+
+### Fixed
+- Update go-pipeline to v0.7.0 (Correctly upload cache `name` and `size` command step settings, support `cache: false`) [#2731](https://github.com/buildkite/agent/pull/2731) (@jordandcarter)
+- Show descriptive error when annotation body size exceeds maximum when using stdin [#2725](https://github.com/buildkite/agent/pull/2725) (@rianmcguire)
+
+### Internal
+- Dependabot updates [#2726](https://github.com/buildkite/agent/pull/2726) [#2727](https://github.com/buildkite/agent/pull/2727) [#2728](https://github.com/buildkite/agent/pull/2728) [#2729](https://github.com/buildkite/agent/pull/2729) (@dependabot[bot])
+
 ## [v3.69.0](https://github.com/buildkite/agent/tree/v3.69.0) (2024-04-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.68.0...v3.69.0)
 
@@ -25,7 +40,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Internal
 - Dependabot updates [#2714](https://github.com/buildkite/agent/pull/2714), [#2712](https://github.com/buildkite/agent/pull/2712), [#2709](https://github.com/buildkite/agent/pull/2709), [#2708](https://github.com/buildkite/agent/pull/2708), [#2663](https://github.com/buildkite/agent/pull/2663) (@dependabot[bot])
-
 
 ## [v3.67.0](https://github.com/buildkite/agent/tree/v3.67.0) (2024-03-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.66.0...v3.67.0)
