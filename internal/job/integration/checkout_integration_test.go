@@ -360,6 +360,55 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 	assert.Equal(t, checkoutRepoCommit, commitHash)
 }
 
+func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", strings.TrimSpace(commitHash)),
+	}
+
+	// Amend the pull request, so commitHash is no longer reachable from refs/pull/123/head
+	err = tester.Repo.CheckoutBranch("update-test-txt")
+	assert.NilError(t, err)
+
+	err = os.WriteFile(
+		filepath.Join(tester.Repo.Path, "test.txt"),
+		[]byte("This is an amended test pull request"),
+		0o600,
+	)
+	assert.NilError(t, err)
+
+	err = tester.Repo.Add("test.txt")
+	assert.NilError(t, err)
+
+	_, err = tester.Repo.Execute("commit", "--amend", "-m", "Amended PR Commit")
+	assert.NilError(t, err)
+
+	_, err = tester.Repo.Execute("update-ref", "refs/pull/123/head", "HEAD")
+	assert.NilError(t, err)
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
 func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 	t.Parallel()
 
