@@ -13,15 +13,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - New flag `--spawn-per-cpu` The number of agents to spawn per cpu in parallel (mutually exclusive with --spawn) [#2711](https://github.com/buildkite/agent/pull/2711) (@mmlb)
 - Upload agent images to GHCR [#2724](https://github.com/buildkite/agent/pull/2724) (@DrJosh9000)
 
-### Changed
-- Update azure-sdk-for-go/sdk/azidentity to 1.5.2, aws/aws-sdk-go to 1.51.21 [#2726](https://github.com/buildkite/agent/pull/2726) (@dependabot[bot])
-- Bump docker/library/golang from `c4fb952` to `450e382` in /.buildkite [#2727](https://github.com/buildkite/agent/pull/2727) (@dependabot[bot])
-- Bump ubuntu/ubuntu from `d06a58c` to `12fb86d` in /packaging/docker/ubuntu-22.04 [#2728](https://github.com/buildkite/agent/pull/2728) (@dependabot[bot])
-- Bump ubuntu/ubuntu from `b7a139e` to `347448b` in /packaging/docker/ubuntu-20.04 [#2729](https://github.com/buildkite/agent/pull/2729) (@dependabot[bot])
-
 ### Fixed
 - Update go-pipeline to v0.7.0 (Correctly upload cache `name` and `size` command step settings, support `cache: false`) [#2731](https://github.com/buildkite/agent/pull/2731) (@jordandcarter)
 - Show descriptive error when annotation body size exceeds maximum when using stdin [#2725](https://github.com/buildkite/agent/pull/2725) (@rianmcguire)
+
+### Internal
+- Dependabot updates [#2726](https://github.com/buildkite/agent/pull/2726) [#2727](https://github.com/buildkite/agent/pull/2727) [#2728](https://github.com/buildkite/agent/pull/2728) [#2729](https://github.com/buildkite/agent/pull/2729) (@dependabot[bot])
 
 ## [v3.69.0](https://github.com/buildkite/agent/tree/v3.69.0) (2024-04-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.68.0...v3.69.0)
