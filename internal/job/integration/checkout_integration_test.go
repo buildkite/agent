@@ -360,6 +360,41 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 	assert.Equal(t, checkoutRepoCommit, commitHash)
 }
 
+func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local",                               // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_GIT_FETCH_FLAGS=--refmap=+refs/pull/*:refs/pull/origin/*", // Track remote pull request refs locally
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", strings.TrimSpace(commitHash)),
+	}
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+
+	// This local ref should match remote refs/pull/123/head
+	localPullRefCommit, err := checkoutRepo.RevParse("refs/pull/origin/123/head")
+	assert.NilError(t, err)
+	assert.Equal(t, localPullRefCommit, commitHash)
+}
+
 func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) {
 	t.Parallel()
 
