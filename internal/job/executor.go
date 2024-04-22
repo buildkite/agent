@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
@@ -449,16 +450,20 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		e.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
 	}
 
-	const maxHookRetry = 3
+	const maxHookRetry = 30
 
 	// Run the wrapper script
 	if err := roko.NewRetrier(
-		roko.WithStrategy(roko.Constant(time.Second)),
+		roko.WithStrategy(roko.Constant(100*time.Millisecond)),
 		roko.WithMaxAttempts(maxHookRetry),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		// Run the script and only retry on fork/exec errors
+		// Run the script and only retry on ETXTBSY.
+		// This error occurs because of an unavoidable race between forking
+		// (which acquires open file descriptors of the parent process) and
+		// writing an executable (the script wrapper).
+		// See https://github.com/golang/go/issues/22315.
 		err := e.shell.RunScript(ctx, script.Path(), hookCfg.Env)
-		if perr := new(os.PathError); errors.As(err, &perr) && perr.Op == "fork/exec" {
+		if errors.Is(err, syscall.ETXTBSY) {
 			return err
 		}
 		r.Break()
@@ -476,9 +481,9 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 			}
 		}
 
-		// If the error is from fork/exec, then inspect the file to see why it failed to be executed,
-		// even after the retry
-		if perr := new(os.PathError); errors.As(err, &perr) && perr.Op == "fork/exec" {
+		if perr := new(os.PathError); errors.As(err, &perr) && errors.Is(perr.Err, syscall.ETXTBSY) {
+			// If the error is ETXTBSY, then inspect the file to see what
+			// process had it open for write and log something helpful
 			logOpenedHookInfo(e.shell.Logger, e.Debug, hookName, perr.Path)
 		}
 
