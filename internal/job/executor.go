@@ -422,6 +422,31 @@ func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
 	}
 }
 
+func logMissingHookInfo(l shell.Logger, wrapperPath string) {
+	// It's unlikely, but possible, that the script wrapper was spontaneously
+	// deleted or corrupted (it's usually in /tmp, which is fair game).
+	// A common setup error is to try to run a Bash hook in a container or other
+	// environment without Bash (or Bash is not in the expected location).
+	shebang, err := shellscript.ShebangLine(wrapperPath)
+	if err != nil {
+		// It's reasonable to assume the script wrapper was spontaneously
+		// deleted, or had something equally horrible happen to it.
+		l.Errorf("The %s hook failed to run - perhaps the wrapper script %q was spontaneously deleted", wrapperPath)
+		return
+	}
+	interpreter := strings.TrimPrefix(shebang, "#!")
+	if interpreter == "" {
+		// Either the script never had a shebang, or the script was
+		// spontaneously corrupted.
+		// If it didn't have a shebang line, we defaulted to using Bash, and if
+		// that's not present we already logged a warning.
+		// If it was spontaneously corrupted, we should expect a different error
+		// than ENOENT.
+		return
+	}
+	l.Errorf("The %s hook failed to run - perhaps the script interpreter %q is missing", interpreter)
+}
+
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	defer e.redactors.Flush()
 
@@ -481,10 +506,18 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 			}
 		}
 
-		if perr := new(os.PathError); errors.As(err, &perr) && errors.Is(perr.Err, syscall.ETXTBSY) {
-			// If the error is ETXTBSY, then inspect the file to see what
-			// process had it open for write and log something helpful
-			logOpenedHookInfo(e.shell.Logger, e.Debug, hookName, perr.Path)
+		switch {
+		case errors.Is(err, syscall.ETXTBSY):
+			// If the underlying error is _still_ ETXTBSY, then inspect the file
+			// to see what process had it open for write, to log something helpful
+			logOpenedHookInfo(e.shell.Logger, e.Debug, hookName, script.Path())
+
+		case errors.Is(err, syscall.ENOENT):
+			// Unfortunately the wrapping os.PathError's Path is always the
+			// program we tried to exec, even if the missing file/directory was
+			// actually the interpreter specified on the shebang line.
+			// Try to figure out which part is missing from the wrapper.
+			logMissingHookInfo(e.shell.Logger, script.Path())
 		}
 
 		return err
