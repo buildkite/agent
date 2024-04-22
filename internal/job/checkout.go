@@ -720,8 +720,9 @@ func gitFetchCommitWithFallback(ctx context.Context, shell *shell.Shell, gitFetc
 		}
 	}
 
-	// Some repositories don't support fetching a specific commit so we fall
-	// back to fetching all heads and tags, hoping that the commit is included.
+	// The commit might be something that's not possible to fetch directly
+	// (eg. a short commit hash), so we fall back to fetching all heads and tags,
+	// hoping that the commit is included.
 	shell.Commentf("Commit fetch failed, trying to fetch all heads and tags")
 	// By default `git fetch origin` will only fetch tags which are
 	// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
