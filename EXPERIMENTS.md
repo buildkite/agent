@@ -92,3 +92,14 @@ running in a terminal, using ANSI escapes to provide colours, progress meters et
 the PTY to modify the stream. (Or do we? That's why this is an experiment)
 
 **Status:** Experimental for some opt-in testing before being promoted to always-on.
+
+### `override-zero-exit-on-cancel`
+
+If the job is cancelled, and the exit status of the process is 0, it is overridden to be 1 instead.
+
+When cancelling a job, the agent signals the process, which typically causes it to exit with a
+non-zero status code. On Windows this is not true - the process exits with code 0 instead, which
+makes the job appear to be successful. (It successfully exited, no?) By overriding the status to 1,
+a cancelled job should appear as a failure, regardless of the OS the agent is running on.
+
+**Status:** Experimental for some opt-in testing. We hope to promote this to be the default soon™.
