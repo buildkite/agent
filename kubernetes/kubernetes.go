@@ -291,11 +291,22 @@ func (c *Client) Connect() (RegisterResponse, error) {
 	if c.SocketPath == "" {
 		c.SocketPath = defaultSocketPath
 	}
-	client, err := rpc.DialHTTP("unix", c.SocketPath)
-	if err != nil {
-		return RegisterResponse{}, err
+
+	// avoid race condition if this container starts before agent which creates the socket
+	for i := 1; i++ {
+		client, err := rpc.DialHTTP("unix", c.SocketPath)
+		if err != nil {
+			r.logger.Warn("client socket dial failed (try %n): %w", i, err)
+			if (i > 10) {
+				return RegisterResponse{}, err
+			}
+			time.Sleep(time.Second)
+		} else {
+			c.client = client
+			break
+		}
 	}
-	c.client = client
+	
 	var resp RegisterResponse
 	if err := c.client.Call("Runner.Register", c.ID, &resp); err != nil {
 		return RegisterResponse{}, err
