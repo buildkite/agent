@@ -64,7 +64,7 @@ func TestRunningPlugins(t *testing.T) {
 		}
 	})
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
@@ -338,7 +338,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 		"BUILDKITE_PLUGINS=" + json,
 	}
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
@@ -376,7 +376,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	}
 	modifyTestPlugin(t, hooks2, p)
 
-	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester2.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
@@ -442,7 +442,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 		"BUILDKITE_PLUGINS=" + json,
 	}
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
@@ -483,7 +483,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	// This time, we expect the value of OSTRICH_EGGS to have changed compared to the first test
 	// run.
-	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester2.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=huge_actually"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)

@@ -222,9 +222,9 @@ func (e *ExecutorTester) writeHookScript(m *bintest.Mock, name string, dir strin
 	return hookScript, os.WriteFile(hookScript, []byte(body), 0o600)
 }
 
-// ExpectLocalHook creates a mock object and a script in the git repository's buildkite hooks dir
+// ExpectRepositoryHook creates a mock object and a script in the git repository's buildkite hooks dir
 // that proxies to the mock. This lets you set up expectations on a local  hook
-func (e *ExecutorTester) ExpectLocalHook(name string) *bintest.Expectation {
+func (e *ExecutorTester) ExpectRepositoryHook(name string) *bintest.Expectation {
 	hooksDir := filepath.Join(e.Repo.Path, ".buildkite", "hooks")
 
 	if err := os.MkdirAll(hooksDir, 0o700); err != nil {
@@ -246,9 +246,9 @@ func (e *ExecutorTester) ExpectLocalHook(name string) *bintest.Expectation {
 	return e.hookMock.Expect("local", name)
 }
 
-// ExpectGlobalHook creates a mock object and a script in the global buildkite hooks dir
+// ExpectAgentHook creates a mock object and a script in the global buildkite hooks dir
 // that proxies to the mock. This lets you set up expectations on a global hook
-func (e *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
+func (e *ExecutorTester) ExpectAgentHook(name string) *bintest.Expectation {
 	_, err := e.writeHookScript(e.hookMock, name, e.HooksDir, "global", name)
 	if err != nil {
 		panic(err)

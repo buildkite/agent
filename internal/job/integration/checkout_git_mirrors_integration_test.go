@@ -615,7 +615,7 @@ func TestCheckoutDoesNotRetryOnHookFailure_WithGitMirrors(t *testing.T) {
 
 	var checkoutCounter int32
 
-	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		counter := atomic.AddInt32(&checkoutCounter, 1)
 		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
 		if counter == 1 {
@@ -661,11 +661,11 @@ func TestRepositorylessCheckout_WithGitMirrors(t *testing.T) {
 
 	tester.MustMock(t, "git").Expect().NotCalled()
 
-	tester.ExpectGlobalHook("pre-checkout").Once()
-	tester.ExpectGlobalHook("post-checkout").Once()
-	tester.ExpectGlobalHook("pre-command").Once()
-	tester.ExpectGlobalHook("post-command").Once()
-	tester.ExpectGlobalHook("pre-exit").Once()
+	tester.ExpectAgentHook("pre-checkout").Once()
+	tester.ExpectAgentHook("post-checkout").Once()
+	tester.ExpectAgentHook("pre-command").Once()
+	tester.ExpectAgentHook("post-command").Once()
+	tester.ExpectAgentHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
 }
@@ -685,7 +685,7 @@ func TestGitMirrorEnv(t *testing.T) {
 
 	// assert the correct BUILDKITE_REPO_MIRROR _after_ the bootstrap has run
 	gitMirrorPath := ""
-	tester.ExpectGlobalHook("pre-command").Once().AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("pre-command").Once().AndCallFunc(func(c *bintest.Call) {
 		gitMirrorPath = c.GetEnv("BUILDKITE_REPO_MIRROR")
 		c.Exit(0)
 	})

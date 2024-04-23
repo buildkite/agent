@@ -50,7 +50,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 
 	git.Expect().AtLeastOnce().WithAnyArguments()
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
@@ -101,7 +101,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 		t.Fatalf("os.WriteFile(%q, postCommand, 0700) = %v", postCmdFile, err)
 	}
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("LLAMAS_ROCK") != "absolutely" {
 			fmt.Fprintf(c.Stderr, "Expected command hook to have environment variable LLAMAS_ROCK be %q, got %q\n", "absolutely", c.GetEnv("LLAMAS_ROCK"))
 			c.Exit(1)
@@ -110,7 +110,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 		}
 	})
 
-	tester.ExpectGlobalHook("pre-exit").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("pre-exit").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("LLAMAS_ROCK") != "" {
 			fmt.Fprintf(c.Stderr, "Expected pre-exit hook to have environment variable LLAMAS_ROCK be empty, got %q\n", c.GetEnv("LLAMAS_ROCK"))
 			c.Exit(1)
@@ -146,7 +146,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 		t.Fatalf("os.WriteFile(pre-command, script, 0700) = %v", err)
 	}
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("MY_CUSTOM_SUBDIR") != c.Dir {
 			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("MY_CUSTOM_SUBDIR"), c.Dir)
 			c.Exit(1)
@@ -181,7 +181,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 		t.Fatalf("os.WriteFile(pre-command, script, 0700) = %v", err)
 	}
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH") != c.Dir {
 			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"), c.Dir)
 			c.Exit(1)
@@ -202,23 +202,23 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.ExpectGlobalHook("environment").Once()
-	tester.ExpectLocalHook("environment").NotCalled()
-	tester.ExpectGlobalHook("pre-checkout").Once()
-	tester.ExpectLocalHook("pre-checkout").NotCalled()
-	tester.ExpectGlobalHook("post-checkout").Once()
-	tester.ExpectLocalHook("post-checkout").Once()
-	tester.ExpectGlobalHook("pre-command").Once()
-	tester.ExpectLocalHook("pre-command").Once()
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndWriteToStdout("Success!\n")
-	tester.ExpectGlobalHook("post-command").Once()
-	tester.ExpectLocalHook("post-command").Once()
-	tester.ExpectGlobalHook("pre-artifact").NotCalled()
-	tester.ExpectLocalHook("pre-artifact").NotCalled()
-	tester.ExpectGlobalHook("post-artifact").NotCalled()
-	tester.ExpectLocalHook("post-artifact").NotCalled()
-	tester.ExpectGlobalHook("pre-exit").Once()
-	tester.ExpectLocalHook("pre-exit").Once()
+	tester.ExpectAgentHook("environment").Once()
+	tester.ExpectRepositoryHook("environment").NotCalled()
+	tester.ExpectAgentHook("pre-checkout").Once()
+	tester.ExpectRepositoryHook("pre-checkout").NotCalled()
+	tester.ExpectAgentHook("post-checkout").Once()
+	tester.ExpectRepositoryHook("post-checkout").Once()
+	tester.ExpectAgentHook("pre-command").Once()
+	tester.ExpectRepositoryHook("pre-command").Once()
+	tester.ExpectAgentHook("command").Once().AndExitWith(0).AndWriteToStdout("Success!\n")
+	tester.ExpectAgentHook("post-command").Once()
+	tester.ExpectRepositoryHook("post-command").Once()
+	tester.ExpectAgentHook("pre-artifact").NotCalled()
+	tester.ExpectRepositoryHook("pre-artifact").NotCalled()
+	tester.ExpectAgentHook("post-artifact").NotCalled()
+	tester.ExpectRepositoryHook("post-artifact").NotCalled()
+	tester.ExpectAgentHook("pre-exit").Once()
+	tester.ExpectRepositoryHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
 }
@@ -233,7 +233,7 @@ func TestReplacingCheckoutHook(t *testing.T) {
 	defer tester.Close()
 
 	// run a checkout in our checkout hook, otherwise we won't have local hooks to run
-	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"))
 		fmt.Fprint(c.Stderr, out)
 		if err != nil {
@@ -243,11 +243,11 @@ func TestReplacingCheckoutHook(t *testing.T) {
 		}
 	})
 
-	tester.ExpectGlobalHook("pre-checkout").Once()
-	tester.ExpectGlobalHook("post-checkout").Once()
-	tester.ExpectLocalHook("post-checkout").Once()
-	tester.ExpectGlobalHook("pre-exit").Once()
-	tester.ExpectLocalHook("pre-exit").Once()
+	tester.ExpectAgentHook("pre-checkout").Once()
+	tester.ExpectAgentHook("post-checkout").Once()
+	tester.ExpectRepositoryHook("post-checkout").Once()
+	tester.ExpectAgentHook("pre-exit").Once()
+	tester.ExpectRepositoryHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
 }
@@ -261,18 +261,18 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0)
+	tester.ExpectAgentHook("command").Once().AndExitWith(0)
 
-	tester.ExpectGlobalHook("environment").Once()
-	tester.ExpectGlobalHook("pre-checkout").Once()
-	tester.ExpectGlobalHook("post-checkout").Once()
-	tester.ExpectLocalHook("post-checkout").Once()
-	tester.ExpectGlobalHook("pre-command").Once()
-	tester.ExpectLocalHook("pre-command").Once()
-	tester.ExpectGlobalHook("post-command").Once()
-	tester.ExpectLocalHook("post-command").Once()
-	tester.ExpectGlobalHook("pre-exit").Once()
-	tester.ExpectLocalHook("pre-exit").Once()
+	tester.ExpectAgentHook("environment").Once()
+	tester.ExpectAgentHook("pre-checkout").Once()
+	tester.ExpectAgentHook("post-checkout").Once()
+	tester.ExpectRepositoryHook("post-checkout").Once()
+	tester.ExpectAgentHook("pre-command").Once()
+	tester.ExpectRepositoryHook("pre-command").Once()
+	tester.ExpectAgentHook("post-command").Once()
+	tester.ExpectRepositoryHook("post-command").Once()
+	tester.ExpectAgentHook("pre-exit").Once()
+	tester.ExpectRepositoryHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
 }
@@ -286,19 +286,19 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.ExpectLocalHook("command").Once().AndExitWith(0)
-	tester.ExpectGlobalHook("command").NotCalled()
+	tester.ExpectRepositoryHook("command").Once().AndExitWith(0)
+	tester.ExpectAgentHook("command").NotCalled()
 
-	tester.ExpectGlobalHook("environment").Once()
-	tester.ExpectGlobalHook("pre-checkout").Once()
-	tester.ExpectGlobalHook("post-checkout").Once()
-	tester.ExpectLocalHook("post-checkout").Once()
-	tester.ExpectGlobalHook("pre-command").Once()
-	tester.ExpectLocalHook("pre-command").Once()
-	tester.ExpectGlobalHook("post-command").Once()
-	tester.ExpectLocalHook("post-command").Once()
-	tester.ExpectGlobalHook("pre-exit").Once()
-	tester.ExpectLocalHook("pre-exit").Once()
+	tester.ExpectAgentHook("environment").Once()
+	tester.ExpectAgentHook("pre-checkout").Once()
+	tester.ExpectAgentHook("post-checkout").Once()
+	tester.ExpectRepositoryHook("post-checkout").Once()
+	tester.ExpectAgentHook("pre-command").Once()
+	tester.ExpectRepositoryHook("pre-command").Once()
+	tester.ExpectAgentHook("post-command").Once()
+	tester.ExpectRepositoryHook("post-command").Once()
+	tester.ExpectAgentHook("pre-exit").Once()
+	tester.ExpectRepositoryHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
 }
@@ -312,8 +312,8 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.ExpectGlobalHook("pre-exit").Once()
-	tester.ExpectLocalHook("pre-exit").Once()
+	tester.ExpectAgentHook("pre-exit").Once()
+	tester.ExpectRepositoryHook("pre-exit").Once()
 
 	if err := tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=false) = %v, want non-nil error", err)
@@ -331,8 +331,8 @@ func TestPreExitHooksDoesNotFireWithoutCommandPhase(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.ExpectGlobalHook("pre-exit").NotCalled()
-	tester.ExpectLocalHook("pre-exit").NotCalled()
+	tester.ExpectAgentHook("pre-exit").NotCalled()
+	tester.ExpectRepositoryHook("pre-exit").NotCalled()
 
 	tester.RunAndCheck(t, "BUILDKITE_BOOTSTRAP_PHASES=plugin,checkout")
 }
@@ -426,7 +426,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 
 			agent := tester.MockAgent(t)
 
-			tester.ExpectGlobalHook(tc.failingHook).
+			tester.ExpectAgentHook(tc.failingHook).
 				Once().
 				AndWriteToStderr("Blargh\n").
 				AndExitWith(1)
@@ -439,15 +439,15 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 			}
 
 			if tc.expectGlobalPreExit {
-				tester.ExpectGlobalHook("pre-exit").Once()
+				tester.ExpectAgentHook("pre-exit").Once()
 			} else {
-				tester.ExpectGlobalHook("pre-exit").NotCalled()
+				tester.ExpectAgentHook("pre-exit").NotCalled()
 			}
 
 			if tc.expectLocalPreExit {
-				tester.ExpectLocalHook("pre-exit").Once()
+				tester.ExpectRepositoryHook("pre-exit").Once()
 			} else {
-				tester.ExpectGlobalHook("pre-exit").NotCalled()
+				tester.ExpectAgentHook("pre-exit").NotCalled()
 			}
 
 			if tc.expectArtifacts {
@@ -465,7 +465,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 	}
 }
 
-func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
+func TestNoRepositoryHooksCalledWhenConfigSet(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester(mainCtx)
@@ -476,8 +476,8 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 
 	tester.Env = append(tester.Env, "BUILDKITE_NO_LOCAL_HOOKS=true")
 
-	tester.ExpectGlobalHook("pre-command").Once()
-	tester.ExpectLocalHook("pre-command").NotCalled()
+	tester.ExpectAgentHook("pre-command").Once()
+	tester.ExpectRepositoryHook("pre-command").NotCalled()
 
 	if err = tester.Run(t, "BUILDKITE_COMMAND=true"); err == nil {
 		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=true) = %v, want non-nil error", err)
@@ -486,7 +486,7 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 	tester.CheckMocks(t)
 }
 
-func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
+func TestExitCodesPropagateOutFromAgentHooks(t *testing.T) {
 	t.Parallel()
 
 	ctx := mainCtx
@@ -510,7 +510,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 			}
 			defer tester.Close()
 
-			tester.ExpectGlobalHook(hook).Once().AndExitWith(5)
+			tester.ExpectAgentHook(hook).Once().AndExitWith(5)
 
 			err = tester.Run(t)
 
@@ -540,8 +540,8 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.ExpectGlobalHook("pre-exit").Once()
-	tester.ExpectLocalHook("pre-exit").Once()
+	tester.ExpectAgentHook("pre-exit").Once()
+	tester.ExpectRepositoryHook("pre-exit").Once()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -632,7 +632,7 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 		t.Fatalf("Failed to build test-binary-hook: %v, output: %s", err, string(output))
 	}
 
-	tester.ExpectGlobalHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		// Set via ./test-binary-hook/main.go
 		if c.GetEnv("OCEAN") != "Pacífico" {
 			fmt.Fprintf(c.Stderr, "Expected OCEAN to be Pacífico, got %q", c.GetEnv("OCEAN"))

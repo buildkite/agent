@@ -256,10 +256,10 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 }
 
 func expectCommandHooks(exitStatus string, t *testing.T, tester *ExecutorTester) {
-	tester.ExpectGlobalHook("pre-command").Once()
-	tester.ExpectLocalHook("pre-command").Once()
-	tester.ExpectGlobalHook("post-command").Once()
-	tester.ExpectLocalHook("post-command").Once()
+	tester.ExpectAgentHook("pre-command").Once()
+	tester.ExpectRepositoryHook("pre-command").Once()
+	tester.ExpectAgentHook("post-command").Once()
+	tester.ExpectRepositoryHook("post-command").Once()
 
 	preExitFunc := func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_COMMAND_EXIT_STATUS"), exitStatus; got != want {
@@ -268,6 +268,6 @@ func expectCommandHooks(exitStatus string, t *testing.T, tester *ExecutorTester)
 		c.Exit(0)
 	}
 
-	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(preExitFunc)
-	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(preExitFunc)
+	tester.ExpectAgentHook("pre-exit").Once().AndCallFunc(preExitFunc)
+	tester.ExpectRepositoryHook("pre-exit").Once().AndCallFunc(preExitFunc)
 }

@@ -603,22 +603,22 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 }
 
-func (e *Executor) hasGlobalHook(name string) bool {
-	_, err := e.globalHookPath(name)
+func (e *Executor) hasAgentHook(name string) bool {
+	_, err := e.agentHookPath(name)
 	return err == nil
 }
 
 // Returns the absolute path to a global hook, or os.ErrNotExist if none is found
-func (e *Executor) globalHookPath(name string) (string, error) {
+func (e *Executor) agentHookPath(name string) (string, error) {
 	return hook.Find(e.HooksPath, name)
 }
 
 // Executes a global hook if one exists
-func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
-	if !e.hasGlobalHook(name) {
+func (e *Executor) executeAgentHook(ctx context.Context, name string) error {
+	if !e.hasAgentHook(name) {
 		return nil
 	}
-	p, err := e.globalHookPath(name)
+	p, err := e.agentHookPath(name)
 	if err != nil {
 		return err
 	}
@@ -630,19 +630,19 @@ func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
 }
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
-func (e *Executor) localHookPath(name string) (string, error) {
+func (e *Executor) repositoryHookPath(name string) (string, error) {
 	dir := filepath.Join(e.shell.Getwd(), ".buildkite", "hooks")
 	return hook.Find(dir, name)
 }
 
-func (e *Executor) hasLocalHook(name string) bool {
-	_, err := e.localHookPath(name)
+func (e *Executor) hasRepositoryHook(name string) bool {
+	_, err := e.repositoryHookPath(name)
 	return err == nil
 }
 
 // Executes a local hook
-func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
-	localHookPath, err := e.localHookPath(name)
+func (e *Executor) executeRepositoryHook(ctx context.Context, name string) error {
+	repositoryHookPath, err := e.repositoryHookPath(name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// If the hook doesn't exist, that's fine, we'll just skip it
@@ -659,22 +659,22 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	// For high-security configs, we allow the disabling of local hooks.
-	localHooksEnabled := e.ExecutorConfig.LocalHooksEnabled
+	repositoryHooksEnabled := e.ExecutorConfig.LocalHooksEnabled
 
 	// Allow hooks to disable local hooks by setting BUILDKITE_NO_LOCAL_HOOKS=true
-	noLocalHooks, _ := e.shell.Env.Get("BUILDKITE_NO_LOCAL_HOOKS")
-	if noLocalHooks == "true" || noLocalHooks == "1" {
-		localHooksEnabled = false
+	noRepositoryHooks, _ := e.shell.Env.Get("BUILDKITE_NO_LOCAL_HOOKS")
+	if noRepositoryHooks == "true" || noRepositoryHooks == "1" {
+		repositoryHooksEnabled = false
 	}
 
-	if !localHooksEnabled {
-		return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
+	if !repositoryHooksEnabled {
+		return fmt.Errorf("Refusing to run %s, local hooks are disabled", repositoryHookPath)
 	}
 
 	return e.executeHook(ctx, HookConfig{
 		Scope: "local",
 		Name:  name,
-		Path:  localHookPath,
+		Path:  repositoryHookPath,
 	})
 }
 
@@ -762,7 +762,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
-	err = e.executeGlobalHook(ctx, "environment")
+	err = e.executeAgentHook(ctx, "environment")
 	return err
 }
 
@@ -779,11 +779,11 @@ func (e *Executor) tearDown(ctx context.Context) error {
 	// Unfortunately pre-exit hooks are often not written with this split in
 	// mind.
 	if e.includePhase("command") {
-		if err = e.executeGlobalHook(ctx, "pre-exit"); err != nil {
+		if err = e.executeAgentHook(ctx, "pre-exit"); err != nil {
 			return err
 		}
 
-		if err = e.executeLocalHook(ctx, "pre-exit"); err != nil {
+		if err = e.executeRepositoryHook(ctx, "pre-exit"); err != nil {
 			return err
 		}
 
@@ -813,10 +813,10 @@ func (e *Executor) runPreCommandHooks(ctx context.Context) error {
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-command"); err != nil {
+	if err = e.executeAgentHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "pre-command"); err != nil {
+	if err = e.executeRepositoryHook(ctx, "pre-command"); err != nil {
 		return err
 	}
 	if err = e.executePluginHook(ctx, "pre-command", e.pluginCheckouts); err != nil {
@@ -832,10 +832,10 @@ func (e *Executor) runCommand(ctx context.Context) error {
 	switch {
 	case e.hasPluginHook("command"):
 		err = e.executePluginHook(ctx, "command", e.pluginCheckouts)
-	case e.hasLocalHook("command"):
-		err = e.executeLocalHook(ctx, "command")
-	case e.hasGlobalHook("command"):
-		err = e.executeGlobalHook(ctx, "command")
+	case e.hasRepositoryHook("command"):
+		err = e.executeRepositoryHook(ctx, "command")
+	case e.hasAgentHook("command"):
+		err = e.executeAgentHook(ctx, "command")
 	default:
 		err = e.defaultCommandPhase(ctx)
 	}
@@ -849,10 +849,10 @@ func (e *Executor) runPostCommandHooks(ctx context.Context) error {
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "post-command"); err != nil {
+	if err = e.executeAgentHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "post-command"); err != nil {
+	if err = e.executeRepositoryHook(ctx, "post-command"); err != nil {
 		return err
 	}
 	if err = e.executePluginHook(ctx, "post-command", e.pluginCheckouts); err != nil {

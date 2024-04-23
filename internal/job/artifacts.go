@@ -40,11 +40,11 @@ func (e *Executor) preArtifactHooks(ctx context.Context) error {
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-artifact"); err != nil {
+	if err = e.executeAgentHook(ctx, "pre-artifact"); err != nil {
 		return err
 	}
 
-	if err = e.executeLocalHook(ctx, "pre-artifact"); err != nil {
+	if err = e.executeRepositoryHook(ctx, "pre-artifact"); err != nil {
 		return err
 	}
 
@@ -82,11 +82,11 @@ func (e *Executor) postArtifactHooks(ctx context.Context) error {
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "post-artifact"); err != nil {
+	if err = e.executeAgentHook(ctx, "post-artifact"); err != nil {
 		return err
 	}
 
-	if err = e.executeLocalHook(ctx, "post-artifact"); err != nil {
+	if err = e.executeRepositoryHook(ctx, "post-artifact"); err != nil {
 		return err
 	}
 

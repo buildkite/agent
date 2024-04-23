@@ -23,7 +23,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("command").Once().AndCallFunc(func(c *bintest.Call) {
 		socketPath := c.GetEnv("BUILDKITE_AGENT_JOB_API_SOCKET")
 		if socketPath == "" {
 			t.Errorf("Expected BUILDKITE_AGENT_JOB_API_SOCKET to be set")
@@ -133,7 +133,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 		c.Exit(0)
 	})
 
-	tester.ExpectGlobalHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+	tester.ExpectAgentHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("MOUNTAIN"), "chimborazo"; got != want {
 			fmt.Fprintf(c.Stderr, "MOUNTAIN = %q, want %q\n", got, want)
 			c.Exit(1)

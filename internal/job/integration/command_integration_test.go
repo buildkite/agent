@@ -64,8 +64,8 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 		c.Exit(0)
 	}
 
-	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(preExitFunc)
-	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(preExitFunc)
+	tester.ExpectAgentHook("pre-exit").Once().AndCallFunc(preExitFunc)
+	tester.ExpectRepositoryHook("pre-exit").Once().AndCallFunc(preExitFunc)
 
 	if err := tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=false) = %v, want non-nil error", err)

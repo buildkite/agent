@@ -104,7 +104,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
+	if err = e.executeAgentHook(ctx, "pre-checkout"); err != nil {
 		return err
 	}
 
@@ -146,8 +146,8 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 		if err := e.executePluginHook(ctx, "checkout", e.pluginCheckouts); err != nil {
 			return err
 		}
-	case e.hasGlobalHook("checkout"):
-		if err := e.executeGlobalHook(ctx, "checkout"); err != nil {
+	case e.hasAgentHook("checkout"):
+		if err := e.executeAgentHook(ctx, "checkout"); err != nil {
 			return err
 		}
 	default:
@@ -230,11 +230,11 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	}
 
 	// Run post-checkout hooks
-	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
+	if err := e.executeAgentHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
+	if err := e.executeRepositoryHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
