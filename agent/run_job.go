@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
@@ -315,6 +316,14 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	case r.cancelled:
 		// The job was signaled because it was cancelled via the buildkite web UI
 		exit.SignalReason = SignalReasonCancel
+
+		if exit.Status == 0 {
+			// On Windows, a signalled process exits 0 rather than non-zero.
+			// This is inconsistent with cancellation on other platforms.
+			if experiments.IsEnabled(ctx, experiments.OverrideZeroExitOnCancel) {
+				exit.Status = 1
+			}
+		}
 	}
 
 	return exit
