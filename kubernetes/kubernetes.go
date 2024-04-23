@@ -297,7 +297,7 @@ func (c *Client) Connect() (RegisterResponse, error) {
 		client, err := rpc.DialHTTP("unix", c.SocketPath)
 		if err != nil {
 			r.logger.Warn("client socket dial failed (try %n): %w", i, err)
-			if (i > 10) {
+			if (i > 30) {
 				return RegisterResponse{}, err
 			}
 			time.Sleep(time.Second)
