@@ -129,7 +129,8 @@ type ExecutorConfig struct {
 	BinPath string
 
 	// Path to the global hooks
-	HooksPath string
+	HooksPath       string
+	ExtraHooksPaths []string
 
 	// Path to the plugins directory
 	PluginsPath string

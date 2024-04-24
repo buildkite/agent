@@ -316,6 +316,7 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 		"hook.name":    hookCfg.Name,
 		"hook.command": hookCfg.Path,
 	})
+
 	span.AddAttributes(hookCfg.SpanAttributes)
 
 	hookName := hookCfg.Scope
@@ -604,13 +605,27 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 }
 
 func (e *Executor) hasAgentHook(name string) bool {
-	_, err := e.agentHookPath(name)
-	return err == nil
+	paths, err := e.agentHookPaths(name)
+	return err == nil && len(paths) > 0
 }
 
 // Returns the absolute path to a global hook, or os.ErrNotExist if none is found
-func (e *Executor) agentHookPath(name string) (string, error) {
-	return hook.Find(e.HooksPath, name)
+func (e *Executor) agentHookPaths(name string) ([]string, error) {
+	hooksPaths := make([]string, 0, len(e.ExtraHooksPaths)+1)
+	baseHookPath, err := hook.Find(e.HooksPath, name)
+	if err == nil {
+		hooksPaths = append(hooksPaths, baseHookPath)
+	}
+
+	for _, ehp := range e.ExtraHooksPaths {
+		p, err := hook.Find(ehp, name)
+		if err != nil {
+			continue
+		}
+		hooksPaths = append(hooksPaths, p)
+	}
+
+	return hooksPaths, nil
 }
 
 // Executes a global hook if one exists
@@ -618,15 +633,24 @@ func (e *Executor) executeAgentHook(ctx context.Context, name string) error {
 	if !e.hasAgentHook(name) {
 		return nil
 	}
-	p, err := e.agentHookPath(name)
+
+	hookPaths, err := e.agentHookPaths(name)
 	if err != nil {
 		return err
 	}
-	return e.executeHook(ctx, HookConfig{
-		Scope: "global",
-		Name:  name,
-		Path:  p,
-	})
+
+	for _, p := range hookPaths {
+		err := e.executeHook(ctx, HookConfig{
+			Scope: "global",
+			Name:  name,
+			Path:  p,
+		})
+		if err != nil {
+			return fmt.Errorf("running hook at path %s: %w", p, err)
+		}
+	}
+
+	return nil
 }
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
