@@ -1184,7 +1184,7 @@ func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *
 			return fmt.Errorf("failed to parse container id, %s", os.Getenv("BUILDKITE_CONTAINER_ID"))
 		}
 		kubernetesClient.ID = id
-		connect, err := kubernetesClient.Connect()
+		connect, err := kubernetesClient.Connect(ctx)
 		if err != nil {
 			return err
 		}

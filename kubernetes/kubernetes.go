@@ -17,6 +17,7 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/roko"
 )
 
 func init() {
@@ -287,11 +288,20 @@ type Client struct {
 
 var errNotConnected = errors.New("client not connected")
 
-func (c *Client) Connect() (RegisterResponse, error) {
+func (c *Client) Connect(ctx context.Context) (RegisterResponse, error) {
 	if c.SocketPath == "" {
 		c.SocketPath = defaultSocketPath
 	}
-	client, err := rpc.DialHTTP("unix", c.SocketPath)
+
+	// Because k8s might run the containers "out of order", the server socket
+	// might not exist yet. Try to connect several times.
+	r := roko.NewRetrier(
+		roko.WithMaxAttempts(30),
+		roko.WithStrategy(roko.Constant(time.Second)),
+	)
+	client, err := roko.DoFunc(ctx, r, func(*roko.Retrier) (*rpc.Client, error) {
+		return rpc.DialHTTP("unix", c.SocketPath)
+	})
 	if err != nil {
 		return RegisterResponse{}, err
 	}

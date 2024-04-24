@@ -171,6 +171,6 @@ func intptr(x int) *int {
 
 // helper for ignoring the response from regular client.Connect
 func connect(c *Client) error {
-	_, err := c.Connect()
+	_, err := c.Connect(context.Background())
 	return err
 }
