@@ -117,17 +117,17 @@ func TestPipelineInterpolationRuntimeEnvPrecedence(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		desc string
+		desc             string
 		preferRuntimeEnv bool
-		expectedCommand string
+		expectedCommand  string
 	}{
 		{
-			desc: "With experiment disabled",
+			desc:             "With experiment disabled",
 			preferRuntimeEnv: false,
 			expectedCommand:  "echo Hi bob",
 		},
 		{
-			desc: "With experiment enabled",
+			desc:             "With experiment enabled",
 			preferRuntimeEnv: true,
 			expectedCommand:  "echo Hi alice",
 		},
@@ -135,7 +135,7 @@ func TestPipelineInterpolationRuntimeEnvPrecedence(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-				// With the experiment enabled this variable takes precedence over the one defined in the pipeline yaml
+			// With the experiment enabled this variable takes precedence over the one defined in the pipeline yaml
 			environ := env.FromMap(map[string]string{
 				"NAME": "alice",
 			})
