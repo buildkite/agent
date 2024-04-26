@@ -24,7 +24,7 @@ const (
 const (
 	// Available experiments
 	AgentAPI                   = "agent-api"
-	DescendingSpawnPrioity     = "descending-spawn-priority"
+	DescendingSpawnPriority    = "descending-spawn-priority"
 	KubernetesExec             = "kubernetes-exec"
 	NormalisedUploadPaths      = "normalised-upload-paths"
 	OverrideZeroExitOnCancel   = "override-zero-exit-on-cancel"
@@ -46,7 +46,7 @@ const (
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                   {},
-		DescendingSpawnPrioity:     {},
+		DescendingSpawnPriority:     {},
 		KubernetesExec:             {},
 		NormalisedUploadPaths:      {},
 		OverrideZeroExitOnCancel:   {},

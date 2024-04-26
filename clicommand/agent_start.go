@@ -1127,7 +1127,7 @@ var AgentStartCommand = cli.Command{
 
 			if cfg.SpawnWithPriority {
 				p := i
-				if experiments.IsEnabled(ctx, experiments.DescendingSpawnPrioity) {
+				if experiments.IsEnabled(ctx, experiments.DescendingSpawnPriority) {
 					// This experiment helps jobs be assigned across all hosts
 					// in cases where the value of --spawn varies between hosts.
 					p = -i
