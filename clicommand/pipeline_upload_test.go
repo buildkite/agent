@@ -1,11 +1,13 @@
 package clicommand
 
 import (
+	"context"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/ordered"
@@ -104,8 +106,64 @@ steps:
 			},
 		}
 	}
+	ctx := context.Background()
 
-	p, err := cfg.parseAndInterpolate("test", strings.NewReader(pipelineYAML), environ)
+	p, err := cfg.parseAndInterpolate("test", strings.NewReader(pipelineYAML), environ, ctx)
 	assert.NilError(t, err, `cfg.parseAndInterpolate("test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
 	assert.DeepEqual(t, p, expectedPipeline, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS))
+}
+
+func TestPipelineInterpolationRuntimeEnvPrecedence(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc string
+		preferRuntimeEnv bool
+		expectedCommand string
+	}{
+		{
+			desc: "With experiment disabled",
+			preferRuntimeEnv: false,
+			expectedCommand:  "echo Hi bob",
+		},
+		{
+			desc: "With experiment enabled",
+			preferRuntimeEnv: true,
+			expectedCommand:  "echo Hi alice",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+				// With the experiment enabled this variable takes precedence over the one defined in the pipeline yaml
+			environ := env.FromMap(map[string]string{
+				"NAME": "alice",
+			})
+
+			const pipelineYAML = `---
+env:
+  NAME: bob
+  GREETING: "Hi ${NAME:-}"
+steps:
+- command: echo $GREETING
+`
+			cfg := &PipelineUploadConfig{
+				RedactedVars:  []string{},
+				RejectSecrets: true,
+			}
+			ctx := context.Background()
+			if test.preferRuntimeEnv {
+				ctx, _ = experiments.Enable(ctx, experiments.InterpolationPrefersRuntimeEnv)
+			}
+
+			p, err := cfg.parseAndInterpolate("test", strings.NewReader(pipelineYAML), environ, ctx)
+			assert.NilError(t, err, `cfg.parseAndInterpolate("test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
+			s := p.Steps[len(p.Steps)-1]
+			commandStep, ok := s.(*pipeline.CommandStep)
+			if !ok {
+				t.Errorf("Invalid pipeline step %v", s)
+			}
+			assert.Equal(t, commandStep.Command, test.expectedCommand)
+		})
+	}
 }
