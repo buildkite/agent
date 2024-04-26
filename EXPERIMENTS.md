@@ -103,3 +103,11 @@ makes the job appear to be successful. (It successfully exited, no?) By overridi
 a cancelled job should appear as a failure, regardless of the OS the agent is running on.
 
 **Status:** Experimental for some opt-in testing. We hope to promote this to be the default soon™.
+
+### `interpolation-prefers-runtime-env`
+
+When interpolating the pipeline level environment block, a pipeline level environment variable could take precedence over environment variables depending on the ordering. This may contravene Buildkite's [documentation](https://buildkite.com/docs/pipelines/environment-variables#environment-variable-precedence) that suggests the Job runtime environment takes precedence over that defined by combining environment variables defined in a pipeline. 
+
+We previously made this the default behaviour of the agent (as of v3.63.0) but have since reverted it.
+
+**Status:** Available as an experiment to allow users who have since depended on this behaviour to re-enable it. If you use this feature please let us know so we may better understand your use case.
