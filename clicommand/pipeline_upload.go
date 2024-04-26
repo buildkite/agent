@@ -401,7 +401,7 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(src string, input io.Reader
 			}
 			result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
 		}
-		if err := result.Interpolate(environ); err != nil {
+		if err := result.Interpolate(environ, false); err != nil {
 			return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 		}
 	}
