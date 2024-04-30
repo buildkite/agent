@@ -23,15 +23,16 @@ const (
 
 const (
 	// Available experiments
-	AgentAPI                   = "agent-api"
-	DescendingSpawnPrioity     = "descending-spawn-priority"
-	KubernetesExec             = "kubernetes-exec"
-	NormalisedUploadPaths      = "normalised-upload-paths"
-	OverrideZeroExitOnCancel   = "override-zero-exit-on-cancel"
-	PTYRaw                     = "pty-raw"
-	PolyglotHooks              = "polyglot-hooks"
-	ResolveCommitAfterCheckout = "resolve-commit-after-checkout"
-	UseZZGlob                  = "use-zzglob"
+	AgentAPI                       = "agent-api"
+	DescendingSpawnPriority        = "descending-spawn-priority"
+	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
+	KubernetesExec                 = "kubernetes-exec"
+	NormalisedUploadPaths          = "normalised-upload-paths"
+	OverrideZeroExitOnCancel       = "override-zero-exit-on-cancel"
+	PTYRaw                         = "pty-raw"
+	PolyglotHooks                  = "polyglot-hooks"
+	ResolveCommitAfterCheckout     = "resolve-commit-after-checkout"
+	UseZZGlob                      = "use-zzglob"
 
 	// Promoted experiments
 	ANSITimestamps         = "ansi-timestamps"
@@ -45,14 +46,15 @@ const (
 
 var (
 	Available = map[string]struct{}{
-		AgentAPI:                   {},
-		DescendingSpawnPrioity:     {},
-		KubernetesExec:             {},
-		NormalisedUploadPaths:      {},
-		OverrideZeroExitOnCancel:   {},
-		PolyglotHooks:              {},
-		ResolveCommitAfterCheckout: {},
-		UseZZGlob:                  {},
+		AgentAPI:                       {},
+		DescendingSpawnPriority:        {},
+		InterpolationPrefersRuntimeEnv: {},
+		KubernetesExec:                 {},
+		NormalisedUploadPaths:          {},
+		OverrideZeroExitOnCancel:       {},
+		PolyglotHooks:                  {},
+		ResolveCommitAfterCheckout:     {},
+		UseZZGlob:                      {},
 	}
 
 	Promoted = map[string]string{

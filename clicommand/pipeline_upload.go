@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
@@ -262,7 +263,7 @@ var PipelineUploadCommand = cli.Command{
 			src = "(stdin)"
 		}
 
-		result, err := cfg.parseAndInterpolate(src, input, environ)
+		result, err := cfg.parseAndInterpolate(ctx, src, input, environ)
 		if w := warning.As(err); w != nil {
 			l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
 		} else if err != nil {
@@ -389,7 +390,7 @@ func searchForSecrets(
 	return nil
 }
 
-func (cfg *PipelineUploadConfig) parseAndInterpolate(src string, input io.Reader, environ *env.Environment) (*pipeline.Pipeline, error) {
+func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src string, input io.Reader, environ *env.Environment) (*pipeline.Pipeline, error) {
 	result, err := pipeline.Parse(input)
 	if err != nil && !warning.Is(err) {
 		return nil, fmt.Errorf("pipeline parsing of %q failed: %w", src, err)
@@ -401,7 +402,8 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(src string, input io.Reader
 			}
 			result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
 		}
-		if err := result.Interpolate(environ); err != nil {
+		preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
+		if err := result.Interpolate(environ, preferRuntimeEnv); err != nil {
 			return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 		}
 	}
