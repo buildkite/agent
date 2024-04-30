@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.71.0](https://github.com/buildkite/agent/tree/v3.71.0) (2024-04-30)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.70.0...v3.71.0)
+
+## Fixed
+- Make preferring runtime env default off [#2747](https://github.com/buildkite/agent/pull/2747) (@patrobinson)
+- Use roko to retry k8s socket dial [#2746](https://github.com/buildkite/agent/pull/2746) (@DrJosh9000)
+- Tweak ETXTBSY retry, and be helpful for ENOENT [#2736](https://github.com/buildkite/agent/pull/2736) (@DrJosh9000)
+
+### Added
+- Experiment: override zero exit code on cancel [#2741](https://github.com/buildkite/agent/pull/2741) (@DrJosh9000)
+
 ## [v3.70.0](https://github.com/buildkite/agent/tree/v3.70.0) (2024-04-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.69.0...v3.70.0)
 
