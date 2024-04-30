@@ -706,6 +706,16 @@ func (a *AgentWorker) Disconnect(ctx context.Context) error {
 	return nil
 }
 
+// This monitor has a 3rd implicit state we will call "initializing" that all agents start in
+// Agents can transition to busy and/or idle but always start in the "initializing" state
+/*
+//                - Busy
+//              /    |
+// Initializing      |
+//              \    |
+//                - Idle
+*/
+// This (intentionally?) ensures the DisconnectAfterIdleTimeout doesn't fire before agents have had a chance to run a job
 type IdleMonitor struct {
 	sync.Mutex
 	totalAgents int
