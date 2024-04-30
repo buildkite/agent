@@ -108,8 +108,8 @@ steps:
 	}
 	ctx := context.Background()
 
-	p, err := cfg.parseAndInterpolate("test", strings.NewReader(pipelineYAML), environ, ctx)
-	assert.NilError(t, err, `cfg.parseAndInterpolate("test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
+	p, err := cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ)
+	assert.NilError(t, err, `cfg.parseAndInterpolate(ctx, "test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
 	assert.DeepEqual(t, p, expectedPipeline, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS))
 }
 
@@ -156,8 +156,8 @@ steps:
 				ctx, _ = experiments.Enable(ctx, experiments.InterpolationPrefersRuntimeEnv)
 			}
 
-			p, err := cfg.parseAndInterpolate("test", strings.NewReader(pipelineYAML), environ, ctx)
-			assert.NilError(t, err, `cfg.parseAndInterpolate("test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
+			p, err := cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ)
+			assert.NilError(t, err, `cfg.parseAndInterpolate(ctx, "test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
 			s := p.Steps[len(p.Steps)-1]
 			commandStep, ok := s.(*pipeline.CommandStep)
 			if !ok {
