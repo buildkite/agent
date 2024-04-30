@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -1180,28 +1179,7 @@ var AgentStartCommand = cli.Command{
 
 		// Determine the health check listening address and port for this agent
 		if cfg.HealthCheckAddr != "" {
-			http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-				l.Info("%s %s", r.Method, r.URL.Path)
-				if r.URL.Path != "/" {
-					http.NotFound(w, r)
-				} else {
-					fmt.Fprintf(w, "OK: Buildkite agent is running")
-				}
-			})
-
-			http.HandleFunc("/status", status.Handle)
-
-			go func() {
-				_, setStatus, done := status.AddSimpleItem(ctx, "Health check server")
-				defer done()
-				setStatus("👂 Listening")
-
-				l.Notice("Starting HTTP health check server on %v", cfg.HealthCheckAddr)
-				err := http.ListenAndServe(cfg.HealthCheckAddr, nil)
-				if err != nil {
-					l.Error("Could not start health check server: %v", err)
-				}
-			}()
+			pool.StartStatusServer(ctx, l, cfg.HealthCheckAddr)
 		}
 
 		return pool.Start(ctx)
