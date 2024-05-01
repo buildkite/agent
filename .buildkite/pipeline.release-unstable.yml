@@ -10,9 +10,9 @@ steps:
     command: ".buildkite/steps/publish-to-s3.sh"
     env:
       CODENAME: "unstable"
-    agents:
-      queue: "deploy"
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-unstable
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -25,9 +25,9 @@ steps:
     command: ".buildkite/steps/github-release.sh"
     env:
       CODENAME: "unstable"
-    agents:
-      queue: "deploy"
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-unstable
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -41,9 +41,9 @@ steps:
     env:
       CODENAME: "unstable"
       RPM_S3_BUCKET: "yum.buildkite.com"
-    agents:
-      queue: "deploy"
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-unstable
       - docker#v5.8.0:
           image: "buildkite/agent:3.55.0-ubuntu"
           entrypoint: bash
@@ -61,9 +61,9 @@ steps:
     env:
       REPOSITORY: "buildkite/agent-rpm-unstable"
       DISTRO_VERSION: rpm_any/rpm_any
-    agents:
-      queue: "deploy"
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-unstable
       - docker#v5.8.0:
           image: "public.ecr.aws/docker/library/ruby:3.0"
           entrypoint: bash
@@ -79,6 +79,8 @@ steps:
     agents:
       queue: "deploy"
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-unstable
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -94,9 +96,9 @@ steps:
     env:
       REPOSITORY: "buildkite/agent-deb-unstable"
       DISTRO_VERSION: any/any
-    agents:
-      queue: "deploy"
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-unstable
       - docker#v5.8.0:
           image: "public.ecr.aws/docker/library/ruby:3.0"
           entrypoint: bash
@@ -108,9 +110,9 @@ steps:
     command: ".buildkite/steps/publish-docker-images.sh"
     env:
       CODENAME: "unstable"
-    agents:
-      queue: "deploy"
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-unstable
       - ecr#v2.7.0:
           login: true
           account-ids: "445615400570"
@@ -122,9 +124,9 @@ steps:
     artifact_paths: "pkg/*.rb;pkg/*.json"
     env:
       CODENAME: "unstable"
-    agents:
-      queue: "deploy"
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-unstable
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
