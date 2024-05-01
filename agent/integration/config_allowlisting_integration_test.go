@@ -133,12 +133,15 @@ func TestConfigAllowlisting(t *testing.T) {
 			tc.mockBootstrapExpectation(mb)
 			defer mb.CheckAndClose(t)
 
-			runJob(t, context.Background(), testRunJobConfig{
+			err := runJob(t, context.Background(), testRunJobConfig{
 				job:           job,
 				server:        server,
 				agentCfg:      tc.agentConfig,
 				mockBootstrap: mb,
 			})
+			if err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
 
 			finishedJob := e.finishesFor(t, jobID)[0]
 

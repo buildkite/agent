@@ -111,12 +111,15 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 			} else {
 				mb.Expect().NotCalled()
 			}
-			runJob(t, ctx, testRunJobConfig{
+			err = runJob(t, ctx, testRunJobConfig{
 				job:           j,
 				server:        server,
 				agentCfg:      agent.AgentConfiguration{HooksPath: hooksDir},
 				mockBootstrap: mb,
 			})
+			if err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
 
 			mb.CheckAndClose(t)
 		})
@@ -158,12 +161,15 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	mb.Expect().NotCalled() // The bootstrap won't be called, as the pre-bootstrap hook failed
 	defer mb.CheckAndClose(t)
 
-	runJob(t, ctx, testRunJobConfig{
+	err = runJob(t, ctx, testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{HooksPath: hooksDir},
 		mockBootstrap: mb,
 	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
 
 	job := e.finishesFor(t, jobID)[0]
 
@@ -202,12 +208,16 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 			server := e.server("my-job-id")
 			defer server.Close()
 
-			runJob(t, ctx, testRunJobConfig{
+			err := runJob(t, ctx, testRunJobConfig{
 				job:           j,
 				server:        server,
 				agentCfg:      agent.AgentConfiguration{},
 				mockBootstrap: mb,
 			})
+			if err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
+
 			finish := e.finishesFor(t, "my-job-id")[0]
 
 			if got, want := finish.ExitStatus, strconv.Itoa(exit); got != want {
@@ -247,12 +257,15 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	server := e.server("my-job-id")
 	defer server.Close()
 
-	runJob(t, ctx, testRunJobConfig{
+	err := runJob(t, ctx, testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{},
 		mockBootstrap: mb,
 	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
 }
 
 // TODO 2023-07-17: What is this testing? How is it testing it?
@@ -284,12 +297,15 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	server := e.server("my-job-id")
 	defer server.Close()
 
-	runJob(t, ctx, testRunJobConfig{
+	err := runJob(t, ctx, testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{},
 		mockBootstrap: mb,
 	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
 }
 
 func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {

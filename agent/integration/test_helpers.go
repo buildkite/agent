@@ -47,7 +47,7 @@ type testRunJobConfig struct {
 	verificationJWKS jwk.Set
 }
 
-func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) {
+func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 	t.Helper()
 
 	l := logger.Discard
@@ -75,8 +75,10 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) {
 	}
 
 	if err := jr.Run(context.Background()); err != nil {
-		t.Errorf("jr.Run() = %v", err)
+		return err
 	}
+
+	return nil
 }
 
 type testAgentEndpoint struct {
