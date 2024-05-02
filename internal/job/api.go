@@ -22,7 +22,7 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 
 	socketPath, err := jobapi.NewSocketPath(e.ExecutorConfig.SocketsPath)
 	if err != nil {
-		return cleanup, fmt.Errorf("creating job API socket path: %v", err)
+		return cleanup, fmt.Errorf("creating job API socket path: %w", err)
 	}
 
 	jobAPIOpts := []jobapi.ServerOpts{}
@@ -31,14 +31,14 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	}
 	srv, token, err := jobapi.NewServer(e.shell.Logger, socketPath, e.shell.Env, e.redactors, jobAPIOpts...)
 	if err != nil {
-		return cleanup, fmt.Errorf("creating job API server: %v", err)
+		return cleanup, fmt.Errorf("creating job API server: %w", err)
 	}
 
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_TOKEN", token)
 
 	if err := srv.Start(); err != nil {
-		return cleanup, fmt.Errorf("starting Job API server: %v", err)
+		return cleanup, fmt.Errorf("starting Job API server: %w", err)
 	}
 
 	return func() {

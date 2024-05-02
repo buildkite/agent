@@ -88,5 +88,5 @@ func findPathToSSHTools(ctx context.Context, sh *shell.Shell) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Unable to find ssh-keyscan: %v", err)
+	return "", fmt.Errorf("Unable to find ssh-keyscan: %w", err)
 }

@@ -129,7 +129,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 		// If there is a region hint provided, we use it unconditionally
 		session, err := awsS3Session(regionHint, l)
 		if err != nil {
-			return nil, fmt.Errorf("Could not load the AWS SDK config (%v)", err)
+			return nil, fmt.Errorf("Could not load the AWS SDK config (%w)", err)
 		}
 
 		sess = session
@@ -147,7 +147,7 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 		// bucket lives
 		session, err := awsS3Session(region, l)
 		if err != nil {
-			return nil, fmt.Errorf("Could not load the AWS SDK config (%v)", err)
+			return nil, fmt.Errorf("Could not load the AWS SDK config (%w)", err)
 		}
 
 		bucketRegion, bucketRegionErr := s3manager.GetBucketRegion(aws.BackgroundContext(), session, bucket, region)

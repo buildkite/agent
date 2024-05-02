@@ -93,7 +93,7 @@ func (u *AzureBlobUploader) Upload(ctx context.Context, artifact *api.Artifact) 
 	u.logger.Debug("Reading file %q", artifact.AbsolutePath)
 	f, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %q (%v)", artifact.AbsolutePath, err)
+		return fmt.Errorf("failed to open file %q (%w)", artifact.AbsolutePath, err)
 	}
 	defer f.Close()
 

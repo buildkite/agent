@@ -91,7 +91,7 @@ var GitCredentialsHelperCommand = cli.Command{
 		// see: https://git-scm.com/docs/git-credential
 		stdin, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return handleAuthError(c, l, fmt.Errorf("failed to read stdin: %v", err))
+			return handleAuthError(c, l, fmt.Errorf("failed to read stdin: %w", err))
 		}
 
 		l.Debug("Git credential input:\n%s\n", string(stdin))
@@ -106,13 +106,13 @@ var GitCredentialsHelperCommand = cli.Command{
 
 		repo, err := parseGitURLFromCredentialInput(string(stdin))
 		if err != nil {
-			return handleAuthError(c, l, fmt.Errorf("failed to parse git URL from stdin: %v", err))
+			return handleAuthError(c, l, fmt.Errorf("failed to parse git URL from stdin: %w", err))
 		}
 
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 		tok, _, err := client.GenerateGithubCodeAccessToken(ctx, repo, cfg.JobID)
 		if err != nil {
-			return handleAuthError(c, l, fmt.Errorf("failed to get github app credentials: %v", err))
+			return handleAuthError(c, l, fmt.Errorf("failed to get github app credentials: %w", err))
 		}
 
 		fmt.Fprintln(c.App.Writer, "username=token")

@@ -233,7 +233,7 @@ var PipelineUploadCommand = cli.Command{
 		if input != os.Stdin {
 			fi, err := input.Stat()
 			if err != nil {
-				return fmt.Errorf("couldn't stat pipeline configuration file %q: %v", input.Name(), err)
+				return fmt.Errorf("couldn't stat pipeline configuration file %q: %w", input.Name(), err)
 			}
 			if fi.Size() == 0 {
 				return fmt.Errorf("pipeline file %q is empty", input.Name())

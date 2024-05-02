@@ -515,9 +515,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		if a.stats.lastPing.IsZero() {
-			return nil, fmt.Errorf("Failed to ping: %v (No successful ping yet)", pingErr)
+			return nil, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
 		} else {
-			return nil, fmt.Errorf("Failed to ping: %v (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
+			return nil, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
 		}
 	}
 
@@ -619,7 +619,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 
 	// If `acquiredJob` is nil, then the job was never acquired
 	if acquiredJob == nil {
-		return fmt.Errorf("Failed to acquire job: %v", err)
+		return fmt.Errorf("Failed to acquire job: %w", err)
 	}
 
 	// Now that we've acquired the job, let's run it
@@ -653,7 +653,7 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
-		return fmt.Errorf("Failed to accept job: %v", err)
+		return fmt.Errorf("Failed to accept job: %w", err)
 	}
 
 	// Now that we've accepted the job, let's run it
@@ -685,7 +685,7 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 		AgentStdout:        a.agentStdout,
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to initialize job: %v", err)
+		return fmt.Errorf("Failed to initialize job: %w", err)
 	}
 	a.jobRunner = jr
 	defer func() {
@@ -695,7 +695,7 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 
 	// Start running the job
 	if err := jr.Run(ctx); err != nil {
-		return fmt.Errorf("Failed to run job: %v", err)
+		return fmt.Errorf("Failed to run job: %w", err)
 	}
 
 	return nil

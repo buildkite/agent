@@ -127,7 +127,7 @@ func (d Download) try(ctx context.Context) error {
 	// Start by downloading the file
 	response, err := d.client.Do(request)
 	if err != nil {
-		return fmt.Errorf("Error while downloading %s (%T: %v)", d.conf.URL, err, err)
+		return fmt.Errorf("Error while downloading %s (%T: %w)", d.conf.URL, err, err)
 	}
 	defer response.Body.Close()
 
@@ -148,20 +148,20 @@ func (d Download) try(ctx context.Context) error {
 	// Now make the folder for our file
 	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 	if err := os.MkdirAll(targetDirectory, 0777); err != nil {
-		return fmt.Errorf("Failed to create folder for %s (%T: %v)", targetFile, err, err)
+		return fmt.Errorf("Failed to create folder for %s (%T: %w)", targetFile, err, err)
 	}
 
 	// Create a file to handle the file
 	fileBuffer, err := os.Create(targetFile)
 	if err != nil {
-		return fmt.Errorf("Failed to create file %s (%T: %v)", targetFile, err, err)
+		return fmt.Errorf("Failed to create file %s (%T: %w)", targetFile, err, err)
 	}
 	defer fileBuffer.Close()
 
 	// Copy the data to the file
 	bytes, err := io.Copy(fileBuffer, response.Body)
 	if err != nil {
-		return fmt.Errorf("Error when copying data %s (%T: %v)", d.conf.URL, err, err)
+		return fmt.Errorf("Error when copying data %s (%T: %w)", d.conf.URL, err, err)
 	}
 
 	d.logger.Info("Successfully downloaded \"%s\" %s", d.conf.Path, humanize.IBytes(uint64(bytes)))

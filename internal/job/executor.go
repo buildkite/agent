@@ -969,7 +969,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	// The shell gets parsed based on the operating system
 	shell, err := shellwords.Split(e.Shell)
 	if err != nil {
-		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", e.Shell, err)
+		return fmt.Errorf("Failed to split shell (%q) into tokens: %w", e.Shell, err)
 	}
 
 	if len(shell) == 0 {
