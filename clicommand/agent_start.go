@@ -1182,7 +1182,16 @@ var AgentStartCommand = cli.Command{
 			pool.StartStatusServer(ctx, l, cfg.HealthCheckAddr)
 		}
 
-		return pool.Start(ctx)
+		err = pool.Start(ctx)
+		if errors.Is(err, agent.ErrJobAcquisitionFailure) {
+			// If the agent tried to acquire a job, but it couldn't because the job was already taken, we should exit with a
+			// specific exit code so that the caller can know that this job can't be acquired.
+
+			const acquisitionFailedExitCode = 27 // chosen by fair dice roll
+			return cli.NewExitError(err, acquisitionFailedExitCode)
+		}
+
+		return err
 	},
 }
 
