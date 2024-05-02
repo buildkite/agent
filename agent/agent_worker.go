@@ -7,7 +7,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -102,6 +101,44 @@ type AgentWorker struct {
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	agentStdout io.Writer
+
+	// Are we doing something right now?
+	state        agentWorkerState
+	currentJobID string
+	stateMtx     sync.Mutex
+}
+
+type agentWorkerState string
+
+const (
+	agentWorkerStateIdle agentWorkerState = "idle"
+	agentWorkerStateBusy agentWorkerState = "busy"
+)
+
+func (a *AgentWorker) setBusy(jobID string) {
+	a.stateMtx.Lock()
+	defer a.stateMtx.Unlock()
+	a.state = agentWorkerStateBusy
+	a.currentJobID = jobID
+}
+
+func (a *AgentWorker) setIdle() {
+	a.stateMtx.Lock()
+	defer a.stateMtx.Unlock()
+	a.state = agentWorkerStateIdle
+	a.currentJobID = ""
+}
+
+func (a *AgentWorker) getState() agentWorkerState {
+	a.stateMtx.Lock()
+	defer a.stateMtx.Unlock()
+	return a.state
+}
+
+func (a *AgentWorker) getCurrentJobID() string {
+	a.stateMtx.Lock()
+	defer a.stateMtx.Unlock()
+	return a.currentJobID
 }
 
 type errUnrecoverable struct {
@@ -143,6 +180,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 		spawnIndex:         c.SpawnIndex,
 		retrySleepFunc:     time.Sleep, // https://github.com/buildkite/roko/issues/2
 		agentStdout:        c.AgentStdout,
+		state:              agentWorkerStateIdle,
 	}
 }
 
@@ -181,23 +219,6 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 		return err
 	}
 	defer a.metricsCollector.Stop()
-
-	// Register our worker specific health check handler
-	http.HandleFunc("/agent/"+strconv.Itoa(a.spawnIndex), func(w http.ResponseWriter, r *http.Request) {
-		a.stats.Lock()
-		defer a.stats.Unlock()
-
-		if a.stats.lastHeartbeatError != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "ERROR: last heartbeat failed: %v. last successful was %v ago", a.stats.lastHeartbeatError, time.Since(a.stats.lastHeartbeat))
-		} else {
-			if a.stats.lastHeartbeat.IsZero() {
-				fmt.Fprintf(w, "OK: no heartbeat yet")
-			} else {
-				fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat))
-			}
-		}
-	})
 
 	// Use a context to run heartbeats for as long as the ping loop or job runs
 	heartbeatCtx, cancel := context.WithCancel(ctx)
@@ -286,6 +307,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 				// Let other agents know this agent is now busy and
 				// not to idle terminate
 				idleMonitor.MarkBusy(a.agent.UUID)
+
 				setStat("💼 Accepting job")
 
 				// Runs the job, only errors if something goes wrong
@@ -639,6 +661,9 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 }
 
 func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error {
+	a.setBusy(acceptResponse.ID)
+	defer a.setIdle()
+
 	jobMetricsScope := a.metrics.With(metrics.Tags{
 		"pipeline": acceptResponse.Env["BUILDKITE_PIPELINE_SLUG"],
 		"org":      acceptResponse.Env["BUILDKITE_ORGANIZATION_SLUG"],
@@ -704,6 +729,24 @@ func (a *AgentWorker) Disconnect(ctx context.Context) error {
 	}
 	a.logger.Info("Disconnected")
 	return nil
+}
+
+func (a *AgentWorker) healthHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a.stats.Lock()
+		defer a.stats.Unlock()
+
+		if a.stats.lastHeartbeatError != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "ERROR: last heartbeat failed: %v. last successful was %v ago", a.stats.lastHeartbeatError, time.Since(a.stats.lastHeartbeat))
+		} else {
+			if a.stats.lastHeartbeat.IsZero() {
+				fmt.Fprintf(w, "OK: no heartbeat yet")
+			} else {
+				fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat))
+			}
+		}
+	}
 }
 
 // This monitor has a 3rd implicit state we will call "initializing" that all agents start in
