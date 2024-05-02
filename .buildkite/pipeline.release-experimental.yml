@@ -13,6 +13,10 @@ steps:
           account-ids: "032379705303"
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
           propagate-environment: true
           mount-buildkite-agent: true
 
@@ -27,6 +31,10 @@ steps:
       - docker#v5.8.0:
           image: "buildkite/agent:3.55.0-ubuntu"
           entrypoint: bash
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
           propagate-environment: true
           mount-buildkite-agent: true
           volumes:
@@ -64,6 +72,10 @@ steps:
           mount-buildkite-agent: true
           tmpfs:
             - "/root/.gnupg"
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
     retry:
       automatic:
         - exit_status: 1
