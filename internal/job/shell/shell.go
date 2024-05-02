@@ -439,7 +439,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 			s.Warningf("Couldn't find bash (%v). Attempting to fall back to sh. This may cause issues for hooks and plugins that assume Bash features.", err)
 			shPath, err = s.AbsolutePath("sh")
 			if err != nil {
-				return fmt.Errorf("error finding a shell, needed to run scripts: %v", err)
+				return fmt.Errorf("error finding a shell, needed to run scripts: %w", err)
 			}
 		}
 		command = shPath

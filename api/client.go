@@ -296,7 +296,7 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 			}
 
 			if err = json.NewDecoder(resp.Body).Decode(v); err != nil {
-				return response, fmt.Errorf("failed to decode JSON response: %v", err)
+				return response, fmt.Errorf("failed to decode JSON response: %w", err)
 			}
 		}
 	}

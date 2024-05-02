@@ -95,7 +95,7 @@ func (u *S3Uploader) Upload(_ context.Context, artifact *api.Artifact) error {
 	u.logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
 	f, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %q (%v)", artifact.AbsolutePath, err)
+		return fmt.Errorf("failed to open file %q (%w)", artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to S3.

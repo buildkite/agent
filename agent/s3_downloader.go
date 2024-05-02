@@ -60,7 +60,7 @@ func (d S3Downloader) Start(ctx context.Context) error {
 
 	signedURL, err := req.Presign(time.Hour)
 	if err != nil {
-		return fmt.Errorf("error pre-signing request: %v", err)
+		return fmt.Errorf("error pre-signing request: %w", err)
 	}
 
 	// We can now cheat and pass the URL onto our regular downloader

@@ -28,18 +28,18 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 	// in, and not for any other repos that the step might clone.
 	err := e.shell.RunWithoutPrompt(ctx, "git", "config", "--global", "credential.useHttpPath", "true")
 	if err != nil {
-		return fmt.Errorf("enabling git credential.useHttpPath: %v", err)
+		return fmt.Errorf("enabling git credential.useHttpPath: %w", err)
 	}
 
 	buildkiteAgent, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("getting executable path: %v", err)
+		return fmt.Errorf("getting executable path: %w", err)
 	}
 
 	helper := fmt.Sprintf(`%s git-credentials-helper`, buildkiteAgent)
 	err = e.shell.RunWithoutPrompt(ctx, "git", "config", "--global", "credential.helper", helper)
 	if err != nil {
-		return fmt.Errorf("configuring git credential.helper: %v", err)
+		return fmt.Errorf("configuring git credential.helper: %w", err)
 	}
 
 	return nil

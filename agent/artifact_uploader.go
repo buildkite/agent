@@ -411,7 +411,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 	// Determine what uploader to use
 	uploader, err := a.createUploader()
 	if err != nil {
-		return fmt.Errorf("creating uploader: %v", err)
+		return fmt.Errorf("creating uploader: %w", err)
 	}
 
 	// Set the URLs of the artifacts based on the uploader
@@ -434,7 +434,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 
 	// Prepare a concurrency pool to upload the artifacts
 	p := pool.New(pool.MaxConcurrencyLimit)
-	errors := []error{}
+	errs := []error{}
 	var errorsMutex sync.Mutex
 
 	// Create a wait group so we can make sure the uploader waits for all
@@ -510,7 +510,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 					// acquire a lock since we mutate the errors
 					// slice in multiple routines.
 					errorsMutex.Lock()
-					errors = append(errors, err)
+					errs = append(errs, err)
 					errorsMutex.Unlock()
 				}
 
@@ -552,7 +552,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 				// acquire a lock since we mutate the errors
 				// slice in multiple routines.
 				errorsMutex.Lock()
-				errors = append(errors, err)
+				errs = append(errs, err)
 				errorsMutex.Unlock()
 
 				state = "error"
@@ -580,8 +580,9 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 	// Wait for the statuses to finish uploading
 	stateUploaderWaitGroup.Wait()
 
-	if len(errors) > 0 {
-		return fmt.Errorf("errors uploading artifacts: %v", errors)
+	if len(errs) > 0 {
+		err := errors.Join(errs...)
+		return fmt.Errorf("errors uploading artifacts: %w", err)
 	}
 
 	a.logger.Info("Artifact uploads completed successfully")
