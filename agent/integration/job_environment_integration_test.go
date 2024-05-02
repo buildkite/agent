@@ -36,13 +36,16 @@ func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 
 	// create a mock agent API
 	e := createTestAgentEndpoint()
-	server := e.server("my-job-id")
+	server := e.server()
 	defer server.Close()
 
-	runJob(t, ctx, testRunJobConfig{
+	err := runJob(t, ctx, testRunJobConfig{
 		job:           job,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{},
 		mockBootstrap: mb,
 	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
 }

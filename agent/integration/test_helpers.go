@@ -47,7 +47,7 @@ type testRunJobConfig struct {
 	verificationJWKS jwk.Set
 }
 
-func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) {
+func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 	t.Helper()
 
 	l := logger.Discard
@@ -70,13 +70,16 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) {
 		AgentConfiguration: cfg.agentCfg,
 		MetricsScope:       scope,
 	})
+
 	if err != nil {
 		t.Fatalf("agent.NewJobRunner() error = %v", err)
 	}
 
 	if err := jr.Run(context.Background()); err != nil {
-		t.Errorf("jr.Run() = %v", err)
+		return err
 	}
+
+	return nil
 }
 
 type testAgentEndpoint struct {
@@ -125,33 +128,116 @@ func (tae *testAgentEndpoint) logsFor(t *testing.T, jobID string) string {
 	return strings.Join(logChunks, "")
 }
 
-func (t *testAgentEndpoint) server(jobID string) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		t.mtx.Lock()
-		defer t.mtx.Unlock()
+type route struct {
+	Path   string
+	Method string
+	http.HandlerFunc
+}
 
-		b, _ := io.ReadAll(req.Body)
-		t.calls[req.URL.Path] = append(t.calls[req.URL.Path], b)
+func (t *testAgentEndpoint) getJobsHandler() http.HandlerFunc {
+	return func(rw http.ResponseWriter, req *http.Request) {
+		rw.WriteHeader(http.StatusOK)
+		fmt.Fprintf(rw, `{"state":"running"}`)
+	}
+}
 
-		switch req.URL.Path {
-		case "/jobs/" + jobID:
-			rw.WriteHeader(http.StatusOK)
-			fmt.Fprintf(rw, `{"state":"running"}`)
-		case "/jobs/" + jobID + "/start":
-			rw.WriteHeader(http.StatusOK)
-		case "/jobs/" + jobID + "/chunks":
-			sequence := req.URL.Query().Get("sequence")
-			seqNo, _ := strconv.Atoi(sequence)
-			r, _ := gzip.NewReader(bytes.NewBuffer(b))
-			uz, _ := io.ReadAll(r)
-			t.logChunks[seqNo] = string(uz)
-			rw.WriteHeader(http.StatusCreated)
-		case "/jobs/" + jobID + "/finish":
-			rw.WriteHeader(http.StatusOK)
-		default:
-			http.Error(rw, fmt.Sprintf("not found; method = %q, path = %q", req.Method, req.URL.Path), http.StatusNotFound)
+func (t *testAgentEndpoint) chunksHandler() http.HandlerFunc {
+	return func(rw http.ResponseWriter, req *http.Request) {
+		b, err := io.ReadAll(req.Body)
+		if err != nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-	}))
+
+		sequence := req.URL.Query().Get("sequence")
+		seqNo, err := strconv.Atoi(sequence)
+		if err != nil {
+			rw.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		r, err := gzip.NewReader(bytes.NewBuffer(b))
+		if err != nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		uz, err := io.ReadAll(r)
+		if err != nil {
+			rw.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		t.logChunks[seqNo] = string(uz)
+		rw.WriteHeader(http.StatusCreated)
+	}
+}
+
+func (t *testAgentEndpoint) defaultRoutes() []route {
+	return []route{
+		{
+			Method:      "GET",
+			Path:        "/jobs/",
+			HandlerFunc: t.getJobsHandler(),
+		},
+		{
+			Method:      "PUT",
+			Path:        "/jobs/{id}/start",
+			HandlerFunc: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) },
+		},
+		{
+			Method:      "POST",
+			Path:        "/jobs/{id}/chunks",
+			HandlerFunc: t.chunksHandler(),
+		},
+		{
+			Method:      "PUT",
+			Path:        "/jobs/{id}/finish",
+			HandlerFunc: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) },
+		},
+	}
+}
+
+func (t *testAgentEndpoint) server(extraRoutes ...route) *httptest.Server {
+	mux := http.NewServeMux()
+
+	defaultRoutes := t.defaultRoutes()
+	routesUniq := make(map[string]http.HandlerFunc, len(defaultRoutes))
+	for _, r := range defaultRoutes {
+		routesUniq[fmt.Sprintf("%s %s", r.Method, r.Path)] = r.HandlerFunc
+	}
+
+	// extra routes overwrite default routes if they conflict
+	for _, r := range extraRoutes {
+		routesUniq[fmt.Sprintf("%s %s", r.Method, r.Path)] = r.HandlerFunc
+	}
+
+	wrapRecordRequest := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			// wait a minute, what's going on here?
+			// well, we want to read the body of the request, but because HTTP response bodies are io.ReadClosers, they can only
+			// be read once. So we read the body, then write it back into the request body so that the next handler can read it.
+			b, _ := io.ReadAll(req.Body)
+			req.Body.Close()
+
+			// bytes.NewBuffer takes ownership of the slice, so we need to copy it
+			newBodyBytes := make([]byte, len(b))
+			copy(newBodyBytes, b)
+			req.Body = io.NopCloser(bytes.NewBuffer(newBodyBytes))
+
+			t.mtx.Lock()
+			t.calls[req.URL.Path] = append(t.calls[req.URL.Path], b)
+			t.mtx.Unlock()
+
+			next.ServeHTTP(rw, req)
+		})
+	}
+
+	for path, handler := range routesUniq {
+		mux.Handle(path, wrapRecordRequest(handler))
+	}
+
+	return httptest.NewServer(mux)
 }
 
 func mockPreBootstrap(t *testing.T, hooksDir string) *bintest.Mock {

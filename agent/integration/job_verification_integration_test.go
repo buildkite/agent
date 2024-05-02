@@ -556,7 +556,7 @@ func TestJobVerification(t *testing.T) {
 
 			// create a mock agent API
 			e := createTestAgentEndpoint()
-			server := e.server(tc.job.ID)
+			server := e.server()
 			defer server.Close()
 
 			mb := mockBootstrap(t)
@@ -569,13 +569,16 @@ func TestJobVerification(t *testing.T) {
 			}
 
 			tc.job.Step = signStep(t, tc.signingKey, pipelineUploadEnv, stepWithInvariants)
-			runJob(t, ctx, testRunJobConfig{
+			err := runJob(t, ctx, testRunJobConfig{
 				job:              &tc.job,
 				server:           server,
 				agentCfg:         tc.agentConf,
 				mockBootstrap:    mb,
 				verificationJWKS: tc.verificationJWKS,
 			})
+			if err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
 
 			job := e.finishesFor(t, tc.job.ID)[0]
 
