@@ -94,7 +94,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 
 			// Creates a mock agent API
 			e := createTestAgentEndpoint()
-			server := e.server(defaultJobID)
+			server := e.server()
 			t.Cleanup(server.Close)
 
 			j := &api.Job{
@@ -154,7 +154,7 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 
 	// create a mock agent API
 	e := createTestAgentEndpoint()
-	server := e.server("my-job-id")
+	server := e.server()
 	defer server.Close()
 
 	mb := mockBootstrap(t)
@@ -205,7 +205,7 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 			mb.Expect().Once().AndExitWith(exit)
 
 			e := createTestAgentEndpoint()
-			server := e.server("my-job-id")
+			server := e.server()
 			defer server.Close()
 
 			err := runJob(t, ctx, testRunJobConfig{
@@ -254,7 +254,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 
 	// create a mock agent API
 	e := createTestAgentEndpoint()
-	server := e.server("my-job-id")
+	server := e.server()
 	defer server.Close()
 
 	err := runJob(t, ctx, testRunJobConfig{
@@ -294,7 +294,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 
 	// create a mock agent API
 	e := createTestAgentEndpoint()
-	server := e.server("my-job-id")
+	server := e.server()
 	defer server.Close()
 
 	err := runJob(t, ctx, testRunJobConfig{
@@ -333,7 +333,7 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 
 	// create a mock agent API
 	e := createTestAgentEndpoint()
-	server := e.server("my-job-id")
+	server := e.server()
 	defer server.Close()
 
 	runJob(t, ctx, testRunJobConfig{

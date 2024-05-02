@@ -556,7 +556,7 @@ func TestJobVerification(t *testing.T) {
 
 			// create a mock agent API
 			e := createTestAgentEndpoint()
-			server := e.server(tc.job.ID)
+			server := e.server()
 			defer server.Close()
 
 			mb := mockBootstrap(t)

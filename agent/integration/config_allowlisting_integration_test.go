@@ -126,7 +126,7 @@ func TestConfigAllowlisting(t *testing.T) {
 			}
 
 			e := createTestAgentEndpoint()
-			server := e.server(jobID)
+			server := e.server()
 			defer server.Close()
 
 			mb := mockBootstrap(t)
