@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -109,6 +110,42 @@ func TestDisconnectRetry(t *testing.T) {
 	assert.Equal(t, "[info] Disconnected", l.Messages[3])
 }
 
+func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	jobID := "some-uuid"
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case fmt.Sprintf("/jobs/%s/acquire", jobID):
+			rw.WriteHeader(http.StatusUnprocessableEntity)
+			return
+
+		default:
+			http.Error(rw, "Not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	worker := &AgentWorker{
+		logger:             logger.Discard,
+		agent:              nil,
+		apiClient:          client,
+		agentConfiguration: AgentConfiguration{},
+	}
+
+	err := worker.AcquireAndRunJob(ctx, jobID)
+	if !errors.Is(err, ErrJobAcquisitionFailure) {
+		t.Fatalf("expected worker.AcquireAndRunJob(%q) = ErrJobAcquisitionFailure, got %v", jobID, err)
+	}
+}
+
 func TestAcquireAndRunJobWaiting(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -156,6 +193,10 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 
 	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
 	assert.ErrorContains(t, err, "423")
+
+	if errors.Is(err, ErrJobAcquisitionFailure) {
+		t.Fatalf("expected worker.AcquireAndRunJob(%q) not to be a ErrJobAcquisitionFailure, but it was: %v", "waitinguuid", err)
+	}
 
 	// the last Retry-After is not recorded as the retries loop exits before using it
 	exptectedSleeps := make([]time.Duration, 0, 9)

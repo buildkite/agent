@@ -551,6 +551,8 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 	return ping.Job, nil
 }
 
+var ErrJobAcquisitionFailure = errors.New("failed to acquire job")
+
 // AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
 // server determined interval (from the Retry-After response header) if the job is in the waiting
 // state. If the job is in an unassignable state, it will return an error immediately.
@@ -594,11 +596,13 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 			if resp != nil {
 				switch resp.StatusCode {
 				case http.StatusUnprocessableEntity:
-					// If the API returns with a 422, that means that we
-					// successfully *tried* to acquire the job, but
-					// Buildkite rejected the finish for some reason.
+					// If the API returns with a 422, it usually means that the job is in a state where it can't be acquired -
+					// e.g. it's already running on another agent, or has been cancelled, or has already run
 					a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
 					r.Break()
+
+					return nil, fmt.Errorf("%w: %w", ErrJobAcquisitionFailure, err)
+
 				case http.StatusLocked:
 					// If the API returns with a 423, the job is in the waiting state
 					a.logger.Warn("The job is waiting for a dependency (%s)", err)
@@ -619,7 +623,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 
 	// If `acquiredJob` is nil, then the job was never acquired
 	if acquiredJob == nil {
-		return fmt.Errorf("Failed to acquire job: %w", err)
+		return fmt.Errorf("failed to acquire job: %w", err)
 	}
 
 	// Now that we've acquired the job, let's run it
