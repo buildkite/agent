@@ -36,6 +36,10 @@ steps:
           login: true
           account-ids: "032379705303"
       - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
           mount-buildkite-agent: true
@@ -73,6 +77,10 @@ steps:
       - aws-assume-role-with-web-identity:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
       - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
           image: "public.ecr.aws/docker/library/ruby:3.0"
           entrypoint: bash
           propagate-environment: true
@@ -110,6 +118,10 @@ steps:
       - aws-assume-role-with-web-identity:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
       - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
           image: "public.ecr.aws/docker/library/ruby:3.0"
           entrypoint: bash
           propagate-environment: true
@@ -141,6 +153,10 @@ steps:
           login: true
           account-ids: "032379705303"
       - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
           mount-buildkite-agent: true
