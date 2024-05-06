@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.72.0](https://github.com/buildkite/agent/tree/v3.72.0) (2024-05-06)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.71.0...v3.72.0)
+
+### Added
+- Add status.json endpoint to health check endpoints [#2759](https://github.com/buildkite/agent/pull/2759) (@moskyb)
+
+### Changed
+- Make failed job acquisitions return a specific exit code (27) [#2762](https://github.com/buildkite/agent/pull/2762) (@moskyb)
+
+### Internal
+- Refactor agent integration test API [#2764](https://github.com/buildkite/agent/pull/2764) (@moskyb)
+- Replace calls to %v for error values in fmt.Errorf with %w [#2763](https://github.com/buildkite/agent/pull/2763) (@moskyb)
+- Release pipeline changes:
+  - Pass AWS creds into docker containers [#2761](https://github.com/buildkite/agent/pull/2761) (@amu-g)
+  - release: Pass AWS credentials to Docker containers [#2760](https://github.com/buildkite/agent/pull/2760) (@lucaswilric)
+  - Use oidc roles in release pipelines [#2755](https://github.com/buildkite/agent/pull/2755) (@amu-g)
+- Dependency updates [#2752](https://github.com/buildkite/agent/pull/2752), [#2751](https://github.com/buildkite/agent/pull/2751), [#2750](https://github.com/buildkite/agent/pull/2750), [#2739](https://github.com/buildkite/agent/pull/2739), [#2740](https://github.com/buildkite/agent/pull/2740), [#2753](https://github.com/buildkite/agent/pull/2753), [#2757](https://github.com/buildkite/agent/pull/2757) (@dependabot[bot])
+
 ## [v3.71.0](https://github.com/buildkite/agent/tree/v3.71.0) (2024-04-30)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.70.0...v3.71.0)
 
