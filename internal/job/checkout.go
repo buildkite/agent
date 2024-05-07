@@ -708,9 +708,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 }
 
 func gitFetchCommitWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags, commit string) error {
-	if err := gitFetch(ctx, shell, gitFetchFlags, "origin", commit); err == nil {
+	err := gitFetch(ctx, shell, gitFetchFlags, "origin", commit)
+	if err == nil {
 		return nil // it worked
-	} else if gerr := new(gitError); errors.As(err, &gerr) {
+	}
+	if gerr := new(gitError); errors.As(err, &gerr) {
 		// if we fail in a way that means the repository is corrupt, we should bail
 		switch gerr.Type {
 		case gitErrorFetchRetryClean, gitErrorFetchBadObject:
