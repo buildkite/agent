@@ -42,7 +42,7 @@ type GitCredentialsHelperConfig struct {
 	Profile     string   `cli:"profile"`
 
 	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
+	// DebugHTTP bool // Not present due to the possibility of leaking code access tokens to logs
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
@@ -63,7 +63,7 @@ var GitCredentialsHelperCommand = cli.Command{
 		AgentAccessTokenFlag,
 		EndpointFlag,
 		NoHTTP2Flag,
-		DebugHTTPFlag,
+		// DebugHTTPFlag, // Not present due to the possibility of leaking code access tokens to logs
 
 		// Global flags
 		NoColorFlag,
