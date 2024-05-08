@@ -544,8 +544,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 		// GitHub has a special ref which lets us fetch a pull request head, whether
-		// or not there is a current head in this repository or another which
-		// references the commit. We presume a commit sha is provided. See:
+		// or not it's a current head in this repository or a fork. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
@@ -557,6 +556,14 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		gitFetchHead, _ := e.shell.RunAndCapture(ctx, "git", "rev-parse", "FETCH_HEAD")
 		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
+		if e.Commit != "HEAD" {
+			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
+			// have been force pushes to the pull request, so this ensures we have it.
+			if err := gitFetchCommitWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
+				return err
+			}
+		}
+
 	case e.Commit == "HEAD":
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
@@ -567,34 +574,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	default:
 		// Otherwise fetch and checkout the commit directly.
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Commit); err == nil {
-			break // it worked, break out of the switch statement
-		} else if gerr := new(gitError); errors.As(err, &gerr) {
-			// if we fail in a way that means the repository is corrupt, we should bail
-			switch gerr.Type {
-			case gitErrorFetchRetryClean, gitErrorFetchBadObject:
-				return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
-			case gitErrorFetchBadReference:
-				// fallback to fetching all heads and tags
-			}
-		}
-
-		// Some repositories don't support fetching a specific commit so we fall
-		// back to fetching all heads and tags, hoping that the commit is included.
-		e.shell.Commentf("Commit fetch failed, trying to fetch all heads and tags")
-		// By default `git fetch origin` will only fetch tags which are
-		// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
-		// fetch all tags in addition to the default refspec, but pre 1.9.0 it
-		// excludes the default refspec.
-		gitFetchRefspec, err := e.shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
-		if err != nil {
-			return fmt.Errorf("getting remote.origin.fetch: %w", err)
-		}
-
-		if err := gitFetch(ctx, e.shell,
-			gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*",
-		); err != nil {
-			return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
+		if err := gitFetchCommitWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
+			return err
 		}
 	}
 
@@ -721,6 +702,43 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	if experiments.IsEnabled(ctx, experiments.ResolveCommitAfterCheckout) {
 		e.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
 		e.resolveCommit(ctx)
+	}
+
+	return nil
+}
+
+func gitFetchCommitWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags, commit string) error {
+	err := gitFetch(ctx, shell, gitFetchFlags, "origin", commit)
+	if err == nil {
+		return nil // it worked
+	}
+	if gerr := new(gitError); errors.As(err, &gerr) {
+		// if we fail in a way that means the repository is corrupt, we should bail
+		switch gerr.Type {
+		case gitErrorFetchRetryClean, gitErrorFetchBadObject:
+			return fmt.Errorf("fetching commit %q: %w", commit, err)
+		case gitErrorFetchBadReference:
+			// fallback to fetching all heads and tags
+		}
+	}
+
+	// The commit might be something that's not possible to fetch directly
+	// (eg. a short commit hash), so we fall back to fetching all heads and tags,
+	// hoping that the commit is included.
+	shell.Commentf("Commit fetch failed, trying to fetch all heads and tags")
+	// By default `git fetch origin` will only fetch tags which are
+	// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
+	// fetch all tags in addition to the default refspec, but pre 1.9.0 it
+	// excludes the default refspec.
+	gitFetchRefspec, err := shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
+	if err != nil {
+		return fmt.Errorf("getting remote.origin.fetch: %w", err)
+	}
+
+	if err := gitFetch(ctx, shell,
+		gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*",
+	); err != nil {
+		return fmt.Errorf("fetching commit %q: %w", commit, err)
 	}
 
 	return nil
