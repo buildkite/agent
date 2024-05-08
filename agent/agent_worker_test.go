@@ -194,8 +194,8 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
 	assert.ErrorContains(t, err, "423")
 
-	if errors.Is(err, ErrJobAcquisitionFailure) {
-		t.Fatalf("expected worker.AcquireAndRunJob(%q) not to be a ErrJobAcquisitionFailure, but it was: %v", "waitinguuid", err)
+	if !errors.Is(err, ErrJobNotYetAcquirable) {
+		t.Fatalf("expected worker.AcquireAndRunJob(%q) to be an ErrJobNotYetAcquirable, but it was: %v", "waitinguuid", err)
 	}
 
 	// the last Retry-After is not recorded as the retries loop exits before using it

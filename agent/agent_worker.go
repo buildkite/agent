@@ -551,7 +551,10 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 	return ping.Job, nil
 }
 
-var ErrJobAcquisitionFailure = errors.New("failed to acquire job")
+var (
+	ErrJobAcquisitionFailure = errors.New("failed to acquire job")
+	ErrJobNotYetAcquirable   = errors.New("job is not yet acquirable")
+)
 
 // AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
 // server determined interval (from the Retry-After response header) if the job is in the waiting
@@ -611,7 +614,8 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 						duration = time.Second + time.Duration(rand.Int63n(int64(time.Second)))
 					}
 					r.SetNextInterval(duration)
-					return nil, err
+
+					return nil, fmt.Errorf("%w: %w", ErrJobNotYetAcquirable, err)
 				}
 			}
 			a.logger.Warn("%s (%s)", err, r)

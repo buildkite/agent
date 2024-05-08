@@ -1183,17 +1183,27 @@ var AgentStartCommand = cli.Command{
 		}
 
 		err = pool.Start(ctx)
-		if errors.Is(err, agent.ErrJobAcquisitionFailure) {
+		switch {
+		case errors.Is(err, agent.ErrJobAcquisitionFailure):
 			// If the agent tried to acquire a job, but it couldn't because the job was already taken, we should exit with a
 			// specific exit code so that the caller can know that this job can't be acquired.
-
-			const acquisitionFailedExitCode = 27 // chosen by fair dice roll
 			return cli.NewExitError(err, acquisitionFailedExitCode)
-		}
 
-		return err
+		case errors.Is(err, agent.ErrJobNotYetAcquirable):
+			// likewise, if the job isn't yet acquirable, we should exit with a specific exit code so that the caller can know
+			// that the job can't be acquired right now, but might be eligible for acquisition later.
+			return cli.NewExitError(err, jobNotYetAcquirableExitCode)
+
+		default:
+			return err
+		}
 	},
 }
+
+const (
+	acquisitionFailedExitCode   = 27
+	jobNotYetAcquirableExitCode = 28
+)
 
 func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set, error) {
 	jwksBytes, err := os.ReadFile(path)
