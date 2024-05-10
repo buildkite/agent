@@ -30,7 +30,7 @@ type SecretGetConfig struct {
 
 var SecretGetCommand = cli.Command{
 	Name:  "get",
-	Usage: "Get a secret by its key",
+	Usage: "Get a secret by its key and print it to stdout",
 	Description: `Usage:
 
     buildkite-agent secret get [key] [options...]
