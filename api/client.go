@@ -232,6 +232,8 @@ func newResponse(r *http.Response) *Response {
 func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 	var err error
 
+	req.Header.Set("X-Buildkite-Token-Rotation-Experiment", "oh yeah")
+
 	if c.conf.DebugHTTP {
 		// If the request is a multi-part form, then it's probably a
 		// file upload, in which case we don't want to spewing out the
