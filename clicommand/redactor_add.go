@@ -54,7 +54,7 @@ type RedactorAddConfig struct {
 var RedactorAddCommand = cli.Command{
 	Name:        "add",
 	Usage:       "Add values to redact from a job's log output",
-	Description: "This may be used to parse a file for values to redact from a running job's log output. If you dynamically fetch secrets during a job, it is recommended that you use this command to ensure they will be redacted from subsequent logs. Secrects fetched with the builtin ′secret get′ command do not require the use of this command, they will be redacted automatically.",
+	Description: "This may be used to parse a file for values to redact from a running job's log output. If you dynamically fetch secrets during a job, it is recommended that you use this command to ensure they will be redacted from subsequent logs. Secrets fetched with the builtin ′secret get′ command do not require the use of this command, they will be redacted automatically.",
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name: "format",
