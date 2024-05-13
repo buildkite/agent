@@ -24,6 +24,7 @@ type Timestamper struct {
 	mu            sync.Mutex
 	startOfLine   bool
 	lastTimestamp time.Time
+	ansiParser    ansiParser
 }
 
 // NewTimestamper sets up a Timestamper outputting to an io.Writer w. Timestamps
@@ -50,7 +51,28 @@ func (p *Timestamper) Write(data []byte) (n int, err error) {
 
 	written := 0
 	for len(data) > 0 {
-		// When at the start of a line, or after a long enough time,
+		// If the previously written data ended in the middle of an ANSI code,
+		// keep feeding bytes to the ANSI parser (and writing them out)
+		// until we're not
+		var codeEnd []byte
+		for p.ansiParser.insideCode() && len(data) > len(codeEnd) {
+			fed := len(codeEnd)
+			p.ansiParser.feed(data[fed])
+			codeEnd = data[:fed+1]
+		}
+		if len(codeEnd) > 0 {
+			n, err := p.out.Write(codeEnd)
+			written += n
+			if err != nil {
+				return written, err
+			}
+			data = data[len(codeEnd):]
+			if len(data) == 0 {
+				break
+			}
+		}
+
+		// When at the start of a line, or after a long enough time
 		// use the callback to format a timestamp and write it.
 		if p.startOfLine || now.Sub(p.lastTimestamp) > p.timeout {
 			if _, err := p.out.Write([]byte(p.formatFunc(now))); err != nil {
@@ -67,6 +89,7 @@ func (p *Timestamper) Write(data []byte) (n int, err error) {
 		if idx == nil {
 			// Write all remaining data. The line continues into the next Write
 			// call.
+			p.ansiParser.feed(data...)
 			n, err := p.out.Write(data)
 			written += n
 			return written, err
@@ -74,7 +97,9 @@ func (p *Timestamper) Write(data []byte) (n int, err error) {
 
 		// Write up to (and including) the newline / breaking sequence, ready to
 		// start a new line in the next iteration or Write.
-		n, err := p.out.Write(data[:idx[1]])
+		chunk := data[:idx[1]]
+		p.ansiParser.feed(chunk...)
+		n, err = p.out.Write(chunk)
 		written += n
 		if err != nil {
 			return written, err
