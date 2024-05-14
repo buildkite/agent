@@ -40,6 +40,10 @@ func TestANSIParser(t *testing.T) {
 			input: "incomplete SOS: \x1bXasdfg",
 			want:  true,
 		},
+		{
+			input: "PM without ST: \x1b^asdf\x1b/more",
+			want:  true,
+		},
 	}
 
 	for _, test := range tests {

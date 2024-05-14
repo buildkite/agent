@@ -62,6 +62,14 @@ func init() {
 	//   ESC '[' (parameter byte)* (intermediate byte)* (final byte)
 	// So the "parameter bytes" and "intermediate bytes" need to loop,
 	// and any other byte is the "final byte" which terminates the sequence.
+	// Here's an ASCII-art state diagram:
+	//
+	//         0x30-0x3F             0x20-0x2F
+	//             ^|                    ^|
+	//             |v                    |v
+	// () --'['--> () --anything else--> () --anything else--> (nil)
+	//          parameter           intermediate               final
+	//
 	csiIntermediate := ansiParserState{}
 	for b := byte(0x30); b <= 0x3F; b++ {
 		csiParameterState[b] = csiParameterState
@@ -75,9 +83,22 @@ func init() {
 	//   ESC [PX]^_] (~arbitrary text) (BEL | ESC '\')
 	// So all bytes need to loop except BEL and ESC \ (that's String Terminator)
 	// which terminate the sequence.
+	//
+	//            not BEL or ESC
+	//                 ^|
+	//                 |v
+	// () --[PX]^_]--> () <--not '\'--+
+	//                  |             |
+	//                  +----ESC----> () --'\'--> (nil)
+	//                  |
+	//                  +--BEL--> (nil)
+	//
+	stEscapeState := ansiParserState{}
 	for b := range 256 {
 		stTextState[byte(b)] = stTextState
+		stEscapeState[byte(b)] = stTextState
 	}
 	stTextState[0x07] = nil
-	stTextState[0x1b] = ansiParserState{'\\': nil}
+	stTextState[0x1b] = stEscapeState
+	stEscapeState['\\'] = nil
 }
