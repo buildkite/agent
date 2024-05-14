@@ -64,11 +64,12 @@ func init() {
 	// and any other byte is the "final byte" which terminates the sequence.
 	// Here's an ASCII-art state diagram:
 	//
-	//         0x30-0x3F             0x20-0x2F
-	//             ^|                    ^|
-	//             |v                    |v
-	// () --'['--> () --anything else--> () --anything else--> (nil)
-	//          parameter           intermediate               final
+	//         0x30-0x3F          0x20-0x2F
+	//             ^|                ^|
+	//             |v                |v
+	// () --'['--> () --0x20-0x2F--> () --anything else--> (nil)
+	//             |
+	//             +--anything else--> (nil)
 	//
 	csiIntermediate := ansiParserState{}
 	for b := byte(0x30); b <= 0x3F; b++ {
