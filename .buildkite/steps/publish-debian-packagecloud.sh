@@ -28,9 +28,6 @@ mkdir -p deb
 echo "--- Downloading built debian packages"
 buildkite-agent artifact download --build "${artifacts_build}" "deb/*.deb" deb/
 
-echo "--- Installing dependencies"
-gem install package_cloud
-
 echo "--- Requesting OIDC token"
 export PACKAGECLOUD_TOKEN="$(buildkite-agent oidc request-token --audience "https://packagecloud.io/${REPOSITORY}" --lifetime 300)"
 
