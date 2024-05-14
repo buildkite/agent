@@ -3,6 +3,10 @@ package process
 // ansiParser implements a tiny ANSI code parser. This is for the purposes of
 // telling whether or not we're in the middle of an ANSI sequence before
 // inserting data of our own.
+// A reasonable summary of ANSI escape codes is at Wikipedia
+// https://en.wikipedia.org/wiki/ANSI_escape_code
+// including mention of some of the necessary deviations from the standards
+// (such as allowing some sequences to terminate with BEL instead of ESC '\').
 type ansiParser struct {
 	state ansiParserState
 }
@@ -14,7 +18,7 @@ func (m *ansiParser) feed(data ...byte) {
 			m.state = m.state[b]
 			continue
 		}
-		if b == '\x1b' {
+		if b == 0x1b {
 			m.state = initialANSIState
 		}
 	}
@@ -24,8 +28,8 @@ func (m *ansiParser) feed(data ...byte) {
 // The parser is mid-sequence if it's in any state other than nil ("normal").
 func (m *ansiParser) insideCode() bool { return m.state != nil }
 
-// ansiParserState is a possible state of the parser. It's just a map of next-
-// byte to next-state. Most next-states are nil.
+// ansiParserState is a possible state of the parser. It's a map of incoming-
+// byte to next-state. Most next-states are nil (they exit the escape code).
 type ansiParserState map[byte]ansiParserState
 
 var (
@@ -40,7 +44,7 @@ var (
 		'^': stTextState,       // PM
 		'_': stTextState,       // APC
 	}
-	// csiParameter state is the state the parser is in after ESC [
+	// csiParameter state is the state the parser is in after ESC '['
 	csiParameterState = ansiParserState{}
 
 	// stTextState is one of the ST-terminated text states (OSC, DCS, APC, etc)
@@ -57,7 +61,7 @@ func init() {
 	// or...
 	//   ESC '[' (parameter byte)* (intermediate byte)* (final byte)
 	// So the "parameter bytes" and "intermediate bytes" need to loop,
-	// and any other byte is the "final byte".
+	// and any other byte is the "final byte" which terminates the sequence.
 	csiIntermediate := ansiParserState{}
 	for b := byte(0x30); b <= 0x3F; b++ {
 		csiParameterState[b] = csiParameterState
@@ -68,12 +72,12 @@ func init() {
 	}
 
 	// OSC, APC, DCS, SOS, PM have the form:
-	//   ESC [PX]^_] (arbitrary text) (BEL | ESC '\')
+	//   ESC [PX]^_] (~arbitrary text) (BEL | ESC '\')
 	// So all bytes need to loop except BEL and ESC \ (that's String Terminator)
 	// which terminate the sequence.
 	for b := range 256 {
 		stTextState[byte(b)] = stTextState
 	}
-	stTextState['\x07'] = nil
-	stTextState['\x1b'] = ansiParserState{'\\': nil}
+	stTextState[0x07] = nil
+	stTextState[0x1b] = ansiParserState{'\\': nil}
 }
