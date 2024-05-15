@@ -294,10 +294,8 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	// to the user as they may be the caused by errors in the pipeline definition.
 	k8sProcess, ok := r.process.(*kubernetes.Runner)
 	if ok && r.cancelled && !r.stopped && k8sProcess.ClientStateUnknown() {
-		fmt.Fprintln(
-			r.jobLogs,
-			"Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.",
-		)
+		fmt.Fprintln(r.jobLogs, "+++ Unknown container exit status")
+		fmt.Fprintln(r.jobLogs, "Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.")
 	}
 
 	// Collect the finished process' exit status
