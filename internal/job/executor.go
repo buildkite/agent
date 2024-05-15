@@ -1181,7 +1181,7 @@ func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *
 	).Do(func(rtr *roko.Retrier) error {
 		id, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_ID"))
 		if err != nil {
-			return fmt.Errorf("failed to parse container id, %s", os.Getenv("BUILDKITE_CONTAINER_ID"))
+			return fmt.Errorf("failed to parse BUILDKITE_CONTAINER_ID %q", os.Getenv("BUILDKITE_CONTAINER_ID"))
 		}
 		kubernetesClient.ID = id
 		connect, err := kubernetesClient.Connect(ctx)

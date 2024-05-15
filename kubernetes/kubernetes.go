@@ -362,10 +362,15 @@ func (c *Client) Await(ctx context.Context, desiredState RunState) error {
 			}
 			if current == desiredState {
 				return nil
-			} else if current == RunStateInterrupt {
+			}
+			if current == RunStateInterrupt {
 				return ErrInterrupt
 			}
-			time.Sleep(time.Second)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Second):
+			}
 		}
 	}
 }
