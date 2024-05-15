@@ -295,7 +295,7 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	k8sProcess, ok := r.process.(*kubernetes.Runner)
 	if ok && r.cancelled && !r.stopped && k8sProcess.ClientStateUnknown() {
 		fmt.Fprintln(r.jobLogs, "+++ Unknown container exit status")
-		fmt.Fprintln(r.jobLogs, "Some containers had unknown exit statuses. Perhaps they were in ImagePullBackOff.")
+		fmt.Fprintln(r.jobLogs, "Some containers had unknown exit statuses. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)")
 	}
 
 	// Collect the finished process' exit status
