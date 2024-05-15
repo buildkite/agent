@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.73.0](https://github.com/buildkite/agent/tree/v3.73.0) (2024-05-16)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.72.0...v3.73.0)
+
+### Changed
+- Return earlier from non-get credential actions [#2776](https://github.com/buildkite/agent/pull/2776) (@moskyb)
+- Remove the --debug-http flag from the git credential helper [#2772](https://github.com/buildkite/agent/pull/2772) (@moskyb)
+- Write "unknown exit status" in expanded section [#2783](https://github.com/buildkite/agent/pull/2783) (@DrJosh9000)
+
+### Fixed
+- Fix poorly-timed timestamp insertions [#2778](https://github.com/buildkite/agent/pull/2778) (@DrJosh9000)
+- Fix typo in 'buildkite-agent redactor add' description. [#2777](https://github.com/buildkite/agent/pull/2777) (@gilesgas)
+- Fix checkout race condition on GitHub PR builds [#2735](https://github.com/buildkite/agent/pull/2735) (@rianmcguire)
+- Expand buildkite-agent secret command with a more useful description. [#2775](https://github.com/buildkite/agent/pull/2775) (@gilesgas)
+
+### Internal
+- Dependabot updates: [#2779](https://github.com/buildkite/agent/pull/2779), [#2782](https://github.com/buildkite/agent/pull/2782), [#2781](https://github.com/buildkite/agent/pull/2781), [#2771](https://github.com/buildkite/agent/pull/2771), [#2770](https://github.com/buildkite/agent/pull/2770), [#2769](https://github.com/buildkite/agent/pull/2769), [#2767](https://github.com/buildkite/agent/pull/2767) (@dependabot[bot])
+
 ## [v3.72.0](https://github.com/buildkite/agent/tree/v3.72.0) (2024-05-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.71.0...v3.72.0)
 
