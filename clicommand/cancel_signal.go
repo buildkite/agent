@@ -4,13 +4,9 @@ import "github.com/urfave/cli"
 
 const (
 	defaultCancelGracePeriod = 10
-	defaultSignalGracePeriod = 9
 )
 
 var (
-	// cancel grace period must be strictly longer than signal grace period
-	_ uint = defaultCancelGracePeriod - defaultSignalGracePeriod - 1
-
 	cancelGracePeriodFlag = cli.IntFlag{
 		Name:  "cancel-grace-period",
 		Value: defaultCancelGracePeriod,
@@ -29,6 +25,6 @@ var (
 		Usage: "The number of seconds given to a subprocess to handle being sent ′cancel-signal′. " +
 			"After this period has elapsed, SIGKILL will be sent.",
 		EnvVar: "BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
-		Value:  defaultSignalGracePeriod,
+		Value:  -1,
 	}
 )
