@@ -835,8 +835,15 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		// default signal grace period to slightly less than the cancel grace period
+		// Treat a negative signal grace period as relative to the cancel grace period
 		if cfg.SignalGracePeriodSeconds < 0 {
+			if cfg.SignalGracePeriodSeconds < cfg.CancelGracePeriod*-1 {
+				return fmt.Errorf(
+					"signal-grace-period-seconds (%d) must be greater than the negative cancel-grace-period (%d)",
+					cfg.SignalGracePeriodSeconds,
+					cfg.CancelGracePeriod*-1,
+				)
+			}
 			cfg.SignalGracePeriodSeconds = cfg.CancelGracePeriod + cfg.SignalGracePeriodSeconds
 		}
 

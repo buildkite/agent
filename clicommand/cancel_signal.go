@@ -23,7 +23,9 @@ var (
 	signalGracePeriodSecondsFlag = cli.IntFlag{
 		Name: "signal-grace-period-seconds",
 		Usage: "The number of seconds given to a subprocess to handle being sent ′cancel-signal′. " +
-			"After this period has elapsed, SIGKILL will be sent.",
+			"After this period has elapsed, SIGKILL will be sent. " +
+			"Negative values are taken relative to ′cancel-grace-period′. " +
+			"The default is ′cancel-grace-period′ - 1.",
 		EnvVar: "BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
 		Value:  -1,
 	}
