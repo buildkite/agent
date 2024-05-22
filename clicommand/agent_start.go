@@ -836,8 +836,8 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// default signal grace period to slightly less than the cancel grace period
-		if cfg.SignalGracePeriodSeconds == -1 {
-			cfg.SignalGracePeriodSeconds = cfg.CancelGracePeriod - 1
+		if cfg.SignalGracePeriodSeconds < 0 {
+			cfg.SignalGracePeriodSeconds = cfg.CancelGracePeriod + cfg.SignalGracePeriodSeconds
 		}
 
 		if cfg.CancelGracePeriod <= cfg.SignalGracePeriodSeconds {
