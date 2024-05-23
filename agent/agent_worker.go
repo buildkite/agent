@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"time"
@@ -608,7 +608,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 					a.logger.Warn("The job is waiting for a dependency (%s)", err)
 					duration, errParseDuration := time.ParseDuration(resp.Header.Get("Retry-After") + "s")
 					if errParseDuration != nil {
-						duration = time.Second + time.Duration(rand.Int63n(int64(time.Second)))
+						duration = time.Second + rand.N(time.Second)
 					}
 					r.SetNextInterval(duration)
 					return nil, err
