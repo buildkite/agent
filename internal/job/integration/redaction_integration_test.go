@@ -89,7 +89,10 @@ func TestRedactorAdd_RedactsVarsAfterUse(t *testing.T) {
 	}
 }
 
-func TestRedactorAdd_FailsWhenNoInitialRedactionStringsArePresent(t *testing.T) {
+// this is a regression test - prior to https://github.com/buildkite/agent/pull/2794, when the executor was provided with
+// an empty list of redacted vars, it would not initialise the redactors at all, meaning that later redactions (ie with
+// the `buildkite-agent redactor add` command, or automatically when using `buildkite-agent secret get`) would not occur
+func TestRegression_TestRedactorAdd_StillWorksWhenNoInitialRedactedVarsAreProvided(t *testing.T) {
 	// when this test is run inside an agent (ie in CI), we don't want to connect to the job API of the executor running this test
 	// we want to instead connect to the job API of the executor process we're testing
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
@@ -115,7 +118,7 @@ func TestRedactorAdd_FailsWhenNoInitialRedactionStringsArePresent(t *testing.T) 
 	}
 
 	// now check that the string is still unredacted after the call to RedactionCreate
-	if !strings.Contains(tester.Output, fmt.Sprintf("There should be a redacted here: %s", secret)) {
+	if !strings.Contains(tester.Output, "There should be a redacted here: [REDACTED]") {
 		t.Fatalf("expected secret to be echoed without redaction after RedactionCreate, but it wasn't. Full output: %s", tester.Output)
 	}
 }

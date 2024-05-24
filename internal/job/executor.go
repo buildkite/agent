@@ -1128,9 +1128,6 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 // The returned method will remove the redactors from the Executor and Flush them.
 func (e *Executor) setupRedactors() {
 	valuesToRedact := redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())
-	if len(valuesToRedact) == 0 {
-		return
-	}
 
 	if e.Debug {
 		e.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
