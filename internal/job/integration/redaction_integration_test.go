@@ -1,0 +1,161 @@
+package integration
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/bintest/v3"
+)
+
+func TestRedactorRedactsAgentToken(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
+		fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		c.Exit(0)
+	})
+
+	err = tester.Run(t)
+	if err != nil {
+		t.Fatalf("running executor tester: %v", err)
+	}
+
+	if !strings.Contains(tester.Output, "The agent token is: [REDACTED]") {
+		t.Fatalf("expected agent token to be redacted, but it wasn't. Full output: %s", tester.Output)
+	}
+}
+
+func TestRedactorDoesNotRedactAgentToken_WhenNotInRedactedVars(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
+		fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		c.Exit(0)
+	})
+
+	err = tester.Run(t, `BUILDKITE_REDACTED_VARS=""`)
+	if err != nil {
+		t.Fatalf("running executor tester: %v", err)
+	}
+
+	if !strings.Contains(tester.Output, "The agent token is: test-token-please-ignore") {
+		t.Fatalf("expected agent token to be printed in full, but it wasn't. Full output: %s", tester.Output)
+	}
+}
+
+func TestRedactorAdd_RedactsVarsAfterUse(t *testing.T) {
+	// when this test is run inside an agent (ie in CI), we don't want to connect to the job API of the executor running this test
+	// we want to instead connect to the job API of the executor process we're testing
+	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")
+	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	secret := "huunter2" // secrets 6 chars or shorter don't get redacted, hence the extra u
+	tester.ExpectGlobalHook("command").AndCallFunc(redactionTestCommandHook(t, secret))
+
+	err = tester.Run(t)
+	if err != nil {
+		t.Fatalf("running executor tester: %v", err)
+	}
+
+	// verify that the secret was echoed prior to calling RedactionCreate
+	if !strings.Contains(tester.Output, fmt.Sprintf("The secret is: %s", secret)) {
+		t.Fatalf("expected secret to be echoed prior to redaction, but it wasn't. Full output: %s", tester.Output)
+	}
+
+	// now check that the string got redacted after the call to RedactionCreate
+	if !strings.Contains(tester.Output, "There should be a redacted here: [REDACTED]") {
+		t.Fatalf("expected secret to be redacted after RedactionCreate, but it wasn't. Full output: %s", tester.Output)
+	}
+}
+
+func TestRedactorAdd_FailsWhenNoInitialRedactionStringsArePresent(t *testing.T) {
+	// when this test is run inside an agent (ie in CI), we don't want to connect to the job API of the executor running this test
+	// we want to instead connect to the job API of the executor process we're testing
+	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	secret := "huunter2" // secrets 6 chars or shorter don't get redacted, hence the extra u
+	tester.ExpectGlobalHook("command").AndCallFunc(redactionTestCommandHook(t, secret))
+
+	err = tester.Run(t, `BUILDKITE_REDACTED_VARS=""`)
+	if err != nil {
+		t.Fatalf("running executor tester: %v", err)
+	}
+
+	// verify that the secret was echoed prior to calling RedactionCreate
+	if !strings.Contains(tester.Output, fmt.Sprintf("The secret is: %s", secret)) {
+		t.Fatalf("expected secret to be echoed prior to redaction, but it wasn't. Full output: %s", tester.Output)
+	}
+
+	// now check that the string is still unredacted after the call to RedactionCreate
+	if !strings.Contains(tester.Output, fmt.Sprintf("There should be a redacted here: %s", secret)) {
+		t.Fatalf("expected secret to be echoed without redaction after RedactionCreate, but it wasn't. Full output: %s", tester.Output)
+	}
+}
+
+func redactionTestCommandHook(t *testing.T, secret string) func(c *bintest.Call) {
+	t.Helper()
+
+	return func(c *bintest.Call) {
+		socketPath := c.GetEnv("BUILDKITE_AGENT_JOB_API_SOCKET")
+		if socketPath == "" {
+			t.Errorf("Expected BUILDKITE_AGENT_JOB_API_SOCKET to be set")
+			c.Exit(1)
+			return
+		}
+
+		socketToken := c.GetEnv("BUILDKITE_AGENT_JOB_API_TOKEN")
+		if socketToken == "" {
+			t.Errorf("Expected BUILDKITE_AGENT_JOB_API_TOKEN to be set")
+			c.Exit(1)
+			return
+		}
+
+		client, err := jobapi.NewClient(mainCtx, socketPath, socketToken)
+		if err != nil {
+			t.Errorf("creating Job API client: %v", err)
+			c.Exit(1)
+			return
+		}
+
+		fmt.Fprintf(c.Stderr, "The secret is: %s\n", secret)
+		time.Sleep(time.Second) // let the log line be written before we add it to the redactor
+
+		_, err = client.RedactionCreate(mainCtx, secret)
+		if err != nil {
+			t.Errorf("creating redaction: %v", err)
+			c.Exit(1)
+			return
+		}
+
+		fmt.Fprintf(c.Stderr, "There should be a redacted here: %s\n", secret)
+		c.Exit(0)
+	}
+}

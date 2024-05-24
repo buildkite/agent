@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
@@ -109,7 +110,8 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 			"BUILDKITE_ARTIFACT_PATHS=",
 			"BUILDKITE_COMMAND=true",
 			"BUILDKITE_JOB_ID=1111-1111-1111-1111",
-			"BUILDKITE_AGENT_ACCESS_TOKEN=test",
+			"BUILDKITE_AGENT_ACCESS_TOKEN=test-token-please-ignore",
+			fmt.Sprintf("BUILDKITE_REDACTED_VARS=%s", strings.Join(*clicommand.RedactedVars.Value, ",")),
 		},
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
