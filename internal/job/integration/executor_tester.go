@@ -47,7 +47,7 @@ type ExecutorTester struct {
 	mocks    []*bintest.Mock
 }
 
-func NewBootstrapTester(ctx context.Context) (*ExecutorTester, error) {
+func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 	// The job API experiment adds a unix domain socket to a directory in the home directory
 	// UDS names are limited to 108 characters, so we need to use a shorter home directory
 	// Who knows what's going on in windowsland
