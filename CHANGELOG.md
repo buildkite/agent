@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.73.1](https://github.com/buildkite/agent/tree/v3.73.1) (2024-05-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.73.0...v3.73.1)
+
+### Fixed
+
+- Fix redaction when no initial redactors are present [#2794](https://github.com/buildkite/agent/pull/2794) (@moskyb)
+- Fix an issue where intermittently, commands run by the agent would fail with `error: fork/exec: operation not permitted` [#2791](https://github.com/buildkite/agent/pull/2791) (@moskyb)
+- Fix an issue where using cancel grace period would not work if signal grace period was not set [#2788](https://github.com/buildkite/agent/pull/2788) (@tessereth)
+- Emit a better error if the job API token is missing [#2789](https://github.com/buildkite/agent/pull/2789) (@moskyb)
+
+### Internal
+- Bump docker/library/golang from `b1e05e2` to `f43c6f0` in /.buildkite [#2785](https://github.com/buildkite/agent/pull/2785) (@dependabot[bot])
+- Upgrade math/rand to v2 [#2792](https://github.com/buildkite/agent/pull/2792) (@DrJosh9000)
+
 ## [v3.73.0](https://github.com/buildkite/agent/tree/v3.73.0) (2024-05-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.72.0...v3.73.0)
 
