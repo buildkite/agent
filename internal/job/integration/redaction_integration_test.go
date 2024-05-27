@@ -59,10 +59,7 @@ func TestRedactorDoesNotRedactAgentToken_WhenNotInRedactedVars(t *testing.T) {
 }
 
 func TestRedactorAdd_RedactsVarsAfterUse(t *testing.T) {
-	// when this test is run inside an agent (ie in CI), we don't want to connect to the job API of the executor running this test
-	// we want to instead connect to the job API of the executor process we're testing
-	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")
-	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+	t.Parallel()
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
@@ -70,7 +67,7 @@ func TestRedactorAdd_RedactsVarsAfterUse(t *testing.T) {
 	}
 	defer tester.Close()
 
-	secret := "huunter2" // secrets 6 chars or shorter don't get redacted, hence the extra u
+	secret := "hunter2"
 	tester.ExpectGlobalHook("command").AndCallFunc(redactionTestCommandHook(t, secret))
 
 	err = tester.Run(t)
@@ -93,10 +90,7 @@ func TestRedactorAdd_RedactsVarsAfterUse(t *testing.T) {
 // an empty list of redacted vars, it would not initialise the redactors at all, meaning that later redactions (ie with
 // the `buildkite-agent redactor add` command, or automatically when using `buildkite-agent secret get`) would not occur
 func TestRegression_TestRedactorAdd_StillWorksWhenNoInitialRedactedVarsAreProvided(t *testing.T) {
-	// when this test is run inside an agent (ie in CI), we don't want to connect to the job API of the executor running this test
-	// we want to instead connect to the job API of the executor process we're testing
-	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
-	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")
+	t.Parallel()
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
@@ -104,7 +98,7 @@ func TestRegression_TestRedactorAdd_StillWorksWhenNoInitialRedactedVarsAreProvid
 	}
 	defer tester.Close()
 
-	secret := "huunter2" // secrets 6 chars or shorter don't get redacted, hence the extra u
+	secret := "hunter2"
 	tester.ExpectGlobalHook("command").AndCallFunc(redactionTestCommandHook(t, secret))
 
 	err = tester.Run(t, `BUILDKITE_REDACTED_VARS=""`)
