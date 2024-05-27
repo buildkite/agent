@@ -19,10 +19,10 @@ func shuffle[T any](rnd *rand.Rand, arr []T) {
 
 func TestDeprecatedNameErrorsOrder(t *testing.T) {
 	t.Parallel()
+
 	seed1 := uint64(time.Now().UnixNano())
 	seed2 := bits.Reverse64(uint64(time.Now().UnixNano()))
 	t.Logf("seed1 = %d, seed2 = %d", seed1, seed2)
-	randSrc := rand.New(rand.NewPCG(seed1, seed2))
 
 	for _, test := range []struct {
 		name string
@@ -95,6 +95,8 @@ func TestDeprecatedNameErrorsOrder(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
+
+			randSrc := rand.New(rand.NewPCG(seed1, seed2))
 			errs := make([]DeprecatedNameError, len(test.errs))
 			copy(errs, test.errs)
 			shuffle(randSrc, errs)
