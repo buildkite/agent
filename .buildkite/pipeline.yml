@@ -15,6 +15,26 @@ steps:
 
   - group: ":go:🧪 Tests"
     steps:
+    - name: ":house::linux: Linux AMD64 Tests on Hosted Compute"
+      key: test-linux-amd64-hosted
+      agents:
+        queue: hosted
+      cache:
+        - ~/gocache
+        - ~/gomodcache
+      command: ".buildkite/steps/tests.sh"
+      artifact_paths: junit-*.xml
+      plugins:
+        - docker-compose#v4.14.0:
+            config: .buildkite/docker-compose.yml
+            cli-version: 2
+            run: agent
+        - test-collector#v1.2.0:
+            files: "junit-*.xml"
+            format: "junit"
+        - artifacts#v1.9.0:
+            upload: "cover.{html,out}"
+
     - name: ":linux: Linux AMD64 Tests"
       key: test-linux-amd64
       command: ".buildkite/steps/tests.sh"
