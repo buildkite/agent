@@ -339,13 +339,6 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
-		cancelSignalFlag,
-		signalGracePeriodSecondsFlag,
-		cli.StringSliceFlag{
-			Name:   "redacted-vars",
-			Usage:  "Pattern of environment variable names containing sensitive values",
-			EnvVar: "BUILDKITE_REDACTED_VARS",
-		},
 		cli.StringFlag{
 			Name:   "tracing-backend",
 			Usage:  "The name of the tracing backend to use.",
@@ -368,10 +361,15 @@ var BootstrapCommand = cli.Command{
 			Usage:  "A list of warning IDs to disable",
 			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
 		},
+		cancelSignalFlag,
+		signalGracePeriodSecondsFlag,
+
+		// Global flags
 		DebugFlag,
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		RedactedVars,
 		StrictSingleHooksFlag,
 	},
 	Action: func(c *cli.Context) error {

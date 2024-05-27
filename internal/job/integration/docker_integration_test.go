@@ -18,7 +18,7 @@ func argumentForCommand(cmd string) any {
 }
 
 func TestRunningCommandWithDocker(t *testing.T) {
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -51,7 +51,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -85,7 +85,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 }
 
 func TestRunningFailingCommandWithDocker(t *testing.T) {
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -124,7 +124,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerCompose(t *testing.T) {
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -157,7 +157,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 }
 
 func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -197,7 +197,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -231,7 +231,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
