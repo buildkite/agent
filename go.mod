@@ -11,7 +11,7 @@ require (
 	github.com/DataDog/datadog-go/v5 v5.5.0
 	github.com/DrJosh9000/zzglob v0.2.0
 	github.com/Khan/genqlient v0.7.0
-	github.com/aws/aws-sdk-go v1.53.1
+	github.com/aws/aws-sdk-go v1.53.10
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.2.0
 	github.com/buildkite/go-pipeline v0.9.0
@@ -51,7 +51,7 @@ require (
 	golang.org/x/oauth2 v0.20.0
 	golang.org/x/sys v0.20.0
 	golang.org/x/term v0.20.0
-	google.golang.org/api v0.180.0
+	google.golang.org/api v0.181.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.63.1
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
@@ -127,8 +127,8 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.18.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240415180920-8c6c420018be // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240429193739-8cf5692501f6 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240506185236-b8a5c65736ae // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240513163218-0867130af1f8 // indirect
 	google.golang.org/grpc v1.63.2 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
