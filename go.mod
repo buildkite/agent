@@ -17,7 +17,7 @@ require (
 	github.com/buildkite/go-pipeline v0.9.0
 	github.com/buildkite/roko v1.2.0
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
-	github.com/creack/pty v1.1.19
+	github.com/creack/pty v1.1.21
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2
