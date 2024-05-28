@@ -3,6 +3,7 @@ package shell_test
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"runtime"
 	"testing"
 
@@ -67,5 +68,24 @@ func TestLoggerStreamer(t *testing.T) {
 
 	if diff := cmp.Diff(got.String(), want.String()); diff != "" {
 		t.Fatalf("shell.WriterLogger output buffer diff (-got +want):\n%s", diff)
+	}
+}
+
+func BenchmarkDoubleFmt(b *testing.B) {
+	logf := func(format string, v ...any) {
+		fmt.Fprintf(io.Discard, "%s", fmt.Sprintf(format, v...))
+		fmt.Fprintln(io.Discard)
+	}
+	for range b.N {
+		logf("asdfghjkl %s %d %t", "hi", 42, true)
+	}
+}
+
+func BenchmarkFmtConcat(b *testing.B) {
+	logf := func(format string, v ...any) {
+		fmt.Fprintf(io.Discard, format+"\n", v...)
+	}
+	for range b.N {
+		logf("asdfghjkl %s %d %t", "hi", 42, true)
 	}
 }
