@@ -11,5 +11,10 @@ import (
 )
 
 func StartPTY(c *exec.Cmd) (*os.File, error) {
-	return pty.Start(c)
+	return pty.StartWithSize(c, &pty.Winsize{
+		Rows: 100,
+		Cols: 160,
+		X:    0, // unused
+		Y:    0, // unused
+	})
 }
