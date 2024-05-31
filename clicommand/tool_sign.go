@@ -75,7 +75,28 @@ UI so that the agents running these steps can verify the signatures.
 
 If a token is provided using the ′graphql-token′ flag, the tool will attempt to retrieve the
 pipeline definition and repo using the Buildkite GraphQL API. If ′update′ is also set, it will
-update the pipeline definition with the signed version using the GraphQL API too.`,
+update the pipeline definition with the signed version using the GraphQL API too.
+
+Examples:
+
+Retrieving the pipeline from the GraphQL API and signing it:
+
+    $ buildkite-agent tool sign \
+        --graphql-token <graphql token> \
+        --organization-slug <your org slug> \
+        --pipeline-slug <slug of the pipeline whose steps you want to sign \
+        --jwks-file /path/to/private/key.json \
+        --update
+
+Signing a pipeline from a file:
+
+    $ buildkite-agent tool sign pipeline.yml \
+        --jwks-file /path/to/private/key.json \
+        --repo <repo url for your pipeline>
+    # or
+    $ cat pipeline.yml | buildkite-agent tool sign \
+        --jwks-file /path/to/private/key.json \
+        --repo <repo url for your pipeline>`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "graphql-token",
