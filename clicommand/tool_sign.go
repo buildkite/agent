@@ -162,14 +162,14 @@ Signing a pipeline from a file:
 			return fmt.Errorf("couldn't read the signing key file: %w", err)
 		}
 
-		sign := func() error { return signWithGraphQL(ctx, c, l, key, &cfg) }
+		sign := signWithGraphQL
 		if cfg.GraphQLToken == "" {
-			sign = func() error { return signOffline(c, l, key, &cfg) }
+			sign = signOffline
 		}
 
-		err = sign()
+		err = sign(ctx, c, l, key, &cfg)
 		if err != nil {
-			l.Fatal("Error signing pipeline: %v", err)
+			return fmt.Errorf("Error signing pipeline: %w", err)
 		}
 
 		return nil
@@ -188,15 +188,15 @@ func validateNoInterpolations(pipelineString string) error {
 			expansions[i] = "$" + e
 		}
 
-		return fmt.Errorf("pipeline contains environment interpolations, which are not supported when statically signing"+
-			"pipelines using this tool (note that interpolation in signed pipelines uploaded by the `buildkite-agent pipeline"+
-			" upload` command will work fine). Please remove the following interpolation directives: %s", strings.Join(expansions, ", "))
+		return fmt.Errorf("pipeline contains environment interpolations, which are only supported when dynamically "+
+			"uploading a pipeline, and not when statically signing pipelines using this tool. "+
+			"Please remove the following interpolation directives: %s", strings.Join(expansions, ", "))
 	}
 
 	return nil
 }
 
-func signOffline(c *cli.Context, l logger.Logger, key jwk.Key, cfg *ToolSignConfig) error {
+func signOffline(_ context.Context, c *cli.Context, l logger.Logger, key jwk.Key, cfg *ToolSignConfig) error {
 	if cfg.Repository == "" {
 		return ErrUseGraphQL
 	}
