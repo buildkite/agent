@@ -1032,6 +1032,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		if len(cfg.AllowedRepositories) > 0 {
+			l.Info("Evaluating allowed repositories has been enabled")
 			agentConf.AllowedRepositories = make([]*regexp.Regexp, 0, len(cfg.AllowedRepositories))
 			for _, v := range cfg.AllowedRepositories {
 				r, err := regexp.Compile(v)
@@ -1043,6 +1044,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		if len(cfg.AllowedPlugins) > 0 {
+			l.Info("Evaluating allowed plugins has been enabled")
 			agentConf.AllowedPlugins = make([]*regexp.Regexp, 0, len(cfg.AllowedPlugins))
 			for _, v := range cfg.AllowedPlugins {
 				r, err := regexp.Compile(v)
