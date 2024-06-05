@@ -69,39 +69,35 @@ func (wl *WriterLogger) Write(b []byte) (int, error) {
 }
 
 func (wl *WriterLogger) Printf(format string, v ...any) {
-	fmt.Fprintf(wl.Writer, "%s", fmt.Sprintf(format, v...))
-	fmt.Fprintln(wl.Writer)
+	fmt.Fprintf(wl.Writer, format+"\n", v...)
 }
 
 func (wl *WriterLogger) Headerf(format string, v ...any) {
-	fmt.Fprintf(wl.Writer, "~~~ %s", fmt.Sprintf(format, v...))
-	fmt.Fprintln(wl.Writer)
+	fmt.Fprintf(wl.Writer, "~~~ "+format+"\n", v...)
 }
 
 func (wl *WriterLogger) Commentf(format string, v ...any) {
 	if wl.Ansi {
-		wl.Printf(ansiColor("# %s", "90"), fmt.Sprintf(format, v...))
+		wl.Printf(ansiColor("# "+format, "90"), v...)
 	} else {
-		wl.Printf("# %s", fmt.Sprintf(format, v...))
+		wl.Printf("# "+format, v...)
 	}
 }
 
 func (wl *WriterLogger) Errorf(format string, v ...any) {
 	if wl.Ansi {
-		wl.Printf(ansiColor("🚨 Error: %s", "31"), fmt.Sprintf(format, v...))
+		wl.Printf(ansiColor("🚨 Error: "+format+"\n^^^ +++", "31"), v...)
 	} else {
-		wl.Printf("🚨 Error: %s", fmt.Sprintf(format, v...))
+		wl.Printf("🚨 Error: "+format+"\n^^^ +++", v...)
 	}
-	wl.Printf("^^^ +++")
 }
 
 func (wl *WriterLogger) Warningf(format string, v ...any) {
 	if wl.Ansi {
-		wl.Printf(ansiColor("⚠️ Warning: %s", "33"), fmt.Sprintf(format, v...))
+		wl.Printf(ansiColor("⚠️ Warning: "+format+"\n^^^ +++", "33"), v...)
 	} else {
-		wl.Printf("⚠️ Warning: %s", fmt.Sprintf(format, v...))
+		wl.Printf("⚠️ Warning: "+format+"\n^^^ +++", v...)
 	}
-	wl.Printf("^^^ +++")
 }
 
 func (wl *WriterLogger) OptionalWarningf(id, format string, v ...any) {
@@ -120,9 +116,9 @@ func (wl *WriterLogger) Promptf(format string, v ...any) {
 		prompt = ">"
 	}
 	if wl.Ansi {
-		wl.Printf(ansiColor(prompt, "90")+" %s", fmt.Sprintf(format, v...))
+		wl.Printf(ansiColor(prompt, "90")+" "+format, v...)
 	} else {
-		wl.Printf(prompt+" %s", fmt.Sprintf(format, v...))
+		wl.Printf(prompt+" "+format, v...)
 	}
 }
 
@@ -148,15 +144,15 @@ func (tl TestingLogger) Headerf(format string, v ...any) {
 }
 
 func (tl TestingLogger) Commentf(format string, v ...any) {
-	tl.Logf("# %s", fmt.Sprintf(format, v...))
+	tl.Logf("# "+format, v...)
 }
 
 func (tl TestingLogger) Errorf(format string, v ...any) {
-	tl.Logf("🚨 Error: %s", fmt.Sprintf(format, v...))
+	tl.Logf("🚨 Error: "+format, v...)
 }
 
 func (tl TestingLogger) Warningf(format string, v ...any) {
-	tl.Logf("⚠️ Warning: %s", fmt.Sprintf(format, v...))
+	tl.Logf("⚠️ Warning: "+format, v...)
 }
 
 func (tl TestingLogger) OptionalWarningf(_id, format string, v ...any) {
@@ -169,7 +165,7 @@ func (tl TestingLogger) Promptf(format string, v ...any) {
 	if runtime.GOOS == "windows" {
 		prompt = ">"
 	}
-	tl.Logf(prompt+" %s", fmt.Sprintf(format, v...))
+	tl.Logf(prompt+" "+format, v...)
 }
 
 type LoggerStreamer struct {
@@ -185,7 +181,7 @@ var lineRegexp = regexp.MustCompile(`(?m:^(.*)\r?\n)`)
 func NewLoggerStreamer(logger Logger) *LoggerStreamer {
 	return &LoggerStreamer{
 		Logger: logger,
-		buf:    bytes.NewBuffer([]byte("")),
+		buf:    bytes.NewBuffer(nil),
 	}
 }
 
@@ -206,7 +202,7 @@ func (l *LoggerStreamer) Close() error {
 	if remaining := l.buf.String()[l.offset:]; len(remaining) > 0 {
 		l.Logger.Printf("%s%s", l.Prefix, remaining)
 	}
-	l.buf = bytes.NewBuffer([]byte(""))
+	l.buf = bytes.NewBuffer(nil)
 	return nil
 }
 
