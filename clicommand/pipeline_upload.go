@@ -282,7 +282,7 @@ var PipelineUploadCommand = cli.Command{
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
 
-			if err := signature.SignPipeline(result, key, os.Getenv("BUILDKITE_REPO")); err != nil {
+			if err := signature.SignPipeline(result, key, os.Getenv("BUILDKITE_REPO"), l); err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
 		}

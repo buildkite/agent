@@ -202,7 +202,7 @@ func signOffline(
 		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
 	}
 
-	if err := signature.SignPipeline(parsedPipeline, key, cfg.Repository); err != nil {
+	if err := signature.SignPipeline(parsedPipeline, key, cfg.Repository, l); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
@@ -258,7 +258,7 @@ func signWithGraphQL(
 		debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
 	}
 
-	if err := signature.SignPipeline(parsedPipeline, key, resp.Pipeline.Repository.Url); err != nil {
+	if err := signature.SignPipeline(parsedPipeline, key, resp.Pipeline.Repository.Url, l); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
