@@ -1040,6 +1040,7 @@ var AgentStartCommand = cli.Command{
 				}
 				agentConf.AllowedRepositories = append(agentConf.AllowedRepositories, r)
 			}
+			l.Info("Allowed repositories patterns: %q", agentConf.AllowedRepositories)
 		}
 
 		if len(cfg.AllowedPlugins) > 0 {
@@ -1051,6 +1052,7 @@ var AgentStartCommand = cli.Command{
 				}
 				agentConf.AllowedPlugins = append(agentConf.AllowedPlugins, r)
 			}
+			l.Info("Allowed plugins patterns: %q", agentConf.AllowedPlugins)
 		}
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
