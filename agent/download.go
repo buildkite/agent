@@ -73,38 +73,31 @@ func (d Download) Start(ctx context.Context) error {
 	})
 }
 
-func getTargetPath(path string, destination string) string {
+func targetPath(dlPath, destPath string) string {
+	dlPath = filepath.Clean(dlPath)
+
 	// If we're downloading a file with a path of "pkg/foo.txt" to a folder
 	// called "pkg", we should merge the two paths together. So, instead of it
 	// downloading to: destination/pkg/pkg/foo.txt, it will just download to
 	// destination/pkg/foo.txt
-	destinationPaths := strings.Split(destination, string(os.PathSeparator))
-	downloadPaths := strings.Split(path, string(os.PathSeparator))
+	destPathComponents := strings.Split(destPath, string(os.PathSeparator))
+	dlPathComponents := strings.Split(dlPath, string(os.PathSeparator))
 
-	for i := 0; i < len(downloadPaths); i += 100 {
-		// If the last part of the destination path matches
-		// this path in the download, then cut it out.
-		lastIndex := len(destinationPaths) - 1
-
-		// Break if we've gone too far.
-		if lastIndex == -1 {
-			break
-		}
-
-		lastPathInDestination := destinationPaths[lastIndex]
-		if lastPathInDestination == downloadPaths[i] {
-			destinationPaths = destinationPaths[:lastIndex]
-		}
+	// If the last component of the destination path matches the first component
+	// of the download path, then trim the last component of the destination.
+	lastIndex := len(destPathComponents) - 1
+	lastDestComponent := destPathComponents[lastIndex]
+	if lastDestComponent == dlPathComponents[0] {
+		destPathComponents = destPathComponents[:lastIndex]
 	}
 
-	finalizedDestination := strings.Join(destinationPaths, string(os.PathSeparator))
-	targetFile := filepath.Join(finalizedDestination, path)
-
-	return targetFile
+	// Join the path back together.
+	truncatedDest := strings.Join(destPathComponents, string(os.PathSeparator))
+	return filepath.Join(truncatedDest, dlPath)
 }
 
 func (d Download) try(ctx context.Context) error {
-	targetFile := getTargetPath(d.conf.Path, d.conf.Destination)
+	targetFile := targetPath(d.conf.Path, d.conf.Destination)
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
