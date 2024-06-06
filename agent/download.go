@@ -89,11 +89,11 @@ func targetPath(dlPath, destPath string) string {
 	lastDestComponent := destPathComponents[lastIndex]
 	if lastDestComponent == dlPathComponents[0] {
 		destPathComponents = destPathComponents[:lastIndex]
+		destPath = strings.Join(destPathComponents, string(os.PathSeparator))
 	}
 
-	// Join the path back together.
-	truncatedDest := strings.Join(destPathComponents, string(os.PathSeparator))
-	return filepath.Join(truncatedDest, dlPath)
+	// Join the paths together.
+	return filepath.Join(destPath, dlPath)
 }
 
 func (d Download) try(ctx context.Context) error {
