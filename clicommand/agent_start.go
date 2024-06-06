@@ -165,6 +165,7 @@ type AgentStartConfig struct {
 	Experiments       []string `cli:"experiment" normalize:"list"`
 	Profile           string   `cli:"profile"`
 	StrictSingleHooks bool     `cli:"strict-single-hooks"`
+	KuberentesExec    bool     `cli:"kubernetes-exec"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -680,6 +681,7 @@ var AgentStartCommand = cli.Command{
 		ProfileFlag,
 		RedactedVars,
 		StrictSingleHooksFlag,
+		KubernetesExecFlag,
 
 		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
@@ -955,6 +957,7 @@ var AgentStartCommand = cli.Command{
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
 			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
+			KubernetesExec:               cfg.KuberentesExec,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,

@@ -687,6 +687,7 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 		JobStatusInterval:  time.Duration(a.agent.JobStatusInterval) * time.Second,
 		AgentConfiguration: a.agentConfiguration,
 		AgentStdout:        a.agentStdout,
+		KubernetesExec:     a.agentConfiguration.KubernetesExec,
 	})
 	if err != nil {
 		return fmt.Errorf("Failed to initialize job: %w", err)

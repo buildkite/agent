@@ -37,16 +37,6 @@ After repository checkout, resolve `BUILDKITE_COMMIT` to a commit hash. This mak
 
 **Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
 
-### `kubernetes-exec`
-
-Modifies `start` and `bootstrap` in such a way that they can run in separate Kubernetes containers in the same pod.
-
-Currently, this experiment is being used by [agent-stack-k8s](https://github.com/buildkite/agent-stack-k8s).
-
-This will result in errors unless orchestrated in a similar manner to that project. Please see the [README](https://github.com/buildkite/agent-stack-k8s/blob/main/README.md) of that repository for more details.
-
-**Status**: Being used in a preview release of agent-stack-k8s. As it has little applicability outside of Kubernetes, this will not be the default behaviour.
-
 ### `polyglot-hooks`
 
 Allows the agent to run hooks written in languages other than bash. This enables the agent to run hooks written in any language, as long as the language has a runtime available on the agent. Polyglot hooks can be in interpreted languages, so long as they have a valid shebang, and the interpreter specified in the shebang is installed on the agent.

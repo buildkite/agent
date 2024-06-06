@@ -168,6 +168,9 @@ type ExecutorConfig struct {
 	// Whether to start the JobAPI
 	JobAPI bool
 
+	// Whether to connect to the Kubernetes socket
+	KubernetesExec bool
+
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string
 }
