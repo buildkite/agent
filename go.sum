@@ -66,6 +66,8 @@ github.com/buildkite/go-pipeline v0.9.0 h1:2a2bibJ9dCCyyNReH73jkQVUYyUnhYAxISyf3
 github.com/buildkite/go-pipeline v0.9.0/go.mod h1:4aqMzJ3iagc0wcI5h8NQpON9xfyq27QGDi4xfnKiCUs=
 github.com/buildkite/interpolate v0.1.1 h1:KP1WzuHTH0UxFUDS3FO2/DUEdloQ7Ksxw0mDU0oC45U=
 github.com/buildkite/interpolate v0.1.1/go.mod h1:UNVe6A+UfiBNKbhAySrBbZFZFxQ+DXr9nWen6WVt/A8=
+github.com/buildkite/interpolate v0.1.2 h1:mVbMCphpu2MHUr1qLdjq9xc3NjNWYg/w/CbrGS5ckzg=
+github.com/buildkite/interpolate v0.1.2/go.mod h1:UNVe6A+UfiBNKbhAySrBbZFZFxQ+DXr9nWen6WVt/A8=
 github.com/buildkite/roko v1.2.0 h1:hbNURz//dQqNl6Eo9awjQOVOZwSDJ8VEbBDxSfT9rGQ=
 github.com/buildkite/roko v1.2.0/go.mod h1:23R9e6nHxgedznkwwfmqZ6+0VJZJZ2Sg/uVcp2cP46I=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000 h1:hiVSLk7s3yFKFOHF/huoShLqrj13RMguWX2yzfvy7es=
