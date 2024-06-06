@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
+	"github.com/buildkite/interpolate"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
@@ -73,7 +75,28 @@ UI so that the agents running these steps can verify the signatures.
 
 If a token is provided using the ′graphql-token′ flag, the tool will attempt to retrieve the
 pipeline definition and repo using the Buildkite GraphQL API. If ′update′ is also set, it will
-update the pipeline definition with the signed version using the GraphQL API too.`,
+update the pipeline definition with the signed version using the GraphQL API too.
+
+Examples:
+
+Retrieving the pipeline from the GraphQL API and signing it:
+
+    $ buildkite-agent tool sign \
+        --graphql-token <graphql token> \
+        --organization-slug <your org slug> \
+        --pipeline-slug <slug of the pipeline whose steps you want to sign \
+        --jwks-file /path/to/private/key.json \
+        --update
+
+Signing a pipeline from a file:
+
+    $ buildkite-agent tool sign pipeline.yml \
+        --jwks-file /path/to/private/key.json \
+        --repo <repo url for your pipeline>
+    # or
+    $ cat pipeline.yml | buildkite-agent tool sign \
+        --jwks-file /path/to/private/key.json \
+        --repo <repo url for your pipeline>`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "graphql-token",
@@ -139,20 +162,41 @@ update the pipeline definition with the signed version using the GraphQL API too
 			return fmt.Errorf("couldn't read the signing key file: %w", err)
 		}
 
+		sign := signWithGraphQL
 		if cfg.GraphQLToken == "" {
-			return signOffline(c, l, key, &cfg)
+			sign = signOffline
 		}
 
-		return signWithGraphQL(ctx, c, l, key, &cfg)
+		err = sign(ctx, c, l, key, &cfg)
+		if err != nil {
+			return fmt.Errorf("Error signing pipeline: %w", err)
+		}
+
+		return nil
 	},
 }
 
-func signOffline(
-	c *cli.Context,
-	l logger.Logger,
-	key jwk.Key,
-	cfg *ToolSignConfig,
-) error {
+func validateNoInterpolations(pipelineString string) error {
+	expansions, err := interpolate.Identifiers(pipelineString)
+	if err != nil {
+		return fmt.Errorf("discovering interpolation expansions: %w", err)
+	}
+
+	if len(expansions) > 0 {
+		for i, e := range expansions {
+			// in interpolate, the identifiers of expansions don't have the $ prefix, and escaped expansions only have one
+			expansions[i] = "$" + e
+		}
+
+		return fmt.Errorf("pipeline contains environment interpolations, which are only supported when dynamically "+
+			"uploading a pipeline, and not when statically signing pipelines using this tool. "+
+			"Please remove the following interpolation directives: %s", strings.Join(expansions, ", "))
+	}
+
+	return nil
+}
+
+func signOffline(_ context.Context, c *cli.Context, l logger.Logger, key jwk.Key, cfg *ToolSignConfig) error {
 	if cfg.Repository == "" {
 		return ErrUseGraphQL
 	}
@@ -186,7 +230,17 @@ func signOffline(
 		return ErrNoPipeline
 	}
 
-	parsedPipeline, err := pipeline.Parse(input)
+	pipelineBytes, err := io.ReadAll(input)
+	if err != nil {
+		return fmt.Errorf("couldn't read pipeline: %w", err)
+	}
+
+	err = validateNoInterpolations(string(pipelineBytes))
+	if err != nil {
+		return err
+	}
+
+	parsedPipeline, err := pipeline.Parse(bytes.NewReader(pipelineBytes))
 	if w := warning.As(err); w != nil {
 		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
 	} else if err != nil {
@@ -211,13 +265,7 @@ func signOffline(
 	return enc.Encode(parsedPipeline)
 }
 
-func signWithGraphQL(
-	ctx context.Context,
-	c *cli.Context,
-	l logger.Logger,
-	key jwk.Key,
-	cfg *ToolSignConfig,
-) error {
+func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key jwk.Key, cfg *ToolSignConfig) error {
 	orgPipelineSlug := fmt.Sprintf("%s/%s", cfg.OrganizationSlug, cfg.PipelineSlug)
 	debugL := l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
 
@@ -240,9 +288,14 @@ func signWithGraphQL(
 	}
 
 	debugL.Debug("Pipeline retrieved successfully: %#v", resp)
-	l.Info("Signing pipeline with the repository URL:\n%s", resp.Pipeline.Repository.Url)
 
-	parsedPipeline, err := pipeline.Parse(strings.NewReader(resp.Pipeline.Steps.Yaml))
+	pipelineString := resp.Pipeline.Steps.Yaml
+	err = validateNoInterpolations(pipelineString)
+	if err != nil {
+		return err
+	}
+
+	parsedPipeline, err := pipeline.Parse(strings.NewReader(pipelineString))
 	if w := warning.As(err); w != nil {
 		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
 	} else if err != nil {
