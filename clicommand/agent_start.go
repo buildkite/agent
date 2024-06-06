@@ -1065,6 +1065,7 @@ var AgentStartCommand = cli.Command{
 
 		tags := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 			Tags:                      cfg.Tags,
+			TagsFromK8s:               cfg.KuberentesExec,
 			TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
 			TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
 			TagsFromEC2Tags:           cfg.TagsFromEC2Tags,

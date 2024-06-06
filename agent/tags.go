@@ -18,6 +18,7 @@ import (
 type FetchTagsConfig struct {
 	Tags []string
 
+	TagsFromK8s               bool
 	TagsFromEC2MetaData       bool
 	TagsFromEC2MetaDataPaths  []string
 	TagsFromEC2Tags           bool
@@ -77,7 +78,7 @@ type tagFetcher struct {
 func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []string {
 	tags := conf.Tags
 
-	if t.k8s != nil {
+	if conf.TagsFromK8s {
 		k8sTags, err := t.k8s()
 		if err != nil {
 			l.Warn("Could not fetch tags from k8s: %s", err)
