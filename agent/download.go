@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
@@ -73,7 +74,7 @@ func (d Download) Start(ctx context.Context) error {
 	})
 }
 
-func targetPath(dlPath, destPath string) string {
+func targetPath(ctx context.Context, dlPath, destPath string) string {
 	dlPath = filepath.Clean(dlPath)
 
 	// If we're downloading a file with a path of "pkg/foo.txt" to a folder
@@ -92,12 +93,24 @@ func targetPath(dlPath, destPath string) string {
 		destPath = strings.Join(destPathComponents, string(os.PathSeparator))
 	}
 
+	if experiments.IsEnabled(ctx, experiments.DisallowArtifactPathTraversal) {
+		// Trim empty or ".." components from the prefix of dlPath; it should not be
+		// permitted to walk up the directory tree from destPath.
+		for len(dlPathComponents) > 0 {
+			if c := dlPathComponents[0]; c != "" && c != ".." {
+				break
+			}
+			dlPathComponents = dlPathComponents[1:]
+		}
+		dlPath = filepath.Join(dlPathComponents...)
+	}
+
 	// Join the paths together.
 	return filepath.Join(destPath, dlPath)
 }
 
 func (d Download) try(ctx context.Context) error {
-	targetFile := targetPath(d.conf.Path, d.conf.Destination)
+	targetFile := targetPath(ctx, d.conf.Path, d.conf.Destination)
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file

@@ -3,7 +3,12 @@
 
 package agent
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/buildkite/agent/v3/internal/experiments"
+)
 
 func TestTargetPath(t *testing.T) {
 	t.Parallel()
@@ -47,10 +52,38 @@ func TestTargetPath(t *testing.T) {
 		{dlPath: "app/logs/a.log", destPath: "foo/app/", want: "foo/app/app/logs/a.log"},
 		{dlPath: "app/logs/a.log", destPath: "foo/app", want: "foo/app/logs/a.log"},
 		{dlPath: "app/logs/a.log", destPath: ".", want: "app/logs/a.log"},
+
+		// The download path _can_ walk up the destination path
+		{dlPath: "../../../../etc/passwd", destPath: "dist/foo", want: "../../etc/passwd"},
 	}
 
+	ctx := context.Background()
+
 	for _, test := range tests {
-		got := targetPath(test.dlPath, test.destPath)
+		got := targetPath(ctx, test.dlPath, test.destPath)
+		if got != test.want {
+			t.Errorf("targetPath(%q, %q) = %q, want %q", test.dlPath, test.destPath, got, test.want)
+		}
+	}
+}
+
+func TestTargetPath_DisallowPathTraversal(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		dlPath, destPath, want string
+	}{
+		// artifact_download documentation examples
+		{dlPath: "app/logs/a.log", destPath: "foo/app/", want: "foo/app/app/logs/a.log"},
+		{dlPath: "app/logs/a.log", destPath: "foo/app", want: "foo/app/logs/a.log"},
+		{dlPath: "app/logs/a.log", destPath: ".", want: "app/logs/a.log"},
+
+		// The download path _cannot_ walk up the destination path
+		{dlPath: "../../../../etc/passwd", destPath: "dist/foo", want: "dist/foo/etc/passwd"},
+	}
+	ctx, _ := experiments.Enable(context.Background(), experiments.DisallowArtifactPathTraversal)
+
+	for _, test := range tests {
+		got := targetPath(ctx, test.dlPath, test.destPath)
 		if got != test.want {
 			t.Errorf("targetPath(%q, %q) = %q, want %q", test.dlPath, test.destPath, got, test.want)
 		}
