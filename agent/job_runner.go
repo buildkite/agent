@@ -50,28 +50,30 @@ const (
 // Certain env can only be set by agent configuration.
 // We show the user a warning in the bootstrap if they use any of these at a job level.
 var ProtectedEnv = map[string]struct{}{
-	"BUILDKITE_AGENT_ENDPOINT":           {},
 	"BUILDKITE_AGENT_ACCESS_TOKEN":       {},
 	"BUILDKITE_AGENT_DEBUG":              {},
+	"BUILDKITE_AGENT_ENDPOINT":           {},
 	"BUILDKITE_AGENT_PID":                {},
 	"BUILDKITE_BIN_PATH":                 {},
-	"BUILDKITE_CONFIG_PATH":              {},
 	"BUILDKITE_BUILD_PATH":               {},
+	"BUILDKITE_COMMAND_EVAL":             {},
+	"BUILDKITE_CONFIG_PATH":              {},
+	"BUILDKITE_CONTAINER_COUNT":          {},
+	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
+	"BUILDKITE_GIT_CLONE_FLAGS":          {},
+	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
+	"BUILDKITE_GIT_FETCH_FLAGS":          {},
+	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
 	"BUILDKITE_GIT_MIRRORS_PATH":         {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":  {},
-	"BUILDKITE_HOOKS_PATH":               {},
-	"BUILDKITE_PLUGINS_PATH":             {},
-	"BUILDKITE_SSH_KEYSCAN":              {},
 	"BUILDKITE_GIT_SUBMODULES":           {},
-	"BUILDKITE_COMMAND_EVAL":             {},
-	"BUILDKITE_PLUGINS_ENABLED":          {},
+	"BUILDKITE_HOOKS_PATH":               {},
+	"BUILDKITE_KUBERNETES_EXEC":          {},
 	"BUILDKITE_LOCAL_HOOKS_ENABLED":      {},
-	"BUILDKITE_GIT_CLONE_FLAGS":          {},
-	"BUILDKITE_GIT_FETCH_FLAGS":          {},
-	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
-	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
-	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
+	"BUILDKITE_PLUGINS_ENABLED":          {},
+	"BUILDKITE_PLUGINS_PATH":             {},
 	"BUILDKITE_SHELL":                    {},
+	"BUILDKITE_SSH_KEYSCAN":              {},
 }
 
 type JobRunnerConfig struct {
@@ -98,6 +100,9 @@ type JobRunnerConfig struct {
 
 	// Whether to set debug HTTP Requests in the job
 	DebugHTTP bool
+
+	// Whether the job is executing as a k8s pod
+	KubernetesExec bool
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	AgentStdout io.Writer
@@ -335,7 +340,8 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	processEnv := append(os.Environ(), env...)
 
 	// The process that will run the bootstrap script
-	if experiments.IsEnabled(ctx, experiments.KubernetesExec) {
+	if conf.KubernetesExec {
+		// Thank you Mario, but our bootstrap is in another container
 		containerCount, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_COUNT"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
@@ -346,7 +352,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 			Stderr:      r.jobLogs,
 			ClientCount: containerCount,
 		})
-	} else {
+	} else { // not Kubernetes
 		// The bootstrap-script gets parsed based on the operating system
 		cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
 		if err != nil {
@@ -487,6 +493,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
 	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.StrictSingleHooks)
 	env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = fmt.Sprintf("%d", int(r.conf.AgentConfiguration.SignalGracePeriod/time.Second))
+
+	if r.conf.KubernetesExec {
+		env["BUILDKITE_KUBERNETES_EXEC"] = "true"
+	}
 
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
 	if r.conf.CancelSignal != process.SIGTERM {

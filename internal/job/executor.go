@@ -100,7 +100,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell.InterruptSignal = e.ExecutorConfig.CancelSignal
 		e.shell.SignalGracePeriod = e.ExecutorConfig.SignalGracePeriod
 	}
-	if experiments.IsEnabled(ctx, experiments.KubernetesExec) {
+	if e.KubernetesExec {
 		kubernetesClient := &kubernetes.Client{}
 		if err := e.startKubernetesClient(ctx, kubernetesClient); err != nil {
 			e.shell.Errorf("Failed to start kubernetes client: %v", err)

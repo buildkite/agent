@@ -26,7 +26,6 @@ const (
 	AgentAPI                       = "agent-api"
 	DescendingSpawnPriority        = "descending-spawn-priority"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
-	KubernetesExec                 = "kubernetes-exec"
 	NormalisedUploadPaths          = "normalised-upload-paths"
 	OverrideZeroExitOnCancel       = "override-zero-exit-on-cancel"
 	PTYRaw                         = "pty-raw"
@@ -42,6 +41,7 @@ const (
 	InbuiltStatusPage      = "inbuilt-status-page"
 	IsolatedPluginCheckout = "isolated-plugin-checkout"
 	JobAPI                 = "job-api"
+	KubernetesExec         = "kubernetes-exec"
 )
 
 var (
@@ -49,7 +49,6 @@ var (
 		AgentAPI:                       {},
 		DescendingSpawnPriority:        {},
 		InterpolationPrefersRuntimeEnv: {},
-		KubernetesExec:                 {},
 		NormalisedUploadPaths:          {},
 		OverrideZeroExitOnCancel:       {},
 		PolyglotHooks:                  {},
@@ -65,6 +64,7 @@ var (
 		InbuiltStatusPage:      standardPromotionMsg(InbuiltStatusPage, "v3.48.0"),
 		IsolatedPluginCheckout: standardPromotionMsg(IsolatedPluginCheckout, "v3.67.0"),
 		JobAPI:                 standardPromotionMsg(JobAPI, "v3.64.0"),
+		KubernetesExec:         "The kubernetes-exec experiment has been replaced with the --kubernetes-exec flag as of agent v3.74.0",
 	}
 
 	// Used to track experiments possibly in use.

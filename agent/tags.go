@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/denisbrodbeck/machineid"
@@ -19,6 +18,7 @@ import (
 type FetchTagsConfig struct {
 	Tags []string
 
+	TagsFromK8s               bool
 	TagsFromEC2MetaData       bool
 	TagsFromEC2MetaDataPaths  []string
 	TagsFromEC2Tags           bool
@@ -78,7 +78,7 @@ type tagFetcher struct {
 func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []string {
 	tags := conf.Tags
 
-	if experiments.IsEnabled(ctx, experiments.KubernetesExec) {
+	if conf.TagsFromK8s {
 		k8sTags, err := t.k8s()
 		if err != nil {
 			l.Warn("Could not fetch tags from k8s: %s", err)

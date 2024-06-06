@@ -97,6 +97,7 @@ type BootstrapConfig struct {
 	TracingServiceName           string   `cli:"tracing-service-name"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
+	KubernetesExec               bool     `cli:"kubernetes-exec"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -371,6 +372,7 @@ var BootstrapCommand = cli.Command{
 		ProfileFlag,
 		RedactedVars,
 		StrictSingleHooksFlag,
+		KubernetesExecFlag,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -452,6 +454,7 @@ var BootstrapCommand = cli.Command{
 			TracingServiceName:           cfg.TracingServiceName,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
+			KubernetesExec:               cfg.KubernetesExec,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
