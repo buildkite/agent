@@ -10,12 +10,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 - Add logs to allowed-[repositories|plugins] [#2810](https://github.com/buildkite/agent/pull/2810) (@jakubm-canva)
-- PTY rows/cols increased [#2806](https://github.com/buildkite/agent/pull/2806) (@pda)
 
 ### Fixed
 - Fix error in k8s after job completes [#2804](https://github.com/buildkite/agent/pull/2804) (@DrJosh9000)
 
 ### Changed
+- PTY rows/cols increased [#2806](https://github.com/buildkite/agent/pull/2806) (@pda)
 - Dont sign initial steps with interpolations [#2813](https://github.com/buildkite/agent/pull/2813) (@moskyb)
 
 ### Internal
