@@ -9,27 +9,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.73.1...v3.74.0)
 
 ### Added
-- kubernetes-exec is now a flag [#2814](https://github.com/buildkite/agent/pull/2814) (@DrJosh9000)
 - Add logs to allowed-[repositories|plugins] [#2810](https://github.com/buildkite/agent/pull/2810) (@jakubm-canva)
 - PTY rows/cols increased [#2806](https://github.com/buildkite/agent/pull/2806) (@pda)
-- Dont sign initial steps with interpolations [#2813](https://github.com/buildkite/agent/pull/2813) (@moskyb)
 
 ### Fixed
 - Fix error in k8s after job completes [#2804](https://github.com/buildkite/agent/pull/2804) (@DrJosh9000)
 
 ### Changed
+- Dont sign initial steps with interpolations [#2813](https://github.com/buildkite/agent/pull/2813) (@moskyb)
+
+### Internal
+- kubernetes-exec is now a flag [#2814](https://github.com/buildkite/agent/pull/2814) (@DrJosh9000)
 - shell logger: Use fmt functions once [#2805](https://github.com/buildkite/agent/pull/2805) (@DrJosh9000)
 - Update deprecated import [#2811](https://github.com/buildkite/agent/pull/2811) (@DrJosh9000)
 - Use Rand per-test in agent/plugin/error_test.go [#2795](https://github.com/buildkite/agent/pull/2795) (@moskyb)
-- Bump ubuntu/ubuntu from `1cc4019` to `289c8c2` in /packaging/docker/ubuntu-22.04 [#2809](https://github.com/buildkite/agent/pull/2809) (@dependabot[bot])
-- Bump rexml from 3.2.5 to 3.2.8 [#2816](https://github.com/buildkite/agent/pull/2816) (@dependabot[bot])
-- Bump docker/library/alpine from 3.19.1 to 3.20.0 in /.buildkite [#2800](https://github.com/buildkite/agent/pull/2800) (@dependabot[bot])
-- Bump docker/library/alpine from 3.19.1 to 3.20.0 in /packaging/docker/alpine [#2801](https://github.com/buildkite/agent/pull/2801) (@dependabot[bot])
-- Bump docker/library/alpine from 3.19.1 to 3.20.0 in /packaging/docker/sidecar [#2802](https://github.com/buildkite/agent/pull/2802) (@dependabot[bot])
-- Bump docker/library/alpine from 3.19.1 to 3.20.0 in /packaging/docker/alpine-k8s [#2803](https://github.com/buildkite/agent/pull/2803) (@dependabot[bot])
-- Bump gopkg.in/DataDog/dd-trace-go.v1 from 1.63.1 to 1.64.0 [#2787](https://github.com/buildkite/agent/pull/2787) (@dependabot[bot])
-- Bump the otel group with 9 updates [#2798](https://github.com/buildkite/agent/pull/2798) (@dependabot[bot])
-- Bump the cloud-providers group across 1 directory with 2 updates [#2808](https://github.com/buildkite/agent/pull/2808) (@dependabot[bot])
+- Dependabot updates: [#2809](https://github.com/buildkite/agent/pull/2809), [#2816](https://github.com/buildkite/agent/pull/2816), [#2800](https://github.com/buildkite/agent/pull/2800), [#2801](https://github.com/buildkite/agent/pull/2801), [#2802](https://github.com/buildkite/agent/pull/2802), [#2803](https://github.com/buildkite/agent/pull/2803), [#2787](https://github.com/buildkite/agent/pull/2787), [#2798](https://github.com/buildkite/agent/pull/2798), [#2808](https://github.com/buildkite/agent/pull/2808) (@dependabot[bot])
 
 ## [v3.73.1](https://github.com/buildkite/agent/tree/v3.73.1) (2024-05-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.73.0...v3.73.1)
