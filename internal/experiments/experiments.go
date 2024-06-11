@@ -24,8 +24,8 @@ const (
 const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
+	AllowArtifactPathTraversal     = "allow-artifact-path-traversal"
 	DescendingSpawnPriority        = "descending-spawn-priority"
-	DisallowArtifactPathTraversal  = "disallow-artifact-path-traversal"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	NormalisedUploadPaths          = "normalised-upload-paths"
 	OverrideZeroExitOnCancel       = "override-zero-exit-on-cancel"
@@ -48,8 +48,8 @@ const (
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
+		AllowArtifactPathTraversal:     {},
 		DescendingSpawnPriority:        {},
-		DisallowArtifactPathTraversal:  {},
 		InterpolationPrefersRuntimeEnv: {},
 		NormalisedUploadPaths:          {},
 		OverrideZeroExitOnCancel:       {},

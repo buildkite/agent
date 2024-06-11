@@ -93,17 +93,21 @@ func targetPath(ctx context.Context, dlPath, destPath string) string {
 		destPath = strings.Join(destPathComponents, string(os.PathSeparator))
 	}
 
-	if experiments.IsEnabled(ctx, experiments.DisallowArtifactPathTraversal) {
-		// Trim empty or ".." components from the prefix of dlPath; it should not be
-		// permitted to walk up the directory tree from destPath.
-		for len(dlPathComponents) > 0 {
-			if c := dlPathComponents[0]; c != "" && c != ".." {
-				break
-			}
-			dlPathComponents = dlPathComponents[1:]
-		}
-		dlPath = filepath.Join(dlPathComponents...)
+	if experiments.IsEnabled(ctx, experiments.AllowArtifactPathTraversal) {
+		// If allow-artifact-path-traversal is enabled, then we don't need to
+		// trim ".." components from dlPath before joining.
+		return filepath.Join(destPath, dlPath)
 	}
+
+	// Trim empty or ".." components from the prefix of dlPath; walking up
+	// the directory tree from destPath should be prohibited.
+	for len(dlPathComponents) > 0 {
+		if c := dlPathComponents[0]; c != "" && c != ".." {
+			break
+		}
+		dlPathComponents = dlPathComponents[1:]
+	}
+	dlPath = filepath.Join(dlPathComponents...)
 
 	// Join the paths together.
 	return filepath.Join(destPath, dlPath)

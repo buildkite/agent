@@ -53,8 +53,8 @@ func TestTargetPath(t *testing.T) {
 		{dlPath: "app/logs/a.log", destPath: "foo/app", want: "foo/app/logs/a.log"},
 		{dlPath: "app/logs/a.log", destPath: ".", want: "app/logs/a.log"},
 
-		// The download path _can_ walk up the destination path
-		{dlPath: "../../../../etc/passwd", destPath: "dist/foo", want: "../../etc/passwd"},
+		// The download path _cannot_ walk up the destination path
+		{dlPath: "../../../../etc/passwd", destPath: "dist/foo", want: "dist/foo/etc/passwd"},
 	}
 
 	ctx := context.Background()
@@ -67,7 +67,7 @@ func TestTargetPath(t *testing.T) {
 	}
 }
 
-func TestTargetPath_DisallowPathTraversal(t *testing.T) {
+func TestTargetPath_AllowPathTraversal(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		dlPath, destPath, want string
@@ -77,10 +77,10 @@ func TestTargetPath_DisallowPathTraversal(t *testing.T) {
 		{dlPath: "app/logs/a.log", destPath: "foo/app", want: "foo/app/logs/a.log"},
 		{dlPath: "app/logs/a.log", destPath: ".", want: "app/logs/a.log"},
 
-		// The download path _cannot_ walk up the destination path
-		{dlPath: "../../../../etc/passwd", destPath: "dist/foo", want: "dist/foo/etc/passwd"},
+		// The download path _can_ walk up the destination path
+		{dlPath: "../../../../etc/passwd", destPath: "dist/foo", want: "../../etc/passwd"},
 	}
-	ctx, _ := experiments.Enable(context.Background(), experiments.DisallowArtifactPathTraversal)
+	ctx, _ := experiments.Enable(context.Background(), experiments.AllowArtifactPathTraversal)
 
 	for _, test := range tests {
 		got := targetPath(ctx, test.dlPath, test.destPath)
