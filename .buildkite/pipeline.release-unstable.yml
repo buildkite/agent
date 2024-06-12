@@ -71,7 +71,7 @@ steps:
   - name: ":redhat: Publish Unstable RPM Package to Buildkite Packages"
     command: ".buildkite/steps/publish-rpm-buildkite-packages.sh"
     env:
-      REPOSITORY: "buildkite/agent-rpm-unstable"
+      REGISTRY: "buildkite/agent-rpm-unstable"
     agents:
       queue: "deploy"
     plugins:
@@ -126,7 +126,7 @@ steps:
   - name: ":debian: Publish Unstable Debian Package to Buildkite Packages"
     command: ".buildkite/steps/publish-debian-buildkite-packages.sh"
     env:
-      REPOSITORY: "buildkite/agent-deb-unstable"
+      REGISTRY: "buildkite/agent-deb-unstable"
     agents:
       queue: "deploy"
     plugins:

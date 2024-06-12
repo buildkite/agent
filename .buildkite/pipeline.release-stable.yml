@@ -90,7 +90,7 @@ steps:
   - name: ":redhat: Publish RPM Package to Buildkite Packages"
     command: ".buildkite/steps/publish-rpm-buildkite-packages.sh"
     env:
-      REPOSITORY: "buildkite/agent-rpm"
+      REGISTRY: "buildkite/agent-rpm"
     agents:
       queue: "deploy"
     plugins:
@@ -126,7 +126,7 @@ steps:
   - name: ":debian: Publish Debian Package to Buildkite Packages"
     command: ".buildkite/steps/publish-debian-buildkite-packages.sh"
     env:
-      REPOSITORY: "buildkite/agent-deb"
+      REGISTRY: "buildkite/agent-deb"
     agents:
       queue: "deploy"
     plugins:

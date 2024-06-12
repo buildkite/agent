@@ -11,8 +11,8 @@ dry_run() {
   fi
 }
 
-if [[ "${REPOSITORY:-}" == "" ]]; then
-  echo "Error: Missing \$REPOSITORY (<organization>/<repository>; i.e. buildkite/agent-experimental)"
+if [[ "${REGISTRY:-}" == "" ]]; then
+  echo "Error: Missing \$REGISTRY (<organization>/<registry>; i.e. buildkite/agent-experimental)"
   exit 1
 fi
 
@@ -24,11 +24,11 @@ echo "--- Downloading built rpm packages"
 buildkite-agent artifact download --build "${artifacts_build}" "rpm/*.rpm" rpm/
 
 echo "--- Requesting OIDC token"
-export TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REPOSITORY}" --lifetime 300)"
+export TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISTRY}" --lifetime 300)"
 
 echo "--- Pushing to Buildkite Packages"
-ORGANIZATION_SLUG="${REPOSITORY%*/}"
-REPOSITORY_SLUG="${REPOSITORY#/*}"
+ORGANIZATION_SLUG="${REGISTRY%*/}"
+REGISTRY_SLUG="${REGISTRY#/*}"
 for FILE in rpm/*.rpm; do
   dry_run curl -X POST "https://api.buildkite.com/v2/packages/organizations/${ORGANIZATION_SLUG}/registries/${REGISTRY_SLUG}/packages" \
     -H "Authorization: Bearer $TOKEN" \

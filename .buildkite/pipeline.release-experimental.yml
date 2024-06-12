@@ -43,7 +43,7 @@ steps:
   - name: ":redhat: Publish Edge RPM Package to Buildkite Packages"
     command: ".buildkite/steps/publish-rpm-buildkite-packages.sh"
     env:
-      REPOSITORY: "buildkite/agent-rpm-experimental"
+      REGISTRY: "buildkite/agent-rpm-experimental"
     agents:
       queue: "deploy"
     plugins:
@@ -98,7 +98,7 @@ steps:
   - name: ":debian: Publish Edge Debian Package to Buildkite Packagesd"
     command: ".buildkite/steps/publish-debian-buildkite-packages.sh"
     env:
-      REPOSITORY: "buildkite/agent-deb-experimental"
+      REGISTRY: "buildkite/agent-deb-experimental"
     agents:
       queue: "deploy"
     plugins:
