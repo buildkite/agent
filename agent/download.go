@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
@@ -73,38 +74,47 @@ func (d Download) Start(ctx context.Context) error {
 	})
 }
 
-func getTargetPath(path string, destination string) string {
+func targetPath(ctx context.Context, dlPath, destPath string) string {
+	dlPath = filepath.Clean(dlPath)
+
 	// If we're downloading a file with a path of "pkg/foo.txt" to a folder
 	// called "pkg", we should merge the two paths together. So, instead of it
 	// downloading to: destination/pkg/pkg/foo.txt, it will just download to
 	// destination/pkg/foo.txt
-	destinationPaths := strings.Split(destination, string(os.PathSeparator))
-	downloadPaths := strings.Split(path, string(os.PathSeparator))
+	destPathComponents := strings.Split(destPath, string(os.PathSeparator))
+	dlPathComponents := strings.Split(dlPath, string(os.PathSeparator))
 
-	for i := 0; i < len(downloadPaths); i += 100 {
-		// If the last part of the destination path matches
-		// this path in the download, then cut it out.
-		lastIndex := len(destinationPaths) - 1
-
-		// Break if we've gone too far.
-		if lastIndex == -1 {
-			break
-		}
-
-		lastPathInDestination := destinationPaths[lastIndex]
-		if lastPathInDestination == downloadPaths[i] {
-			destinationPaths = destinationPaths[:lastIndex]
-		}
+	// If the last component of the destination path matches the first component
+	// of the download path, then trim the last component of the destination.
+	lastIndex := len(destPathComponents) - 1
+	lastDestComponent := destPathComponents[lastIndex]
+	if lastDestComponent == dlPathComponents[0] {
+		destPathComponents = destPathComponents[:lastIndex]
+		destPath = strings.Join(destPathComponents, string(os.PathSeparator))
 	}
 
-	finalizedDestination := strings.Join(destinationPaths, string(os.PathSeparator))
-	targetFile := filepath.Join(finalizedDestination, path)
+	if experiments.IsEnabled(ctx, experiments.AllowArtifactPathTraversal) {
+		// If allow-artifact-path-traversal is enabled, then we don't need to
+		// trim ".." components from dlPath before joining.
+		return filepath.Join(destPath, dlPath)
+	}
 
-	return targetFile
+	// Trim empty or ".." components from the prefix of dlPath; walking up
+	// the directory tree from destPath should be prohibited.
+	for len(dlPathComponents) > 0 {
+		if c := dlPathComponents[0]; c != "" && c != ".." {
+			break
+		}
+		dlPathComponents = dlPathComponents[1:]
+	}
+	dlPath = filepath.Join(dlPathComponents...)
+
+	// Join the paths together.
+	return filepath.Join(destPath, dlPath)
 }
 
 func (d Download) try(ctx context.Context) error {
-	targetFile := getTargetPath(d.conf.Path, d.conf.Destination)
+	targetFile := targetPath(ctx, d.conf.Path, d.conf.Destination)
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
