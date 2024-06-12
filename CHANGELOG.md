@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Use Rand per-test in agent/plugin/error_test.go [#2795](https://github.com/buildkite/agent/pull/2795) (@moskyb)
 - Publish buildkite packages from regular queue [#2826](https://github.com/buildkite/agent/pull/2826) (@sj26)
 - Publish debian and rpm packages to Buildkite Packages [#2824](https://github.com/buildkite/agent/pull/2824) (@sj26)
+- Publish Buildkite Packages — Fix Typo [#2831](https://github.com/buildkite/agent/pull/2831) (@sj26)
+- Publish Buildkite Packages without Docker [#2830](https://github.com/buildkite/agent/pull/2830) (@sj26)
 - Dependabot updates: [#2809](https://github.com/buildkite/agent/pull/2809), [#2816](https://github.com/buildkite/agent/pull/2816), [#2800](https://github.com/buildkite/agent/pull/2800), [#2801](https://github.com/buildkite/agent/pull/2801), [#2802](https://github.com/buildkite/agent/pull/2802), [#2803](https://github.com/buildkite/agent/pull/2803), [#2787](https://github.com/buildkite/agent/pull/2787), [#2798](https://github.com/buildkite/agent/pull/2798), [#2808](https://github.com/buildkite/agent/pull/2808), [#2827](https://github.com/buildkite/agent/pull/2827) (@dependabot[bot])
 
 ## [v3.73.1](https://github.com/buildkite/agent/tree/v3.73.1) (2024-05-23)
