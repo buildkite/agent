@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [v3.74.0](https://github.com/buildkite/agent/tree/v3.73.1+1) (2024-06-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.73.1...v3.74.0)
 
+### Security
+- ⚠️ When using `artifact download`, artifacts that were uploaded with paths containing `..` will no longer be able to traverse up from the destination path. This change is unlikely to break the vast majority of pipelines, however if you are relying on `..` for path traversal and cannot fix your pipeline, you can enable the new experiment `allow-artifact-path-traversal` [#2815](https://github.com/buildkite/agent/pull/2815) (@DrJosh9000)
+
 ### Added
 - Add logs to allowed-[repositories|plugins] [#2810](https://github.com/buildkite/agent/pull/2810) (@jakubm-canva)
 
