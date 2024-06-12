@@ -95,7 +95,7 @@ steps:
       queue: "deploy"
     plugins:
       - docker#v5.8.0:
-          image: "public.ecr.aws/docker/library/ruby:3.0"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           entrypoint: bash
           propagate-environment: true
           mount-buildkite-agent: true
@@ -131,7 +131,7 @@ steps:
       queue: "deploy"
     plugins:
       - docker#v5.8.0:
-          image: "public.ecr.aws/docker/library/ruby:3.0"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           entrypoint: bash
           propagate-environment: true
           mount-buildkite-agent: true
