@@ -95,7 +95,7 @@ steps:
         - exit_status: 1
           limit: 3
 
-  - name: ":debian: Publish Edge Debian Package to Buildkite Packagesd"
+  - name: ":debian: Publish Edge Debian Package to Buildkite Packages"
     command: ".buildkite/steps/publish-debian-buildkite-packages.sh"
     env:
       REGISTRY: "buildkite/agent-deb-experimental"
