@@ -87,6 +87,20 @@ steps:
           mount-buildkite-agent: true
     soft_fail: true
 
+  - name: ":redhat: Publish RPM Package to Buildkite Packages"
+    command: ".buildkite/steps/publish-rpm-buildkite-packages.sh"
+    env:
+      REPOSITORY: "buildkite/agent-rpm"
+    agents:
+      queue: "deploy"
+    plugins:
+      - docker#v5.8.0:
+          image: "public.ecr.aws/docker/library/ruby:3.0"
+          entrypoint: bash
+          propagate-environment: true
+          mount-buildkite-agent: true
+    soft_fail: true
+
   - name: ":debian: Publish Debian Package"
     command: ".buildkite/steps/publish-debian-package.sh"
     env:
@@ -108,6 +122,20 @@ steps:
           mount-buildkite-agent: true
           tmpfs:
             - "/root/.gnupg"
+
+  - name: ":debian: Publish Debian Package to Buildkite Packages"
+    command: ".buildkite/steps/publish-debian-buildkite-packages.sh"
+    env:
+      REPOSITORY: "buildkite/agent-deb"
+    agents:
+      queue: "deploy"
+    plugins:
+      - docker#v5.8.0:
+          image: "public.ecr.aws/docker/library/ruby:3.0"
+          entrypoint: bash
+          propagate-environment: true
+          mount-buildkite-agent: true
+    soft_fail: true
 
   - name: ":debian: Publish Debian Package to Packagecloud"
     command: ".buildkite/steps/publish-debian-packagecloud.sh"
