@@ -28,7 +28,7 @@ parse_version() {
   IFS='.' read -r -a parts <<< "${v%-*}"
 
   for idx in $(seq 1 ${#parts[*]}) ; do
-    sed -e 's/ /./g' <<< "${parts[@]:0:$idx}"
+    sed -e 's/ /./g' <<< "${parts[@]:0:$idx// /.}"
   done
 
   [[ "${v%-*}" == "$v" ]] || echo "$v"

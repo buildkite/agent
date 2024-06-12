@@ -19,10 +19,18 @@ function to_json {
 
 echo '--- Getting agent version from build meta data'
 
-export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
-export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
-export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
-export IS_PRERELEASE=$(buildkite-agent meta-data get "agent-is-prerelease")
+FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
+export FULL_AGENT_VERSION
+
+AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+export AGENT_VERSION
+
+BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
+export BUILD_VERSION
+
+IS_PRERELEASE=$(buildkite-agent meta-data get "agent-is-prerelease")
+export IS_PRERELEASE
+
 
 echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"

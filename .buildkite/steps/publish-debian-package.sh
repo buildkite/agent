@@ -24,7 +24,8 @@ if ! findmnt --source tmpfs --target /root/.gnupg; then
 fi
 
 echo "fetching signing key..."
-export GPG_SIGNING_KEY=$(aws ssm get-parameter --name /pipelines/agent/GPG_SIGNING_KEY --with-decryption --output text --query Parameter.Value --region us-east-1)
+GPG_SIGNING_KEY=$(aws ssm get-parameter --name /pipelines/agent/GPG_SIGNING_KEY --with-decryption --output text --query Parameter.Value --region us-east-1)
+export GPG_SIGNING_KEY
 
 echo "fetching secret key..."
 aws ssm get-parameter --name /pipelines/agent/GPG_SECRET_KEY_ASCII --with-decryption --output text --query Parameter.Value --region us-east-1 > ${secret_key_path}
