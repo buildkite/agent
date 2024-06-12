@@ -93,6 +93,11 @@ steps:
       REGISTRY: "buildkite/agent-rpm"
       EXTENSION: rpm
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+      - ecr#v2.7.0:
+          login: true
+          account-ids: "032379705303"
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           entrypoint: bash
@@ -128,6 +133,11 @@ steps:
       REGISTRY: "buildkite/agent-deb"
       EXTENSION: deb
     plugins:
+      - aws-assume-role-with-web-identity:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+      - ecr#v2.7.0:
+          login: true
+          account-ids: "032379705303"
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           entrypoint: bash
