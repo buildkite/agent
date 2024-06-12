@@ -24,7 +24,7 @@ echo "--- Downloading built debian packages"
 buildkite-agent artifact download --build "${artifacts_build}" "deb/*.deb" deb/
 
 echo "--- Requesting OIDC token"
-export TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISITRY}" --lifetime 300)"
+TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISITRY}" --lifetime 300)"
 
 echo "--- Pushing to Packagecloud"
 ORGANIZATION_SLUG="${REGISTRY%*/}"

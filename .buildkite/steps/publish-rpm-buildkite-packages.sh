@@ -24,7 +24,7 @@ echo "--- Downloading built rpm packages"
 buildkite-agent artifact download --build "${artifacts_build}" "rpm/*.rpm" rpm/
 
 echo "--- Requesting OIDC token"
-export TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISTRY}" --lifetime 300)"
+TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISTRY}" --lifetime 300)"
 
 echo "--- Pushing to Buildkite Packages"
 ORGANIZATION_SLUG="${REGISTRY%*/}"
