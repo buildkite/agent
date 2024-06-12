@@ -73,17 +73,6 @@ steps:
     env:
       REGISTRY: "buildkite/agent-rpm-unstable"
       EXTENSION: rpm
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-beta
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          entrypoint: bash
-          propagate-environment: true
-          mount-buildkite-agent: true
     soft_fail: true
 
   - name: ":redhat: Publish Unstable RPM Package to Packagecloud"
@@ -132,17 +121,6 @@ steps:
     env:
       REGISTRY: "buildkite/agent-deb-unstable"
       EXTENSION: deb
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-beta
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          entrypoint: bash
-          propagate-environment: true
-          mount-buildkite-agent: true
     soft_fail: true
 
   - name: ":debian: Publish Unstable Debian Package to Packagecloud"
