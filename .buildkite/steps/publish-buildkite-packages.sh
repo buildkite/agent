@@ -24,7 +24,7 @@ echo "--- Downloading built packages"
 buildkite-agent artifact download --build "${artifacts_build}" "${EXTENSION}/*.${EXTENSION}" "${EXTENSION}/"
 
 echo "--- Requesting OIDC token"
-TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISITRY}" --lifetime 300)"
+TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISTRY}" --lifetime 300)"
 
 echo "--- Pushing to Packagecloud"
 ORGANIZATION_SLUG="${REGISTRY%*/}"
