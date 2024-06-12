@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This is the installer for the Buildkite Agent.
 #
@@ -43,7 +43,7 @@ else
       # On Apple Silicon Macs, the architecture reported by `uname` depends on
       # the architecture of the shell, which is in turn influenced by the
       # *terminal*, as *child processes prefer their parents' architecture*.
-      # 
+      #
       # This means that for Terminal.app with the default shell it will be
       # arm64, but x86_64 for people using (pre-3.4.0 builds of) iTerm2 or
       # x86_64 shells.
