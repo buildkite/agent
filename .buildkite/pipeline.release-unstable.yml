@@ -73,8 +73,6 @@ steps:
     env:
       REGISTRY: "buildkite/agent-rpm-unstable"
       EXTENSION: rpm
-    agents:
-      queue: "deploy"
     plugins:
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
@@ -129,8 +127,6 @@ steps:
     env:
       REGISTRY: "buildkite/agent-deb-unstable"
       EXTENSION: deb
-    agents:
-      queue: "deploy"
     plugins:
       - docker#v5.8.0:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
