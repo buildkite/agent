@@ -24,6 +24,23 @@ func Redact([]byte) []byte {
 	return redacted
 }
 
+// Match reports if the name matches any of the patterns.
+func Match(logger shell.Logger, patterns []string, name string) bool {
+	for _, pattern := range patterns {
+		matched, err := path.Match(pattern, name)
+		if err != nil {
+			// path.ErrBadPattern is the only error returned by path.Match
+			logger.Warningf("Bad redacted vars pattern: %s", pattern)
+			continue
+		}
+
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
 // Values returns the variable Values to be redacted, given a
 // redaction config string and an environment map.
 func Values(logger shell.Logger, patterns []string, environment map[string]string) []string {
@@ -43,32 +60,24 @@ func Values(logger shell.Logger, patterns []string, environment map[string]strin
 // Vars returns the variable names and values to be redacted, given a
 // redaction config string and an environment map.
 func Vars(logger shell.Logger, patterns []string, environment map[string]string) map[string]string {
-	// Lifted out of Bootstrap.setupRedactors to facilitate testing
 	vars := make(map[string]string)
 	shortVars := make(map[string]struct{})
 
 	for name, val := range environment {
-		for _, pattern := range patterns {
-			matched, err := path.Match(pattern, name)
-			if err != nil {
-				// path.ErrBadPattern is the only error returned by path.Match
-				logger.Warningf("Bad redacted vars pattern: %s", pattern)
-				continue
-			}
-
-			if !matched {
-				continue
-			}
-			if len(val) < LengthMin {
-				if len(val) > 0 {
-					shortVars[name] = struct{}{}
-				}
-				continue
-			}
-
-			vars[name] = val
-			break // Break pattern loop, continue to next env var
+		// Does the name match any of the patterns?
+		if !Match(logger, patterns, name) {
+			continue
 		}
+
+		// The name matched, now test the length of the value.
+		if len(val) < LengthMin {
+			if len(val) > 0 {
+				shortVars[name] = struct{}{}
+			}
+			continue
+		}
+
+		vars[name] = val
 	}
 
 	if len(shortVars) > 0 {
