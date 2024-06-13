@@ -27,8 +27,8 @@ echo "--- Requesting OIDC token"
 TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISTRY}" --lifetime 300)"
 
 echo "--- Pushing to Buildkite Packages"
-ORGANIZATION_SLUG="${REGISTRY%*/}"
-REGISTRY_SLUG="${REGISTRY#/*}"
+ORGANIZATION_SLUG="${REGISTRY%/*}"
+REGISTRY_SLUG="${REGISTRY#*/}"
 for FILE in "${EXTENSION}"/*."${EXTENSION}"; do
   dry_run curl -X POST "https://api.buildkite.com/v2/packages/organizations/${ORGANIZATION_SLUG}/registries/${REGISTRY_SLUG}/packages" \
     -H "Authorization: Bearer $TOKEN" \
