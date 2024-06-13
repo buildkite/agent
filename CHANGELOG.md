@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Security
 - ⚠️ When using `artifact download`, artifacts that were uploaded with paths containing `..` will no longer be able to traverse up from the destination path. This change is unlikely to break the vast majority of pipelines, however if you are relying on `..` for path traversal and cannot fix your pipeline, you can enable the new experiment `allow-artifact-path-traversal` [#2815](https://github.com/buildkite/agent/pull/2815) (@DrJosh9000)
+- Redact Job API token like other env vars [#2834](https://github.com/buildkite/agent/pull/2834) (@DrJosh9000)
 
 ### Added
 - Add logs to allowed-[repositories|plugins] [#2810](https://github.com/buildkite/agent/pull/2810) (@jakubm-canva)
@@ -30,6 +31,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Publish debian and rpm packages to Buildkite Packages [#2824](https://github.com/buildkite/agent/pull/2824) (@sj26)
 - Publish Buildkite Packages — Fix Typo [#2831](https://github.com/buildkite/agent/pull/2831) (@sj26)
 - Publish Buildkite Packages without Docker [#2830](https://github.com/buildkite/agent/pull/2830) (@sj26)
+- Publish Buildkite Packages — Fix Urls [#2833](https://github.com/buildkite/agent/pull/2833) (@sj26)
 - Dependabot updates: [#2809](https://github.com/buildkite/agent/pull/2809), [#2816](https://github.com/buildkite/agent/pull/2816), [#2800](https://github.com/buildkite/agent/pull/2800), [#2801](https://github.com/buildkite/agent/pull/2801), [#2802](https://github.com/buildkite/agent/pull/2802), [#2803](https://github.com/buildkite/agent/pull/2803), [#2787](https://github.com/buildkite/agent/pull/2787), [#2798](https://github.com/buildkite/agent/pull/2798), [#2808](https://github.com/buildkite/agent/pull/2808), [#2827](https://github.com/buildkite/agent/pull/2827) (@dependabot[bot])
 - More Dependabot updates: [#2817](https://github.com/buildkite/agent/pull/2817), [#2818](https://github.com/buildkite/agent/pull/2818), [#2819](https://github.com/buildkite/agent/pull/2819), [#2822](https://github.com/buildkite/agent/pull/2822), [#2829](https://github.com/buildkite/agent/pull/2829), [#2832](https://github.com/buildkite/agent/pull/2832) (@dependabot[bot])
 
