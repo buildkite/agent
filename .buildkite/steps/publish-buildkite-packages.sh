@@ -30,7 +30,7 @@ echo "--- Pushing to Buildkite Packages"
 ORGANIZATION_SLUG="${REGISTRY%/*}"
 REGISTRY_SLUG="${REGISTRY#*/}"
 for FILE in "${EXTENSION}"/*."${EXTENSION}"; do
-  dry_run curl -X POST "https://api.buildkite.com/v2/packages/organizations/${ORGANIZATION_SLUG}/registries/${REGISTRY_SLUG}/packages" \
+  dry_run curl --fail -X POST "https://api.buildkite.com/v2/packages/organizations/${ORGANIZATION_SLUG}/registries/${REGISTRY_SLUG}/packages" \
     -H "Authorization: Bearer $TOKEN" \
     -F "file=@$FILE"
 done
