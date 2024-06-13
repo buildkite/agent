@@ -5,9 +5,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/tracetools"
-	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
@@ -43,43 +41,6 @@ func TestDirForRepository(t *testing.T) {
 
 	for _, test := range repositoryNameTests {
 		assert.Equal(t, test.expected, dirForRepository(test.repositoryName))
-	}
-}
-
-func TestValuesToRedact(t *testing.T) {
-	t.Parallel()
-
-	redactConfig := []string{
-		"*_PASSWORD",
-		"*_TOKEN",
-	}
-	environment := map[string]string{
-		"BUILDKITE_PIPELINE": "unit-test",
-		// These are example values, and are not leaked credentials
-		"DATABASE_USERNAME": "AzureDiamond",
-		"DATABASE_PASSWORD": "hunter2",
-	}
-
-	got := redact.Values(shell.DiscardLogger, redactConfig, environment)
-	want := []string{"hunter2"}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("redact.Values(%q, %q) diff (-got +want)\n%s", redactConfig, environment, diff)
-	}
-}
-
-func TestValuesToRedactEmpty(t *testing.T) {
-	t.Parallel()
-
-	redactConfig := []string{}
-	environment := map[string]string{
-		"FOO":                "BAR",
-		"BUILDKITE_PIPELINE": "unit-test",
-	}
-
-	got := redact.Values(shell.DiscardLogger, redactConfig, environment)
-	if len(got) != 0 {
-		t.Errorf("redact.Values(%q, %q) = %q, want empty slice", redactConfig, environment, got)
 	}
 }
 
