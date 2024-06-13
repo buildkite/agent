@@ -40,6 +40,9 @@ release_image() {
   dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://docker.io/${target_image}:${tag}"
   echo "--- :github: Copying ${target_image}:${tag} to GHCR"
   dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://ghcr.io/${target_image}:${tag}"
+  echo "--- :buildkite: Copying ${target_image}:${tag} to Buildkite Packages"
+  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://packages.buildkite.com/buildkite/agent-docker/agent/${target_image}:${tag}" \
+    || true # Soft fail if we can't upload to Packages
 }
 
 variant="${1:-}"
