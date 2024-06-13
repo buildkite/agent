@@ -26,7 +26,7 @@ buildkite-agent artifact download --build "${artifacts_build}" "${EXTENSION}/*.$
 echo "--- Requesting OIDC token"
 TOKEN="$(buildkite-agent oidc request-token --audience "https://packages.buildkite.com/${REGISTRY}" --lifetime 300)"
 
-echo "--- Pushing to Packagecloud"
+echo "--- Pushing to Buildkite Packages"
 ORGANIZATION_SLUG="${REGISTRY%*/}"
 REGISTRY_SLUG="${REGISTRY#/*}"
 for FILE in "${EXTENSION}"/*."${EXTENSION}"; do
