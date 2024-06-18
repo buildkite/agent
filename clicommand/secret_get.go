@@ -3,6 +3,8 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"strings"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/jobapi"
@@ -10,9 +12,10 @@ import (
 )
 
 type SecretGetConfig struct {
-	Key           string `cli:"arg:0"`
-	Job           string `cli:"job" validate:"required"`
-	SkipRedaction bool   `cli:"skip-redaction"`
+	Key                    string `cli:"arg:0"`
+	Job                    string `cli:"job" validate:"required"`
+	SkipRedaction          bool   `cli:"skip-redaction"`
+	NoNormalizeLineEndings bool   `cli:"no-normalize-line-endings"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -42,6 +45,13 @@ specified in this command is the key's name defined for the secret in its
 cluster. The key's name is case insensitive in this command, and the
 key's value is automatically redacted in the build logs.
 
+The secret's value is redacted in the build logs by default. If you want to
+print the secret to the build logs, use the --skip-redaction flag.
+
+By default, the secret's line endings are normalized to whatever platform the
+agent is running on - CRLF for windows, and LF for other platforms. If you want
+to preserve the line endings in the secret, use the --no-normalize-line-endings flag.
+
 Examples:
 
 The following examples reference the same Buildkite secret ′key′:
@@ -58,6 +68,11 @@ The following examples reference the same Buildkite secret ′key′:
 			Name:   "skip-redaction",
 			Usage:  "Skip redacting the retrieved secret from the logs. Then, the command will print the secret to the Job's logs if called directly.",
 			EnvVar: "BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION",
+		},
+		cli.BoolFlag{
+			Name:   "no-normalize-line-endings",
+			Usage:  "Don't normalize line endings in the secret value",
+			EnvVar: "BUILDKITE_AGENT_SECRET_GET_NO_NORMALIZE_LINE_ENDINGS",
 		},
 
 		// API Flags
@@ -84,13 +99,23 @@ The following examples reference the same Buildkite secret ′key′:
 			return err
 		}
 
+		val := secret.Value
+		if !cfg.NoNormalizeLineEndings {
+			val = normalizeLineEndings(runtime.GOOS, val)
+		}
+
 		jobClient, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create Job API client: %w", err)
 		}
 
 		if !cfg.SkipRedaction {
-			if err := AddToRedactor(ctx, l, jobClient, secret.Value); err != nil {
+			toRedact := []string{val}
+			if val != secret.Value { // ie, we have normalised the line endings
+				toRedact = append(toRedact, secret.Value) // redact the original value as well, just in case
+			}
+
+			if err := AddToRedactor(ctx, l, jobClient, toRedact...); err != nil {
 				if cfg.Debug {
 					return err
 				}
@@ -98,8 +123,28 @@ The following examples reference the same Buildkite secret ′key′:
 			}
 		}
 
-		_, err = fmt.Fprintln(c.App.Writer, secret.Value)
+		_, err = fmt.Fprintln(c.App.Writer, val)
 
 		return err
 	},
+}
+
+func normalizeLineEndings(platform, s string) string {
+	switch platform {
+	case "windows":
+		b := strings.Builder{}
+		for idx, c := range s {
+			// replace \n with \r\n, but only if the \n is not already preceded by \r
+			if c == '\n' && (idx == 0 || s[idx-1] != '\r') {
+				b.WriteString("\r\n")
+				continue
+			}
+
+			b.WriteRune(c)
+		}
+
+		return b.String()
+	default:
+		return strings.ReplaceAll(s, "\r\n", "\n")
+	}
 }
