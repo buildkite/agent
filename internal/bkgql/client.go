@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	graphQLEndpoint = "https://graphql.buildkite.com/v1"
+	DefaultEndpoint = "https://graphql.buildkite.com/v1"
 	graphQLTimeout  = 60 * time.Second
 )
 
-func NewClient(token string) graphql.Client {
-	return graphql.NewClient("https://graphql.buildkite.com/v1", &http.Client{
+func NewClient(endpoint, token string) graphql.Client {
+	return graphql.NewClient(endpoint, &http.Client{
 		Timeout:   graphQLTimeout,
 		Transport: &authedTransport{token: token, wrapped: http.DefaultTransport},
 	})
