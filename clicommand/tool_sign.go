@@ -37,6 +37,7 @@ type ToolSignConfig struct {
 	// Needed for to use GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
 	PipelineSlug     string `cli:"pipeline-slug"`
+	GraphQLEndpoint  string `cli:"graphql-endpoint"`
 
 	// Added to signature
 	Repository string `cli:"repo"`
@@ -136,6 +137,12 @@ Signing a pipeline from a file:
 			Name:   "pipeline-slug",
 			Usage:  "The pipeline slug. Required to connect to the GraphQL API.",
 			EnvVar: "BUILDKITE_PIPELINE_SLUG",
+		},
+		cli.StringFlag{
+			Name:   "graphql-endpoint",
+			Usage:  "The endpoint for the Buildkite GraphQL API. This is only needed if you are using the the graphql-token flag, and is mostly useful for development purposes",
+			Value:  bkgql.DefaultEndpoint,
+			EnvVar: "BUILDKITE_GRAPHQL_ENDPOINT",
 		},
 
 		// Added to signature
@@ -271,7 +278,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key j
 
 	l.Info("Retrieving pipeline from the GraphQL API")
 
-	client := bkgql.NewClient(cfg.GraphQLToken)
+	client := bkgql.NewClient(cfg.GraphQLEndpoint, cfg.GraphQLToken)
 
 	resp, err := bkgql.GetPipeline(ctx, client, orgPipelineSlug)
 	if err != nil {
