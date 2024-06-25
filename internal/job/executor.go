@@ -101,14 +101,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell.SignalGracePeriod = e.ExecutorConfig.SignalGracePeriod
 	}
 
-	if e.KubernetesExec {
-		kubernetesClient := &kubernetes.Client{}
-		if err := e.startKubernetesClient(ctx, kubernetesClient); err != nil {
+	if e.KubernetesClient != nil {
+		if err := e.kubernetesSetup(ctx, e.KubernetesClient); err != nil {
 			e.shell.Errorf("Failed to start kubernetes client: %v", err)
 			return 1
 		}
 		defer func() {
-			_ = kubernetesClient.Exit(exitCode)
+			_ = e.KubernetesClient.Exit(exitCode)
 		}()
 	}
 
@@ -1183,55 +1182,15 @@ func (e *Executor) setupRedactors() {
 	e.redactors.Add(valuesToRedact...)
 }
 
-func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *kubernetes.Client) error {
+func (e *Executor) kubernetesSetup(ctx context.Context, kubernetesClient *kubernetes.Client) error {
 	e.shell.Commentf("Using Kubernetes support")
 
-	id, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_ID"))
-	if err != nil {
-		return fmt.Errorf("failed to parse BUILDKITE_CONTAINER_ID %q", os.Getenv("BUILDKITE_CONTAINER_ID"))
-	}
-	kubernetesClient.ID = id
-
-	rtr := roko.NewRetrier(
-		roko.WithMaxAttempts(7),
-		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-	)
-	regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
-		return kubernetesClient.Connect(ctx)
-	})
-
-	if err != nil {
-		return fmt.Errorf("error connecting to kubernetes runner: %w", err)
-	}
-
-	// Merge the "server" container's process env into the shell env, and into
-	// our env too. This is the env that JobRunner would normally set when
-	// forking the executor, and includes BUILDKITE_AGENT_ACCESS_TOKEN,
-	// BUILDKITE_AGENT_ID, etc.
-	serverEnv := env.FromSlice(regResp.Env)
-	e.shell.Env.Merge(serverEnv)
-	for n, v := range serverEnv.Dump() {
-		if err := os.Setenv(n, v); err != nil {
-			return err
-		}
-	}
-
-	// TODO / food for thought:
-	// Maybe we should try to obtain the env from the "server" before
-	// setupLoggerAndConfig is called, since it sets subcommand config from
-	// env vars.
-	// This would more accurately emulate what happens in the non-k8s case
-	// (JobRunner passes processEnv when fork/exec-ing the executor directly,
-	// which configures the executor) and would make any env vars obtained from
-	// k8s socket that normally configure the executor (but currently don't,
-	// because they aren't available before setupLoggerAndConfig is called) be
-	// consistent with how it actually ends up configured (because they would
-	// configure them).
-
+	// Attach the log stream to the k8s client
 	writer := io.MultiWriter(os.Stdout, kubernetesClient)
 	e.shell.Writer = writer
 	e.shell.Logger = shell.NewWriterLogger(writer, true, e.DisabledWarnings)
 
+	// Proceed when ready
 	if err := kubernetesClient.Await(ctx, kubernetes.RunStateStart); err != nil {
 		return fmt.Errorf("error waiting for client to become ready: %w", err)
 	}

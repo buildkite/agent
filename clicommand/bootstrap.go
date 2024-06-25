@@ -10,8 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job"
+	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -98,6 +101,7 @@ type BootstrapConfig struct {
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
 	KubernetesExec               bool     `cli:"kubernetes-exec"`
+	KubernetesContainerID        int      `cli:"kubernetes-container-id"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -362,6 +366,13 @@ var BootstrapCommand = cli.Command{
 			Usage:  "A list of warning IDs to disable",
 			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
 		},
+		cli.IntFlag{
+			Name: "kubernetes-container-id",
+			Usage: "This is intended to be used only by the Buildkite k8s stack " +
+				"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
+				"used to identify this container within the pod",
+			EnvVar: "BUILDKITE_CONTAINER_ID",
+		},
 		cancelSignalFlag,
 		signalGracePeriodSecondsFlag,
 
@@ -376,6 +387,34 @@ var BootstrapCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
+
+		// Surprise! Before doing anything else, even loading the other
+		// flags/config, we connect the socket to get env vars. These are
+		// normally present in the environment if the bootstrap was forked,
+		// directly, but because in k8s land we use containers to separate the
+		// agent and its executors, such vars won't be available unless we do
+		// this.
+		var k8sClient *kubernetes.Client
+		if c.Bool(KubernetesExecFlag.Name) {
+			k8sClient = &kubernetes.Client{ID: c.Int("kubernetes-container-id")}
+
+			rtr := roko.NewRetrier(
+				roko.WithMaxAttempts(7),
+				roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+			)
+			regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
+				return k8sClient.Connect(ctx)
+			})
+			if err != nil {
+				return fmt.Errorf("error connecting to kubernetes runner: %w", err)
+			}
+			for n, v := range env.FromSlice(regResp.Env).Dump() {
+				if err := os.Setenv(n, v); err != nil {
+					return err
+				}
+			}
+		}
+
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
 
@@ -454,7 +493,7 @@ var BootstrapCommand = cli.Command{
 			TracingServiceName:           cfg.TracingServiceName,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
-			KubernetesExec:               cfg.KubernetesExec,
+			KubernetesClient:             k8sClient,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
