@@ -51,12 +51,10 @@ type Runner struct {
 	conf     Config
 	mu       sync.Mutex
 	listener net.Listener
-	started,
-	done,
-	interrupt chan struct{}
-	startedOnce,
-	closedOnce,
-	interruptOnce sync.Once
+
+	started, done, interrupt               chan struct{}
+	startedOnce, closedOnce, interruptOnce sync.Once
+
 	server  *rpc.Server
 	mux     *http.ServeMux
 	clients map[int]*clientResult
@@ -79,7 +77,7 @@ type Config struct {
 	SocketPath     string
 	ClientCount    int
 	Stdout, Stderr io.Writer
-	AccessToken    string
+	Env            []string
 }
 
 func (r *Runner) Run(ctx context.Context) error {
@@ -196,12 +194,11 @@ type ExitCode struct {
 }
 
 type Status struct {
-	Ready       bool
-	AccessToken string
+	Ready bool
 }
 
 type RegisterResponse struct {
-	AccessToken string
+	Env []string
 }
 
 func (r *Runner) WriteLogs(args Logs, reply *Empty) error {
@@ -256,7 +253,8 @@ func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	}
 	r.logger.Info("client %d connected", id)
 	client.State = stateConnected
-	reply.AccessToken = r.conf.AccessToken
+
+	reply.Env = r.conf.Env
 	return nil
 }
 
@@ -288,7 +286,7 @@ type Client struct {
 
 var errNotConnected = errors.New("client not connected")
 
-func (c *Client) Connect(ctx context.Context) (RegisterResponse, error) {
+func (c *Client) Connect(ctx context.Context) (*RegisterResponse, error) {
 	if c.SocketPath == "" {
 		c.SocketPath = defaultSocketPath
 	}
@@ -303,14 +301,14 @@ func (c *Client) Connect(ctx context.Context) (RegisterResponse, error) {
 		return rpc.DialHTTP("unix", c.SocketPath)
 	})
 	if err != nil {
-		return RegisterResponse{}, err
+		return nil, err
 	}
 	c.client = client
 	var resp RegisterResponse
 	if err := c.client.Call("Runner.Register", c.ID, &resp); err != nil {
-		return RegisterResponse{}, err
+		return nil, err
 	}
-	return resp, nil
+	return &resp, nil
 }
 
 func (c *Client) Exit(exitStatus int) error {
