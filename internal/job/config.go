@@ -170,7 +170,7 @@ type ExecutorConfig struct {
 	JobAPI bool
 
 	// The connected Kubernetes socket, if needed
-	KubernetesClient *kubernetes.Client
+	K8sAgentSocket *kubernetes.Client
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string

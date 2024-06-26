@@ -101,13 +101,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell.SignalGracePeriod = e.ExecutorConfig.SignalGracePeriod
 	}
 
-	if e.KubernetesClient != nil {
-		if err := e.kubernetesSetup(ctx, e.KubernetesClient); err != nil {
-			e.shell.Errorf("Failed to start kubernetes client: %v", err)
+	if e.K8sAgentSocket != nil {
+		if err := e.kubernetesSetup(ctx, e.K8sAgentSocket); err != nil {
+			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
 			return 1
 		}
 		defer func() {
-			_ = e.KubernetesClient.Exit(exitCode)
+			_ = e.K8sAgentSocket.Exit(exitCode)
 		}()
 	}
 
@@ -1182,16 +1182,16 @@ func (e *Executor) setupRedactors() {
 	e.redactors.Add(valuesToRedact...)
 }
 
-func (e *Executor) kubernetesSetup(ctx context.Context, kubernetesClient *kubernetes.Client) error {
+func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernetes.Client) error {
 	e.shell.Commentf("Using Kubernetes support")
 
 	// Attach the log stream to the k8s client
-	writer := io.MultiWriter(os.Stdout, kubernetesClient)
+	writer := io.MultiWriter(os.Stdout, k8sAgentSocket)
 	e.shell.Writer = writer
 	e.shell.Logger = shell.NewWriterLogger(writer, true, e.DisabledWarnings)
 
 	// Proceed when ready
-	if err := kubernetesClient.Await(ctx, kubernetes.RunStateStart); err != nil {
+	if err := k8sAgentSocket.Await(ctx, kubernetes.RunStateStart); err != nil {
 		return fmt.Errorf("error waiting for client to become ready: %w", err)
 	}
 
@@ -1201,7 +1201,7 @@ func (e *Executor) kubernetesSetup(ctx context.Context, kubernetesClient *kubern
 		// If the k8s client is interrupted because our own ctx was cancelled,
 		// then the job is already stopping, so there's no point logging an
 		// error.
-		if err := kubernetesClient.Await(ctx, kubernetes.RunStateInterrupt); err != nil && !errors.Is(err, context.Canceled) {
+		if err := k8sAgentSocket.Await(ctx, kubernetes.RunStateInterrupt); err != nil && !errors.Is(err, context.Canceled) {
 			e.shell.Errorf("Error waiting for client interrupt: %v", err)
 		}
 		e.Cancel()

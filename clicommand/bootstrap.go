@@ -394,16 +394,16 @@ var BootstrapCommand = cli.Command{
 		// directly, but because in k8s land we use containers to separate the
 		// agent and its executors, such vars won't be available unless we do
 		// this.
-		var k8sClient *kubernetes.Client
+		var k8sAgentSocket *kubernetes.Client
 		if c.Bool(KubernetesExecFlag.Name) {
-			k8sClient = &kubernetes.Client{ID: c.Int("kubernetes-container-id")}
+			k8sAgentSocket = &kubernetes.Client{ID: c.Int("kubernetes-container-id")}
 
 			rtr := roko.NewRetrier(
 				roko.WithMaxAttempts(7),
 				roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 			)
 			regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
-				return k8sClient.Connect(ctx)
+				return k8sAgentSocket.Connect(ctx)
 			})
 			if err != nil {
 				return fmt.Errorf("error connecting to kubernetes runner: %w", err)
@@ -493,7 +493,7 @@ var BootstrapCommand = cli.Command{
 			TracingServiceName:           cfg.TracingServiceName,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
-			KubernetesClient:             k8sClient,
+			K8sAgentSocket:               k8sAgentSocket,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
