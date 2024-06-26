@@ -408,7 +408,37 @@ var BootstrapCommand = cli.Command{
 			if err != nil {
 				return fmt.Errorf("error connecting to kubernetes runner: %w", err)
 			}
+
+			// Set our environment vars based on the registration response.
+			// But note that the k8s stack interprets the job definition itself,
+			// and sets a variety of env vars (e.g. BUILDKITE_COMMAND) that
+			// *could* be different to the ones the agent normally supplies.
+			// Examples:
+			// * The command container could be passed a specific
+			//   BUILDKITE_COMMAND that is computed from the command+args
+			//   podSpec attributes (in the kubernetes "plugin"), instead of the
+			//   "command" attribute of the step.
+			// * BUILDKITE_PLUGINS is pre-processed by the k8s stack to remove
+			//   the kubernetes "plugin". If we used the agent's default
+			//   BUILDKITE_PLUGINS, we'd be trying to find a kubernetes plugin
+			//   that doesn't exist.
+			// So we should skip setting any vars that are already set, and
+			// specifically any that could be deliberately *unset* by the
+			// k8s stack (BUILDKITE_PLUGINS could be unset if kubernetes is
+			// the only "plugin" in the step).
+			// (Maybe we could move some of the k8s stack processing in here?)
 			for n, v := range env.FromSlice(regResp.Env).Dump() {
+				// Skip these ones specifically.
+				// See agent-stack-k8s/internal/controller/scheduler/scheduler.go#(*jobWrapper).Build
+				switch n {
+				case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS":
+					continue
+				}
+				// Skip any that are already set.
+				if _, set := os.LookupEnv(n); set {
+					continue
+				}
+				// Set it!
 				if err := os.Setenv(n, v); err != nil {
 					return err
 				}
