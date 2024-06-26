@@ -100,14 +100,14 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell.InterruptSignal = e.ExecutorConfig.CancelSignal
 		e.shell.SignalGracePeriod = e.ExecutorConfig.SignalGracePeriod
 	}
-	if e.KubernetesExec {
-		kubernetesClient := &kubernetes.Client{}
-		if err := e.startKubernetesClient(ctx, kubernetesClient); err != nil {
-			e.shell.Errorf("Failed to start kubernetes client: %v", err)
+
+	if e.K8sAgentSocket != nil {
+		if err := e.kubernetesSetup(ctx, e.K8sAgentSocket); err != nil {
+			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
 			return 1
 		}
 		defer func() {
-			_ = kubernetesClient.Exit(exitCode)
+			_ = e.K8sAgentSocket.Exit(exitCode)
 		}()
 	}
 
@@ -1182,35 +1182,16 @@ func (e *Executor) setupRedactors() {
 	e.redactors.Add(valuesToRedact...)
 }
 
-func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *kubernetes.Client) error {
-	e.shell.Commentf("Using experimental Kubernetes support")
-	err := roko.NewRetrier(
-		roko.WithMaxAttempts(7),
-		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-	).Do(func(rtr *roko.Retrier) error {
-		id, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_ID"))
-		if err != nil {
-			return fmt.Errorf("failed to parse BUILDKITE_CONTAINER_ID %q", os.Getenv("BUILDKITE_CONTAINER_ID"))
-		}
-		kubernetesClient.ID = id
-		connect, err := kubernetesClient.Connect(ctx)
-		if err != nil {
-			return err
-		}
-		os.Setenv("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
-		e.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
-		writer := io.MultiWriter(os.Stdout, kubernetesClient)
-		e.shell.Writer = writer
-		e.shell.Logger = shell.NewWriterLogger(writer, true, e.DisabledWarnings)
+func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernetes.Client) error {
+	e.shell.Commentf("Using Kubernetes support")
 
-		return nil
-	})
+	// Attach the log stream to the k8s client
+	writer := io.MultiWriter(os.Stdout, k8sAgentSocket)
+	e.shell.Writer = writer
+	e.shell.Logger = shell.NewWriterLogger(writer, true, e.DisabledWarnings)
 
-	if err != nil {
-		return fmt.Errorf("error connecting to kubernetes runner: %w", err)
-	}
-
-	if err := kubernetesClient.Await(ctx, kubernetes.RunStateStart); err != nil {
+	// Proceed when ready
+	if err := k8sAgentSocket.Await(ctx, kubernetes.RunStateStart); err != nil {
 		return fmt.Errorf("error waiting for client to become ready: %w", err)
 	}
 
@@ -1220,7 +1201,7 @@ func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *
 		// If the k8s client is interrupted because our own ctx was cancelled,
 		// then the job is already stopping, so there's no point logging an
 		// error.
-		if err := kubernetesClient.Await(ctx, kubernetes.RunStateInterrupt); err != nil && !errors.Is(err, context.Canceled) {
+		if err := k8sAgentSocket.Await(ctx, kubernetes.RunStateInterrupt); err != nil && !errors.Is(err, context.Canceled) {
 			e.shell.Errorf("Error waiting for client interrupt: %v", err)
 		}
 		e.Cancel()
