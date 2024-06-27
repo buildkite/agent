@@ -568,7 +568,7 @@ func TestJobVerification(t *testing.T) {
 				RepositoryURL: tc.repositoryURL,
 			}
 
-			tc.job.Step = signStep(t, tc.signingKey, pipelineUploadEnv, stepWithInvariants)
+			tc.job.Step = signStep(t, ctx, tc.signingKey, pipelineUploadEnv, stepWithInvariants)
 			err := runJob(t, ctx, testRunJobConfig{
 				job:              &tc.job,
 				server:           server,
@@ -659,6 +659,7 @@ func jwksFromKeys(t *testing.T, jwkes ...jwk.Key) jwk.Set {
 
 func signStep(
 	t *testing.T,
+	ctx context.Context,
 	key jwk.Key,
 	env map[string]string,
 	stepWithInvariants signature.CommandStepWithInvariants,
@@ -670,7 +671,7 @@ func signStep(
 		return stepWithInvariants.CommandStep
 	}
 
-	signature, err := signature.Sign(key, &stepWithInvariants, signature.WithEnv(env))
+	signature, err := signature.Sign(ctx, key, &stepWithInvariants, signature.WithEnv(env))
 	if err != nil {
 		t.Fatalf("signing step: %v", err)
 	}

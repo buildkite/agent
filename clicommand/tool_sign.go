@@ -262,7 +262,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key jwk.K
 		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
 	}
 
-	err := signature.SignSteps(
+	err = signature.SignSteps(
 		ctx,
 		parsedPipeline.Steps,
 		key,

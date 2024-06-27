@@ -288,7 +288,7 @@ var PipelineUploadCommand = cli.Command{
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
 
-			err := signature.SignSteps(
+			err = signature.SignSteps(
 				ctx,
 				result.Steps,
 				key,
