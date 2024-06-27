@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
 )
 
@@ -169,8 +168,9 @@ type ExecutorConfig struct {
 	// Whether to start the JobAPI
 	JobAPI bool
 
-	// The connected Kubernetes socket, if needed
-	K8sAgentSocket *kubernetes.Client
+	// Whether to enable Kubernetes support, and which container we're running in
+	KubernetesExec        bool
+	KubernetesContainerID int
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string

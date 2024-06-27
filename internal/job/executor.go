@@ -101,13 +101,14 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell.SignalGracePeriod = e.ExecutorConfig.SignalGracePeriod
 	}
 
-	if e.K8sAgentSocket != nil {
-		if err := e.kubernetesSetup(ctx, e.K8sAgentSocket); err != nil {
+	if e.KubernetesExec {
+		socket := &kubernetes.Client{ID: e.KubernetesContainerID}
+		if err := e.kubernetesSetup(ctx, socket); err != nil {
 			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
 			return 1
 		}
 		defer func() {
-			_ = e.K8sAgentSocket.Exit(exitCode)
+			_ = socket.Exit(exitCode)
 		}()
 	}
 
@@ -1185,6 +1186,57 @@ func (e *Executor) setupRedactors() {
 func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernetes.Client) error {
 	e.shell.Commentf("Using Kubernetes support")
 
+	rtr := roko.NewRetrier(
+		roko.WithMaxAttempts(7),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+	)
+	regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
+		return k8sAgentSocket.Connect(ctx)
+	})
+	if err != nil {
+		return fmt.Errorf("error connecting to kubernetes runner: %w", err)
+	}
+
+	// Set our environment vars based on the registration response.
+	// But note that the k8s stack interprets the job definition itself,
+	// and sets a variety of env vars (e.g. BUILDKITE_COMMAND) that
+	// *could* be different to the ones the agent normally supplies.
+	// Examples:
+	// * The command container could be passed a specific
+	//   BUILDKITE_COMMAND that is computed from the command+args
+	//   podSpec attributes (in the kubernetes "plugin"), instead of the
+	//   "command" attribute of the step.
+	// * BUILDKITE_PLUGINS is pre-processed by the k8s stack to remove
+	//   the kubernetes "plugin". If we used the agent's default
+	//   BUILDKITE_PLUGINS, we'd be trying to find a kubernetes plugin
+	//   that doesn't exist.
+	// So we should skip setting any vars that are already set, and
+	// specifically any that could be deliberately *unset* by the
+	// k8s stack (BUILDKITE_PLUGINS could be unset if kubernetes is
+	// the only "plugin" in the step).
+	// (Maybe we could move some of the k8s stack processing in here?)
+	//
+	// To think about: how to obtain the env vars early enough to set
+	// them in ExecutorConfig (because of how urfave/cli works, it
+	// must happen before App.Run, which is before the program even knows
+	// which subcommand is running).
+	for n, v := range env.FromSlice(regResp.Env).Dump() {
+		// Skip these ones specifically.
+		// See agent-stack-k8s/internal/controller/scheduler/scheduler.go#(*jobWrapper).Build
+		switch n {
+		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS":
+			continue
+		}
+		// Skip any that are already set.
+		if e.shell.Env.Exists(n) {
+			continue
+		}
+		// Set it!
+		e.shell.Env.Set(n, v)
+		if err := os.Setenv(n, v); err != nil {
+			return err
+		}
+	}
 	// Attach the log stream to the k8s client
 	writer := io.MultiWriter(os.Stdout, k8sAgentSocket)
 	e.shell.Writer = writer

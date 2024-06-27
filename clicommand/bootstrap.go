@@ -10,11 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
-	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -387,64 +384,6 @@ var BootstrapCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
-
-		// Surprise! Before doing anything else, even loading the other
-		// flags/config, we connect the socket to get env vars. These are
-		// normally present in the environment if the bootstrap was forked,
-		// directly, but because in k8s land we use containers to separate the
-		// agent and its executors, such vars won't be available unless we do
-		// this.
-		var k8sAgentSocket *kubernetes.Client
-		if c.Bool(KubernetesExecFlag.Name) {
-			k8sAgentSocket = &kubernetes.Client{ID: c.Int("kubernetes-container-id")}
-
-			rtr := roko.NewRetrier(
-				roko.WithMaxAttempts(7),
-				roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-			)
-			regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
-				return k8sAgentSocket.Connect(ctx)
-			})
-			if err != nil {
-				return fmt.Errorf("error connecting to kubernetes runner: %w", err)
-			}
-
-			// Set our environment vars based on the registration response.
-			// But note that the k8s stack interprets the job definition itself,
-			// and sets a variety of env vars (e.g. BUILDKITE_COMMAND) that
-			// *could* be different to the ones the agent normally supplies.
-			// Examples:
-			// * The command container could be passed a specific
-			//   BUILDKITE_COMMAND that is computed from the command+args
-			//   podSpec attributes (in the kubernetes "plugin"), instead of the
-			//   "command" attribute of the step.
-			// * BUILDKITE_PLUGINS is pre-processed by the k8s stack to remove
-			//   the kubernetes "plugin". If we used the agent's default
-			//   BUILDKITE_PLUGINS, we'd be trying to find a kubernetes plugin
-			//   that doesn't exist.
-			// So we should skip setting any vars that are already set, and
-			// specifically any that could be deliberately *unset* by the
-			// k8s stack (BUILDKITE_PLUGINS could be unset if kubernetes is
-			// the only "plugin" in the step).
-			// (Maybe we could move some of the k8s stack processing in here?)
-			for n, v := range env.FromSlice(regResp.Env).Dump() {
-				// Skip these ones specifically.
-				// See agent-stack-k8s/internal/controller/scheduler/scheduler.go#(*jobWrapper).Build
-				switch n {
-				case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS":
-					continue
-				}
-				// Skip any that are already set.
-				if _, set := os.LookupEnv(n); set {
-					continue
-				}
-				// Set it!
-				if err := os.Setenv(n, v); err != nil {
-					return err
-				}
-			}
-		}
-
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
 
@@ -523,7 +462,8 @@ var BootstrapCommand = cli.Command{
 			TracingServiceName:           cfg.TracingServiceName,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
-			K8sAgentSocket:               k8sAgentSocket,
+			KubernetesExec:               cfg.KubernetesExec,
+			KubernetesContainerID:        cfg.KubernetesContainerID,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
