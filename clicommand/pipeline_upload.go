@@ -74,8 +74,9 @@ type PipelineUploadConfig struct {
 	RejectSecrets   bool     `cli:"reject-secrets"`
 
 	// Used for signing
-	JWKSFile  string `cli:"jwks-file"`
-	JWKSKeyID string `cli:"jwks-key-id"`
+	JWKSFile     string `cli:"jwks-file"`
+	JWKSKeyID    string `cli:"jwks-key-id"`
+	DebugSigning bool   `cli:"debug-signing"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -140,6 +141,11 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "jwks-key-id",
 			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
+		},
+		cli.BoolFlag{
+			Name:   "debug-signing",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
 		},
 
 		// API Flags
@@ -282,7 +288,7 @@ var PipelineUploadCommand = cli.Command{
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
 
-			if err := signature.SignPipeline(result, key, os.Getenv("BUILDKITE_REPO")); err != nil {
+			if err := signature.SignSteps(ctx, result.Steps, key, os.Getenv("BUILDKITE_REPO"), signature.WithEnv(result.Env.ToMap()), signature.WithLogger(l), signature.WithDebugSigning(cfg.DebugSigning)); err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
 		}

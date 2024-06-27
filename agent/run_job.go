@@ -101,7 +101,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	if r.conf.JWKS != nil {
 		ise := &invalidSignatureError{}
-		switch err := r.verifyJob(r.conf.JWKS); {
+		switch err := r.verifyJob(ctx, r.conf.JWKS); {
 		case errors.Is(err, ErrNoSignature) || errors.As(err, &ise):
 			r.verificationFailureLogs(r.VerificationFailureBehavior, err)
 			if r.VerificationFailureBehavior == VerificationBehaviourBlock {

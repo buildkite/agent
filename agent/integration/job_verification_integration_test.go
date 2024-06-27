@@ -670,7 +670,7 @@ func signStep(
 		return stepWithInvariants.CommandStep
 	}
 
-	signature, err := signature.Sign(key, env, &stepWithInvariants)
+	signature, err := signature.Sign(key, &stepWithInvariants, signature.WithEnv(env))
 	if err != nil {
 		t.Fatalf("signing step: %v", err)
 	}

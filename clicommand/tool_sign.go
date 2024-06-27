@@ -31,8 +31,9 @@ type ToolSignConfig struct {
 	NoConfirm    bool   `cli:"no-confirm"`
 
 	// Used for signing
-	JWKSFile  string `cli:"jwks-file"`
-	JWKSKeyID string `cli:"jwks-key-id"`
+	JWKSFile     string `cli:"jwks-file"`
+	JWKSKeyID    string `cli:"jwks-key-id"`
+	DebugSigning bool   `cli:"debug-signing"`
 
 	// Needed for to use GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
@@ -196,7 +197,7 @@ func validateNoInterpolations(pipelineString string) error {
 	return nil
 }
 
-func signOffline(_ context.Context, c *cli.Context, l logger.Logger, key jwk.Key, cfg *ToolSignConfig) error {
+func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key jwk.Key, cfg *ToolSignConfig) error {
 	if cfg.Repository == "" {
 		return ErrUseGraphQL
 	}
@@ -256,7 +257,7 @@ func signOffline(_ context.Context, c *cli.Context, l logger.Logger, key jwk.Key
 		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
 	}
 
-	if err := signature.SignPipeline(parsedPipeline, key, cfg.Repository); err != nil {
+	if err := signature.SignSteps(ctx, parsedPipeline.Steps, key, cfg.Repository, signature.WithEnv(parsedPipeline.Env.ToMap()), signature.WithLogger(l), signature.WithDebugSigning(cfg.DebugSigning)); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
@@ -311,7 +312,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key j
 		debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
 	}
 
-	if err := signature.SignPipeline(parsedPipeline, key, resp.Pipeline.Repository.Url); err != nil {
+	if err := signature.SignSteps(ctx, parsedPipeline.Steps, key, resp.Pipeline.Repository.Url, signature.WithEnv(parsedPipeline.Env.ToMap()), signature.WithLogger(debugL), signature.WithDebugSigning(cfg.DebugSigning)); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 

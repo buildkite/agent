@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,7 +35,7 @@ func (e *invalidSignatureError) Unwrap() error {
 	return e.underlying
 }
 
-func (r *JobRunner) verifyJob(keySet jwk.Set) error {
+func (r *JobRunner) verifyJob(ctx context.Context, keySet jwk.Set) error {
 	step := r.conf.Job.Step
 
 	if step.Signature == nil {
@@ -48,7 +49,10 @@ func (r *JobRunner) verifyJob(keySet jwk.Set) error {
 	}
 
 	// Verify the signature
-	if err := signature.Verify(step.Signature, r.conf.JWKS, r.conf.Job.Env, stepWithInvariants); err != nil {
+	if err := signature.Verify(ctx, step.Signature, r.conf.JWKS, stepWithInvariants,
+		signature.WithEnv(r.conf.Job.Env),
+		signature.WithLogger(r.agentLogger),
+		signature.WithDebugSigning(r.conf.AgentConfiguration.DebugSigning)); err != nil {
 		r.agentLogger.Debug("verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
 		return newInvalidSignatureError(ErrVerificationFailed)
 	}

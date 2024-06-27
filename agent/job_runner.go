@@ -523,6 +523,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		env["BUILDKITE_AGENT_JWKS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKeyID
 	}
 
+	if r.conf.AgentConfiguration.DebugSigning {
+		env["BUILDKITE_AGENT_DEBUG_SIGNING"] = "true"
+	}
+
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing
