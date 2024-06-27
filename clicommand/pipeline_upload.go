@@ -288,7 +288,16 @@ var PipelineUploadCommand = cli.Command{
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
 
-			if err := signature.SignSteps(ctx, result.Steps, key, os.Getenv("BUILDKITE_REPO"), signature.WithEnv(result.Env.ToMap()), signature.WithLogger(l), signature.WithDebugSigning(cfg.DebugSigning)); err != nil {
+			err := signature.SignSteps(
+				ctx,
+				result.Steps,
+				key,
+				os.Getenv("BUILDKITE_REPO"),
+				signature.WithEnv(result.Env.ToMap()),
+				signature.WithLogger(l),
+				signature.WithDebugSigning(cfg.DebugSigning),
+			)
+			if err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
 		}

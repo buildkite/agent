@@ -49,10 +49,15 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet jwk.Set) error {
 	}
 
 	// Verify the signature
-	if err := signature.Verify(ctx, step.Signature, r.conf.JWKS, stepWithInvariants,
+	err := signature.Verify(
+		ctx,
+		step.Signature,
+		r.conf.JWKS, stepWithInvariants,
 		signature.WithEnv(r.conf.Job.Env),
 		signature.WithLogger(r.agentLogger),
-		signature.WithDebugSigning(r.conf.AgentConfiguration.DebugSigning)); err != nil {
+		signature.WithDebugSigning(r.conf.AgentConfiguration.DebugSigning),
+	)
+	if err != nil {
 		r.agentLogger.Debug("verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
 		return newInvalidSignatureError(ErrVerificationFailed)
 	}
