@@ -126,6 +126,11 @@ Signing a pipeline from a file:
 			Usage:  "The JWKS key ID to use when signing the pipeline. If none is provided and the JWKS file contains only one key, that key will be used.",
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
 		},
+		cli.BoolFlag{
+			Name:   "debug-signing",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
+		},
 
 		// These are required for GraphQL
 		cli.StringFlag{
