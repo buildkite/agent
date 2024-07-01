@@ -24,7 +24,7 @@ require (
 	github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2
 	github.com/gliderlabs/ssh v0.3.7
 	github.com/go-chi/chi/v5 v5.0.14
-	github.com/gofrs/flock v0.8.1
+	github.com/gofrs/flock v0.11.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-querystring v1.1.0
 	github.com/gowebpki/jcs v1.0.1
