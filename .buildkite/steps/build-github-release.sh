@@ -1,11 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 echo '--- Getting agent version from build meta data'
 
-export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
-export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
-export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
+FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
+export FULL_AGENT_VERSION
+
+AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+export AGENT_VERSION
+
+BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
+export BUILD_VERSION
 
 echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
@@ -20,7 +25,7 @@ buildkite-agent artifact download "pkg/*" .
 function build() {
   echo "--- Building release for: $1"
 
-  ./scripts/build-github-release.sh $1 $AGENT_VERSION
+  ./scripts/build-github-release.sh "$1" "$AGENT_VERSION"
 }
 
 # Export the function so we can use it in xargs
@@ -30,4 +35,4 @@ export -f build
 rm -rf releases
 
 # Loop over all the binaries and build them
-ls pkg/* | xargs -I {} bash -c "build {}"
+find pkg/* -print0 | xargs -I {} bash -c "build {}"

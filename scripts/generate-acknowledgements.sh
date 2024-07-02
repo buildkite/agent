@@ -8,7 +8,7 @@ echo 'Generating OSS attributions'
 echo "GOOS=${GOOS:-not set}"
 echo "GOARCH=${GOARCH:-not set}"
 
-cd $(git rev-parse --show-toplevel)
+cd "$(git rev-parse --show-toplevel)"
 
 if [[ ! -f "./go.mod" ]]; then
     echo "Couldn't find go.mod - are you in the agent repository?"
@@ -28,9 +28,13 @@ fi
 
 # Create temporary directory and file
 # TEMPFILE is not in TEMPDIR, because this causes infinite recursion later on.
-export TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)"
-export TEMPFILE="$(mktemp /tmp/acknowledgements.XXXXXX)"
-trap "rm -fr ${TEMPDIR} ${TEMPFILE}" EXIT
+TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)"
+export TEMPDIR
+
+TEMPFILE="$(mktemp /tmp/acknowledgements.XXXXXX)"
+export TEMPFILE
+
+trap 'rm -fr ${TEMPDIR} ${TEMPFILE}' EXIT
 
 "${GO_LICENSES}" save . --save_path="${TEMPDIR}" --force
 
@@ -43,7 +47,7 @@ Licenses for the libraries used are reproduced below.
 EOF
 
 addfile() {
-    printf "\n\n---\n\n## %s\n\n\`\`\`\n" "${2:-${1#${TEMPDIR}/}}" >> "${TEMPFILE}"
+    printf "\n\n---\n\n## %s\n\n\`\`\`\n" "${2:-${1#"${TEMPDIR}"/}}" >> "${TEMPFILE}"
     cat "$1" >> "${TEMPFILE}"
     printf "\n\`\`\`\n" >> "${TEMPFILE}"
 }

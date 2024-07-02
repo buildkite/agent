@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # $1 will be the version being upgraded from if this is an upgrade
 if [ "$1" = "" ] ; then
   OPERATION="install"

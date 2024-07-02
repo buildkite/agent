@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 artifacts_build="$(buildkite-agent meta-data get "agent-artifacts-build")"
@@ -32,7 +32,8 @@ echo "--- Installing dependencies"
 gem install package_cloud
 
 echo "--- Requesting OIDC token"
-export PACKAGECLOUD_TOKEN="$(buildkite-agent oidc request-token --audience "https://packagecloud.io/${REPOSITORY}" --lifetime 300)"
+PACKAGECLOUD_TOKEN="$(buildkite-agent oidc request-token --audience "https://packagecloud.io/${REPOSITORY}" --lifetime 300)"
+export PACKAGECLOUD_TOKEN
 
 echo "--- Pushing to Packagecloud"
 dry_run package_cloud push "${REPOSITORY}/${DISTRO_VERSION}" deb/*.deb

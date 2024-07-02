@@ -1,5 +1,6 @@
-#!/bin/sh
-#
+#!/usr/bin/env bash
+# shellcheck disable=1090
+
 ### BEGIN INIT INFO
 # Provides:          buildkite-agent
 # Required-Start:    $network $local_fs $remote_fs
@@ -20,17 +21,16 @@ pid_file="/var/run/${name}.pid"
 lock_dir="/var/lock/subsys"
 lock_file="${lock_dir}/${name}"
 log="/var/log/${name}.log"
-stderr_log="/var/log/${name}.err"
 
-[ -r /etc/default/${name} ] && . /etc/default/${name}
-[ -r /etc/sysconfig/${name} ] && . /etc/sysconfig/${name}
+[ -r "/etc/default/${name}" ] && . "/etc/default/${name}"
+[ -r "/etc/sysconfig/${name}" ] && . "/etc/sysconfig/${name}"
 
 get_pid() {
     cat "$pid_file"
 }
 
 is_running() {
-    [ -f "$pid_file" ] && ps `get_pid` > /dev/null 2>&1
+    [ -f "$pid_file" ] && ps "$(get_pid)" > /dev/null 2>&1
 }
 
 case "$1" in
@@ -53,9 +53,8 @@ case "$1" in
     stop)
     if is_running; then
         echo -n "Stopping $name.."
-        kill `get_pid`
-        for i in {1..10}
-        do
+        kill "$(get_pid)"
+        for _ in {1..10}; do
             if ! is_running; then
                 break
             fi

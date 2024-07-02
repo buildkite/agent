@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 if [[ ${#} -lt 2 ]]
@@ -48,7 +48,7 @@ if [[ "${BINARY_PATH}" == *"windows"* ]]; then
 
   info "Zipping up the files"
   cd "${TMP_RELEASE_DIRECTORY}"
-  zip -X -r "../${RELEASE_FILE_NAME}" *
+  zip -X -r "../${RELEASE_FILE_NAME}" -- *
 else
   RELEASE_FILE_NAME="${RELEASE_NAME}.tar.gz"
 
