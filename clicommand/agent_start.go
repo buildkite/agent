@@ -84,6 +84,7 @@ type AgentStartConfig struct {
 
 	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
 	SigningJWKSKeyID string `cli:"signing-jwks-key-id"`
+	DebugSigning     bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
 	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
@@ -655,6 +656,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The JWKS key ID to use when signing the pipeline. If omitted, and the signing JWKS contains only one key, that key will be used.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID",
 		},
+		cli.BoolFlag{
+			Name:   "debug-signing",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
+		},
 		cli.StringFlag{
 			Name:   "verification-failure-behavior",
 			Value:  agent.VerificationBehaviourBlock,
@@ -961,6 +967,7 @@ var AgentStartCommand = cli.Command{
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
+			DebugSigning:     cfg.DebugSigning,
 
 			VerificationJWKS: verificationJWKS,
 

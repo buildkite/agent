@@ -39,6 +39,7 @@ type AgentConfiguration struct {
 
 	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
 	SigningJWKSKeyID string // The key ID to sign pipeline uploads with
+	DebugSigning     bool   // Whether to print step payloads when signing them
 
 	VerificationJWKS             jwk.Set // The set of keys to verify jobs with
 	VerificationFailureBehaviour string  // What to do if job verification fails (one of `block` or `warn`)
