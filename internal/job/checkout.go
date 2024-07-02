@@ -623,6 +623,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			e.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
 			mirrorSubmodules := e.ExecutorConfig.GitMirrorsPath != ""
+			submoduleMirrorDirs := make([]string, 0)
 			for _, repository := range submoduleRepos {
 				submoduleArgs := append([]string(nil), args...)
 				// submodules might need their fingerprints verified too
@@ -639,6 +640,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 				if err != nil {
 					return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 				}
+
+				submoduleMirrorDirs = append(submoduleMirrorDirs, mirrorDir)
 
 				// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
 				if err := e.createCheckoutDir(); err != nil {
@@ -663,6 +666,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 				if err := e.shell.Run(ctx, "git", submoduleArgs...); err != nil {
 					return fmt.Errorf("updating submodules: %w", err)
 				}
+			}
+
+			for i, dir := range submoduleMirrorDirs {
+				e.shell.Env.Set(fmt.Sprintf("BUILDKITE_REPO_SUBMODULE_MIRROR_%d", i), dir)
 			}
 
 			if !mirrorSubmodules {
