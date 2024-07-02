@@ -453,7 +453,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "git-fetch-flags",
-			Value:  "-v --prune",
+			Value:  "-v --prune --tags",
 			Usage:  "Flags to pass to \"git fetch\" command",
 			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
 		},
