@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.74.1](https://github.com/buildkite/agent/tree/v3.74.1) (2024-07-03)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.74.0...v3.74.1)
+
+### Added
+- Log public signing key thumbprint and signed step payload [#2853](https://github.com/buildkite/agent/pull/2853) (@jordandcarter)
+
+### Fixed
+- Don't try to early-set env vars [#2852](https://github.com/buildkite/agent/pull/2852) (@DrJosh9000)
+- Convey env vars between k8s containers [#2851](https://github.com/buildkite/agent/pull/2851) (@DrJosh9000)
+- Fix typo in "kuberentes" [#2836](https://github.com/buildkite/agent/pull/2836) (@moskyb)
+
+### Internal
+- Make the graphql endpoint for `buildkite-agent tool sign` configurable [#2841](https://github.com/buildkite/agent/pull/2841) (@moskyb)
+- Dependabot updates: [#2863](https://github.com/buildkite/agent/pull/2863), [#2862](https://github.com/buildkite/agent/pull/2862), [#2857](https://github.com/buildkite/agent/pull/2857), [#2860](https://github.com/buildkite/agent/pull/2860), [#2864](https://github.com/buildkite/agent/pull/2864), [#2856](https://github.com/buildkite/agent/pull/2856), [#2867](https://github.com/buildkite/agent/pull/2867), [#2846](https://github.com/buildkite/agent/pull/2846), [#2848](https://github.com/buildkite/agent/pull/2848), [#2847](https://github.com/buildkite/agent/pull/2847), [#2845](https://github.com/buildkite/agent/pull/2845), [#2840](https://github.com/buildkite/agent/pull/2840), [#2844](https://github.com/buildkite/agent/pull/2844), [#2842](https://github.com/buildkite/agent/pull/2842), [#2843](https://github.com/buildkite/agent/pull/2843), [#2849](https://github.com/buildkite/agent/pull/2849) (@dependabot[bot])
+
 ## [v3.74.0](https://github.com/buildkite/agent/tree/v3.74.0) (2024-06-11)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.73.1...v3.74.0)
 
