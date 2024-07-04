@@ -37,11 +37,11 @@ parse_version() {
 release_image() {
   local tag="$1"
   echo "--- :docker: Copying ${target_image}:${tag} to Docker Hub"
-  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://docker.io/${target_image}:${tag}"
+  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://docker.io/buildkite/${target_image}:${tag}"
   echo "--- :github: Copying ${target_image}:${tag} to GHCR"
-  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://ghcr.io/${target_image}:${tag}"
+  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://ghcr.io/buildkite/${target_image}:${tag}"
   echo "--- :buildkite: Copying ${target_image}:${tag} to Buildkite Packages"
-  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://packages.buildkite.com/${target_image}:${tag}"
+  dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://packages.buildkite.com/buildkite/agent-docker/${target_image}:${tag}"
 }
 
 variant="${1:-}"
@@ -50,7 +50,7 @@ codename="${3:-}"
 version="${4:-}"
 build="${5:-dev}"
 
-target_image="buildkite/agent"
+target_image="agent"
 variant_suffix=""
 
 if [[ "$variant" != "alpine" ]] ; then
