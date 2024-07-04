@@ -47,9 +47,9 @@ aws ssm get-parameter \
 echo "--- docker login to Buildkite Packages"
 
 buildkite-agent oidc request-token \
-  --audience "https://packages.buildkite.com/buildkite/agent-docker" \
+  --audience "https://packages.buildkite.com/buildkite/agent" \
   --lifetime 300 \
-  | docker login packages.buildkite.com/buildkite/agent-docker --username=buildkite --password-stdin
+  | docker login packages.buildkite.com/buildkite/agent --username=buildkite --password-stdin
 
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
