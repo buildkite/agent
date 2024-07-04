@@ -44,13 +44,6 @@ aws ssm get-parameter \
   --region us-east-1 \
   | docker login ghcr.io --username="${ghcr_user}" --password-stdin
 
-echo "--- docker login to Buildkite Packages"
-
-buildkite-agent oidc request-token \
-  --audience "https://packages.buildkite.com/buildkite/agent" \
-  --lifetime 300 \
-  | docker login packages.buildkite.com/buildkite/agent --username=buildkite --password-stdin
-
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
 
