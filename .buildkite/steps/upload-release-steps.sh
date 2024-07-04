@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Generates and uploads pipeline steps for the edge, beta and stable release

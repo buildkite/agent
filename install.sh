@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This is the installer for the Buildkite Agent.
 #
@@ -43,7 +43,7 @@ else
       # On Apple Silicon Macs, the architecture reported by `uname` depends on
       # the architecture of the shell, which is in turn influenced by the
       # *terminal*, as *child processes prefer their parents' architecture*.
-      # 
+      #
       # This means that for Terminal.app with the default shell it will be
       # arm64, but x86_64 for people using (pre-3.4.0 builds of) iTerm2 or
       # x86_64 shells.
@@ -102,14 +102,14 @@ function buildkite-download {
     echo -e "\033[31mFailed to download file: $1\033[0m\n"
 
     cat $BUILDKITE_DOWNLOAD_TMP_FILE
-    exit $BUILDKITE_DOWNLOAD_EXIT_STATUS
+    exit "$BUILDKITE_DOWNLOAD_EXIT_STATUS"
   fi
 }
 
 echo -e "Installing Version: \033[35mv$VERSION\033[0m"
 
 # Default the destination folder
-: ${DESTINATION:="$HOME/.buildkite-agent"}
+: "${DESTINATION:="$HOME/.buildkite-agent"}"
 
 # If they have a $HOME/.buildkite folder, rename it to `buildkite-agent` and
 # symlink back to the old one. Since we changed the name of the folder, we

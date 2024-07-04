@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 if [[ ${#} -lt 3 ]]
@@ -44,7 +44,7 @@ fi
 export CGO_ENABLED=0
 
 # Generated files
-"$(dirname $0)"/generate-acknowledgements.sh
+"$(dirname "$0")"/generate-acknowledgements.sh
 
 mkdir -p $BUILD_PATH
 go build -v -ldflags "-X github.com/buildkite/agent/v3/version.buildNumber=${BUILD_NUMBER}" -o "${BUILD_PATH}/${BINARY_FILENAME}" .

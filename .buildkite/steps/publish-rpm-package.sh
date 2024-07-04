@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 artifacts_build="$(buildkite-agent meta-data get "agent-artifacts-build")"
@@ -82,7 +82,7 @@ for ARCH in "x86_64" "i386" "aarch64"; do
     "${ARCH_PATH}/repodata"
 
   # Copy the new RPMs in.
-  find "rpm/" -type f -name "*${ARCH}*" | xargs cp -t "${ARCH_PATH}"
+  find "rpm/" -type f -name "*${ARCH}*" -print0 | xargs cp -t "${ARCH_PATH}"
 
   echo "--- Updating yum repository for ${CODENAME}/${ARCH}"
   if updaterepo "${ARCH_PATH}"; then
@@ -99,7 +99,7 @@ for ARCH in "x86_64" "i386" "aarch64"; do
     "${ARCH_PATH}"
 
   # Copy the new RPMs in again.
-  find "rpm/" -type f -name "*${ARCH}*" | xargs cp -t "${ARCH_PATH}"
+  find "rpm/" -type f -name "*${ARCH}*" -print0 | xargs cp -t "${ARCH_PATH}"
 
   echo "--- Recreating yum repository for ${CODENAME}/${ARCH}"
   createrepo "${ARCH_PATH}"

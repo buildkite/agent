@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -o errexit
 
@@ -48,7 +48,7 @@ deb_s3_args=(
 # Older versions were ok with prefix and bucket in the same parameter, but we now need to split them
 
 echo "Parsing DEB_S3_BUCKET=$DEB_S3_BUCKET"
-DEB_S3_BUCKET_ARRAY=(${DEB_S3_BUCKET//\// })
+DEB_S3_BUCKET_ARRAY=("${DEB_S3_BUCKET//\// }")
 
 if [[ ${#DEB_S3_BUCKET_ARRAY[@]} -gt 2 ]] ; then
   echo "Expected $DEB_S3_BUCKET to have at most 1 path component"

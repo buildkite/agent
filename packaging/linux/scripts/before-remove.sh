@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Check if upstart exists
 command -v initctl > /dev/null
 BK_UPSTART_EXISTS=$?

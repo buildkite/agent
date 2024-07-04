@@ -4,87 +4,96 @@ agents:
   queue: agent-runners-linux-amd64
 
 steps:
-  - name: ":go::robot_face: Check Code Committed"
-    key: check-code-committed
-    command: .buildkite/steps/check-code-committed.sh
-    plugins:
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: agent
+  - group: "🧪 Tests and Checks ✅"
+    steps:
+    - name: ":go::robot_face: Check Code Committed"
+      key: check-code-committed
+      command: .buildkite/steps/check-code-committed.sh
+      plugins:
+        - docker-compose#v4.14.0:
+            config: .buildkite/docker-compose.yml
+            cli-version: 2
+            run: agent
 
-  - name: ":linux: Linux AMD64 Tests"
-    key: test-linux-amd64
-    command: ".buildkite/steps/tests.sh"
-    artifact_paths: junit-*.xml
-    plugins:
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: agent
-      - test-collector#v1.2.0:
-          files: "junit-*.xml"
-          format: "junit"
-      - artifacts#v1.9.0:
-          upload: "cover.{html,out}"
+    - name: "🐢🔎 Shellcheck"
+      key: shellcheck
+      command: .buildkite/steps/shellcheck.sh
+      plugins:
+        - docker#v5.8.0:
+            image: koalaman/shellcheck-alpine
 
-  - name: ":linux: Linux ARM64 Tests"
-    key: test-linux-arm64
-    command: ".buildkite/steps/tests.sh"
-    artifact_paths: junit-*.xml
-    agents:
-      queue: agent-runners-linux-arm64
-    plugins:
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: agent
-      - test-collector#v1.2.0:
-          files: "junit-*.xml"
-          format: "junit"
-      - artifacts#v1.9.0:
-          upload: "cover.{html,out}"
+    - name: ":linux: Linux AMD64 Tests"
+      key: test-linux-amd64
+      command: ".buildkite/steps/tests.sh"
+      artifact_paths: junit-*.xml
+      plugins:
+        - docker-compose#v4.14.0:
+            config: .buildkite/docker-compose.yml
+            cli-version: 2
+            run: agent
+        - test-collector#v1.2.0:
+            files: "junit-*.xml"
+            format: "junit"
+        - artifacts#v1.9.0:
+            upload: "cover.{html,out}"
 
-  - name: ":satellite: Detect Data Races"
-    key: test-race-linux-arm64
-    command: ".buildkite/steps/tests.sh -race"
-    artifact_paths: junit-*.xml
-    agents:
-      queue: agent-runners-linux-arm64
-    plugins:
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: agent
-      - test-collector#v1.2.0:
-          files: "junit-*.xml"
-          format: "junit"
-      - artifacts#v1.9.0:
-          upload: "cover.{html,out}"
+    - name: ":linux: Linux ARM64 Tests"
+      key: test-linux-arm64
+      command: ".buildkite/steps/tests.sh"
+      artifact_paths: junit-*.xml
+      agents:
+        queue: agent-runners-linux-arm64
+      plugins:
+        - docker-compose#v4.14.0:
+            config: .buildkite/docker-compose.yml
+            cli-version: 2
+            run: agent
+        - test-collector#v1.2.0:
+            files: "junit-*.xml"
+            format: "junit"
+        - artifacts#v1.9.0:
+            upload: "cover.{html,out}"
 
-  - name: ":windows: Windows AMD64 Tests"
-    key: test-windows
-    command: "bash .buildkite\\steps\\tests.sh"
-    artifact_paths: junit-*.xml
-    agents:
-      queue: agent-runners-windows-amd64
-    plugins:
-      - test-collector#v1.2.0:
-          files: "junit-*.xml"
-          format: "junit"
-      - artifacts#v1.9.0:
-          upload: "cover.{html,out}"
+    - name: ":satellite: Detect Data Races"
+      key: test-race-linux-arm64
+      command: ".buildkite/steps/tests.sh -race"
+      artifact_paths: junit-*.xml
+      agents:
+        queue: agent-runners-linux-arm64
+      plugins:
+        - docker-compose#v4.14.0:
+            config: .buildkite/docker-compose.yml
+            cli-version: 2
+            run: agent
+        - test-collector#v1.2.0:
+            files: "junit-*.xml"
+            format: "junit"
+        - artifacts#v1.9.0:
+            upload: "cover.{html,out}"
 
-  - label: ":writing_hand: Annotate with Test Failures"
-    depends_on:
-      - test-linux-amd64
-      - test-race-linux-arm64
-      - test-linux-arm64
-      - test-windows
-    allow_dependency_failure: true
-    plugins:
-      - junit-annotate#v1.6.0:
-          artifacts: junit-*.xml
+    - name: ":windows: Windows AMD64 Tests"
+      key: test-windows
+      command: "bash .buildkite\\steps\\tests.sh"
+      artifact_paths: junit-*.xml
+      agents:
+        queue: agent-runners-windows-amd64
+      plugins:
+        - test-collector#v1.2.0:
+            files: "junit-*.xml"
+            format: "junit"
+        - artifacts#v1.9.0:
+            upload: "cover.{html,out}"
+
+    - label: ":writing_hand: Annotate with Test Failures"
+      depends_on:
+        - test-linux-amd64
+        - test-race-linux-arm64
+        - test-linux-arm64
+        - test-windows
+      allow_dependency_failure: true
+      plugins:
+        - junit-annotate#v1.6.0:
+            artifacts: junit-*.xml
 
   - group: ":hammer_and_wrench: Binary builds"
     steps:
