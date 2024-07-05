@@ -68,25 +68,6 @@ steps:
         - exit_status: 1
           limit: 3
 
-  - name: ":redhat: Publish RPM Package to Packagecloud"
-    command: ".buildkite/steps/publish-rpm-packagecloud.sh"
-    env:
-      REPOSITORY: "buildkite/agent-rpm"
-      DISTRO_VERSION: rpm_any/rpm_any
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "public.ecr.aws/docker/library/ruby:3.0"
-          entrypoint: bash
-          propagate-environment: true
-          mount-buildkite-agent: true
-    soft_fail: true
-
   - name: ":redhat: Publish RPM Package to Buildkite Packages"
     command: ".buildkite/steps/publish-buildkite-packages.sh"
     env:
@@ -121,25 +102,6 @@ steps:
     env:
       REGISTRY: "buildkite/agent-deb"
       EXTENSION: deb
-    soft_fail: true
-
-  - name: ":debian: Publish Debian Package to Packagecloud"
-    command: ".buildkite/steps/publish-debian-packagecloud.sh"
-    env:
-      REPOSITORY: "buildkite/agent-deb"
-      DISTRO_VERSION: any/any
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "public.ecr.aws/docker/library/ruby:3.0"
-          entrypoint: bash
-          propagate-environment: true
-          mount-buildkite-agent: true
     soft_fail: true
 
   - name: ":docker: Publish Docker Images"
