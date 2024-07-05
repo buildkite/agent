@@ -27,7 +27,6 @@ Example:
 
     $ buildkite-agent step get "label" --step "key"
     $ buildkite-agent step get --format json
-    $ buildkite-agent step get "retry" --format json
     $ buildkite-agent step get "state" --step "my-other-step"`
 
 type StepGetConfig struct {
