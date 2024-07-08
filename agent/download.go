@@ -189,18 +189,18 @@ func (d Download) try(ctx context.Context) error {
 		return fmt.Errorf("closing temp file (%T: %w)", err, err)
 	}
 
-	// Rename the temp file to its intended name within the same directory.
-	// On Unix-like platforms this is generally an "atomic replace".
-	// Caveats: https://pkg.go.dev/os#Rename
-	if err := os.Rename(temp.Name(), targetPath); err != nil {
-		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
-	}
-
 	gotSHA256 := hex.EncodeToString(hash.Sum(nil))
 
 	// If the downloader was configured with a checksum to check, check it
 	if d.conf.WantSHA256 != "" && gotSHA256 != d.conf.WantSHA256 {
 		return fmt.Errorf("checksum of downloaded content %s != uploaded checksum %s", gotSHA256, d.conf.WantSHA256)
+	}
+
+	// Rename the temp file to its intended name within the same directory.
+	// On Unix-like platforms this is generally an "atomic replace".
+	// Caveats: https://pkg.go.dev/os#Rename
+	if err := os.Rename(temp.Name(), targetPath); err != nil {
+		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
 	}
 
 	d.logger.Info("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
