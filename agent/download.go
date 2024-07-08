@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,6 +39,9 @@ type DownloadConfig struct {
 
 	// How many times should it retry the download before giving up
 	Retries int
+
+	// Hexadecimal(SHA256(content)) used to verify the downloaded contents, if not empty
+	WantSHA256 string
 
 	// If failed responses should be dumped to the log
 	DebugHTTP bool
@@ -114,11 +119,11 @@ func targetPath(ctx context.Context, dlPath, destPath string) string {
 }
 
 func (d Download) try(ctx context.Context) error {
-	targetFile := targetPath(ctx, d.conf.Path, d.conf.Destination)
-	targetDirectory, _ := filepath.Split(targetFile)
+	targetPath := targetPath(ctx, d.conf.Path, d.conf.Destination)
+	targetDirectory, targetFile := filepath.Split(targetPath)
 
 	// Show a nice message that we're starting to download the file
-	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetFile)
+	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetPath)
 
 	request, err := http.NewRequestWithContext(ctx, "GET", d.conf.URL, nil)
 	if err != nil {
@@ -158,23 +163,47 @@ func (d Download) try(ctx context.Context) error {
 	// Now make the folder for our file
 	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 	if err := os.MkdirAll(targetDirectory, 0777); err != nil {
-		return fmt.Errorf("Failed to create folder for %s (%T: %w)", targetFile, err, err)
+		return fmt.Errorf("creating directory for %s (%T: %w)", targetPath, err, err)
 	}
 
-	// Create a file to handle the file
-	fileBuffer, err := os.Create(targetFile)
+	// Create a temporary file to write to.
+	temp, err := os.CreateTemp(targetDirectory, targetFile)
 	if err != nil {
-		return fmt.Errorf("Failed to create file %s (%T: %w)", targetFile, err, err)
+		return fmt.Errorf("creating temp file (%T: %w)", err, err)
 	}
-	defer fileBuffer.Close()
+	defer os.Remove(temp.Name())
+	defer temp.Close()
 
-	// Copy the data to the file
-	bytes, err := io.Copy(fileBuffer, response.Body)
+	// Create a SHA256 to hash the download as we go.
+	hash := sha256.New()
+	out := io.MultiWriter(hash, temp)
+
+	// Copy the data to the file (and hash).
+	bytes, err := io.Copy(out, response.Body)
 	if err != nil {
-		return fmt.Errorf("Error when copying data %s (%T: %w)", d.conf.URL, err, err)
+		return fmt.Errorf("copying data to temp file (%T: %w)", err, err)
 	}
 
-	d.logger.Info("Successfully downloaded \"%s\" %s", d.conf.Path, humanize.IBytes(uint64(bytes)))
+	// close must succeed for the file to be considered properly written.
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("closing temp file (%T: %w)", err, err)
+	}
+
+	// Rename the temp file to its intended name within the same directory.
+	// On Unix-like platforms this is generally an "atomic replace".
+	// Caveats: https://pkg.go.dev/os#Rename
+	if err := os.Rename(temp.Name(), targetPath); err != nil {
+		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
+	}
+
+	gotSHA256 := hex.EncodeToString(hash.Sum(nil))
+
+	// If the downloader was configured with a checksum to check, check it
+	if d.conf.WantSHA256 != "" && gotSHA256 != d.conf.WantSHA256 {
+		return fmt.Errorf("checksum of downloaded content %s != uploaded checksum %s", gotSHA256, d.conf.WantSHA256)
+	}
+
+	d.logger.Info("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
 
 	return nil
 }
