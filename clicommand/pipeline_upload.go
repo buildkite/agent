@@ -248,20 +248,9 @@ var PipelineUploadCommand = cli.Command{
 
 		environ := env.FromSlice(os.Environ())
 
-		if !cfg.NoInterpolation {
-			// Load environment to pass into parser
-
+		if !cfg.NoInterpolation { // yes, interpolation
 			// resolve BUILDKITE_COMMIT based on the local git repo
-			if commitRef, ok := environ.Get("BUILDKITE_COMMIT"); ok {
-				cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
-				if err != nil {
-					l.Warn("Error running git rev-parse %q: %v", commitRef, err)
-				} else {
-					trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-					l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
-					environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
-				}
-			}
+			resolveCommit(l, environ)
 		}
 
 		src := filename
@@ -361,6 +350,22 @@ var PipelineUploadCommand = cli.Command{
 	},
 }
 
+// resolveCommit resolves and replaces BUILDKITE_COMMIT with the resolved value.
+func resolveCommit(l logger.Logger, environ *env.Environment) {
+	commitRef, has := environ.Get("BUILDKITE_COMMIT")
+	if !has {
+		return
+	}
+	cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
+	if err != nil {
+		l.Warn("Error running git rev-parse %q: %v", commitRef, err)
+		return
+	}
+	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
+	l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
+	environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
+}
+
 func searchForSecrets(
 	l logger.Logger,
 	cfg *PipelineUploadConfig,
@@ -412,18 +417,21 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 	if err != nil && !warning.Is(err) {
 		return nil, fmt.Errorf("pipeline parsing of %q failed: %w", src, err)
 	}
-	if !cfg.NoInterpolation {
-		if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
-			if result.Env == nil {
-				result.Env = ordered.NewMap[string, string](1)
-			}
-			result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
-		}
-		preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
-		if err := result.Interpolate(environ, preferRuntimeEnv); err != nil {
-			return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
-		}
+	if cfg.NoInterpolation {
+		// Note that err may be nil or a non-nil warning from pipeline.Parse
+		return result, err
 	}
-	// err may be nil or a warning from pipeline.Parse
+	// Pass the trace context from our environment to the pipeline.
+	if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
+		if result.Env == nil {
+			result.Env = ordered.NewMap[string, string](1)
+		}
+		result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
+	}
+	// Do the interpolation.
+	preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
+	if err := result.Interpolate(environ, preferRuntimeEnv); err != nil {
+		return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
+	}
 	return result, err
 }
