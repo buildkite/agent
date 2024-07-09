@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"golang.org/x/exp/maps"
 )
@@ -43,15 +44,15 @@ func Match(logger shell.Logger, patterns []string, name string) bool {
 
 // Values returns the variable Values to be redacted, given a
 // redaction config string and an environment map.
-func Values(logger shell.Logger, patterns []string, environment map[string]string) []string {
+func Values(logger shell.Logger, patterns []string, environment []env.Pair) []string {
 	vars := Vars(logger, patterns, environment)
 	if len(vars) == 0 {
 		return nil
 	}
 
 	vals := make([]string, 0, len(vars))
-	for _, val := range vars {
-		vals = append(vals, val)
+	for _, pair := range vars {
+		vals = append(vals, pair.Value)
 	}
 
 	return vals
@@ -59,25 +60,25 @@ func Values(logger shell.Logger, patterns []string, environment map[string]strin
 
 // Vars returns the variable names and values to be redacted, given a
 // redaction config string and an environment map.
-func Vars(logger shell.Logger, patterns []string, environment map[string]string) map[string]string {
-	vars := make(map[string]string)
+func Vars(logger shell.Logger, patterns []string, environment []env.Pair) []env.Pair {
+	var vars []env.Pair
 	shortVars := make(map[string]struct{})
 
-	for name, val := range environment {
+	for _, pair := range environment {
 		// Does the name match any of the patterns?
-		if !Match(logger, patterns, name) {
+		if !Match(logger, patterns, pair.Name) {
 			continue
 		}
 
 		// The name matched, now test the length of the value.
-		if len(val) < LengthMin {
-			if len(val) > 0 {
-				shortVars[name] = struct{}{}
+		if len(pair.Value) < LengthMin {
+			if len(pair.Value) > 0 {
+				shortVars[pair.Name] = struct{}{}
 			}
 			continue
 		}
 
-		vars[name] = val
+		vars = append(vars, pair)
 	}
 
 	if len(shortVars) > 0 {

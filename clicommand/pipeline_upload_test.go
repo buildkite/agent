@@ -23,7 +23,7 @@ func TestSearchForSecrets(t *testing.T) {
 		RejectSecrets: true,
 	}
 
-	p := &pipeline.Pipeline{
+	plainPipeline := &pipeline.Pipeline{
 		Steps: pipeline.Steps{
 			&pipeline.CommandStep{
 				Command: "secret squirrels and alpacas",
@@ -32,24 +32,74 @@ func TestSearchForSecrets(t *testing.T) {
 	}
 
 	tests := []struct {
-		desc    string
-		environ map[string]string
-		wantLog string
+		desc     string
+		environ  map[string]string
+		pipeline *pipeline.Pipeline
+		wantLog  string
 	}{
 		{
-			desc:    "no secret",
-			environ: map[string]string{"SEKRET": "llamas", "UNRELATED": "horses"},
-			wantLog: "",
+			desc:     "no secret",
+			environ:  map[string]string{"SEKRET": "llamas", "UNRELATED": "horses"},
+			pipeline: plainPipeline,
+			wantLog:  "",
 		},
 		{
-			desc:    "one secret",
-			environ: map[string]string{"SEKRET": "squirrel", "PYTHON": "not a chance"},
+			desc:     "one secret",
+			environ:  map[string]string{"SEKRET": "squirrel", "PYTHON": "not a chance"},
+			pipeline: plainPipeline,
+			wantLog:  `pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET], and cannot be uploaded to Buildkite`,
+		},
+		{
+			desc:     "two secrets",
+			environ:  map[string]string{"SEKRET": "squirrel", "SSH_KEY": "alpacas", "SPECIES": "Felix sylvestris"},
+			pipeline: plainPipeline,
+			wantLog:  `pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET SSH_KEY], and cannot be uploaded to Buildkite`,
+		},
+		{
+			desc:    "one step env secret",
+			environ: nil,
+			pipeline: &pipeline.Pipeline{
+				Steps: pipeline.Steps{
+					&pipeline.CommandStep{
+						Command: "secret squirrels and alpacas",
+						Env:     map[string]string{"SEKRET": "squirrels", "UNRELATED": "horses"},
+					},
+				},
+			},
 			wantLog: `pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET], and cannot be uploaded to Buildkite`,
 		},
 		{
-			desc:    "two secrets",
-			environ: map[string]string{"SEKRET": "squirrel", "SSH_KEY": "alpacas", "SPECIES": "Felix sylvestris"},
-			wantLog: `pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET SSH_KEY], and cannot be uploaded to Buildkite`,
+			desc:    "one step env secret within a group",
+			environ: nil,
+			pipeline: &pipeline.Pipeline{
+				Steps: pipeline.Steps{
+					&pipeline.GroupStep{
+						Steps: pipeline.Steps{
+							&pipeline.CommandStep{
+								Command: "secret squirrels and alpacas",
+								Env:     map[string]string{"SEKRET": "squirrels", "UNRELATED": "horses"},
+							},
+						},
+					},
+				},
+			},
+			wantLog: `pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET], and cannot be uploaded to Buildkite`,
+		},
+		{
+			desc:    "one pipeline env secret",
+			environ: nil,
+			pipeline: &pipeline.Pipeline{
+				Env: ordered.MapFromItems(
+					ordered.TupleSS{Key: "SEKRET", Value: "squirrel"},
+					ordered.TupleSS{Key: "UNRELATED", Value: "horses"},
+				),
+				Steps: pipeline.Steps{
+					&pipeline.CommandStep{
+						Command: "secret squirrels and alpacas",
+					},
+				},
+			},
+			wantLog: `pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET], and cannot be uploaded to Buildkite`,
 		},
 	}
 
@@ -57,7 +107,7 @@ func TestSearchForSecrets(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 			l := logger.NewBuffer()
-			err := searchForSecrets(l, cfg, test.environ, p, "cat-o-matic.yaml")
+			err := searchForSecrets(l, cfg, env.FromMap(test.environ), test.pipeline, "cat-o-matic.yaml")
 			if len(test.wantLog) == 0 {
 				assert.NilError(t, err)
 				return

@@ -67,6 +67,22 @@ func FromSlice(s []string) *Environment {
 	return env
 }
 
+// Pair is an environment variable name/value pair.
+type Pair struct{ Name, Value string }
+
+// DumpPairs returns a copy of the environment with all keys normalised.
+func (e *Environment) DumpPairs() []Pair {
+	d := make([]Pair, 0, e.underlying.Size())
+	e.underlying.Range(func(k, v string) bool {
+		d = append(d, Pair{
+			Name:  normalizeKeyName(k),
+			Value: v,
+		})
+		return true
+	})
+	return d
+}
+
 // Dump returns a copy of the environment with all keys normalized
 func (e *Environment) Dump() map[string]string {
 	d := make(map[string]string, e.underlying.Size())

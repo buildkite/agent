@@ -578,7 +578,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	e.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	e.redactors.Add(redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())...)
+	e.redactors.Add(redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())...)
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
@@ -1140,7 +1140,7 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 //
 // The returned method will remove the redactors from the Executor and Flush them.
 func (e *Executor) setupRedactors() {
-	valuesToRedact := redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())
+	valuesToRedact := redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())
 
 	if e.Debug {
 		e.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)

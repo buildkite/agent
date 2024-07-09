@@ -3,6 +3,7 @@ package redact
 import (
 	"testing"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/google/go-cmp/cmp"
 )
@@ -14,11 +15,11 @@ func TestValuesToRedact(t *testing.T) {
 		"*_PASSWORD",
 		"*_TOKEN",
 	}
-	environment := map[string]string{
-		"BUILDKITE_PIPELINE": "unit-test",
+	environment := []env.Pair{
+		{Name: "BUILDKITE_PIPELINE", Value: "unit-test"},
 		// These are example values, and are not leaked credentials
-		"DATABASE_USERNAME": "AzureDiamond",
-		"DATABASE_PASSWORD": "hunter2",
+		{Name: "DATABASE_USERNAME", Value: "AzureDiamond"},
+		{Name: "DATABASE_PASSWORD", Value: "hunter2"},
 	}
 
 	got := Values(shell.DiscardLogger, redactConfig, environment)
@@ -33,9 +34,9 @@ func TestValuesToRedactEmpty(t *testing.T) {
 	t.Parallel()
 
 	redactConfig := []string{}
-	environment := map[string]string{
-		"FOO":                "BAR",
-		"BUILDKITE_PIPELINE": "unit-test",
+	environment := []env.Pair{
+		{Name: "FOO", Value: "BAR"},
+		{Name: "BUILDKITE_PIPELINE", Value: "unit-test"},
 	}
 
 	got := Values(shell.DiscardLogger, redactConfig, environment)
