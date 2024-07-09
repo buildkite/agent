@@ -128,6 +128,7 @@ steps:
           - with: { os: linux, arch: ppc64le }
           - with: { os: linux, arch: mips64le }
           - with: { os: linux, arch: s390x }
+          - with: { os: linux, arch: riscv64 }
 
           - with: { os: netbsd, arch: amd64 }
 
