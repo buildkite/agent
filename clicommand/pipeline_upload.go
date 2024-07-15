@@ -28,6 +28,7 @@ import (
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
+	"github.com/buildkite/interpolate"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
@@ -397,6 +398,22 @@ func allEnvVars(o any, f func(p env.Pair)) {
 	}
 }
 
+// isPureSubstitution reports whether value is a shell variable substitution
+// without any default or surrounding text.
+func isPureSubstitution(value string) bool {
+	if !strings.HasPrefix(value, "$") {
+		return false
+	}
+	interp, err := interpolate.Interpolate(nil, value)
+	if err != nil {
+		// Wasn't a valid substitution.
+		return false
+	}
+	// If it was purely a substitution, then the interpolation result using an
+	// empty env should be empty.
+	return interp == ""
+}
+
 func searchForSecrets(
 	l logger.Logger,
 	cfg *PipelineUploadConfig,
@@ -414,11 +431,22 @@ func searchForSecrets(
 	// it's not a secret that needs rejecting from the upload!
 	var allVars []env.Pair
 	allEnvVars(pp, func(pair env.Pair) {
+		// Variables declared within the pipeline might look like this after
+		// interpolation:
+		//
+		//   env:
+		//     MY_SECRET: $RUNTIME_SECRET
+		//
+		// MY_SECRET is actually defined at job runtime, not now, and its
+		// value is not currently known. So it's not a secret. We can skip it.
+		if isPureSubstitution(pair.Value) {
+			return
+		}
 		allVars = append(allVars, pair)
 	})
 
 	// Unlike env vars from the env, we know these exist in the pipeline YAML!
-	// So we can declare the secrets to be found.
+	// So we can declare the secrets to be found if they match the usual rules.
 	matched, short, err := redact.Vars(cfg.RedactedVars, allVars)
 	if err != nil {
 		l.Warn("Couldn't match environment variable names against redacted-vars: %v", err)
