@@ -38,7 +38,11 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_TOKEN", token)
 
-	if redact.Match(e.shell.Logger, e.RedactedVars, "BUILDKITE_AGENT_JOB_API_TOKEN") {
+	matched, err := redact.MatchAny(e.RedactedVars, "BUILDKITE_AGENT_JOB_API_TOKEN")
+	if err != nil {
+		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against -redacted-vars: %v", err)
+	}
+	if matched {
 		// The Job API token lets the job talk to this executor. When the job ends,
 		// the socket should be closed and the token becomes meaningless. Also, the
 		// socket should only be accessible to the user running the agent on the

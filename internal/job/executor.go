@@ -578,7 +578,18 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	e.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	e.redactors.Add(redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())...)
+	toRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())
+	if err != nil {
+		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	if len(short) > 0 {
+		slices.Sort(short)
+		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+	}
+
+	for _, pair := range toRedact {
+		e.redactors.Add(pair.Value)
+	}
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
@@ -1140,20 +1151,32 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 //
 // The returned method will remove the redactors from the Executor and Flush them.
 func (e *Executor) setupRedactors() {
-	valuesToRedact := redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())
+	varsToRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())
+	if err != nil {
+		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	if len(short) > 0 {
+		slices.Sort(short)
+		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+	}
 
 	if e.Debug {
 		e.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
+	}
+
+	needles := make([]string, 0, len(varsToRedact))
+	for _, pair := range varsToRedact {
+		needles = append(needles, pair.Value)
 	}
 
 	// If the shell Writer is already a Replacer, reset the values to redact.
 	if rdc, ok := e.shell.Writer.(*replacer.Replacer); ok {
 		// There may have been some redactees in the redactor already, so we
 		// propagate them to any new redactor.
-		valuesToRedact = append(valuesToRedact, rdc.Needles()...)
+		needles = append(needles, rdc.Needles()...)
 		e.redactors.Append(rdc)
 	} else {
-		rdc := replacer.New(e.shell.Writer, valuesToRedact, redact.Redact)
+		rdc := replacer.New(e.shell.Writer, needles, redact.Redact)
 		e.shell.Writer = rdc
 		e.redactors.Append(rdc)
 	}
@@ -1172,15 +1195,15 @@ func (e *Executor) setupRedactors() {
 	if rdc := shellLoggerRedactor; rdc != nil {
 		// There may have been some redactees in the redactor already, so we
 		// propagate them to any new redactor.
-		valuesToRedact = append(valuesToRedact, rdc.Needles()...)
+		needles = append(needles, rdc.Needles()...)
 		e.redactors.Append(rdc)
 	} else if shellWriterLogger != nil {
-		rdc := replacer.New(e.shell.Writer, valuesToRedact, redact.Redact)
+		rdc := replacer.New(e.shell.Writer, needles, redact.Redact)
 		shellWriterLogger.Writer = rdc
 		e.redactors.Append(rdc)
 	}
 
-	e.redactors.Add(valuesToRedact...)
+	e.redactors.Add(needles...)
 }
 
 func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernetes.Client) error {

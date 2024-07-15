@@ -18,7 +18,6 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/stdin"
@@ -406,6 +405,7 @@ func searchForSecrets(
 	src string,
 ) error {
 	secretsFound := make(map[string]struct{})
+	shortValues := make(map[string]struct{})
 
 	// The pipeline being uploaded can also contain secret-shaped environment
 	// variables in the env maps strewn throughout the pipeline (pipeline env
@@ -418,18 +418,31 @@ func searchForSecrets(
 	})
 
 	// Unlike env vars from the env, we know these exist in the pipeline YAML!
-	// So we don't need to scan the pipeline for their values.
-	for _, pair := range redact.Vars(shell.StderrLogger, cfg.RedactedVars, allVars) {
+	// So we can declare the secrets to be found.
+	matched, short, err := redact.Vars(cfg.RedactedVars, allVars)
+	if err != nil {
+		l.Warn("Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	for _, name := range short {
+		shortValues[name] = struct{}{}
+	}
+	for _, pair := range matched {
 		secretsFound[pair.Name] = struct{}{}
 	}
 
 	// Now consider env vars from the environment.
 	// Filter these down to the vars normally redacted.
-	vars := redact.Vars(shell.StderrLogger, cfg.RedactedVars, environ.DumpPairs())
+	matched, short, err = redact.Vars(cfg.RedactedVars, environ.DumpPairs())
+	if err != nil {
+		l.Warn("Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	for _, name := range short {
+		shortValues[name] = struct{}{}
+	}
 
 	// Create a slice of values to search the pipeline for.
-	needles := make([]string, 0, len(vars))
-	for _, pair := range vars {
+	needles := make([]string, 0, len(matched))
+	for _, pair := range matched {
 		needles = append(needles, pair.Value)
 	}
 
@@ -438,7 +451,7 @@ func searchForSecrets(
 		// It matched some of the needles, but which ones?
 		// (This information could be plumbed through the replacer, if
 		// we wanted to make it even more complicated.)
-		for _, pair := range vars {
+		for _, pair := range matched {
 			if strings.Contains(string(found), pair.Value) {
 				secretsFound[pair.Name] = struct{}{}
 			}
@@ -449,6 +462,12 @@ func searchForSecrets(
 	// Encode the pipeline as JSON into the searcher.
 	if err := json.NewEncoder(searcher).Encode(pp); err != nil {
 		return fmt.Errorf("couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%w)", src, err)
+	}
+
+	if len(shortValues) > 0 {
+		vars := maps.Keys(shortValues)
+		slices.Sort(vars)
+		l.Warn("Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(vars, ", "))
 	}
 
 	if len(secretsFound) > 0 {
