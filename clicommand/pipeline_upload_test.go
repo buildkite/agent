@@ -61,7 +61,7 @@ func TestSearchForSecrets(t *testing.T) {
 			pipeline: &pipeline.Pipeline{
 				Steps: pipeline.Steps{
 					&pipeline.CommandStep{
-						Command: "secret squirrels and alpacas",
+						Command: "secret llamas and alpacas",
 						Env:     map[string]string{"SEKRET": "squirrels", "UNRELATED": "horses"},
 					},
 				},
@@ -76,7 +76,7 @@ func TestSearchForSecrets(t *testing.T) {
 					&pipeline.GroupStep{
 						Steps: pipeline.Steps{
 							&pipeline.CommandStep{
-								Command: "secret squirrels and alpacas",
+								Command: "secret llamas and alpacas",
 								Env:     map[string]string{"SEKRET": "squirrels", "UNRELATED": "horses"},
 							},
 						},
@@ -95,7 +95,7 @@ func TestSearchForSecrets(t *testing.T) {
 				),
 				Steps: pipeline.Steps{
 					&pipeline.CommandStep{
-						Command: "secret squirrels and alpacas",
+						Command: "secret llamas and alpacas",
 					},
 				},
 			},

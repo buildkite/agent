@@ -405,29 +405,35 @@ func searchForSecrets(
 	pp *pipeline.Pipeline,
 	src string,
 ) error {
-	// In other parts of the agent, only the process environment is considered
-	// as potentially containing secrets (to redact from logs).
-	// The process environment here can definitely contain secrets, but the
-	// pipeline being uploaded can also contain secret-shaped environment
+	secretsFound := make(map[string]struct{})
+
+	// The pipeline being uploaded can also contain secret-shaped environment
 	// variables in the env maps strewn throughout the pipeline (pipeline env
 	// and step env).
 	// Just because it's a variable written in the pipeline YAML, doesn't mean
 	// it's not a secret that needs rejecting from the upload!
-	// Therefore, gather all environment variables from the pipeline.
-	allVars := environ.DumpPairs()
+	var allVars []env.Pair
 	allEnvVars(pp, func(pair env.Pair) {
 		allVars = append(allVars, pair)
 	})
 
-	// Filter down to vars to redact, and a slice with just their values.
-	vars := redact.Vars(shell.StderrLogger, cfg.RedactedVars, allVars)
+	// Unlike env vars from the env, we know these exist in the pipeline YAML!
+	// So we don't need to scan the pipeline for their values.
+	for _, pair := range redact.Vars(shell.StderrLogger, cfg.RedactedVars, allVars) {
+		secretsFound[pair.Name] = struct{}{}
+	}
+
+	// Now consider env vars from the environment.
+	// Filter these down to the vars normally redacted.
+	vars := redact.Vars(shell.StderrLogger, cfg.RedactedVars, environ.DumpPairs())
+
+	// Create a slice of values to search the pipeline for.
 	needles := make([]string, 0, len(vars))
 	for _, pair := range vars {
 		needles = append(needles, pair.Value)
 	}
 
 	// Use a streaming replacer as a string searcher.
-	secretsFound := make(map[string]struct{})
 	searcher := replacer.New(io.Discard, needles, func(found []byte) []byte {
 		// It matched some of the needles, but which ones?
 		// (This information could be plumbed through the replacer, if
