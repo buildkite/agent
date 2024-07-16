@@ -254,10 +254,12 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key jwk.K
 	}
 
 	parsedPipeline, err := pipeline.Parse(bytes.NewReader(pipelineBytes))
-	if w := warning.As(err); w != nil {
+	if err != nil {
+		w := warning.As(err)
+		if w == nil {
+			return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
+		}
 		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
-	} else if err != nil {
-		return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
 	}
 
 	if cfg.Debug {
@@ -318,10 +320,12 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key j
 	}
 
 	parsedPipeline, err := pipeline.Parse(strings.NewReader(pipelineString))
-	if w := warning.As(err); w != nil {
+	if err != nil {
+		w := warning.As(err)
+		if w == nil {
+			return fmt.Errorf("pipeline parsing failed: %w", err)
+		}
 		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
-	} else if err != nil {
-		return fmt.Errorf("pipeline parsing failed: %w", err)
 	}
 
 	if cfg.Debug {
