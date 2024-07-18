@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.74.2](https://github.com/buildkite/agent/tree/v3.74.2) (2024-07-16)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.74.1...v3.74.2)
+
+### Added
+- Introduce `riscv64` architecture [#2877](https://github.com/buildkite/agent/pull/2877) (@TimePrinciple)
+
+### Changed
+- SUP-2343: remove "retry" example from "buildkite-agent step get" as not valid [#2879](https://github.com/buildkite/agent/pull/2879) (@tomowatt)
+- Reject more secrets [#2884](https://github.com/buildkite/agent/pull/2884) (@DrJosh9000)
+- Include repo name in Packages image path [#2871](https://github.com/buildkite/agent/pull/2871) (@swebb)
+
+### Fixed
+- Fix some common artifact download bugs [#2878](https://github.com/buildkite/agent/pull/2878) (@DrJosh9000)
+
+### Internal
+- Update LICENSE.txt [#2885](https://github.com/buildkite/agent/pull/2885) (@wooly)
+- Remove Packagecloud agent publish steps from agent pipeline [#2873](https://github.com/buildkite/agent/pull/2873) (@tommeier)
+- Release Docker images on Buildkite Packages [#2837](https://github.com/buildkite/agent/pull/2837) (@swebb)
+- Fix the OIDC login for Packages [#2875](https://github.com/buildkite/agent/pull/2875) (@swebb)
+- Fix the Packages registry name [#2874](https://github.com/buildkite/agent/pull/2874) (@swebb)
+- Fix image name when pushing to Buildkite packages [#2870](https://github.com/buildkite/agent/pull/2870) (@swebb)
+- Dependabot updates: [#2888](https://github.com/buildkite/agent/pull/2888), [#2887](https://github.com/buildkite/agent/pull/2887), [#2882](https://github.com/buildkite/agent/pull/2882), [#2883](https://github.com/buildkite/agent/pull/2883), [#2880](https://github.com/buildkite/agent/pull/2880) (@dependabot[bot])
+
 ## [v3.74.1](https://github.com/buildkite/agent/tree/v3.74.1) (2024-07-03)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.74.0...v3.74.1)
 
