@@ -34,3 +34,6 @@ rm -rf releases
 
 # Loop over all the binaries and build them
 ls pkg/* | xargs -I {} bash -c "build {}"
+
+# Add a SHA256SUMS file
+(cd releases ; sha256sum * > "buildkite-agent-${AGENT_VERSION}.SHA256SUMS")
