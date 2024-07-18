@@ -40,6 +40,13 @@ release_image() {
   dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://docker.io/buildkite/${target_image}:${tag}"
   echo "--- :github: Copying ${target_image}:${tag} to GHCR"
   dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://ghcr.io/buildkite/${target_image}:${tag}"
+
+  # OIDC tokens only last 5 minutes, and issuing them is cheap, so log in as close as possible to the push
+  buildkite-agent oidc request-token \
+    --audience "https://packages.buildkite.com/buildkite/agent-docker" \
+    --lifetime 300 \
+    | docker login packages.buildkite.com/buildkite/agent-docker --username=buildkite --password-stdin
+
   echo "--- :buildkite: Copying ${target_image}:${tag} to Buildkite Packages"
   dry_run skopeo copy --multi-arch all "docker://${source_image}" "docker://packages.buildkite.com/buildkite/agent-docker/${target_image}:${tag}"
 }
