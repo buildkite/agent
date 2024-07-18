@@ -1,15 +1,18 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 echo '--- Getting agent version from build meta data'
 
-export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
-export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
-export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
+FULL_AGENT_VERSION="$(buildkite-agent meta-data get "agent-version-full")"
+AGENT_VERSION="$(buildkite-agent meta-data get "agent-version")"
+BUILD_VERSION="$(buildkite-agent meta-data get "agent-version-build")"
+export FULL_AGENT_VERSION
+export AGENT_VERSION
+export BUILD_VERSION
 
-echo "Full agent version: $FULL_AGENT_VERSION"
-echo "Agent version: $AGENT_VERSION"
-echo "Build version: $BUILD_VERSION"
+echo "Full agent version: ${FULL_AGENT_VERSION}"
+echo "Agent version: ${AGENT_VERSION}"
+echo "Build version: ${BUILD_VERSION}"
 
 echo '--- Downloading binaries'
 
@@ -20,7 +23,7 @@ buildkite-agent artifact download "pkg/*" .
 function build() {
   echo "--- Building release for: $1"
 
-  ./scripts/build-github-release.sh $1 $AGENT_VERSION
+  ./scripts/build-github-release.sh $1 "${AGENT_VERSION}"
 }
 
 # Export the function so we can use it in xargs
@@ -31,3 +34,6 @@ rm -rf releases
 
 # Loop over all the binaries and build them
 ls pkg/* | xargs -I {} bash -c "build {}"
+
+# Add a SHA256SUMS file
+(cd releases ; sha256sum * > "buildkite-agent-${AGENT_VERSION}.SHA256SUMS")
