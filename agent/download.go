@@ -24,6 +24,9 @@ const (
 	headerUserAgent = "User-Agent"
 )
 
+// Real umask set by init func in download_unix.go. 0o022 is a common default.
+var umask = os.FileMode(0o022)
+
 type DownloadConfig struct {
 	// The actual URL to get the file from
 	URL string
@@ -182,6 +185,13 @@ func (d Download) try(ctx context.Context) error {
 	bytes, err := io.Copy(out, response.Body)
 	if err != nil {
 		return fmt.Errorf("copying data to temp file (%T: %w)", err, err)
+	}
+
+	// os.CreateTemp uses 0o600 permissions, but in the past we used os.Create
+	// which uses 0x666. Since these are set at open time, they are restricted
+	// by umask.
+	if err := temp.Chmod(0o666 &^ umask); err != nil {
+		return fmt.Errorf("setting file permissions (%T: %w)", err, err)
 	}
 
 	// close must succeed for the file to be considered properly written.
