@@ -121,13 +121,9 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	defer stopper()
 	defer func() { span.FinishWithError(err) }()
 
-	// kind of a weird series of events - wrap a context in a cancellation (at the top of the func), then pull the cancellation
-	// out again, but some of the stuff we need to do in the executor (namely the teardown) needs to be able to "survive"
-	// a cancellation so we need to be able to pass a cancellable context to the non-teardown stuff, and an uncancellable
-	// context to the teardown stuff
-	nonCancelCtx := context.WithoutCancel(ctx)
-
-	// Listen for cancellation
+	// Listen for cancellation. Once ctx is cancelled, some tasks can run
+	// afterwards during the signal grace period. These use graceCtx.
+	graceCtx := withGracePeriod(ctx, e.SignalGracePeriod)
 	go func() {
 		<-e.cancelCh
 		e.shell.Commentf("Received cancellation signal, interrupting")
@@ -151,7 +147,9 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
-		if err = e.tearDown(nonCancelCtx); err != nil {
+		// We strive to let the executor tear-down happen whether or not the job
+		// (and thus ctx) is cancelled, so it can run during the grace period.
+		if err := e.tearDown(graceCtx); err != nil {
 			e.shell.Errorf("Error tearing down job executor: %v", err)
 
 			// this gets passed back via the named return
