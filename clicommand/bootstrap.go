@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/process"
@@ -91,6 +90,7 @@ type BootstrapConfig struct {
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
 	CancelSignal                 string   `cli:"cancel-signal"`
+	CancelGracePeriod            int      `cli:"cancel-grace-period"`
 	SignalGracePeriodSeconds     int      `cli:"signal-grace-period-seconds"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
@@ -371,6 +371,7 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_CONTAINER_ID",
 		},
 		cancelSignalFlag,
+		cancelGracePeriodFlag,
 		signalGracePeriodSecondsFlag,
 
 		// Global flags
@@ -408,7 +409,10 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
-		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
+		signalGracePeriod, err := signalGracePeriod(cfg.CancelGracePeriod, cfg.SignalGracePeriodSeconds)
+		if err != nil {
+			return err
+		}
 
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{

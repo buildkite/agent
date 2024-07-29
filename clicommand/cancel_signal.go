@@ -1,6 +1,11 @@
 package clicommand
 
-import "github.com/urfave/cli"
+import (
+	"fmt"
+	"time"
+
+	"github.com/urfave/cli"
+)
 
 const (
 	defaultCancelGracePeriod = 10
@@ -30,3 +35,33 @@ var (
 		Value:  -1,
 	}
 )
+
+// signalGracePeriod computes the signal grace period based on the various
+// possible flag configurations:
+//   - If signalGracePeriodSecs is negative, it is relative to
+//     cancelGracePeriodSecs.
+//   - If cancelGracePeriodSecs is less than signalGracePeriodSecs that is an
+//     error.
+func signalGracePeriod(cancelGracePeriodSecs, signalGracePeriodSecs int) (time.Duration, error) {
+	// Treat a negative signal grace period as relative to the cancel grace period
+	if signalGracePeriodSecs < 0 {
+		if cancelGracePeriodSecs < -signalGracePeriodSecs {
+			return 0, fmt.Errorf(
+				"cancel-grace-period (%d) must be at least as big as signal-grace-period-seconds (%d)",
+				cancelGracePeriodSecs,
+				signalGracePeriodSecs,
+			)
+		}
+		signalGracePeriodSecs = cancelGracePeriodSecs + signalGracePeriodSecs
+	}
+
+	if cancelGracePeriodSecs <= signalGracePeriodSecs {
+		return 0, fmt.Errorf(
+			"cancel-grace-period (%d) must be greater than signal-grace-period-seconds (%d)",
+			cancelGracePeriodSecs,
+			signalGracePeriodSecs,
+		)
+	}
+
+	return time.Duration(signalGracePeriodSecs) * time.Second, nil
+}
