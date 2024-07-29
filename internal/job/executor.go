@@ -235,8 +235,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			span.RecordError(commandErr)
 		}
 
-		// Only upload artifacts as part of the command phase
-		if err = e.artifactPhase(ctx); err != nil {
+		// Only upload artifacts as part of the command phase.
+		// The artifacts might be relevant for debugging job timeouts, so it can
+		// run during the grace period.
+		if err := e.artifactPhase(graceCtx); err != nil {
 			e.shell.Errorf("%v", err)
 
 			if commandErr != nil {
