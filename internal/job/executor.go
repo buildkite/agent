@@ -121,13 +121,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	defer stopper()
 	defer func() { span.FinishWithError(err) }()
 
-	// kind of a weird series of events - wrap a context in a cancellation (at the top of the func), then pull the cancellation
-	// out again, but some of the stuff we need to do in the executor (namely the teardown) needs to be able to "survive"
-	// a cancellation so we need to be able to pass a cancellable context to the non-teardown stuff, and an uncancellable
-	// context to the teardown stuff
-	nonCancelCtx := context.WithoutCancel(ctx)
-
-	// Listen for cancellation
+	// Listen for cancellation. Once ctx is cancelled, some tasks can run
+	// afterwards during the signal grace period. These use graceCtx.
+	graceCtx, graceCancel := withGracePeriod(ctx, e.SignalGracePeriod)
+	defer graceCancel()
 	go func() {
 		<-e.cancelCh
 		e.shell.Commentf("Received cancellation signal, interrupting")
@@ -151,7 +148,9 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
-		if err = e.tearDown(nonCancelCtx); err != nil {
+		// We strive to let the executor tear-down happen whether or not the job
+		// (and thus ctx) is cancelled, so it can run during the grace period.
+		if err := e.tearDown(graceCtx); err != nil {
 			e.shell.Errorf("Error tearing down job executor: %v", err)
 
 			// this gets passed back via the named return
@@ -237,8 +236,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			span.RecordError(commandErr)
 		}
 
-		// Only upload artifacts as part of the command phase
-		if err = e.artifactPhase(ctx); err != nil {
+		// Only upload artifacts as part of the command phase.
+		// The artifacts might be relevant for debugging job timeouts, so it can
+		// run during the grace period.
+		if err := e.artifactPhase(graceCtx); err != nil {
 			e.shell.Errorf("%v", err)
 
 			if commandErr != nil {
@@ -831,58 +832,48 @@ func (e *Executor) tearDown(ctx context.Context) error {
 }
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
-func (e *Executor) runPreCommandHooks(ctx context.Context) error {
+func (e *Executor) runPreCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-command"); err != nil {
+	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "pre-command"); err != nil {
+	if err := e.executeLocalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = e.executePluginHook(ctx, "pre-command", e.pluginCheckouts); err != nil {
-		return err
-	}
-	return nil
+	return e.executePluginHook(ctx, "pre-command", e.pluginCheckouts)
 }
 
 // runCommand runs the command and adds tracing spans.
 func (e *Executor) runCommand(ctx context.Context) error {
-	var err error
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case e.hasPluginHook("command"):
-		err = e.executePluginHook(ctx, "command", e.pluginCheckouts)
+		return e.executePluginHook(ctx, "command", e.pluginCheckouts)
 	case e.hasLocalHook("command"):
-		err = e.executeLocalHook(ctx, "command")
+		return e.executeLocalHook(ctx, "command")
 	case e.hasGlobalHook("command"):
-		err = e.executeGlobalHook(ctx, "command")
+		return e.executeGlobalHook(ctx, "command")
 	default:
-		err = e.defaultCommandPhase(ctx)
+		return e.defaultCommandPhase(ctx)
 	}
-	return err
 }
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
-func (e *Executor) runPostCommandHooks(ctx context.Context) error {
+func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "post-command"); err != nil {
+	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "post-command"); err != nil {
+	if err := e.executeLocalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = e.executePluginHook(ctx, "post-command", e.pluginCheckouts); err != nil {
-		return err
-	}
-	return nil
+	return e.executePluginHook(ctx, "post-command", e.pluginCheckouts)
 }
 
 // CommandPhase determines how to run the build, and then runs it
@@ -900,7 +891,11 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 		if preCommandErr != nil {
 			return
 		}
-		hookErr = e.runPostCommandHooks(ctx)
+		// Because post-command hooks are often used for post-job cleanup, they
+		// can run during the grace period.
+		graceCtx, cancel := withGracePeriod(ctx, e.SignalGracePeriod)
+		defer cancel()
+		hookErr = e.runPostCommandHooks(graceCtx)
 	}()
 
 	// Run pre-command hooks
