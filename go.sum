@@ -35,8 +35,8 @@ github.com/DataDog/gostackparse v0.7.0 h1:i7dLkXHvYzHV308hnkvVGDL3BR4FWl7IsXNPz/
 github.com/DataDog/gostackparse v0.7.0/go.mod h1:lTfqcJKqS9KnXQGnyQMCugq3u1FP6UZMfWR0aitKFMM=
 github.com/DataDog/sketches-go v1.4.5 h1:ki7VfeNz7IcNafq7yI/j5U/YCkO3LJiMDtXz9OMQbyE=
 github.com/DataDog/sketches-go v1.4.5/go.mod h1:7Y8GN8Jf66DLyDhc94zuWA3uHEt/7ttt8jHOBWWrSOg=
-github.com/DrJosh9000/zzglob v0.2.0 h1:/emTm1QHFXZZlRark33J8KiHrSNMIXDYXVY0jDjsSa4=
-github.com/DrJosh9000/zzglob v0.2.0/go.mod h1:+iLI/qvROFsS1A/jl+B8MVYNu/0cjveYOJqU37O8fcs=
+github.com/DrJosh9000/zzglob v0.3.1 h1:Ffthy/AxQ6nyEC3c7n3qGCd4CajZWMrdYjcdaYXTFeI=
+github.com/DrJosh9000/zzglob v0.3.1/go.mod h1:rMssZ45uIKN5WFJWLonPnC+fJTULGts9mjM7JjdF7UI=
 github.com/Khan/genqlient v0.7.0 h1:GZ1meyRnzcDTK48EjqB8t3bcfYvHArCUUvgOwpz1D4w=
 github.com/Khan/genqlient v0.7.0/go.mod h1:HNyy3wZvuYwmW3Y7mkoQLZsa/R5n5yIRajS1kPBvSFM=
 github.com/Microsoft/go-winio v0.5.0/go.mod h1:JPGBdM1cNvN/6ISo+n8V5iA4v8pBzdOpzfwIujj1a84=
