@@ -831,58 +831,48 @@ func (e *Executor) tearDown(ctx context.Context) error {
 }
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
-func (e *Executor) runPreCommandHooks(ctx context.Context) error {
+func (e *Executor) runPreCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-command"); err != nil {
+	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "pre-command"); err != nil {
+	if err := e.executeLocalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = e.executePluginHook(ctx, "pre-command", e.pluginCheckouts); err != nil {
-		return err
-	}
-	return nil
+	return e.executePluginHook(ctx, "pre-command", e.pluginCheckouts)
 }
 
 // runCommand runs the command and adds tracing spans.
 func (e *Executor) runCommand(ctx context.Context) error {
-	var err error
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case e.hasPluginHook("command"):
-		err = e.executePluginHook(ctx, "command", e.pluginCheckouts)
+		return e.executePluginHook(ctx, "command", e.pluginCheckouts)
 	case e.hasLocalHook("command"):
-		err = e.executeLocalHook(ctx, "command")
+		return e.executeLocalHook(ctx, "command")
 	case e.hasGlobalHook("command"):
-		err = e.executeGlobalHook(ctx, "command")
+		return e.executeGlobalHook(ctx, "command")
 	default:
-		err = e.defaultCommandPhase(ctx)
+		return e.defaultCommandPhase(ctx)
 	}
-	return err
 }
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
-func (e *Executor) runPostCommandHooks(ctx context.Context) error {
+func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "post-command"); err != nil {
+	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "post-command"); err != nil {
+	if err := e.executeLocalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = e.executePluginHook(ctx, "post-command", e.pluginCheckouts); err != nil {
-		return err
-	}
-	return nil
+	return e.executePluginHook(ctx, "post-command", e.pluginCheckouts)
 }
 
 // CommandPhase determines how to run the build, and then runs it
