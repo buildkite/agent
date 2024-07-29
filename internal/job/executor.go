@@ -900,7 +900,9 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 		if preCommandErr != nil {
 			return
 		}
-		hookErr = e.runPostCommandHooks(ctx)
+		// Because post-command hooks are often used for post-job cleanup, they
+		// can run during the grace period.
+		hookErr = e.runPostCommandHooks(withGracePeriod(ctx, e.SignalGracePeriod))
 	}()
 
 	// Run pre-command hooks
