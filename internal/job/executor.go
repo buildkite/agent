@@ -123,7 +123,8 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Listen for cancellation. Once ctx is cancelled, some tasks can run
 	// afterwards during the signal grace period. These use graceCtx.
-	graceCtx := withGracePeriod(ctx, e.SignalGracePeriod)
+	graceCtx, graceCancel := withGracePeriod(ctx, e.SignalGracePeriod)
+	defer graceCancel()
 	go func() {
 		<-e.cancelCh
 		e.shell.Commentf("Received cancellation signal, interrupting")
@@ -892,7 +893,9 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 		}
 		// Because post-command hooks are often used for post-job cleanup, they
 		// can run during the grace period.
-		hookErr = e.runPostCommandHooks(withGracePeriod(ctx, e.SignalGracePeriod))
+		graceCtx, cancel := withGracePeriod(ctx, e.SignalGracePeriod)
+		defer cancel()
+		hookErr = e.runPostCommandHooks(graceCtx)
 	}()
 
 	// Run pre-command hooks

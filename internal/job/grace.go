@@ -11,12 +11,17 @@ import (
 // extra goroutine. However, we need to enforce the signal grace period from
 // within the job executor for use-cases where the executor is _not_ forked from
 // something else that will enforce the grace period (with SIGKILL).
-func withGracePeriod(ctx context.Context, graceTimeout time.Duration) context.Context {
+func withGracePeriod(ctx context.Context, graceTimeout time.Duration) (context.Context, context.CancelFunc) {
 	gctx, cancel := context.WithCancelCause(context.WithoutCancel(ctx))
 	go func() {
 		<-ctx.Done()
-		time.Sleep(graceTimeout)
-		cancel(context.DeadlineExceeded)
+		select {
+		case <-time.After(graceTimeout):
+			cancel(context.DeadlineExceeded)
+
+		case <-gctx.Done():
+			// This can happen if the caller called the cancel func.
+		}
 	}()
-	return gctx
+	return gctx, func() { cancel(context.Canceled) }
 }
