@@ -5,7 +5,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,10 +84,7 @@ func NewClient(l logger.Logger, conf Config) *Client {
 			MaxIdleConns:        100,
 			IdleConnTimeout:     90 * time.Second,
 			TLSHandshakeTimeout: 30 * time.Second,
-		}
-
-		if conf.DisableHTTP2 {
-			t.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+			ForceAttemptHTTP2:   !conf.DisableHTTP2, // HTTP2 is enabled by default
 		}
 
 		httpClient = &http.Client{
