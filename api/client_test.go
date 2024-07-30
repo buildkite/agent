@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestRegisteringAndConnectingClient(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/register":
 			if got, want := authToken(req), "llamas"; got != want {
@@ -37,16 +38,21 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	}))
 	defer server.Close()
 
+	// enable HTTP/2.0 to ensure the client can handle defaults to using it
+	server.EnableHTTP2 = true
+	server.StartTLS()
+
 	ctx := context.Background()
 
 	// Initial client with a registration token
 	c := api.NewClient(logger.Discard, api.Config{
-		Endpoint: server.URL,
-		Token:    "llamas",
+		Endpoint:  server.URL,
+		Token:     "llamas",
+		TLSConfig: &tls.Config{InsecureSkipVerify: true},
 	})
 
 	// Check a register works
-	regResp, _, err := c.Register(ctx, &api.AgentRegisterRequest{})
+	regResp, httpResp, err := c.Register(ctx, &api.AgentRegisterRequest{})
 	if err != nil {
 		t.Fatalf("c.Register(&AgentRegisterRequest{}) error = %v", err)
 	}
@@ -57,6 +63,10 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 
 	if got, want := regResp.AccessToken, "alpacas"; got != want {
 		t.Errorf("regResp.AccessToken = %q, want %q", got, want)
+	}
+
+	if got, want := httpResp.Proto, "HTTP/2.0"; got != want {
+		t.Errorf("httpResp.Proto = %q, want %q", got, want)
 	}
 
 	// New client with the access token

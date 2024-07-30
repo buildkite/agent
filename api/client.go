@@ -5,6 +5,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -47,6 +48,9 @@ type Config struct {
 
 	// The http client used, leave nil for the default
 	HTTPClient *http.Client
+
+	// optional TLS configuration primarily used for testing
+	TLSConfig *tls.Config
 }
 
 // A Client manages communication with the Buildkite Agent API.
@@ -85,6 +89,7 @@ func NewClient(l logger.Logger, conf Config) *Client {
 			IdleConnTimeout:     90 * time.Second,
 			TLSHandshakeTimeout: 30 * time.Second,
 			ForceAttemptHTTP2:   !conf.DisableHTTP2, // HTTP2 is enabled by default
+			TLSClientConfig:     conf.TLSConfig,
 		}
 
 		httpClient = &http.Client{
