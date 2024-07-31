@@ -492,6 +492,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(ctx), ",")
 	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
 	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.StrictSingleHooks)
+	env["BUILDKITE_CANCEL_GRACE_PERIOD"] = fmt.Sprintf("%d", r.conf.AgentConfiguration.CancelGracePeriod)
 	env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = fmt.Sprintf("%d", int(r.conf.AgentConfiguration.SignalGracePeriod/time.Second))
 
 	if r.conf.KubernetesExec {
