@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -48,6 +47,9 @@ type Config struct {
 
 	// The http client used, leave nil for the default
 	HTTPClient *http.Client
+
+	// optional TLS configuration primarily used for testing
+	TLSConfig *tls.Config
 }
 
 // A Client manages communication with the Buildkite Agent API.
@@ -74,28 +76,26 @@ func NewClient(l logger.Logger, conf Config) *Client {
 
 	httpClient := conf.HTTPClient
 	if conf.HTTPClient == nil {
-		t := &http.Transport{
-			Proxy:              http.ProxyFromEnvironment,
-			DisableCompression: false,
-			DisableKeepAlives:  false,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-			MaxIdleConns:        100,
-			IdleConnTimeout:     90 * time.Second,
-			TLSHandshakeTimeout: 30 * time.Second,
-		}
+
+		// use the default transport as it is optimized and configured for http2
+		// and will avoid accidents in the future
+		tr := http.DefaultTransport.(*http.Transport).Clone()
 
 		if conf.DisableHTTP2 {
-			t.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+			tr.ForceAttemptHTTP2 = false
+			tr.TLSNextProto = make(map[string]func(authority string, c *tls.Conn) http.RoundTripper)
+			// The default TLSClientConfig has h2 in NextProtos, so the negotiated TLS connection will assume h2 support.
+			// see https://github.com/golang/go/issues/50571
+			tr.TLSClientConfig.NextProtos = []string{"http/1.1"}
 		}
+
+		tr.TLSClientConfig = conf.TLSConfig
 
 		httpClient = &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &authenticatedTransport{
 				Token:    conf.Token,
-				Delegate: t,
+				Delegate: tr,
 			},
 		}
 	}
