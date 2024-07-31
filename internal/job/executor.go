@@ -509,7 +509,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		return err
 	}); err != nil {
 		exitCode := shell.GetExitCode(err)
-		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
+		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
 
 		// If the hook exited with a non-zero exit code, then we should pass that back to the executor
 		// so it may inform the Buildkite API
@@ -910,7 +910,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 	// error this will be zero. It's used to set the exit code later, so it's important
 	e.shell.Env.Set(
 		"BUILDKITE_COMMAND_EXIT_STATUS",
-		fmt.Sprintf("%d", shell.GetExitCode(commandErr)),
+		strconv.Itoa(shell.GetExitCode(commandErr)),
 	)
 
 	// Exit early if there was no error

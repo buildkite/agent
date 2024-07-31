@@ -4,7 +4,7 @@
 package process
 
 import (
-	"fmt"
+	"strconv"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -62,7 +62,7 @@ func GetPgid(pid int) (int, error) {
 func SignalString(s syscall.Signal) string {
 	name := unix.SignalName(s)
 	if name == "" {
-		return fmt.Sprintf("%d", int(s))
+		return strconv.Itoa(int(s))
 	}
 	return name
 }

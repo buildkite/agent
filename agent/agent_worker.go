@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -590,7 +591,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 		aj, resp, err := a.apiClient.AcquireJob(
 			timeoutCtx, jobId,
 			api.Header{Name: "X-Buildkite-Lock-Acquire-Job", Value: "1"},
-			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: fmt.Sprintf("%d", r.AttemptCount())},
+			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: strconv.Itoa(r.AttemptCount())},
 		)
 		if err != nil {
 			if resp != nil {
