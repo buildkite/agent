@@ -86,7 +86,7 @@ func NewClient(l logger.Logger, conf Config) *Client {
 			tr.TLSNextProto = make(map[string]func(authority string, c *tls.Conn) http.RoundTripper)
 			// The default TLSClientConfig has h2 in NextProtos, so the negotiated TLS connection will assume h2 support.
 			// see https://github.com/golang/go/issues/50571
-			tr.TLSClientConfig = nil
+			tr.TLSClientConfig.NextProtos = []string{"http/1.1"}
 		}
 
 		tr.TLSClientConfig = conf.TLSConfig
