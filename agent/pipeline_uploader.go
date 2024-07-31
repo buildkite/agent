@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -125,7 +126,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 			u.Change,
 			api.Header{
 				Name:  "X-Buildkite-Backoff-Sequence",
-				Value: fmt.Sprintf("%d", r.AttemptCount()),
+				Value: strconv.Itoa(r.AttemptCount()),
 			},
 		)
 		if err != nil {
@@ -185,7 +186,7 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 			u.Change.UUID,
 			api.Header{
 				Name:  "X-Buildkite-Backoff-Sequence",
-				Value: fmt.Sprintf("%d", r.AttemptCount()),
+				Value: strconv.Itoa(r.AttemptCount()),
 			},
 		)
 		if err != nil {
