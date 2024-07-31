@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/kubernetes"
@@ -20,7 +21,6 @@ import (
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/go-pipeline"
-	"github.com/buildkite/roko"
 )
 
 const (
@@ -51,7 +51,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
 	// up like started log streamer workers, and so on.
-	if err := r.startJob(ctx, r.startedAt); err != nil {
+	if err := r.client.StartJob(ctx, r.conf.Job, r.startedAt); err != nil {
 		return err
 	}
 
@@ -75,7 +75,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Default exit status is no exit status
-	exit := processExit{}
+	exit := core.ProcessExit{}
 
 	// Used to wait on various routines that we spin up
 	var wg sync.WaitGroup
@@ -270,21 +270,15 @@ func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
 	}
 }
 
-type processExit struct {
-	Status       int
-	Signal       string
-	SignalReason string
-}
-
-func (r *JobRunner) runJob(ctx context.Context) processExit {
-	exit := processExit{}
+func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
+	exit := core.ProcessExit{}
 	// Run the process. This will block until it finishes.
 	if err := r.process.Run(ctx); err != nil {
 		// Send the error to job logs
 		fmt.Fprintf(r.jobLogs, "Error running job: %s\n", err)
 
 		// The process did not run at all, so make sure it fails
-		return processExit{
+		return core.ProcessExit{
 			Status:       -1,
 			SignalReason: SignalReasonProcessRunError,
 		}
@@ -327,7 +321,7 @@ func (r *JobRunner) runJob(ctx context.Context) processExit {
 	return exit
 }
 
-func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit processExit) {
+func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit) {
 	finishedAt := time.Now()
 
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
@@ -371,56 +365,9 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit proces
 
 	// Finish the build in the Buildkite Agent API
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
-	r.finishJob(ctx, finishedAt, exit, r.logStreamer.FailedChunks())
+	r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks())
 
 	r.agentLogger.Info("Finished job %s", r.conf.Job.ID)
-}
-
-// finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
-// cannot return successfully, this will retry for a long time.
-func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exit processExit, failedChunkCount int) error {
-	r.conf.Job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
-	r.conf.Job.ExitStatus = strconv.Itoa(exit.Status)
-	r.conf.Job.Signal = exit.Signal
-	r.conf.Job.SignalReason = exit.SignalReason
-	r.conf.Job.ChunksFailedCount = failedChunkCount
-
-	r.agentLogger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
-		r.conf.Job.ExitStatus, r.conf.Job.Signal, r.conf.Job.SignalReason)
-
-	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
-	defer cancel()
-
-	return roko.NewRetrier(
-		// retry for ~a day with exponential backoff
-		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-		roko.WithMaxAttempts(20),
-		roko.WithJitter(),
-	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.FinishJob(ctx, r.conf.Job)
-		if err != nil {
-			// If the API returns with a 422, that means that we
-			// successfully tried to finish the job, but Buildkite
-			// rejected the finish for some reason. This can
-			// sometimes mean that Buildkite has cancelled the job
-			// before we get a chance to send the final API call
-			// (maybe this agent took too long to kill the
-			// process).
-			// The API may also return a 401 when job tokens
-			// are enabled.
-			// In either case, we don't want to keep trying
-			// to finish the job forever so we'll just bail out and
-			// go find some more work to do.
-			if response != nil && (response.StatusCode == 422 || response.StatusCode == 401) {
-				r.agentLogger.Warn("Buildkite rejected the call to finish the job (%s)", err)
-				retrier.Break()
-			} else {
-				r.agentLogger.Warn("%s (%s)", err, retrier)
-			}
-		}
-
-		return err
-	})
 }
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output

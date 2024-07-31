@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
 )
@@ -22,8 +23,8 @@ func TestLogStreamer(t *testing.T) {
 	)
 
 	var mu sync.Mutex
-	var got []*LogStreamerChunk
-	callback := func(ctx context.Context, chunk *LogStreamerChunk) error {
+	var got []*api.Chunk
+	callback := func(ctx context.Context, chunk *api.Chunk) error {
 		mu.Lock()
 		got = append(got, chunk)
 		mu.Unlock()
@@ -47,41 +48,41 @@ func TestLogStreamer(t *testing.T) {
 
 	ls.Stop()
 
-	want := []*LogStreamerChunk{
+	want := []*api.Chunk{
 		{
-			Data:   []byte("0123456789"),
-			Order:  1,
-			Offset: 0,
-			Size:   10,
+			Data:     []byte("0123456789"),
+			Sequence: 1,
+			Offset:   0,
+			Size:     10,
 		},
 		{
-			Data:   []byte("abcdefghij"),
-			Order:  2,
-			Offset: 10,
-			Size:   10,
+			Data:     []byte("abcdefghij"),
+			Sequence: 2,
+			Offset:   10,
+			Size:     10,
 		},
 		{
-			Data:   []byte("klmnopqrst"),
-			Order:  3,
-			Offset: 20,
-			Size:   10,
+			Data:     []byte("klmnopqrst"),
+			Sequence: 3,
+			Offset:   20,
+			Size:     10,
 		},
 		{
-			Data:   []byte("uvwxyz!@#$"),
-			Order:  4,
-			Offset: 30,
-			Size:   10,
+			Data:     []byte("uvwxyz!@#$"),
+			Sequence: 4,
+			Offset:   30,
+			Size:     10,
 		},
 		{
-			Data:   []byte("%^&*()"),
-			Order:  5,
-			Offset: 40,
-			Size:   6,
+			Data:     []byte("%^&*()"),
+			Sequence: 5,
+			Offset:   40,
+			Size:     6,
 		},
 	}
 
 	sort.Slice(got, func(i, j int) bool {
-		return got[i].Order < got[j].Order
+		return got[i].Sequence < got[j].Sequence
 	})
 
 	if diff := cmp.Diff(got, want); diff != "" {

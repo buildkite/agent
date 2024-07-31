@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/status"
 	"github.com/dustin/go-humanize"
@@ -43,10 +44,10 @@ type LogStreamer struct {
 	chunksFailedCount int32
 
 	// The callback called when a chunk is ready for upload
-	callback func(context.Context, *LogStreamerChunk) error
+	callback func(context.Context, *api.Chunk) error
 
 	// The queue of chunks that are needing to be uploaded
-	queue chan *LogStreamerChunk
+	queue chan *api.Chunk
 
 	// Total size in bytes of the log
 	bytes uint64
@@ -67,31 +68,17 @@ type LogStreamer struct {
 	stopped bool
 }
 
-type LogStreamerChunk struct {
-	// The contents of the chunk
-	Data []byte
-
-	// The sequence number of this chunk
-	Order uint64
-
-	// The byte offset of this chunk
-	Offset uint64
-
-	// The byte size of this chunk
-	Size uint64
-}
-
 // NewLogStreamer creates a new instance of the log streamer.
 func NewLogStreamer(
 	agentLogger logger.Logger,
-	callback func(context.Context, *LogStreamerChunk) error,
+	callback func(context.Context, *api.Chunk) error,
 	conf LogStreamerConfig,
 ) *LogStreamer {
 	return &LogStreamer{
 		logger:   agentLogger,
 		conf:     conf,
 		callback: callback,
-		queue:    make(chan *LogStreamerChunk, 1024),
+		queue:    make(chan *api.Chunk, 1024),
 	}
 }
 
@@ -152,11 +139,11 @@ func (ls *LogStreamer) Process(ctx context.Context, output []byte) error {
 		// Take the chunk from the start of output, leave the remainder for the
 		// next iteration.
 		ls.order++
-		chunk := &LogStreamerChunk{
-			Data:   output[:size],
-			Order:  ls.order,
-			Offset: ls.bytes,
-			Size:   size,
+		chunk := &api.Chunk{
+			Data:     output[:size],
+			Sequence: ls.order,
+			Offset:   ls.bytes,
+			Size:     size,
 		}
 		output = output[size:]
 
@@ -204,7 +191,7 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 
 		// Get the next chunk (pointer) from the queue. This will block
 		// until something is returned.
-		var chunk *LogStreamerChunk
+		var chunk *api.Chunk
 		select {
 		case chunk = <-ls.queue:
 			if chunk == nil { // channel was closed
@@ -221,7 +208,7 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 		if err != nil {
 			atomic.AddInt32(&ls.chunksFailedCount, 1)
 
-			ls.logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Order)
+			ls.logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Sequence)
 		}
 	}
 }
