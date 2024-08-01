@@ -89,7 +89,9 @@ func NewClient(l logger.Logger, conf Config) *Client {
 			tr.TLSClientConfig.NextProtos = []string{"http/1.1"}
 		}
 
-		tr.TLSClientConfig = conf.TLSConfig
+		if conf.TLSConfig != nil {
+			tr.TLSClientConfig = conf.TLSConfig
+		}
 
 		httpClient = &http.Client{
 			Timeout: 60 * time.Second,
