@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.76.2](https://github.com/buildkite/agent/tree/v3.76.2) (2024-08-01)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.76.1...v3.76.2)
+
+> [!NOTE]
+> v3.76.0 fixed an issue which caused the HTTP client in the agent to fall back to HTTP/1.1, see [#2908](https://github.com/buildkite/agent/pull/2908). If you need to disable HTTP/2.0 in your environment you can do this using the `--no-http2` flag or matching configuration option.
+
+### Fixed
+- Only override TLSClientConfig if set [#2913](https://github.com/buildkite/agent/pull/2913) (@DrJosh9000)
+
 ## [v3.76.1](https://github.com/buildkite/agent/tree/v3.76.1) (2024-07-31)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.76.0...v3.76.1)
 
