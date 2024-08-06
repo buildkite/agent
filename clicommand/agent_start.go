@@ -20,6 +20,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
@@ -1091,8 +1092,9 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, "Token"))
+		// Create the API apiClient
+		apiClient := api.NewClient(l, loadAPIClientConfig(cfg, "Token"))
+		client := &core.Client{APIClient: apiClient, Logger: l}
 
 		// The registration request for all agents
 		registerReq := api.AgentRegisterRequest{
@@ -1144,7 +1146,7 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Register the agent with the buildkite API
-			ag, err := agent.Register(ctx, l, client, registerReq)
+			ag, err := client.Register(ctx, registerReq)
 			if err != nil {
 				return err
 			}
@@ -1154,7 +1156,7 @@ var AgentStartCommand = cli.Command{
 				l.WithFields(logger.StringField("agent", ag.Name)),
 				ag,
 				mc,
-				client,
+				apiClient,
 				agent.AgentWorkerConfig{
 					AgentConfiguration: agentConf,
 					CancelSignal:       cancelSig,
@@ -1191,7 +1193,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		err = pool.Start(ctx)
-		if errors.Is(err, agent.ErrJobAcquisitionFailure) {
+		if errors.Is(err, core.ErrJobAcquisitionRejected) {
 			// If the agent tried to acquire a job, but it couldn't because the job was already taken, we should exit with a
 			// specific exit code so that the caller can know that this job can't be acquired.
 

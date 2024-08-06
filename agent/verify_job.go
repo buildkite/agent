@@ -52,7 +52,8 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet jwk.Set) error {
 	err := signature.Verify(
 		ctx,
 		step.Signature,
-		r.conf.JWKS, stepWithInvariants,
+		keySet,
+		stepWithInvariants,
 		signature.WithEnv(r.conf.Job.Env),
 		signature.WithLogger(r.agentLogger),
 		signature.WithDebugSigning(r.conf.AgentConfiguration.DebugSigning),

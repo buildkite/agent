@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
@@ -126,6 +127,9 @@ type JobRunner struct {
 	// The APIClient that will be used when updating the job
 	apiClient APIClient
 
+	// The agentlib Client is used to drive some APIClient methods
+	client *core.Client
+
 	// The internal process of the job
 	process jobAPI
 
@@ -174,6 +178,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		agentLogger: l,
 		conf:        conf,
 		apiClient:   apiClient,
+		client:      &core.Client{APIClient: apiClient, Logger: l},
 	}
 
 	var err error
@@ -199,11 +204,17 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
-	r.logStreamer = NewLogStreamer(r.agentLogger, r.onUploadChunk, LogStreamerConfig{
-		Concurrency:       3,
-		MaxChunkSizeBytes: r.conf.Job.ChunksMaxSizeBytes,
-		MaxSizeBytes:      r.conf.Job.LogMaxSizeBytes,
-	})
+	r.logStreamer = NewLogStreamer(
+		r.agentLogger,
+		func(ctx context.Context, chunk *api.Chunk) error {
+			return r.client.UploadChunk(ctx, r.conf.Job.ID, chunk)
+		},
+		LogStreamerConfig{
+			Concurrency:       3,
+			MaxChunkSizeBytes: r.conf.Job.ChunksMaxSizeBytes,
+			MaxSizeBytes:      r.conf.Job.LogMaxSizeBytes,
+		},
+	)
 
 	// TempDir is not guaranteed to exist
 	tempDir := os.TempDir()
@@ -260,10 +271,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 
 		// If we have ansi-timestamps, we can skip line timestamps AND header times
 		// this is the future of timestamping
-		prefixer := process.NewTimestamper(outputWriter, func(now time.Time) string {
-			return fmt.Sprintf("\x1b_bk;t=%d\x07",
-				now.UnixNano()/int64(time.Millisecond))
-		}, 1*time.Second)
+		prefixer := process.NewTimestamper(outputWriter, core.BKTimestamp, 1*time.Second)
 		allWriters = append(allWriters, prefixer)
 
 	case conf.AgentConfiguration.TimestampLines:
@@ -615,34 +623,6 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	return true, nil
 }
 
-// Starts the job in the Buildkite Agent API. We'll retry on connection-related
-// issues, but if a connection succeeds and we get an client error response back from
-// Buildkite, we won't bother retrying. For example, a "no such host" will
-// retry, but an HTTP response from Buildkite that isn't retryable won't.
-func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
-	r.conf.Job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
-
-	return roko.NewRetrier(
-		roko.WithMaxAttempts(7),
-		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-	).DoWithContext(ctx, func(rtr *roko.Retrier) error {
-		response, err := r.apiClient.StartJob(ctx, r.conf.Job)
-
-		if err != nil {
-			if response != nil && api.IsRetryableStatus(response) {
-				r.agentLogger.Warn("%s (%s)", err, rtr)
-			} else if api.IsRetryableError(err) {
-				r.agentLogger.Warn("%s (%s)", err, rtr)
-			} else {
-				r.agentLogger.Warn("Buildkite rejected the call to start the job (%s)", err)
-				rtr.Break()
-			}
-		}
-
-		return err
-	})
-}
-
 // jobCancellationChecker waits for the processes to start, then continuously
 // polls GetJobState to see if the job has been cancelled server-side. If so,
 // it calls r.Cancel.
@@ -708,45 +688,6 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.agentLogger.Warn("Buildkite rejected the header times (%s)", err)
-				retrier.Break()
-			} else {
-				r.agentLogger.Warn("%s (%s)", err, retrier)
-			}
-		}
-
-		return err
-	})
-}
-
-// onUploadChunk uploads a log streamer chunk. If a valid chunk cannot be
-// uploaded, it will retry for a long time.
-func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) error {
-	// We consider logs to be an important thing, and we shouldn't give up
-	// on sending the chunk data back to Buildkite. In the event Buildkite
-	// is having downtime or there are connection problems, we'll want to
-	// hold onto chunks until it's back online to upload them.
-	//
-	// This code will retry for a long time until we get back a successful
-	// response from Buildkite that it's considered the chunk (a 4xx will be
-	// returned if the chunk is invalid, and we shouldn't retry on that)
-	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
-	defer cancel()
-
-	return roko.NewRetrier(
-		// retry for ~a day with exponential backoff
-		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-		roko.WithMaxAttempts(20),
-		roko.WithJitter(),
-	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.UploadChunk(ctx, r.conf.Job.ID, &api.Chunk{
-			Data:     chunk.Data,
-			Sequence: chunk.Order,
-			Offset:   chunk.Offset,
-			Size:     chunk.Size,
-		})
-		if err != nil {
-			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
-				r.agentLogger.Warn("Buildkite rejected the chunk upload (%s)", err)
 				retrier.Break()
 			} else {
 				r.agentLogger.Warn("%s (%s)", err, retrier)

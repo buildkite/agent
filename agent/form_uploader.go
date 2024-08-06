@@ -135,7 +135,7 @@ func (u *FormUploader) Upload(_ context.Context, artifact *api.Artifact) error {
 }
 
 // Creates a new file upload http request with optional extra params
-func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request, error) {
+func createUploadRequest(_ logger.Logger, artifact *api.Artifact) (*http.Request, error) {
 	streamer := newMultipartStreamer()
 
 	// Set the post data for the request

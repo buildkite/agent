@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -59,6 +58,9 @@ type AgentWorker struct {
 	// The API Client used when this agent is communicating with the API
 	apiClient APIClient
 
+	// The core Client is used to drive some APIClient methods
+	client *core.Client
+
 	// The logger instance to use
 	logger logger.Logger
 
@@ -94,11 +96,6 @@ type AgentWorker struct {
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
 	jobRunner jobRunner
-
-	// retrySleepFunc is useful for testing retry loops fast
-	// Hopefully this can be replaced with a global setting for tests in future:
-	// https://github.com/buildkite/roko/issues/2
-	retrySleepFunc func(time.Duration)
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	agentStdout io.Writer
@@ -168,18 +165,22 @@ func (e *errUnrecoverable) Unwrap() error {
 
 // Creates the agent worker and initializes its API Client
 func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, apiClient APIClient, c AgentWorkerConfig) *AgentWorker {
+	apiClient = apiClient.FromAgentRegisterResponse(a)
 	return &AgentWorker{
-		logger:             l,
-		agent:              a,
-		metricsCollector:   m,
-		apiClient:          apiClient.FromAgentRegisterResponse(a),
+		logger:           l,
+		agent:            a,
+		metricsCollector: m,
+		apiClient:        apiClient,
+		client: &core.Client{
+			APIClient: apiClient,
+			Logger:    l,
+		},
 		debug:              c.Debug,
 		debugHTTP:          c.DebugHTTP,
 		agentConfiguration: c.AgentConfiguration,
 		stop:               make(chan struct{}),
 		cancelSig:          c.CancelSignal,
 		spawnIndex:         c.SpawnIndex,
-		retrySleepFunc:     time.Sleep, // https://github.com/buildkite/roko/issues/2
 		agentStdout:        c.AgentStdout,
 		state:              agentWorkerStateIdle,
 	}
@@ -421,21 +422,10 @@ func (a *AgentWorker) Stop(graceful bool) {
 	a.stopping = true
 }
 
-// Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
+// Connects the agent to the Buildkite Agent API, retrying up to 10 times if it
 // fails.
 func (a *AgentWorker) Connect(ctx context.Context) error {
-	a.logger.Info("Connecting to Buildkite...")
-
-	return roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		_, err := a.apiClient.Connect(ctx)
-		if err != nil {
-			a.logger.Warn("%s (%s)", err, r)
-		}
-		return err
-	})
+	return a.client.Connect(ctx)
 }
 
 // Performs a heatbeat
@@ -552,83 +542,18 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 	return ping.Job, nil
 }
 
-var ErrJobAcquisitionFailure = errors.New("failed to acquire job")
-
 // AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
 // server determined interval (from the Retry-After response header) if the job is in the waiting
 // state. If the job is in an unassignable state, it will return an error immediately.
 // Otherwise, it will retry every 3s for 30 s. The whole operation will timeout after 5 min.
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
-	a.logger.Info("Attempting to acquire job %s...", jobId)
-
-	// Timeout the context to prevent the exponentital backoff from growing too
-	// large if the job is in the waiting state.
-	//
-	// If there were no delays or jitter, the attempts would happen at t = 0, 1, 2, 4, ..., 128s
-	// after the initial one. Therefore, there are 9 attempts taking at least 255s. If the jitter
-	// always hit the max of 1s, then another 8s is added to that. This is still comfortably within
-	// the timeout of 270s, and the bound seems tight enough so that the agent is not wasting time
-	// waiting for a retry that will never happen.
-	timeoutCtx, cancel := context.WithTimeout(ctx, 270*time.Second)
-	defer cancel()
-
-	// Acquire the job using the ID we were provided. We'll retry as best we can on non 422 error.
-	// Except for 423 errors, in which we exponentially back off under the direction of the API
-	// setting the Retry-After header
-	r := roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.Constant(3*time.Second)),
-		roko.WithSleepFunc(a.retrySleepFunc),
-	)
-
-	acquiredJob, err := roko.DoFunc(timeoutCtx, r, func(r *roko.Retrier) (*api.Job, error) {
-		// If this agent has been asked to stop, don't even bother
-		// doing any retry checks and just bail.
-		if a.stopping {
-			r.Break()
-		}
-
-		aj, resp, err := a.apiClient.AcquireJob(
-			timeoutCtx, jobId,
-			api.Header{Name: "X-Buildkite-Lock-Acquire-Job", Value: "1"},
-			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: strconv.Itoa(r.AttemptCount())},
-		)
-		if err != nil {
-			if resp != nil {
-				switch resp.StatusCode {
-				case http.StatusUnprocessableEntity:
-					// If the API returns with a 422, it usually means that the job is in a state where it can't be acquired -
-					// e.g. it's already running on another agent, or has been cancelled, or has already run
-					a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
-					r.Break()
-
-					return nil, fmt.Errorf("%w: %w", ErrJobAcquisitionFailure, err)
-
-				case http.StatusLocked:
-					// If the API returns with a 423, the job is in the waiting state
-					a.logger.Warn("The job is waiting for a dependency (%s)", err)
-					duration, errParseDuration := time.ParseDuration(resp.Header.Get("Retry-After") + "s")
-					if errParseDuration != nil {
-						duration = time.Second + rand.N(time.Second)
-					}
-					r.SetNextInterval(duration)
-					return nil, err
-				}
-			}
-			a.logger.Warn("%s (%s)", err, r)
-			return nil, err
-		}
-
-		return aj, nil
-	})
-
-	// If `acquiredJob` is nil, then the job was never acquired
-	if acquiredJob == nil {
+	job, err := a.client.AcquireJob(ctx, jobId)
+	if err != nil {
 		return fmt.Errorf("failed to acquire job: %w", err)
 	}
 
 	// Now that we've acquired the job, let's run it
-	return a.RunJob(ctx, acquiredJob)
+	return a.RunJob(ctx, job)
 }
 
 // Accepts a job and runs it, only returns an error if something goes wrong
@@ -711,30 +636,7 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 // permanently disconnecting. Don't spend long retrying, because we want to
 // disconnect as fast as possible.
 func (a *AgentWorker) Disconnect(ctx context.Context) error {
-	a.logger.Info("Disconnecting...")
-	err := roko.NewRetrier(
-		roko.WithMaxAttempts(4),
-		roko.WithStrategy(roko.Constant(1*time.Second)),
-		roko.WithSleepFunc(a.retrySleepFunc),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		if _, err := a.apiClient.Disconnect(ctx); err != nil {
-			a.logger.Warn("%s (%s)", err, r) // e.g. POST https://...: 500 (Attempt 0/4 Retrying in ..)
-			return err
-		}
-		return nil
-	})
-
-	if err != nil {
-		// none of the retries worked
-		a.logger.Warn(
-			"There was an error sending the disconnect API call to Buildkite. "+
-				"If this agent still appears online, you may have to manually stop it (%s)",
-			err,
-		)
-		return err
-	}
-	a.logger.Info("Disconnected")
-	return nil
+	return a.client.Disconnect(ctx)
 }
 
 func (a *AgentWorker) healthHandler() http.HandlerFunc {
