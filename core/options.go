@@ -39,7 +39,7 @@ func WithRetrySleepFunc(f func(time.Duration)) ControllerOption {
 }
 
 // WithEndpoint allows overriding the API endpoint (base URL).
-// Defaults to "https://agent.buildkite.com/".
+// Defaults to "https://agent.buildkite.com/v3".
 func WithEndpoint(endpoint string) ControllerOption {
 	return func(c *controllerConfig) {
 		c.endpoint = endpoint

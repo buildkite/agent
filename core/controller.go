@@ -25,7 +25,7 @@ func NewController(ctx context.Context, regToken, agentName string, tags []strin
 	cfg := &controllerConfig{
 		logger:            logger.Discard,
 		retrySleepFunc:    nil,
-		endpoint:          "https://agent.buildkite.com/",
+		endpoint:          "https://agent.buildkite.com/v3",
 		userAgent:         version.UserAgent(),
 		debugHTTP:         false,
 		allowHTTP2:        true,
