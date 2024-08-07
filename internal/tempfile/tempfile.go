@@ -26,7 +26,9 @@ func WithName(filename string) Opts {
 	}
 }
 
-// WithDir sets the subdirectory of the temporary file within the system temp directory.
+// WithDir sets the subdirectory to contain the temporary file. If dir is
+// absolute, it will be used as-is, otherwise it will be taken relative to the
+// system temporary directory ([os.TempDir]).
 func WithDir(dir string) Opts {
 	return func(tf *request) {
 		tf.dir = dir
@@ -56,14 +58,18 @@ func New(opts ...Opts) (*os.File, error) {
 		opt(req)
 	}
 
-	tempDir := os.TempDir()
+	dir := os.TempDir()
 	if req.dir != "" {
-		tempDir = filepath.Join(tempDir, req.dir)
+		if filepath.IsAbs(req.dir) {
+			dir = filepath.Clean(req.dir)
+		} else {
+			dir = filepath.Join(dir, req.dir)
+		}
 	}
 
 	// umask will make perms more reasonable
-	if err := os.MkdirAll(tempDir, allRWX); err != nil {
-		return nil, fmt.Errorf("failed to create temporary directory %q: %w", tempDir, err)
+	if err := os.MkdirAll(dir, allRWX); err != nil {
+		return nil, fmt.Errorf("failed to create temporary directory %q: %w", dir, err)
 	}
 
 	tempFileName := req.filename
@@ -73,7 +79,7 @@ func New(opts ...Opts) (*os.File, error) {
 		tempFileName = basename + "-*" + extension
 	}
 
-	tempFile, err := os.CreateTemp(tempDir, tempFileName)
+	tempFile, err := os.CreateTemp(dir, tempFileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary file %q: %w", req.filename, err)
 	}
