@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.77.0](https://github.com/buildkite/agent/tree/v3.77.0) (2024-08-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.76.2...v3.77.0)
+
+### Added
+- Added `core` package: `core` makes some core agent functions accessible as a library [#2915](https://github.com/buildkite/agent/pull/2915) (@DrJosh9000)
+
+### Fixed
+- Write hooks into new tempdir [#2925](https://github.com/buildkite/agent/pull/2925) (@DrJosh9000)
+- Fix default endpoint string in `api` and `core` [#2923](https://github.com/buildkite/agent/pull/2923) (@DrJosh9000)
+
+### Internal
+Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922](https://github.com/buildkite/agent/pull/2922), [#2921](https://github.com/buildkite/agent/pull/2921), [#2918](https://github.com/buildkite/agent/pull/2918), [#2917](https://github.com/buildkite/agent/pull/2917) (@dependabot[bot])
+
 ## [v3.76.2](https://github.com/buildkite/agent/tree/v3.76.2) (2024-08-01)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.76.1...v3.76.2)
 
