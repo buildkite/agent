@@ -121,6 +121,7 @@ type WrapperOpt func(*Wrapper)
 type Wrapper struct {
 	hookPath      string
 	os            string
+	tempDir       string
 	wrapperPath   string
 	beforeEnvPath string
 	afterEnvPath  string
@@ -202,19 +203,33 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		templateType = PosixShellTemplateType
 	}
 
-	if wrap.beforeEnvPath, err = tempfile.NewClosed(
-		tempfile.WithDir(hookWrapperDir),
-		tempfile.WithName("hook-before-env"),
-	); err != nil {
-		return nil, err
+	// On systems where multiple buildkite-agents are running under different
+	// users, a shared path could be owned by a different user.
+	// Creating a new temporary directory to hold the temporary files avoids
+	// this issue and makes cleanup easier.
+	tempDir, err := os.MkdirTemp(os.TempDir(), hookWrapperDir)
+	if err != nil {
+		return nil, fmt.Errorf("creating temporary directory for hook wrapper: %w", err)
 	}
+	wrap.tempDir = tempDir
 
-	if wrap.afterEnvPath, err = tempfile.NewClosed(
-		tempfile.WithDir(hookWrapperDir),
-		tempfile.WithName("hook-after-env"),
-	); err != nil {
+	beforeEnvPath, err := tempfile.NewClosed(
+		tempfile.WithDir(tempDir),
+		tempfile.WithName("hook-before-env"),
+	)
+	if err != nil {
 		return nil, err
 	}
+	wrap.beforeEnvPath = beforeEnvPath
+
+	afterEnvPath, err := tempfile.NewClosed(
+		tempfile.WithDir(tempDir),
+		tempfile.WithName("hook-after-env"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	wrap.afterEnvPath = afterEnvPath
 
 	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
@@ -234,13 +249,16 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		PathToHook:        absolutePathToHook,
 	}
 
-	if wrap.wrapperPath, err = WriteHookWrapper(
+	wrapperPath, err := WriteHookWrapper(
 		templateType,
 		templateInput,
+		tempDir,
 		scriptFileName,
-	); err != nil {
+	)
+	if err != nil {
 		return nil, err
 	}
+	wrap.wrapperPath = wrapperPath
 
 	return wrap, nil
 }
@@ -251,10 +269,11 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 func WriteHookWrapper(
 	templateType TemplateType,
 	input WrapperTemplateInput,
+	dir string,
 	hookWrapperName string,
 ) (string, error) {
 	f, err := tempfile.New(
-		tempfile.WithDir(hookWrapperDir),
+		tempfile.WithDir(dir),
 		tempfile.WithName(hookWrapperName),
 		tempfile.KeepingExtension(),
 		tempfile.WithPerms(0o700),
@@ -291,9 +310,7 @@ func (w *Wrapper) Path() string {
 // Close cleans up the wrapper script and the environment files. Ignores errors, in
 // particular the error from os.Remove if the file doesn't exist.
 func (w *Wrapper) Close() {
-	_ = os.Remove(w.wrapperPath)
-	_ = os.Remove(w.beforeEnvPath)
-	_ = os.Remove(w.afterEnvPath)
+	_ = os.RemoveAll(w.tempDir)
 }
 
 // Changes returns the changes in the environment and working dir after the hook script runs
