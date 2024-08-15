@@ -86,7 +86,7 @@ func (wl *WriterLogger) Commentf(format string, v ...any) {
 
 func (wl *WriterLogger) Errorf(format string, v ...any) {
 	if wl.Ansi {
-		wl.Printf(ansiColor("🚨 Error: "+format+"\n^^^ +++", "31"), v...)
+		wl.Printf(ansiColor("🚨 Error: "+format, "31")+"\n^^^ +++", v...)
 	} else {
 		wl.Printf("🚨 Error: "+format+"\n^^^ +++", v...)
 	}
@@ -94,7 +94,7 @@ func (wl *WriterLogger) Errorf(format string, v ...any) {
 
 func (wl *WriterLogger) Warningf(format string, v ...any) {
 	if wl.Ansi {
-		wl.Printf(ansiColor("⚠️ Warning: "+format+"\n^^^ +++", "33"), v...)
+		wl.Printf(ansiColor("⚠️ Warning: "+format, "33")+"\n^^^ +++", v...)
 	} else {
 		wl.Printf("⚠️ Warning: "+format+"\n^^^ +++", v...)
 	}

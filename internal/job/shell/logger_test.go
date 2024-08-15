@@ -43,6 +43,38 @@ func TestAnsiLogger(t *testing.T) {
 	}
 }
 
+func TestAnsiWithColorsLogger(t *testing.T) {
+	got := &bytes.Buffer{}
+	l := shell.NewWriterLogger(got, true, nil)
+
+	l.Headerf("Testing header: %q", "llamas")
+	l.Printf("Testing print: %q", "llamas")
+	l.Commentf("Testing comment: %q", "llamas")
+	l.Errorf("Testing error: %q", "llamas")
+	l.Warningf("Testing warning: %q", "llamas")
+	l.Promptf("Testing prompt: %q", "llamas")
+
+	want := &bytes.Buffer{}
+
+	fmt.Fprintln(want, `~~~ Testing header: "llamas"`)
+	fmt.Fprintln(want, `Testing print: "llamas"`)
+	fmt.Fprintln(want, `[90m# Testing comment: "llamas"[0m`)
+	fmt.Fprintln(want, `[31m🚨 Error: Testing error: "llamas"[0m`)
+	fmt.Fprintln(want, "^^^ +++")
+	fmt.Fprintln(want, `[33m⚠️ Warning: Testing warning: "llamas"[0m`)
+	fmt.Fprintln(want, "^^^ +++")
+
+	if runtime.GOOS == "windows" {
+		fmt.Fprintln(want, `[90m>[0m Testing prompt: "llamas"`)
+	} else {
+		fmt.Fprintln(want, `[90m$[0m Testing prompt: "llamas"`)
+	}
+
+	if diff := cmp.Diff(got.String(), want.String()); diff != "" {
+		t.Fatalf("shell.WriterLogger output buffer diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestLoggerStreamer(t *testing.T) {
 	got := &bytes.Buffer{}
 	l := shell.NewWriterLogger(got, false, nil)
