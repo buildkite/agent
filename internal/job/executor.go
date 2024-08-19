@@ -1269,16 +1269,16 @@ func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernet
 		// If the k8s client is interrupted because the "server" agent is
 		// stopped or unreachable, we should stop running the job.
 		err := k8sAgentSocket.Await(ctx, kubernetes.RunStateInterrupt)
-		if err != nil {
-			// If the k8s client is interrupted because our own ctx was cancelled,
-			// then the job is already stopping, so there's no point logging an
-			// error.
-			if !errors.Is(err, context.Canceled) {
-				e.shell.Errorf("Error waiting for client interrupt: %v", err)
-			}
-			// If there's an error from Await, we should Cancel the job.
-			e.Cancel()
+		// If the k8s client is interrupted because our own ctx was cancelled,
+		// then the job is already stopping, so there's no point logging an
+		// error.
+		if errors.Is(err, context.Canceled) {
+			return
 		}
+		if err != nil {
+			e.shell.Errorf("Error waiting for client interrupt: %v", err)
+		}
+		e.Cancel()
 	}()
 	return nil
 }
