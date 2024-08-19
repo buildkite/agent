@@ -58,6 +58,8 @@ Example:
 
 var (
 	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+	localHooksFailureBehaviors   = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+	pluginsFailureBehaviors      = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
 		regexp.MustCompile("^BUILDKITE$"),
@@ -140,14 +142,16 @@ type AgentStartConfig struct {
 	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
 
-	NoSSHKeyscan        bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval       bool     `cli:"no-command-eval"`
-	NoLocalHooks        bool     `cli:"no-local-hooks"`
-	NoPlugins           bool     `cli:"no-plugins"`
-	NoPluginValidation  bool     `cli:"no-plugin-validation"`
-	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
-	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
-	AllowedPlugins      []string `cli:"allowed-plugins" normalize:"list"`
+	NoSSHKeyscan              bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval             bool     `cli:"no-command-eval"`
+	NoLocalHooks              bool     `cli:"no-local-hooks"`
+	NoPlugins                 bool     `cli:"no-plugins"`
+	NoPluginValidation        bool     `cli:"no-plugin-validation"`
+	NoFeatureReporting        bool     `cli:"no-feature-reporting"`
+	AllowedRepositories       []string `cli:"allowed-repositories" normalize:"list"`
+	AllowedPlugins            []string `cli:"allowed-plugins" normalize:"list"`
+	LocalHooksFailureBehavior string   `cli:"local-hooks-failure-behavior"`
+	PluginsFailureBehavior    string   `cli:"plugins-failure-behavior"`
 
 	EnableEnvironmentVariableAllowList bool     `cli:"enable-environment-variable-allowlist"`
 	AllowedEnvironmentVariables        []string `cli:"allowed-environment-variables" normalize:"list"`
@@ -668,6 +672,18 @@ var AgentStartCommand = cli.Command{
 			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v. Defaults to %s", verificationFailureBehaviors, agent.VerificationBehaviourBlock),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
+		cli.StringFlag{
+			Name:   "local-hooks-failure-behavior",
+			Value:  agent.VerificationBehaviourBlock,
+			Usage:  fmt.Sprintf("The behavior when a job is not allowed to run local hooks. One of: %v. Defaults to %s", localHooksFailureBehaviors, agent.DisabledBehaviourError),
+			EnvVar: "BUILDKITE_AGENT_LOCAL_HOOKS_FAILURE_BEHAVIOR",
+		},
+		cli.StringFlag{
+			Name:   "plugins-failure-behavior",
+			Value:  agent.VerificationBehaviourBlock,
+			Usage:  fmt.Sprintf("The behavior when a job is not allowed to run plugins. One of: %v. Defaults to %s", pluginsFailureBehaviors, agent.DisabledBehaviourError),
+			EnvVar: "BUILDKITE_AGENT_PLUGINS_FAILURE_BEHAVIOR",
+		},
 		cli.StringSliceFlag{
 			Name:   "disable-warnings-for",
 			Usage:  "A list of warning IDs to disable",
@@ -927,6 +943,8 @@ var AgentStartCommand = cli.Command{
 			CommandEval:                  !cfg.NoCommandEval,
 			PluginsEnabled:               !cfg.NoPlugins,
 			PluginValidation:             !cfg.NoPluginValidation,
+			LocalHooksFailureBehavior:    cfg.LocalHooksFailureBehavior,
+			PluginsFailureBehavior:       cfg.PluginsFailureBehavior,
 			LocalHooksEnabled:            !cfg.NoLocalHooks,
 			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
 			StrictSingleHooks:            cfg.StrictSingleHooks,

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/utils"
@@ -42,11 +43,19 @@ func (e *Executor) preparePlugins() error {
 	// Check if we can run plugins (disabled via --no-plugins)
 	if !e.ExecutorConfig.PluginsEnabled {
 		if !e.ExecutorConfig.LocalHooksEnabled {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
+			if e.ExecutorConfig.LocalHooksFailureBehavior == agent.DisabledBehaviourError {
+				return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
+			}
+			e.shell.Logger.Warningf("Plugins have been disabled on this agent with `--no-local-hooks`")
+			return nil
 		} else if !e.ExecutorConfig.CommandEval {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
 		} else {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
+			if e.ExecutorConfig.PluginsFailureBehavior == agent.DisabledBehaviourError {
+				return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
+			}
+			e.shell.Logger.Warningf("Plugins have been disabled on this agent with `--no-plugins`")
+			return nil
 		}
 	}
 
