@@ -13,7 +13,7 @@ require (
 	github.com/Khan/genqlient v0.7.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
-	github.com/buildkite/bintest/v3 v3.2.0
+	github.com/buildkite/bintest/v3 v3.3.0
 	github.com/buildkite/go-pipeline v0.10.0
 	github.com/buildkite/interpolate v0.1.3
 	github.com/buildkite/roko v1.2.0
@@ -100,14 +100,12 @@ require (
 	github.com/lestrrat-go/iter v1.0.2 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/outcaste-io/ristretto v0.2.3 // indirect
-	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/qri-io/jsonpointer v0.1.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.7.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/tinylib/msgp v1.1.8 // indirect
