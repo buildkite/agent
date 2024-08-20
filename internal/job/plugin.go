@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/internal/job/hook"
+	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/roko"
 )
@@ -40,26 +41,17 @@ func (e *Executor) preparePlugins() error {
 		e.shell.Commentf("Plugin JSON is %s", e.Plugins)
 	}
 
-	// Check if we can run plugins (disabled via --no-plugins)
-	if !e.ExecutorConfig.PluginsEnabled {
-		if !e.ExecutorConfig.LocalHooksEnabled {
-			if e.ExecutorConfig.LocalHooksFailureBehavior == agent.DisabledBehaviourError {
-				return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
-			}
-			e.shell.Logger.Warningf("Plugins have been disabled on this agent with `--no-local-hooks`")
-			return nil
-		} else if !e.ExecutorConfig.CommandEval {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
-		} else {
-			if e.ExecutorConfig.PluginsFailureBehavior == agent.DisabledBehaviourError {
-				return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
-			}
-			e.shell.Logger.Warningf("Plugins have been disabled on this agent with `--no-plugins`")
-			return nil
-		}
+	// Check if we can run plugins (disabled via --no-plugins or --no-local-hooks)
+	enabled, err := checkPluginsEnabled(e.shell.Logger, e.ExecutorConfig)
+	if err != nil {
+		return err
 	}
 
-	var err error
+	// plugins are disabled, so we don't need to do anything
+	if !enabled {
+		return nil
+	}
+
 	e.plugins, err = plugin.CreateFromJSON(e.ExecutorConfig.Plugins)
 	if err != nil {
 		return fmt.Errorf("Failed to parse a plugin definition: %w", err)
@@ -419,4 +411,28 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	}
 
 	return checkout, nil
+}
+
+// checkPluginsEnabled verifies that plugins are enabled on the agent, and uses the configured behaviour is to either return an error, or log a warning.
+func checkPluginsEnabled(logger shell.Logger, executorConfig ExecutorConfig) (bool, error) {
+	if executorConfig.PluginsEnabled && executorConfig.LocalHooksEnabled && executorConfig.CommandEval {
+		return true, nil
+	}
+
+	switch {
+	case !executorConfig.LocalHooksEnabled:
+		if executorConfig.LocalHooksFailureBehavior == agent.DisabledBehaviourError {
+			return false, fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
+		}
+		logger.Warningf("Plugins have been disabled on this agent with `--no-local-hooks`")
+	case !executorConfig.CommandEval:
+		return false, fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
+	default:
+		if executorConfig.PluginsFailureBehavior == agent.DisabledBehaviourError {
+			return false, fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
+		}
+		logger.Warningf("Plugins have been disabled on this agent with `--no-plugins`")
+	}
+
+	return false, nil
 }
