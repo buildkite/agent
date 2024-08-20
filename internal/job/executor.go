@@ -1244,6 +1244,16 @@ func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernet
 		switch n {
 		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS":
 			continue
+
+		case "BUILDKITE_AGENT_ACCESS_TOKEN":
+			// Just in case someone has tried to fiddle with this, set it
+			// unconditionally (to be compatible with pre-v3.74.1 / PR 2851
+			// behavior).
+			e.shell.Env.Set(n, v)
+			if err := os.Setenv(n, v); err != nil {
+				return err
+			}
+			continue
 		}
 		// Skip any that are already set.
 		if e.shell.Env.Exists(n) {
