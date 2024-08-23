@@ -117,6 +117,13 @@ var (
 			"*_CONNECTION_STRING",
 		},
 	}
+
+	TraceContextEncodingFlag = cli.StringFlag{
+		Name:   "trace-context-encoding",
+		Usage:  "Sets the inner encoding for BUILDKITE_TRACE_CONTEXT. Must be either json or gob",
+		Value:  "gob",
+		EnvVar: "BUILDKITE_TRACE_CONTEXT_ENCODING",
+	}
 )
 
 func globalFlags() []cli.Flag {
