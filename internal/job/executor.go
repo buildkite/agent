@@ -436,7 +436,7 @@ func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
 	}
 }
 
-func logMissingHookInfo(l shell.Logger, wrapperPath string) {
+func logMissingHookInfo(l shell.Logger, hookName, wrapperPath string) {
 	// It's unlikely, but possible, that the script wrapper was spontaneously
 	// deleted or corrupted (it's usually in /tmp, which is fair game).
 	// A common setup error is to try to run a Bash hook in a container or other
@@ -445,7 +445,7 @@ func logMissingHookInfo(l shell.Logger, wrapperPath string) {
 	if err != nil {
 		// It's reasonable to assume the script wrapper was spontaneously
 		// deleted, or had something equally horrible happen to it.
-		l.Errorf("The %s hook failed to run - perhaps the wrapper script %q was spontaneously deleted", wrapperPath)
+		l.Errorf("The %s hook failed to run - perhaps the wrapper script %q was spontaneously deleted", hookName, wrapperPath)
 		return
 	}
 	interpreter := strings.TrimPrefix(shebang, "#!")
@@ -458,7 +458,7 @@ func logMissingHookInfo(l shell.Logger, wrapperPath string) {
 		// than ENOENT.
 		return
 	}
-	l.Errorf("The %s hook failed to run - perhaps the script interpreter %q is missing", interpreter)
+	l.Errorf("The %s hook failed to run - perhaps the script interpreter %q is missing", hookName, interpreter)
 }
 
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
@@ -531,7 +531,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 			// program we tried to exec, even if the missing file/directory was
 			// actually the interpreter specified on the shebang line.
 			// Try to figure out which part is missing from the wrapper.
-			logMissingHookInfo(e.shell.Logger, script.Path())
+			logMissingHookInfo(e.shell.Logger, hookName, script.Path())
 		}
 
 		return err
