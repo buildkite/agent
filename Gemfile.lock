@@ -47,7 +47,7 @@ GEM
       stud
     public_suffix (5.0.1)
     rchardet (1.8.0)
-    rexml (3.3.3)
+    rexml (3.3.6)
       strscan
     strscan (3.1.0)
     stud (0.0.23)
