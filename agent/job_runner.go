@@ -22,7 +22,6 @@ import (
 	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 const (
@@ -85,7 +84,7 @@ type JobRunnerConfig struct {
 	JobStatusInterval time.Duration
 
 	// The JSON Web Keyset for verifying the job
-	JWKS jwk.Set
+	JWKS any
 
 	// A scope for metrics within a job
 	MetricsScope *metrics.Scope
@@ -522,6 +521,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// to propagate it if it's explicitly disabled.
 	if !r.conf.AgentConfiguration.RunInPty {
 		env["BUILDKITE_PTY"] = "false"
+	}
+
+	// pass through the KMS key ID for signing
+	if r.conf.AgentConfiguration.SigningJWKSKMSKeyID != "" {
+		env["BUILDKITE_AGENT_JWKS_KMS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKMSKeyID
 	}
 
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed

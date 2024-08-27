@@ -8,7 +8,11 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/buildkite/agent/v3/internal/bkgql"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
@@ -17,7 +21,7 @@ import (
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/buildkite/interpolate"
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	awssigner "github.com/jwx-go/crypto-signer/v2/aws"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
 )
@@ -33,6 +37,7 @@ type ToolSignConfig struct {
 	// Used for signing
 	JWKSFile     string `cli:"jwks-file"`
 	JWKSKeyID    string `cli:"jwks-key-id"`
+	JWKSKMSKeyID string `cli:"jwks-kms-key-id"`
 	DebugSigning bool   `cli:"debug-signing"`
 
 	// Needed for to use GraphQL API
@@ -127,6 +132,11 @@ Signing a pipeline from a file:
 			Usage:  "The JWKS key ID to use when signing the pipeline. If none is provided and the JWKS file contains only one key, that key will be used.",
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
 		},
+		cli.StringFlag{
+			Name:   "jwks-kms-key-id",
+			Usage:  "The KMS key to use as the JWKS.",
+			EnvVar: "BUILDKITE_AGENT_JWKS_KMS_KEY_ID",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
@@ -170,9 +180,32 @@ Signing a pipeline from a file:
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](context.Background(), c)
 		defer done()
 
-		key, err := jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
-		if err != nil {
-			return fmt.Errorf("couldn't read the signing key file: %w", err)
+		var key signature.Key
+		var err error
+
+		switch {
+		case cfg.JWKSKMSKeyID != "":
+			awscfg, err := config.LoadDefaultConfig(
+				context.Background(),
+			)
+			if err != nil {
+				panic(err.Error())
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			sv := awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
+				WithAlgorithm(types.SigningAlgorithmSpecEcdsaSha256).
+				WithKeyID(cfg.JWKSKMSKeyID)
+
+			key = sv.WithContext(ctx)
+		default:
+			key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't read the signing key file: %w", err)
+			}
+
 		}
 
 		sign := signWithGraphQL
@@ -209,7 +242,7 @@ func validateNoInterpolations(pipelineString string) error {
 	return nil
 }
 
-func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key jwk.Key, cfg *ToolSignConfig) error {
+func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
 	if cfg.Repository == "" {
 		return ErrUseGraphQL
 	}
@@ -289,7 +322,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key jwk.K
 	return enc.Encode(parsedPipeline)
 }
 
-func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key jwk.Key, cfg *ToolSignConfig) error {
+func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
 	orgPipelineSlug := fmt.Sprintf("%s/%s", cfg.OrganizationSlug, cfg.PipelineSlug)
 	debugL := l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
 

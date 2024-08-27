@@ -18,6 +18,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
@@ -33,6 +36,7 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
+	awssigner "github.com/jwx-go/crypto-signer/v2/aws"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
@@ -83,9 +87,11 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
-	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
 	SigningJWKSKeyID string `cli:"signing-jwks-key-id"`
-	DebugSigning     bool   `cli:"debug-signing"`
+
+	SigningJWKSFile     string `cli:"signing-jwks-file" normalize:"filepath"`
+	SigningJWKSKMSKeyID string `cli:"signing-jwks-kms-key-id"`
+	DebugSigning        bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
 	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
@@ -658,6 +664,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The JWKS key ID to use when signing the pipeline. If omitted, and the signing JWKS contains only one key, that key will be used.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID",
 		},
+		cli.StringFlag{
+			Name:   "signing-jwks-kms-key-id",
+			Usage:  "The JWKS KMS key ID to use when signing the pipeline.",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_KMS_KEY_ID",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
@@ -878,12 +889,31 @@ var AgentStartCommand = cli.Command{
 			defer shutdown()
 		}
 
-		var verificationJWKS jwk.Set
-		if cfg.VerificationJWKSFile != "" {
-			var err error
-			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
+		var verificationJWKS any
+		switch {
+		case cfg.SigningJWKSKMSKeyID != "":
+			awscfg, err := config.LoadDefaultConfig(
+				context.Background(),
+			)
 			if err != nil {
-				l.Fatal("Verification JWKS failed validation: %v", err)
+				panic(err.Error())
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+
+			sv := awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
+				WithAlgorithm(types.SigningAlgorithmSpecEcdsaSha256).
+				WithKeyID(cfg.SigningJWKSKMSKeyID)
+
+			verificationJWKS = sv.WithContext(ctx)
+		case cfg.VerificationJWKSFile != "":
+			if cfg.VerificationJWKSFile != "" {
+				var err error
+				verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
+				if err != nil {
+					l.Fatal("Verification JWKS failed validation: %v", err)
+				}
 			}
 		}
 
@@ -956,9 +986,10 @@ var AgentStartCommand = cli.Command{
 			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
 			KubernetesExec:               cfg.KubernetesExec,
 
-			SigningJWKSFile:  cfg.SigningJWKSFile,
-			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
-			DebugSigning:     cfg.DebugSigning,
+			SigningJWKSFile:     cfg.SigningJWKSFile,
+			SigningJWKSKeyID:    cfg.SigningJWKSKeyID,
+			SigningJWKSKMSKeyID: cfg.SigningJWKSKMSKeyID,
+			DebugSigning:        cfg.DebugSigning,
 
 			VerificationJWKS: verificationJWKS,
 
