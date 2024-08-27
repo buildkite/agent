@@ -3,6 +3,9 @@ package clicommand
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -896,7 +899,7 @@ var AgentStartCommand = cli.Command{
 				context.Background(),
 			)
 			if err != nil {
-				panic(err.Error())
+				return fmt.Errorf("failed to load AWS config: %w", err)
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -905,6 +908,15 @@ var AgentStartCommand = cli.Command{
 			sv := awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
 				WithAlgorithm(types.SigningAlgorithmSpecEcdsaSha256).
 				WithKeyID(cfg.SigningJWKSKMSKeyID)
+
+			data, err := x509.MarshalPKIXPublicKey(sv.Public())
+			if err != nil {
+				return fmt.Errorf("failed to marshal public key: %w", err)
+			}
+
+			shasum := sha256.Sum256(data)
+
+			l.Warn("Using KMS key %s for signing with Sum256 (%s)", cfg.SigningJWKSKMSKeyID, hex.EncodeToString(shasum[:]))
 
 			verificationJWKS = sv.WithContext(ctx)
 		case cfg.VerificationJWKSFile != "":
