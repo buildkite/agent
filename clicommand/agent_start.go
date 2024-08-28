@@ -3,9 +3,6 @@ package clicommand
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
@@ -897,28 +895,16 @@ var AgentStartCommand = cli.Command{
 		case cfg.SigningJWKSKMSKeyID != "":
 			awscfg, err := config.LoadDefaultConfig(
 				context.Background(),
+				config.WithClientLogMode(aws.LogRetries|aws.LogRequest),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to load AWS config: %w", err)
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			defer cancel()
-
-			sv := awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
+			verificationJWKS = awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
 				WithAlgorithm(types.SigningAlgorithmSpecEcdsaSha256).
 				WithKeyID(cfg.SigningJWKSKMSKeyID)
 
-			data, err := x509.MarshalPKIXPublicKey(sv.Public())
-			if err != nil {
-				return fmt.Errorf("failed to marshal public key: %w", err)
-			}
-
-			shasum := sha256.Sum256(data)
-
-			l.Warn("Using KMS key %s for signing with Sum256 (%s)", cfg.SigningJWKSKMSKeyID, hex.EncodeToString(shasum[:]))
-
-			verificationJWKS = sv.WithContext(ctx)
 		case cfg.VerificationJWKSFile != "":
 			if cfg.VerificationJWKSFile != "" {
 				var err error

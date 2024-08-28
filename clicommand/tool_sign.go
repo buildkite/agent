@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
@@ -180,8 +179,10 @@ Signing a pipeline from a file:
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](context.Background(), c)
 		defer done()
 
-		var key signature.Key
-		var err error
+		var (
+			key signature.Key
+			err error
+		)
 
 		switch {
 		case cfg.JWKSKMSKeyID != "":
@@ -189,17 +190,13 @@ Signing a pipeline from a file:
 				context.Background(),
 			)
 			if err != nil {
-				panic(err.Error())
+				return fmt.Errorf("couldn't load AWS config: %w", err)
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-			defer cancel()
-
-			sv := awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
+			// assign a crypto signer which uses the KMS key to sign the pipeline
+			key = awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
 				WithAlgorithm(types.SigningAlgorithmSpecEcdsaSha256).
 				WithKeyID(cfg.JWKSKMSKeyID)
-
-			key = sv.WithContext(ctx)
 		default:
 			key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
 			if err != nil {
