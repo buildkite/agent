@@ -62,8 +62,8 @@ github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf/go.mod h1:CeKhh8xSs3WZAc50xABMxu+FlfAAd5PNumo7NfOv7EE=
 github.com/buildkite/bintest/v3 v3.3.0 h1:RTWcSaJRlOT6t/K311ejPf+0J3LE/QEODzVG3vlLnWo=
 github.com/buildkite/bintest/v3 v3.3.0/go.mod h1:btqpTsVODiJcb0NMdkkmtMQ6xoFc2W/nY5yy+3I0zcs=
-github.com/buildkite/go-pipeline v0.11.0 h1:q6y4HejVJOSVZLu0juTra0ULFh7P/okl4EHjKAPzo7k=
-github.com/buildkite/go-pipeline v0.11.0/go.mod h1:qWZlY1gczr6MQp8lwa6Y0ttvFY/OnYxzrNvAglNFB3U=
+github.com/buildkite/go-pipeline v0.12.0 h1:3P6i71zqtLK9+vvN4yLFJ61QQvwm3ZBvtR7EgSnArVo=
+github.com/buildkite/go-pipeline v0.12.0/go.mod h1:qWZlY1gczr6MQp8lwa6Y0ttvFY/OnYxzrNvAglNFB3U=
 github.com/buildkite/interpolate v0.1.3 h1:OFEhqji1rNTRg0u9DsSodg63sjJQEb1uWbENq9fUOBM=
 github.com/buildkite/interpolate v0.1.3/go.mod h1:UNVe6A+UfiBNKbhAySrBbZFZFxQ+DXr9nWen6WVt/A8=
 github.com/buildkite/roko v1.2.0 h1:hbNURz//dQqNl6Eo9awjQOVOZwSDJ8VEbBDxSfT9rGQ=
