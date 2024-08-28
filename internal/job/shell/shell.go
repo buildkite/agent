@@ -72,6 +72,9 @@ type Shell struct {
 
 	// Amount of time to wait between sending the InterruptSignal and SIGKILL
 	SignalGracePeriod time.Duration
+
+	// How to encode trace contexts.
+	traceContextCodec tracetools.Codec
 }
 
 type newShellOpt func(*Shell)
@@ -79,6 +82,12 @@ type newShellOpt func(*Shell)
 func WithLogger(l Logger) newShellOpt {
 	return func(s *Shell) {
 		s.Logger = l
+	}
+}
+
+func WithTraceContextCodec(c tracetools.Codec) newShellOpt {
+	return func(s *Shell) {
+		s.traceContextCodec = c
 	}
 }
 
@@ -90,10 +99,11 @@ func New(opts ...newShellOpt) (*Shell, error) {
 	}
 
 	shell := &Shell{
-		Logger: StderrLogger,
-		Env:    env.FromSlice(os.Environ()),
-		Writer: os.Stdout,
-		wd:     wd,
+		Logger:            StderrLogger,
+		Env:               env.FromSlice(os.Environ()),
+		Writer:            os.Stdout,
+		wd:                wd,
+		traceContextCodec: tracetools.CodecGob{},
 	}
 
 	for _, opt := range opts {
@@ -119,6 +129,7 @@ func (s *Shell) WithStdin(r io.Reader) *Shell {
 		wd:                s.wd,
 		InterruptSignal:   s.InterruptSignal,
 		SignalGracePeriod: s.SignalGracePeriod,
+		traceContextCodec: s.traceContextCodec,
 	}
 }
 
@@ -373,7 +384,7 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 	if span == nil {
 		return
 	}
-	if err := tracetools.EncodeTraceContext(span, env.Dump()); err != nil {
+	if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
 		if s.Debug {
 			s.Logger.Warningf("Failed to encode trace context: %v", err)
 		}

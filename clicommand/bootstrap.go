@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/urfave/cli"
 )
 
@@ -95,6 +96,7 @@ type BootstrapConfig struct {
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
+	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
 	KubernetesExec               bool     `cli:"kubernetes-exec"`
@@ -382,6 +384,7 @@ var BootstrapCommand = cli.Command{
 		RedactedVars,
 		StrictSingleHooksFlag,
 		KubernetesExecFlag,
+		TraceContextEncodingFlag,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -412,6 +415,11 @@ var BootstrapCommand = cli.Command{
 		signalGracePeriod, err := signalGracePeriod(cfg.CancelGracePeriod, cfg.SignalGracePeriodSeconds)
 		if err != nil {
 			return err
+		}
+
+		traceContextCodec, err := tracetools.ParseEncoding(cfg.TraceContextEncoding)
+		if err != nil {
+			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
 
 		// Configure the bootstraper
@@ -464,6 +472,7 @@ var BootstrapCommand = cli.Command{
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
+			TraceContextCodec:            traceContextCodec,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			KubernetesExec:               cfg.KubernetesExec,

@@ -161,13 +161,14 @@ type AgentStartConfig struct {
 	TracingServiceName          string `cli:"tracing-service-name"`
 
 	// Global flags
-	Debug             bool     `cli:"debug"`
-	LogLevel          string   `cli:"log-level"`
-	NoColor           bool     `cli:"no-color"`
-	Experiments       []string `cli:"experiment" normalize:"list"`
-	Profile           string   `cli:"profile"`
-	StrictSingleHooks bool     `cli:"strict-single-hooks"`
-	KubernetesExec    bool     `cli:"kubernetes-exec"`
+	Debug                bool     `cli:"debug"`
+	LogLevel             string   `cli:"log-level"`
+	NoColor              bool     `cli:"no-color"`
+	Experiments          []string `cli:"experiment" normalize:"list"`
+	Profile              string   `cli:"profile"`
+	StrictSingleHooks    bool     `cli:"strict-single-hooks"`
+	KubernetesExec       bool     `cli:"kubernetes-exec"`
+	TraceContextEncoding string   `cli:"trace-context-encoding"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -689,6 +690,7 @@ var AgentStartCommand = cli.Command{
 		RedactedVars,
 		StrictSingleHooksFlag,
 		KubernetesExecFlag,
+		TraceContextEncodingFlag,
 
 		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
@@ -849,6 +851,10 @@ var AgentStartCommand = cli.Command{
 			return err
 		}
 
+		if _, err := tracetools.ParseEncoding(cfg.TraceContextEncoding); err != nil {
+			return fmt.Errorf("while parsing trace context encoding: %v", err)
+		}
+
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
 			Datadog:              cfg.MetricsDatadog,
 			DatadogHost:          cfg.MetricsDatadogHost,
@@ -946,6 +952,7 @@ var AgentStartCommand = cli.Command{
 			AcquireJob:                   cfg.AcquireJob,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
+			TraceContextEncoding:         cfg.TraceContextEncoding,
 			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
 			KubernetesExec:               cfg.KubernetesExec,
 

@@ -89,7 +89,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		var err error
 		logger := shell.StderrLogger
 		logger.DisabledWarningIDs = e.DisabledWarnings
-		e.shell, err = shell.New(shell.WithLogger(logger))
+		e.shell, err = shell.New(shell.WithLogger(logger), shell.WithTraceContextCodec(e.TraceContextCodec))
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
