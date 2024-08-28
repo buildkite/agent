@@ -6,12 +6,12 @@ import (
 )
 
 type Build struct {
-	ID string `json:"id"`
+	UUID string `json:"uuid"`
 }
 
-// CancelBuild cancels a build with the given ID
-func (c *Client) CancelBuild(ctx context.Context, id string) (*Build, *Response, error) {
-	u := fmt.Sprintf("builds/%s/cancel", railsPathEscape(id))
+// CancelBuild cancels a build with the given UUID
+func (c *Client) CancelBuild(ctx context.Context, uuid string) (*Build, *Response, error) {
+	u := fmt.Sprintf("builds/%s/cancel", railsPathEscape(uuid))
 
 	req, err := c.newRequest(ctx, "POST", u, nil)
 	if err != nil {
