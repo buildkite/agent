@@ -104,7 +104,7 @@ func cancelBuild(ctx context.Context, cfg BuildCancelConfig, l logger.Logger) er
 			return err
 		}
 
-		l.Info("Successfully cancelled build %s", build.ID)
+		l.Info("Successfully cancelled build %s", build.UUID)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to cancel build: %w", err)
