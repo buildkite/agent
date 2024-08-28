@@ -28,6 +28,13 @@ var BuildkiteAgentCommands = []cli.Command{
 		},
 	},
 	{
+		Name:  "build",
+		Usage: "Interact with a Buildkite build",
+		Subcommands: []cli.Command{
+			BuildCancelCommand,
+		},
+	},
+	{
 		Name:  "env",
 		Usage: "Process environment subcommands",
 		Subcommands: []cli.Command{

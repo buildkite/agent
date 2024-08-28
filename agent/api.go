@@ -13,6 +13,7 @@ type APIClient interface {
 	AcquireJob(context.Context, string, ...api.Header) (*api.Job, *api.Response, error)
 	Annotate(context.Context, string, *api.Annotation) (*api.Response, error)
 	AnnotationRemove(context.Context, string, string) (*api.Response, error)
+	CancelBuild(context.Context, string) (*api.Build, *api.Response, error)
 	Config() api.Config
 	Connect(context.Context) (*api.Response, error)
 	CreateArtifacts(context.Context, string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error)
