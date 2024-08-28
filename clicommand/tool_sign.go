@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/buildkite/agent/v3/internal/bkgql"
+	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/go-pipeline"
@@ -20,7 +21,6 @@ import (
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/buildkite/interpolate"
-	awssigner "github.com/jwx-go/crypto-signer/v2/aws"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
 )

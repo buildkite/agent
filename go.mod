@@ -146,5 +146,3 @@ require (
 )
 
 replace github.com/buildkite/go-pipeline => ../go-pipeline
-
-replace github.com/jwx-go/crypto-signer/v2/aws => ../crypto-signer/aws

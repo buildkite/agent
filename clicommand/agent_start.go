@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/agentapi"
+	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
@@ -37,7 +38,7 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
-	awssigner "github.com/jwx-go/crypto-signer/v2/aws"
+	"github.com/lestrrat-go/jwx/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
@@ -903,7 +904,8 @@ var AgentStartCommand = cli.Command{
 
 			verificationJWKS = awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
 				WithAlgorithm(types.SigningAlgorithmSpecEcdsaSha256).
-				WithKeyID(cfg.SigningJWKSKMSKeyID)
+				WithKeyID(cfg.SigningJWKSKMSKeyID).
+				WithJWAKeyAlgorithm(jwa.ES256)
 
 		case cfg.VerificationJWKSFile != "":
 			if cfg.VerificationJWKSFile != "" {
