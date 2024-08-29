@@ -14,9 +14,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
+	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
@@ -78,6 +81,7 @@ type PipelineUploadConfig struct {
 	// Used for signing
 	JWKSFile     string `cli:"jwks-file"`
 	JWKSKeyID    string `cli:"jwks-key-id"`
+	JWKSKMSKeyID string `cli:"jwks-kms-key-id"`
 	DebugSigning bool   `cli:"debug-signing"`
 
 	// Global flags
@@ -143,6 +147,11 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "jwks-key-id",
 			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
+		},
+		cli.StringFlag{
+			Name:   "jwks-kms-key-id",
+			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
+			EnvVar: "BUILDKITE_AGENT_JWKS_KMS_KEY_ID",
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
@@ -275,11 +284,33 @@ var PipelineUploadCommand = cli.Command{
 			searchForSecrets(l, &cfg, environ, result, src)
 		}
 
-		if cfg.JWKSFile != "" {
-			key, err := jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
+		var (
+			key signature.Key
+		)
+
+		switch {
+		case cfg.JWKSKMSKeyID != "":
+			awscfg, err := config.LoadDefaultConfig(
+				context.Background(),
+			)
+			if err != nil {
+				return fmt.Errorf("couldn't load AWS config: %w", err)
+			}
+
+			// assign a crypto signer which uses the KMS key to sign the pipeline
+			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.JWKSKMSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't create KMS signer: %w", err)
+			}
+
+		case cfg.JWKSFile != "":
+			key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
 			if err != nil {
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
+		}
+
+		if key != nil {
 
 			err = signature.SignSteps(
 				ctx,

@@ -132,7 +132,7 @@ Signing a pipeline from a file:
 		},
 		cli.StringFlag{
 			Name:   "jwks-kms-key-id",
-			Usage:  "The KMS key to use as the JWKS.",
+			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
 			EnvVar: "BUILDKITE_AGENT_JWKS_KMS_KEY_ID",
 		},
 		cli.BoolFlag{
