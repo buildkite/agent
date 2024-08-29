@@ -13,31 +13,69 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 )
 
-type ECDSA struct {
+var (
+	ErrInvalidKeyAlgorithm = fmt.Errorf(`invalid key algorithm`)
+	ErrInvalidKeyID        = fmt.Errorf(`invalid key ID`)
+)
+
+type KMS struct {
 	alg    types.SigningAlgorithmSpec
 	jwaAlg jwa.KeyAlgorithm
 	client *kms.Client
 	kid    string
 }
 
-// NewECDSA creates a new ECDSA object. This object isnot complete by itself -- it
-// needs to be setup with the algorithm name to use (see
+// NewKMS creates a new ECDSA object. This object isnot complete by itself -- it
+// needs is setup with the algorithm name to use (see
 // https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/kms/types#SigningAlgorithmSpec),
 // a key ID to use while the AWS SDK makes network
 // requests.
-func NewECDSA(client *kms.Client) *ECDSA {
-	return &ECDSA{
-		client: client,
+func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
+	if kmsKeyID == "" {
+		return nil, ErrInvalidKeyID
 	}
+
+	keyDesc, err := client.GetPublicKey(context.Background(), &kms.GetPublicKeyInput{KeyId: aws.String(kmsKeyID)})
+	if err != nil {
+		return nil, fmt.Errorf(`failed to describe key %q: %w`, kmsKeyID, err)
+	}
+
+	if keyDesc.KeyUsage != types.KeyUsageTypeSignVerify {
+		return nil, fmt.Errorf(`invalid key usage. expected SIGN_VERIFY, got %q`, keyDesc.KeyUsage)
+	}
+
+	if len(keyDesc.SigningAlgorithms) == 0 {
+		return nil, fmt.Errorf(`no signing algorithms found for key %q`, kmsKeyID)
+	}
+
+	alg := keyDesc.SigningAlgorithms[0]
+
+	// using the first algorithm in the list we select the appropriate jwa.KeyAlgorithm
+	var jwaAlg jwa.KeyAlgorithm
+	switch alg {
+	case types.SigningAlgorithmSpecEcdsaSha256:
+		jwaAlg = jwa.ES256
+	case types.SigningAlgorithmSpecRsassaPkcs1V15Sha256:
+		jwaAlg = jwa.RS256
+	default:
+		return nil, fmt.Errorf("unsupported signing algorithm %q", alg)
+	}
+
+	return &KMS{
+		client: client,
+		jwaAlg: jwaAlg,
+		alg:    alg,
+		kid:    kmsKeyID,
+	}, nil
 }
 
 // Sign generates a signature from the given digest.
-func (sv *ECDSA) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (sv *KMS) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	if sv.alg == "" {
-		return nil, fmt.Errorf(`aws.ECDSA.Sign() requires the types.SigningAlgorithmSpec`)
+		return nil, fmt.Errorf(`aws.KMS.Sign() requires the types.SigningAlgorithmSpec`)
 	}
 	if sv.kid == "" {
-		return nil, fmt.Errorf(`aws.ECDSA.Sign() requires the KMS key ID`)
+		return nil, fmt.Errorf(`aws.KMS.Sign() requires the KMS key ID`)
 	}
 
 	input := kms.SignInput{
@@ -59,16 +97,16 @@ func (sv *ECDSA) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byt
 // Because the crypto.Signer API does not allow for an error to be returned,
 // the return value from this function cannot describe what kind of error
 // occurred.
-func (sv *ECDSA) Public() crypto.PublicKey {
+func (sv *KMS) Public() crypto.PublicKey {
 	pubkey, _ := sv.GetPublicKey()
 	return pubkey
 }
 
 // This method is an escape hatch for those cases where the user needs
 // to debug what went wrong during the GetPublicKey operation.
-func (sv *ECDSA) GetPublicKey() (crypto.PublicKey, error) {
+func (sv *KMS) GetPublicKey() (crypto.PublicKey, error) {
 	if sv.kid == "" {
-		return nil, fmt.Errorf(`aws.ECDSA.Sign() requires the key ID`)
+		return nil, fmt.Errorf(`aws.KMS.Sign() requires the key ID`)
 	}
 
 	input := kms.GetPublicKeyInput{
@@ -93,35 +131,6 @@ func (sv *ECDSA) GetPublicKey() (crypto.PublicKey, error) {
 }
 
 // jwa.ES256
-func (sv *ECDSA) Algorithm() jwa.KeyAlgorithm {
+func (sv *KMS) Algorithm() jwa.KeyAlgorithm {
 	return sv.jwaAlg
-}
-
-// WithAlgorithm associates a new types.SigningAlgorithmSpec with the object, which will be used for Sign() and Public()
-func (cs *ECDSA) WithAlgorithm(v types.SigningAlgorithmSpec) *ECDSA {
-	return &ECDSA{
-		client: cs.client,
-		alg:    v,
-		kid:    cs.kid,
-		jwaAlg: cs.jwaAlg,
-	}
-}
-
-// WithKeyID associates a new string with the object, which will be used for Sign() and Public()
-func (cs *ECDSA) WithKeyID(v string) *ECDSA {
-	return &ECDSA{
-		client: cs.client,
-		alg:    cs.alg,
-		kid:    v,
-		jwaAlg: cs.jwaAlg,
-	}
-}
-
-func (cs *ECDSA) WithJWAKeyAlgorithm(jwaAlg jwa.KeyAlgorithm) *ECDSA {
-	return &ECDSA{
-		client: cs.client,
-		alg:    cs.alg,
-		kid:    cs.kid,
-		jwaAlg: jwaAlg,
-	}
 }

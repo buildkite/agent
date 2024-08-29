@@ -21,7 +21,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
-	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
@@ -38,7 +37,6 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
-	"github.com/lestrrat-go/jwx/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
@@ -891,21 +889,32 @@ var AgentStartCommand = cli.Command{
 			defer shutdown()
 		}
 
+		// if the agent is provided a KMS key ID, it should use the KMS signer, otherwise
+		// it should load the JWKS from the file
 		var verificationJWKS any
 		switch {
 		case cfg.SigningJWKSKMSKeyID != "":
+
+			var v aws.ClientLogMode
+			// log requests and retries if we are debugging signing
+			// see https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/logging/
+			if cfg.DebugSigning {
+				v = aws.LogRetries | aws.LogRequest
+			}
+
 			awscfg, err := config.LoadDefaultConfig(
 				context.Background(),
-				config.WithClientLogMode(aws.LogRetries|aws.LogRequest),
+				config.WithClientLogMode(v),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to load AWS config: %w", err)
 			}
 
-			verificationJWKS = awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
-				WithAlgorithm(types.SigningAlgorithmSpecEcdsaSha256).
-				WithKeyID(cfg.SigningJWKSKMSKeyID).
-				WithJWAKeyAlgorithm(jwa.ES256)
+			// assign a crypto signer which uses the KMS key to sign the pipeline
+			verificationJWKS, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningJWKSKMSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't create KMS signer: %w", err)
+			}
 
 		case cfg.VerificationJWKSFile != "":
 			if cfg.VerificationJWKSFile != "" {

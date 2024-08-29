@@ -11,7 +11,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
-	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/buildkite/agent/v3/internal/bkgql"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/stdin"
@@ -194,9 +193,11 @@ Signing a pipeline from a file:
 			}
 
 			// assign a crypto signer which uses the KMS key to sign the pipeline
-			key = awssigner.NewECDSA(kms.NewFromConfig(awscfg)).
-				WithAlgorithm(types.SigningAlgorithmSpecEcdsaSha256).
-				WithKeyID(cfg.JWKSKMSKeyID)
+			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.JWKSKMSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't create KMS signer: %w", err)
+			}
+
 		default:
 			key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
 			if err != nil {
