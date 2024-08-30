@@ -36,8 +36,8 @@ type ToolSignConfig struct {
 	JWKSFile  string `cli:"jwks-file"`
 	JWKSKeyID string `cli:"jwks-key-id"`
 
-	// used for signing using KMS
-	AWSKMSKeyID string `cli:"aws-kms-key"`
+	// AWS KMS key used for signing pipelines
+	AWSKMSKeyID string `cli:"signing-aws-kms-key"`
 
 	// Enable debug logging for pipeline signing, this depends on debug logging also being enabled
 	DebugSigning bool `cli:"debug-signing"`
@@ -135,7 +135,7 @@ Signing a pipeline from a file:
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
 		},
 		cli.StringFlag{
-			Name:   "aws-kms-key",
+			Name:   "signing-aws-kms-key",
 			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
 			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
 		},
