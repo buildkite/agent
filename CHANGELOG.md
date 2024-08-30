@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.79.0](https://github.com/buildkite/agent/tree/v3.79.0) (2024-08-29)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.78.0...v3.79.0)
+
+### Fixed
+- Fix error when hook cannot be run due to missing interpreter [#2948](https://github.com/buildkite/agent/pull/2948) (@mcncl)
+
+### Added
+- Support for multiple trace context encodings [#2947](https://github.com/buildkite/agent/pull/2947) (@DrJosh9000)
+
+### Internal
+- Bump github.com/buildkite/go-pipeline from 0.11.0 to 0.12.0 [#2959](https://github.com/buildkite/agent/pull/2959) (@wolfeidau)
+- Dependabot churn: [#2951](https://github.com/buildkite/agent/pull/2951), [#2955](https://github.com/buildkite/agent/pull/2955), [#2949](https://github.com/buildkite/agent/pull/2949), [#2956](https://github.com/buildkite/agent/pull/2956), [#2954](https://github.com/buildkite/agent/pull/2954), [#2950](https://github.com/buildkite/agent/pull/2950), [#2953](https://github.com/buildkite/agent/pull/2953) (@dependabot[bot])
+
 ## [v3.78.0](https://github.com/buildkite/agent/tree/v3.78.0) (2024-08-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.77.0...v3.78.0)
 
