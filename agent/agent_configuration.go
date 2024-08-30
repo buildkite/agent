@@ -35,10 +35,10 @@ type AgentConfiguration struct {
 	RunInPty                    bool
 	KubernetesExec              bool
 
-	SigningJWKSFile     string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
-	SigningJWKSKeyID    string // The key ID to sign pipeline uploads with
-	SigningJWKSKMSKeyID string // The KMS key ID to sign pipeline uploads with
-	DebugSigning        bool   // Whether to print step payloads when signing them
+	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
+	SigningJWKSKeyID string // The key ID to sign pipeline uploads with
+	SigningAWSKMSKey string // The KMS key ID to sign pipeline uploads with
+	DebugSigning     bool   // Whether to print step payloads when signing them
 
 	VerificationJWKS             any    // The set of keys to verify jobs with
 	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)

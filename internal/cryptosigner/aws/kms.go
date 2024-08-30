@@ -30,6 +30,12 @@ type KMS struct {
 // https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/kms/types#SigningAlgorithmSpec),
 // a key ID to use while the AWS SDK makes network
 // requests.
+
+// NewKMS creates a new crypto signer which uses AWS KMS to sign data. The keys signing algorithm spec
+// dictates the type of signature that will be generated (see
+// https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/kms/types#SigningAlgorithmSpec),
+
+// The key ID is the unique identifier of the KMS key or key alias.
 func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 	if kmsKeyID == "" {
 		return nil, ErrInvalidKeyID
@@ -40,10 +46,12 @@ func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 		return nil, fmt.Errorf(`failed to describe key %q: %w`, kmsKeyID, err)
 	}
 
+	// the key must be a sign/verify key see https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/kms/types#KeyUsageType
 	if keyDesc.KeyUsage != types.KeyUsageTypeSignVerify {
 		return nil, fmt.Errorf(`invalid key usage. expected SIGN_VERIFY, got %q`, keyDesc.KeyUsage)
 	}
 
+	// there should be at least one signing algorithm available, and for sign/verify keys there should only be one.
 	if len(keyDesc.SigningAlgorithms) == 0 {
 		return nil, fmt.Errorf(`no signing algorithms found for key %q`, kmsKeyID)
 	}
@@ -94,7 +102,7 @@ func (sv *KMS) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte,
 
 // Public returns the corresponding public key.
 //
-// Because the crypto.Signer API does not allow for an error to be returned,
+// NOTE: Because the crypto.Signer API does not allow for an error to be returned,
 // the return value from this function cannot describe what kind of error
 // occurred.
 func (sv *KMS) Public() crypto.PublicKey {

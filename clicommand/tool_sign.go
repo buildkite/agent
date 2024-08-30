@@ -33,10 +33,14 @@ type ToolSignConfig struct {
 	NoConfirm    bool   `cli:"no-confirm"`
 
 	// Used for signing
-	JWKSFile     string `cli:"jwks-file"`
-	JWKSKeyID    string `cli:"jwks-key-id"`
-	JWKSKMSKeyID string `cli:"jwks-kms-key-id"`
-	DebugSigning bool   `cli:"debug-signing"`
+	JWKSFile  string `cli:"jwks-file"`
+	JWKSKeyID string `cli:"jwks-key-id"`
+
+	// used for signing using KMS
+	AWSKMSKeyID string `cli:"aws-kms-key"`
+
+	// Enable debug logging for pipeline signing, this depends on debug logging also being enabled
+	DebugSigning bool `cli:"debug-signing"`
 
 	// Needed for to use GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
@@ -131,9 +135,9 @@ Signing a pipeline from a file:
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
 		},
 		cli.StringFlag{
-			Name:   "jwks-kms-key-id",
+			Name:   "aws-kms-key",
 			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
-			EnvVar: "BUILDKITE_AGENT_JWKS_KMS_KEY_ID",
+			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
@@ -184,7 +188,8 @@ Signing a pipeline from a file:
 		)
 
 		switch {
-		case cfg.JWKSKMSKeyID != "":
+		case cfg.AWSKMSKeyID != "":
+			// load the AWS SDK V2 config
 			awscfg, err := config.LoadDefaultConfig(
 				context.Background(),
 			)
@@ -193,7 +198,7 @@ Signing a pipeline from a file:
 			}
 
 			// assign a crypto signer which uses the KMS key to sign the pipeline
-			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.JWKSKMSKeyID)
+			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.AWSKMSKeyID)
 			if err != nil {
 				return fmt.Errorf("couldn't create KMS signer: %w", err)
 			}

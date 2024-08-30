@@ -524,8 +524,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	}
 
 	// pass through the KMS key ID for signing
-	if r.conf.AgentConfiguration.SigningJWKSKMSKeyID != "" {
-		env["BUILDKITE_AGENT_JWKS_KMS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKMSKeyID
+	if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
+		env["BUILDKITE_AGENT_AWS_KMS_KEY"] = r.conf.AgentConfiguration.SigningAWSKMSKey
 	}
 
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
