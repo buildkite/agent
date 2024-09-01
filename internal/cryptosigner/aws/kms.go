@@ -63,8 +63,16 @@ func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 	switch alg {
 	case types.SigningAlgorithmSpecEcdsaSha256:
 		jwaAlg = jwa.ES256
+	case types.SigningAlgorithmSpecEcdsaSha384:
+		jwaAlg = jwa.ES384
+	case types.SigningAlgorithmSpecEcdsaSha512:
+		jwaAlg = jwa.ES512
 	case types.SigningAlgorithmSpecRsassaPkcs1V15Sha256:
 		jwaAlg = jwa.RS256
+	case types.SigningAlgorithmSpecRsassaPkcs1V15Sha384:
+		jwaAlg = jwa.RS384
+	case types.SigningAlgorithmSpecRsassaPkcs1V15Sha512:
+		jwaAlg = jwa.RS512
 	default:
 		return nil, fmt.Errorf("unsupported signing algorithm %q", alg)
 	}
