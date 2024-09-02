@@ -52,13 +52,25 @@ func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 	}
 
 	// there should be at least one signing algorithm available, and for sign/verify keys there should only be one.
-	if len(keyDesc.SigningAlgorithms) == 0 {
-		return nil, fmt.Errorf(`no signing algorithms found for key %q`, kmsKeyID)
+	if len(keyDesc.SigningAlgorithms) != 1 {
+		return nil, fmt.Errorf(`expected one signing algorithm for key %q got %q`, kmsKeyID, keyDesc.SigningAlgorithms)
 	}
 
 	alg := keyDesc.SigningAlgorithms[0]
 
-	// using the first algorithm in the list we select the appropriate jwa.KeyAlgorithm
+	// Using the matching KMS keyset as per the following table, we select the
+	// appropriate jwa.KeyAlgorithm see https://datatracker.ietf.org/doc/html/rfc7518#section-3.1
+	// and https://docs.aws.amazon.com/kms/latest/developerguide/asymmetric-key-specs.html
+	//
+	// | "alg" Param Value | Digital Signature Algorithm | KMS KeySpec |
+	// | ----------------- | --------------------------- | ----------- |
+	// | ES256   | ECDSA using P-256 and SHA-256   | ECC_NIST_P256 |
+	// | ES384   | ECDSA using P-384 and SHA-384   | ECC_NIST_P384 |
+	// | ES512   | ECDSA using P-521 and SHA-512   | ECC_NIST_P521 |
+	// | RS256   | RSASSA-PKCS1-v1_5 using SHA-256 | RSASSA_PKCS1_V1_5_SHA_256 |
+	// | RS384   | RSASSA-PKCS1-v1_5 using SHA-384 | RSASSA_PKCS1_V1_5_SHA_384 |
+	// | RS512   | RSASSA-PKCS1-v1_5 using SHA-512 | RSASSA_PKCS1_V1_5_SHA_512 |
+	//
 	var jwaAlg jwa.KeyAlgorithm
 	switch alg {
 	case types.SigningAlgorithmSpecEcdsaSha256:
