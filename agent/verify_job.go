@@ -10,7 +10,6 @@ import (
 
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/gowebpki/jcs"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 var (
@@ -35,7 +34,7 @@ func (e *invalidSignatureError) Unwrap() error {
 	return e.underlying
 }
 
-func (r *JobRunner) verifyJob(ctx context.Context, keySet jwk.Set) error {
+func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	step := r.conf.Job.Step
 
 	if step.Signature == nil {

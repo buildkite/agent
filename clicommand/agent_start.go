@@ -18,10 +18,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/agentapi"
+	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
@@ -83,8 +87,10 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
-	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
 	SigningJWKSKeyID string `cli:"signing-jwks-key-id"`
+
+	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
+	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
@@ -658,6 +664,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The JWKS key ID to use when signing the pipeline. If omitted, and the signing JWKS contains only one key, that key will be used.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID",
 		},
+		cli.StringFlag{
+			Name:   "signing-aws-kms-key",
+			Usage:  "The KMS KMS key ID, or key alias used when signing and verifying the pipeline.",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
@@ -878,8 +889,36 @@ var AgentStartCommand = cli.Command{
 			defer shutdown()
 		}
 
-		var verificationJWKS jwk.Set
-		if cfg.VerificationJWKSFile != "" {
+		// if the agent is provided a KMS key ID, it should use the KMS signer, otherwise
+		// it should load the JWKS from the file
+		var verificationJWKS any
+		switch {
+		case cfg.SigningAWSKMSKey != "":
+
+			var logMode aws.ClientLogMode
+			// log requests and retries if we are debugging signing
+			// see https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/logging/
+			if cfg.DebugSigning {
+				logMode = aws.LogRetries | aws.LogRequest
+			}
+
+			// this is currently loaded here to ensure it is ONLY loaded if the agent is using KMS for signing
+			// this will limit the possible impact of this new SDK on the rest of the agent users
+			awscfg, err := config.LoadDefaultConfig(
+				ctx,
+				config.WithClientLogMode(logMode),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to load AWS config: %w", err)
+			}
+
+			// assign a crypto signer which uses the KMS key to sign the pipeline
+			verificationJWKS, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
+			if err != nil {
+				return fmt.Errorf("couldn't create KMS signer: %w", err)
+			}
+
+		case cfg.VerificationJWKSFile != "":
 			var err error
 			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
 			if err != nil {
@@ -958,6 +997,7 @@ var AgentStartCommand = cli.Command{
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
+			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
 			DebugSigning:     cfg.DebugSigning,
 
 			VerificationJWKS: verificationJWKS,
