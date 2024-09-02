@@ -905,7 +905,7 @@ var AgentStartCommand = cli.Command{
 			// this is currently loaded here to ensure it is ONLY loaded if the agent is using KMS for signing
 			// this will limit the possible impact of this new SDK on the rest of the agent users
 			awscfg, err := config.LoadDefaultConfig(
-				context.Background(),
+				ctx,
 				config.WithClientLogMode(logMode),
 			)
 			if err != nil {
@@ -919,12 +919,10 @@ var AgentStartCommand = cli.Command{
 			}
 
 		case cfg.VerificationJWKSFile != "":
-			if cfg.VerificationJWKSFile != "" {
-				var err error
-				verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
-				if err != nil {
-					l.Fatal("Verification JWKS failed validation: %v", err)
-				}
+			var err error
+			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
+			if err != nil {
+				l.Fatal("Verification JWKS failed validation: %v", err)
 			}
 		}
 

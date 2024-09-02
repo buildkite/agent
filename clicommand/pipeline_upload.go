@@ -290,9 +290,7 @@ var PipelineUploadCommand = cli.Command{
 
 		switch {
 		case cfg.SigningAWSKMSKey != "":
-			awscfg, err := config.LoadDefaultConfig(
-				context.Background(),
-			)
+			awscfg, err := config.LoadDefaultConfig(ctx)
 			if err != nil {
 				return fmt.Errorf("couldn't load AWS config: %w", err)
 			}

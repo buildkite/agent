@@ -14,10 +14,11 @@ import (
 )
 
 var (
-	ErrInvalidKeyAlgorithm = fmt.Errorf(`invalid key algorithm`)
-	ErrInvalidKeyID        = fmt.Errorf(`invalid key ID`)
+	ErrInvalidKeyAlgorithm = fmt.Errorf("invalid key algorithm")
+	ErrInvalidKeyID        = fmt.Errorf("invalid key ID")
 )
 
+// KMS is a crypto.Signer that uses an AWS KMS key for signing.
 type KMS struct {
 	alg    types.SigningAlgorithmSpec
 	jwaAlg jwa.KeyAlgorithm
@@ -43,17 +44,17 @@ func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 
 	keyDesc, err := client.GetPublicKey(context.Background(), &kms.GetPublicKeyInput{KeyId: aws.String(kmsKeyID)})
 	if err != nil {
-		return nil, fmt.Errorf(`failed to describe key %q: %w`, kmsKeyID, err)
+		return nil, fmt.Errorf("failed to describe key %q: %w", kmsKeyID, err)
 	}
 
 	// the key must be a sign/verify key see https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/kms/types#KeyUsageType
 	if keyDesc.KeyUsage != types.KeyUsageTypeSignVerify {
-		return nil, fmt.Errorf(`invalid key usage. expected SIGN_VERIFY, got %q`, keyDesc.KeyUsage)
+		return nil, fmt.Errorf("invalid key usage. expected SIGN_VERIFY, got %q", keyDesc.KeyUsage)
 	}
 
 	// there should be at least one signing algorithm available, and for sign/verify keys there should only be one.
 	if len(keyDesc.SigningAlgorithms) != 1 {
-		return nil, fmt.Errorf(`expected one signing algorithm for key %q got %q`, kmsKeyID, keyDesc.SigningAlgorithms)
+		return nil, fmt.Errorf("expected one signing algorithm for key %q got %q", kmsKeyID, keyDesc.SigningAlgorithms)
 	}
 
 	alg := keyDesc.SigningAlgorithms[0]
@@ -100,10 +101,10 @@ func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 // Sign generates a signature from the given digest.
 func (sv *KMS) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	if sv.alg == "" {
-		return nil, fmt.Errorf(`aws.KMS.Sign() requires the types.SigningAlgorithmSpec`)
+		return nil, fmt.Errorf("aws.KMS.Sign() requires the types.SigningAlgorithmSpec")
 	}
 	if sv.kid == "" {
-		return nil, fmt.Errorf(`aws.KMS.Sign() requires the KMS key ID`)
+		return nil, fmt.Errorf("aws.KMS.Sign() requires the KMS key ID")
 	}
 
 	input := kms.SignInput{
@@ -114,7 +115,7 @@ func (sv *KMS) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte,
 	}
 	signed, err := sv.client.Sign(context.Background(), &input)
 	if err != nil {
-		return nil, fmt.Errorf(`failed to sign via KMS: %w`, err)
+		return nil, fmt.Errorf("failed to sign via KMS: %w", err)
 	}
 
 	return signed.Signature, nil
@@ -130,11 +131,11 @@ func (sv *KMS) Public() crypto.PublicKey {
 	return pubkey
 }
 
-// This method is an escape hatch for those cases where the user needs
+// GetPublicKey is an escape hatch for those cases where the user needs
 // to debug what went wrong during the GetPublicKey operation.
 func (sv *KMS) GetPublicKey() (crypto.PublicKey, error) {
 	if sv.kid == "" {
-		return nil, fmt.Errorf(`aws.KMS.Sign() requires the key ID`)
+		return nil, fmt.Errorf("aws.KMS.Sign() requires the key ID")
 	}
 
 	input := kms.GetPublicKeyInput{
@@ -143,22 +144,22 @@ func (sv *KMS) GetPublicKey() (crypto.PublicKey, error) {
 
 	output, err := sv.client.GetPublicKey(context.Background(), &input)
 	if err != nil {
-		return nil, fmt.Errorf(`failed to get public key from KMS: %w`, err)
+		return nil, fmt.Errorf("failed to get public key from KMS: %w", err)
 	}
 
 	if output.KeyUsage != types.KeyUsageTypeSignVerify {
-		return nil, fmt.Errorf(`invalid key usage. expected SIGN_VERIFY, got %q`, output.KeyUsage)
+		return nil, fmt.Errorf("invalid key usage. expected SIGN_VERIFY, got %q", output.KeyUsage)
 	}
 
 	key, err := x509.ParsePKIXPublicKey(output.PublicKey)
 	if err != nil {
-		return nil, fmt.Errorf(`failed to parse key: %w`, err)
+		return nil, fmt.Errorf("failed to parse key: %w", err)
 	}
 
 	return key, nil
 }
 
-// jwa.ES256
+// Algorithm returns the equivalent of the KMS key's signing algorithm as a JWA key algorithm.
 func (sv *KMS) Algorithm() jwa.KeyAlgorithm {
 	return sv.jwaAlg
 }

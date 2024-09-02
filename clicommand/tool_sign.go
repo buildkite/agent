@@ -190,9 +190,7 @@ Signing a pipeline from a file:
 		switch {
 		case cfg.AWSKMSKeyID != "":
 			// load the AWS SDK V2 config
-			awscfg, err := config.LoadDefaultConfig(
-				context.Background(),
-			)
+			awscfg, err := config.LoadDefaultConfig(ctx)
 			if err != nil {
 				return fmt.Errorf("couldn't load AWS config: %w", err)
 			}
