@@ -47,7 +47,7 @@ type Artifact struct {
 	UploadInstructions *ArtifactUploadInstructions `json:"-"`
 
 	// A specific Content-Type to use on upload
-	ContentType string `json:"-"`
+	ContentType string `json:"content_type,omitempty"`
 }
 
 type ArtifactBatch struct {
