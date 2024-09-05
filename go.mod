@@ -1,8 +1,6 @@
 module github.com/buildkite/agent/v3
 
-go 1.22
-
-toolchain go1.22.1
+go 1.22.6
 
 require (
 	cloud.google.com/go/compute/metadata v0.5.0
@@ -34,7 +32,7 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.1
 	github.com/mattn/go-zglob v0.0.6
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/oleiade/reflections v1.0.1
+	github.com/oleiade/reflections v1.1.0
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pborman/uuid v1.2.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
