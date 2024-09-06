@@ -64,6 +64,8 @@ Format specifiers:
 
   %S    SHA1 checksum of the artifact
 
+  %T    SHA256 checksum of the artifact
+
   %u    Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead`
 
 type ArtifactSearchConfig struct {
@@ -162,6 +164,7 @@ var ArtifactSearchCommand = cli.Command{
 				"%j", artifact.JobID,
 				"%s", strconv.FormatInt(artifact.FileSize, 10),
 				"%S", artifact.Sha1Sum,
+				"%T", artifact.Sha256Sum,
 				"%u", artifact.URL,
 				"%i", artifact.ID,
 			)
