@@ -125,13 +125,13 @@ steps:
             # - with: { os: freebsd, arch: arm64 }
             #   skip: "arm64 FreeBSD is not currently supported"
 
-            # - with: { os: linux, arch: arm }
-            # - with: { os: linux, arch: armhf }
-            # - with: { os: linux, arch: ppc64 }
-            # - with: { os: linux, arch: ppc64le }
-            # - with: { os: linux, arch: mips64le }
-            # - with: { os: linux, arch: s390x }
-            # - with: { os: linux, arch: riscv64 }
+            - with: { os: linux, arch: arm }
+            - with: { os: linux, arch: armhf }
+            - with: { os: linux, arch: ppc64 }
+            - with: { os: linux, arch: ppc64le }
+            - with: { os: linux, arch: mips64le }
+            - with: { os: linux, arch: s390x }
+            - with: { os: linux, arch: riscv64 }
 
             # - with: { os: netbsd, arch: amd64 }
 
@@ -159,9 +159,9 @@ steps:
   #       volumes:
   #         - "/usr/bin/buildkite-agent:/usr/bin/buildkite-agent"
 
-  # - name: ":mag: Extract Agent Version Metadata"
-  #   key: set-metadata
-  #   command: ".buildkite/steps/extract-agent-version-metadata.sh"
+  - name: ":mag: Extract Agent Version Metadata"
+    key: set-metadata
+    command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
   # - group: ":docker: Docker Image Builds"
   #   steps:
@@ -218,21 +218,29 @@ steps:
   #             - ubuntu-22.04
   #             - sidecar
 
-  # - name: ":debian: Debian package build"
-  #   key: build-debian-packages
-  #   depends_on:
-  #     - build-binary
-  #     - set-metadata
-  #   command: ".buildkite/steps/build-debian-packages.sh"
-  #   artifact_paths: "deb/**/*"
+  - name: ":debian: Debian package build"
+    key: build-debian-packages
+    depends_on:
+      - build-binary
+      - set-metadata
+    command: ".buildkite/steps/build-debian-packages.sh"
+    artifact_paths: "deb/**/*"
+    plugins:
+      - buildkite-plugins/generate-build-provenance#main:
+          artifacts: "deb/*"
+          provenance_filename: "buildkite-agent-debian-packages.provenance.json"
 
-  # - name: ":redhat: RPM Package build"
-  #   key: build-rpm-packages
-  #   depends_on:
-  #     - build-binary
-  #     - set-metadata
-  #   command: ".buildkite/steps/build-rpm-packages.sh"
-  #   artifact_paths: "rpm/**/*"
+  - name: ":redhat: RPM Package build"
+    key: build-rpm-packages
+    depends_on:
+      - build-binary
+      - set-metadata
+    command: ".buildkite/steps/build-rpm-packages.sh"
+    artifact_paths: "rpm/**/*"
+    plugins:
+      - buildkite-plugins/generate-build-provenance#main:
+          artifacts: "rpm/*"
+          provenance_filename: "buildkite-agent-rpm-packages.provenance.json"
 
   # - name: ":github: Build Github Release"
   #   key: build-github-release
