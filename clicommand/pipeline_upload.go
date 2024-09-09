@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -290,9 +289,9 @@ var PipelineUploadCommand = cli.Command{
 
 		switch {
 		case cfg.SigningAWSKMSKey != "":
-			awscfg, err := config.LoadDefaultConfig(ctx)
+			awscfg, err := agent.GetAWSConfigV2(ctx)
 			if err != nil {
-				return fmt.Errorf("couldn't load AWS config: %w", err)
+				return err
 			}
 
 			// assign a crypto signer which uses the KMS key to sign the pipeline

@@ -904,12 +904,12 @@ var AgentStartCommand = cli.Command{
 
 			// this is currently loaded here to ensure it is ONLY loaded if the agent is using KMS for signing
 			// this will limit the possible impact of this new SDK on the rest of the agent users
-			awscfg, err := config.LoadDefaultConfig(
+			awscfg, err := agent.GetAWSConfigV2(
 				ctx,
 				config.WithClientLogMode(logMode),
 			)
 			if err != nil {
-				return fmt.Errorf("failed to load AWS config: %w", err)
+				return err
 			}
 
 			// assign a crypto signer which uses the KMS key to sign the pipeline
