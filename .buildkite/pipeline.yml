@@ -88,52 +88,55 @@ steps:
 
   - group: ":hammer_and_wrench: Binary builds"
     steps:
-    - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-      command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
-      key: build-binary
-      depends_on:
-        # don't wait for slower windows tests
-        - test-linux-amd64
-        - test-linux-arm64
-      artifact_paths: "pkg/*"
-      plugins:
-        docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: agent
-      matrix:
-        setup:
-          os:
-            - darwin
-            - freebsd
-            - linux
-            - openbsd
-            - windows
-          arch:
-            - "386"
-            - amd64
-            - arm64
-        adjustments:
-          - with: { os: darwin, arch: "386" }
-            skip: "macOS no longer supports x86 binaries"
+      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
+        command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
+        key: build-binary
+        depends_on:
+          # don't wait for slower windows tests
+          - test-linux-amd64
+          - test-linux-arm64
+        artifact_paths: "pkg/*"
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              run: agent
+          - generate-build-provenance#v1.0.1:
+              artifacts: "pkg/*"
+              provenance_filename: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.provenance.json"
+        matrix:
+          setup:
+            os:
+              - darwin
+              - freebsd
+              - linux
+              - openbsd
+              - windows
+            arch:
+              - "386"
+              - amd64
+              - arm64
+          adjustments:
+            - with: { os: darwin, arch: "386" }
+              skip: "macOS no longer supports x86 binaries"
 
-          - with: { os: dragonflybsd, arch: amd64 }
+            - with: { os: dragonflybsd, arch: amd64 }
 
-          - with: { os: freebsd, arch: arm64 }
-            skip: "arm64 FreeBSD is not currently supported"
+            - with: { os: freebsd, arch: arm64 }
+              skip: "arm64 FreeBSD is not currently supported"
 
-          - with: { os: linux, arch: arm }
-          - with: { os: linux, arch: armhf }
-          - with: { os: linux, arch: ppc64 }
-          - with: { os: linux, arch: ppc64le }
-          - with: { os: linux, arch: mips64le }
-          - with: { os: linux, arch: s390x }
-          - with: { os: linux, arch: riscv64 }
+            - with: { os: linux, arch: arm }
+            - with: { os: linux, arch: armhf }
+            - with: { os: linux, arch: ppc64 }
+            - with: { os: linux, arch: ppc64le }
+            - with: { os: linux, arch: mips64le }
+            - with: { os: linux, arch: s390x }
+            - with: { os: linux, arch: riscv64 }
 
-          - with: { os: netbsd, arch: amd64 }
+            - with: { os: netbsd, arch: amd64 }
 
-          - with: { os: openbsd, arch: arm64 }
-            skip: "arm64 OpenBSD is not currently supported"
+            - with: { os: openbsd, arch: arm64 }
+              skip: "arm64 OpenBSD is not currently supported"
 
   - label: ":bathtub: Check version string is clean"
     key: check-version-string
@@ -145,16 +148,16 @@ steps:
     depends_on: build-binary
     command: ".buildkite/steps/test-bk.sh"
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
-        env:
-          - BUILDKITE_AGENT_ACCESS_TOKEN
-          - BUILDKITE_BUILD_ID
-          - BUILDKITE_JOB_ID
-        volumes:
-          - "/usr/bin/buildkite-agent:/usr/bin/buildkite-agent"
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_BUILD_ID
+            - BUILDKITE_JOB_ID
+          volumes:
+            - "/usr/bin/buildkite-agent:/usr/bin/buildkite-agent"
 
   - name: ":mag: Extract Agent Version Metadata"
     key: set-metadata
@@ -222,6 +225,10 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
+    plugins:
+      - generate-build-provenance#v1.0.1:
+          artifacts: "deb/*"
+          provenance_filename: "buildkite-agent-debian-packages.provenance.json"
 
   - name: ":redhat: RPM Package build"
     key: build-rpm-packages
@@ -230,6 +237,10 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
+    plugins:
+      - generate-build-provenance#v1.0.1:
+          artifacts: "rpm/*"
+          provenance_filename: "buildkite-agent-rpm-packages.provenance.json"
 
   - name: ":github: Build Github Release"
     key: build-github-release
@@ -239,9 +250,12 @@ steps:
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.release.yml
-        run: github-release
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.release.yml
+          run: github-release
+      - generate-build-provenance#v1.0.1:
+          artifacts: "releases/*.tar.gz;releases/*.zip"
+          provenance_filename: "buildkite-agent-github-releases.provenance.json"
 
   - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
