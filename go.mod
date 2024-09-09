@@ -12,6 +12,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2 v1.30.4
 	github.com/aws/aws-sdk-go-v2/config v1.27.31
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.12
 	github.com/aws/aws-sdk-go-v2/service/kms v1.35.5
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.3.0
@@ -77,7 +78,6 @@ require (
 	github.com/alexflint/go-scalar v1.0.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.30 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.12 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.1 // indirect
