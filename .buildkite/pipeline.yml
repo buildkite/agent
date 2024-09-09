@@ -101,7 +101,7 @@ steps:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               run: agent
-          - buildkite-plugins/generate-build-provenance#isaacsu/check-globbing:
+          - generate-build-provenance#v1.0.0:
               artifacts: "pkg/*"
               provenance_filename: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.provenance.json"
         matrix:
@@ -226,7 +226,7 @@ steps:
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
     plugins:
-      - buildkite-plugins/generate-build-provenance#isaacsu/check-globbing:
+      - generate-build-provenance#v1.0.0:
           artifacts: "deb/*"
           provenance_filename: "buildkite-agent-debian-packages.provenance.json"
 
@@ -238,7 +238,7 @@ steps:
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
     plugins:
-      - buildkite-plugins/generate-build-provenance#isaacsu/check-globbing:
+      - generate-build-provenance#v1.0.0:
           artifacts: "rpm/*"
           provenance_filename: "buildkite-agent-rpm-packages.provenance.json"
 
@@ -253,7 +253,7 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.release.yml
           run: github-release
-      - buildkite-plugins/generate-build-provenance#isaacsu/check-globbing:
+      - generate-build-provenance#v1.0.0:
           artifacts: "releases/*.tar.gz;releases/*.zip"
           provenance_filename: "buildkite-agent-github-releases.provenance.json"
 
