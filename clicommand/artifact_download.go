@@ -111,7 +111,7 @@ var ArtifactDownloadCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the downloader
-		downloader := artifact.NewArtifactDownloader(l, client, artifact.ArtifactDownloaderConfig{
+		downloader := artifact.NewDownloader(l, client, artifact.DownloaderConfig{
 			Query:              cfg.Query,
 			Destination:        cfg.Destination,
 			BuildID:            cfg.Build,

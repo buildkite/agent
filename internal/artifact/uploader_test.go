@@ -77,7 +77,7 @@ func TestCollect(t *testing.T) {
 		},
 	}
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: fmt.Sprintf("%s;%s",
 			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
@@ -160,7 +160,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("log", "*"),
 			filepath.Join("tmp", "capybara", "**", "*"),
@@ -185,7 +185,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
@@ -211,7 +211,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
@@ -239,7 +239,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
@@ -275,7 +275,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
@@ -313,7 +313,7 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 		}, ";"),
@@ -393,7 +393,7 @@ func TestCollect_WithZZGlob(t *testing.T) {
 		},
 	}
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: fmt.Sprintf("%s;%s",
 			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
@@ -476,7 +476,7 @@ func TestCollectThatDoesntMatchAnyFiles_WithZZGlob(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("log", "*"),
 			filepath.Join("tmp", "capybara", "**", "*"),
@@ -501,7 +501,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything_WithZZGlob(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
@@ -527,7 +527,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks_WithZZGlob(t
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
@@ -555,7 +555,7 @@ func TestCollectWithDuplicateMatches_WithZZGlob(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
@@ -591,7 +591,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks_WithZZGlob(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
@@ -629,7 +629,7 @@ func TestCollectMatchesUploadSymlinks_WithZZGlob(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 		}, ";"),
