@@ -1,4 +1,4 @@
-package agent
+package awslib
 
 import (
 	"os"
@@ -10,10 +10,9 @@ import (
 
 var awsSess *session.Session
 
-// The aws sdk relies on being given a region, which is a breaking change for us
-// This applies a heuristic that detects where the agent might be based on the env
-// but also the local isntance metadata if available
-func awsRegion() (string, error) {
+// Region detects the current AWS region where the agent might be running
+// using the env but also the local instance metadata if available.
+func Region() (string, error) {
 	if r := os.Getenv("AWS_REGION"); r != "" {
 		return r, nil
 	}
@@ -38,8 +37,10 @@ func awsRegion() (string, error) {
 	return "", aws.ErrMissingRegion
 }
 
-func awsSession() (*session.Session, error) {
-	region, err := awsRegion()
+// Session returns a singleton Session, creating a new Session for the
+// current region if not created previously.
+func Session() (*session.Session, error) {
+	region, err := Region()
 	if err != nil {
 		return nil, err
 	}

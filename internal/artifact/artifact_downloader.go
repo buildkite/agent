@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"context"
@@ -12,7 +12,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/buildkite/agent/v3/api"
-	iartifact "github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/pool"
 )
@@ -183,8 +182,8 @@ func (a *ArtifactDownloader) createDownloader(artifact *api.Artifact, path, dest
 			DebugHTTP:   a.conf.DebugHTTP,
 		})
 
-	case iartifact.IsAzureBlobPath(artifact.UploadDestination):
-		return iartifact.NewAzureBlobDownloader(a.logger, iartifact.AzureBlobDownloaderConfig{
+	case IsAzureBlobPath(artifact.UploadDestination):
+		return NewAzureBlobDownloader(a.logger, AzureBlobDownloaderConfig{
 			Path:        path,
 			Repository:  artifact.UploadDestination,
 			Destination: destination,

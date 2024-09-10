@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/kms"
-	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v3/internal/awslib"
 	"github.com/buildkite/agent/v3/internal/bkgql"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/stdin"
@@ -190,7 +190,7 @@ Signing a pipeline from a file:
 		switch {
 		case cfg.AWSKMSKeyID != "":
 			// load the AWS SDK V2 config
-			awscfg, err := agent.GetAWSConfigV2(ctx)
+			awscfg, err := awslib.GetConfigV2(ctx)
 			if err != nil {
 				return err
 			}

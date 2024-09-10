@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"context"
@@ -17,7 +17,6 @@ import (
 
 	"github.com/DrJosh9000/zzglob"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/mime"
 	"github.com/buildkite/agent/v3/logger"
@@ -396,9 +395,9 @@ func (a *ArtifactUploader) createUploader() (uploader Uploader, err error) {
 			DebugHTTP:   a.conf.DebugHTTP,
 		})
 
-	case artifact.IsAzureBlobPath(a.conf.Destination):
+	case IsAzureBlobPath(a.conf.Destination):
 		dest = "Azure Blob storage"
-		return artifact.NewAzureBlobUploader(a.logger, artifact.AzureBlobUploaderConfig{
+		return NewAzureBlobUploader(a.logger, AzureBlobUploaderConfig{
 			Destination: a.conf.Destination,
 		})
 

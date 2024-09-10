@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"testing"
