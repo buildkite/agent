@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.81.0](https://github.com/buildkite/agent/tree/v3.81.0) (2024-09-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.80.0...v3.81.0)
+
+### Fixed
+- Fix for region discovery issue with aws sdkv2 when running in ec2 [#2977](https://github.com/buildkite/agent/pull/2977) (@wolfeidau)
+- Explain verification-failure-behavior in more detail [#2984](https://github.com/buildkite/agent/pull/2984) (@DrJosh9000)
+
+### Added
+- Add sha256 checksum output to the formatting options [#2974](https://github.com/buildkite/agent/pull/2974) (@patrobinson)
+
+### Internal
+- Dependabot churn: [#2978](https://github.com/buildkite/agent/pull/2978), [#2980](https://github.com/buildkite/agent/pull/2980) (@dependabot[bot])
+
 ## [v3.80.0](https://github.com/buildkite/agent/tree/v3.80.0) (2024-09-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.79.0...v3.80.0)
 
