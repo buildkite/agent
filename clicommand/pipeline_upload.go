@@ -18,6 +18,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/redact"
@@ -289,7 +290,7 @@ var PipelineUploadCommand = cli.Command{
 
 		switch {
 		case cfg.SigningAWSKMSKey != "":
-			awscfg, err := agent.GetAWSConfigV2(ctx)
+			awscfg, err := awslib.GetConfigV2(ctx)
 			if err != nil {
 				return err
 			}

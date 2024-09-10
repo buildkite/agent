@@ -1,7 +1,6 @@
 //go:build !windows
-// +build !windows
 
-package agent
+package artifact
 
 import (
 	"context"

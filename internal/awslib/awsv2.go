@@ -1,4 +1,4 @@
-package agent
+package awslib
 
 import (
 	"context"
@@ -9,7 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 )
 
-func GetAWSConfigV2(ctx context.Context, optFns ...func(*config.LoadOptions) error) (cfg aws.Config, err error) {
+// GetConfigV2 creates a new AWS SDK v2 config.
+func GetConfigV2(ctx context.Context, optFns ...func(*config.LoadOptions) error) (cfg aws.Config, err error) {
 	cfg, err = config.LoadDefaultConfig(ctx, optFns...)
 	if err != nil {
 		return cfg, fmt.Errorf("error loading default config: %w", err)

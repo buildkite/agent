@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/roko"
 )
 
-type ArtifactBatchCreatorConfig struct {
+type BatchCreatorConfig struct {
 	// The ID of the Job that these artifacts belong to
 	JobID string
 
@@ -24,9 +24,9 @@ type ArtifactBatchCreatorConfig struct {
 	CreateArtifactsTimeout time.Duration
 }
 
-type ArtifactBatchCreator struct {
+type BatchCreator struct {
 	// The creation config
-	conf ArtifactBatchCreatorConfig
+	conf BatchCreatorConfig
 
 	// The logger instance to use
 	logger logger.Logger
@@ -35,15 +35,15 @@ type ArtifactBatchCreator struct {
 	apiClient APIClient
 }
 
-func NewArtifactBatchCreator(l logger.Logger, ac APIClient, c ArtifactBatchCreatorConfig) *ArtifactBatchCreator {
-	return &ArtifactBatchCreator{
+func NewArtifactBatchCreator(l logger.Logger, ac APIClient, c BatchCreatorConfig) *BatchCreator {
+	return &BatchCreator{
 		logger:    l,
 		conf:      c,
 		apiClient: ac,
 	}
 }
 
-func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
+func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 	length := len(a.conf.Artifacts)
 	chunks := 30
 

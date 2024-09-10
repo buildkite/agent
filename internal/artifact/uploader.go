@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"context"
@@ -17,7 +17,6 @@ import (
 
 	"github.com/DrJosh9000/zzglob"
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/mime"
 	"github.com/buildkite/agent/v3/logger"
@@ -32,7 +31,7 @@ const (
 	ArtifactFallbackMimeType = "binary/octet-stream"
 )
 
-type ArtifactUploaderConfig struct {
+type UploaderConfig struct {
 	// The ID of the Job
 	JobID string
 
@@ -55,9 +54,9 @@ type ArtifactUploaderConfig struct {
 	UploadSkipSymlinks bool
 }
 
-type ArtifactUploader struct {
+type Uploader struct {
 	// The upload config
-	conf ArtifactUploaderConfig
+	conf UploaderConfig
 
 	// The logger instance to use
 	logger logger.Logger
@@ -66,15 +65,15 @@ type ArtifactUploader struct {
 	apiClient APIClient
 }
 
-func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig) *ArtifactUploader {
-	return &ArtifactUploader{
+func NewUploader(l logger.Logger, ac APIClient, c UploaderConfig) *Uploader {
+	return &Uploader{
 		logger:    l,
 		apiClient: ac,
 		conf:      c,
 	}
 }
 
-func (a *ArtifactUploader) Upload(ctx context.Context) error {
+func (a *Uploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect(ctx)
 	if err != nil {
@@ -110,16 +109,16 @@ func isDir(path string) bool {
 	return fi.IsDir()
 }
 
-func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error) {
+func (a *Uploader) Collect(ctx context.Context) ([]*api.Artifact, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
 	}
 
 	ac := &artifactCollector{
-		ArtifactUploader: a,
-		wd:               wd,
-		seenPaths:        make(map[string]bool),
+		Uploader:  a,
+		wd:        wd,
+		seenPaths: make(map[string]bool),
 	}
 
 	filesCh := make(chan string)
@@ -157,7 +156,7 @@ func (a *ArtifactUploader) Collect(ctx context.Context) ([]*api.Artifact, error)
 
 // artifactCollector processes glob patterns into files.
 type artifactCollector struct {
-	*ArtifactUploader
+	*Uploader
 	wd string
 
 	mu        sync.Mutex
@@ -166,7 +165,7 @@ type artifactCollector struct {
 }
 
 // glob resolves the globs (patterns with * and ** in them).
-func (a *ArtifactUploader) glob(ctx context.Context, filesCh chan<- string) error {
+func (a *Uploader) glob(ctx context.Context, filesCh chan<- string) error {
 	// glob is solely responsible for writing to the channel.
 	defer close(filesCh)
 
@@ -314,7 +313,7 @@ func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) e
 	}
 }
 
-func (a *ArtifactUploader) build(path string, absolutePath string) (*api.Artifact, error) {
+func (a *Uploader) build(path string, absolutePath string) (*api.Artifact, error) {
 	// Open the file to hash its contents.
 	file, err := os.Open(absolutePath)
 	if err != nil {
@@ -359,7 +358,7 @@ func (a *ArtifactUploader) build(path string, absolutePath string) (*api.Artifac
 
 // createUploader applies some heuristics to the destination to infer which
 // uploader to use.
-func (a *ArtifactUploader) createUploader() (uploader Uploader, err error) {
+func (a *Uploader) createUploader() (_ uploader, err error) {
 	var dest string
 	defer func() {
 		if err != nil || dest == "" {
@@ -396,9 +395,9 @@ func (a *ArtifactUploader) createUploader() (uploader Uploader, err error) {
 			DebugHTTP:   a.conf.DebugHTTP,
 		})
 
-	case artifact.IsAzureBlobPath(a.conf.Destination):
+	case IsAzureBlobPath(a.conf.Destination):
 		dest = "Azure Blob storage"
-		return artifact.NewAzureBlobUploader(a.logger, artifact.AzureBlobUploaderConfig{
+		return NewAzureBlobUploader(a.logger, AzureBlobUploaderConfig{
 			Destination: a.conf.Destination,
 		})
 
@@ -407,7 +406,16 @@ func (a *ArtifactUploader) createUploader() (uploader Uploader, err error) {
 	}
 }
 
-func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
+type uploader interface {
+	// The Artifact.URL property is populated with what ever is returned
+	// from this method prior to uploading.
+	URL(*api.Artifact) string
+
+	// The actual uploading of the file
+	Upload(context.Context, *api.Artifact) error
+}
+
+func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
 	// Determine what uploader to use
 	uploader, err := a.createUploader()
 	if err != nil {
@@ -420,7 +428,7 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 	}
 
 	// Create the artifacts on Buildkite
-	batchCreator := NewArtifactBatchCreator(a.logger, a.apiClient, ArtifactBatchCreatorConfig{
+	batchCreator := NewArtifactBatchCreator(a.logger, a.apiClient, BatchCreatorConfig{
 		JobID:                  a.conf.JobID,
 		Artifacts:              artifacts,
 		UploadDestination:      a.conf.Destination,

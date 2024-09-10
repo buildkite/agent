@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"context"
@@ -40,7 +40,7 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 		Token:    "llamasforever",
 	})
 
-	d := NewArtifactDownloader(logger.Discard, ac, ArtifactDownloaderConfig{
+	d := NewDownloader(logger.Discard, ac, DownloaderConfig{
 		BuildID: "my-build",
 	})
 

@@ -25,6 +25,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
@@ -904,7 +905,7 @@ var AgentStartCommand = cli.Command{
 
 			// this is currently loaded here to ensure it is ONLY loaded if the agent is using KMS for signing
 			// this will limit the possible impact of this new SDK on the rest of the agent users
-			awscfg, err := agent.GetAWSConfigV2(
+			awscfg, err := awslib.GetConfigV2(
 				ctx,
 				config.WithClientLogMode(logMode),
 			)

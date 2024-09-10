@@ -1,4 +1,4 @@
-package agent
+package artifact
 
 import (
 	"context"
@@ -25,12 +25,10 @@ func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
 }
 
 func TestCollect(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
+	root, _ := os.Getwd()
 
 	volumeName := filepath.VolumeName(root)
 	rootWithoutVolume := strings.TrimPrefix(root, volumeName)
@@ -45,42 +43,42 @@ func TestCollect(t *testing.T) {
 	}{
 		{
 			Name:         "Mr Freeze.jpg",
-			Path:         []string{"test", "fixtures", "artifacts", "Mr Freeze.jpg"},
-			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			Path:         []string{"fixtures", "Mr Freeze.jpg"},
+			AbsolutePath: filepath.Join(root, "fixtures", "Mr Freeze.jpg"),
 			FileSize:     362371,
 			Sha1Sum:      "f5bc7bc9f5f9c3e543dde0eb44876c6f9acbfb6b",
 			Sha256Sum:    "0c657a363d92093e68224e0716ed8b8b5d4bbc3dfe9b026e32b241fc9b369d47",
 		},
 		{
 			Name:         "Commando.jpg",
-			Path:         []string{"test", "fixtures", "artifacts", "folder", "Commando.jpg"},
-			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			Path:         []string{"fixtures", "folder", "Commando.jpg"},
+			AbsolutePath: filepath.Join(root, "fixtures", "folder", "Commando.jpg"),
 			FileSize:     113000,
 			Sha1Sum:      "811d7cb0317582e22ebfeb929d601cdabea4b3c0",
 			Sha256Sum:    "fcfbe62fd7b6638165a61e8de901ac9df93fc1389906f2772bdefed5de115426",
 		},
 		{
 			Name:         "The Terminator.jpg",
-			Path:         []string{"test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"},
-			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			Path:         []string{"fixtures", "this is a folder with a space", "The Terminator.jpg"},
+			AbsolutePath: filepath.Join(root, "fixtures", "this is a folder with a space", "The Terminator.jpg"),
 			FileSize:     47301,
 			Sha1Sum:      "ed76566ede9cb6edc975fcadca429665aad8785a",
 			Sha256Sum:    "5b4228a4bbef3d9f676e0a2e8cf6ea06759124ef0fbdb27a6c35df8759fcd39d",
 		},
 		{
 			Name:         "Smile.gif",
-			Path:         []string{rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"},
-			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
+			Path:         []string{rootWithoutVolume[1:], "fixtures", "gifs", "Smile.gif"},
+			AbsolutePath: filepath.Join(root, "fixtures", "gifs", "Smile.gif"),
 			FileSize:     2038453,
 			Sha1Sum:      "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd",
 			Sha256Sum:    "fc5e8608c7772e4ae834fbc47eec3d902099eb3599f5191e40d9e3d9b3764b0e",
 		},
 	}
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: fmt.Sprintf("%s;%s",
-			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
-			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
+			filepath.Join("fixtures", "**/*.jpg"),
+			filepath.Join(root, "fixtures", "**/*.gif"),
 		),
 	})
 
@@ -115,6 +113,7 @@ func TestCollect(t *testing.T) {
 	// this is the behaviour without normalised-upload-paths.
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
 			a := findArtifact(artifactsWithoutExperimentEnabled, tc.Name)
 			if a == nil {
 				t.Fatalf("findArtifact(%q) == nil", tc.Name)
@@ -132,6 +131,7 @@ func TestCollect(t *testing.T) {
 	// this is the behaviour with normalised-upload-paths.
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
 			a := findArtifact(artifactsWithExperimentEnabled, tc.Name)
 			if a == nil {
 				t.Fatalf("findArtifact(%q) == nil", tc.Name)
@@ -139,7 +139,7 @@ func TestCollect(t *testing.T) {
 
 			// Note that the rootWithoutVolume component of some tc.Path values
 			// may already have backslashes in them on Windows:
-			// []string{"path\to\codebase", "test", "fixtures", "hello"}
+			// []string{"path\to\codebase", "fixtures", "hello"}
 			// So forward-slash joining them with path.Join(tc.Path...} isn't enough.
 			forwardSlashed := filepath.ToSlash(filepath.Join(tc.Path...))
 
@@ -153,14 +153,10 @@ func TestCollect(t *testing.T) {
 }
 
 func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("log", "*"),
 			filepath.Join("tmp", "capybara", "**", "*"),
@@ -178,18 +174,14 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
 	})
 
@@ -204,19 +196,15 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
-			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			filepath.Join("fixtures", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
+			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
 		GlobResolveFollowSymlinks: true,
 	})
@@ -232,17 +220,13 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 }
 
 func TestCollectWithDuplicateMatches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
+			filepath.Join("fixtures", "**", "*.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
 		}, ";"),
 	})
 
@@ -258,27 +242,23 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 	assert.ElementsMatch(
 		t,
 		[]string{
-			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "links", "terminator", "terminator2.jpg"),
+			filepath.Join("fixtures", "Mr Freeze.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"),
+			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("fixtures", "links", "terminator", "terminator2.jpg"),
 		},
 		paths,
 	)
 }
 
 func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
+			filepath.Join("fixtures", "**", "*.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
 		}, ";"),
 		GlobResolveFollowSymlinks: true,
 	})
@@ -295,27 +275,23 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 	assert.ElementsMatch(
 		t,
 		[]string{
-			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "links", "terminator", "terminator2.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "terminator2.jpg"),
+			filepath.Join("fixtures", "Mr Freeze.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"),
+			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("fixtures", "links", "terminator", "terminator2.jpg"),
+			filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
 		},
 		paths,
 	)
 }
 
 func TestCollectMatchesUploadSymlinks(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
 		UploadSkipSymlinks: true,
 	})
@@ -332,21 +308,19 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 	assert.ElementsMatch(
 		t,
 		[]string{
-			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("fixtures", "Mr Freeze.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"),
+			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
 		},
 		paths,
 	)
 }
 
 func TestCollect_WithZZGlob(t *testing.T) {
+	t.Parallel()
 	ctx, _ := experiments.Enable(context.Background(), experiments.UseZZGlob)
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
+	root, _ := os.Getwd()
 
 	volumeName := filepath.VolumeName(root)
 	rootWithoutVolume := strings.TrimPrefix(root, volumeName)
@@ -361,42 +335,42 @@ func TestCollect_WithZZGlob(t *testing.T) {
 	}{
 		{
 			Name:         "Mr Freeze.jpg",
-			Path:         []string{"test", "fixtures", "artifacts", "Mr Freeze.jpg"},
-			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			Path:         []string{"fixtures", "Mr Freeze.jpg"},
+			AbsolutePath: filepath.Join(root, "fixtures", "Mr Freeze.jpg"),
 			FileSize:     362371,
 			Sha1Sum:      "f5bc7bc9f5f9c3e543dde0eb44876c6f9acbfb6b",
 			Sha256Sum:    "0c657a363d92093e68224e0716ed8b8b5d4bbc3dfe9b026e32b241fc9b369d47",
 		},
 		{
 			Name:         "Commando.jpg",
-			Path:         []string{"test", "fixtures", "artifacts", "folder", "Commando.jpg"},
-			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			Path:         []string{"fixtures", "folder", "Commando.jpg"},
+			AbsolutePath: filepath.Join(root, "fixtures", "folder", "Commando.jpg"),
 			FileSize:     113000,
 			Sha1Sum:      "811d7cb0317582e22ebfeb929d601cdabea4b3c0",
 			Sha256Sum:    "fcfbe62fd7b6638165a61e8de901ac9df93fc1389906f2772bdefed5de115426",
 		},
 		{
 			Name:         "The Terminator.jpg",
-			Path:         []string{"test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"},
-			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			Path:         []string{"fixtures", "this is a folder with a space", "The Terminator.jpg"},
+			AbsolutePath: filepath.Join(root, "fixtures", "this is a folder with a space", "The Terminator.jpg"),
 			FileSize:     47301,
 			Sha1Sum:      "ed76566ede9cb6edc975fcadca429665aad8785a",
 			Sha256Sum:    "5b4228a4bbef3d9f676e0a2e8cf6ea06759124ef0fbdb27a6c35df8759fcd39d",
 		},
 		{
 			Name:         "Smile.gif",
-			Path:         []string{rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"},
-			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
+			Path:         []string{rootWithoutVolume[1:], "fixtures", "gifs", "Smile.gif"},
+			AbsolutePath: filepath.Join(root, "fixtures", "gifs", "Smile.gif"),
 			FileSize:     2038453,
 			Sha1Sum:      "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd",
 			Sha256Sum:    "fc5e8608c7772e4ae834fbc47eec3d902099eb3599f5191e40d9e3d9b3764b0e",
 		},
 	}
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: fmt.Sprintf("%s;%s",
-			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
-			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
+			filepath.Join("fixtures", "**/*.jpg"),
+			filepath.Join(root, "fixtures", "**/*.gif"),
 		),
 	})
 
@@ -431,6 +405,7 @@ func TestCollect_WithZZGlob(t *testing.T) {
 	// this is the behaviour without normalised-upload-paths.
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
 			a := findArtifact(artifactsWithoutExperimentEnabled, tc.Name)
 			if a == nil {
 				t.Fatalf("findArtifact(%q) == nil", tc.Name)
@@ -448,6 +423,7 @@ func TestCollect_WithZZGlob(t *testing.T) {
 	// this is the behaviour with normalised-upload-paths.
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
 			a := findArtifact(artifactsWithExperimentEnabled, tc.Name)
 			if a == nil {
 				t.Fatalf("findArtifact(%q) == nil", tc.Name)
@@ -455,7 +431,7 @@ func TestCollect_WithZZGlob(t *testing.T) {
 
 			// Note that the rootWithoutVolume component of some tc.Path values
 			// may already have backslashes in them on Windows:
-			// []string{"path\to\codebase", "test", "fixtures", "hello"}
+			// []string{"path\to\codebase", "fixtures", "hello"}
 			// So forward-slash joining them with path.Join(tc.Path...} isn't enough.
 			forwardSlashed := filepath.ToSlash(filepath.Join(tc.Path...))
 
@@ -469,14 +445,10 @@ func TestCollect_WithZZGlob(t *testing.T) {
 }
 
 func TestCollectThatDoesntMatchAnyFiles_WithZZGlob(t *testing.T) {
+	t.Parallel()
 	ctx, _ := experiments.Enable(context.Background(), experiments.UseZZGlob)
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("log", "*"),
 			filepath.Join("tmp", "capybara", "**", "*"),
@@ -494,18 +466,14 @@ func TestCollectThatDoesntMatchAnyFiles_WithZZGlob(t *testing.T) {
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnything_WithZZGlob(t *testing.T) {
+	t.Parallel()
 	ctx, _ := experiments.Enable(context.Background(), experiments.UseZZGlob)
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
 	})
 
@@ -520,19 +488,15 @@ func TestCollectWithSomeGlobsThatDontMatchAnything_WithZZGlob(t *testing.T) {
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks_WithZZGlob(t *testing.T) {
+	t.Parallel()
 	ctx, _ := experiments.Enable(context.Background(), experiments.UseZZGlob)
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
-			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			filepath.Join("fixtures", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
+			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
 		GlobResolveFollowSymlinks: true,
 	})
@@ -548,17 +512,13 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks_WithZZGlob(t
 }
 
 func TestCollectWithDuplicateMatches_WithZZGlob(t *testing.T) {
+	t.Parallel()
 	ctx, _ := experiments.Enable(context.Background(), experiments.UseZZGlob)
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
+			filepath.Join("fixtures", "**", "*.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
 		}, ";"),
 	})
 
@@ -574,27 +534,23 @@ func TestCollectWithDuplicateMatches_WithZZGlob(t *testing.T) {
 	assert.ElementsMatch(
 		t,
 		[]string{
-			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "links", "terminator", "terminator2.jpg"),
+			filepath.Join("fixtures", "Mr Freeze.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"),
+			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("fixtures", "links", "terminator", "terminator2.jpg"),
 		},
 		paths,
 	)
 }
 
 func TestCollectWithDuplicateMatchesFollowingSymlinks_WithZZGlob(t *testing.T) {
+	t.Parallel()
 	ctx, _ := experiments.Enable(context.Background(), experiments.UseZZGlob)
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
+			filepath.Join("fixtures", "**", "*.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
 		}, ";"),
 		GlobResolveFollowSymlinks: true,
 	})
@@ -611,27 +567,23 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks_WithZZGlob(t *testing.T) {
 	assert.ElementsMatch(
 		t,
 		[]string{
-			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "links", "terminator", "terminator2.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "terminator2.jpg"),
+			filepath.Join("fixtures", "Mr Freeze.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"),
+			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("fixtures", "links", "terminator", "terminator2.jpg"),
+			filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
 		},
 		paths,
 	)
 }
 
 func TestCollectMatchesUploadSymlinks_WithZZGlob(t *testing.T) {
+	t.Parallel()
 	ctx, _ := experiments.Enable(context.Background(), experiments.UseZZGlob)
 
-	wd, _ := os.Getwd()
-	root := filepath.Join(wd, "..")
-	os.Chdir(root)
-	defer os.Chdir(wd)
-
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
-			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
 		UploadSkipSymlinks: true,
 	})
@@ -648,9 +600,9 @@ func TestCollectMatchesUploadSymlinks_WithZZGlob(t *testing.T) {
 	assert.ElementsMatch(
 		t,
 		[]string{
-			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
-			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("fixtures", "Mr Freeze.jpg"),
+			filepath.Join("fixtures", "folder", "Commando.jpg"),
+			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
 		},
 		paths,
 	)

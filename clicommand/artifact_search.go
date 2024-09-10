@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
 )
 
@@ -144,7 +144,7 @@ var ArtifactSearchCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the searcher and try get the artifacts
-		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
+		searcher := artifact.NewSearcher(l, client, cfg.Build)
 		artifacts, err := searcher.Search(ctx, cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
 		if err != nil {
 			return err
