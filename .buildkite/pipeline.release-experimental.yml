@@ -42,7 +42,7 @@ steps:
 
   - name: ":redhat: Publish Edge RPM Package to Buildkite Packages"
     plugins:
-      - publish-to-packages#isaacsu/pkg-7533-upload-build-provenance:
+      - publish-to-packages#v2.0.0:
           artifacts: "rpm/*.rpm"
           registry: "buildkite/agent-rpm-experimental"
           artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
@@ -76,7 +76,7 @@ steps:
 
   - name: ":debian: Publish Edge Debian Package to Buildkite Packages"
     plugins:
-      - publish-to-packages#isaacsu/pkg-7533-upload-build-provenance:
+      - publish-to-packages#v2.0.0:
           artifacts: "deb/*.deb"
           registry: "buildkite/agent-deb-experimental"
           artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
