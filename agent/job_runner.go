@@ -639,8 +639,18 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 
 	// This (plus inherited) is the only ENV that should be exposed
 	// to the pre-bootstrap hook.
+	// - Env files are designed to be validated by the pre-bootstrap hook
+	// - The pre-bootstrap hook may want to create annotations, so it can also
+	//   have a few necessary and global args as env vars.
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envShellFile.Name())
 	sh.Env.Set("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
+	apiConfig := r.apiClient.Config()
+	sh.Env.Set("BUILDKITE_JOB_ID", r.conf.Job.ID)
+	sh.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", apiConfig.Token)
+	sh.Env.Set("BUILDKITE_AGENT_ENDPOINT", apiConfig.Endpoint)
+	sh.Env.Set("BUILDKITE_NO_HTTP2", fmt.Sprint(apiConfig.DisableHTTP2))
+	sh.Env.Set("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
+	sh.Env.Set("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
 
 	sh.Writer = LogWriter{
 		l: r.agentLogger,
