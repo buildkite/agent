@@ -70,7 +70,7 @@ steps:
 
   - name: ":redhat: Publish Unstable RPM Package to Buildkite Packages"
     plugins:
-      - publish-to-packages#v1.0.0:
+      - publish-to-packages#v2.0.0:
           artifacts: "rpm/*.rpm"
           registry: "buildkite/agent-rpm-unstable"
           artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
@@ -100,7 +100,7 @@ steps:
 
   - name: ":debian: Publish Unstable Debian Package to Buildkite Packages"
     plugins:
-      - publish-to-packages#v1.0.0:
+      - publish-to-packages#v2.0.0:
           artifacts: "deb/*.deb"
           registry: "buildkite/agent-deb-unstable"
           artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
