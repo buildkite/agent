@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -156,8 +157,9 @@ type JobRunner struct {
 	// A lock to protect concurrent calls to cancel
 	cancelLock sync.Mutex
 
-	// File containing a copy of the job env
-	envFile *os.File
+	// Files containing a copy of the job env
+	envShellFile *os.File
+	envJSONFile  *os.File
 }
 
 type jobAPI interface {
@@ -225,12 +227,19 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	}
 
 	// Prepare a file to receive the given job environment
-	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.conf.Job.ID)); err != nil {
+	file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.conf.Job.ID))
+	if err != nil {
 		return r, err
-	} else {
-		r.agentLogger.Debug("[JobRunner] Created env file: %s", file.Name())
-		r.envFile = file
 	}
+	r.agentLogger.Debug("[JobRunner] Created env file (shell format): %s", file.Name())
+	r.envShellFile = file
+
+	file, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", r.conf.Job.ID))
+	if err != nil {
+		return r, err
+	}
+	r.agentLogger.Debug("[JobRunner] Created env file (JSON format): %s", file.Name())
+	r.envJSONFile = file
 
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
@@ -420,19 +429,36 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
 
-	// Write out the job environment to a file, in k="v" format, with newlines escaped
+	// Write out the job environment to file:
+	// - envShellFile: in k="v" format, with newlines escaped
+	// - envJSONFile: as a single JSON object {"k":"v",...}, escaped appropriately for JSON.
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
-	if r.envFile != nil {
+	if r.envShellFile != nil {
 		for key, value := range env {
-			if _, err := r.envFile.WriteString(fmt.Sprintf("%s=%q\n", key, value)); err != nil {
+			if _, err := r.envShellFile.WriteString(fmt.Sprintf("%s=%q\n", key, value)); err != nil {
 				return nil, err
 			}
 		}
-		if err := r.envFile.Close(); err != nil {
+		if err := r.envShellFile.Close(); err != nil {
 			return nil, err
 		}
-		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
+	}
+	if r.envJSONFile != nil {
+		if err := json.NewEncoder(r.envJSONFile).Encode(env); err != nil {
+			return nil, err
+		}
+		if err := r.envJSONFile.Close(); err != nil {
+			return nil, err
+		}
+	}
+	// Now that the env files have been written, we can add their corresponding
+	// paths to the job env.
+	if r.envShellFile != nil {
+		env["BUILDKITE_ENV_FILE"] = r.envShellFile.Name()
+	}
+	if r.envJSONFile != nil {
+		env["BUILDKITE_ENV_JSON_FILE"] = r.envJSONFile.Name()
 	}
 
 	var ignoredEnv []string
@@ -613,7 +639,8 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 
 	// This (plus inherited) is the only ENV that should be exposed
 	// to the pre-bootstrap hook.
-	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
+	sh.Env.Set("BUILDKITE_ENV_FILE", r.envShellFile.Name())
+	sh.Env.Set("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
 
 	sh.Writer = LogWriter{
 		l: r.agentLogger,
