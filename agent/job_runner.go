@@ -484,10 +484,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	apiConfig := r.apiClient.Config()
 	env["BUILDKITE_AGENT_ENDPOINT"] = apiConfig.Endpoint
 	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = apiConfig.Token
+	env["BUILDKITE_NO_HTTP2"] = fmt.Sprint(apiConfig.DisableHTTP2)
 
 	// Add agent environment variables
-	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", r.conf.Debug)
-	env["BUILDKITE_AGENT_DEBUG_HTTP"] = fmt.Sprintf("%t", r.conf.DebugHTTP)
+	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprint(r.conf.Debug)
+	env["BUILDKITE_AGENT_DEBUG_HTTP"] = fmt.Sprint(r.conf.DebugHTTP)
 	env["BUILDKITE_AGENT_PID"] = strconv.Itoa(os.Getpid())
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
@@ -507,14 +508,14 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
 	env["BUILDKITE_SOCKETS_PATH"] = r.conf.AgentConfiguration.SocketsPath
 	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
-	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
+	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
 	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
-	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.SSHKeyscan)
-	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitSubmodules)
-	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandEval)
-	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
-	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
+	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan)
+	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules)
+	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprint(r.conf.AgentConfiguration.CommandEval)
+	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled)
+	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
 	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
@@ -524,7 +525,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(ctx), ",")
 	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
-	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.StrictSingleHooks)
+	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks)
 	env["BUILDKITE_CANCEL_GRACE_PERIOD"] = strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod)
 	env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod / time.Second))
 	env["BUILDKITE_TRACE_CONTEXT_ENCODING"] = r.conf.AgentConfiguration.TraceContextEncoding
@@ -576,7 +577,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 			enablePluginValidation = true
 		}
 	}
-	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprintf("%t", enablePluginValidation)
+	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprint(enablePluginValidation)
 
 	if r.conf.AgentConfiguration.TracingBackend != "" {
 		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
