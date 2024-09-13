@@ -179,6 +179,7 @@ type AgentStartConfig struct {
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
+	TraceHTTP bool   `cli:"trace-http"`
 	Token     string `cli:"token" validate:"required"`
 	Endpoint  string `cli:"endpoint" validate:"required"`
 	NoHTTP2   bool   `cli:"no-http2"`
@@ -692,6 +693,7 @@ var AgentStartCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
+		TraceHTTPFlag,
 
 		// Global flags
 		NoColorFlag,

@@ -74,6 +74,12 @@ var (
 		EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
 	}
 
+	TraceHTTPFlag = cli.BoolFlag{
+		Name:   "trace-http",
+		Usage:  "Enable HTTP trace mode, which logs timings for each HTTP request. Timings are logged at the debug level unless a request fails at the network level in which case they are logged at the error level",
+		EnvVar: "BUILDKITE_AGENT_TRACE_HTTP",
+	}
+
 	NoColorFlag = cli.BoolFlag{
 		Name:   "no-color",
 		Usage:  "Don't show colors in logging",
