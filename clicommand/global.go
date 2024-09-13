@@ -283,6 +283,11 @@ func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 		conf.DebugHTTP = true
 	}
 
+	traceHTTP, err := reflections.GetField(cfg, "TraceHTTP")
+	if traceHTTP == true && err == nil {
+		conf.TraceHTTP = true
+	}
+
 	endpoint, err := reflections.GetField(cfg, "Endpoint")
 	if endpoint != "" && err == nil {
 		conf.Endpoint = endpoint.(string)
