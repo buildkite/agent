@@ -45,6 +45,9 @@ const (
 
 	VerificationBehaviourWarn  = "warn"
 	VerificationBehaviourBlock = "block"
+
+	DisabledBehaviourWarn  = "warn"
+	DisabledBehaviourError = "error"
 )
 
 // Certain env can only be set by agent configuration.
@@ -489,6 +492,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandEval)
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
+	env["BUILDKITE_LOCAL_HOOKS_FAILURE_BEHAVIOR"] = r.conf.AgentConfiguration.LocalHooksFailureBehavior
+	env["BUILDKITE_PLUGINS_FAILURE_BEHAVIOR"] = r.conf.AgentConfiguration.PluginsFailureBehavior
 	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
 	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags

@@ -82,6 +82,8 @@ type BootstrapConfig struct {
 	PluginValidation             bool     `cli:"plugin-validation"`
 	PluginsAlwaysCloneFresh      bool     `cli:"plugins-always-clone-fresh"`
 	LocalHooksEnabled            bool     `cli:"local-hooks-enabled"`
+	LocalHooksFailureBehavior    string   `cli:"local-hooks-failure-behavior"`
+	PluginsFailureBehavior       string   `cli:"plugins-failure-behavior"`
 	StrictSingleHooks            bool     `cli:"strict-single-hooks"`
 	PTY                          bool     `cli:"pty"`
 	LogLevel                     string   `cli:"log-level"`
@@ -317,6 +319,16 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Allow local hooks to be run",
 			EnvVar: "BUILDKITE_LOCAL_HOOKS_ENABLED",
 		},
+		cli.StringFlag{
+			Name:   "local-hooks-failure-behavior",
+			Usage:  "The behavior when a job is not allowed to run local hooks.",
+			EnvVar: "BUILDKITE_LOCAL_HOOKS_FAILURE_BEHAVIOR",
+		},
+		cli.StringFlag{
+			Name:   "plugins-failure-behavior",
+			Usage:  "The behavior when a job is not allowed to run plugins.",
+			EnvVar: "BUILDKITE_PLUGINS_FAILURE_BEHAVIOR",
+		},
 		cli.BoolTFlag{
 			Name:   "ssh-keyscan",
 			Usage:  "Automatically run ssh-keyscan before checkout",
@@ -451,6 +463,8 @@ var BootstrapCommand = cli.Command{
 			HooksPath:                    cfg.HooksPath,
 			JobID:                        cfg.JobID,
 			LocalHooksEnabled:            cfg.LocalHooksEnabled,
+			LocalHooksFailureBehavior:    cfg.LocalHooksFailureBehavior,
+			PluginsFailureBehavior:       cfg.PluginsFailureBehavior,
 			OrganizationSlug:             cfg.OrganizationSlug,
 			Phases:                       cfg.Phases,
 			PipelineProvider:             cfg.PipelineProvider,

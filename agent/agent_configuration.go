@@ -34,6 +34,8 @@ type AgentConfiguration struct {
 	StrictSingleHooks           bool
 	RunInPty                    bool
 	KubernetesExec              bool
+	LocalHooksFailureBehavior   string
+	PluginsFailureBehavior      string
 
 	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
 	SigningJWKSKeyID string // The key ID to sign pipeline uploads with

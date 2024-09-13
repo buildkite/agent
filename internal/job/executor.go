@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
@@ -693,7 +694,11 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	if !localHooksEnabled {
-		return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
+		if e.ExecutorConfig.LocalHooksFailureBehavior == agent.DisabledBehaviourError {
+			return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
+		}
+
+		e.shell.Warningf("Refusing to run %s, local hooks are disabled", localHookPath)
 	}
 
 	return e.executeHook(ctx, HookConfig{

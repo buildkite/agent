@@ -108,6 +108,12 @@ type ExecutorConfig struct {
 	// Are local hooks enabled?
 	LocalHooksEnabled bool
 
+	// What failure behaviour is configured for local hooks no being allowed to run
+	LocalHooksFailureBehavior string
+
+	// What failure behaviour is configured for plugins no being allowed to run
+	PluginsFailureBehavior string
+
 	// Should we enforce that only one checkout and one command hook are run?
 	StrictSingleHooks bool
 
