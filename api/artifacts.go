@@ -57,13 +57,15 @@ type ArtifactBatch struct {
 }
 
 type ArtifactUploadInstructions struct {
-	Data   map[string]string `json:"data"`
-	Action struct {
-		URL       string `json:"url,omitempty"`
-		Method    string `json:"method"`
-		Path      string `json:"path"`
-		FileInput string `json:"file_input"`
-	}
+	Data   map[string]string    `json:"data"`
+	Action ArtifactUploadAction `json:"action"`
+}
+
+type ArtifactUploadAction struct {
+	URL       string `json:"url,omitempty"`
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	FileInput string `json:"file_input"`
 }
 
 type ArtifactBatchCreateResponse struct {

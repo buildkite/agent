@@ -50,10 +50,7 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 	// Split into the artifacts into chunks so we're not uploading a ton of
 	// files at once.
 	for i := 0; i < length; i += chunks {
-		j := i + chunks
-		if length < j {
-			j = length
-		}
+		j := min(i+chunks, length)
 
 		// The artifacts that will be uploaded in this chunk
 		theseArtifacts := a.conf.Artifacts[i:j]

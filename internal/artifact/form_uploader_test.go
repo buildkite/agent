@@ -96,12 +96,7 @@ func TestFormUploading(t *testing.T) {
 				Data: map[string]string{
 					"path": "${artifact:path}",
 				},
-				Action: struct {
-					URL       string "json:\"url,omitempty\""
-					Method    string "json:\"method\""
-					Path      string "json:\"path\""
-					FileInput string "json:\"file_input\""
-				}{
+				Action: api.ArtifactUploadAction{
 					URL:       server.URL,
 					Method:    "POST",
 					Path:      "buildkiteartifacts.com",
@@ -145,12 +140,7 @@ func TestFormUploadFileMissing(t *testing.T) {
 			Data: map[string]string{
 				"path": "${artifact:path}",
 			},
-			Action: struct {
-				URL       string "json:\"url,omitempty\""
-				Method    string "json:\"method\""
-				Path      string "json:\"path\""
-				FileInput string "json:\"file_input\""
-			}{
+			Action: api.ArtifactUploadAction{
 				URL:       server.URL,
 				Method:    "POST",
 				Path:      "buildkiteartifacts.com",

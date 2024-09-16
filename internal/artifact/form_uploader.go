@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/http/httputil"
-	"regexp"
 	"strings"
 
 	// "net/http/httputil"
@@ -23,10 +22,10 @@ import (
 	"github.com/buildkite/agent/v3/version"
 )
 
-var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
+const artifactPathVariable = "${artifact:path}"
 
 // FormUploader uploads to S3 as a single signed POST, which have a hard limit of 5Gb.
-var maxFormUploadedArtifactSize = int64(5368709120)
+const maxFormUploadedArtifactSize = int64(5368709120)
 
 type FormUploaderConfig struct {
 	// Whether or not HTTP calls should be debugged
@@ -50,17 +49,15 @@ func NewFormUploader(l logger.Logger, c FormUploaderConfig) *FormUploader {
 
 // The FormUploader doens't specify a URL, as one is provided by Buildkite
 // after uploading
-func (u *FormUploader) URL(artifact *api.Artifact) string {
-	return ""
-}
+func (u *FormUploader) URL(*api.Artifact) string { return "" }
 
-func (u *FormUploader) Upload(_ context.Context, artifact *api.Artifact) error {
+func (u *FormUploader) Upload(ctx context.Context, artifact *api.Artifact) error {
 	if artifact.FileSize > maxFormUploadedArtifactSize {
 		return errArtifactTooLarge{Size: artifact.FileSize}
 	}
 
 	// Create a HTTP request for uploading the file
-	request, err := createUploadRequest(u.logger, artifact)
+	request, err := createUploadRequest(ctx, u.logger, artifact)
 	if err != nil {
 		return err
 	}
@@ -100,49 +97,41 @@ func (u *FormUploader) Upload(_ context.Context, artifact *api.Artifact) error {
 	// Perform the request
 	u.logger.Debug("%s %s", request.Method, request.URL)
 	response, err := client.Do(request)
-
-	// Check for errors
 	if err != nil {
 		return err
-	} else {
-		// Be sure to close the response body at the end of
-		// this function
-		defer response.Body.Close()
+	}
+	defer response.Body.Close()
 
-		if u.conf.DebugHTTP {
-			responseDump, err := httputil.DumpResponse(response, true)
-			if err != nil {
-				u.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
-			} else {
-				u.logger.Debug("\n%s", string(responseDump))
-			}
-		}
-
-		if response.StatusCode/100 != 2 {
-			body := &bytes.Buffer{}
-			_, err := body.ReadFrom(response.Body)
-			if err != nil {
-				return err
-			}
-
-			// Return a custom error with the response body from the page
-			message := fmt.Sprintf("%s (%d)", body, response.StatusCode)
-			return errors.New(message)
+	if u.conf.DebugHTTP {
+		responseDump, err := httputil.DumpResponse(response, true)
+		if err != nil {
+			u.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+		} else {
+			u.logger.Debug("\n%s", string(responseDump))
 		}
 	}
 
+	if response.StatusCode/100 != 2 {
+		body := &bytes.Buffer{}
+		_, err := body.ReadFrom(response.Body)
+		if err != nil {
+			return err
+		}
+
+		return fmt.Errorf("%s (%d)", body, response.StatusCode)
+	}
 	return nil
 }
 
 // Creates a new file upload http request with optional extra params
-func createUploadRequest(_ logger.Logger, artifact *api.Artifact) (*http.Request, error) {
+func createUploadRequest(ctx context.Context, _ logger.Logger, artifact *api.Artifact) (*http.Request, error) {
 	streamer := newMultipartStreamer()
 
 	// Set the post data for the request
 	for key, val := range artifact.UploadInstructions.Data {
 		// Replace the magical ${artifact:path} variable with the
 		// artifact's path
-		newVal := ArtifactPathVariableRegex.ReplaceAllLiteralString(val, artifact.Path)
+		newVal := strings.ReplaceAll(val, artifactPathVariable, artifact.Path)
 
 		// Write the new value to the form
 		if err := streamer.WriteField(key, newVal); err != nil {
@@ -173,7 +162,7 @@ func createUploadRequest(_ logger.Logger, artifact *api.Artifact) (*http.Request
 	uri.Path = artifact.UploadInstructions.Action.Path
 
 	// Create the request
-	req, err := http.NewRequest(artifact.UploadInstructions.Action.Method, uri.String(), streamer.Reader())
+	req, err := http.NewRequestWithContext(ctx, artifact.UploadInstructions.Action.Method, uri.String(), streamer.Reader())
 	if err != nil {
 		fh.Close()
 		return nil, err
