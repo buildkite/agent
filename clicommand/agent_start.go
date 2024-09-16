@@ -39,7 +39,6 @@ import (
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
 )
@@ -1382,7 +1381,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 }
 
 func defaultSocketsPath() string {
-	home, err := homedir.Dir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return filepath.Join(os.TempDir(), "buildkite-sockets")
 	}

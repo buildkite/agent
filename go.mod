@@ -32,7 +32,6 @@ require (
 	github.com/gowebpki/jcs v1.0.1
 	github.com/lestrrat-go/jwx/v2 v2.1.1
 	github.com/mattn/go-zglob v0.0.6
-	github.com/mitchellh/go-homedir v1.1.0
 	github.com/oleiade/reflections v1.1.0
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pborman/uuid v1.2.1
