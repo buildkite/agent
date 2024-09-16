@@ -397,11 +397,11 @@ func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {
 		DNSDone: func(_ httptrace.DNSDoneInfo) {
 			t.LogTiming("dnsDone")
 		},
-		ConnectStart: func(_, _ string) {
-			t.LogTiming("connectStart")
+		ConnectStart: func(network, addr string) {
+			t.LogTiming(fmt.Sprintf("connectStart.%s.%s", network, addr))
 		},
-		ConnectDone: func(_, _ string, _ error) {
-			t.LogTiming("connectDone")
+		ConnectDone: func(network, addr string, _ error) {
+			t.LogTiming(fmt.Sprintf("connectDone.%s.%s", network, addr))
 		},
 		TLSHandshakeStart: func() {
 			t.LogTiming("tlsHandshakeStart")
