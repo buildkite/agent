@@ -349,11 +349,15 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	wg.Wait()
 
 	// Remove the env file, if any
-	if r.envFile != nil {
-		if err := os.Remove(r.envFile.Name()); err != nil {
-			r.agentLogger.Warn("[JobRunner] Error cleaning up env file: %s", err)
+	for _, f := range []*os.File{r.envShellFile, r.envJSONFile} {
+		if f == nil {
+			continue
 		}
-		r.agentLogger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
+		if err := os.Remove(f.Name()); err != nil {
+			r.agentLogger.Warn("[JobRunner] Error cleaning up env file: %s", err)
+			continue
+		}
+		r.agentLogger.Debug("[JobRunner] Deleted env file: %s", f.Name())
 	}
 
 	// Write some metrics about the job run
