@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-package utils
+package osutil
 
 import (
 	"os"

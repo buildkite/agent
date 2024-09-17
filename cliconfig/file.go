@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/utils"
+	"github.com/buildkite/agent/v3/internal/osutil"
 )
 
 type File struct {
@@ -60,7 +60,7 @@ func (f *File) Load() error {
 }
 
 func (f File) AbsolutePath() (string, error) {
-	return utils.NormalizeFilePath(f.Path)
+	return osutil.NormalizeFilePath(f.Path)
 }
 
 func (f File) Exists() bool {

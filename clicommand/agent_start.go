@@ -30,7 +30,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/utils"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -1133,7 +1133,7 @@ var AgentStartCommand = cli.Command{
 
 		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
 		// so we may as well check that'll work now and fail early if it's a problem
-		if !utils.FileExists(agentConf.BuildPath) {
+		if !osutil.FileExists(agentConf.BuildPath) {
 			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
 			// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 			if err := os.MkdirAll(agentConf.BuildPath, 0o777); err != nil {

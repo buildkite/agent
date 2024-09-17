@@ -26,11 +26,11 @@ import (
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
-	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -338,7 +338,7 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	}
 	hookName += " " + hookCfg.Name
 
-	if !utils.FileExists(hookCfg.Path) {
+	if !osutil.FileExists(hookCfg.Path) {
 		if e.Debug {
 			e.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
 		}
@@ -420,7 +420,7 @@ func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
 		} else {
 			l.Errorf("The %s hook failed to run the %s process has the hook file open", hookName, procPath)
 		}
-	case utils.FileExists("/dev/fd"):
+	case osutil.FileExists("/dev/fd"):
 		isOpened, err := file.IsOpened(l, debug, path)
 		if err == nil {
 			if isOpened {
@@ -715,7 +715,7 @@ func dirForRepository(repository string) string {
 
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
 func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repository string) {
-	if utils.FileExists(repository) {
+	if osutil.FileExists(repository) {
 		return
 	}
 
@@ -965,7 +965,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 
 	scriptFileName := strings.Replace(e.Command, "\n", "", -1)
 	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
-	commandIsScript := err == nil && utils.FileExists(pathToCommand)
+	commandIsScript := err == nil && osutil.FileExists(pathToCommand)
 	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
 
 	// If the command isn't a script, then it's something we need
@@ -1039,7 +1039,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		// shouldn't be vulnerable to this!
 		if e.ExecutorConfig.CommandEval {
 			// Make script executable
-			if err = utils.ChmodExecutable(pathToCommand); err != nil {
+			if err = osutil.ChmodExecutable(pathToCommand); err != nil {
 				e.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
 				return err
 			}

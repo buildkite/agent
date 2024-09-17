@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/utils"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
@@ -372,7 +372,7 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 
 		// Normalize the field to be a filepath
 		if valueAsString, ok := value.(string); ok {
-			normalizedPath, err := utils.NormalizeFilePath(valueAsString)
+			normalizedPath, err := osutil.NormalizeFilePath(valueAsString)
 			if err != nil {
 				return err
 			}
@@ -392,7 +392,7 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 
 		// Normalize the field to be a command
 		if valueAsString, ok := value.(string); ok {
-			normalizedCommandPath, err := utils.NormalizeCommand(valueAsString)
+			normalizedCommandPath, err := osutil.NormalizeCommand(valueAsString)
 			if err != nil {
 				return err
 			}
