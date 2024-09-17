@@ -230,9 +230,11 @@ func (t *testAgentEndpoint) server(extraRoutes ...route) *httptest.Server {
 			t.mtx.Unlock()
 
 			// We also require job tokens are used for authentication
-			if !strings.HasPrefix(req.Header["Authorization"][0], "Token bkaj_") {
-				fmt.Printf("Invalid authorization header, expected job token, got: %q\n", req.Header["Authorization"][0])
-				rw.WriteHeader(http.StatusUnauthorized)
+			authzHeader := req.Header.Get("Authorization")
+			if !strings.HasPrefix(authzHeader, "Token bkaj_") {
+				msg := fmt.Sprintf("Authorization header = %q, want job token prefix 'Token bkaj_'", authzHeader)
+				fmt.Fprintln(os.Stderr, msg)
+				http.Error(rw, msg, http.StatusUnauthorized)
 				return
 			}
 
