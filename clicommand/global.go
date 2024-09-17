@@ -74,6 +74,12 @@ var (
 		EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
 	}
 
+	TraceHTTPFlag = cli.BoolFlag{
+		Name:   "trace-http",
+		Usage:  "Enable HTTP trace mode, which logs timings for each HTTP request. Timings are logged at the debug level unless a request fails at the network level in which case they are logged at the error level",
+		EnvVar: "BUILDKITE_AGENT_TRACE_HTTP",
+	}
+
 	NoColorFlag = cli.BoolFlag{
 		Name:   "no-color",
 		Usage:  "Don't show colors in logging",
@@ -275,6 +281,11 @@ func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 	debugHTTP, err := reflections.GetField(cfg, "DebugHTTP")
 	if debugHTTP == true && err == nil {
 		conf.DebugHTTP = true
+	}
+
+	traceHTTP, err := reflections.GetField(cfg, "TraceHTTP")
+	if traceHTTP == true && err == nil {
+		conf.TraceHTTP = true
 	}
 
 	endpoint, err := reflections.GetField(cfg, "Endpoint")
