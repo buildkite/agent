@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,48 +54,45 @@ func (e *Executor) configureHTTPSInsteadOfSSH(ctx context.Context) error {
 	)
 }
 
-func (e *Executor) removeCheckoutDir() error {
+func (e *Executor) removeCheckoutDir(ctx context.Context) error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// on windows, sometimes removing large dirs can fail for various reasons
 	// for instance having files open
 	// see https://github.com/golang/go/issues/20841
-	for range 10 {
+	return roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Constant(10*time.Second)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		e.shell.Commentf("Removing %s", checkoutPath)
-		if err := os.RemoveAll(checkoutPath); err != nil {
-			e.shell.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
-		} else {
-			if _, err := os.Stat(checkoutPath); os.IsNotExist(err) {
-				return nil
-			} else {
-				e.shell.Errorf("Failed to remove %s", checkoutPath)
-			}
+		if err := hardRemoveAll(checkoutPath); err != nil {
+			e.shell.Errorf("Failed to remove %q (%s)", checkoutPath, err)
+			return err
 		}
-		e.shell.Commentf("Waiting 10 seconds")
-		<-time.After(time.Second * 10)
-	}
-
-	return fmt.Errorf("Failed to remove %s", checkoutPath)
+		if _, err := os.Stat(checkoutPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			e.shell.Errorf("Failed to remove %q", checkoutPath)
+			return err
+		}
+		return nil
+	})
 }
 
 func (e *Executor) createCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	if !utils.FileExists(checkoutPath) {
-		e.shell.Commentf("Creating \"%s\"", checkoutPath)
-		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
+		e.shell.Commentf("Creating %q", checkoutPath)
+		// Actual file permissions will be reduced by umask, and won't be 0777
+		// unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
 			return err
 		}
 	}
 
-	if e.shell.Getwd() != checkoutPath {
-		if err := e.shell.Chdir(checkoutPath); err != nil {
-			return err
-		}
+	if e.shell.Getwd() == checkoutPath {
+		return nil
 	}
-
-	return nil
+	return e.shell.Chdir(checkoutPath)
 }
 
 // CheckoutPhase creates the build directory and makes sure we're running the
@@ -115,7 +113,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if e.CleanCheckout {
 		e.shell.Headerf("Cleaning pipeline checkout")
-		if err = e.removeCheckoutDir(); err != nil {
+		if err = e.removeCheckoutDir(ctx); err != nil {
 			return err
 		}
 	}
@@ -199,7 +197,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 				// This removes the checkout dir, which means the next checkout
 				// will be a lot slower (clone vs fetch), but hopefully will
 				// allow the agent to self-heal
-				if err := e.removeCheckoutDir(); err != nil {
+				if err := e.removeCheckoutDir(ctx); err != nil {
 					e.shell.Printf("Failed to remove checkout dir while cleaning up after a checkout error.")
 				}
 
