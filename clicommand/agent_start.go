@@ -39,7 +39,6 @@ import (
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
 )
@@ -179,6 +178,7 @@ type AgentStartConfig struct {
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
+	TraceHTTP bool   `cli:"trace-http"`
 	Token     string `cli:"token" validate:"required"`
 	Endpoint  string `cli:"endpoint" validate:"required"`
 	NoHTTP2   bool   `cli:"no-http2"`
@@ -692,6 +692,7 @@ var AgentStartCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
+		TraceHTTPFlag,
 
 		// Global flags
 		NoColorFlag,
@@ -1382,7 +1383,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 }
 
 func defaultSocketsPath() string {
-	home, err := homedir.Dir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return filepath.Join(os.TempDir(), "buildkite-sockets")
 	}
