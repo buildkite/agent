@@ -1383,7 +1383,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 }
 
 func defaultSocketsPath() string {
-	home, err := os.UserHomeDir()
+	home, err := osutil.UserHomeDir()
 	if err != nil {
 		return filepath.Join(os.TempDir(), "buildkite-sockets")
 	}
