@@ -37,6 +37,7 @@ func NewTestShell(t *testing.T) *Shell {
 			"TMP":         os.Getenv("TMP"),
 			"TEMP":        os.Getenv("TEMP"),
 			"ProgramData": os.Getenv("ProgramData"),
+			"USERPROFILE": os.Getenv("USERPROFILE"),
 		})
 	} else {
 		sh.Env = env.FromMap(map[string]string{
