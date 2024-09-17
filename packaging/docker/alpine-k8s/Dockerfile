@@ -26,12 +26,12 @@ FROM public.ecr.aws/docker/library/alpine:3.20.1@sha256:b89d9c93e9ed3597455c90a0
 ARG TARGETOS
 ARG TARGETARCH
 
+ENV K8_VERSION=v1.31.0
+
 RUN <<EOF
 set -eu
-
-VERSION=$(wget -qO- https://dl.k8s.io/release/stable.txt)
 wget -qO kubectl \
-    "https://storage.googleapis.com/kubernetes-release/release/$VERSION/bin/linux/$TARGETARCH/kubectl"
+    "https://storage.googleapis.com/kubernetes-release/release/$K8_VERSION/bin/linux/$TARGETARCH/kubectl"
 chmod +x kubectl
 EOF
 
