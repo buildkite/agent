@@ -179,7 +179,6 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		agentLogger: l,
 		conf:        conf,
 		apiClient:   apiClient,
-		client:      &core.Client{APIClient: apiClient, Logger: l},
 	}
 
 	var err error
@@ -199,6 +198,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		clientConf.Token = r.conf.Job.Token
 		r.apiClient = api.NewClient(r.agentLogger, clientConf)
 	}
+	r.client = &core.Client{APIClient: r.apiClient, Logger: l}
 
 	// Create our header times struct
 	r.headerTimesStreamer = newHeaderTimesStreamer(r.agentLogger, r.onUploadHeaderTime)

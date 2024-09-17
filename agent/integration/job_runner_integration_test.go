@@ -103,6 +103,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 				Env: map[string]string{
 					"BUILDKITE_COMMAND": "echo hello world",
 				},
+				Token: "bkaj_job-token",
 			}
 
 			mb := mockBootstrap(t)
@@ -150,6 +151,7 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	// create a mock agent API
@@ -197,6 +199,7 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 				Env: map[string]string{
 					"BUILDKITE_COMMAND": "echo hello world",
 				},
+				Token: "bkaj_job-token",
 			}
 
 			mb := mockBootstrap(t)
@@ -231,7 +234,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	jobToken := "actually-llamas-are-only-okay"
+	jobToken := "bkaj_actually-llamas-are-only-okay"
 
 	j := &api.Job{
 		ID:                 "my-job-id",
@@ -280,13 +283,14 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 		Env: map[string]string{
 			"BUILDKITE_COMMAND": "echo hello world",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	mb := mockBootstrap(t)
 	defer mb.CheckAndClose(t)
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), "llamasrock"; got != want {
+		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), "bkaj_job-token"; got != want {
 			t.Errorf("c.GetEnv(BUILDKITE_AGENT_ACCESS_TOKEN) = %q, want %q", got, want)
 		}
 		c.Exit(0)
@@ -319,6 +323,7 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 			"BUILDKITE_COMMAND":      "echo hello world",
 			"BUILDKITE_COMMAND_EVAL": "false",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	mb := mockBootstrap(t)

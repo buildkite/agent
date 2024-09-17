@@ -135,6 +135,7 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 			"PATHEXT="+os.Getenv("PATHEXT"),
 			"TMP="+os.Getenv("TMP"),
 			"TEMP="+os.Getenv("TEMP"),
+			"USERPROFILE="+homeDir,
 		)
 	} else {
 		bt.Env = append(bt.Env, "PATH="+pathDir+":"+os.Getenv("PATH"))
