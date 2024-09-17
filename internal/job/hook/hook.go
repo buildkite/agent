@@ -10,7 +10,7 @@ import (
 	"runtime"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/utils"
+	"github.com/buildkite/agent/v3/internal/osutil"
 )
 
 // Find returns the absolute path to the best matching hook file in a path, or
@@ -23,7 +23,7 @@ func Find(hookDir string, name string) (string, error) {
 		}
 	}
 	// otherwise chech for th default shell script
-	if p := filepath.Join(hookDir, name); utils.FileExists(p) {
+	if p := filepath.Join(hookDir, name); osutil.FileExists(p) {
 		return p, nil
 	}
 	// Don't wrap os.ErrNotExist without checking callers handle it.

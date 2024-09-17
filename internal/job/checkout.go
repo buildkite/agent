@@ -11,7 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/utils"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
 )
@@ -80,7 +80,7 @@ func (e *Executor) removeCheckoutDir() error {
 func (e *Executor) createCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
-	if !utils.FileExists(checkoutPath) {
+	if !osutil.FileExists(checkoutPath) {
 		e.shell.Commentf("Creating \"%s\"", checkoutPath)
 		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
@@ -258,7 +258,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 }
 
 func hasGitSubmodules(sh *shell.Shell) bool {
-	return utils.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
+	return osutil.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
 func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit string) bool {
@@ -283,7 +283,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	isMainRepository := repository == e.Repository
 
 	// Create the mirrors path if it doesn't exist
-	if baseDir := filepath.Dir(mirrorDir); !utils.FileExists(baseDir) {
+	if baseDir := filepath.Dir(mirrorDir); !osutil.FileExists(baseDir) {
 		e.shell.Commentf("Creating \"%s\"", baseDir)
 		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(baseDir, 0777); err != nil {
@@ -309,7 +309,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	defer mirrorCloneLock.Unlock()
 
 	// If we don't have a mirror, we need to clone it
-	if !utils.FileExists(mirrorDir) {
+	if !osutil.FileExists(mirrorDir) {
 		e.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
 		flags := "--mirror " + e.GitCloneMirrorFlags
 		if err := gitClone(ctx, e.shell, flags, repository, mirrorDir); err != nil {
@@ -455,7 +455,7 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
 
 		// Check if specified mirrorDir exists, otherwise the clone will fail.
-		if !utils.FileExists(mirrorDir) {
+		if !osutil.FileExists(mirrorDir) {
 			// Fall back to a clean clone, rather than failing the clone and therefore the build
 			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
 			mirrorDir = ""
@@ -507,7 +507,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	// Does the git directory exist?
 	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
-	if utils.FileExists(existingGitDir) {
+	if osutil.FileExists(existingGitDir) {
 		// Update the origin of the repository so we can gracefully handle
 		// repository renames
 		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
@@ -647,7 +647,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 				// Tests use a local temp path for the repository, real repositories don't. Handle both.
 				var repositoryPath string
-				if !utils.FileExists(repository) {
+				if !osutil.FileExists(repository) {
 					repositoryPath = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
 				} else {
 					repositoryPath = repository

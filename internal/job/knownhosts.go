@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
@@ -19,7 +20,7 @@ type knownHosts struct {
 }
 
 func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
-	userHomePath, err := os.UserHomeDir()
+	userHomePath, err := osutil.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("Could not find the current users home directory (%s)", err)
 	}
