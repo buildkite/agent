@@ -119,6 +119,7 @@ func TestConfigAllowlisting(t *testing.T) {
 					"BUILDKITE":         "true",
 					"BUILDKITE_COMMAND": "echo hello",
 				},
+				Token: "bkaj_job-token",
 			}
 
 			for k, v := range tc.extraEnv {

@@ -22,6 +22,7 @@ func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 				Paths: []string{"foo", "bar"},
 			},
 		},
+		Token: "bkaj_job-token",
 	}
 
 	mb := mockBootstrap(t)
