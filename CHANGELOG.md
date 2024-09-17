@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.82.0](https://github.com/buildkite/agent/tree/v3.82.0) (2024-09-17)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.81.0...v3.82.0)
+
+### Added
+- Emit HTTP timings [#2989](https://github.com/buildkite/agent/pull/2989) (@patrobinson)
+- Add JSON-format env file, allow annotations from pre-bootstrap [#2988](https://github.com/buildkite/agent/pull/2988) (@DrJosh9000)
+
+### Changed
+- Remove mitchellh/go-homedir; it's archived [#2990](https://github.com/buildkite/agent/pull/2990) (@mckern)
+
+### Fixed
+- Use job tokens for log chunk uploads [#2986](https://github.com/buildkite/agent/pull/2986) (@tessereth)
+- Temporarily pin kubectl version [#2997](https://github.com/buildkite/agent/pull/2997) (@patrobinson)
+- Prefer $HOME on all platforms [#3000](https://github.com/buildkite/agent/pull/3000) (@DrJosh9000)
+- Bump github.com/buildkite/interpolate from 0.1.3 to 0.1.4 [#3002](https://github.com/buildkite/agent/pull/3002) (@dependabot[bot]) (Fixes a bug in nested variable interpolation https://github.com/buildkite/interpolate/pull/15)
+
+### Internal
+- Dependabot churn: [#2992](https://github.com/buildkite/agent/pull/2992) [#2993](https://github.com/buildkite/agent/pull/2993) [#2995](https://github.com/buildkite/agent/pull/2995) [#2996](https://github.com/buildkite/agent/pull/2996) [#2979](https://github.com/buildkite/agent/pull/2979) [#2981](https://github.com/buildkite/agent/pull/2981)
+- Consolidate artifact functionality in internal package [#2985](https://github.com/buildkite/agent/pull/2985) (@DrJosh9000)
+
+
 ## [v3.81.0](https://github.com/buildkite/agent/tree/v3.81.0) (2024-09-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.80.0...v3.81.0)
 
