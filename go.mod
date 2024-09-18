@@ -17,7 +17,7 @@ require (
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.3.0
 	github.com/buildkite/go-pipeline v0.13.1
-	github.com/buildkite/interpolate v0.1.3
+	github.com/buildkite/interpolate v0.1.4
 	github.com/buildkite/roko v1.2.0
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/creack/pty v1.1.19
