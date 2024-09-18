@@ -101,9 +101,9 @@ steps:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               run: agent
-          - generate-build-provenance#v1.0.1:
+          - generate-provenance-attestation#v1.0.0:
               artifacts: "pkg/*"
-              provenance_filename: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.provenance.json"
+              attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
         matrix:
           setup:
             os:
@@ -226,9 +226,9 @@ steps:
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
     plugins:
-      - generate-build-provenance#v1.0.1:
+      - generate-provenance-attestation#v1.0.0:
           artifacts: "deb/*"
-          provenance_filename: "buildkite-agent-debian-packages.provenance.json"
+          attestation_name: "buildkite-agent-debian-packages.package-attestation.json"
 
   - name: ":redhat: RPM Package build"
     key: build-rpm-packages
@@ -238,9 +238,9 @@ steps:
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
     plugins:
-      - generate-build-provenance#v1.0.1:
+      - generate-provenance-attestation#v1.0.0:
           artifacts: "rpm/*"
-          provenance_filename: "buildkite-agent-rpm-packages.provenance.json"
+          attestation_name: "buildkite-agent-rpm-packages.package-attestation.json"
 
   - name: ":github: Build Github Release"
     key: build-github-release
@@ -253,9 +253,9 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.release.yml
           run: github-release
-      - generate-build-provenance#v1.0.1:
+      - generate-provenance-attestation#v1.0.0:
           artifacts: "releases/*.tar.gz;releases/*.zip"
-          provenance_filename: "buildkite-agent-github-releases.provenance.json"
+          attestation_name: "buildkite-agent-github-releases.attestation.json"
 
   - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
