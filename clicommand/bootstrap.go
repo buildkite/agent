@@ -101,6 +101,7 @@ type BootstrapConfig struct {
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
 	KubernetesExec               bool     `cli:"kubernetes-exec"`
 	KubernetesContainerID        int      `cli:"kubernetes-container-id"`
+	CachePaths                   string   `cli:"cache-paths"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -372,6 +373,12 @@ var BootstrapCommand = cli.Command{
 				"used to identify this container within the pod",
 			EnvVar: "BUILDKITE_CONTAINER_ID",
 		},
+		cli.StringFlag{
+			Name: "cache-paths",
+			Usage: "Paths to cache between jobs. The cache will be restored before the job starts, and saved after it finishes. " +
+				"Paths should be separated by a colon.",
+			EnvVar: "BUILDKITE_AGENT_CACHE_PATHS",
+		},
 		cancelSignalFlag,
 		cancelGracePeriodFlag,
 		signalGracePeriodSecondsFlag,
@@ -477,6 +484,7 @@ var BootstrapCommand = cli.Command{
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			KubernetesExec:               cfg.KubernetesExec,
 			KubernetesContainerID:        cfg.KubernetesContainerID,
+			CachePaths:                   cfg.CachePaths,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)

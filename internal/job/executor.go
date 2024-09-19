@@ -210,6 +210,11 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	}
 
 	if phaseErr == nil && e.includePhase("command") {
+		// Attempt to restore the cache, if it's enabled. Continue on error.
+		if err := e.restoreCachePhase(ctx); err != nil {
+			e.shell.Errorf("Error restoring cache: %v", err)
+		}
+
 		var commandErr error
 		phaseErr, commandErr = e.CommandPhase(ctx)
 		/*
@@ -251,6 +256,12 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 				// Only upload has errored, report its error.
 				return shell.GetExitCode(err)
 			}
+		}
+
+		// Only save cache as part of the command phase.
+		// Attempt to restore the cache, if it's enabled. Continue on error.
+		if err := e.saveCachePhase(graceCtx); err != nil {
+			e.shell.Errorf("Error restoring cache: %v", err)
 		}
 	}
 

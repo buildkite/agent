@@ -178,6 +178,10 @@ type ExecutorConfig struct {
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string
+
+	CacheLocalPath string `env:"BUILDKITE_AGENT_CACHE_LOCAL_PATH"`
+
+	CachePaths string `env:"BUILDKITE_AGENT_CACHE_PATHS"`
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
