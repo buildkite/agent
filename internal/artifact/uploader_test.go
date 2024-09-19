@@ -97,13 +97,13 @@ func TestCollect(t *testing.T) {
 	ctxExpEnabled, _ := experiments.Enable(ctx, experiments.NormalisedUploadPaths)
 	ctxExpDisabled := experiments.Disable(ctx, experiments.NormalisedUploadPaths)
 
-	artifactsWithoutExperimentEnabled, err := uploader.Collect(ctxExpDisabled)
+	artifactsWithoutExperimentEnabled, err := uploader.collect(ctxExpDisabled)
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
 
-	artifactsWithExperimentEnabled, err := uploader.Collect(ctxExpEnabled)
+	artifactsWithExperimentEnabled, err := uploader.collect(ctxExpEnabled)
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)
 	}
@@ -165,7 +165,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -185,7 +185,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -209,7 +209,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 		GlobResolveFollowSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -230,7 +230,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -263,7 +263,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 		GlobResolveFollowSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -296,7 +296,7 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 		UploadSkipSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -389,13 +389,13 @@ func TestCollect_WithZZGlob(t *testing.T) {
 	ctxExpEnabled, _ := experiments.Enable(ctx, experiments.NormalisedUploadPaths)
 	ctxExpDisabled := experiments.Disable(ctx, experiments.NormalisedUploadPaths)
 
-	artifactsWithoutExperimentEnabled, err := uploader.Collect(ctxExpDisabled)
+	artifactsWithoutExperimentEnabled, err := uploader.collect(ctxExpDisabled)
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
 
-	artifactsWithExperimentEnabled, err := uploader.Collect(ctxExpEnabled)
+	artifactsWithExperimentEnabled, err := uploader.collect(ctxExpEnabled)
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)
 	}
@@ -457,7 +457,7 @@ func TestCollectThatDoesntMatchAnyFiles_WithZZGlob(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -477,7 +477,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything_WithZZGlob(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -501,7 +501,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks_WithZZGlob(t
 		GlobResolveFollowSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -522,7 +522,7 @@ func TestCollectWithDuplicateMatches_WithZZGlob(t *testing.T) {
 		}, ";"),
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -555,7 +555,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks_WithZZGlob(t *testing.T) {
 		GlobResolveFollowSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
@@ -588,7 +588,7 @@ func TestCollectMatchesUploadSymlinks_WithZZGlob(t *testing.T) {
 		UploadSkipSymlinks: true,
 	})
 
-	artifacts, err := uploader.Collect(ctx)
+	artifacts, err := uploader.collect(ctx)
 	if err != nil {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}

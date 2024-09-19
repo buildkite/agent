@@ -75,7 +75,7 @@ func NewUploader(l logger.Logger, ac APIClient, c UploaderConfig) *Uploader {
 
 func (a *Uploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
-	artifacts, err := a.Collect(ctx)
+	artifacts, err := a.collect(ctx)
 	if err != nil {
 		return fmt.Errorf("collecting artifacts: %w", err)
 	}
@@ -109,7 +109,7 @@ func isDir(path string) bool {
 	return fi.IsDir()
 }
 
-func (a *Uploader) Collect(ctx context.Context) ([]*api.Artifact, error) {
+func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
