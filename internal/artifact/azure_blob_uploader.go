@@ -88,18 +88,36 @@ func (u *AzureBlobUploader) URL(artifact *api.Artifact) string {
 	return sasURL
 }
 
-// Upload uploads an artifact file.
-func (u *AzureBlobUploader) Upload(ctx context.Context, artifact *api.Artifact) error {
-	u.logger.Debug("Reading file %q", artifact.AbsolutePath)
-	f, err := os.Open(artifact.AbsolutePath)
+func (u *AzureBlobUploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
+	return []workUnit{&azureBlobUploaderWork{
+		AzureBlobUploader: u,
+		artifact:          artifact,
+	}}, nil
+}
+
+type azureBlobUploaderWork struct {
+	*AzureBlobUploader
+	artifact *api.Artifact
+}
+
+func (u *azureBlobUploaderWork) Artifact() *api.Artifact { return u.artifact }
+
+func (u *azureBlobUploaderWork) Description() string {
+	return singleUnitDescription(u.artifact)
+}
+
+// DoWork uploads an artifact file.
+func (u *azureBlobUploaderWork) DoWork(ctx context.Context) error {
+	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %q (%w)", artifact.AbsolutePath, err)
+		return fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 	defer f.Close()
 
-	blobName := path.Join(u.loc.BlobPath, artifact.Path)
+	blobName := path.Join(u.loc.BlobPath, u.artifact.Path)
 
-	u.logger.Debug("Uploading %s to %s", artifact.Path, u.loc.URL(blobName))
+	u.logger.Debug("Uploading %s to %s", u.artifact.Path, u.loc.URL(blobName))
 
 	bbc := u.client.NewContainerClient(u.loc.ContainerName).NewBlockBlobClient(blobName)
 	_, err = bbc.UploadFile(ctx, f, nil)

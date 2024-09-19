@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -80,37 +81,43 @@ func TestFormUploading(t *testing.T) {
 		t.Fatalf("os.Getwd() error = %v", err)
 	}
 
-	runtest := func(wd string) {
-		abspath := filepath.Join(wd, "llamas.txt")
-		err = os.WriteFile(abspath, []byte("llamas"), 0700)
-		defer os.Remove(abspath)
-
-		uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
-		artifact := &api.Artifact{
-			ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
-			Path:         "llamas.txt",
-			AbsolutePath: abspath,
-			GlobPath:     "llamas.txt",
-			ContentType:  "text/plain",
-			UploadInstructions: &api.ArtifactUploadInstructions{
-				Data: map[string]string{
-					"path": "${artifact:path}",
-				},
-				Action: api.ArtifactUploadAction{
-					URL:       server.URL,
-					Method:    "POST",
-					Path:      "buildkiteartifacts.com",
-					FileInput: "file",
-				}},
-		}
-
-		if err := uploader.Upload(ctx, artifact); err != nil {
-			t.Errorf("uploader.Upload(artifact) = %v", err)
-		}
-	}
-
 	for _, wd := range []string{temp, cwd} {
-		runtest(wd)
+		t.Run(wd, func(t *testing.T) {
+			abspath := filepath.Join(wd, "llamas.txt")
+			err = os.WriteFile(abspath, []byte("llamas"), 0700)
+			defer os.Remove(abspath)
+
+			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
+			artifact := &api.Artifact{
+				ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
+				Path:         "llamas.txt",
+				AbsolutePath: abspath,
+				GlobPath:     "llamas.txt",
+				ContentType:  "text/plain",
+				UploadInstructions: &api.ArtifactUploadInstructions{
+					Data: map[string]string{
+						"path": "${artifact:path}",
+					},
+					Action: api.ArtifactUploadAction{
+						URL:       server.URL,
+						Method:    "POST",
+						Path:      "buildkiteartifacts.com",
+						FileInput: "file",
+					},
+				},
+			}
+
+			work, err := uploader.CreateWork(artifact)
+			if err != nil {
+				t.Fatalf("uploader.CreateWork(artifact) error = %v", err)
+			}
+
+			for _, wu := range work {
+				if err := wu.DoWork(ctx); err != nil {
+					t.Errorf("bkUploaderWork.DoWork(artifact) = %v", err)
+				}
+			}
+		})
 	}
 }
 
@@ -148,13 +155,19 @@ func TestFormUploadFileMissing(t *testing.T) {
 			}},
 	}
 
-	if err := uploader.Upload(ctx, artifact); !os.IsNotExist(err) {
-		t.Errorf("uploader.Upload(artifact) = %v, want os.ErrNotExist", err)
+	work, err := uploader.CreateWork(artifact)
+	if err != nil {
+		t.Fatalf("uploader.CreateWork(artifact) error = %v", err)
+	}
+
+	for _, wu := range work {
+		if err := wu.DoWork(ctx); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("bkUploaderWork.DoWork(artifact) = %v, want %v", err, fs.ErrNotExist)
+		}
 	}
 }
 
 func TestFormUploadTooBig(t *testing.T) {
-	ctx := context.Background()
 	uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
 	const size = int64(6442450944) // 6Gb
 	artifact := &api.Artifact{
@@ -167,7 +180,8 @@ func TestFormUploadTooBig(t *testing.T) {
 		UploadInstructions: &api.ArtifactUploadInstructions{},
 	}
 
-	if err := uploader.Upload(ctx, artifact); !errors.Is(err, errArtifactTooLarge{Size: size}) {
-		t.Errorf("uploader.Upload(artifact) = %v, want errArtifactTooLarge", err)
+	wantErr := errArtifactTooLarge{Size: size}
+	if _, err := uploader.CreateWork(artifact); !errors.Is(err, wantErr) {
+		t.Fatalf("uploader.CreateWork(artifact) error = %v, want %v", err, wantErr)
 	}
 }

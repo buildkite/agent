@@ -49,17 +49,36 @@ func NewBKUploader(l logger.Logger, c BKUploaderConfig) *BKUploader {
 	}
 }
 
-// The BKUploader doens't specify a URL, as one is provided by Buildkite
-// after uploading
+// URL returns the empty string. BKUploader doesn't know the URL in advance,
+// it is provided by Buildkite after uploading.
 func (u *BKUploader) URL(*api.Artifact) string { return "" }
 
-func (u *BKUploader) Upload(ctx context.Context, artifact *api.Artifact) error {
+// CreateWork checks the artifact size, then creates one worker.
+func (u *BKUploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
 	if artifact.FileSize > maxFormUploadedArtifactSize {
-		return errArtifactTooLarge{Size: artifact.FileSize}
+		return nil, errArtifactTooLarge{Size: artifact.FileSize}
 	}
+	// TODO: create multiple workers for multipart uploads
+	return []workUnit{&bkUploaderWork{
+		BKUploader: u,
+		artifact:   artifact,
+	}}, nil
+}
 
-	// Create a HTTP request for uploading the file
-	request, err := createUploadRequest(ctx, u.logger, artifact)
+type bkUploaderWork struct {
+	*BKUploader
+	artifact *api.Artifact
+}
+
+func (u *bkUploaderWork) Artifact() *api.Artifact { return u.artifact }
+
+func (u *bkUploaderWork) Description() string {
+	return singleUnitDescription(u.artifact)
+}
+
+// DoWork tries the upload.
+func (u *bkUploaderWork) DoWork(ctx context.Context) error {
+	request, err := createUploadRequest(ctx, u.logger, u.artifact)
 	if err != nil {
 		return err
 	}
@@ -87,13 +106,15 @@ func (u *BKUploader) Upload(ctx context.Context, artifact *api.Artifact) error {
 		// know which one.
 		trace := &httptrace.ClientTrace{
 			GotConn: func(connInfo httptrace.GotConnInfo) {
-				u.logger.Debug("artifact %s uploading to: %s", artifact.ID, connInfo.Conn.RemoteAddr())
+				u.logger.Debug("artifact %s uploading to: %s", u.artifact.ID, connInfo.Conn.RemoteAddr())
 			},
 		}
 		request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
 	}
 
 	// Create the client
+	// TODO: this uses the default transport, potentially ignoring many agent
+	// config options
 	client := &http.Client{}
 
 	// Perform the request

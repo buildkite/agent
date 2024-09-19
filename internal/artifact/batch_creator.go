@@ -60,9 +60,10 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 		// twice, it'll just return the previous data and skip the
 		// upload)
 		batch := &api.ArtifactBatch{
-			ID:                api.NewUUID(),
-			Artifacts:         theseArtifacts,
-			UploadDestination: a.conf.UploadDestination,
+			ID:                 api.NewUUID(),
+			Artifacts:          theseArtifacts,
+			UploadDestination:  a.conf.UploadDestination,
+			MultipartSupported: true,
 		}
 
 		a.logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
@@ -111,11 +112,12 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 		}
 
 		// Save the id and instructions to each artifact
-		index := 0
-		for _, id := range creation.ArtifactIDs {
+		for index, id := range creation.ArtifactIDs {
 			theseArtifacts[index].ID = id
-			theseArtifacts[index].UploadInstructions = creation.UploadInstructions
-			index += 1
+			theseArtifacts[index].UploadInstructions = creation.InstructionsTemplate
+			if specific := creation.PerArtifactInstructions[id]; specific != nil {
+				theseArtifacts[index].UploadInstructions = specific
+			}
 		}
 	}
 
