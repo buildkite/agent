@@ -107,11 +107,11 @@ func (u *azureBlobUploaderWork) Description() string {
 }
 
 // DoWork uploads an artifact file.
-func (u *azureBlobUploaderWork) DoWork(ctx context.Context) error {
+func (u *azureBlobUploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, error) {
 	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
 	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
+		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 	defer f.Close()
 
@@ -121,5 +121,5 @@ func (u *azureBlobUploaderWork) DoWork(ctx context.Context) error {
 
 	bbc := u.client.NewContainerClient(u.loc.ContainerName).NewBlockBlobClient(blobName)
 	_, err = bbc.UploadFile(ctx, f, nil)
-	return err
+	return nil, err
 }

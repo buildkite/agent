@@ -99,10 +99,10 @@ func (u *s3UploaderWork) Description() string {
 	return singleUnitDescription(u.artifact)
 }
 
-func (u *s3UploaderWork) DoWork(context.Context) error {
+func (u *s3UploaderWork) DoWork(context.Context) (*api.ArtifactPartETag, error) {
 	permission, err := u.resolvePermission()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create an uploader with the session and default options
@@ -112,7 +112,7 @@ func (u *s3UploaderWork) DoWork(context.Context) error {
 	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
 	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
+		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to S3.
@@ -131,8 +131,7 @@ func (u *s3UploaderWork) DoWork(context.Context) error {
 	}
 
 	_, err = uploader.Upload(params)
-
-	return err
+	return nil, err
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {

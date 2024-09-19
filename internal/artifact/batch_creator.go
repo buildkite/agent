@@ -22,6 +22,9 @@ type BatchCreatorConfig struct {
 	// CreateArtifactsTimeout, sets a context.WithTimeout around the CreateArtifacts API.
 	// If it's zero, there's no context timeout and the default HTTP timeout will prevail.
 	CreateArtifactsTimeout time.Duration
+
+	// Whether to allow multipart uploads to the BK-hosted bucket.
+	AllowMultipart bool
 }
 
 type BatchCreator struct {
@@ -63,7 +66,7 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 			ID:                 api.NewUUID(),
 			Artifacts:          theseArtifacts,
 			UploadDestination:  a.conf.UploadDestination,
-			MultipartSupported: true,
+			MultipartSupported: a.conf.AllowMultipart,
 		}
 
 		a.logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)

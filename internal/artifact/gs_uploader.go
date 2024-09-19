@@ -137,7 +137,7 @@ func (u *gsUploaderWork) Description() string {
 	return singleUnitDescription(u.artifact)
 }
 
-func (u *gsUploaderWork) DoWork(_ context.Context) error {
+func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error) {
 	permission := os.Getenv("BUILDKITE_GS_ACL")
 
 	// The dirtiest validation method ever...
@@ -147,7 +147,7 @@ func (u *gsUploaderWork) DoWork(_ context.Context) error {
 		permission != "projectPrivate" &&
 		permission != "publicRead" &&
 		permission != "publicReadWrite" {
-		return fmt.Errorf("Invalid GS ACL `%s`", permission)
+		return nil, fmt.Errorf("Invalid GS ACL `%s`", permission)
 	}
 
 	if permission == "" {
@@ -164,7 +164,7 @@ func (u *gsUploaderWork) DoWork(_ context.Context) error {
 	}
 	file, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Failed to open file %q (%v)", u.artifact.AbsolutePath, err))
+		return nil, errors.New(fmt.Sprintf("Failed to open file %q (%v)", u.artifact.AbsolutePath, err))
 	}
 	call := u.service.Objects.Insert(u.BucketName, object)
 	if permission != "" {
@@ -173,10 +173,10 @@ func (u *gsUploaderWork) DoWork(_ context.Context) error {
 	if res, err := call.Media(file, googleapi.ContentType("")).Do(); err == nil {
 		u.logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
 	} else {
-		return errors.New(fmt.Sprintf("Failed to PUT file %q (%v)", u.artifactPath(u.artifact), err))
+		return nil, errors.New(fmt.Sprintf("Failed to PUT file %q (%v)", u.artifactPath(u.artifact), err))
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (u *GSUploader) artifactPath(artifact *api.Artifact) string {

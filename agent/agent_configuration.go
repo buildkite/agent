@@ -43,23 +43,24 @@ type AgentConfiguration struct {
 	VerificationJWKS             any    // The set of keys to verify jobs with
 	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
 
-	ANSITimestamps             bool
-	TimestampLines             bool
-	HealthCheckAddr            string
-	DisconnectAfterJob         bool
-	DisconnectAfterIdleTimeout int
-	CancelGracePeriod          int
-	SignalGracePeriod          time.Duration
-	EnableJobLogTmpfile        bool
-	JobLogPath                 string
-	WriteJobLogsToStdout       bool
-	LogFormat                  string
-	Shell                      string
-	Profile                    string
-	RedactedVars               []string
-	AcquireJob                 string
-	TracingBackend             string
-	TracingServiceName         string
-	TraceContextEncoding       string
-	DisableWarningsFor         []string
+	ANSITimestamps               bool
+	TimestampLines               bool
+	HealthCheckAddr              string
+	DisconnectAfterJob           bool
+	DisconnectAfterIdleTimeout   int
+	CancelGracePeriod            int
+	SignalGracePeriod            time.Duration
+	EnableJobLogTmpfile          bool
+	JobLogPath                   string
+	WriteJobLogsToStdout         bool
+	LogFormat                    string
+	Shell                        string
+	Profile                      string
+	RedactedVars                 []string
+	AcquireJob                   string
+	TracingBackend               string
+	TracingServiceName           string
+	TraceContextEncoding         string
+	DisableWarningsFor           []string
+	AllowMultipartArtifactUpload bool
 }

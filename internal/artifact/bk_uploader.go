@@ -2,30 +2,39 @@ package artifact
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	_ "crypto/sha512" // import sha512 to make sha512 ssl certs work
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptrace"
 	"net/http/httputil"
-	"strings"
-
-	// "net/http/httputil"
-	"errors"
 	"net/url"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
+	"github.com/dustin/go-humanize"
 )
 
 const artifactPathVariable = "${artifact:path}"
 
-// BKUploader uploads to S3 as a single signed POST, which have a hard limit of 5Gb.
-const maxFormUploadedArtifactSize = int64(5368709120)
+const (
+	// BKUploader uploads to S3 either as:
+	// - a single signed POST, which has a hard limit of 5GB, or
+	// - as a signed multipart, which has a limit of 5GB per _part_, but we
+	//   aren't supporting larger artifacts yet.
+	maxFormUploadedArtifactSize = int64(5 * 1024 * 1024 * 1024)
+
+	// Multipart parts have a minimum size of 5MB.
+	minPartSize = int64(5 * 1024 * 1024)
+)
 
 type BKUploaderConfig struct {
 	// Whether or not HTTP calls should be debugged
@@ -58,29 +67,151 @@ func (u *BKUploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
 	if artifact.FileSize > maxFormUploadedArtifactSize {
 		return nil, errArtifactTooLarge{Size: artifact.FileSize}
 	}
-	// TODO: create multiple workers for multipart uploads
-	return []workUnit{&bkUploaderWork{
-		BKUploader: u,
-		artifact:   artifact,
-	}}, nil
+	actions := artifact.UploadInstructions.Actions
+	if len(actions) == 0 {
+		// Not multiple actions - use a single form upload.
+		return []workUnit{&bkFormUpload{
+			BKUploader: u,
+			artifact:   artifact,
+		}}, nil
+	}
+
+	// Ensure the actions are sorted by part number.
+	slices.SortFunc(actions, func(a, b api.ArtifactUploadAction) int {
+		return cmp.Compare(a.PartNumber, b.PartNumber)
+	})
+
+	// Split the artifact across multiple parts.
+	chunks := int64(len(actions))
+	chunkSize := artifact.FileSize / chunks
+	remainder := artifact.FileSize % chunks
+	var offset int64
+	workUnits := make([]workUnit, 0, chunks)
+	for i, action := range actions {
+		size := chunkSize
+		if int64(i) < remainder {
+			// Spread the remainder across the first chunks.
+			size++
+		}
+		workUnits = append(workUnits, &bkMultipartUpload{
+			BKUploader: u,
+			artifact:   artifact,
+			partCount:  int(chunks),
+			action:     &action,
+			offset:     offset,
+			size:       size,
+		})
+		offset += size
+	}
+	// After that loop, `offset` should equal `artifact.FileSize`.
+	return workUnits, nil
 }
 
-type bkUploaderWork struct {
+// bkMultipartUpload uploads a single part of a multipart upload.
+type bkMultipartUpload struct {
+	*BKUploader
+	artifact     *api.Artifact
+	action       *api.ArtifactUploadAction
+	partCount    int
+	offset, size int64
+}
+
+func (u *bkMultipartUpload) Artifact() *api.Artifact { return u.artifact }
+
+func (u *bkMultipartUpload) Description() string {
+	return fmt.Sprintf("%s %s part %d/%d (~%s starting at ~%s)",
+		u.artifact.ID,
+		u.artifact.Path,
+		u.action.PartNumber,
+		u.partCount,
+		humanize.IBytes(uint64(u.size)),
+		humanize.IBytes(uint64(u.offset)),
+	)
+}
+
+func (u *bkMultipartUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, error) {
+	f, err := os.Open(u.artifact.AbsolutePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	f.Seek(u.offset, 0)
+	lr := io.LimitReader(f, u.size)
+
+	req, err := http.NewRequestWithContext(ctx, u.action.Method, u.action.URL, lr)
+	if err != nil {
+		return nil, err
+	}
+	// Content-Ranges are 0-indexed and inclusive
+	// example: Content-Range: bytes 200-1000/67589
+	req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", u.offset, u.offset+u.size-1, u.artifact.FileSize))
+	req.Header.Set("Content-Type", u.artifact.ContentType)
+	req.Header.Add("User-Agent", version.UserAgent())
+
+	if u.conf.DebugHTTP {
+		dumpReqOut, err := httputil.DumpRequestOut(req, false)
+		if err != nil {
+			u.logger.Error("Couldn't dump outgoing request: %v", err)
+		}
+		u.logger.Debug("%s", dumpReqOut)
+	}
+
+	// TODO: set all the usual http transport & client options...
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if u.conf.DebugHTTP {
+		dumpResp, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			u.logger.Error("Couldn't dump outgoing request: %v", err)
+			return nil, err
+		}
+		u.logger.Debug("%s", dumpResp)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %v", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("unsuccessful status %s: %s", resp.Status, body)
+	}
+
+	etag := resp.Header.Get("Etag")
+	u.logger.Debug("Artifact %s part %d has ETag = %s", u.artifact.ID, u.action.PartNumber, etag)
+	if etag == "" {
+		return nil, errors.New("response missing ETag header")
+	}
+
+	return &api.ArtifactPartETag{
+		PartNumber: u.action.PartNumber,
+		ETag:       etag,
+	}, nil
+}
+
+// bkFormUpload uploads an artifact to a presigned URL in a single request using
+// a request body encoded as multipart/form-data.
+type bkFormUpload struct {
 	*BKUploader
 	artifact *api.Artifact
 }
 
-func (u *bkUploaderWork) Artifact() *api.Artifact { return u.artifact }
+func (u *bkFormUpload) Artifact() *api.Artifact { return u.artifact }
 
-func (u *bkUploaderWork) Description() string {
+func (u *bkFormUpload) Description() string {
 	return singleUnitDescription(u.artifact)
 }
 
 // DoWork tries the upload.
-func (u *bkUploaderWork) DoWork(ctx context.Context) error {
-	request, err := createUploadRequest(ctx, u.logger, u.artifact)
+func (u *bkFormUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, error) {
+	request, err := createFormUploadRequest(ctx, u.logger, u.artifact)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if u.conf.DebugHTTP {
@@ -121,7 +252,7 @@ func (u *bkUploaderWork) DoWork(ctx context.Context) error {
 	u.logger.Debug("%s %s", request.Method, request.URL)
 	response, err := client.Do(request)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer response.Body.Close()
 
@@ -138,17 +269,18 @@ func (u *bkUploaderWork) DoWork(ctx context.Context) error {
 		body := &bytes.Buffer{}
 		_, err := body.ReadFrom(response.Body)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		return fmt.Errorf("%s (%d)", body, response.StatusCode)
+		return nil, fmt.Errorf("%s (%d)", body, response.StatusCode)
 	}
-	return nil
+	return nil, nil
 }
 
 // Creates a new file upload http request with optional extra params
-func createUploadRequest(ctx context.Context, _ logger.Logger, artifact *api.Artifact) (*http.Request, error) {
+func createFormUploadRequest(ctx context.Context, _ logger.Logger, artifact *api.Artifact) (*http.Request, error) {
 	streamer := newMultipartStreamer()
+	action := artifact.UploadInstructions.Action
 
 	// Set the post data for the request
 	for key, val := range artifact.UploadInstructions.Data {
@@ -170,13 +302,13 @@ func createUploadRequest(ctx context.Context, _ logger.Logger, artifact *api.Art
 	// It's important that we add the form field last because when
 	// uploading to an S3 form, they are really nit-picky about the field
 	// order, and the file needs to be the last one other it doesn't work.
-	if err := streamer.WriteFile(artifact.UploadInstructions.Action.FileInput, artifact.Path, fh); err != nil {
+	if err := streamer.WriteFile(action.FileInput, artifact.Path, fh); err != nil {
 		fh.Close()
 		return nil, err
 	}
 
 	// Create the URL that we'll send data to
-	uri, err := url.Parse(artifact.UploadInstructions.Action.URL)
+	uri, err := url.Parse(action.URL)
 	if err != nil {
 		fh.Close()
 		return nil, err
@@ -185,7 +317,7 @@ func createUploadRequest(ctx context.Context, _ logger.Logger, artifact *api.Art
 	uri.Path = artifact.UploadInstructions.Action.Path
 
 	// Create the request
-	req, err := http.NewRequestWithContext(ctx, artifact.UploadInstructions.Action.Method, uri.String(), streamer.Reader())
+	req, err := http.NewRequestWithContext(ctx, action.Method, uri.String(), streamer.Reader())
 	if err != nil {
 		fh.Close()
 		return nil, err
