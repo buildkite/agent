@@ -24,34 +24,36 @@ import (
 
 const artifactPathVariable = "${artifact:path}"
 
-// FormUploader uploads to S3 as a single signed POST, which have a hard limit of 5Gb.
+// BKUploader uploads to S3 as a single signed POST, which have a hard limit of 5Gb.
 const maxFormUploadedArtifactSize = int64(5368709120)
 
-type FormUploaderConfig struct {
+type BKUploaderConfig struct {
 	// Whether or not HTTP calls should be debugged
 	DebugHTTP bool
 }
 
-type FormUploader struct {
+// BKUploader uploads artifacts to Buildkite itself.
+type BKUploader struct {
 	// The configuration
-	conf FormUploaderConfig
+	conf BKUploaderConfig
 
 	// The logger instance to use
 	logger logger.Logger
 }
 
-func NewFormUploader(l logger.Logger, c FormUploaderConfig) *FormUploader {
-	return &FormUploader{
+// NewBKUploader creates a new Buildkite uploader.
+func NewBKUploader(l logger.Logger, c BKUploaderConfig) *BKUploader {
+	return &BKUploader{
 		logger: l,
 		conf:   c,
 	}
 }
 
-// The FormUploader doens't specify a URL, as one is provided by Buildkite
+// The BKUploader doens't specify a URL, as one is provided by Buildkite
 // after uploading
-func (u *FormUploader) URL(*api.Artifact) string { return "" }
+func (u *BKUploader) URL(*api.Artifact) string { return "" }
 
-func (u *FormUploader) Upload(ctx context.Context, artifact *api.Artifact) error {
+func (u *BKUploader) Upload(ctx context.Context, artifact *api.Artifact) error {
 	if artifact.FileSize > maxFormUploadedArtifactSize {
 		return errArtifactTooLarge{Size: artifact.FileSize}
 	}

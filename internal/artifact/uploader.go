@@ -370,7 +370,7 @@ func (a *Uploader) createUploader() (_ uploader, err error) {
 	switch {
 	case a.conf.Destination == "":
 		a.logger.Info("Uploading to default Buildkite artifact storage")
-		return NewFormUploader(a.logger, FormUploaderConfig{
+		return NewBKUploader(a.logger, BKUploaderConfig{
 			DebugHTTP: a.conf.DebugHTTP,
 		}), nil
 
