@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/http/httputil"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-querystring/query"
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -80,30 +82,44 @@ func NewClient(l logger.Logger, conf Config) *Client {
 	}
 
 	httpClient := conf.HTTPClient
+
 	if conf.HTTPClient == nil {
-
-		// use the default transport as it is optimized and configured for http2
-		// and will avoid accidents in the future
-		tr := http.DefaultTransport.(*http.Transport).Clone()
-
 		if conf.DisableHTTP2 {
-			tr.ForceAttemptHTTP2 = false
-			tr.TLSNextProto = make(map[string]func(authority string, c *tls.Conn) http.RoundTripper)
-			// The default TLSClientConfig has h2 in NextProtos, so the negotiated TLS connection will assume h2 support.
-			// see https://github.com/golang/go/issues/50571
-			tr.TLSClientConfig.NextProtos = []string{"http/1.1"}
-		}
+			tr := &http.Transport{
+				Proxy:              http.ProxyFromEnvironment,
+				DisableCompression: false,
+				DisableKeepAlives:  false,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				MaxIdleConns:        100,
+				IdleConnTimeout:     90 * time.Second,
+				TLSHandshakeTimeout: 30 * time.Second,
+				TLSNextProto:        make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+			}
+			httpClient = &http.Client{
+				Timeout: 60 * time.Second,
+				Transport: &authenticatedTransport{
+					Token:    conf.Token,
+					Delegate: tr,
+				},
+			}
+		} else {
+			tr := &http2.Transport{
+				ReadIdleTimeout: 30 * time.Second,
+			}
+			if conf.TLSConfig != nil {
+				tr.TLSClientConfig = conf.TLSConfig
+			}
 
-		if conf.TLSConfig != nil {
-			tr.TLSClientConfig = conf.TLSConfig
-		}
-
-		httpClient = &http.Client{
-			Timeout: 60 * time.Second,
-			Transport: &authenticatedTransport{
-				Token:    conf.Token,
-				Delegate: tr,
-			},
+			httpClient = &http.Client{
+				Timeout: 60 * time.Second,
+				Transport: &authenticatedTransport{
+					Token:    conf.Token,
+					Delegate: tr,
+				},
+			}
 		}
 	}
 
@@ -270,6 +286,7 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 	c.logger.Debug("%s %s", req.Method, req.URL)
 
 	resp, err := c.client.Do(req)
+
 	if err != nil {
 		if c.conf.TraceHTTP {
 			tracer.EmitTraceToLog(logger.ERROR)
@@ -377,6 +394,7 @@ func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {
 			t.LogField("reused", strconv.FormatBool(info.Reused))
 			t.LogField("idle", strconv.FormatBool(info.WasIdle))
 			t.LogDuration("idleTime", info.IdleTime)
+			t.LogField("localAddr", info.Conn.LocalAddr().String())
 		},
 		PutIdleConn: func(err error) {
 			t.LogTiming("putIdleConn")
