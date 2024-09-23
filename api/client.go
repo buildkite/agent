@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/http/httputil"
@@ -83,44 +82,52 @@ func NewClient(l logger.Logger, conf Config) *Client {
 
 	httpClient := conf.HTTPClient
 
-	if conf.HTTPClient == nil {
-		if conf.DisableHTTP2 {
-			tr := &http.Transport{
-				Proxy:              http.ProxyFromEnvironment,
-				DisableCompression: false,
-				DisableKeepAlives:  false,
-				DialContext: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).DialContext,
-				MaxIdleConns:        100,
-				IdleConnTimeout:     90 * time.Second,
-				TLSHandshakeTimeout: 30 * time.Second,
-				TLSNextProto:        make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-			}
-			httpClient = &http.Client{
-				Timeout: 60 * time.Second,
-				Transport: &authenticatedTransport{
-					Token:    conf.Token,
-					Delegate: tr,
-				},
-			}
-		} else {
-			tr := &http2.Transport{
-				ReadIdleTimeout: 30 * time.Second,
-			}
-			if conf.TLSConfig != nil {
-				tr.TLSClientConfig = conf.TLSConfig
-			}
-
-			httpClient = &http.Client{
-				Timeout: 60 * time.Second,
-				Transport: &authenticatedTransport{
-					Token:    conf.Token,
-					Delegate: tr,
-				},
-			}
+	if httpClient != nil {
+		return &Client{
+			logger: l,
+			client: httpClient,
+			conf:   conf,
 		}
+	}
+
+	// Base any modifications on the default transport.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// Allow override of TLSConfig. This must be set prior to calling
+	// http2.ConfigureTransports.
+	if conf.TLSConfig != nil {
+		transport.TLSClientConfig = conf.TLSConfig
+	}
+
+	if conf.DisableHTTP2 {
+		transport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+		// The default TLSClientConfig has h2 in NextProtos, so the
+		// negotiated TLS connection will assume h2 support.
+		// see https://github.com/golang/go/issues/50571
+		transport.TLSClientConfig.NextProtos = []string{"http/1.1"}
+	} else {
+		// There is a bug in http2 on Linux regarding using dead connections.
+		// This is a workaround. See https://github.com/golang/go/issues/59690
+		//
+		// Note that http2.ConfigureTransports alters its argument in order to
+		// supply http2 functionality, and the http2.Transport does not support
+		// HTTP/1.1 as a protocol, so we get slightly odd-looking code where
+		// we use `transport` later on instead of the just-returned `tr2`.
+		// tr2 is needed merely to configure the http2 option.
+		tr2, err := http2.ConfigureTransports(transport)
+		if err != nil {
+			l.Warn("Failed to configure HTTP2 transports: %v", err)
+		}
+		if tr2 != nil {
+			tr2.ReadIdleTimeout = 30 * time.Second
+		}
+	}
+
+	httpClient = &http.Client{
+		Timeout: 60 * time.Second,
+		Transport: &authenticatedTransport{
+			Token:    conf.Token,
+			Delegate: transport,
+		},
 	}
 
 	return &Client{
