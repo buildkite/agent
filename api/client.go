@@ -22,6 +22,7 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-querystring/query"
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -80,31 +81,53 @@ func NewClient(l logger.Logger, conf Config) *Client {
 	}
 
 	httpClient := conf.HTTPClient
-	if conf.HTTPClient == nil {
 
-		// use the default transport as it is optimized and configured for http2
-		// and will avoid accidents in the future
-		tr := http.DefaultTransport.(*http.Transport).Clone()
-
-		if conf.DisableHTTP2 {
-			tr.ForceAttemptHTTP2 = false
-			tr.TLSNextProto = make(map[string]func(authority string, c *tls.Conn) http.RoundTripper)
-			// The default TLSClientConfig has h2 in NextProtos, so the negotiated TLS connection will assume h2 support.
-			// see https://github.com/golang/go/issues/50571
-			tr.TLSClientConfig.NextProtos = []string{"http/1.1"}
+	if httpClient != nil {
+		return &Client{
+			logger: l,
+			client: httpClient,
+			conf:   conf,
 		}
+	}
 
-		if conf.TLSConfig != nil {
-			tr.TLSClientConfig = conf.TLSConfig
-		}
+	// Base any modifications on the default transport.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// Allow override of TLSConfig. This must be set prior to calling
+	// http2.ConfigureTransports.
+	if conf.TLSConfig != nil {
+		transport.TLSClientConfig = conf.TLSConfig
+	}
 
-		httpClient = &http.Client{
-			Timeout: 60 * time.Second,
-			Transport: &authenticatedTransport{
-				Token:    conf.Token,
-				Delegate: tr,
-			},
+	if conf.DisableHTTP2 {
+		transport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+		// The default TLSClientConfig has h2 in NextProtos, so the
+		// negotiated TLS connection will assume h2 support.
+		// see https://github.com/golang/go/issues/50571
+		transport.TLSClientConfig.NextProtos = []string{"http/1.1"}
+	} else {
+		// There is a bug in http2 on Linux regarding using dead connections.
+		// This is a workaround. See https://github.com/golang/go/issues/59690
+		//
+		// Note that http2.ConfigureTransports alters its argument in order to
+		// supply http2 functionality, and the http2.Transport does not support
+		// HTTP/1.1 as a protocol, so we get slightly odd-looking code where
+		// we use `transport` later on instead of the just-returned `tr2`.
+		// tr2 is needed merely to configure the http2 option.
+		tr2, err := http2.ConfigureTransports(transport)
+		if err != nil {
+			l.Warn("Failed to configure HTTP2 transports: %v", err)
 		}
+		if tr2 != nil {
+			tr2.ReadIdleTimeout = 30 * time.Second
+		}
+	}
+
+	httpClient = &http.Client{
+		Timeout: 60 * time.Second,
+		Transport: &authenticatedTransport{
+			Token:    conf.Token,
+			Delegate: transport,
+		},
 	}
 
 	return &Client{
@@ -270,6 +293,7 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 	c.logger.Debug("%s %s", req.Method, req.URL)
 
 	resp, err := c.client.Do(req)
+
 	if err != nil {
 		if c.conf.TraceHTTP {
 			tracer.EmitTraceToLog(logger.ERROR)
@@ -377,6 +401,7 @@ func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {
 			t.LogField("reused", strconv.FormatBool(info.Reused))
 			t.LogField("idle", strconv.FormatBool(info.WasIdle))
 			t.LogDuration("idleTime", info.IdleTime)
+			t.LogField("localAddr", info.Conn.LocalAddr().String())
 		},
 		PutIdleConn: func(err error) {
 			t.LogTiming("putIdleConn")
