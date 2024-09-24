@@ -16,7 +16,8 @@ type OIDCTokenConfig struct {
 	Lifetime int    `cli:"lifetime"`
 	Job      string `cli:"job"      validate:"required"`
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
-	Claims []string `cli:"claim"    normalize:"list"`
+	Claims         []string `cli:"claim"           normalize:"list"`
+	AwsSessionTags []string `cli:"aws-session-tag" normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -79,6 +80,13 @@ var OIDCRequestTokenCommand = cli.Command{
 			EnvVar: "BUILDKITE_OIDC_TOKEN_CLAIMS",
 		},
 
+		cli.StringSliceFlag{
+			Name:   "aws-session-tag",
+			Value:  &cli.StringSlice{},
+			Usage:  "Add claims as AWS Session Tags",
+			EnvVar: "BUILDKITE_OIDC_TOKEN_AWS_SESSION_TAGS",
+		},
+
 		// API Flags
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -112,10 +120,11 @@ var OIDCRequestTokenCommand = cli.Command{
 		)
 		token, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.OIDCToken, error) {
 			req := &api.OIDCTokenRequest{
-				Job:      cfg.Job,
-				Audience: cfg.Audience,
-				Lifetime: cfg.Lifetime,
-				Claims:   cfg.Claims,
+				Job:            cfg.Job,
+				Audience:       cfg.Audience,
+				Lifetime:       cfg.Lifetime,
+				Claims:         cfg.Claims,
+				AwsSessionTags: cfg.AwsSessionTags,
 			}
 
 			token, resp, err := client.OIDCToken(ctx, req)
