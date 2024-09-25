@@ -124,6 +124,24 @@ func TestOIDCToken(t *testing.T) {
 			ExpectedBody: []byte(fmt.Sprintf(`{"lifetime":%d}`+"\n", lifetime)),
 			OIDCToken:    &api.OIDCToken{Token: oidcToken},
 		},
+		{
+			AccessToken: accessToken,
+			OIDCTokenRequest: &api.OIDCTokenRequest{
+				Job:    jobID,
+				Claims: []string{"organization_id", "pipeline_id"},
+			},
+			ExpectedBody: []byte(`{"claims":["organization_id","pipeline_id"]}` + "\n"),
+			OIDCToken:    &api.OIDCToken{Token: oidcToken},
+		},
+		{
+			AccessToken: accessToken,
+			OIDCTokenRequest: &api.OIDCTokenRequest{
+				Job:            jobID,
+				AWSSessionTags: []string{"organization_id", "pipeline_id"},
+			},
+			ExpectedBody: []byte(`{"aws_session_tags":["organization_id","pipeline_id"]}` + "\n"),
+			OIDCToken:    &api.OIDCToken{Token: oidcToken},
+		},
 	}
 
 	for _, test := range tests {
