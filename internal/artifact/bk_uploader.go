@@ -10,14 +10,13 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"net/http/httptrace"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"slices"
 	"strings"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/dustin/go-humanize"
@@ -37,8 +36,10 @@ const (
 )
 
 type BKUploaderConfig struct {
-	// Whether or not HTTP calls should be debugged
-	DebugHTTP bool
+	// Standard HTTP options
+	DebugHTTP    bool
+	TraceHTTP    bool
+	DisableHTTP2 bool
 }
 
 // BKUploader uploads artifacts to Buildkite itself.
@@ -143,35 +144,25 @@ func (u *bkMultipartUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, 
 	if err != nil {
 		return nil, err
 	}
-	// Content-Ranges are 0-indexed and inclusive
+
+	// Content-Range is mostly for debugging purposes.
+	// Note thatContent-Ranges are 0-indexed and inclusive
 	// example: Content-Range: bytes 200-1000/67589
 	req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", u.offset, u.offset+u.size-1, u.artifact.FileSize))
 	req.Header.Set("Content-Type", u.artifact.ContentType)
-	req.Header.Add("User-Agent", version.UserAgent())
 
-	if u.conf.DebugHTTP {
-		dumpReqOut, err := httputil.DumpRequestOut(req, false)
-		if err != nil {
-			u.logger.Error("Couldn't dump outgoing request: %v", err)
-		}
-		u.logger.Debug("%s", dumpReqOut)
-	}
+	client := agenthttp.NewClient(
+		agenthttp.WithAllowHTTP2(!u.conf.DisableHTTP2),
+	)
 
-	// TODO: set all the usual http transport & client options...
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := agenthttp.Do(u.logger, client, req,
+		agenthttp.WithDebugHTTP(u.conf.DebugHTTP),
+		agenthttp.WithTraceHTTP(u.conf.TraceHTTP),
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	if u.conf.DebugHTTP {
-		dumpResp, err := httputil.DumpResponse(resp, true)
-		if err != nil {
-			u.logger.Error("Couldn't dump outgoing request: %v", err)
-			return nil, err
-		}
-		u.logger.Debug("%s", dumpResp)
-	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -214,56 +205,23 @@ func (u *bkFormUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, error
 		return nil, err
 	}
 
-	if u.conf.DebugHTTP {
-		// If the request is a multi-part form, then it's probably a
-		// file upload, in which case we don't want to spewing out the
-		// file contents into the debug log (especially if it's been
-		// gzipped)
-		var requestDump []byte
-		if strings.Contains(request.Header.Get("Content-Type"), "multipart/form-data") {
-			requestDump, err = httputil.DumpRequestOut(request, false)
-		} else {
-			requestDump, err = httputil.DumpRequestOut(request, true)
-		}
-
-		if err != nil {
-			u.logger.Debug("\nERR: %s\n%s", err, string(requestDump))
-		} else {
-			u.logger.Debug("\n%s", string(requestDump))
-		}
-
-		// configure the HTTP request to log the server IP. The IPs for s3.amazonaws.com
-		// rotate every 5 seconds, and if one of them is misbehaving it may be helpful to
-		// know which one.
-		trace := &httptrace.ClientTrace{
-			GotConn: func(connInfo httptrace.GotConnInfo) {
-				u.logger.Debug("artifact %s uploading to: %s", u.artifact.ID, connInfo.Conn.RemoteAddr())
-			},
-		}
-		request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
-	}
-
 	// Create the client
-	// TODO: this uses the default transport, potentially ignoring many agent
-	// config options
-	client := &http.Client{}
+	client := agenthttp.NewClient(
+		agenthttp.WithAllowHTTP2(!u.conf.DisableHTTP2),
+	)
 
 	// Perform the request
-	u.logger.Debug("%s %s", request.Method, request.URL)
-	response, err := client.Do(request)
+	response, err := agenthttp.Do(u.logger, client, request,
+		agenthttp.WithDebugHTTP(u.conf.DebugHTTP),
+		agenthttp.WithTraceHTTP(u.conf.TraceHTTP),
+	)
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
 
-	if u.conf.DebugHTTP {
-		responseDump, err := httputil.DumpResponse(response, true)
-		if err != nil {
-			u.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
-		} else {
-			u.logger.Debug("\n%s", string(responseDump))
-		}
-	}
+	// Be sure to close the response body at the end of
+	// this function
+	defer response.Body.Close()
 
 	if response.StatusCode/100 != 2 {
 		body := &bytes.Buffer{}
@@ -272,6 +230,7 @@ func (u *bkFormUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, error
 			return nil, err
 		}
 
+		// Return a custom error with the response body from the page
 		return nil, fmt.Errorf("%s (%d)", body, response.StatusCode)
 	}
 	return nil, nil

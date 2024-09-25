@@ -26,6 +26,7 @@ type GSDownloaderConfig struct {
 
 	// If failed responses should be dumped to the log
 	DebugHTTP bool
+	TraceHTTP bool
 }
 
 type GSDownloader struct {
@@ -44,7 +45,7 @@ func NewGSDownloader(l logger.Logger, c GSDownloaderConfig) *GSDownloader {
 }
 
 func (d GSDownloader) Start(ctx context.Context) error {
-	client, err := newGoogleClient(storage.DevstorageReadOnlyScope)
+	client, err := newGoogleClient(ctx, storage.DevstorageReadOnlyScope)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
 	}
@@ -58,6 +59,7 @@ func (d GSDownloader) Start(ctx context.Context) error {
 		Destination: d.conf.Destination,
 		Retries:     d.conf.Retries,
 		DebugHTTP:   d.conf.DebugHTTP,
+		TraceHTTP:   d.conf.TraceHTTP,
 	}).Start(ctx)
 }
 

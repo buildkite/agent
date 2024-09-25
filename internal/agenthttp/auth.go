@@ -1,15 +1,22 @@
-package api
+package agenthttp
 
 import (
 	"fmt"
 	"net/http"
 )
 
-// authenticatedTransport manages injection of the API token.
+// authenticatedTransport manages injection of the API token into every request.
+// Using a transport to inject credentials into every request like this is
+// ugly because http.RoundTripper has specific requirements, but has
+// precedent (e.g. https://github.com/golang/oauth2/blob/master/transport.go).
 type authenticatedTransport struct {
-	// The Token used for authentication. This can either the be
-	// organizations registration token, or the agents access token.
+	// If set, the header "Authorization: Token %s" will be added to all requests.
+	// Mutually incompatible with Bearer.
 	Token string
+
+	// If set, the header "Authorization: Bearer %s" will be added to all requests.
+	// Mutually incompatible with Token.
+	Bearer string
 
 	// Delegate is the underlying HTTP transport
 	Delegate http.RoundTripper
@@ -45,7 +52,12 @@ func (t authenticatedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	// req.Clone does a sufficiently deep clone (including Header which we
 	// modify).
 	req = req.Clone(req.Context())
-	req.Header.Set("Authorization", fmt.Sprintf("Token %s", t.Token))
+	switch {
+	case t.Token != "":
+		req.Header.Set("Authorization", "Token "+t.Token)
+	case t.Bearer != "":
+		req.Header.Set("Authorization", "Bearer "+t.Bearer)
+	}
 
 	// req.Body is assumed to be closed by the delegate.
 	reqBodyClosed = true

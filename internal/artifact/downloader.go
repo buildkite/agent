@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/pool"
 )
@@ -32,8 +32,10 @@ type DownloaderConfig struct {
 	// Where we'll be downloading artifacts to
 	Destination string
 
-	// Whether to show HTTP debugging
-	DebugHTTP bool
+	// Standard HTTP options
+	DebugHTTP    bool
+	TraceHTTP    bool
+	DisableHTTP2 bool
 }
 
 type Downloader struct {
@@ -162,6 +164,7 @@ func (a *Downloader) createDownloader(artifact *api.Artifact, path, destination 
 			Destination: destination,
 			Retries:     5,
 			DebugHTTP:   a.conf.DebugHTTP,
+			TraceHTTP:   a.conf.TraceHTTP,
 		})
 
 	case strings.HasPrefix(artifact.UploadDestination, "gs://"):
@@ -171,6 +174,7 @@ func (a *Downloader) createDownloader(artifact *api.Artifact, path, destination 
 			Destination: destination,
 			Retries:     5,
 			DebugHTTP:   a.conf.DebugHTTP,
+			TraceHTTP:   a.conf.TraceHTTP,
 		})
 
 	case strings.HasPrefix(artifact.UploadDestination, "rt://"):
@@ -180,6 +184,7 @@ func (a *Downloader) createDownloader(artifact *api.Artifact, path, destination 
 			Destination: destination,
 			Retries:     5,
 			DebugHTTP:   a.conf.DebugHTTP,
+			TraceHTTP:   a.conf.TraceHTTP,
 		})
 
 	case IsAzureBlobPath(artifact.UploadDestination):
@@ -189,15 +194,18 @@ func (a *Downloader) createDownloader(artifact *api.Artifact, path, destination 
 			Destination: destination,
 			Retries:     5,
 			DebugHTTP:   a.conf.DebugHTTP,
+			TraceHTTP:   a.conf.TraceHTTP,
 		})
 
 	default:
-		return NewDownload(a.logger, http.DefaultClient, DownloadConfig{
+		client := agenthttp.NewClient(agenthttp.WithAllowHTTP2(!a.conf.DisableHTTP2))
+		return NewDownload(a.logger, client, DownloadConfig{
 			URL:         artifact.URL,
 			Path:        path,
 			Destination: destination,
 			Retries:     5,
 			DebugHTTP:   a.conf.DebugHTTP,
+			TraceHTTP:   a.conf.TraceHTTP,
 		})
 	}
 }

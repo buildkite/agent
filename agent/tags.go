@@ -49,7 +49,7 @@ func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []str
 			return EC2Tags{}.Get()
 		},
 		ecsMetaDataDefault: func() (map[string]string, error) {
-			return ECSMetadata{}.Get()
+			return ECSMetadata{}.Get(ctx)
 		},
 		gcpMetaDataDefault: func() (map[string]string, error) {
 			return GCPMetaData{}.Get()

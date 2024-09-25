@@ -18,9 +18,6 @@ type S3UploaderConfig struct {
 	// The destination which includes the S3 bucket name and the path.
 	// For example, s3://my-bucket-name/foo/bar
 	Destination string
-
-	// Whether or not HTTP calls should be debugged
-	DebugHTTP bool
 }
 
 type S3Uploader struct {

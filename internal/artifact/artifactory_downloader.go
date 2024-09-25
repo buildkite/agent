@@ -5,12 +5,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -29,7 +29,9 @@ type ArtifactoryDownloaderConfig struct {
 	Retries int
 
 	// If failed responses should be dumped to the log
-	DebugHTTP bool
+	DebugHTTP    bool
+	TraceHTTP    bool
+	DisableHTTP2 bool
 }
 
 type ArtifactoryDownloader struct {
@@ -68,14 +70,17 @@ func (d ArtifactoryDownloader) Start(ctx context.Context) error {
 		"Authorization": fmt.Sprintf("Basic %s", getBasicAuthHeader(username, password)),
 	}
 
+	client := agenthttp.NewClient(agenthttp.WithAllowHTTP2(!d.conf.DisableHTTP2))
+
 	// We can now cheat and pass the URL onto our regular downloader
-	return NewDownload(d.logger, http.DefaultClient, DownloadConfig{
+	return NewDownload(d.logger, client, DownloadConfig{
 		URL:         fullURL,
 		Path:        d.conf.Path,
 		Destination: d.conf.Destination,
 		Retries:     d.conf.Retries,
 		Headers:     headers,
 		DebugHTTP:   d.conf.DebugHTTP,
+		TraceHTTP:   d.conf.TraceHTTP,
 	}).Start(ctx)
 }
 

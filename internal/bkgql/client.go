@@ -4,11 +4,10 @@ package bkgql
 //go:generate go run github.com/Khan/genqlient
 
 import (
-	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 )
 
 const (
@@ -17,18 +16,8 @@ const (
 )
 
 func NewClient(endpoint, token string) graphql.Client {
-	return graphql.NewClient(endpoint, &http.Client{
-		Timeout:   graphQLTimeout,
-		Transport: &authedTransport{token: token, wrapped: http.DefaultTransport},
-	})
-}
-
-type authedTransport struct {
-	token   string
-	wrapped http.RoundTripper
-}
-
-func (t *authedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", t.token))
-	return t.wrapped.RoundTrip(req)
+	return graphql.NewClient(endpoint, agenthttp.NewClient(
+		agenthttp.WithAuthBearer(token),
+		agenthttp.WithTimeout(graphQLTimeout),
+	))
 }

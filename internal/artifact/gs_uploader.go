@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/option"
 	storage "google.golang.org/api/storage/v1"
 )
 
@@ -22,9 +24,6 @@ type GSUploaderConfig struct {
 	// The destination which includes the GS bucket name and the path.
 	// gs://my-bucket-name/foo/bar
 	Destination string
-
-	// Whether or not HTTP calls shoud be debugged
-	DebugHTTP bool
 }
 
 type GSUploader struct {
@@ -44,12 +43,12 @@ type GSUploader struct {
 	service *storage.Service
 }
 
-func NewGSUploader(l logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
-	client, err := newGoogleClient(storage.DevstorageFullControlScope)
+func NewGSUploader(ctx context.Context, l logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
+	client, err := newGoogleClient(ctx, storage.DevstorageFullControlScope)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
 	}
-	service, err := storage.New(client)
+	service, err := storage.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
 		return nil, err
 	}
@@ -78,18 +77,19 @@ func clientFromJSON(data []byte, scope string) (*http.Client, error) {
 	return conf.Client(oauth2.NoContext), nil
 }
 
-func newGoogleClient(scope string) (*http.Client, error) {
+func newGoogleClient(ctx context.Context, scope string) (*http.Client, error) {
 	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON") != "" {
 		data := []byte(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON"))
 		return clientFromJSON(data, scope)
-	} else if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
+	}
+	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
 		data, err := os.ReadFile(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS"))
 		if err != nil {
 			return nil, err
 		}
 		return clientFromJSON(data, scope)
 	}
-	return google.DefaultClient(context.Background(), scope)
+	return google.DefaultClient(ctx, scope)
 }
 
 func (u *GSUploader) URL(artifact *api.Artifact) string {
@@ -109,7 +109,7 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 
 	// Build the path from the prefix and the artifactPath
 	// Also ensure that we always have exactly one / between prefix and artifactPath
-	path := fmt.Sprintf("%s/%s", strings.TrimSuffix(pathPrefix, "/"), u.artifactPath(artifact))
+	path := path.Join(pathPrefix, u.artifactPath(artifact))
 
 	var artifactURL = &url.URL{
 		Scheme: "https",

@@ -62,6 +62,7 @@ type ArtifactDownloadConfig struct {
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
+	TraceHTTP        bool   `cli:"trace-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
@@ -94,6 +95,7 @@ var ArtifactDownloadCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
+		TraceHTTPFlag,
 
 		// Global flags
 		NoColorFlag,
@@ -118,6 +120,8 @@ var ArtifactDownloadCommand = cli.Command{
 			Step:               cfg.Step,
 			IncludeRetriedJobs: cfg.IncludeRetriedJobs,
 			DebugHTTP:          cfg.DebugHTTP,
+			TraceHTTP:          cfg.TraceHTTP,
+			DisableHTTP2:       cfg.NoHTTP2,
 		})
 
 		// Download the artifacts

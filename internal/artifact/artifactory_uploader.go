@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -26,8 +27,10 @@ type ArtifactoryUploaderConfig struct {
 	// e.g artifactory://my-repo-name/foo/bar
 	Destination string
 
-	// Whether or not HTTP calls should be debugged
-	DebugHTTP bool
+	// Standard HTTP options
+	DebugHTTP    bool
+	TraceHTTP    bool
+	DisableHTTP2 bool
 }
 
 type ArtifactoryUploader struct {
@@ -71,9 +74,11 @@ func NewArtifactoryUploader(l logger.Logger, c ArtifactoryUploaderConfig) (*Arti
 		return nil, err
 	}
 	return &ArtifactoryUploader{
-		logger:     l,
-		conf:       c,
-		client:     &http.Client{},
+		logger: l,
+		conf:   c,
+		client: agenthttp.NewClient(
+			agenthttp.WithAllowHTTP2(!c.DisableHTTP2),
+		),
 		iURL:       parsedURL,
 		Path:       path,
 		Repository: repo,
@@ -152,7 +157,10 @@ func (u *artifactoryUploaderWork) DoWork(context.Context) (*api.ArtifactPartETag
 	}
 	req.Header.Add("X-Checksum-SHA256", sha256Checksum)
 
-	res, err := u.client.Do(req)
+	res, err := agenthttp.Do(u.logger, u.client, req,
+		agenthttp.WithDebugHTTP(u.conf.DebugHTTP),
+		agenthttp.WithTraceHTTP(u.conf.TraceHTTP),
+	)
 	if err != nil {
 		return nil, err
 	}
