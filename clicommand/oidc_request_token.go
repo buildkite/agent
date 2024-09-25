@@ -17,7 +17,7 @@ type OIDCTokenConfig struct {
 	Job      string `cli:"job"      validate:"required"`
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
 	Claims         []string `cli:"claim"           normalize:"list"`
-	AwsSessionTags []string `cli:"aws-session-tag" normalize:"list"`
+	AWSSessionTags []string `cli:"aws-session-tag" normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -124,7 +124,7 @@ var OIDCRequestTokenCommand = cli.Command{
 				Audience:       cfg.Audience,
 				Lifetime:       cfg.Lifetime,
 				Claims:         cfg.Claims,
-				AwsSessionTags: cfg.AwsSessionTags,
+				AWSSessionTags: cfg.AWSSessionTags,
 			}
 
 			token, resp, err := client.OIDCToken(ctx, req)

@@ -14,7 +14,7 @@ type OIDCTokenRequest struct {
 	Audience       string
 	Lifetime       int
 	Claims         []string
-	AwsSessionTags []string
+	AWSSessionTags []string
 }
 
 func (c *Client) OIDCToken(ctx context.Context, methodReq *OIDCTokenRequest) (*OIDCToken, *Response, error) {
@@ -22,12 +22,12 @@ func (c *Client) OIDCToken(ctx context.Context, methodReq *OIDCTokenRequest) (*O
 		Audience       string   `json:"audience,omitempty"`
 		Lifetime       int      `json:"lifetime,omitempty"`
 		Claims         []string `json:"claims,omitempty"`
-		AwsSessionTags []string `json:"aws_session_tags,omitempty"`
+		AWSSessionTags []string `json:"aws_session_tags,omitempty"`
 	}{
 		Audience:       methodReq.Audience,
 		Lifetime:       methodReq.Lifetime,
 		Claims:         methodReq.Claims,
-		AwsSessionTags: methodReq.AwsSessionTags,
+		AWSSessionTags: methodReq.AWSSessionTags,
 	}
 
 	u := fmt.Sprintf("jobs/%s/oidc/tokens", railsPathEscape(methodReq.Job))

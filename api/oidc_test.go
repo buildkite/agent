@@ -137,7 +137,7 @@ func TestOIDCToken(t *testing.T) {
 			AccessToken: accessToken,
 			OIDCTokenRequest: &api.OIDCTokenRequest{
 				Job:            jobID,
-				AwsSessionTags: []string{"organization_id", "pipeline_id"},
+				AWSSessionTags: []string{"organization_id", "pipeline_id"},
 			},
 			ExpectedBody: []byte(`{"aws_session_tags":["organization_id","pipeline_id"]}` + "\n"),
 			OIDCToken:    &api.OIDCToken{Token: oidcToken},
