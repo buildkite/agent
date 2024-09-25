@@ -86,9 +86,9 @@ type AgentWorker struct {
 	cancelSig process.Signal
 
 	// Stop controls
+	stopMutex sync.Mutex
 	stop      chan struct{}
 	stopping  bool
-	stopMutex sync.Mutex
 
 	// The index of this agent worker
 	spawnIndex int
@@ -296,7 +296,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 
 	// Continue this loop until the closing of the stop channel signals termination
 	for {
-		if !a.stopping {
+		a.stopMutex.Lock()
+		stopping := a.stopping
+		a.stopMutex.Unlock()
+		if !stopping {
 			setStat("📡 Pinging Buildkite for work")
 			job, err := a.Ping(ctx)
 			if err != nil {
