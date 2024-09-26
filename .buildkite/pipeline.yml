@@ -1,7 +1,13 @@
 env:
   DRY_RUN: false # set to true to disable publishing releases
+  AGENT_RUNNERS_LINUX_QUEUE: "${AGENT_RUNNERS_LINUX_QUEUE:-agent-runners-linux-amd64}"
+  AGENT_RUNNERS_LINUX_ARM64_QUEUE: "${AGENT_RUNNERS_LINUX_ARM64_QUEUE:-agent-runners-linux-arm64}"
+  AGENT_RUNNERS_WINDOWS_QUEUE: "${AGENT_RUNNERS_WINDOWS_QUEUE:-agent-runners-windows-amd64}"
+  AGENT_BUILDERS_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
+  AGENT_BUILDERS_ARM64_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
+
 agents:
-  queue: agent-runners-linux-amd64
+  queue: "$AGENT_RUNNERS_LINUX_QUEUE"
 
 steps:
   - name: ":go::robot_face: Check Code Committed"
@@ -33,7 +39,7 @@ steps:
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
     agents:
-      queue: agent-runners-linux-arm64
+      queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -50,7 +56,7 @@ steps:
     command: ".buildkite/steps/tests.sh -race"
     artifact_paths: junit-*.xml
     agents:
-      queue: agent-runners-linux-arm64
+      queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -67,7 +73,7 @@ steps:
     command: "bash .buildkite\\steps\\tests.sh"
     artifact_paths: junit-*.xml
     agents:
-      queue: agent-runners-windows-amd64
+      queue: $AGENT_RUNNERS_WINDOWS_QUEUE
     plugins:
       - test-collector#v1.2.0:
           files: "junit-*.xml"
@@ -167,8 +173,15 @@ steps:
     steps:
       - name: ":docker: {{matrix}} image build"
         key: build-docker
+        plugins:
+          - aws-assume-role-with-web-identity#v1.0.0:
+              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - ecr#v2.9.0:
+              login: true
+              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+              region: "us-east-1"
         agents:
-          queue: elastic-builders
+          queue: $AGENT_BUILDERS_QUEUE
         depends_on:
           - build-binary
           - set-metadata
@@ -187,10 +200,17 @@ steps:
       - name: ":docker: {{matrix.variant}} amd64 image test"
         key: test-docker-amd64
         agents:
-          queue: elastic-builders
+          queue: $AGENT_BUILDERS_QUEUE
         depends_on:
           - build-docker
         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+        plugins:
+          - aws-assume-role-with-web-identity#v1.0.0:
+              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - ecr#v2.9.0:
+              login: true
+              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+              region: "us-east-1"
         matrix:
           setup:
             variant:
@@ -202,9 +222,16 @@ steps:
               - sidecar
 
       - name: ":docker: {{matrix.variant}} arm64 image test"
+        plugins:
+          - aws-assume-role-with-web-identity#v1.0.0:
+              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - ecr#v2.9.0:
+              login: true
+              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+              region: "us-east-1"
         key: test-docker-arm64
         agents:
-          queue: elastic-builders-arm64
+          queue: $AGENT_BUILDERS_ARM64_QUEUE
         depends_on:
           - build-docker
         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
