@@ -11,9 +11,9 @@ require (
 	github.com/Khan/genqlient v0.7.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2 v1.31.0
-	github.com/aws/aws-sdk-go-v2/config v1.27.37
+	github.com/aws/aws-sdk-go-v2/config v1.27.39
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.14
-	github.com/aws/aws-sdk-go-v2/service/kms v1.36.1
+	github.com/aws/aws-sdk-go-v2/service/kms v1.36.3
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.3.0
 	github.com/buildkite/go-pipeline v0.13.2
@@ -54,14 +54,14 @@ require (
 	golang.org/x/oauth2 v0.23.0
 	golang.org/x/sys v0.25.0
 	golang.org/x/term v0.24.0
-	google.golang.org/api v0.198.0
+	google.golang.org/api v0.199.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.67.1
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
 )
 
 require (
-	cloud.google.com/go/auth v0.9.4 // indirect
+	cloud.google.com/go/auth v0.9.5 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.4 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
@@ -77,15 +77,15 @@ require (
 	github.com/alexflint/go-arg v1.4.2 // indirect
 	github.com/alexflint/go-scalar v1.0.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.35 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.37 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.18 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.18 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.20 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.23.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.27.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.31.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.23.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.27.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.31.3 // indirect
 	github.com/aws/smithy-go v1.21.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -136,7 +136,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/grpc v1.66.2 // indirect
+	google.golang.org/grpc v1.67.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
