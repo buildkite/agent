@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -109,10 +108,6 @@ var OIDCRequestTokenCommand = cli.Command{
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
 		if cfg.Lifetime < 0 {
 			return fmt.Errorf("lifetime %d must be a non-negative integer.", cfg.Lifetime)
-		}
-
-		for i, claim := range cfg.Claims {
-			cfg.Claims[i] = strings.TrimSpace(claim)
 		}
 
 		// Create the API client
