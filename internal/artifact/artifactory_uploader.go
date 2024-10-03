@@ -99,50 +99,64 @@ func (u *ArtifactoryUploader) URL(artifact *api.Artifact) string {
 	return url.String()
 }
 
-func (u *ArtifactoryUploader) Upload(_ context.Context, artifact *api.Artifact) error {
+func (u *ArtifactoryUploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
+	return []workUnit{&artifactoryUploaderWork{
+		ArtifactoryUploader: u,
+		artifact:            artifact,
+	}}, nil
+}
+
+type artifactoryUploaderWork struct {
+	*ArtifactoryUploader
+	artifact *api.Artifact
+}
+
+func (u *artifactoryUploaderWork) Artifact() *api.Artifact { return u.artifact }
+
+func (u *artifactoryUploaderWork) Description() string {
+	return singleUnitDescription(u.artifact)
+}
+
+func (u *artifactoryUploaderWork) DoWork(context.Context) (*api.ArtifactPartETag, error) {
 	// Open file from filesystem
-	u.logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
-	f, err := os.Open(artifact.AbsolutePath)
+	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %q (%w)", artifact.AbsolutePath, err)
+		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to Artifactory.
-	u.logger.Debug("Uploading \"%s\" to `%s`", artifact.Path, u.URL(artifact))
+	u.logger.Debug("Uploading %q to %q", u.artifact.Path, u.URL(u.artifact))
 
-	req, err := http.NewRequest("PUT", u.URL(artifact), f)
+	req, err := http.NewRequest("PUT", u.URL(u.artifact), f)
 	req.SetBasicAuth(u.user, u.password)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	md5Checksum, err := checksumFile(md5.New(), artifact.AbsolutePath)
+	md5Checksum, err := checksumFile(md5.New(), u.artifact.AbsolutePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Add("X-Checksum-MD5", md5Checksum)
 
-	sha1Checksum, err := checksumFile(sha1.New(), artifact.AbsolutePath)
+	sha1Checksum, err := checksumFile(sha1.New(), u.artifact.AbsolutePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Add("X-Checksum-SHA1", sha1Checksum)
 
-	sha256Checksum, err := checksumFile(sha256.New(), artifact.AbsolutePath)
+	sha256Checksum, err := checksumFile(sha256.New(), u.artifact.AbsolutePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Add("X-Checksum-SHA256", sha256Checksum)
 
 	res, err := u.client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := checkResponse(res); err != nil {
-		return err
-	}
-
-	return nil
+	return nil, checkResponse(res)
 }
 
 func checksumFile(hasher hash.Hash, path string) (string, error) {

@@ -119,7 +119,25 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 	return artifactURL.String()
 }
 
-func (u *GSUploader) Upload(_ context.Context, artifact *api.Artifact) error {
+func (u *GSUploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
+	return []workUnit{&gsUploaderWork{
+		GSUploader: u,
+		artifact:   artifact,
+	}}, nil
+}
+
+type gsUploaderWork struct {
+	*GSUploader
+	artifact *api.Artifact
+}
+
+func (u *gsUploaderWork) Artifact() *api.Artifact { return u.artifact }
+
+func (u *gsUploaderWork) Description() string {
+	return singleUnitDescription(u.artifact)
+}
+
+func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error) {
 	permission := os.Getenv("BUILDKITE_GS_ACL")
 
 	// The dirtiest validation method ever...
@@ -129,24 +147,24 @@ func (u *GSUploader) Upload(_ context.Context, artifact *api.Artifact) error {
 		permission != "projectPrivate" &&
 		permission != "publicRead" &&
 		permission != "publicReadWrite" {
-		return fmt.Errorf("Invalid GS ACL `%s`", permission)
+		return nil, fmt.Errorf("Invalid GS ACL `%s`", permission)
 	}
 
 	if permission == "" {
 		u.logger.Debug("Uploading \"%s\" to bucket \"%s\" with default permission",
-			u.artifactPath(artifact), u.BucketName)
+			u.artifactPath(u.artifact), u.BucketName)
 	} else {
 		u.logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
-			u.artifactPath(artifact), u.BucketName, permission)
+			u.artifactPath(u.artifact), u.BucketName, permission)
 	}
 	object := &storage.Object{
-		Name:               u.artifactPath(artifact),
-		ContentType:        artifact.ContentType,
-		ContentDisposition: u.contentDisposition(artifact),
+		Name:               u.artifactPath(u.artifact),
+		ContentType:        u.artifact.ContentType,
+		ContentDisposition: u.contentDisposition(u.artifact),
 	}
-	file, err := os.Open(artifact.AbsolutePath)
+	file, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Failed to open file \"%q\" (%v)", artifact.AbsolutePath, err))
+		return nil, errors.New(fmt.Sprintf("Failed to open file %q (%v)", u.artifact.AbsolutePath, err))
 	}
 	call := u.service.Objects.Insert(u.BucketName, object)
 	if permission != "" {
@@ -155,10 +173,10 @@ func (u *GSUploader) Upload(_ context.Context, artifact *api.Artifact) error {
 	if res, err := call.Media(file, googleapi.ContentType("")).Do(); err == nil {
 		u.logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
 	} else {
-		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%v)", u.artifactPath(artifact), err))
+		return nil, errors.New(fmt.Sprintf("Failed to PUT file %q (%v)", u.artifactPath(u.artifact), err))
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (u *GSUploader) artifactPath(artifact *api.Artifact) string {

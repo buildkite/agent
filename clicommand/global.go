@@ -100,6 +100,12 @@ var (
 		EnvVar: "BUILDKITE_KUBERNETES_EXEC",
 	}
 
+	NoMultipartArtifactUploadFlag = cli.BoolFlag{
+		Name:   "no-multipart-artifact-upload",
+		Usage:  "For Buildkite-hosted artifacts, disables the use of multipart uploads. Has no effect on uploads to other destinations such as custom cloud buckets",
+		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
+	}
+
 	ExperimentsFlag = cli.StringSliceFlag{
 		Name:   "experiment",
 		Value:  &cli.StringSlice{},

@@ -534,6 +534,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		env["BUILDKITE_KUBERNETES_EXEC"] = "true"
 	}
 
+	if !r.conf.AgentConfiguration.AllowMultipartArtifactUpload {
+		env["BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD"] = "true"
+	}
+
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
 	if r.conf.CancelSignal != process.SIGTERM {
 		env["BUILDKITE_CANCEL_SIGNAL"] = r.conf.CancelSignal.String()

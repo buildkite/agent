@@ -167,14 +167,15 @@ type AgentStartConfig struct {
 	TracingServiceName          string `cli:"tracing-service-name"`
 
 	// Global flags
-	Debug                bool     `cli:"debug"`
-	LogLevel             string   `cli:"log-level"`
-	NoColor              bool     `cli:"no-color"`
-	Experiments          []string `cli:"experiment" normalize:"list"`
-	Profile              string   `cli:"profile"`
-	StrictSingleHooks    bool     `cli:"strict-single-hooks"`
-	KubernetesExec       bool     `cli:"kubernetes-exec"`
-	TraceContextEncoding string   `cli:"trace-context-encoding"`
+	Debug                     bool     `cli:"debug"`
+	LogLevel                  string   `cli:"log-level"`
+	NoColor                   bool     `cli:"no-color"`
+	Experiments               []string `cli:"experiment" normalize:"list"`
+	Profile                   string   `cli:"profile"`
+	StrictSingleHooks         bool     `cli:"strict-single-hooks"`
+	KubernetesExec            bool     `cli:"kubernetes-exec"`
+	TraceContextEncoding      string   `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload bool     `cli:"no-multipart-artifact-upload"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -704,6 +705,7 @@ var AgentStartCommand = cli.Command{
 		StrictSingleHooksFlag,
 		KubernetesExecFlag,
 		TraceContextEncodingFlag,
+		NoMultipartArtifactUploadFlag,
 
 		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
@@ -994,7 +996,7 @@ var AgentStartCommand = cli.Command{
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
 			TraceContextEncoding:         cfg.TraceContextEncoding,
-			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
+			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
 			KubernetesExec:               cfg.KubernetesExec,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
@@ -1002,7 +1004,8 @@ var AgentStartCommand = cli.Command{
 			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
 			DebugSigning:     cfg.DebugSigning,
 
-			VerificationJWKS: verificationJWKS,
+			VerificationJWKS:             verificationJWKS,
+			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
 
 			DisableWarningsFor: cfg.DisableWarningsFor,
 		}

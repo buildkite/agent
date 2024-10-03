@@ -10,5 +10,5 @@ import (
 type APIClient interface {
 	CreateArtifacts(context.Context, string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error)
 	SearchArtifacts(context.Context, string, *api.ArtifactSearchOptions) ([]*api.Artifact, *api.Response, error)
-	UpdateArtifacts(context.Context, string, map[string]string) (*api.Response, error)
+	UpdateArtifacts(context.Context, string, []api.ArtifactState) (*api.Response, error)
 }

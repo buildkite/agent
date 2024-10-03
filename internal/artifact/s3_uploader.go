@@ -81,30 +81,47 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 	return url.String()
 }
 
-func (u *S3Uploader) Upload(_ context.Context, artifact *api.Artifact) error {
+func (u *S3Uploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
+	return []workUnit{&s3UploaderWork{
+		S3Uploader: u,
+		artifact:   artifact,
+	}}, nil
+}
 
+type s3UploaderWork struct {
+	*S3Uploader
+	artifact *api.Artifact
+}
+
+func (u *s3UploaderWork) Artifact() *api.Artifact { return u.artifact }
+
+func (u *s3UploaderWork) Description() string {
+	return singleUnitDescription(u.artifact)
+}
+
+func (u *s3UploaderWork) DoWork(context.Context) (*api.ArtifactPartETag, error) {
 	permission, err := u.resolvePermission()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploaderWithClient(u.client)
 
 	// Open file from filesystem
-	u.logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
-	f, err := os.Open(artifact.AbsolutePath)
+	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %q (%w)", artifact.AbsolutePath, err)
+		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to S3.
-	u.logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
+	u.logger.Debug("Uploading %q to bucket with permission %q", u.artifactPath(u.artifact), permission)
 
 	params := &s3manager.UploadInput{
 		Bucket:      aws.String(u.BucketName),
-		Key:         aws.String(u.artifactPath(artifact)),
-		ContentType: aws.String(artifact.ContentType),
+		Key:         aws.String(u.artifactPath(u.artifact)),
+		ContentType: aws.String(u.artifact.ContentType),
 		ACL:         aws.String(permission),
 		Body:        f,
 	}
@@ -114,8 +131,7 @@ func (u *S3Uploader) Upload(_ context.Context, artifact *api.Artifact) error {
 	}
 
 	_, err = uploader.Upload(params)
-
-	return err
+	return nil, err
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {

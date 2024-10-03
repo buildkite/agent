@@ -88,6 +88,7 @@ type ArtifactUploadConfig struct {
 	// Uploader flags
 	GlobResolveFollowSymlinks bool `cli:"glob-resolve-follow-symlinks"`
 	UploadSkipSymlinks        bool `cli:"upload-skip-symlinks"`
+	NoMultipartUpload         bool `cli:"no-multipart-artifact-upload"`
 
 	// deprecated
 	FollowSymlinks bool `cli:"follow-symlinks" deprecated-and-renamed-to:"GlobResolveFollowSymlinks"`
@@ -138,6 +139,7 @@ var ArtifactUploadCommand = cli.Command{
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		NoMultipartArtifactUploadFlag,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -154,6 +156,8 @@ var ArtifactUploadCommand = cli.Command{
 			Destination: cfg.Destination,
 			ContentType: cfg.ContentType,
 			DebugHTTP:   cfg.DebugHTTP,
+
+			AllowMultipart: !cfg.NoMultipartUpload,
 
 			// If the deprecated flag was set to true, pretend its replacement was set to true too
 			// this works as long as the user only sets one of the two flags
