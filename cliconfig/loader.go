@@ -421,6 +421,8 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 						continue
 					}
 
+					normalized = strings.TrimSpace(normalized)
+
 					normalizedSlice = append(normalizedSlice, normalized)
 				}
 			}
