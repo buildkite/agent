@@ -165,10 +165,17 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 				return nil
 			}
 
+			var errLockTimeout ErrTimedOutAcquiringLock
 			switch {
 			case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
 				e.shell.Warningf("Checkout was interrupted by a signal")
 				r.Break()
+
+			case errors.As(err, &errLockTimeout):
+				e.shell.Warningf("Checkout could not acquire the %s lock before timing out", errLockTimeout.Name)
+				r.Break()
+				// 94 chosen by fair die roll
+				return &shell.ExitError{Code: 94, Err: err}
 
 			case errors.Is(err, context.Canceled):
 				e.shell.Warningf("Checkout was cancelled")
@@ -304,7 +311,10 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	defer canc()
 	mirrorCloneLock, err := e.shell.LockFile(cloneCtx, mirrorDir+".clonelock")
 	if err != nil {
-		return "", err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", ErrTimedOutAcquiringLock{Name: "clone", Err: err}
+		}
+		return "", fmt.Errorf("unable to acquire clone lock: %w", err)
 	}
 	defer mirrorCloneLock.Unlock()
 
@@ -343,7 +353,10 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	defer canc()
 	mirrorUpdateLock, err := e.shell.LockFile(updateCtx, mirrorDir+".updatelock")
 	if err != nil {
-		return "", err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", ErrTimedOutAcquiringLock{Name: "update", Err: err}
+		}
+		return "", fmt.Errorf("unable to acquire update lock: %w", err)
 	}
 	defer mirrorUpdateLock.Unlock()
 
@@ -406,6 +419,17 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 
 	return mirrorDir, nil
 }
+
+type ErrTimedOutAcquiringLock struct {
+	Name string
+	Err  error
+}
+
+func (e ErrTimedOutAcquiringLock) Error() string {
+	return fmt.Sprintf("timed out acquiring %s lock: %v", e.Name, e.Err)
+}
+
+func (e ErrTimedOutAcquiringLock) Unwrap() error { return e.Err }
 
 // updateRemoteURL updates the URL for 'origin'. If gitDir == "", it assumes the
 // local repo is in the current directory, otherwise it includes --git-dir.
