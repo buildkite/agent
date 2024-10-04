@@ -301,7 +301,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// Git should attempt to fetch the shortHash, but fail. Then fallback to fetching
-	// all the heads and tags and checking out the short hash.
+	// all the heads and tags and checking out the short commit hash.
 	git.ExpectAll([][]any{
 		{"remote", "get-url", "origin"},
 		{"clean", "-ffxdq"},
@@ -310,7 +310,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 		{"fetch", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
 		{"checkout", "-f", shortCommitHash},
 		{"clean", "-ffxdq"},
-		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", shortCommitHash, "-s", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
