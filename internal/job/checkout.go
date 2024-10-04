@@ -774,7 +774,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 		"--no-pager",
 		"log",
 		"-1",
-		"HEAD",
+		e.Commit,
 		"-s", // --no-patch was introduced in v1.8.4 in 2013, but e.g. CentOS 7 isn't there yet
 		"--no-color",
 		"--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B",
