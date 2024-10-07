@@ -758,7 +758,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored
 	// or overwritten. This shows a warning to the user so they don't get confused
 	// when their environment changes don't seem to do anything
-	if ignored, exists := e.shell.Env.Get("BUILDKITE_IGNORED_ENV"); exists {
+	if ignored, _ := e.shell.Env.Get("BUILDKITE_IGNORED_ENV"); ignored != "" {
 		e.shell.Headerf("Detected protected environment variables")
 		e.shell.Commentf("Your pipeline environment has protected environment variables set. " +
 			"These can only be set via hooks, plugins or the agent configuration.")
