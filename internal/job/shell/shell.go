@@ -657,11 +657,11 @@ func IsExitError(err error) bool {
 
 // ExitError is an error that carries a shell exit code
 type ExitError struct {
-	Code    int
-	Message string
+	Code int
+	Err  error
 }
 
 // Error returns the string message and fulfils the error interface
-func (ee *ExitError) Error() string {
-	return ee.Message
-}
+func (ee *ExitError) Error() string { return ee.Err.Error() }
+
+func (ee *ExitError) Unwrap() error { return ee.Err }

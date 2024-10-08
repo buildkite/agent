@@ -515,8 +515,8 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		// so it may inform the Buildkite API
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
-				Code:    exitCode,
-				Message: fmt.Sprintf("The %s hook exited with status %d", hookName, exitCode),
+				Code: exitCode,
+				Err:  fmt.Errorf("The %s hook exited with status %d", hookName, exitCode),
 			}
 		}
 
