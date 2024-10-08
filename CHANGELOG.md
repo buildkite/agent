@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.83.0](https://github.com/buildkite/agent/tree/v3.83.0) (2024-10-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.82.1...v3.83.0)
+
+### Added
+- Exit with code 94 if a mirror lock times out [#3023](https://github.com/buildkite/agent/pull/3023) (@DrJosh9000)
+- Add support for oidc aws session tags [#3015](https://github.com/buildkite/agent/pull/3015) (@sj26)
+- Support for future multipart artifact uploads [#2991](https://github.com/buildkite/agent/pull/2991) (@DrJosh9000)
+
+### Fixed
+- Tweak BUILDKITE_IGNORED_ENV handling [#3029](https://github.com/buildkite/agent/pull/3029) (@DrJosh9000)
+- BUG FIX: Ensure Build Title Is Correct When Checkout Is Skipped [#3024](https://github.com/buildkite/agent/pull/3024) (@123sarahj123)
+- Ensure all string slice args have whitespace cleaned off of each element [#3021](https://github.com/buildkite/agent/pull/3021) (@moskyb)
+- Fix data race on worker stop [#3016](https://github.com/buildkite/agent/pull/3016) (@DrJosh9000)
+
+### Internal
+- Migrate Agent Pipeline to Agent Cluster [#3018](https://github.com/buildkite/agent/pull/3018) (@matthewborden)
+- Refactor the various agent HTTP clients [#3017](https://github.com/buildkite/agent/pull/3017) (@DrJosh9000)
+- Dependabot bumps to busybox [#3025](https://github.com/buildkite/agent/pull/3025), golang.org/x packages [#3027](https://github.com/buildkite/agent/pull/3027), cloud provider packages [#3028](https://github.com/buildkite/agent/pull/3028), [#3019](https://github.com/buildkite/agent/pull/3019), [#3013](https://github.com/buildkite/agent/pull/3013), [#3009](https://github.com/buildkite/agent/pull/3009), DataDog packages [#3010](https://github.com/buildkite/agent/pull/3010) Ubuntu [#3012](https://github.com/buildkite/agent/pull/3012), [#3008](https://github.com/buildkite/agent/pull/3008), and go-pipeline [#3014](https://github.com/buildkite/agent/pull/3014) (@dependabot[bot])
+
 ## [v3.82.1](https://github.com/buildkite/agent/tree/v3.82.1) (2024-09-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.82.0...v3.82.1)
 
@@ -25,7 +44,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Use job tokens for log chunk uploads [#2986](https://github.com/buildkite/agent/pull/2986) (@tessereth)
 - Temporarily pin kubectl version [#2997](https://github.com/buildkite/agent/pull/2997) (@patrobinson)
 - Prefer $HOME on all platforms [#3000](https://github.com/buildkite/agent/pull/3000) (@DrJosh9000)
-- Bump github.com/buildkite/interpolate from 0.1.3 to 0.1.4 [#3002](https://github.com/buildkite/agent/pull/3002) (@dependabot[bot]) (Fixes a bug in nested variable interpolation https://github.com/buildkite/interpolate/pull/15)
+- Bump github.com/buildkite/interpolate from 0.1.3 to 0.1.4 [#3002](https://github.com/buildkite/agent/pull/3002)  (Fixes a bug in nested variable interpolation https://github.com/buildkite/interpolate/pull/15)
 
 ### Internal
 - Dependabot churn: [#2992](https://github.com/buildkite/agent/pull/2992) [#2993](https://github.com/buildkite/agent/pull/2993) [#2995](https://github.com/buildkite/agent/pull/2995) [#2996](https://github.com/buildkite/agent/pull/2996) [#2979](https://github.com/buildkite/agent/pull/2979) [#2981](https://github.com/buildkite/agent/pull/2981)
@@ -43,7 +62,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Add sha256 checksum output to the formatting options [#2974](https://github.com/buildkite/agent/pull/2974) (@patrobinson)
 
 ### Internal
-- Dependabot churn: [#2978](https://github.com/buildkite/agent/pull/2978), [#2980](https://github.com/buildkite/agent/pull/2980) (@dependabot[bot])
+- Dependabot churn: [#2978](https://github.com/buildkite/agent/pull/2978), [#2980](https://github.com/buildkite/agent/pull/2980)
 
 ## [v3.80.0](https://github.com/buildkite/agent/tree/v3.80.0) (2024-09-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.79.0...v3.80.0)
@@ -59,7 +78,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Updated to support only ECC_NIST_P256 keyspec for initial release [#2973](https://github.com/buildkite/agent/pull/2973) (@wolfeidau)
 
 ### Internal
-- Dependabot churn: [#2964](https://github.com/buildkite/agent/pull/2964), [#2965](https://github.com/buildkite/agent/pull/2965), [#2952](https://github.com/buildkite/agent/pull/2952), [#2972](https://github.com/buildkite/agent/pull/2972), [#2963](https://github.com/buildkite/agent/pull/2963) (@dependabot[bot])
+- Dependabot churn: [#2964](https://github.com/buildkite/agent/pull/2964), [#2965](https://github.com/buildkite/agent/pull/2965), [#2952](https://github.com/buildkite/agent/pull/2952), [#2972](https://github.com/buildkite/agent/pull/2972), [#2963](https://github.com/buildkite/agent/pull/2963)
 
 ## [v3.79.0](https://github.com/buildkite/agent/tree/v3.79.0) (2024-08-29)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.78.0...v3.79.0)
@@ -72,7 +91,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Internal
 - Bump github.com/buildkite/go-pipeline from 0.11.0 to 0.12.0 [#2959](https://github.com/buildkite/agent/pull/2959) (@wolfeidau)
-- Dependabot churn: [#2951](https://github.com/buildkite/agent/pull/2951), [#2955](https://github.com/buildkite/agent/pull/2955), [#2949](https://github.com/buildkite/agent/pull/2949), [#2956](https://github.com/buildkite/agent/pull/2956), [#2954](https://github.com/buildkite/agent/pull/2954), [#2950](https://github.com/buildkite/agent/pull/2950), [#2953](https://github.com/buildkite/agent/pull/2953) (@dependabot[bot])
+- Dependabot churn: [#2951](https://github.com/buildkite/agent/pull/2951), [#2955](https://github.com/buildkite/agent/pull/2955), [#2949](https://github.com/buildkite/agent/pull/2949), [#2956](https://github.com/buildkite/agent/pull/2956), [#2954](https://github.com/buildkite/agent/pull/2954), [#2950](https://github.com/buildkite/agent/pull/2950), [#2953](https://github.com/buildkite/agent/pull/2953)
 
 ## [v3.78.0](https://github.com/buildkite/agent/tree/v3.78.0) (2024-08-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.77.0...v3.78.0)
@@ -87,7 +106,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Update description for the 'priority' option for the 'buildkite-agent annotate' command. [#2934](https://github.com/buildkite/agent/pull/2934) (@gilesgas)
 
 ### Internal
-Dependabot churn: [#2927](https://github.com/buildkite/agent/pull/2927), [#2928](https://github.com/buildkite/agent/pull/2928), [#2929](https://github.com/buildkite/agent/pull/2929), [#2930](https://github.com/buildkite/agent/pull/2930), [#2931](https://github.com/buildkite/agent/pull/2931), [#2937](https://github.com/buildkite/agent/pull/2937), [#2939](https://github.com/buildkite/agent/pull/2939), [#2940](https://github.com/buildkite/agent/pull/2940), [#2943](https://github.com/buildkite/agent/pull/2943) (@dependabot[bot])
+Dependabot churn: [#2927](https://github.com/buildkite/agent/pull/2927), [#2928](https://github.com/buildkite/agent/pull/2928), [#2929](https://github.com/buildkite/agent/pull/2929), [#2930](https://github.com/buildkite/agent/pull/2930), [#2931](https://github.com/buildkite/agent/pull/2931), [#2937](https://github.com/buildkite/agent/pull/2937), [#2939](https://github.com/buildkite/agent/pull/2939), [#2940](https://github.com/buildkite/agent/pull/2940), [#2943](https://github.com/buildkite/agent/pull/2943)
 
 ## [v3.77.0](https://github.com/buildkite/agent/tree/v3.77.0) (2024-08-08)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.76.2...v3.77.0)
@@ -100,7 +119,7 @@ Dependabot churn: [#2927](https://github.com/buildkite/agent/pull/2927), [#2928]
 - Fix default endpoint string in `api` and `core` [#2923](https://github.com/buildkite/agent/pull/2923) (@DrJosh9000)
 
 ### Internal
-Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922](https://github.com/buildkite/agent/pull/2922), [#2921](https://github.com/buildkite/agent/pull/2921), [#2918](https://github.com/buildkite/agent/pull/2918), [#2917](https://github.com/buildkite/agent/pull/2917) (@dependabot[bot])
+Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922](https://github.com/buildkite/agent/pull/2922), [#2921](https://github.com/buildkite/agent/pull/2921), [#2918](https://github.com/buildkite/agent/pull/2918), [#2917](https://github.com/buildkite/agent/pull/2917)
 
 ## [v3.76.2](https://github.com/buildkite/agent/tree/v3.76.2) (2024-08-01)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.76.1...v3.76.2)
@@ -133,7 +152,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Let artifact phase and post-command run in grace period [#2899](https://github.com/buildkite/agent/pull/2899) (@DrJosh9000)
 
 ### Internal
-- Dependabot updates: [#2902](https://github.com/buildkite/agent/pull/2902), [#2907](https://github.com/buildkite/agent/pull/2907), [#2903](https://github.com/buildkite/agent/pull/2903), [#2904](https://github.com/buildkite/agent/pull/2904), [#2901](https://github.com/buildkite/agent/pull/2901), [#2905](https://github.com/buildkite/agent/pull/2905), [#2896](https://github.com/buildkite/agent/pull/2896), [#2897](https://github.com/buildkite/agent/pull/2897) (@dependabot[bot])
+- Dependabot updates: [#2902](https://github.com/buildkite/agent/pull/2902), [#2907](https://github.com/buildkite/agent/pull/2907), [#2903](https://github.com/buildkite/agent/pull/2903), [#2904](https://github.com/buildkite/agent/pull/2904), [#2901](https://github.com/buildkite/agent/pull/2901), [#2905](https://github.com/buildkite/agent/pull/2905), [#2896](https://github.com/buildkite/agent/pull/2896), [#2897](https://github.com/buildkite/agent/pull/2897)
 
 ## [v3.75.1](https://github.com/buildkite/agent/tree/v3.75.1) (2024-07-22)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.75.0...v3.75.1)
@@ -164,7 +183,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Fix the OIDC login for Packages [#2875](https://github.com/buildkite/agent/pull/2875) (@swebb)
 - Fix the Packages registry name [#2874](https://github.com/buildkite/agent/pull/2874) (@swebb)
 - Fix image name when pushing to Buildkite packages [#2870](https://github.com/buildkite/agent/pull/2870) (@swebb)
-- Dependabot updates: [#2888](https://github.com/buildkite/agent/pull/2888), [#2887](https://github.com/buildkite/agent/pull/2887), [#2882](https://github.com/buildkite/agent/pull/2882), [#2883](https://github.com/buildkite/agent/pull/2883), [#2880](https://github.com/buildkite/agent/pull/2880) (@dependabot[bot])
+- Dependabot updates: [#2888](https://github.com/buildkite/agent/pull/2888), [#2887](https://github.com/buildkite/agent/pull/2887), [#2882](https://github.com/buildkite/agent/pull/2882), [#2883](https://github.com/buildkite/agent/pull/2883), [#2880](https://github.com/buildkite/agent/pull/2880)
 
 ## [v3.74.1](https://github.com/buildkite/agent/tree/v3.74.1) (2024-07-03)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.74.0...v3.74.1)
@@ -179,7 +198,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 
 ### Internal
 - Make the graphql endpoint for `buildkite-agent tool sign` configurable [#2841](https://github.com/buildkite/agent/pull/2841) (@moskyb)
-- Dependabot updates: [#2863](https://github.com/buildkite/agent/pull/2863), [#2862](https://github.com/buildkite/agent/pull/2862), [#2857](https://github.com/buildkite/agent/pull/2857), [#2860](https://github.com/buildkite/agent/pull/2860), [#2864](https://github.com/buildkite/agent/pull/2864), [#2856](https://github.com/buildkite/agent/pull/2856), [#2867](https://github.com/buildkite/agent/pull/2867), [#2846](https://github.com/buildkite/agent/pull/2846), [#2848](https://github.com/buildkite/agent/pull/2848), [#2847](https://github.com/buildkite/agent/pull/2847), [#2845](https://github.com/buildkite/agent/pull/2845), [#2840](https://github.com/buildkite/agent/pull/2840), [#2844](https://github.com/buildkite/agent/pull/2844), [#2842](https://github.com/buildkite/agent/pull/2842), [#2843](https://github.com/buildkite/agent/pull/2843), [#2849](https://github.com/buildkite/agent/pull/2849) (@dependabot[bot])
+- Dependabot updates: [#2863](https://github.com/buildkite/agent/pull/2863), [#2862](https://github.com/buildkite/agent/pull/2862), [#2857](https://github.com/buildkite/agent/pull/2857), [#2860](https://github.com/buildkite/agent/pull/2860), [#2864](https://github.com/buildkite/agent/pull/2864), [#2856](https://github.com/buildkite/agent/pull/2856), [#2867](https://github.com/buildkite/agent/pull/2867), [#2846](https://github.com/buildkite/agent/pull/2846), [#2848](https://github.com/buildkite/agent/pull/2848), [#2847](https://github.com/buildkite/agent/pull/2847), [#2845](https://github.com/buildkite/agent/pull/2845), [#2840](https://github.com/buildkite/agent/pull/2840), [#2844](https://github.com/buildkite/agent/pull/2844), [#2842](https://github.com/buildkite/agent/pull/2842), [#2843](https://github.com/buildkite/agent/pull/2843), [#2849](https://github.com/buildkite/agent/pull/2849)
 
 ## [v3.74.0](https://github.com/buildkite/agent/tree/v3.74.0) (2024-06-11)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.73.1...v3.74.0)
@@ -204,7 +223,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Update deprecated import [#2811](https://github.com/buildkite/agent/pull/2811) (@DrJosh9000)
 - Use Rand per-test in agent/plugin/error_test.go [#2795](https://github.com/buildkite/agent/pull/2795) (@moskyb)
 - Publish debian and rpm packages to Buildkite Packages [#2824](https://github.com/buildkite/agent/pull/2824) [#2826](https://github.com/buildkite/agent/pull/2826) [#2831](https://github.com/buildkite/agent/pull/2831) [#2830](https://github.com/buildkite/agent/pull/2830) [#2833](https://github.com/buildkite/agent/pull/2833) (@sj26)
-- Dependabot updates: [#2809](https://github.com/buildkite/agent/pull/2809), [#2816](https://github.com/buildkite/agent/pull/2816), [#2800](https://github.com/buildkite/agent/pull/2800), [#2801](https://github.com/buildkite/agent/pull/2801), [#2802](https://github.com/buildkite/agent/pull/2802), [#2803](https://github.com/buildkite/agent/pull/2803), [#2787](https://github.com/buildkite/agent/pull/2787), [#2798](https://github.com/buildkite/agent/pull/2798), [#2808](https://github.com/buildkite/agent/pull/2808), [#2827](https://github.com/buildkite/agent/pull/2827) [#2817](https://github.com/buildkite/agent/pull/2817), [#2818](https://github.com/buildkite/agent/pull/2818), [#2819](https://github.com/buildkite/agent/pull/2819), [#2822](https://github.com/buildkite/agent/pull/2822), [#2829](https://github.com/buildkite/agent/pull/2829), [#2832](https://github.com/buildkite/agent/pull/2832), [#2835](https://github.com/buildkite/agent/pull/2835) (@dependabot[bot])
+- Dependabot updates: [#2809](https://github.com/buildkite/agent/pull/2809), [#2816](https://github.com/buildkite/agent/pull/2816), [#2800](https://github.com/buildkite/agent/pull/2800), [#2801](https://github.com/buildkite/agent/pull/2801), [#2802](https://github.com/buildkite/agent/pull/2802), [#2803](https://github.com/buildkite/agent/pull/2803), [#2787](https://github.com/buildkite/agent/pull/2787), [#2798](https://github.com/buildkite/agent/pull/2798), [#2808](https://github.com/buildkite/agent/pull/2808), [#2827](https://github.com/buildkite/agent/pull/2827) [#2817](https://github.com/buildkite/agent/pull/2817), [#2818](https://github.com/buildkite/agent/pull/2818), [#2819](https://github.com/buildkite/agent/pull/2819), [#2822](https://github.com/buildkite/agent/pull/2822), [#2829](https://github.com/buildkite/agent/pull/2829), [#2832](https://github.com/buildkite/agent/pull/2832), [#2835](https://github.com/buildkite/agent/pull/2835)
 
 ## [v3.73.1](https://github.com/buildkite/agent/tree/v3.73.1) (2024-05-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.73.0...v3.73.1)
@@ -217,7 +236,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Emit a better error if the job API token is missing [#2789](https://github.com/buildkite/agent/pull/2789) (@moskyb)
 
 ### Internal
-- Bump docker/library/golang from `b1e05e2` to `f43c6f0` in /.buildkite [#2785](https://github.com/buildkite/agent/pull/2785) (@dependabot[bot])
+- Bump docker/library/golang from `b1e05e2` to `f43c6f0` in /.buildkite [#2785](https://github.com/buildkite/agent/pull/2785)
 - Upgrade math/rand to v2 [#2792](https://github.com/buildkite/agent/pull/2792) (@DrJosh9000)
 
 ## [v3.73.0](https://github.com/buildkite/agent/tree/v3.73.0) (2024-05-16)
@@ -235,7 +254,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Expand buildkite-agent secret command with a more useful description. [#2775](https://github.com/buildkite/agent/pull/2775) (@gilesgas)
 
 ### Internal
-- Dependabot updates: [#2779](https://github.com/buildkite/agent/pull/2779), [#2782](https://github.com/buildkite/agent/pull/2782), [#2781](https://github.com/buildkite/agent/pull/2781), [#2771](https://github.com/buildkite/agent/pull/2771), [#2770](https://github.com/buildkite/agent/pull/2770), [#2769](https://github.com/buildkite/agent/pull/2769), [#2767](https://github.com/buildkite/agent/pull/2767) (@dependabot[bot])
+- Dependabot updates: [#2779](https://github.com/buildkite/agent/pull/2779), [#2782](https://github.com/buildkite/agent/pull/2782), [#2781](https://github.com/buildkite/agent/pull/2781), [#2771](https://github.com/buildkite/agent/pull/2771), [#2770](https://github.com/buildkite/agent/pull/2770), [#2769](https://github.com/buildkite/agent/pull/2769), [#2767](https://github.com/buildkite/agent/pull/2767)
 
 ## [v3.72.0](https://github.com/buildkite/agent/tree/v3.72.0) (2024-05-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.71.0...v3.72.0)
@@ -253,7 +272,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
   - Pass AWS creds into docker containers [#2761](https://github.com/buildkite/agent/pull/2761) (@amu-g)
   - release: Pass AWS credentials to Docker containers [#2760](https://github.com/buildkite/agent/pull/2760) (@lucaswilric)
   - Use oidc roles in release pipelines [#2755](https://github.com/buildkite/agent/pull/2755) (@amu-g)
-- Dependency updates [#2752](https://github.com/buildkite/agent/pull/2752), [#2751](https://github.com/buildkite/agent/pull/2751), [#2750](https://github.com/buildkite/agent/pull/2750), [#2739](https://github.com/buildkite/agent/pull/2739), [#2740](https://github.com/buildkite/agent/pull/2740), [#2753](https://github.com/buildkite/agent/pull/2753), [#2757](https://github.com/buildkite/agent/pull/2757) (@dependabot[bot])
+- Dependency updates [#2752](https://github.com/buildkite/agent/pull/2752), [#2751](https://github.com/buildkite/agent/pull/2751), [#2750](https://github.com/buildkite/agent/pull/2750), [#2739](https://github.com/buildkite/agent/pull/2739), [#2740](https://github.com/buildkite/agent/pull/2740), [#2753](https://github.com/buildkite/agent/pull/2753), [#2757](https://github.com/buildkite/agent/pull/2757)
 
 ## [v3.71.0](https://github.com/buildkite/agent/tree/v3.71.0) (2024-04-30)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.70.0...v3.71.0)
@@ -279,7 +298,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Show descriptive error when annotation body size exceeds maximum when using stdin [#2725](https://github.com/buildkite/agent/pull/2725) (@rianmcguire)
 
 ### Internal
-- Dependabot updates [#2726](https://github.com/buildkite/agent/pull/2726) [#2727](https://github.com/buildkite/agent/pull/2727) [#2728](https://github.com/buildkite/agent/pull/2728) [#2729](https://github.com/buildkite/agent/pull/2729) (@dependabot[bot])
+- Dependabot updates [#2726](https://github.com/buildkite/agent/pull/2726) [#2727](https://github.com/buildkite/agent/pull/2727) [#2728](https://github.com/buildkite/agent/pull/2728) [#2729](https://github.com/buildkite/agent/pull/2729)
 
 ## [v3.69.0](https://github.com/buildkite/agent/tree/v3.69.0) (2024-04-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.68.0...v3.69.0)
@@ -300,7 +319,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Don't run pre-exit hooks without command phase [#2707](https://github.com/buildkite/agent/pull/2707) (@DrJosh9000)
 
 ### Internal
-- Dependabot updates [#2714](https://github.com/buildkite/agent/pull/2714), [#2712](https://github.com/buildkite/agent/pull/2712), [#2709](https://github.com/buildkite/agent/pull/2709), [#2708](https://github.com/buildkite/agent/pull/2708), [#2663](https://github.com/buildkite/agent/pull/2663) (@dependabot[bot])
+- Dependabot updates [#2714](https://github.com/buildkite/agent/pull/2714), [#2712](https://github.com/buildkite/agent/pull/2712), [#2709](https://github.com/buildkite/agent/pull/2709), [#2708](https://github.com/buildkite/agent/pull/2708), [#2663](https://github.com/buildkite/agent/pull/2663)
 
 ## [v3.67.0](https://github.com/buildkite/agent/tree/v3.67.0) (2024-03-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.66.0...v3.67.0)
@@ -320,7 +339,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Add a User-Agent header when uploading artifacts to Buildkite's default location [#2672](https://github.com/buildkite/agent/pull/2672) (@yob)
 - Break from artifact upload retry loop on more 4xx responses [#2697](https://github.com/buildkite/agent/pull/2697) (@SorchaAbel)
 - Use roko.DoFunc [#2689](https://github.com/buildkite/agent/pull/2689) (@DrJosh9000)
-- Dependabot up to its usual tricks: [#2704](https://github.com/buildkite/agent/pull/2704), [#2701](https://github.com/buildkite/agent/pull/2701), [#2702](https://github.com/buildkite/agent/pull/2702), [#2666](https://github.com/buildkite/agent/pull/2666), [#2691](https://github.com/buildkite/agent/pull/2691), [#2692](https://github.com/buildkite/agent/pull/2692) (@dependabot[bot])
+- Dependabot up to its usual tricks: [#2704](https://github.com/buildkite/agent/pull/2704), [#2701](https://github.com/buildkite/agent/pull/2701), [#2702](https://github.com/buildkite/agent/pull/2702), [#2666](https://github.com/buildkite/agent/pull/2666), [#2691](https://github.com/buildkite/agent/pull/2691), [#2692](https://github.com/buildkite/agent/pull/2692)
 
 ## [v3.66.0](https://github.com/buildkite/agent/tree/v3.66.0) (2024-03-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.65.0...v3.66.0)
@@ -369,7 +388,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Packaging: Use separate repos for each package type [#2636](https://github.com/buildkite/agent/pull/2636) (@sj26)
 
 ### Internal
-- Various dependency updates: [#2643](https://github.com/buildkite/agent/pull/2643), [#2642](https://github.com/buildkite/agent/pull/2642) [#2641](https://github.com/buildkite/agent/pull/2641), [#2638](https://github.com/buildkite/agent/pull/2638), [#2640](https://github.com/buildkite/agent/pull/2640), [#2639](https://github.com/buildkite/agent/pull/2639), [#2637](https://github.com/buildkite/agent/pull/2637) (@dependabot[bot])
+- Various dependency updates: [#2643](https://github.com/buildkite/agent/pull/2643), [#2642](https://github.com/buildkite/agent/pull/2642) [#2641](https://github.com/buildkite/agent/pull/2641), [#2638](https://github.com/buildkite/agent/pull/2638), [#2640](https://github.com/buildkite/agent/pull/2640), [#2639](https://github.com/buildkite/agent/pull/2639), [#2637](https://github.com/buildkite/agent/pull/2637)
 
 ## [v3.63.1](https://github.com/buildkite/agent/tree/v3.63.1) (2024-02-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.63.0...v3.63.1)
@@ -475,7 +494,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Add a PR template [#2601](https://github.com/buildkite/agent/pull/2601) (@triarius)
 - Move check from upload-release-steps.sh to pipeline.yml [#2617](https://github.com/buildkite/agent/pull/2617) (@DrJosh9000)
 - build-github-release.sh tidyups [#2619](https://github.com/buildkite/agent/pull/2619) (@DrJosh9000)
-- Various dependency updates [#2625](https://github.com/buildkite/agent/pull/2625), [#2630](https://github.com/buildkite/agent/pull/2630), [#2627](https://github.com/buildkite/agent/pull/2627), [#2626](https://github.com/buildkite/agent/pull/2626), [#2622](https://github.com/buildkite/agent/pull/2622), [#2605](https://github.com/buildkite/agent/pull/2605), [#2609](https://github.com/buildkite/agent/pull/2609), [#2603](https://github.com/buildkite/agent/pull/2603), [#2602](https://github.com/buildkite/agent/pull/2602), [#2604](https://github.com/buildkite/agent/pull/2604), [#2606](https://github.com/buildkite/agent/pull/2606), [#2616](https://github.com/buildkite/agent/pull/2616), [#2610](https://github.com/buildkite/agent/pull/2610), [#2611](https://github.com/buildkite/agent/pull/2611) (@dependabot[bot])
+- Various dependency updates [#2625](https://github.com/buildkite/agent/pull/2625), [#2630](https://github.com/buildkite/agent/pull/2630), [#2627](https://github.com/buildkite/agent/pull/2627), [#2626](https://github.com/buildkite/agent/pull/2626), [#2622](https://github.com/buildkite/agent/pull/2622), [#2605](https://github.com/buildkite/agent/pull/2605), [#2609](https://github.com/buildkite/agent/pull/2609), [#2603](https://github.com/buildkite/agent/pull/2603), [#2602](https://github.com/buildkite/agent/pull/2602), [#2604](https://github.com/buildkite/agent/pull/2604), [#2606](https://github.com/buildkite/agent/pull/2606), [#2616](https://github.com/buildkite/agent/pull/2616), [#2610](https://github.com/buildkite/agent/pull/2610), [#2611](https://github.com/buildkite/agent/pull/2611)
 
 ## [v3.62.0](https://github.com/buildkite/agent/tree/v3.62.0) (2024-01-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.61.0...v3.62.0)
@@ -504,7 +523,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 - Update go-pipeline to v0.3.2 (fixes parsing pipelines that contain YAML aliases used as mapping keys) [#2560](https://github.com/buildkite/agent/pull/2560) (@DrJosh9000)
 
 ### Changed
-- Alpine image updated from 3.18.5 to 3.19.0 [#2545](https://github.com/buildkite/agent/pull/2545), [#2549](https://github.com/buildkite/agent/pull/2549), [#2550](https://github.com/buildkite/agent/pull/2550), [#2551](https://github.com/buildkite/agent/pull/2551) (@dependabot[bot])
+- Alpine image updated from 3.18.5 to 3.19.0 [#2545](https://github.com/buildkite/agent/pull/2545), [#2549](https://github.com/buildkite/agent/pull/2549), [#2550](https://github.com/buildkite/agent/pull/2550), [#2551](https://github.com/buildkite/agent/pull/2551)
 
 ### Internal
 - Make it clear these are not leaked credentials [#2554](https://github.com/buildkite/agent/pull/2554) (@sj26)
@@ -515,7 +534,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.60.0...v3.60.1)
 
 ### Security
-- Bump docker/library/golang from 1.21.4 to 1.21.5 in /.buildkite [#2542](https://github.com/buildkite/agent/pull/2542) (@dependabot[bot])
+- Bump docker/library/golang from 1.21.4 to 1.21.5 in /.buildkite [#2542](https://github.com/buildkite/agent/pull/2542)
 
 ### Fixed
 - Fix typo in environment variable name for allowed-plugins [#2526](https://github.com/buildkite/agent/pull/2526) (@moskyb)
@@ -524,7 +543,7 @@ Dependabot churn: [#2919](https://github.com/buildkite/agent/pull/2919), [#2922]
 ### Internal
 - Refactor hook wrapper writing [#2505](https://github.com/buildkite/agent/pull/2505) (@triarius)
 - Use os.RemoveAll in cleanup [#2538](https://github.com/buildkite/agent/pull/2538) (@DrJosh9000)
-- Dependencies [#2537](https://github.com/buildkite/agent/pull/2537) [#2536](https://github.com/buildkite/agent/pull/2536) [#2500](https://github.com/buildkite/agent/pull/2500) [#2528](https://github.com/buildkite/agent/pull/2528) [#2529](https://github.com/buildkite/agent/pull/2529) [#2533](https://github.com/buildkite/agent/pull/2533) [#2532](https://github.com/buildkite/agent/pull/2532) [#2534](https://github.com/buildkite/agent/pull/2534) [#2535](https://github.com/buildkite/agent/pull/2535) (@dependabot[bot])
+- Dependencies [#2537](https://github.com/buildkite/agent/pull/2537) [#2536](https://github.com/buildkite/agent/pull/2536) [#2500](https://github.com/buildkite/agent/pull/2500) [#2528](https://github.com/buildkite/agent/pull/2528) [#2529](https://github.com/buildkite/agent/pull/2529) [#2533](https://github.com/buildkite/agent/pull/2533) [#2532](https://github.com/buildkite/agent/pull/2532) [#2534](https://github.com/buildkite/agent/pull/2534) [#2535](https://github.com/buildkite/agent/pull/2535)
 
 
 ## [v3.60.0](https://github.com/buildkite/agent/tree/v3.60.0) (2023-11-29)
@@ -551,7 +570,7 @@ Signed pipelines is now GA! Check out the docs [here](https://buildkite.com/docs
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.58.0...v3.59.0)
 
 ### Security
-- This release is built with Go 1.20.11, which includes fixes for two vulnerabilities in file path handling on Windows (CVE-2023-45283, CVE-2023-45284). [#2486](https://github.com/buildkite/agent/pull/2486) (@dependabot[bot])
+- This release is built with Go 1.20.11, which includes fixes for two vulnerabilities in file path handling on Windows (CVE-2023-45283, CVE-2023-45284). [#2486](https://github.com/buildkite/agent/pull/2486)
 
 ### Changed
 - Experimental: Signed Pipelines
@@ -564,7 +583,7 @@ Signed pipelines is now GA! Check out the docs [here](https://buildkite.com/docs
 - Migrate usage of internal/{pipeline,ordered,jwkutil} to go-pipeline [#2489](https://github.com/buildkite/agent/pull/2489) (@moskyb)
 - Update bintest to v3.2.0 to resolve ETXTBSY race condition in tests [#2480](https://github.com/buildkite/agent/pull/2480) (@DrJosh9000)
 - Fix race in header times streamer [#2485](https://github.com/buildkite/agent/pull/2485), [#2487](https://github.com/buildkite/agent/pull/2487) (@DrJosh9000)
-- Various dependency updates [#2484](https://github.com/buildkite/agent/pull/2484), [#2482](https://github.com/buildkite/agent/pull/2482) (@dependabot[bot])
+- Various dependency updates [#2484](https://github.com/buildkite/agent/pull/2484), [#2482](https://github.com/buildkite/agent/pull/2482)
 
 ## [v3.58.0](https://github.com/buildkite/agent/tree/v3.58.0) (2023-11-02)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.57.0...v3.58.0)
@@ -583,7 +602,7 @@ Signed pipelines is now GA! Check out the docs [here](https://buildkite.com/docs
 
 ### Internal
 - Reduce header regexps [#2135](https://github.com/buildkite/agent/pull/2135) (@DrJosh9000)
-- Various dependency updates: [#2469](https://github.com/buildkite/agent/pull/2469), [#2468](https://github.com/buildkite/agent/pull/2468), [#2467](https://github.com/buildkite/agent/pull/2467), [#2463](https://github.com/buildkite/agent/pull/2463), [#2450](https://github.com/buildkite/agent/pull/2450), [#2460](https://github.com/buildkite/agent/pull/2460), [#2459](https://github.com/buildkite/agent/pull/2459), [#2458](https://github.com/buildkite/agent/pull/2458) (@dependabot[bot])
+- Various dependency updates: [#2469](https://github.com/buildkite/agent/pull/2469), [#2468](https://github.com/buildkite/agent/pull/2468), [#2467](https://github.com/buildkite/agent/pull/2467), [#2463](https://github.com/buildkite/agent/pull/2463), [#2450](https://github.com/buildkite/agent/pull/2450), [#2460](https://github.com/buildkite/agent/pull/2460), [#2459](https://github.com/buildkite/agent/pull/2459), [#2458](https://github.com/buildkite/agent/pull/2458)
 
 ## [v3.57.0](https://github.com/buildkite/agent/tree/v3.57.0) (2023-10-19)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.56.0...v3.57.0)
@@ -607,7 +626,7 @@ Signed pipelines is now GA! Check out the docs [here](https://buildkite.com/docs
 - Add CODEOWNERS file [#2444](https://github.com/buildkite/agent/pull/2444) (@moskyb)
 - Push agent packages to Packagecloud [#2438](https://github.com/buildkite/agent/pull/2438) [#2441](https://github.com/buildkite/agent/pull/2441) [#2443](https://github.com/buildkite/agent/pull/2443) [#2442](https://github.com/buildkite/agent/pull/2442) (@sj26)
 - Test clicommand config completeness [#2414](https://github.com/buildkite/agent/pull/2414) (@moskyb)
-- As always, the cosmic background radiation of dependabot updates. Thanks dependabot! [#2435](https://github.com/buildkite/agent/pull/2435) [#2434](https://github.com/buildkite/agent/pull/2434) [#2433](https://github.com/buildkite/agent/pull/2433) [#2432](https://github.com/buildkite/agent/pull/2432) [#2421](https://github.com/buildkite/agent/pull/2421) [#2418](https://github.com/buildkite/agent/pull/2418) [#2417](https://github.com/buildkite/agent/pull/2417)  (@dependabot[bot])
+- As always, the cosmic background radiation of dependabot updates. Thanks dependabot! [#2435](https://github.com/buildkite/agent/pull/2435) [#2434](https://github.com/buildkite/agent/pull/2434) [#2433](https://github.com/buildkite/agent/pull/2433) [#2432](https://github.com/buildkite/agent/pull/2432) [#2421](https://github.com/buildkite/agent/pull/2421) [#2418](https://github.com/buildkite/agent/pull/2418) [#2417](https://github.com/buildkite/agent/pull/2417)
 
 ## [v3.56.0](https://github.com/buildkite/agent/tree/v3.56.0) (2023-10-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.55.0...v3.56.0)
@@ -634,7 +653,7 @@ Signed pipelines is now GA! Check out the docs [here](https://buildkite.com/docs
 - Update dependabot config to use groups [#2384](https://github.com/buildkite/agent/pull/2384) (@moskyb)
 - Fix some typos in code comments [#2380](https://github.com/buildkite/agent/pull/2380) (@testwill)
 
-And (a slightly larger?) than usual amount of (@dependabot[bot]) updates [#2369](https://github.com/buildkite/agent/pull/2369) [#2371](https://github.com/buildkite/agent/pull/2371) [#2372](https://github.com/buildkite/agent/pull/2372) [#2373](https://github.com/buildkite/agent/pull/2373) [#2377](https://github.com/buildkite/agent/pull/2377) [#2378](https://github.com/buildkite/agent/pull/2378) [#2383](https://github.com/buildkite/agent/pull/2383) [#2386](https://github.com/buildkite/agent/pull/2386) [#2387](https://github.com/buildkite/agent/pull/2387) [#2397](https://github.com/buildkite/agent/pull/2397) [#2398](https://github.com/buildkite/agent/pull/2398) [#2399](https://github.com/buildkite/agent/pull/2399) [#2400](https://github.com/buildkite/agent/pull/2400) [#2401](https://github.com/buildkite/agent/pull/2401) [#2402](https://github.com/buildkite/agent/pull/2402) [#2403](https://github.com/buildkite/agent/pull/2403) [#2405](https://github.com/buildkite/agent/pull/2405)
+And (a slightly larger?) than usual amount of  updates [#2369](https://github.com/buildkite/agent/pull/2369) [#2371](https://github.com/buildkite/agent/pull/2371) [#2372](https://github.com/buildkite/agent/pull/2372) [#2373](https://github.com/buildkite/agent/pull/2373) [#2377](https://github.com/buildkite/agent/pull/2377) [#2378](https://github.com/buildkite/agent/pull/2378) [#2383](https://github.com/buildkite/agent/pull/2383) [#2386](https://github.com/buildkite/agent/pull/2386) [#2387](https://github.com/buildkite/agent/pull/2387) [#2397](https://github.com/buildkite/agent/pull/2397) [#2398](https://github.com/buildkite/agent/pull/2398) [#2399](https://github.com/buildkite/agent/pull/2399) [#2400](https://github.com/buildkite/agent/pull/2400) [#2401](https://github.com/buildkite/agent/pull/2401) [#2402](https://github.com/buildkite/agent/pull/2402) [#2403](https://github.com/buildkite/agent/pull/2403) [#2405](https://github.com/buildkite/agent/pull/2405)
 
 
 ## [v3.55.0](https://github.com/buildkite/agent/tree/v3.55.0) (2023-09-14)
@@ -726,7 +745,7 @@ And (a slightly larger?) than usual amount of (@dependabot[bot]) updates [#2369]
 - Make the agent send a SIGTERM (configurable) before a SIGKILL to subprocesses [#2250](https://github.com/buildkite/agent/pull/2250) (@triarius)
 - Limit job log length [#2192](https://github.com/buildkite/agent/pull/2192) (@DrJosh9000)
 - Refactor redactor into streaming replacer and use it to redact secrets [#2277](https://github.com/buildkite/agent/pull/2277) (@DrJosh9000)
-- Dependency upgrades [#2278](https://github.com/buildkite/agent/pull/2278) [#2274](https://github.com/buildkite/agent/pull/2274) [#2271](https://github.com/buildkite/agent/pull/2271) [#2272](https://github.com/buildkite/agent/pull/2272) [#2275](https://github.com/buildkite/agent/pull/2275) [#2266](https://github.com/buildkite/agent/pull/2266) (@dependabot[bot])
+- Dependency upgrades [#2278](https://github.com/buildkite/agent/pull/2278) [#2274](https://github.com/buildkite/agent/pull/2274) [#2271](https://github.com/buildkite/agent/pull/2271) [#2272](https://github.com/buildkite/agent/pull/2272) [#2275](https://github.com/buildkite/agent/pull/2275) [#2266](https://github.com/buildkite/agent/pull/2266)
 
 ### Fixed
 - Fix `fatal: bad object` not detected from git fetch [#2286](https://github.com/buildkite/agent/pull/2286) (@triarius)
@@ -894,7 +913,7 @@ And the usual amount of @dependabot[bot] updates!
 ### Changed
 - `Buildkite-Timeout-Milliseconds` API request header [#2160](https://github.com/buildkite/agent/pull/2160) (@pda)
 - Extract pipeline parser to package internal/pipeline [#2158](https://github.com/buildkite/agent/pull/2158) (@DrJosh9000)
-- Minor dependency updates [#2165](https://github.com/buildkite/agent/pull/2165) [#2164](https://github.com/buildkite/agent/pull/2164) [#2162](https://github.com/buildkite/agent/pull/2162) [#2161](https://github.com/buildkite/agent/pull/2161) [#2153](https://github.com/buildkite/agent/pull/2153) [#2152](https://github.com/buildkite/agent/pull/2152) [#2151](https://github.com/buildkite/agent/pull/2151) (@dependabot[bot])
+- Minor dependency updates [#2165](https://github.com/buildkite/agent/pull/2165) [#2164](https://github.com/buildkite/agent/pull/2164) [#2162](https://github.com/buildkite/agent/pull/2162) [#2161](https://github.com/buildkite/agent/pull/2161) [#2153](https://github.com/buildkite/agent/pull/2153) [#2152](https://github.com/buildkite/agent/pull/2152) [#2151](https://github.com/buildkite/agent/pull/2151)
 - Lock library [#2145](https://github.com/buildkite/agent/pull/2145) (@DrJosh9000)
 
 
@@ -1091,7 +1110,7 @@ Full changelog follows:
 
 - Update windows install script to detect arm64 systems [#1768](https://github.com/buildkite/agent/pull/1768) (@yob)
 - Install docker compose v2 plugin in agent alpine and ubuntu docker images [#1841](https://github.com/buildkite/agent/pull/1841) (@ajoneil) (@triarius)
-- 🧹 A variety of dependency updates, documentation, and cleanups! (@dependabot[bot]) (@DrJosh9000)
+- 🧹 A variety of dependency updates, documentation, and cleanups!  (@DrJosh9000)
 
 
 ## [v3.40.0](https://github.com/buildkite/agent/tree/v3.40.0) (2022-11-08)
@@ -1193,9 +1212,9 @@ Full changelog follows:
 - Refactor retry machinery to allow the use of exponential backoff [#1588](https://github.com/buildkite/agent/pull/1588) (@moskyb)
 - Create all directories with 0775 permissions [#1616](https://github.com/buildkite/agent/pull/1616) (@moskyb)
 - Dependency Updates:
-  - github.com/urfave/cli: 1.22.4 -> 1.22.9 [#1619](https://github.com/buildkite/agent/pull/1619) + [#1638](https://github.com/buildkite/agent/pull/1638) (@dependabot[bot])
-  - Golang: 1.17.6 -> 1.18.1 (yay, generics!) [#1603](https://github.com/buildkite/agent/pull/1603) + [#1627](https://github.com/buildkite/agent/pull/1627) (@dependabot[bot])
-  - Alpine Build Images: 3.15.0 -> 3.15.4 [#1626](https://github.com/buildkite/agent/pull/1626) (@dependabot[bot])
+  - github.com/urfave/cli: 1.22.4 -> 1.22.9 [#1619](https://github.com/buildkite/agent/pull/1619) + [#1638](https://github.com/buildkite/agent/pull/1638)
+  - Golang: 1.17.6 -> 1.18.1 (yay, generics!) [#1603](https://github.com/buildkite/agent/pull/1603) + [#1627](https://github.com/buildkite/agent/pull/1627)
+  - Alpine Build Images: 3.15.0 -> 3.15.4 [#1626](https://github.com/buildkite/agent/pull/1626)
   - Alpine Release Images: 3.12 -> 3.15.4 [#1628](https://github.com/buildkite/agent/pull/1628) (@moskyb)
 
 ## [v3.35.2](https://github.com/buildkite/agent/tree/v3.35.2) (2022-04-13)
