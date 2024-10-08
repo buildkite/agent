@@ -3,12 +3,12 @@ package artifact
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -30,7 +30,9 @@ type S3DownloaderConfig struct {
 	Retries int
 
 	// If failed responses should be dumped to the log
-	DebugHTTP bool
+	DebugHTTP    bool
+	TraceHTTP    bool
+	DisableHTTP2 bool
 }
 
 type S3Downloader struct {
@@ -64,12 +66,14 @@ func (d S3Downloader) Start(ctx context.Context) error {
 	}
 
 	// We can now cheat and pass the URL onto our regular downloader
-	return NewDownload(d.logger, http.DefaultClient, DownloadConfig{
+	client := agenthttp.NewClient(agenthttp.WithAllowHTTP2(!d.conf.DisableHTTP2))
+	return NewDownload(d.logger, client, DownloadConfig{
 		URL:         signedURL,
 		Path:        d.conf.Path,
 		Destination: d.conf.Destination,
 		Retries:     d.conf.Retries,
 		DebugHTTP:   d.conf.DebugHTTP,
+		TraceHTTP:   d.conf.TraceHTTP,
 	}).Start(ctx)
 }
 

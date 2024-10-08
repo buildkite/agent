@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
@@ -47,7 +47,9 @@ type DownloadConfig struct {
 	WantSHA256 string
 
 	// If failed responses should be dumped to the log
+	// Standard HTTP options.
 	DebugHTTP bool
+	TraceHTTP bool
 }
 
 type Download struct {
@@ -143,7 +145,10 @@ func (d Download) try(ctx context.Context) error {
 	}
 
 	// Start by downloading the file
-	response, err := d.client.Do(request)
+	response, err := agenthttp.Do(d.logger, d.client, request,
+		agenthttp.WithDebugHTTP(d.conf.DebugHTTP),
+		agenthttp.WithTraceHTTP(d.conf.TraceHTTP),
+	)
 	if err != nil {
 		return fmt.Errorf("Error while downloading %s (%T: %w)", d.conf.URL, err, err)
 	}
@@ -151,15 +156,6 @@ func (d Download) try(ctx context.Context) error {
 
 	// Double check the status
 	if response.StatusCode/100 != 2 && response.StatusCode/100 != 3 {
-		if d.conf.DebugHTTP {
-			responseDump, err := httputil.DumpResponse(response, true)
-			if err != nil {
-				d.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
-			} else {
-				d.logger.Debug("\n%s", string(responseDump))
-			}
-		}
-
 		return &downloadError{response.Status}
 	}
 

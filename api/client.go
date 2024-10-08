@@ -11,18 +11,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptrace"
-	"net/http/httputil"
-	"net/textproto"
 	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-querystring/query"
-	"golang.org/x/net/http2"
 )
 
 const (
@@ -80,60 +77,22 @@ func NewClient(l logger.Logger, conf Config) *Client {
 		conf.UserAgent = defaultUserAgent
 	}
 
-	httpClient := conf.HTTPClient
-
-	if httpClient != nil {
+	if conf.HTTPClient != nil {
 		return &Client{
 			logger: l,
-			client: httpClient,
+			client: conf.HTTPClient,
 			conf:   conf,
 		}
 	}
 
-	// Base any modifications on the default transport.
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	// Allow override of TLSConfig. This must be set prior to calling
-	// http2.ConfigureTransports.
-	if conf.TLSConfig != nil {
-		transport.TLSClientConfig = conf.TLSConfig
-	}
-
-	if conf.DisableHTTP2 {
-		transport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
-		// The default TLSClientConfig has h2 in NextProtos, so the
-		// negotiated TLS connection will assume h2 support.
-		// see https://github.com/golang/go/issues/50571
-		transport.TLSClientConfig.NextProtos = []string{"http/1.1"}
-	} else {
-		// There is a bug in http2 on Linux regarding using dead connections.
-		// This is a workaround. See https://github.com/golang/go/issues/59690
-		//
-		// Note that http2.ConfigureTransports alters its argument in order to
-		// supply http2 functionality, and the http2.Transport does not support
-		// HTTP/1.1 as a protocol, so we get slightly odd-looking code where
-		// we use `transport` later on instead of the just-returned `tr2`.
-		// tr2 is needed merely to configure the http2 option.
-		tr2, err := http2.ConfigureTransports(transport)
-		if err != nil {
-			l.Warn("Failed to configure HTTP2 transports: %v", err)
-		}
-		if tr2 != nil {
-			tr2.ReadIdleTimeout = 30 * time.Second
-		}
-	}
-
-	httpClient = &http.Client{
-		Timeout: 60 * time.Second,
-		Transport: &authenticatedTransport{
-			Token:    conf.Token,
-			Delegate: transport,
-		},
-	}
-
 	return &Client{
 		logger: l,
-		client: httpClient,
-		conf:   conf,
+		client: agenthttp.NewClient(
+			agenthttp.WithAuthToken(conf.Token),
+			agenthttp.WithAllowHTTP2(!conf.DisableHTTP2),
+			agenthttp.WithTLSConfig(conf.TLSConfig),
+		),
+		conf: conf,
 	}
 }
 
@@ -260,73 +219,20 @@ func newResponse(r *http.Response) *Response {
 // interface, the raw response body will be written to v, without attempting to
 // first decode it.
 func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
-	var err error
 
-	if c.conf.DebugHTTP {
-		// If the request is a multi-part form, then it's probably a
-		// file upload, in which case we don't want to spewing out the
-		// file contents into the debug log (especially if it's been
-		// gzipped)
-		var requestDump []byte
-		if strings.Contains(req.Header.Get("Content-Type"), "multipart/form-data") {
-			requestDump, err = httputil.DumpRequestOut(req, false)
-		} else {
-			requestDump, err = httputil.DumpRequestOut(req, true)
-		}
-
-		if err != nil {
-			c.logger.Debug("ERR: %s\n%s", err, string(requestDump))
-		} else {
-			c.logger.Debug("%s", string(requestDump))
-		}
-	}
-
-	tracer := &tracer{Logger: c.logger}
-	if c.conf.TraceHTTP {
-		// Inject a custom http tracer
-		req = traceHTTPRequest(req, tracer)
-		tracer.Start()
-	}
-
-	ts := time.Now()
-
-	c.logger.Debug("%s %s", req.Method, req.URL)
-
-	resp, err := c.client.Do(req)
-
+	resp, err := agenthttp.Do(c.logger, c.client, req,
+		agenthttp.WithDebugHTTP(c.conf.DebugHTTP),
+		agenthttp.WithTraceHTTP(c.conf.TraceHTTP),
+	)
 	if err != nil {
-		if c.conf.TraceHTTP {
-			tracer.EmitTraceToLog(logger.ERROR)
-		}
 		return nil, err
 	}
-
-	c.logger.WithFields(
-		logger.StringField("proto", resp.Proto),
-		logger.IntField("status", resp.StatusCode),
-		logger.DurationField("Δ", time.Since(ts)),
-	).Debug("↳ %s %s", req.Method, req.URL)
-
 	defer resp.Body.Close()
 	defer io.Copy(io.Discard, resp.Body)
 
 	response := newResponse(resp)
 
-	if c.conf.DebugHTTP {
-		responseDump, err := httputil.DumpResponse(resp, true)
-		if err != nil {
-			c.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
-		} else {
-			c.logger.Debug("\n%s", string(responseDump))
-		}
-	}
-
-	if c.conf.TraceHTTP {
-		tracer.EmitTraceToLog(logger.DEBUG)
-	}
-
-	err = checkResponse(resp)
-	if err != nil {
+	if err := checkResponse(resp); err != nil {
 		// even though there was an error, we still return the response
 		// in case the caller wants to inspect it further
 		return response, err
@@ -346,107 +252,7 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 		}
 	}
 
-	return response, err
-}
-
-type traceEvent struct {
-	event string
-	since time.Duration
-}
-
-type tracer struct {
-	startTime time.Time
-	logger.Logger
-}
-
-func (t *tracer) Start() {
-	t.startTime = time.Now()
-}
-
-func (t *tracer) LogTiming(event string) {
-	t.Logger = t.Logger.WithFields(logger.DurationField(event, time.Since(t.startTime)))
-}
-
-func (t *tracer) LogField(key, value string) {
-	t.Logger = t.Logger.WithFields(logger.StringField(key, value))
-}
-
-func (t *tracer) LogDuration(event string, d time.Duration) {
-	t.Logger = t.Logger.WithFields(logger.DurationField(event, d))
-}
-
-// Currently logger.Logger doesn't give us a way to set the level we want to emit logs at dynamically
-func (t *tracer) EmitTraceToLog(level logger.Level) {
-	msg := "HTTP Timing Trace"
-	switch level {
-	case logger.DEBUG:
-		t.Debug(msg)
-	case logger.INFO:
-		t.Info(msg)
-	case logger.WARN:
-		t.Warn(msg)
-	case logger.ERROR:
-		t.Error(msg)
-	}
-}
-
-func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {
-	trace := &httptrace.ClientTrace{
-		GetConn: func(hostPort string) {
-			t.LogField("hostPort", hostPort)
-			t.LogTiming("getConn")
-		},
-		GotConn: func(info httptrace.GotConnInfo) {
-			t.LogTiming("gotConn")
-			t.LogField("reused", strconv.FormatBool(info.Reused))
-			t.LogField("idle", strconv.FormatBool(info.WasIdle))
-			t.LogDuration("idleTime", info.IdleTime)
-			t.LogField("localAddr", info.Conn.LocalAddr().String())
-		},
-		PutIdleConn: func(err error) {
-			t.LogTiming("putIdleConn")
-			if err != nil {
-				t.LogField("putIdleConnectionError", err.Error())
-			}
-		},
-		GotFirstResponseByte: func() {
-			t.LogTiming("gotFirstResponseByte")
-		},
-		Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
-			t.LogTiming("got1xxResponse")
-			return nil
-		},
-		DNSStart: func(_ httptrace.DNSStartInfo) {
-			t.LogTiming("dnsStart")
-		},
-		DNSDone: func(_ httptrace.DNSDoneInfo) {
-			t.LogTiming("dnsDone")
-		},
-		ConnectStart: func(network, addr string) {
-			t.LogTiming(fmt.Sprintf("connectStart.%s.%s", network, addr))
-		},
-		ConnectDone: func(network, addr string, _ error) {
-			t.LogTiming(fmt.Sprintf("connectDone.%s.%s", network, addr))
-		},
-		TLSHandshakeStart: func() {
-			t.LogTiming("tlsHandshakeStart")
-		},
-		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
-			t.LogTiming("tlsHandshakeDone")
-		},
-		WroteHeaders: func() {
-			t.LogTiming("wroteHeaders")
-		},
-		WroteRequest: func(_ httptrace.WroteRequestInfo) {
-			t.LogTiming("wroteRequest")
-		},
-	}
-
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-
-	t.LogField("uri", req.URL.String())
-	t.LogField("method", req.Method)
-	return req
+	return response, nil
 }
 
 // ErrorResponse provides a message.

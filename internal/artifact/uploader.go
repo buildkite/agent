@@ -45,8 +45,10 @@ type UploaderConfig struct {
 	// A specific Content-Type to use for all artifacts
 	ContentType string
 
-	// Whether to show HTTP debugging
-	DebugHTTP bool
+	// Standard HTTP options.
+	DebugHTTP    bool
+	TraceHTTP    bool
+	DisableHTTP2 bool
 
 	// Whether to follow symbolic links when resolving globs
 	GlobResolveFollowSymlinks bool
@@ -92,7 +94,7 @@ func (a *Uploader) Upload(ctx context.Context) error {
 	a.logger.Info("Found %d files that match %q", len(artifacts), a.conf.Paths)
 
 	// Determine what uploader to use
-	uploader, err := a.createUploader()
+	uploader, err := a.createUploader(ctx)
 	if err != nil {
 		return fmt.Errorf("creating uploader: %w", err)
 	}
@@ -387,7 +389,7 @@ func (a *Uploader) build(path string, absolutePath string) (*api.Artifact, error
 
 // createUploader applies some heuristics to the destination to infer which
 // uploader to use.
-func (a *Uploader) createUploader() (_ workCreator, err error) {
+func (a *Uploader) createUploader(ctx context.Context) (_ workCreator, err error) {
 	var dest string
 	defer func() {
 		if err != nil || dest == "" {
@@ -400,28 +402,30 @@ func (a *Uploader) createUploader() (_ workCreator, err error) {
 	case a.conf.Destination == "":
 		a.logger.Info("Uploading to default Buildkite artifact storage")
 		return NewBKUploader(a.logger, BKUploaderConfig{
-			DebugHTTP: a.conf.DebugHTTP,
+			DebugHTTP:    a.conf.DebugHTTP,
+			TraceHTTP:    a.conf.TraceHTTP,
+			DisableHTTP2: a.conf.DisableHTTP2,
 		}), nil
 
 	case strings.HasPrefix(a.conf.Destination, "s3://"):
 		dest = "Amazon S3"
 		return NewS3Uploader(a.logger, S3UploaderConfig{
 			Destination: a.conf.Destination,
-			DebugHTTP:   a.conf.DebugHTTP,
 		})
 
 	case strings.HasPrefix(a.conf.Destination, "gs://"):
 		dest = "Google Cloud Storage"
-		return NewGSUploader(a.logger, GSUploaderConfig{
+		return NewGSUploader(ctx, a.logger, GSUploaderConfig{
 			Destination: a.conf.Destination,
-			DebugHTTP:   a.conf.DebugHTTP,
 		})
 
 	case strings.HasPrefix(a.conf.Destination, "rt://"):
 		dest = "Artifactory"
 		return NewArtifactoryUploader(a.logger, ArtifactoryUploaderConfig{
-			Destination: a.conf.Destination,
-			DebugHTTP:   a.conf.DebugHTTP,
+			Destination:  a.conf.Destination,
+			DebugHTTP:    a.conf.DebugHTTP,
+			TraceHTTP:    a.conf.TraceHTTP,
+			DisableHTTP2: a.conf.DisableHTTP2,
 		})
 
 	case IsAzureBlobPath(a.conf.Destination):

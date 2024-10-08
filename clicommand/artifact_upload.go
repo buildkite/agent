@@ -81,6 +81,7 @@ type ArtifactUploadConfig struct {
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
+	TraceHTTP        bool   `cli:"trace-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
@@ -132,6 +133,7 @@ var ArtifactUploadCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
+		TraceHTTPFlag,
 
 		// Global flags
 		NoColorFlag,
@@ -151,11 +153,13 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
-			JobID:       cfg.Job,
-			Paths:       cfg.UploadPaths,
-			Destination: cfg.Destination,
-			ContentType: cfg.ContentType,
-			DebugHTTP:   cfg.DebugHTTP,
+			JobID:        cfg.Job,
+			Paths:        cfg.UploadPaths,
+			Destination:  cfg.Destination,
+			ContentType:  cfg.ContentType,
+			DebugHTTP:    cfg.DebugHTTP,
+			TraceHTTP:    cfg.TraceHTTP,
+			DisableHTTP2: cfg.NoHTTP2,
 
 			AllowMultipart: !cfg.NoMultipartUpload,
 
