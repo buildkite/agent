@@ -66,7 +66,10 @@ func (d S3Downloader) Start(ctx context.Context) error {
 	}
 
 	// We can now cheat and pass the URL onto our regular downloader
-	client := agenthttp.NewClient(agenthttp.WithAllowHTTP2(!d.conf.DisableHTTP2))
+	client := agenthttp.NewClient(
+		agenthttp.WithAllowHTTP2(!d.conf.DisableHTTP2),
+		agenthttp.WithNoTimeout,
+	)
 	return NewDownload(d.logger, client, DownloadConfig{
 		URL:         signedURL,
 		Path:        d.conf.Path,
