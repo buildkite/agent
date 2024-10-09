@@ -11,7 +11,8 @@ import (
 	"golang.org/x/net/http2"
 )
 
-// NewClient creates a HTTP client.
+// NewClient creates a HTTP client. Note that the default timeout is 60 seconds;
+// for some use cases (e.g. artifact operations) use [WithNoTimeout].
 func NewClient(opts ...ClientOption) *http.Client {
 	conf := clientConfig{
 		// This spells out the defaults, even if some of them are zero values.
@@ -62,6 +63,7 @@ func WithAuthBearer(b string) ClientOption     { return func(c *clientConfig) { 
 func WithAuthToken(t string) ClientOption      { return func(c *clientConfig) { c.Token = t } }
 func WithAllowHTTP2(a bool) ClientOption       { return func(c *clientConfig) { c.AllowHTTP2 = a } }
 func WithTimeout(d time.Duration) ClientOption { return func(c *clientConfig) { c.Timeout = d } }
+func WithNoTimeout(c *clientConfig)            { c.Timeout = 0 }
 func WithTLSConfig(t *tls.Config) ClientOption { return func(c *clientConfig) { c.TLSConfig = t } }
 
 type ClientOption = func(*clientConfig)

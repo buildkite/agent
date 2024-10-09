@@ -78,6 +78,7 @@ func NewArtifactoryUploader(l logger.Logger, c ArtifactoryUploaderConfig) (*Arti
 		conf:   c,
 		client: agenthttp.NewClient(
 			agenthttp.WithAllowHTTP2(!c.DisableHTTP2),
+			agenthttp.WithNoTimeout,
 		),
 		iURL:       parsedURL,
 		Path:       path,

@@ -198,7 +198,10 @@ func (a *Downloader) createDownloader(artifact *api.Artifact, path, destination 
 		})
 
 	default:
-		client := agenthttp.NewClient(agenthttp.WithAllowHTTP2(!a.conf.DisableHTTP2))
+		client := agenthttp.NewClient(
+			agenthttp.WithAllowHTTP2(!a.conf.DisableHTTP2),
+			agenthttp.WithNoTimeout,
+		)
 		return NewDownload(a.logger, client, DownloadConfig{
 			URL:         artifact.URL,
 			Path:        path,

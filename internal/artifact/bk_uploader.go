@@ -153,6 +153,7 @@ func (u *bkMultipartUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, 
 
 	client := agenthttp.NewClient(
 		agenthttp.WithAllowHTTP2(!u.conf.DisableHTTP2),
+		agenthttp.WithNoTimeout,
 	)
 
 	resp, err := agenthttp.Do(u.logger, client, req,
@@ -208,6 +209,7 @@ func (u *bkFormUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, error
 	// Create the client
 	client := agenthttp.NewClient(
 		agenthttp.WithAllowHTTP2(!u.conf.DisableHTTP2),
+		agenthttp.WithNoTimeout,
 	)
 
 	// Perform the request

@@ -70,7 +70,10 @@ func (d ArtifactoryDownloader) Start(ctx context.Context) error {
 		"Authorization": fmt.Sprintf("Basic %s", getBasicAuthHeader(username, password)),
 	}
 
-	client := agenthttp.NewClient(agenthttp.WithAllowHTTP2(!d.conf.DisableHTTP2))
+	client := agenthttp.NewClient(
+		agenthttp.WithAllowHTTP2(!d.conf.DisableHTTP2),
+		agenthttp.WithNoTimeout,
+	)
 
 	// We can now cheat and pass the URL onto our regular downloader
 	return NewDownload(d.logger, client, DownloadConfig{
