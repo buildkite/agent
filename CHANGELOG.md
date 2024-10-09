@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.83.1](https://github.com/buildkite/agent/tree/v3.83.0) (2024-10-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.83.0...v3.83.1)
+
+### Fixed
+- Fix artifact up/download timeouts [#3033](https://github.com/buildkite/agent/pull/3033) (@DrJosh9000)
+
 ## [v3.83.0](https://github.com/buildkite/agent/tree/v3.83.0) (2024-10-08)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.82.1...v3.83.0)
 
