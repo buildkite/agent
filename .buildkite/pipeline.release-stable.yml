@@ -160,16 +160,25 @@ steps:
             - with: { pkg_arch: "SKIP_FAKE_ARCH" }
               skip: true
 
-  - name: ":docker: Publish Docker Images"
-    command: ".buildkite/steps/publish-docker-images.sh"
-    env:
-      CODENAME: "stable"
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "445615400570"
+  - group: ":docker: Publish Docker Images"
+    steps:
+      - name: ":docker: Publish Docker Images to {{matrix.registry}}"
+        command: ".buildkite/steps/publish-docker-images.sh"
+        env:
+          CODENAME: "stable"
+          REGISTRY: "{{matrix.registry}}"
+        plugins:
+          - aws-assume-role-with-web-identity:
+              role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+          - ecr#v2.7.0:
+              login: true
+              account-ids: "445615400570"
+        matrix:
+          setup:
+            registry:
+              - docker.io
+              - ghcr.io
+              - packages.buildkite.com
 
   - wait
 

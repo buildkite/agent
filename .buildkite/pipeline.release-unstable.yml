@@ -160,16 +160,25 @@ steps:
             - with: { pkg_arch: "SKIP_FAKE_ARCH" }
               skip: true
 
-  - name: ":docker: Publish Unstable Docker Images"
-    command: ".buildkite/steps/publish-docker-images.sh"
-    env:
-      CODENAME: "unstable"
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-beta
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "445615400570"
+  - group: ":docker: Publish Unstable Docker Images"
+    steps:
+      - name: ":docker: Publish Unstable Images to {{matrix.registry}}"
+        command: ".buildkite/steps/publish-docker-images.sh"
+        env:
+          CODENAME: "unstable"
+          REGISTRY: "{{matrix.registry}}"
+        plugins:
+          - aws-assume-role-with-web-identity:
+              role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-beta
+          - ecr#v2.7.0:
+              login: true
+              account-ids: "445615400570"
+        matrix:
+          setup:
+            registry:
+              - docker.io
+              - ghcr.io
+              - packages.buildkite.com
 
   - wait
 
