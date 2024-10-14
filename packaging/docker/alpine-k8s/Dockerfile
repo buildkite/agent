@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM public.ecr.aws/docker/library/alpine:3.20.1@sha256:b89d9c93e9ed3597455c90a0b88a8bbb5cb7188438f70953fede212a0c4394e0 AS base
+FROM public.ecr.aws/docker/library/alpine:3.20.3@sha256:beefdbd8a1da6d2915566fde36db9db0b524eb737fc57cd1367effd16dc0d06d AS base
 
 RUN apk update && apk add --no-cache \
     bash \
@@ -22,7 +22,7 @@ RUN apk update && apk add --no-cache \
 
 COPY docker-compose /usr/local/bin/docker-compose
 
-FROM public.ecr.aws/docker/library/alpine:3.20.1@sha256:b89d9c93e9ed3597455c90a0b88a8bbb5cb7188438f70953fede212a0c4394e0 AS kubectl-downloader
+FROM public.ecr.aws/docker/library/alpine:3.20.3@sha256:beefdbd8a1da6d2915566fde36db9db0b524eb737fc57cd1367effd16dc0d06d AS kubectl-downloader
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -35,7 +35,7 @@ wget -qO kubectl \
 chmod +x kubectl
 EOF
 
-FROM public.ecr.aws/docker/library/alpine:3.20.1@sha256:b89d9c93e9ed3597455c90a0b88a8bbb5cb7188438f70953fede212a0c4394e0 AS kustomize-downloader
+FROM public.ecr.aws/docker/library/alpine:3.20.3@sha256:beefdbd8a1da6d2915566fde36db9db0b524eb737fc57cd1367effd16dc0d06d AS kustomize-downloader
 ARG TARGETOS
 ARG TARGETARCH
 
