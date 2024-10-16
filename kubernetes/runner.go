@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,11 +12,9 @@ import (
 	"os"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
-	"github.com/buildkite/roko"
 )
 
 func init() {
@@ -26,7 +23,15 @@ func init() {
 
 const defaultSocketPath = "/workspace/buildkite.sock"
 
-func New(l logger.Logger, c Config) *Runner {
+type RunnerConfig struct {
+	SocketPath     string
+	ClientCount    int
+	Stdout, Stderr io.Writer
+	Env            []string
+}
+
+// NewRunner returns a runner, implementing the agent's jobRunner interface.
+func NewRunner(l logger.Logger, c RunnerConfig) *Runner {
 	if c.SocketPath == "" {
 		c.SocketPath = defaultSocketPath
 	}
@@ -46,9 +51,12 @@ func New(l logger.Logger, c Config) *Runner {
 	}
 }
 
+// Runner implements the agent's jobRunner interface, but instead of directly
+// managing a subprocess, it runs a socket server that is connected to from
+// another container.
 type Runner struct {
 	logger   logger.Logger
-	conf     Config
+	conf     RunnerConfig
 	mu       sync.Mutex
 	listener net.Listener
 
@@ -60,26 +68,7 @@ type Runner struct {
 	clients map[int]*clientResult
 }
 
-type clientResult struct {
-	ExitStatus int
-	State      clientState
-}
-
-type clientState int
-
-const (
-	stateUnknown clientState = iota
-	stateConnected
-	stateExited
-)
-
-type Config struct {
-	SocketPath     string
-	ClientCount    int
-	Stdout, Stderr io.Writer
-	Env            []string
-}
-
+// Run runs the socket server.
 func (r *Runner) Run(ctx context.Context) error {
 	r.server.Register(r)
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
@@ -103,6 +92,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	return nil
 }
 
+// Started returns a channel that is closed when the job has started running.
 func (r *Runner) Started() <-chan struct{} {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -110,6 +100,7 @@ func (r *Runner) Started() <-chan struct{} {
 	return r.started
 }
 
+// Done returns a channel that is closed when the job is completed.
 func (r *Runner) Done() <-chan struct{} {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -117,7 +108,7 @@ func (r *Runner) Done() <-chan struct{} {
 	return r.done
 }
 
-// Interrupts all clients, triggering graceful shutdown
+// Interrupts all clients, triggering graceful shutdown.
 func (r *Runner) Interrupt() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -128,7 +119,7 @@ func (r *Runner) Interrupt() error {
 	return nil
 }
 
-// Stops the RPC server, allowing Run to return immediately
+// Terminate stops the RPC server, allowing Run to return immediately.
 func (r *Runner) Terminate() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -139,24 +130,7 @@ func (r *Runner) Terminate() error {
 	return nil
 }
 
-type waitStatus struct {
-	Code       int
-	SignalCode *int
-}
-
-func (w waitStatus) ExitStatus() int {
-	return w.Code
-}
-
-func (w waitStatus) Signal() syscall.Signal {
-	var signal syscall.Signal
-	return signal
-}
-
-func (w waitStatus) Signaled() bool {
-	return false
-}
-
+// WaitStatus returns a wait status that represents all the clients.
 func (r *Runner) WaitStatus() process.WaitStatus {
 	ws := waitStatus{}
 	for _, client := range r.clients {
@@ -172,6 +146,7 @@ func (r *Runner) WaitStatus() process.WaitStatus {
 	return ws
 }
 
+// ClientStateUnknown reports whether anhy of the client states is stateUnknown.
 func (r *Runner) ClientStateUnknown() bool {
 	for _, client := range r.clients {
 		if client.State == stateUnknown {
@@ -183,24 +158,10 @@ func (r *Runner) ClientStateUnknown() bool {
 
 // ==== sidecar api ====
 
+// Empty is an empty RPC message.
 type Empty struct{}
-type Logs struct {
-	Data []byte
-}
 
-type ExitCode struct {
-	ID         int
-	ExitStatus int
-}
-
-type Status struct {
-	Ready bool
-}
-
-type RegisterResponse struct {
-	Env []string
-}
-
+// WriteLogs is called to pass logs on to Buildkite.
 func (r *Runner) WriteLogs(args Logs, reply *Empty) error {
 	r.startedOnce.Do(func() {
 		close(r.started)
@@ -209,6 +170,12 @@ func (r *Runner) WriteLogs(args Logs, reply *Empty) error {
 	return err
 }
 
+// Logs is an RPC message that contains log data.
+type Logs struct {
+	Data []byte
+}
+
+// Exit is called when the client exits.
 func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -238,6 +205,15 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	return nil
 }
 
+// ExitCode is an RPC message that specifies an exit status for a client ID.
+type ExitCode struct {
+	ID         int
+	ExitStatus int
+}
+
+// Register is called when the client registers with the runner. The reply
+// contains the env vars that would normally be in the environment of the
+// bootstrap subcommand, particularly, the agent session token.
 func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -258,6 +234,14 @@ func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	return nil
 }
 
+// RegisterResponse is an RPC message to registering clients containing info
+// needed to run.
+type RegisterResponse struct {
+	Env []string
+}
+
+// Status is called by the client to check the status of the job, so that it can
+// pack things up if the job is cancelled.
 func (r *Runner) Status(id int, reply *RunState) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -265,114 +249,68 @@ func (r *Runner) Status(id int, reply *RunState) error {
 	select {
 	case <-r.done:
 		return rpc.ErrShutdown
+
 	case <-r.interrupt:
 		*reply = RunStateInterrupt
 		return nil
+
 	default:
 		if id == 0 {
 			*reply = RunStateStart
-		} else if client, found := r.clients[id-1]; found && client.State == stateExited {
+			return nil
+		}
+		if client, found := r.clients[id-1]; found && client.State == stateExited {
 			*reply = RunStateStart
 		}
 		return nil
 	}
 }
 
-type Client struct {
-	ID         int
-	SocketPath string
-	client     *rpc.Client
-}
-
-var errNotConnected = errors.New("client not connected")
-
-func (c *Client) Connect(ctx context.Context) (*RegisterResponse, error) {
-	if c.SocketPath == "" {
-		c.SocketPath = defaultSocketPath
-	}
-
-	// Because k8s might run the containers "out of order", the server socket
-	// might not exist yet. Try to connect several times.
-	r := roko.NewRetrier(
-		roko.WithMaxAttempts(30),
-		roko.WithStrategy(roko.Constant(time.Second)),
-	)
-	client, err := roko.DoFunc(ctx, r, func(*roko.Retrier) (*rpc.Client, error) {
-		return rpc.DialHTTP("unix", c.SocketPath)
-	})
-	if err != nil {
-		return nil, err
-	}
-	c.client = client
-	var resp RegisterResponse
-	if err := c.client.Call("Runner.Register", c.ID, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (c *Client) Exit(exitStatus int) error {
-	if c.client == nil {
-		return errNotConnected
-	}
-	return c.client.Call("Runner.Exit", ExitCode{
-		ID:         c.ID,
-		ExitStatus: exitStatus,
-	}, nil)
-}
-
-// Write implements io.Writer
-func (c *Client) Write(p []byte) (int, error) {
-	if c.client == nil {
-		return 0, errNotConnected
-	}
-	n := len(p)
-	err := c.client.Call("Runner.WriteLogs", Logs{
-		Data: p,
-	}, nil)
-	return n, err
-}
-
-type WaitReadyResponse struct {
-	Err error
-	Status
-}
-
+// RunState is an RPC message that describes to a client whether the job should
+// continue waiting before running, start running, or stop running.
 type RunState int
 
 const (
+	// RunStateWait means the job is not ready to start executing yet.
 	RunStateWait RunState = iota
+
+	// RunStateStart means the job can begin.
 	RunStateStart
+
+	// RunStateInterrupt means the job is cancelled or should be terminated for
+	// some other reason.
 	RunStateInterrupt
 )
 
-var ErrInterrupt = errors.New("interrupt signal received")
+// ==== related types and consts ====
 
-func (c *Client) Await(ctx context.Context, desiredState RunState) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			var current RunState
-			if err := c.client.Call("Runner.Status", c.ID, &current); err != nil {
-				return err
-			}
-			if current == desiredState {
-				return nil
-			}
-			if current == RunStateInterrupt {
-				return ErrInterrupt
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Second):
-			}
-		}
-	}
+type clientResult struct {
+	ExitStatus int
+	State      clientState
 }
 
-func (c *Client) Close() {
-	c.client.Close()
+type clientState int
+
+const (
+	stateUnknown clientState = iota
+	stateConnected
+	stateExited
+)
+
+type waitStatus struct {
+	Code       int
+	SignalCode *int
+}
+
+func (w waitStatus) ExitStatus() int {
+	return w.Code
+}
+
+func (w waitStatus) Signal() syscall.Signal {
+	var signal syscall.Signal
+	return signal
+}
+
+func (w waitStatus) Signaled() bool {
+	return false
 }

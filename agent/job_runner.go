@@ -362,7 +362,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
 		}
-		r.process = kubernetes.New(r.agentLogger, kubernetes.Config{
+		r.process = kubernetes.NewRunner(r.agentLogger, kubernetes.RunnerConfig{
 			Stdout:      r.jobLogs,
 			Stderr:      r.jobLogs,
 			ClientCount: containerCount,

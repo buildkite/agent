@@ -135,7 +135,7 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 	t.Cleanup(func() {
 		os.RemoveAll(tempDir)
 	})
-	runner := New(logger.Discard, Config{
+	runner := NewRunner(logger.Discard, RunnerConfig{
 		SocketPath:  socketPath,
 		ClientCount: clientCount,
 	})
