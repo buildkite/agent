@@ -35,7 +35,7 @@ func NewRunner(l logger.Logger, c RunnerConfig) *Runner {
 	if c.SocketPath == "" {
 		c.SocketPath = defaultSocketPath
 	}
-	clients := make(map[int]*clientResult, c.ClientCount)
+	clients := make([]*clientResult, c.ClientCount)
 	for i := range c.ClientCount {
 		clients[i] = &clientResult{}
 	}
@@ -57,15 +57,17 @@ func NewRunner(l logger.Logger, c RunnerConfig) *Runner {
 type Runner struct {
 	logger   logger.Logger
 	conf     RunnerConfig
-	mu       sync.Mutex
 	listener net.Listener
 
-	started, done, interrupt               chan struct{}
-	startedOnce, closedOnce, interruptOnce sync.Once
+	// Channels that are closed at certain points in the job lifecycle
+	started, done, interrupt chan struct{}
+
+	// Guards the closing of the channels to ensure they are only closed once
+	startedOnce, doneOnce, interruptOnce sync.Once
 
 	server  *rpc.Server
 	mux     *http.ServeMux
-	clients map[int]*clientResult
+	clients []*clientResult
 }
 
 // Run runs the socket server.
@@ -93,40 +95,22 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 // Started returns a channel that is closed when the job has started running.
-func (r *Runner) Started() <-chan struct{} {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *Runner) Started() <-chan struct{} { return r.started }
 
-	return r.started
-}
+func (r *Runner) markStarted() { r.startedOnce.Do(func() { close(r.started) }) }
 
 // Done returns a channel that is closed when the job is completed.
-func (r *Runner) Done() <-chan struct{} {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	return r.done
-}
+func (r *Runner) Done() <-chan struct{} { return r.done }
 
 // Interrupts all clients, triggering graceful shutdown.
 func (r *Runner) Interrupt() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.interruptOnce.Do(func() {
-		close(r.interrupt)
-	})
+	r.interruptOnce.Do(func() { close(r.interrupt) })
 	return nil
 }
 
 // Terminate stops the RPC server, allowing Run to return immediately.
 func (r *Runner) Terminate() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.closedOnce.Do(func() {
-		close(r.done)
-	})
+	r.doneOnce.Do(func() { close(r.done) })
 	return nil
 }
 
@@ -134,22 +118,31 @@ func (r *Runner) Terminate() error {
 func (r *Runner) WaitStatus() process.WaitStatus {
 	ws := waitStatus{}
 	for _, client := range r.clients {
-		if client.ExitStatus != 0 {
-			return waitStatus{Code: client.ExitStatus}
+		client.mu.Lock()
+		exitStatus, state := client.ExitStatus, client.State
+		client.mu.Unlock()
+
+		if exitStatus != 0 {
+			return waitStatus{Code: exitStatus}
 		}
 
 		// use an unusual status code to distinguish this unusual state
-		if client.State == stateUnknown {
+		if state == stateNotYetConnected {
 			ws.Code -= 10
 		}
 	}
 	return ws
 }
 
-// ClientStateUnknown reports whether anhy of the client states is stateUnknown.
-func (r *Runner) ClientStateUnknown() bool {
+// AnyClientNotConnectedYet reports whether any of the clients have not yet
+// connected.
+func (r *Runner) AnyClientNotConnectedYet() bool {
 	for _, client := range r.clients {
-		if client.State == stateUnknown {
+		client.mu.Lock()
+		state := client.State
+		client.mu.Unlock()
+
+		if state == stateNotYetConnected {
 			return true
 		}
 	}
@@ -163,9 +156,7 @@ type Empty struct{}
 
 // WriteLogs is called to pass logs on to Buildkite.
 func (r *Runner) WriteLogs(args Logs, reply *Empty) error {
-	r.startedOnce.Do(func() {
-		close(r.started)
-	})
+	r.markStarted()
 	_, err := io.Copy(r.conf.Stdout, bytes.NewReader(args.Data))
 	return err
 }
@@ -177,30 +168,29 @@ type Logs struct {
 
 // Exit is called when the client exits.
 func (r *Runner) Exit(args ExitCode, reply *Empty) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	client, found := r.clients[args.ID]
-	if !found {
+	if args.ID < 0 || args.ID >= len(r.clients) {
 		return fmt.Errorf("unrecognized client id: %d", args.ID)
 	}
+	client := r.clients[args.ID]
 	r.logger.Info("client %d exited with code %d", args.ID, args.ExitStatus)
+
+	client.mu.Lock()
 	client.ExitStatus = args.ExitStatus
 	client.State = stateExited
-	if client.ExitStatus != 0 {
-		r.closedOnce.Do(func() {
-			close(r.done)
-		})
+	client.mu.Unlock()
+
+	if args.ExitStatus != 0 {
+		r.Terminate()
 	}
 
 	allExited := true
 	for _, client := range r.clients {
+		client.mu.Lock()
 		allExited = client.State == stateExited && allExited
+		client.mu.Unlock()
 	}
 	if allExited {
-		r.closedOnce.Do(func() {
-			close(r.done)
-		})
+		r.Terminate()
 	}
 	return nil
 }
@@ -215,16 +205,16 @@ type ExitCode struct {
 // contains the env vars that would normally be in the environment of the
 // bootstrap subcommand, particularly, the agent session token.
 func (r *Runner) Register(id int, reply *RegisterResponse) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.startedOnce.Do(func() {
-		close(r.started)
-	})
-	client, found := r.clients[id]
-	if !found {
-		return fmt.Errorf("client id %d not found", id)
+	if id < 0 || id >= len(r.clients) {
+		return fmt.Errorf("unrecognized client id: %d", id)
 	}
-	if client.State != stateUnknown {
+
+	r.markStarted()
+
+	client := r.clients[id]
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	if client.State != stateNotYetConnected {
 		return fmt.Errorf("client id %d already registered", id)
 	}
 	r.logger.Info("client %d connected", id)
@@ -242,9 +232,11 @@ type RegisterResponse struct {
 
 // Status is called by the client to check the status of the job, so that it can
 // pack things up if the job is cancelled.
+// If the client stops calling Status before calling Exit, we assume it is lost.
 func (r *Runner) Status(id int, reply *RunState) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	if id < 0 || id >= len(r.clients) {
+		return fmt.Errorf("unrecognized client id: %d", id)
+	}
 
 	select {
 	case <-r.done:
@@ -255,11 +247,17 @@ func (r *Runner) Status(id int, reply *RunState) error {
 		return nil
 
 	default:
+		// First client should start first.
 		if id == 0 {
 			*reply = RunStateStart
 			return nil
 		}
-		if client, found := r.clients[id-1]; found && client.State == stateExited {
+
+		// Client N can start after Client N-1 has exited.
+		client := r.clients[id-1]
+		client.mu.Lock()
+		defer client.mu.Unlock()
+		if client.State == stateExited {
 			*reply = RunStateStart
 		}
 		return nil
@@ -285,6 +283,7 @@ const (
 // ==== related types and consts ====
 
 type clientResult struct {
+	mu         sync.Mutex
 	ExitStatus int
 	State      clientState
 }
@@ -292,7 +291,7 @@ type clientResult struct {
 type clientState int
 
 const (
-	stateUnknown clientState = iota
+	stateNotYetConnected clientState = iota
 	stateConnected
 	stateExited
 )

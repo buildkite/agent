@@ -291,9 +291,9 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
 	// to the user as they may be the caused by errors in the pipeline definition.
 	k8sProcess, ok := r.process.(*kubernetes.Runner)
-	if ok && r.cancelled && !r.stopped && k8sProcess.ClientStateUnknown() {
+	if ok && r.cancelled && !r.stopped && k8sProcess.AnyClientNotConnectedYet() {
 		fmt.Fprintln(r.jobLogs, "+++ Unknown container exit status")
-		fmt.Fprintln(r.jobLogs, "Some containers had unknown exit statuses. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)")
+		fmt.Fprintln(r.jobLogs, "Some containers never connected to the agent. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)")
 	}
 
 	// Collect the finished process' exit status
