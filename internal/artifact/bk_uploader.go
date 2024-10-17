@@ -145,10 +145,12 @@ func (u *bkMultipartUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, 
 		return nil, err
 	}
 
-	// Content-Range is mostly for debugging purposes.
-	// Note thatContent-Ranges are 0-indexed and inclusive
-	// example: Content-Range: bytes 200-1000/67589
-	req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", u.offset, u.offset+u.size-1, u.artifact.FileSize))
+	// Content-Range would be useful for debugging purposes, but S3 will reject
+	// the request.
+	// Content-Length is needed to avoid Go adding Transfer-Encoding: chunked
+	// which would also cause S3 to reject the request (plus we know the part
+	// length in advance).
+	req.ContentLength = u.size
 	req.Header.Set("Content-Type", u.artifact.ContentType)
 
 	client := agenthttp.NewClient(
