@@ -58,20 +58,20 @@ var RedactorAddCommand = cli.Command{
 
     buildkite-agent redactor add [options...]
 
-  Description:
+Description:
 
-  This command may be used to parse a file for values to redact from a
-	running job's log output. If you dynamically fetch secrets during a job,
-	it is recommended that you use this command to ensure they will be
-	redacted from subsequent logs. Secrets fetched with the builtin
-	′secret get′ command do not require the use of this command, they will
-	be redacted automatically.
+This command may be used to parse a file for values to redact from a
+running job's log output. If you dynamically fetch secrets during a job,
+it is recommended that you use this command to ensure they will be
+redacted from subsequent logs. Secrets fetched with the builtin
+′secret get′ command do not require the use of this command, they will
+be redacted automatically.
 
-  Example:
+Example:
 
     $ buildkite-agent redactor add ...
 
-	Redacts something.`,
+Redacts something.`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name: "format",
