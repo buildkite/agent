@@ -12,6 +12,7 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
@@ -24,10 +25,11 @@ func init() {
 const defaultSocketPath = "/workspace/buildkite.sock"
 
 type RunnerConfig struct {
-	SocketPath     string
-	ClientCount    int
-	Stdout, Stderr io.Writer
-	Env            []string
+	SocketPath        string
+	ClientCount       int
+	Stdout, Stderr    io.Writer
+	Env               []string
+	ClientLostTimeout time.Duration
 }
 
 // NewRunner returns a runner, implementing the agent's jobRunner interface.
@@ -90,8 +92,48 @@ func (r *Runner) Run(ctx context.Context) error {
 	r.listener = l
 	go http.Serve(l, r.mux)
 
+	if r.conf.ClientLostTimeout > 0 {
+		go r.livenessCheck(ctx)
+	}
+
 	<-r.done
 	return nil
+}
+
+func (r *Runner) livenessCheck(ctx context.Context) {
+	// 100ms chosen for snappiness; we should easily be able to scan all
+	// clients quickly.
+	tick := time.NewTicker(100 * time.Millisecond)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-r.done:
+			return
+
+		case <-tick.C:
+			// Scan through the clients to see if any have become lost.
+			for id, client := range r.clients {
+				client.mu.Lock()
+
+				// If the client has connected, and was last heard from too
+				// long ago, it's lost.
+				// This usually happens if k8s has OOM-killed the container.
+				// The next client in the sequence won't have started yet, so
+				// we can just terminate.
+				lhf := time.Since(client.LastHeardFrom)
+				if client.State == StateConnected && lhf > r.conf.ClientLostTimeout {
+					r.logger.Error("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf)
+					client.State = StateLost
+					r.Terminate()
+				}
+				client.mu.Unlock()
+			}
+
+		}
+	}
 }
 
 // Started returns a channel that is closed when the job has started running.
@@ -116,7 +158,6 @@ func (r *Runner) Terminate() error {
 
 // WaitStatus returns a wait status that represents all the clients.
 func (r *Runner) WaitStatus() process.WaitStatus {
-	ws := waitStatus{}
 	for _, client := range r.clients {
 		client.mu.Lock()
 		exitStatus, state := client.ExitStatus, client.State
@@ -126,23 +167,25 @@ func (r *Runner) WaitStatus() process.WaitStatus {
 			return waitStatus{Code: exitStatus}
 		}
 
-		// use an unusual status code to distinguish this unusual state
-		if state == stateNotYetConnected {
-			ws.Code -= 10
+		// use an unusual status code to distinguish unusual states
+		switch state {
+		case StateLost:
+			return waitStatus{Code: -7}
+		case StateNotYetConnected:
+			return waitStatus{Code: -10}
 		}
 	}
-	return ws
+	return waitStatus{}
 }
 
-// AnyClientNotConnectedYet reports whether any of the clients have not yet
-// connected.
-func (r *Runner) AnyClientNotConnectedYet() bool {
+// AnyClientIn reports whether any of the clients are in a particular state.
+func (r *Runner) AnyClientIn(state ClientState) bool {
 	for _, client := range r.clients {
 		client.mu.Lock()
-		state := client.State
+		s := client.State
 		client.mu.Unlock()
 
-		if state == stateNotYetConnected {
+		if s == state {
 			return true
 		}
 	}
@@ -176,20 +219,25 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 
 	client.mu.Lock()
 	client.ExitStatus = args.ExitStatus
-	client.State = stateExited
+	client.State = StateExited
 	client.mu.Unlock()
 
 	if args.ExitStatus != 0 {
 		r.Terminate()
 	}
 
-	allExited := true
+	allTerminal := true
 	for _, client := range r.clients {
 		client.mu.Lock()
-		allExited = client.State == stateExited && allExited
+		if client.State == StateNotYetConnected || client.State == StateConnected {
+			allTerminal = false
+		}
 		client.mu.Unlock()
+		if !allTerminal {
+			break
+		}
 	}
-	if allExited {
+	if allTerminal {
 		r.Terminate()
 	}
 	return nil
@@ -214,11 +262,13 @@ func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	client := r.clients[id]
 	client.mu.Lock()
 	defer client.mu.Unlock()
-	if client.State != stateNotYetConnected {
+
+	if client.State != StateNotYetConnected {
 		return fmt.Errorf("client id %d already registered", id)
 	}
 	r.logger.Info("client %d connected", id)
-	client.State = stateConnected
+	client.LastHeardFrom = time.Now()
+	client.State = StateConnected
 
 	reply.Env = r.conf.Env
 	return nil
@@ -237,6 +287,11 @@ func (r *Runner) Status(id int, reply *RunState) error {
 	if id < 0 || id >= len(r.clients) {
 		return fmt.Errorf("unrecognized client id: %d", id)
 	}
+
+	client := r.clients[id]
+	client.mu.Lock()
+	client.LastHeardFrom = time.Now()
+	client.mu.Unlock()
 
 	select {
 	case <-r.done:
@@ -257,7 +312,7 @@ func (r *Runner) Status(id int, reply *RunState) error {
 		client := r.clients[id-1]
 		client.mu.Lock()
 		defer client.mu.Unlock()
-		if client.State == stateExited {
+		if client.State == StateExited {
 			*reply = RunStateStart
 		}
 		return nil
@@ -283,17 +338,19 @@ const (
 // ==== related types and consts ====
 
 type clientResult struct {
-	mu         sync.Mutex
-	ExitStatus int
-	State      clientState
+	mu            sync.Mutex
+	ExitStatus    int
+	State         ClientState
+	LastHeardFrom time.Time
 }
 
-type clientState int
+type ClientState int
 
 const (
-	stateNotYetConnected clientState = iota
-	stateConnected
-	stateExited
+	StateNotYetConnected ClientState = iota
+	StateConnected
+	StateExited
+	StateLost
 )
 
 type waitStatus struct {

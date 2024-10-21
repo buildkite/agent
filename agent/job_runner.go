@@ -363,10 +363,11 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
 		}
 		r.process = kubernetes.NewRunner(r.agentLogger, kubernetes.RunnerConfig{
-			Stdout:      r.jobLogs,
-			Stderr:      r.jobLogs,
-			ClientCount: containerCount,
-			Env:         processEnv,
+			Stdout:            r.jobLogs,
+			Stderr:            r.jobLogs,
+			ClientCount:       containerCount,
+			Env:               processEnv,
+			ClientLostTimeout: 30 * time.Second,
 		})
 	} else { // not Kubernetes
 		// The bootstrap-script gets parsed based on the operating system
