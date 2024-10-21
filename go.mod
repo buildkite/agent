@@ -11,7 +11,7 @@ require (
 	github.com/Khan/genqlient v0.7.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2 v1.32.2
-	github.com/aws/aws-sdk-go-v2/config v1.27.43
+	github.com/aws/aws-sdk-go-v2/config v1.28.0
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.17
 	github.com/aws/aws-sdk-go-v2/service/kms v1.37.2
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
@@ -54,7 +54,7 @@ require (
 	golang.org/x/oauth2 v0.23.0
 	golang.org/x/sys v0.26.0
 	golang.org/x/term v0.25.0
-	google.golang.org/api v0.200.0
+	google.golang.org/api v0.201.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.69.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
