@@ -235,6 +235,27 @@ func TestReplacerMultiLine(t *testing.T) {
 	}
 }
 
+func TestReplacerMultiLineCrLf(t *testing.T) {
+	t.Parallel()
+
+	var buf strings.Builder
+
+	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
+
+	fmt.Fprint(replacer, "lalalala\r\n")
+	fmt.Fprint(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----\r\n")
+	fmt.Fprint(replacer, "asdf\r\n")
+	fmt.Fprint(replacer, "-----END OPENSSH PRIVATE KEY-----\r\n")
+	fmt.Fprint(replacer, "lalalala\r\n")
+	replacer.Flush()
+
+	want := "lalalala\r\n[REDACTED]lalalala\r\n"
+
+	if diff := cmp.Diff(buf.String(), want); diff != "" {
+		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestAddingNeedles(t *testing.T) {
 	t.Parallel()
 
