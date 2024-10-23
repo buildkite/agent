@@ -122,16 +122,29 @@ func (r *Replacer) Write(b []byte) (int, error) {
 		// In the middle of matching?
 		for _, s := range r.partialMatches {
 			// Does the needle match on this byte?
-			if c != s.needle[s.matched] {
-				// No - drop this partial match.
+			switch s.needle[s.position] {
+			case c:
+				// It matched!
+				s.position++
+
+			case '\n':
+				// Special-case \n since PTY cooked-mode turns \n into \r\n.
+				// Allow repetitions of \r, as long as it is followed by \n
+				// (so don't increment s.position - \n should be matched later.
+				if c != '\r' {
+					continue
+				}
+
+			default:
+				// Did not match. Drop this partial match.
 				continue
 			}
 
-			// It matched!
+			// It's one more byte from the stream that matched.
 			s.matched++
 
 			// Have we fully matched this needle?
-			if s.matched < len(s.needle) {
+			if s.position < len(s.needle) {
 				// This state survives for another byte.
 				r.nextMatches = append(r.nextMatches, s)
 				continue
@@ -139,7 +152,7 @@ func (r *Replacer) Write(b []byte) (int, error) {
 
 			// Match complete; save range to redact.
 			r.completedMatches = append(r.completedMatches, subrange{
-				from: bufidx - len(s.needle) + 1,
+				from: bufidx - s.matched + 1,
 				to:   bufidx + 1,
 			})
 		}
@@ -156,8 +169,9 @@ func (r *Replacer) Write(b []byte) (int, error) {
 				continue
 			}
 			r.nextMatches = append(r.nextMatches, partialMatch{
-				needle:  s,
-				matched: 1,
+				needle:   s,
+				matched:  1,
+				position: 1,
 			})
 		}
 
@@ -356,8 +370,9 @@ func (r *Replacer) unsafeAdd(needles []string) {
 
 // partialMatch tracks how far through one of the needles we have matched.
 type partialMatch struct {
-	needle  string
-	matched int
+	needle   string
+	matched  int // number of bytes i the stream matched
+	position int // position within the needle matched up to
 }
 
 // subrange designates a contiguous range in a buffer (slice indexes: inclusive
