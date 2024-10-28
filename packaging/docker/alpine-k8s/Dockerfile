@@ -18,6 +18,7 @@ RUN apk update && apk add --no-cache \
     run-parts \
     su-exec \
     tini \
+    tini-static \
     tzdata
 
 COPY docker-compose /usr/local/bin/docker-compose
