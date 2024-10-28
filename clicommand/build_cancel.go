@@ -23,10 +23,7 @@ Cancel a running build.
 Example:
 
     # Cancels the current build
-    $ buildkite-agent build cancel
-
-    # Cancel a different build
-    $ buildkite-agent build cancel --build "01234567-89ab-cdef-0123-456789abcdef"`
+    $ buildkite-agent build cancel`
 
 type BuildCancelConfig struct {
 	Build string `cli:"build" validate:"required"`
