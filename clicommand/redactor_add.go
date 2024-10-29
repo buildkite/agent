@@ -56,7 +56,7 @@ var RedactorAddCommand = cli.Command{
 	Usage: "Add values to redact from a job's log output",
 	Description: `Usage:
 
-    buildkite-agent redactor add [options...]
+    buildkite-agent redactor add [options...] [file-contents-to-redact]
 
 Description:
 
@@ -69,9 +69,23 @@ be redacted automatically.
 
 Example:
 
-    $ buildkite-agent redactor add ...
+To redact the verbatim contents of the file 'id_ed25519' from future logs:
 
-Redacts something.`,
+    $ buildkite-agent redactor add id_ed25519
+
+To redact the string 'llamasecret' from future logs:
+
+		$ echo llamasecret | buildkite-agent redactor add
+
+To redact multiple secrets from future logs in one command, create a flat
+JSON object file (for example, 'my-secrets.json', with multiple "key" values,
+one for each secret:
+
+		$ echo '{"key":"secret1","key":"secret2"}' | buildkite-agent redactor add --format=json
+
+Or
+
+    $ buildkite-agent redactor add --format=json my-secrets.json`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name: "format",
