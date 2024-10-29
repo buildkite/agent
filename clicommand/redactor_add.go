@@ -52,9 +52,40 @@ type RedactorAddConfig struct {
 }
 
 var RedactorAddCommand = cli.Command{
-	Name:        "add",
-	Usage:       "Add values to redact from a job's log output",
-	Description: "This may be used to parse a file for values to redact from a running job's log output. If you dynamically fetch secrets during a job, it is recommended that you use this command to ensure they will be redacted from subsequent logs. Secrets fetched with the builtin ′secret get′ command do not require the use of this command, they will be redacted automatically.",
+	Name:  "add",
+	Usage: "Add values to redact from a job's log output",
+	Description: `Usage:
+
+    buildkite-agent redactor add [options...] [file-with-content-to-redact]
+
+Description:
+
+This command may be used to parse a file for values to redact from a
+running job's log output. If you dynamically fetch secrets during a job,
+it is recommended that you use this command to ensure they will be
+redacted from subsequent logs. Secrets fetched with the builtin
+′secret get′ command do not require the use of this command, they will
+be redacted automatically.
+
+Example:
+
+To redact the verbatim contents of the file 'id_ed25519' from future logs:
+
+    $ buildkite-agent redactor add id_ed25519
+
+To redact the string 'llamasecret' from future logs:
+
+		$ echo llamasecret | buildkite-agent redactor add
+
+To redact multiple secrets from future logs in one command, create a flat
+JSON object file (for example, 'my-secrets.json'), with multiple "key" values,
+one for each secret:
+
+		$ echo '{"key":"secret1","key":"secret2"}' | buildkite-agent redactor add --format=json
+
+Or
+
+    $ buildkite-agent redactor add --format=json my-secrets.json`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name: "format",
