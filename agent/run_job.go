@@ -290,10 +290,19 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 	// Intended to capture situations where the job-exec (aka bootstrap) container did not
 	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
 	// to the user as they may be the caused by errors in the pipeline definition.
-	k8sProcess, ok := r.process.(*kubernetes.Runner)
-	if ok && r.cancelled && !r.stopped && k8sProcess.ClientStateUnknown() {
-		fmt.Fprintln(r.jobLogs, "+++ Unknown container exit status")
-		fmt.Fprintln(r.jobLogs, "Some containers had unknown exit statuses. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)")
+	k8sProcess, isK8s := r.process.(*kubernetes.Runner)
+	if isK8s && !r.stopped {
+		switch {
+		case r.cancelled && k8sProcess.AnyClientIn(kubernetes.StateNotYetConnected):
+			fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
+One or more containers never connected to the agent. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)?
+`)
+		case k8sProcess.AnyClientIn(kubernetes.StateLost):
+			fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
+One or more containers connected to the agent, but then stopped communicating without exiting normally. Perhaps the container was OOM-killed?
+`)
+		}
+
 	}
 
 	// Collect the finished process' exit status

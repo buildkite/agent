@@ -24,13 +24,6 @@ func TestOrderedClients(t *testing.T) {
 	client2 := &Client{ID: 2}
 	clients := []*Client{client0, client1, client2}
 
-	// wait for runner to listen
-	require.Eventually(t, func() bool {
-		_, err := os.Lstat(socketPath)
-		return err == nil
-
-	}, time.Second*10, time.Millisecond, "expected socket file to exist")
-
 	for _, client := range clients {
 		client.SocketPath = socketPath
 		require.NoError(t, connect(client))
@@ -60,19 +53,39 @@ func TestOrderedClients(t *testing.T) {
 	}
 }
 
+func TestLivenessCheck(t *testing.T) {
+	runner := newRunner(t, 2)
+	socketPath := runner.conf.SocketPath
+
+	client0 := &Client{ID: 0}
+	client1 := &Client{ID: 1}
+	clients := []*Client{client0, client1}
+
+	for _, client := range clients {
+		client.SocketPath = socketPath
+		require.NoError(t, connect(client))
+		t.Cleanup(client.Close)
+	}
+	ctx := context.Background()
+	require.NoError(t, client0.Await(ctx, RunStateStart))
+	require.NoError(t, client1.Await(ctx, RunStateWait))
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	select {
+	case <-runner.Done():
+		break
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for client0 to be declared lost and job terminated")
+	}
+}
+
 func TestDuplicateClients(t *testing.T) {
 	runner := newRunner(t, 2)
 	socketPath := runner.conf.SocketPath
 
 	client0 := &Client{ID: 0, SocketPath: socketPath}
 	client1 := &Client{ID: 0, SocketPath: socketPath}
-
-	// wait for runner to listen
-	require.Eventually(t, func() bool {
-		_, err := os.Lstat(socketPath)
-		return err == nil
-
-	}, time.Second*10, time.Millisecond, "expected socket file to exist")
 
 	require.NoError(t, connect(client0))
 	require.Error(t, connect(client1), "expected an error when connecting a client with a duplicate ID")
@@ -135,9 +148,10 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 	t.Cleanup(func() {
 		os.RemoveAll(tempDir)
 	})
-	runner := New(logger.Discard, Config{
-		SocketPath:  socketPath,
-		ClientCount: clientCount,
+	runner := NewRunner(logger.Discard, RunnerConfig{
+		SocketPath:        socketPath,
+		ClientCount:       clientCount,
+		ClientLostTimeout: 2 * time.Second,
 	})
 	runnerCtx, cancelRunner := context.WithCancel(context.Background())
 	go runner.Run(runnerCtx)
