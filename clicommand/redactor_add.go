@@ -56,7 +56,7 @@ var RedactorAddCommand = cli.Command{
 	Usage: "Add values to redact from a job's log output",
 	Description: `Usage:
 
-    buildkite-agent redactor add [options...] [file-contents-to-redact]
+    buildkite-agent redactor add [options...] [file-with-content-to-redact]
 
 Description:
 
