@@ -41,20 +41,24 @@ if ([string]::IsNullOrEmpty($url)) {
     if($null -eq $version){
       $version = "latest"
     }
-    $releaseInfoUrl = "https://buildkite.com/agent/releases/$($version)?platform=windows&arch=$arch"
-    if($beta) {
-        $releaseInfoUrl = $releaseInfoUrl + "&prerelease=true"
+    if ($version -eq "latest") {
+      $releaseInfoUrl = "https://buildkite.com/agent/releases/$($version)?platform=windows&arch=$arch"
+      if($beta) {
+          $releaseInfoUrl = $releaseInfoUrl + "&prerelease=true"
+      }
+      Write-Host "Finding latest release"
+  
+      $resp = Invoke-WebRequest -Uri "$releaseInfoUrl" -UseBasicParsing -Method GET
+  
+      $releaseInfo = @{}
+      foreach ($line in $resp.Content.Split("`n")) {
+          $info = $line -split "="
+          $releaseInfo.add($info[0],$info[1])
+      }
+      $url = $releaseInfo.url
+    } else {
+      $url = "https://github.com/buildkite/agent/releases/download/v$($version)/buildkite-agent-windows-$arch-$($version).zip"
     }
-    Write-Host "Finding latest release"
-
-    $resp = Invoke-WebRequest -Uri "$releaseInfoUrl" -UseBasicParsing -Method GET
-
-    $releaseInfo = @{}
-    foreach ($line in $resp.Content.Split("`n")) {
-        $info = $line -split "="
-        $releaseInfo.add($info[0],$info[1])
-    }
-    $url = $releaseInfo.url
 }
 
 # Github requires TLS1.2
