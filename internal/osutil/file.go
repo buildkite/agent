@@ -29,3 +29,10 @@ func FileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil
 }
+
+// IsEmptyDir reports whether the path is an empty directory. Any error returned
+// by [os.ReadDir] causes the result to be false.
+func IsEmptyDir(path string) bool {
+	ents, err := os.ReadDir(path)
+	return err == nil && len(ents) == 0
+}

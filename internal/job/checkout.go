@@ -318,8 +318,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	}
 	defer mirrorCloneLock.Unlock()
 
-	// If we don't have a mirror, we need to clone it
-	if !osutil.FileExists(mirrorDir) {
+	// If we don't have a mirror, or it's empty for some reason, we need to
+	// clone it
+	if !osutil.FileExists(mirrorDir) || osutil.IsEmptyDir(mirrorDir) {
 		e.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
 		flags := "--mirror " + e.GitCloneMirrorFlags
 		if err := gitClone(ctx, e.shell, flags, repository, mirrorDir); err != nil {
