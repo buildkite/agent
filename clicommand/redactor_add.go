@@ -81,11 +81,11 @@ To redact multiple secrets from future logs in one command, create a flat
 JSON object file (for example, 'my-secrets.json'), with multiple "key" values,
 one for each secret:
 
-		$ echo '{"key":"secret1","key":"secret2"}' | buildkite-agent redactor add --format=json
+		$ echo '{"key":"secret1","key":"secret2"}' | buildkite-agent redactor add --format json
 
 Or
 
-    $ buildkite-agent redactor add --format=json my-secrets.json`,
+    $ buildkite-agent redactor add --format json my-secrets.json`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name: "format",
