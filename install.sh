@@ -18,8 +18,6 @@ echo -e "\033[33m
                                                 __/ |
                                                |___/\033[0m"
 
-echo -e "Finding latest release..."
-
 SYSTEM="$(uname -s | awk '{print tolower($0)}')"
 MACHINE="$(uname -m | awk '{print tolower($0)}')"
 
@@ -73,11 +71,6 @@ else
   esac
 fi
 
-RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=${PLATFORM}&arch=${ARCH}&system=${SYSTEM}&machine=${MACHINE}"
-if [[ "${BETA:-}" == "true" ]]; then
-  RELEASE_INFO_URL="${RELEASE_INFO_URL}&prerelease=true"
-fi
-
 if command -v curl >/dev/null 2>&1 ; then
   HTTP_GET="curl -LsS"
 elif command -v wget >/dev/null 2>&1 ; then
@@ -88,11 +81,24 @@ else
   exit 1
 fi
 
-LATEST_RELEASE="$(eval "${HTTP_GET} '${RELEASE_INFO_URL}'")"
+if [[ "${BUILDKITE_AGENT_VERSION:-"latest"}" == "latest" ]]; then
+    echo -e "Finding latest release..."
 
-VERSION="$(          echo "${LATEST_RELEASE}" | awk -F= '/version=/  { print $2 }')"
-DOWNLOAD_FILENAME="$(echo "${LATEST_RELEASE}" | awk -F= '/filename=/ { print $2 }')"
-DOWNLOAD_URL="$(     echo "${LATEST_RELEASE}" | awk -F= '/url=/      { print $2 }')"
+    RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=${PLATFORM}&arch=${ARCH}&system=${SYSTEM}&machine=${MACHINE}"
+    if [[ "${BETA:-}" == "true" ]]; then
+      RELEASE_INFO_URL="${RELEASE_INFO_URL}&prerelease=true"
+    fi
+
+    LATEST_RELEASE="$(eval "${HTTP_GET} '${RELEASE_INFO_URL}'")"
+
+    VERSION="$(          echo "${LATEST_RELEASE}" | awk -F= '/version=/  { print $2 }')"
+    DOWNLOAD_FILENAME="$(echo "${LATEST_RELEASE}" | awk -F= '/filename=/ { print $2 }')"
+    DOWNLOAD_URL="$(     echo "${LATEST_RELEASE}" | awk -F= '/url=/      { print $2 }')"
+else
+    VERSION=$BUILDKITE_AGENT_VERSION
+    DOWNLOAD_FILENAME="buildkite-agent-${PLATFORM}-${ARCH}-${VERSION}.tar.gz"
+    DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v${VERSION}/${DOWNLOAD_FILENAME}"
+fi
 
 if [[ "${DISABLE_CHECKSUM_VERIFICATION:-}" != "true" ]]; then
   if command -v openssl >/dev/null 2>&1 ; then
