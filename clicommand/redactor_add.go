@@ -90,7 +90,7 @@ Or
 		cli.StringFlag{
 			Name: "format",
 			Usage: fmt.Sprintf(
-				"The format for the input, one of: %s. ′none′ will add the entire input as a to the redactor, save for leading and trailing whitespace, ′json′ will parse it a string valued JSON Object, where each value of each key will be added to the redactor.",
+				"The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
 				secretsFormats,
 			),
 			EnvVar: "BUILDKITE_AGENT_REDACT_ADD_FORMAT",
