@@ -88,11 +88,8 @@ Or
     $ buildkite-agent redactor add --format json my-secrets.json`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name: "format",
-			Usage: fmt.Sprintf(
-				"The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
-				secretsFormats,
-			),
+			Name:   "format",
+			Usage:  "The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
 			EnvVar: "BUILDKITE_AGENT_REDACT_ADD_FORMAT",
 			Value:  FormatStringNone,
 		},
