@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -33,6 +33,7 @@ import (
 
 const lockRetryDuration = time.Second
 
+// ErrShellNotStarted is returned when the shell has not started a process.
 var ErrShellNotStarted = errors.New("shell not started")
 
 // Shell represents a virtual shell, handles logging, executing commands and
@@ -63,9 +64,8 @@ type Shell struct {
 	// Current working directory that shell commands get executed in
 	wd string
 
-	// Currently running command
-	cmd     *command
-	cmdLock sync.Mutex
+	// The currently-running or last-run process.
+	proc atomic.Pointer[process.Process]
 
 	// The signal to use to interrupt the command
 	InterruptSignal process.Signal
@@ -120,10 +120,7 @@ func New(opts ...newShellOpt) (*Shell, error) {
 //
 //	sh.CloneWithStdin(strings.NewReader("hello world")).Run("cat")
 func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
-	// cargo-culted cmdLock, not sure if it's needed
-	s.cmdLock.Lock()
-	defer s.cmdLock.Unlock()
-	// Can't copy struct like `newsh := *s` because sync.Mutex can't be copied.
+	// Can't copy struct like `newsh := *s` because atomics can't be copied.
 	return &Shell{
 		Logger:            s.Logger,
 		Env:               s.Env,
@@ -180,37 +177,21 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	return filepath.Abs(absolutePath)
 }
 
-// Interrupt running command
-func (s *Shell) Interrupt() {
-	s.cmdLock.Lock()
-	defer s.cmdLock.Unlock()
+// Interrupt interrupts the running process, if there is one.
+func (s *Shell) Interrupt() { s.proc.Load().Interrupt() }
 
-	if s.cmd != nil && s.cmd.proc != nil {
-		s.cmd.proc.Interrupt()
-	}
-}
-
-// Terminate running command
-func (s *Shell) Terminate() {
-	s.cmdLock.Lock()
-	defer s.cmdLock.Unlock()
-
-	if s.cmd != nil && s.cmd.proc != nil {
-		s.cmd.proc.Terminate()
-	}
-}
+// Terminate terminates the running process, if there is one.
+func (s *Shell) Terminate() { s.proc.Load().Terminate() }
 
 // Returns the WaitStatus of the shell's process.
 //
-// The shell must have been started.
+// The shell must have started at least one process.
 func (s *Shell) WaitStatus() (process.WaitStatus, error) {
-	s.cmdLock.Lock()
-	defer s.cmdLock.Unlock()
-
-	if s.cmd == nil || s.cmd.proc == nil {
+	p := s.proc.Load()
+	if p == nil {
 		return nil, ErrShellNotStarted
 	}
-	return s.cmd.proc.WaitStatus(), nil
+	return p.WaitStatus(), nil
 }
 
 // LockFile is a pid-based lock for cross-process locking
@@ -288,15 +269,15 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 		s.Promptf("%s < /dev/stdin", formatted)
 	}
 
-	cmd, err := s.buildCommand(command, arg...)
+	cmdCfg, err := s.buildCommand(command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
 	}
 
-	cmd.Env = append(cmd.Env, environ.ToSlice()...)
+	cmdCfg.Env = append(cmdCfg.Env, environ.ToSlice()...)
 
-	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
+	return s.executeCommand(ctx, cmdCfg, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
@@ -465,54 +446,42 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 		args = nil
 	}
 
-	cmd, err := s.buildCommand(command, args...)
+	cmdCfg, err := s.buildCommand(command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
 	}
 
 	// Combine the two slices of env, let the latter overwrite the former
-	environ := env.FromSlice(cmd.Env)
+	environ := env.FromSlice(cmdCfg.Env)
 	environ.Merge(extra)
-	cmd.Env = environ.ToSlice()
+	cmdCfg.Env = environ.ToSlice()
 
-	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
+	return s.executeCommand(ctx, cmdCfg, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
 	})
 }
 
-type command struct {
-	process.Config
-	proc *process.Process
-}
-
-// buildCommand returns a command that can later be executed
-func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
+// buildCommand returns a command that can later be executed.
+func (s *Shell) buildCommand(name string, arg ...string) (process.Config, error) {
 	// Always use absolute path as Windows has a hard time
 	// finding executables in its path
 	absPath, err := s.AbsolutePath(name)
 	if err != nil {
-		return nil, err
+		return process.Config{}, err
 	}
 
-	cfg := process.Config{
+	return process.Config{
 		Path:              absPath,
 		Args:              arg,
-		Env:               s.Env.ToSlice(),
+		Env:               append(s.Env.ToSlice(), "PWD="+s.wd),
 		Stdin:             s.stdin,
 		Dir:               s.wd,
 		InterruptSignal:   s.InterruptSignal,
 		SignalGracePeriod: s.SignalGracePeriod,
-	}
-
-	// Add env that commands expect a shell to set
-	cfg.Env = append(cfg.Env,
-		"PWD="+s.wd,
-	)
-
-	return &command{Config: cfg}, nil
+	}, nil
 }
 
 type executeFlags struct {
@@ -556,20 +525,16 @@ func round(d time.Duration) time.Duration {
 
 func (s *Shell) executeCommand(
 	ctx context.Context,
-	cmd *command,
+	cmdCfg process.Config,
 	w io.Writer,
 	flags executeFlags,
 ) error {
 	// Combine the two slices of env, let the latter overwrite the former
-	tracedEnv := env.FromSlice(cmd.Env)
+	tracedEnv := env.FromSlice(cmdCfg.Env)
 	s.injectTraceCtx(ctx, tracedEnv)
-	cmd.Env = tracedEnv.ToSlice()
+	cmdCfg.Env = tracedEnv.ToSlice()
 
-	s.cmdLock.Lock()
-	s.cmd = cmd
-	s.cmdLock.Unlock()
-
-	cmdStr := process.FormatCommand(cmd.Path, cmd.Args)
+	cmdStr := process.FormatCommand(cmdCfg.Path, cmdCfg.Args)
 
 	if s.Debug {
 		t := time.Now()
@@ -578,37 +543,32 @@ func (s *Shell) executeCommand(
 		}()
 	}
 
-	cfg := cmd.Config
-
 	// Modify process config based on execution flags
 	if flags.PTY {
-		cfg.PTY = true
-		cfg.Stdout = w
+		cmdCfg.PTY = true
+		cmdCfg.Stdout = w
 	} else {
 		// Show stdout if requested or via debug
 		if flags.Stdout {
-			cfg.Stdout = w
+			cmdCfg.Stdout = w
 		} else if s.Debug {
 			stdOutStreamer := NewLoggerStreamer(s.Logger)
 			defer stdOutStreamer.Close()
-			cfg.Stdout = stdOutStreamer
+			cmdCfg.Stdout = stdOutStreamer
 		}
 
 		// Show stderr if requested or via debug
 		if flags.Stderr {
-			cfg.Stderr = w
+			cmdCfg.Stderr = w
 		} else if s.Debug {
 			stdErrStreamer := NewLoggerStreamer(s.Logger)
 			defer stdErrStreamer.Close()
-			cfg.Stderr = stdErrStreamer
+			cmdCfg.Stderr = stdErrStreamer
 		}
 	}
 
-	p := process.New(logger.Discard, cfg)
-
-	s.cmdLock.Lock()
-	s.cmd.proc = p
-	s.cmdLock.Unlock()
+	p := process.New(logger.Discard, cmdCfg)
+	s.proc.Store(p)
 
 	if err := p.Run(ctx); err != nil {
 		return fmt.Errorf("error running %q: %w", cmdStr, err)
@@ -635,7 +595,7 @@ func ExitCode(err error) int {
 }
 
 // IsExitSignaled returns true if the error is an ExitError that was
-// caused by receiving a signal
+// caused by receiving a signal.
 func IsExitSignaled(err error) bool {
 	if err == nil {
 		return false
