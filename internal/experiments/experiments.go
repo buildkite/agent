@@ -30,7 +30,6 @@ const (
 	NormalisedUploadPaths          = "normalised-upload-paths"
 	OverrideZeroExitOnCancel       = "override-zero-exit-on-cancel"
 	PTYRaw                         = "pty-raw"
-	PolyglotHooks                  = "polyglot-hooks"
 	ResolveCommitAfterCheckout     = "resolve-commit-after-checkout"
 	UseZZGlob                      = "use-zzglob"
 
@@ -43,6 +42,7 @@ const (
 	IsolatedPluginCheckout = "isolated-plugin-checkout"
 	JobAPI                 = "job-api"
 	KubernetesExec         = "kubernetes-exec"
+	PolyglotHooks          = "polyglot-hooks"
 )
 
 var (
@@ -53,7 +53,6 @@ var (
 		InterpolationPrefersRuntimeEnv: {},
 		NormalisedUploadPaths:          {},
 		OverrideZeroExitOnCancel:       {},
-		PolyglotHooks:                  {},
 		ResolveCommitAfterCheckout:     {},
 		UseZZGlob:                      {},
 	}
@@ -67,6 +66,7 @@ var (
 		IsolatedPluginCheckout: standardPromotionMsg(IsolatedPluginCheckout, "v3.67.0"),
 		JobAPI:                 standardPromotionMsg(JobAPI, "v3.64.0"),
 		KubernetesExec:         "The kubernetes-exec experiment has been replaced with the --kubernetes-exec flag as of agent v3.74.0",
+		PolyglotHooks:          standardPromotionMsg(PolyglotHooks, "v3.85.0"),
 	}
 
 	// Used to track experiments possibly in use.
