@@ -73,10 +73,10 @@ type Shell struct {
 	// input.
 	stdin io.Reader
 
-	// Where stdout (and sometimes the stderr) of the process is usually written
-	// (like a real shell, that displays both in the same stream).
+	// Where stdout (and usually stderr) of the process is written
+	// (similar to a real shell, that displays both in the same stream).
 	// Defaults to [os.Stdout].
-	Writer io.Writer
+	stdout io.Writer
 
 	// How to encode trace contexts.
 	traceContextCodec tracetools.Codec
@@ -93,7 +93,7 @@ func WithDryRun(d bool) NewShellOpt              { return func(s *Shell) { s.dry
 func WithEnv(e *env.Environment) NewShellOpt     { return func(s *Shell) { s.Env = e } }
 func WithLogger(l Logger) NewShellOpt            { return func(s *Shell) { s.Logger = l } }
 func WithPTY(pty bool) NewShellOpt               { return func(s *Shell) { s.pty = pty } }
-func WithStdout(w io.Writer) NewShellOpt         { return func(s *Shell) { s.Writer = w } }
+func WithStdout(w io.Writer) NewShellOpt         { return func(s *Shell) { s.stdout = w } }
 func WithWD(wd string) NewShellOpt               { return func(s *Shell) { s.wd = wd } }
 
 func WithInterruptSignal(sig process.Signal) NewShellOpt {
@@ -128,8 +128,8 @@ func New(opts ...NewShellOpt) (*Shell, error) {
 	if shell.Env == nil {
 		shell.Env = env.FromSlice(os.Environ())
 	}
-	if shell.Writer == nil {
-		shell.Writer = os.Stdout
+	if shell.stdout == nil {
+		shell.stdout = os.Stdout
 	}
 	if shell.traceContextCodec == nil {
 		shell.traceContextCodec = tracetools.CodecGob{}
@@ -157,7 +157,7 @@ func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
 		Logger:            s.Logger,
 		Env:               s.Env,
 		stdin:             r, // our new stdin
-		Writer:            s.Writer,
+		stdout:            s.stdout,
 		wd:                s.wd,
 		interruptSignal:   s.interruptSignal,
 		signalGracePeriod: s.signalGracePeriod,
@@ -309,7 +309,7 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 
 	cmdCfg.Env = append(cmdCfg.Env, environ.ToSlice()...)
 
-	return s.executeCommand(ctx, cmdCfg, s.Writer, s.Writer, s.pty)
+	return s.executeCommand(ctx, cmdCfg, s.stdout, s.stdout, s.pty)
 }
 
 // RunWithOlfactor runs a command, writes stdout and stderr to s.stdout,
@@ -332,7 +332,7 @@ func (s *Shell) RunWithOlfactor(ctx context.Context, smells []string, command st
 		return nil, err
 	}
 
-	w, o := olfactor.New(s.Writer, smells)
+	w, o := olfactor.New(s.stdout, smells)
 	return o, s.executeCommand(ctx, cmd, w, w, s.pty)
 }
 
@@ -345,7 +345,7 @@ func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...str
 		return err
 	}
 
-	return s.executeCommand(ctx, cmd, s.Writer, s.Writer, s.pty)
+	return s.executeCommand(ctx, cmd, s.stdout, s.stdout, s.pty)
 }
 
 // RunAndCapture runs a command and captures stdout to a string. Stdout is captured, but
@@ -467,7 +467,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 	environ.Merge(extra)
 	cmdCfg.Env = environ.ToSlice()
 
-	return s.executeCommand(ctx, cmdCfg, s.Writer, s.Writer, s.pty)
+	return s.executeCommand(ctx, cmdCfg, s.stdout, s.stdout, s.pty)
 }
 
 // buildCommand returns a command that can later be executed.

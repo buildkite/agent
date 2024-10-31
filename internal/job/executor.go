@@ -83,24 +83,8 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Check if not nil to allow for tests to overwrite shell
-	if e.shell == nil {
-		var err error
-		logger := shell.StderrLogger
-		logger.DisabledWarningIDs = e.DisabledWarnings
-		e.shell, err = shell.New(
-			shell.WithDebug(e.ExecutorConfig.Debug),
-			shell.WithInterruptSignal(e.ExecutorConfig.CancelSignal),
-			shell.WithLogger(logger),
-			shell.WithPTY(e.ExecutorConfig.RunInPty),
-			shell.WithSignalGracePeriod(e.ExecutorConfig.SignalGracePeriod),
-			shell.WithTraceContextCodec(e.TraceContextCodec),
-		)
-		if err != nil {
-			fmt.Printf("Error creating shell: %v", err)
-			return 1
-		}
-	}
+	// Start with stdout and stderr as their usual selves.
+	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
 
 	if e.KubernetesExec {
 		socket := &kubernetes.Client{ID: e.KubernetesContainerID}
@@ -108,6 +92,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
 			return 1
 		}
+
+		// Tee both stdout and stderr to the k8s socket client, so that the
+		// logs are shipped to the agent container and then to Buildkite, but
+		// are also visible as container logs.
+		stdout = io.MultiWriter(stdout, socket)
+		stderr = io.MultiWriter(stderr, socket)
+
 		defer func() {
 			_ = socket.Exit(exitCode)
 		}()
@@ -115,7 +106,27 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// setup the redactors here once and for the life of the executor
 	// they will be flushed at the end of each hook
-	e.setupRedactors()
+	environ := env.FromSlice(os.Environ())
+	preRedactedStdout, preRedactedLogger := e.setupRedactors(environ, stdout, stderr)
+
+	// Check if not nil to allow for tests to overwrite shell.
+	if e.shell == nil {
+		sh, err := shell.New(
+			shell.WithDebug(e.ExecutorConfig.Debug),
+			shell.WithEnv(environ),
+			shell.WithLogger(preRedactedLogger), // shell -> logger -> redactor -> real stderr
+			shell.WithInterruptSignal(e.ExecutorConfig.CancelSignal),
+			shell.WithPTY(e.ExecutorConfig.RunInPty),
+			shell.WithStdout(preRedactedStdout), // shell -> redactor -> real stdout
+			shell.WithSignalGracePeriod(e.ExecutorConfig.SignalGracePeriod),
+			shell.WithTraceContextCodec(e.TraceContextCodec),
+		)
+		if err != nil {
+			fmt.Printf("Error creating shell: %v", err)
+			return 1
+		}
+		e.shell = sh
+	}
 
 	var err error
 	span, ctx, stopper := e.startTracing(ctx)
@@ -1136,24 +1147,33 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 	return scriptFile.Name(), nil
 }
 
-// setupRedactors wraps shell output and logging in Redactors if any redaction
-// is necessary based on RedactedVars configuration and the existence of
-// matching environment vars. It will store the redactors in the Executor so
-// that they may be updated when the environment changes.
+// setupRedactors creates new stdout and [shell.Logger] to use for a new shell,
+// that write to stdout and stderr respectively, each via a [replacer.Replacer]
+// set up as a secret redactor. References to the redactors are retained in
+// e.redactors so they can be updated with new secrets.
 //
-// The returned method will remove the redactors from the Executor and Flush them.
-func (e *Executor) setupRedactors() {
-	varsToRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())
+// Pictorally:
+//
+//	(returned io.Writer) == redactor 1 -> stdout
+//
+// and
+//
+//	(returned shell.Logger) -> redactor 2 -> stderr
+func (e *Executor) setupRedactors(environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
+	// tempLogger exists so the redactor setup can log the warnings below.
+	tempLogger := shell.NewWriterLogger(stderr, true, e.DisabledWarnings)
+
+	varsToRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, environ.DumpPairs())
 	if err != nil {
-		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+		tempLogger.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
 	}
 	if len(short) > 0 {
 		slices.Sort(short)
-		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+		tempLogger.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
 	}
 
 	if e.Debug {
-		e.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
+		tempLogger.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
 	}
 
 	needles := make([]string, 0, len(varsToRedact))
@@ -1161,41 +1181,13 @@ func (e *Executor) setupRedactors() {
 		needles = append(needles, pair.Value)
 	}
 
-	// If the shell Writer is already a Replacer, reset the values to redact.
-	if rdc, ok := e.shell.Writer.(*replacer.Replacer); ok {
-		// There may have been some redactees in the redactor already, so we
-		// propagate them to any new redactor.
-		needles = append(needles, rdc.Needles()...)
-		e.redactors.Append(rdc)
-	} else {
-		rdc := replacer.New(e.shell.Writer, needles, redact.Redact)
-		e.shell.Writer = rdc
-		e.redactors.Append(rdc)
-	}
+	stdoutRedactor := replacer.New(stdout, needles, redact.Redact)
+	e.redactors.Append(stdoutRedactor)
+	loggerRedactor := replacer.New(stderr, needles, redact.Redact)
+	e.redactors.Append(loggerRedactor)
 
-	// If the shell.Logger is already a redacted WriterLogger, reset the values to redact.
-	// (maybe there's a better way to do two levels of type assertion? ...
-	// shell.Logger may be a WriterLogger, and its Writer may be a Redactor)
-	var shellWriterLogger *shell.WriterLogger
-	var shellLoggerRedactor *replacer.Replacer
-	if logger, ok := e.shell.Logger.(*shell.WriterLogger); ok {
-		shellWriterLogger = logger
-		if redactor, ok := logger.Writer.(*replacer.Replacer); ok {
-			shellLoggerRedactor = redactor
-		}
-	}
-	if rdc := shellLoggerRedactor; rdc != nil {
-		// There may have been some redactees in the redactor already, so we
-		// propagate them to any new redactor.
-		needles = append(needles, rdc.Needles()...)
-		e.redactors.Append(rdc)
-	} else if shellWriterLogger != nil {
-		rdc := replacer.New(e.shell.Writer, needles, redact.Redact)
-		shellWriterLogger.Writer = rdc
-		e.redactors.Append(rdc)
-	}
-
-	e.redactors.Add(needles...)
+	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)
+	return stdoutRedactor, logger
 }
 
 func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernetes.Client) error {
@@ -1262,10 +1254,6 @@ func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernet
 			return err
 		}
 	}
-	// Attach the log stream to the k8s client
-	writer := io.MultiWriter(os.Stdout, k8sAgentSocket)
-	e.shell.Writer = writer
-	e.shell.Logger = shell.NewWriterLogger(writer, true, e.DisabledWarnings)
 
 	// Proceed when ready
 	if err := k8sAgentSocket.Await(ctx, kubernetes.RunStateStart); err != nil {
