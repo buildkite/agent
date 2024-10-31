@@ -246,7 +246,7 @@ func (s *Shell) LockFile(ctx context.Context, path string) (LockFile, error) {
 }
 
 // Run runs a command, write stdout and stderr to the logger and return an error
-// if it fails
+// if it fails.
 func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
 	formatted := process.FormatCommand(command, arg)
 	if s.stdin == nil {
@@ -259,6 +259,8 @@ func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
 	return s.RunWithoutPrompt(ctx, command, arg...)
 }
 
+// RunWithEnv runs the command with additional environment variables set, passing
+// both stdout and stderr to s.Writer.
 func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, command string, arg ...string) error {
 	formatted := process.FormatCommand(command, arg)
 	if s.stdin == nil {
@@ -276,24 +278,15 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 
 	cmdCfg.Env = append(cmdCfg.Env, environ.ToSlice()...)
 
-	return s.executeCommand(ctx, cmdCfg, s.Writer, executeFlags{
-		Stdout: true,
-		Stderr: true,
-		PTY:    s.PTY,
-	})
+	return s.executeCommand(ctx, cmdCfg, s.Writer, s.Writer, s.PTY)
 }
 
-// RunWithOlfactor runs a command, writes stdout and stderr to the shell's writer,
+// RunWithOlfactor runs a command, writes stdout and stderr to s.Writer,
 // and returns an error if it fails. If the process exits with a non-zero exit code,
 // and `smell` was written to the logger (i.e. the combined stream of stdout and stderr),
 // the error will be of type `olfactor.OlfactoryError`. If the process exits 0, the error
 // will be nil whether or not the output contained `smell`.
-func (s *Shell) RunWithOlfactor(
-	ctx context.Context,
-	smells []string,
-	command string,
-	arg ...string,
-) (*olfactor.Olfactor, error) {
+func (s *Shell) RunWithOlfactor(ctx context.Context, smells []string, command string, arg ...string) (*olfactor.Olfactor, error) {
 	formatted := process.FormatCommand(command, arg)
 	if s.stdin == nil {
 		s.Promptf("%s", formatted)
@@ -309,15 +302,11 @@ func (s *Shell) RunWithOlfactor(
 	}
 
 	w, o := olfactor.New(s.Writer, smells)
-	return o, s.executeCommand(ctx, cmd, w, executeFlags{
-		Stdout: true,
-		Stderr: true,
-		PTY:    s.PTY,
-	})
+	return o, s.executeCommand(ctx, cmd, w, w, s.PTY)
 }
 
-// RunWithoutPrompt runs a command, writes stdout and err to the logger,
-// and returns an error if it fails. It doesn't show a prompt.
+// RunWithoutPrompt runs a command, writes stdout and stderr to s.Writer,
+// and returns an error if it fails. It doesn't show a "prompt".
 func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...string) error {
 	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
@@ -325,15 +314,11 @@ func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...str
 		return err
 	}
 
-	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
-		Stdout: true,
-		Stderr: true,
-		PTY:    s.PTY,
-	})
+	return s.executeCommand(ctx, cmd, s.Writer, s.Writer, s.PTY)
 }
 
-// RunAndCapture runs a command and captures the output for processing. Stdout is captured, but
-// stderr isn't. If the shell is in debug mode then the command will be eched and both stderr
+// RunAndCapture runs a command and captures stdout to a string. Stdout is captured, but
+// stderr isn't. If the shell is in debug mode then the command will be echoed and both stderr
 // and stdout will be written to the logger. A PTY is never used for RunAndCapture.
 func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string) (string, error) {
 	if s.Debug {
@@ -347,12 +332,7 @@ func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string
 
 	var sb strings.Builder
 
-	err = s.executeCommand(ctx, cmd, &sb, executeFlags{
-		Stdout: true,
-		Stderr: false,
-		PTY:    false,
-	})
-	if err != nil {
+	if err := s.executeCommand(ctx, cmd, &sb, nil, false); err != nil {
 		return "", err
 	}
 
@@ -377,7 +357,7 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 
 // RunScript is like Run, but the target is an interpreted script which has
 // some extra checks to ensure it gets to the correct interpreter. Extra environment vars
-// can also be passed the script
+// can also be passed the script. Both stdout and stderr are directed to s.Writer.
 func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
 	var command string
 	var args []string
@@ -456,11 +436,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 	environ.Merge(extra)
 	cmdCfg.Env = environ.ToSlice()
 
-	return s.executeCommand(ctx, cmdCfg, s.Writer, executeFlags{
-		Stdout: true,
-		Stderr: true,
-		PTY:    s.PTY,
-	})
+	return s.executeCommand(ctx, cmdCfg, s.Writer, s.Writer, s.PTY)
 }
 
 // buildCommand returns a command that can later be executed.
@@ -481,17 +457,6 @@ func (s *Shell) buildCommand(name string, arg ...string) (process.Config, error)
 		InterruptSignal:   s.InterruptSignal,
 		SignalGracePeriod: s.SignalGracePeriod,
 	}, nil
-}
-
-type executeFlags struct {
-	// Whether to capture stdout
-	Stdout bool
-
-	// Whether to capture stderr
-	Stderr bool
-
-	// Run the command in a PTY
-	PTY bool
 }
 
 func round(d time.Duration) time.Duration {
@@ -522,12 +487,17 @@ func round(d time.Duration) time.Duration {
 	}
 }
 
-func (s *Shell) executeCommand(
-	ctx context.Context,
-	cmdCfg process.Config,
-	w io.Writer,
-	flags executeFlags,
-) error {
+// executeCommand executes a command.
+//
+// To ignore an output stream, you can use either nil or io.Discard:
+//
+//	s.executeCommand(ctx, cmd, nil, nil, pty)  // ignore both
+//	s.executeCommand(ctx, cmd, writer, nil, pty) // ignore stderr
+//	s.executeCommand(ctx, cmd, writer, writer, pty) // send both to same writer
+//	s.executeCommand(ctx, cmd, writer1, writer2, false)
+//
+// Note that if pty = true, only the stdout writer will be used.
+func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdout, stderr io.Writer, pty bool) error {
 	// Combine the two slices of env, let the latter overwrite the former
 	tracedEnv := env.FromSlice(cmdCfg.Env)
 	s.injectTraceCtx(ctx, tracedEnv)
@@ -542,28 +512,26 @@ func (s *Shell) executeCommand(
 		}()
 	}
 
-	// Modify process config based on execution flags
-	if flags.PTY {
-		cmdCfg.PTY = true
-		cmdCfg.Stdout = w
-	} else {
-		// Show stdout if requested or via debug
-		if flags.Stdout {
-			cmdCfg.Stdout = w
-		} else if s.Debug {
-			stdOutStreamer := NewLoggerStreamer(s.Logger)
-			defer stdOutStreamer.Close()
-			cmdCfg.Stdout = stdOutStreamer
-		}
+	cmdCfg.PTY = pty
+	cmdCfg.Stdout = stdout
+	cmdCfg.Stderr = stderr
 
-		// Show stderr if requested or via debug
-		if flags.Stderr {
-			cmdCfg.Stderr = w
-		} else if s.Debug {
-			stdErrStreamer := NewLoggerStreamer(s.Logger)
-			defer stdErrStreamer.Close()
-			cmdCfg.Stderr = stdErrStreamer
-		}
+	if cmdCfg.Stdout == nil {
+		cmdCfg.Stdout = io.Discard
+	}
+	if cmdCfg.Stderr == nil {
+		cmdCfg.Stderr = io.Discard
+	}
+
+	if s.Debug {
+		// Tee output streams to debug logger.
+		stdOutStreamer := NewLoggerStreamer(s.Logger)
+		defer stdOutStreamer.Close()
+		cmdCfg.Stdout = io.MultiWriter(cmdCfg.Stdout, stdOutStreamer)
+
+		stdErrStreamer := NewLoggerStreamer(s.Logger)
+		defer stdErrStreamer.Close()
+		cmdCfg.Stderr = io.MultiWriter(cmdCfg.Stderr, stdErrStreamer)
 	}
 
 	p := process.New(logger.Discard, cmdCfg)
