@@ -88,16 +88,18 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		var err error
 		logger := shell.StderrLogger
 		logger.DisabledWarningIDs = e.DisabledWarnings
-		e.shell, err = shell.New(shell.WithLogger(logger), shell.WithTraceContextCodec(e.TraceContextCodec))
+		e.shell, err = shell.New(
+			shell.WithDebug(e.ExecutorConfig.Debug),
+			shell.WithInterruptSignal(e.ExecutorConfig.CancelSignal),
+			shell.WithLogger(logger),
+			shell.WithPTY(e.ExecutorConfig.RunInPty),
+			shell.WithSignalGracePeriod(e.ExecutorConfig.SignalGracePeriod),
+			shell.WithTraceContextCodec(e.TraceContextCodec),
+		)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
 		}
-
-		e.shell.PTY = e.ExecutorConfig.RunInPty
-		e.shell.Debug = e.ExecutorConfig.Debug
-		e.shell.InterruptSignal = e.ExecutorConfig.CancelSignal
-		e.shell.SignalGracePeriod = e.ExecutorConfig.SignalGracePeriod
 	}
 
 	if e.KubernetesExec {

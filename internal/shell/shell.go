@@ -42,71 +42,104 @@ var ErrShellNotStarted = errors.New("shell not started")
 type Shell struct {
 	Logger
 
-	// The running environment for the shell
+	// The running environment for the shell.
 	Env *env.Environment
 
-	// Whether the shell is a PTY
-	PTY bool
-
-	// stdin is an optional input stream used by Run() and friends.
-	// It remains unexported on the assumption that it's not useful except via
-	// WithStdin() to get a shell-copy prepared for a single command that needs
-	// input.
-	stdin io.Reader
-
-	// Where stdout is written, defaults to os.Stdout
-	Writer io.Writer
+	// If set, the command arg vectors are appended to the slice as they are
+	// executed (or would be executed, as in dry-run mode).
+	commandLog *[][]string
 
 	// Whether to run the shell in debug mode
-	Debug bool
+	debug bool
 
-	// Current working directory that shell commands get executed in
-	wd string
+	// Whether to actually execute commands.
+	dryRun bool
+
+	// The signal to use to interrupt the process.
+	interruptSignal process.Signal
 
 	// The currently-running or last-run process.
 	proc atomic.Pointer[process.Process]
 
-	// The signal to use to interrupt the command
-	InterruptSignal process.Signal
+	// Whether the shell is a PTY.
+	pty bool
 
 	// Amount of time to wait between sending the InterruptSignal and SIGKILL
-	SignalGracePeriod time.Duration
+	signalGracePeriod time.Duration
+
+	// stdin is an optional input stream used by Run() and friends.
+	// It remains unexported on the assumption that it's not useful except via
+	// CloneWithStdin to get a clone prepared for a single command that needs
+	// input.
+	stdin io.Reader
+
+	// Where stdout (and sometimes the stderr) of the process is usually written
+	// (like a real shell, that displays both in the same stream).
+	// Defaults to [os.Stdout].
+	Writer io.Writer
 
 	// How to encode trace contexts.
 	traceContextCodec tracetools.Codec
+
+	// Current working directory that shell commands get executed in
+	wd string
 }
 
-type newShellOpt func(*Shell)
+type NewShellOpt = func(*Shell)
 
-func WithLogger(l Logger) newShellOpt {
-	return func(s *Shell) {
-		s.Logger = l
-	}
+func WithCommandLog(log *[][]string) NewShellOpt { return func(s *Shell) { s.commandLog = log } }
+func WithDebug(d bool) NewShellOpt               { return func(s *Shell) { s.debug = d } }
+func WithDryRun(d bool) NewShellOpt              { return func(s *Shell) { s.dryRun = d } }
+func WithEnv(e *env.Environment) NewShellOpt     { return func(s *Shell) { s.Env = e } }
+func WithLogger(l Logger) NewShellOpt            { return func(s *Shell) { s.Logger = l } }
+func WithPTY(pty bool) NewShellOpt               { return func(s *Shell) { s.pty = pty } }
+func WithStdout(w io.Writer) NewShellOpt         { return func(s *Shell) { s.Writer = w } }
+func WithWD(wd string) NewShellOpt               { return func(s *Shell) { s.wd = wd } }
+
+func WithInterruptSignal(sig process.Signal) NewShellOpt {
+	return func(s *Shell) { s.interruptSignal = sig }
 }
 
-func WithTraceContextCodec(c tracetools.Codec) newShellOpt {
-	return func(s *Shell) {
-		s.traceContextCodec = c
-	}
+func WithSignalGracePeriod(d time.Duration) NewShellOpt {
+	return func(s *Shell) { s.signalGracePeriod = d }
 }
 
-// New returns a new Shell
-func New(opts ...newShellOpt) (*Shell, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to find current working directory: %w", err)
-	}
+func WithTraceContextCodec(c tracetools.Codec) NewShellOpt {
+	return func(s *Shell) { s.traceContextCodec = c }
+}
 
-	shell := &Shell{
-		Logger:            StderrLogger,
-		Env:               env.FromSlice(os.Environ()),
-		Writer:            os.Stdout,
-		wd:                wd,
-		traceContextCodec: tracetools.CodecGob{},
-	}
+// New returns a new Shell. The default stdout is [os.Stdout], the default logger
+// writes to [os.Stderr], the initial working directory is the result of calling
+// [os.Getwd], the default environment variable set is read from [os.Environ],
+// and the default trace context encoding is Gob.
+func New(opts ...NewShellOpt) (*Shell, error) {
+	// Start with an empty shell.
+	shell := &Shell{}
 
+	// Apply all the options to it.
 	for _, opt := range opts {
 		opt(shell)
+	}
+
+	// Set defaults for the important options, if not provided.
+	if shell.Logger == nil {
+		shell.Logger = &WriterLogger{Writer: os.Stderr, Ansi: true}
+	}
+	if shell.Env == nil {
+		shell.Env = env.FromSlice(os.Environ())
+	}
+	if shell.Writer == nil {
+		shell.Writer = os.Stdout
+	}
+	if shell.traceContextCodec == nil {
+		shell.traceContextCodec = tracetools.CodecGob{}
+	}
+	if shell.wd == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to find current working directory: %w", err)
+		}
+		shell.wd = wd
 	}
 
 	return shell, nil
@@ -126,8 +159,8 @@ func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
 		stdin:             r, // our new stdin
 		Writer:            s.Writer,
 		wd:                s.wd,
-		InterruptSignal:   s.InterruptSignal,
-		SignalGracePeriod: s.SignalGracePeriod,
+		interruptSignal:   s.interruptSignal,
+		signalGracePeriod: s.signalGracePeriod,
 		traceContextCodec: s.traceContextCodec,
 	}
 }
@@ -258,7 +291,7 @@ func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
 }
 
 // RunWithEnv runs the command with additional environment variables set, passing
-// both stdout and stderr to s.Writer.
+// both stdout and stderr to s.stdout.
 func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, command string, arg ...string) error {
 	formatted := process.FormatCommand(command, arg)
 	if s.stdin == nil {
@@ -276,10 +309,10 @@ func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, comman
 
 	cmdCfg.Env = append(cmdCfg.Env, environ.ToSlice()...)
 
-	return s.executeCommand(ctx, cmdCfg, s.Writer, s.Writer, s.PTY)
+	return s.executeCommand(ctx, cmdCfg, s.Writer, s.Writer, s.pty)
 }
 
-// RunWithOlfactor runs a command, writes stdout and stderr to s.Writer,
+// RunWithOlfactor runs a command, writes stdout and stderr to s.stdout,
 // and returns an error if it fails. If the process exits with a non-zero exit code,
 // and `smell` was written to the logger (i.e. the combined stream of stdout and stderr),
 // the error will be of type `olfactor.OlfactoryError`. If the process exits 0, the error
@@ -300,10 +333,10 @@ func (s *Shell) RunWithOlfactor(ctx context.Context, smells []string, command st
 	}
 
 	w, o := olfactor.New(s.Writer, smells)
-	return o, s.executeCommand(ctx, cmd, w, w, s.PTY)
+	return o, s.executeCommand(ctx, cmd, w, w, s.pty)
 }
 
-// RunWithoutPrompt runs a command, writes stdout and stderr to s.Writer,
+// RunWithoutPrompt runs a command, writes stdout and stderr to s.stdout,
 // and returns an error if it fails. It doesn't show a "prompt".
 func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...string) error {
 	cmd, err := s.buildCommand(command, arg...)
@@ -312,14 +345,14 @@ func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...str
 		return err
 	}
 
-	return s.executeCommand(ctx, cmd, s.Writer, s.Writer, s.PTY)
+	return s.executeCommand(ctx, cmd, s.Writer, s.Writer, s.pty)
 }
 
 // RunAndCapture runs a command and captures stdout to a string. Stdout is captured, but
 // stderr isn't. If the shell is in debug mode then the command will be echoed and both stderr
 // and stdout will be written to the logger. A PTY is never used for RunAndCapture.
 func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string) (string, error) {
-	if s.Debug {
+	if s.debug {
 		s.Promptf("%s", process.FormatCommand(command, arg))
 	}
 
@@ -346,7 +379,7 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 		return
 	}
 	if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
-		if s.Debug {
+		if s.debug {
 			s.Logger.Warningf("Failed to encode trace context: %v", err)
 		}
 		return
@@ -355,7 +388,7 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 
 // RunScript is like Run, but the target is an interpreted script which has
 // some extra checks to ensure it gets to the correct interpreter. Extra environment vars
-// can also be passed the script. Both stdout and stderr are directed to s.Writer.
+// can also be passed the script. Both stdout and stderr are directed to s.stdout.
 func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
 	var command string
 	var args []string
@@ -369,7 +402,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 
 	switch {
 	case isWindows && isSh:
-		if s.Debug {
+		if s.debug {
 			s.Commentf("Attempting to run %s with Bash for Windows", path)
 		}
 		// Find Bash, either part of Cygwin or MSYS. Must be in the path
@@ -382,7 +415,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 		args = []string{filepath.ToSlash(path)}
 
 	case isWindows && isPwsh:
-		if s.Debug {
+		if s.debug {
 			s.Commentf("Attempting to run %s with Powershell", path)
 		}
 		command = "powershell.exe"
@@ -434,7 +467,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 	environ.Merge(extra)
 	cmdCfg.Env = environ.ToSlice()
 
-	return s.executeCommand(ctx, cmdCfg, s.Writer, s.Writer, s.PTY)
+	return s.executeCommand(ctx, cmdCfg, s.Writer, s.Writer, s.pty)
 }
 
 // buildCommand returns a command that can later be executed.
@@ -452,37 +485,9 @@ func (s *Shell) buildCommand(name string, arg ...string) (process.Config, error)
 		Env:               append(s.Env.ToSlice(), "PWD="+s.wd),
 		Stdin:             s.stdin,
 		Dir:               s.wd,
-		InterruptSignal:   s.InterruptSignal,
-		SignalGracePeriod: s.SignalGracePeriod,
+		InterruptSignal:   s.interruptSignal,
+		SignalGracePeriod: s.signalGracePeriod,
 	}, nil
-}
-
-func round(d time.Duration) time.Duration {
-	// The idea here is to show 5 significant digits worth of time.
-	// If your build takes 2 hours, you probably don't care about the timing
-	// being reported down to the microsecond.
-	switch {
-	case d < 100*time.Microsecond:
-		return d
-	case d < time.Millisecond:
-		return d.Round(10 * time.Nanosecond)
-	case d < 10*time.Millisecond:
-		return d.Round(100 * time.Nanosecond)
-	case d < 100*time.Millisecond:
-		return d.Round(time.Microsecond)
-	case d < time.Second:
-		return d.Round(10 * time.Microsecond)
-	case d < 10*time.Second:
-		return d.Round(100 * time.Microsecond)
-	case d < time.Minute:
-		return d.Round(time.Millisecond)
-	case d < 10*time.Minute:
-		return d.Round(10 * time.Millisecond)
-	case d < time.Hour:
-		return d.Round(100 * time.Millisecond)
-	default:
-		return d.Round(10 * time.Second)
-	}
 }
 
 // executeCommand executes a command.
@@ -503,7 +508,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 
 	cmdStr := process.FormatCommand(cmdCfg.Path, cmdCfg.Args)
 
-	if s.Debug {
+	if s.debug {
 		t := time.Now()
 		defer func() {
 			s.Commentf("↳ Command completed in %v", round(time.Since(t)))
@@ -521,7 +526,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		cmdCfg.Stderr = io.Discard
 	}
 
-	if s.Debug {
+	if s.debug {
 		// Tee output streams to debug logger.
 		stdOutStreamer := NewLoggerStreamer(s.Logger)
 		defer stdOutStreamer.Close()
@@ -530,6 +535,16 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		stdErrStreamer := NewLoggerStreamer(s.Logger)
 		defer stdErrStreamer.Close()
 		cmdCfg.Stderr = io.MultiWriter(cmdCfg.Stderr, stdErrStreamer)
+	}
+
+	if s.commandLog != nil {
+		*s.commandLog = append(*s.commandLog,
+			append([]string{cmdCfg.Path}, cmdCfg.Args...),
+		)
+	}
+
+	if s.dryRun {
+		return nil
 	}
 
 	p := process.New(logger.Discard, cmdCfg)
@@ -573,6 +588,7 @@ func IsExitSignaled(err error) bool {
 	return false
 }
 
+// IsExitError reports whether err is an [ExitError] or [exec.ExitError].
 func IsExitError(err error) bool {
 	if cause := new(ExitError); errors.As(err, &cause) {
 		return true
@@ -589,7 +605,34 @@ type ExitError struct {
 	Err  error
 }
 
-// Error returns the string message and fulfils the error interface
 func (ee *ExitError) Error() string { return ee.Err.Error() }
 
 func (ee *ExitError) Unwrap() error { return ee.Err }
+
+func round(d time.Duration) time.Duration {
+	// The idea here is to show 5 significant digits worth of time.
+	// If your build takes 2 hours, you probably don't care about the timing
+	// being reported down to the microsecond.
+	switch {
+	case d < 100*time.Microsecond:
+		return d
+	case d < time.Millisecond:
+		return d.Round(10 * time.Nanosecond)
+	case d < 10*time.Millisecond:
+		return d.Round(100 * time.Nanosecond)
+	case d < 100*time.Millisecond:
+		return d.Round(time.Microsecond)
+	case d < time.Second:
+		return d.Round(10 * time.Microsecond)
+	case d < 10*time.Second:
+		return d.Round(100 * time.Microsecond)
+	case d < time.Minute:
+		return d.Round(time.Millisecond)
+	case d < 10*time.Minute:
+		return d.Round(10 * time.Millisecond)
+	case d < time.Hour:
+		return d.Round(100 * time.Millisecond)
+	default:
+		return d.Round(10 * time.Second)
+	}
+}

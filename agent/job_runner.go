@@ -638,7 +638,9 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
 	r.agentLogger.Info("Running pre-bootstrap hook %q", hook)
 
-	sh, err := shell.New()
+	sh, err := shell.New(
+		shell.WithStdout(LogWriter{l: r.agentLogger}),
+	)
 	if err != nil {
 		return false, err
 	}
@@ -657,10 +659,6 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	sh.Env.Set("BUILDKITE_NO_HTTP2", fmt.Sprint(apiConfig.DisableHTTP2))
 	sh.Env.Set("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
 	sh.Env.Set("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
-
-	sh.Writer = LogWriter{
-		l: r.agentLogger,
-	}
 
 	if err := sh.RunScript(ctx, hook, nil); err != nil {
 		r.agentLogger.Error("Finished pre-bootstrap hook %q: job rejected: %s", hook, err)

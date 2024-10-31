@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,8 +30,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}
 	defer sshKeygen.Close()
 
-	sh := newShellForTest(t)
-	sh.PTY = true
+	sh := newShellForTest(t, shell.WithPTY(true))
 
 	go func() {
 		call := <-sshKeygen.Ch
@@ -57,7 +57,7 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 	}
 	defer sshKeygen.Close()
 
-	sh := newShellForTest(t)
+	sh := newShellForTest(t, shell.WithPTY(false))
 
 	go func() {
 		call := <-sshKeygen.Ch
@@ -86,10 +86,11 @@ func TestRun(t *testing.T) {
 
 	out := &bytes.Buffer{}
 
-	sh := newShellForTest(t)
-	sh.PTY = false
-	sh.Writer = out
-	sh.Logger = shell.NewWriterLogger(out, false, nil)
+	sh := newShellForTest(t,
+		shell.WithLogger(shell.NewWriterLogger(out, false, nil)),
+		shell.WithStdout(out),
+		shell.WithPTY(false),
+	)
 
 	go func() {
 		call := <-sshKeygen.Ch
@@ -116,8 +117,7 @@ func TestRunWithStdin(t *testing.T) {
 	t.Parallel()
 
 	out := &bytes.Buffer{}
-	sh := newShellForTest(t)
-	sh.Writer = out
+	sh := newShellForTest(t, shell.WithStdout(out), shell.WithPTY(false))
 
 	if err := sh.CloneWithStdin(strings.NewReader("hello stdin")).Run(context.Background(), "tr", "hs", "HS"); err != nil {
 		t.Fatalf(`sh.WithStdin("hello stdin").Run("tr", "hs", "HS") error = %v`, err)
@@ -312,8 +312,10 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	sh := newShellForTest(t)
-	sh.Logger = shell.DiscardLogger
+	sh := newShellForTest(t,
+		shell.WithStdout(io.Discard),
+		shell.WithPTY(false),
+	)
 
 	lockPath := filepath.Join(dir, "my.lock")
 
@@ -358,13 +360,12 @@ func acquireLockInOtherProcess(t *testing.T, lockfile string) *exec.Cmd {
 	return cmd
 }
 
-func newShellForTest(t *testing.T) *shell.Shell {
+func newShellForTest(t *testing.T, opts ...shell.NewShellOpt) *shell.Shell {
 	t.Helper()
-	sh, err := shell.New()
+	sh, err := shell.New(opts...)
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}
-	sh.Logger = shell.DiscardLogger
 	return sh
 }
 
@@ -438,11 +439,10 @@ func TestRunWithOlfactor(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			sh, err := shell.New()
+			out := &bytes.Buffer{}
+			sh, err := shell.New(shell.WithStdout(out))
 			assert.NilError(t, err)
 
-			out := &bytes.Buffer{}
-			sh.Writer = out
 			o, err := sh.RunWithOlfactor(
 				context.Background(),
 				test.smellsToSniff,
@@ -463,12 +463,11 @@ func TestRunWithOlfactor(t *testing.T) {
 func TestRunWithoutPrompt(t *testing.T) {
 	t.Parallel()
 
-	sh, err := shell.New()
+	out := &bytes.Buffer{}
+	sh, err := shell.New(shell.WithStdout(out))
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
 	}
-	out := &bytes.Buffer{}
-	sh.Writer = out
 
 	if err := sh.RunWithoutPrompt(context.Background(), "echo", "hi"); err != nil {
 		t.Fatalf("sh.RunWithoutPrompt(echo hi) = %v", err)

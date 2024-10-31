@@ -9,26 +9,25 @@ import (
 	"github.com/buildkite/agent/v3/env"
 )
 
-// NewTestShell creates a minimal shell suitable for tests.
-func NewTestShell(t *testing.T) *Shell {
+// NewTestShell creates a shell with suitable defaults for tests. Note that it
+// still really for real executes commands, unless WithDryRun(true) is passed.
+// By default is set up with minimal env vars, and throws away stdout (unless
+// DEBUG_SHELL is set or WithStdout is passed).
+func NewTestShell(t *testing.T, opts ...NewShellOpt) *Shell {
 	t.Helper()
 
-	sh, err := New()
-	if err != nil {
-		t.Fatalf("shell.New() error = %v", err)
-	}
-
-	sh.Logger = DiscardLogger
-	sh.Writer = io.Discard
-
+	logger := Logger(DiscardLogger)
+	stdout := io.Discard
 	if os.Getenv(`DEBUG_SHELL`) == "1" {
-		sh.Logger = TestingLogger{T: t}
-		sh.Writer = os.Stdout
+		logger = TestingLogger{T: t}
+		stdout = os.Stdout
 	}
 
-	// Windows requires certain env variables to be present
-	if runtime.GOOS == "windows" {
-		sh.Env = env.FromMap(map[string]string{
+	var environ *env.Environment
+	switch runtime.GOOS {
+	case "windows":
+		// Windows requires certain env variables to be present
+		environ = env.FromMap(map[string]string{
 			"PATH":        os.Getenv("PATH"),
 			"SystemRoot":  os.Getenv("SystemRoot"),
 			"WINDIR":      os.Getenv("WINDIR"),
@@ -39,11 +38,22 @@ func NewTestShell(t *testing.T) *Shell {
 			"ProgramData": os.Getenv("ProgramData"),
 			"USERPROFILE": os.Getenv("USERPROFILE"),
 		})
-	} else {
-		sh.Env = env.FromMap(map[string]string{
+
+	default:
+		environ = env.FromMap(map[string]string{
 			"PATH": os.Getenv("PATH"),
 		})
 	}
 
+	opts = append([]NewShellOpt{
+		WithEnv(environ),
+		WithLogger(logger),
+		WithStdout(stdout),
+	}, opts...)
+
+	sh, err := New(opts...)
+	if err != nil {
+		t.Fatalf("shell.New(opts...) error = %v", err)
+	}
 	return sh
 }
