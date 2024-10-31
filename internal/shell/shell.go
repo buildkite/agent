@@ -5,7 +5,6 @@
 package shell
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -346,9 +345,9 @@ func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string
 		return "", err
 	}
 
-	var b bytes.Buffer
+	var sb strings.Builder
 
-	err = s.executeCommand(ctx, cmd, &b, executeFlags{
+	err = s.executeCommand(ctx, cmd, &sb, executeFlags{
 		Stdout: true,
 		Stderr: false,
 		PTY:    false,
@@ -357,7 +356,7 @@ func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string
 		return "", err
 	}
 
-	return strings.TrimSpace(b.String()), nil
+	return strings.TrimSpace(sb.String()), nil
 }
 
 // injectTraceCtx adds tracing information to the given env vars to support
