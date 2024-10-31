@@ -235,6 +235,51 @@ func TestReplacerMultiLine(t *testing.T) {
 	}
 }
 
+func TestReplacerMultiLineCrLf(t *testing.T) {
+	t.Parallel()
+
+	var buf strings.Builder
+
+	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
+
+	fmt.Fprint(replacer, "lalalala\r\n")
+	fmt.Fprint(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----\r\n")
+	fmt.Fprint(replacer, "asdf\r\n")
+	fmt.Fprint(replacer, "-----END OPENSSH PRIVATE KEY-----\r\n")
+	fmt.Fprint(replacer, "lalalala\r\n")
+	replacer.Flush()
+
+	want := "lalalala\r\n[REDACTED]lalalala\r\n"
+
+	if diff := cmp.Diff(buf.String(), want); diff != "" {
+		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestReplacerMultiLineCrCrLf(t *testing.T) {
+	t.Parallel()
+
+	var buf strings.Builder
+
+	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
+
+	// Thanks to some combination of baked-mode PTY and other processing, log
+	// output linebreaks often look like \r\r\n, which is annoying both when
+	// redacting secrets and when opening them in a text editor.
+	fmt.Fprint(replacer, "lalalala\r\r\n")
+	fmt.Fprint(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----\r\r\n")
+	fmt.Fprint(replacer, "asdf\r\r\n")
+	fmt.Fprint(replacer, "-----END OPENSSH PRIVATE KEY-----\r\r\n")
+	fmt.Fprint(replacer, "lalalala\r\r\n")
+	replacer.Flush()
+
+	want := "lalalala\r\r\n[REDACTED]lalalala\r\r\n"
+
+	if diff := cmp.Diff(buf.String(), want); diff != "" {
+		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestAddingNeedles(t *testing.T) {
 	t.Parallel()
 

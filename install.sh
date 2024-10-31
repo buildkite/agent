@@ -102,7 +102,7 @@ fi
 
 if [[ "${DISABLE_CHECKSUM_VERIFICATION:-}" != "true" ]]; then
   if command -v openssl >/dev/null 2>&1 ; then
-    SHA256SUM="openssl dgst -r"
+    SHA256SUM="openssl dgst -sha256 -r"
   elif command -v sha256sum >/dev/null 2>&1 ; then
     SHA256SUM="sha256sum"
   else

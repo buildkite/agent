@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 
 	"github.com/buildkite/agent/v3/internal/job/shell"
@@ -579,7 +578,7 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 		t.Fatal("ruby not found in $PATH. This test requires ruby to be installed on the host")
 	}
 
-	ctx, _ := experiments.Enable(mainCtx, experiments.PolyglotHooks)
+	ctx := mainCtx
 
 	tester, err := NewExecutorTester(ctx)
 	if err != nil {
@@ -608,7 +607,6 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 	t.Parallel()
 
 	ctx := mainCtx
-	ctx, _ = experiments.Enable(ctx, experiments.PolyglotHooks)
 
 	tester, err := NewExecutorTester(ctx)
 	if err != nil {

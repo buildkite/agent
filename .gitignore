@@ -24,3 +24,6 @@ packaging/docker/*/hooks/
 
 .idea
 .vscode
+
+# Editor config boils down to personal preference
+.editorconfig

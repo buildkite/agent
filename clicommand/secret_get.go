@@ -47,7 +47,7 @@ Examples:
 The following examples reference the same Buildkite secret ′key′:
 
     $ buildkite-agent secret get deploy_key
-		$ buildkite-agent secret get DEPLOY_KEY`,
+    $ buildkite-agent secret get DEPLOY_KEY`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
