@@ -22,7 +22,6 @@ import (
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/job/shell"
@@ -346,10 +345,6 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	}
 
 	e.shell.Headerf("Running %s hook", hookName)
-
-	if !experiments.IsEnabled(ctx, experiments.PolyglotHooks) {
-		return e.runWrappedShellScriptHook(ctx, hookName, hookCfg)
-	}
 
 	hookType, err := hook.Type(hookCfg.Path)
 	if err != nil {
