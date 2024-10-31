@@ -16,7 +16,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
-	"github.com/gofrs/flock"
 	"github.com/google/go-cmp/cmp"
 	"gotest.tools/v3/assert"
 )
@@ -326,7 +325,7 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 
 	lock, err := sh.LockFile(ctx, lockPath)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Equal(t, lock, (*flock.Flock)(nil))
+	assert.Equal(t, lock, nil)
 }
 
 func acquireLockInOtherProcess(t *testing.T, lockfile string) *exec.Cmd {

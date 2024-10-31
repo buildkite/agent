@@ -193,13 +193,17 @@ func (s *Shell) WaitStatus() (process.WaitStatus, error) {
 	return p.WaitStatus(), nil
 }
 
-// LockFile is a pid-based lock for cross-process locking
-type LockFile interface {
+// Unlocker implementations are things that can be unlocked, such as a
+// cross-process lock. This interface exists for implementation-hiding.
+type Unlocker interface {
 	Unlock() error
 }
 
-func (s *Shell) flock(ctx context.Context, path string) (*flock.Flock, error) {
-	// + "f" to ensure that flocks and lockfiles never share a filename
+// LockFile creates a cross-process file-based lock. To set a timeout on
+// attempts to acquire the lock, pass a context with a timeout.
+func (s *Shell) LockFile(ctx context.Context, path string) (Unlocker, error) {
+	// + "f" to ensure that flocks and lockfiles (a similar lock library used by
+	// old agent versions) never share a filename.
 	absolutePathToLock, err := filepath.Abs(path + "f")
 	if err != nil {
 		return nil, fmt.Errorf("failed to find absolute path to lock %q: %w", path, err)
@@ -237,12 +241,6 @@ retryLoop:
 	}
 
 	return lock, nil
-}
-
-// LockFile creates a cross-process file-based lock. To set a timeout on
-// attempts to acquire the lock, pass a context with a timeout.
-func (s *Shell) LockFile(ctx context.Context, path string) (LockFile, error) {
-	return s.flock(ctx, path)
 }
 
 // Run runs a command, write stdout and stderr to the logger and return an error
