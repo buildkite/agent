@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
 )

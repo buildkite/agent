@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"

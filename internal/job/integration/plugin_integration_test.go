@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
 	"gotest.tools/v3/assert"
 )

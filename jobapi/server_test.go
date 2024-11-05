@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/google/go-cmp/cmp"
 	"gotest.tools/v3/assert"
