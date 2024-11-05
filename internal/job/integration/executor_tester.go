@@ -338,7 +338,7 @@ func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
-	if err := e.Run(t, env...); shell.GetExitCode(err) != 0 {
+	if err := e.Run(t, env...); shell.ExitCode(err) != 0 {
 		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
 	}
 

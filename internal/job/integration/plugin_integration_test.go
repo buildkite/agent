@@ -116,7 +116,7 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	if err == nil {
 		t.Fatalf("tester.Run(t, %v) = %v, want non-nil error", env, err)
 	}
-	if got, want := shell.GetExitCode(err), 5; got != want {
+	if got, want := shell.ExitCode(err), 5; got != want {
 		t.Fatalf("shell.GetExitCode(%v) = %d, want %d", err, got, want)
 	}
 

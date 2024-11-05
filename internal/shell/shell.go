@@ -614,9 +614,9 @@ func (s *Shell) executeCommand(
 	return p.WaitResult()
 }
 
-// GetExitCode extracts an exit code from an error where the platform supports it,
+// ExitCode extracts an exit code from an error where the platform supports it,
 // otherwise returns 0 for no error and 1 for an error
-func GetExitCode(err error) int {
+func ExitCode(err error) int {
 	if err == nil {
 		return 0
 	}

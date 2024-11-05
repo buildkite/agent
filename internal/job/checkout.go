@@ -167,7 +167,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 
 			var errLockTimeout ErrTimedOutAcquiringLock
 			switch {
-			case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
+			case shell.IsExitError(err) && shell.ExitCode(err) == -1:
 				e.shell.Warningf("Checkout was interrupted by a signal")
 				r.Break()
 

@@ -153,7 +153,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			e.shell.Errorf("Error tearing down job executor: %v", err)
 
 			// this gets passed back via the named return
-			exitCode = shell.GetExitCode(err)
+			exitCode = shell.ExitCode(err)
 		}
 	}()
 
@@ -167,21 +167,21 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		err := e.configureGitCredentialHelper(ctx)
 		if err != nil {
 			e.shell.Errorf("Error configuring git credential helper: %v", err)
-			return shell.GetExitCode(err)
+			return shell.ExitCode(err)
 		}
 
 		// so that the new credential helper will be used for all github urls
 		err = e.configureHTTPSInsteadOfSSH(ctx)
 		if err != nil {
 			e.shell.Errorf("Error configuring https instead of ssh: %v", err)
-			return shell.GetExitCode(err)
+			return shell.ExitCode(err)
 		}
 	}
 
 	// Initialize the environment, a failure here will still call the tearDown
 	if err = e.setUp(ctx); err != nil {
 		e.shell.Errorf("Error setting up job executor: %v", err)
-		return shell.GetExitCode(err)
+		return shell.ExitCode(err)
 	}
 
 	// Execute the job phases in order
@@ -248,7 +248,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 				// error reporting below.
 			} else {
 				// Only upload has errored, report its error.
-				return shell.GetExitCode(err)
+				return shell.ExitCode(err)
 			}
 		}
 	}
@@ -258,7 +258,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	if phaseErr != nil {
 		err = phaseErr
 		e.shell.Errorf("%v", phaseErr)
-		return shell.GetExitCode(phaseErr)
+		return shell.ExitCode(phaseErr)
 	}
 
 	// Use the exit code from the command phase
@@ -503,7 +503,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		r.Break()
 		return err
 	}); err != nil {
-		exitCode := shell.GetExitCode(err)
+		exitCode := shell.ExitCode(err)
 		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
 
 		// If the hook exited with a non-zero exit code, then we should pass that back to the executor
@@ -905,7 +905,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 	// error this will be zero. It's used to set the exit code later, so it's important
 	e.shell.Env.Set(
 		"BUILDKITE_COMMAND_EXIT_STATUS",
-		strconv.Itoa(shell.GetExitCode(commandErr)),
+		strconv.Itoa(shell.ExitCode(commandErr)),
 	)
 
 	// Exit early if there was no error
@@ -930,7 +930,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 		// TODO: investigate phasing this out under a experiment
 		return nil, nil
 	case isExitError && !isExitSignaled:
-		e.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandErr))
+		e.shell.Errorf("The command exited with status %d", shell.ExitCode(commandErr))
 		return nil, commandErr
 	default:
 		e.shell.Errorf("%s", commandErr)

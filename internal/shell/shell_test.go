@@ -71,7 +71,7 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 		t.Errorf("sh.RunAndCapture(ssh-keygen) error = %v, want non-nil error", err)
 	}
 
-	if got, want := shell.GetExitCode(err), 24; got != want {
+	if got, want := shell.ExitCode(err), 24; got != want {
 		t.Errorf("shell.GetExitCode(%v) = %d, want %d", err, got, want)
 	}
 }
