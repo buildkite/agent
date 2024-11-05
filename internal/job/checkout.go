@@ -809,7 +809,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	}
 
 	stdin := strings.NewReader(out)
-	if err := e.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", CommitMetadataKey); err != nil {
+	if err := e.shell.CloneWithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", CommitMetadataKey); err != nil {
 		return fmt.Errorf("sending git commit information to Buildkite: %w", err)
 	}
 

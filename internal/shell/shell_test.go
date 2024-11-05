@@ -120,7 +120,7 @@ func TestRunWithStdin(t *testing.T) {
 	sh := newShellForTest(t)
 	sh.Writer = out
 
-	if err := sh.WithStdin(strings.NewReader("hello stdin")).Run(context.Background(), "tr", "hs", "HS"); err != nil {
+	if err := sh.CloneWithStdin(strings.NewReader("hello stdin")).Run(context.Background(), "tr", "hs", "HS"); err != nil {
 		t.Fatalf(`sh.WithStdin("hello stdin").Run("tr", "hs", "HS") error = %v`, err)
 	}
 	if got, want := out.String(), "Hello Stdin"; want != got {

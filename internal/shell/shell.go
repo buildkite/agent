@@ -113,10 +113,13 @@ func New(opts ...newShellOpt) (*Shell, error) {
 	return shell, nil
 }
 
-// WithStdin returns a copy of the Shell with the provided io.Reader set as the
-// Stdin for the next command. The copy should be discarded after one command.
-// For example, sh.WithStdin(strings.NewReader("hello world")).Run("cat")
-func (s *Shell) WithStdin(r io.Reader) *Shell {
+// CloneWithStdin returns a copy of the Shell with the provided [io.Reader] set
+// as the Stdin for the next command. The copy should be discarded after one
+// command.
+// For example:
+//
+//	sh.CloneWithStdin(strings.NewReader("hello world")).Run("cat")
+func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
 	// cargo-culted cmdLock, not sure if it's needed
 	s.cmdLock.Lock()
 	defer s.cmdLock.Unlock()
