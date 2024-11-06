@@ -348,9 +348,11 @@ func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...str
 	return s.executeCommand(ctx, cmd, s.stdout, s.stdout, s.pty)
 }
 
-// RunAndCapture runs a command and captures stdout to a string. Stdout is captured, but
-// stderr isn't. If the shell is in debug mode then the command will be echoed and both stderr
-// and stdout will be written to the logger. A PTY is never used for RunAndCapture.
+// RunAndCapture runs a command and captures stdout of the command to a string
+// instead of s.stdout. Stderr is *discarded*.
+// If the shell is in debug mode then the command will be echoed and both stdout
+// and stderr will be written to the logger.
+// Note that a PTY is never used for RunAndCapture.
 func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string) (string, error) {
 	if s.debug {
 		s.Promptf("%s", process.FormatCommand(command, arg))
