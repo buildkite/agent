@@ -81,7 +81,7 @@ else
   exit 1
 fi
 
-if [[ "${BUILDKITE_AGENT_VERSION:-"latest"}" == "latest" ]]; then
+if [[ "${BUILDKITE_AGENT_VERSION:-latest}" == "latest" ]]; then
     echo -e "Finding latest release..."
 
     RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=${PLATFORM}&arch=${ARCH}&system=${SYSTEM}&machine=${MACHINE}"
@@ -95,7 +95,7 @@ if [[ "${BUILDKITE_AGENT_VERSION:-"latest"}" == "latest" ]]; then
     DOWNLOAD_FILENAME="$(echo "${LATEST_RELEASE}" | awk -F= '/filename=/ { print $2 }')"
     DOWNLOAD_URL="$(     echo "${LATEST_RELEASE}" | awk -F= '/url=/      { print $2 }')"
 else
-    VERSION=$BUILDKITE_AGENT_VERSION
+    VERSION="${BUILDKITE_AGENT_VERSION}"
     DOWNLOAD_FILENAME="buildkite-agent-${PLATFORM}-${ARCH}-${VERSION}.tar.gz"
     DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v${VERSION}/${DOWNLOAD_FILENAME}"
 fi
