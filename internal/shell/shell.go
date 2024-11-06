@@ -276,122 +276,27 @@ retryLoop:
 	return lock, nil
 }
 
-// Run runs a command, write stdout and stderr to the logger and return an error
-// if it fails.
-func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
-	formatted := process.FormatCommand(command, arg)
-	if s.stdin == nil {
-		s.Promptf("%s", formatted)
-	} else {
-		// bash-syntax-compatible indication that input is coming from somewhere
-		s.Promptf("%s < /dev/stdin", formatted)
-	}
-
-	return s.RunWithoutPrompt(ctx, command, arg...)
+// Command represents a command that can be run in a shell.
+type Command struct {
+	shell   *Shell
+	command string
+	args    []string
 }
 
-// RunWithEnv runs the command with additional environment variables set, passing
-// both stdout and stderr to s.stdout.
-func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, command string, arg ...string) error {
-	formatted := process.FormatCommand(command, arg)
-	if s.stdin == nil {
-		s.Promptf("%s", formatted)
-	} else {
-		// bash-syntax-compatible indication that input is coming from somewhere
-		s.Promptf("%s < /dev/stdin", formatted)
-	}
-
-	cmdCfg, err := s.buildCommand(command, arg...)
-	if err != nil {
-		s.Errorf("Error building command: %v", err)
-		return err
-	}
-
-	cmdCfg.Env = append(cmdCfg.Env, environ.ToSlice()...)
-
-	return s.executeCommand(ctx, cmdCfg, s.stdout, s.stdout, s.pty)
-}
-
-// RunWithOlfactor runs a command, writes stdout and stderr to s.stdout,
-// and returns an error if it fails. If the process exits with a non-zero exit code,
-// and `smell` was written to the logger (i.e. the combined stream of stdout and stderr),
-// the error will be of type `olfactor.OlfactoryError`. If the process exits 0, the error
-// will be nil whether or not the output contained `smell`.
-func (s *Shell) RunWithOlfactor(ctx context.Context, smells []string, command string, arg ...string) (*olfactor.Olfactor, error) {
-	formatted := process.FormatCommand(command, arg)
-	if s.stdin == nil {
-		s.Promptf("%s", formatted)
-	} else {
-		// bash-syntax-compatible indication that input is coming from somewhere
-		s.Promptf("%s < /dev/stdin", formatted)
-	}
-
-	cmd, err := s.buildCommand(command, arg...)
-	if err != nil {
-		s.Errorf("Error building command: %v", err)
-		return nil, err
-	}
-
-	w, o := olfactor.New(s.stdout, smells)
-	return o, s.executeCommand(ctx, cmd, w, w, s.pty)
-}
-
-// RunWithoutPrompt runs a command, writes stdout and stderr to s.stdout,
-// and returns an error if it fails. It doesn't show a "prompt".
-func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...string) error {
-	cmd, err := s.buildCommand(command, arg...)
-	if err != nil {
-		s.Errorf("Error building command: %v", err)
-		return err
-	}
-
-	return s.executeCommand(ctx, cmd, s.stdout, s.stdout, s.pty)
-}
-
-// RunAndCapture runs a command and captures stdout of the command to a string
-// instead of s.stdout. Stderr is *discarded*.
-// If the shell is in debug mode then the command will be echoed and both stdout
-// and stderr will be written to the logger.
-// Note that a PTY is never used for RunAndCapture.
-func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string) (string, error) {
-	if s.debug {
-		s.Promptf("%s", process.FormatCommand(command, arg))
-	}
-
-	cmd, err := s.buildCommand(command, arg...)
-	if err != nil {
-		return "", err
-	}
-
-	var sb strings.Builder
-
-	if err := s.executeCommand(ctx, cmd, &sb, nil, false); err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(sb.String()), nil
-}
-
-// injectTraceCtx adds tracing information to the given env vars to support
-// distributed tracing across jobs/builds.
-func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
-	span := opentracing.SpanFromContext(ctx)
-	// Not all shell runs will have tracing (nor do they really need to).
-	if span == nil {
-		return
-	}
-	if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
-		if s.debug {
-			s.Logger.Warningf("Failed to encode trace context: %v", err)
-		}
-		return
+// Command returns a command that can be run in the shell.
+func (s *Shell) Command(command string, args ...string) Command {
+	return Command{
+		shell:   s,
+		command: command,
+		args:    args,
 	}
 }
 
-// RunScript is like Run, but the target is an interpreted script which has
-// some extra checks to ensure it gets to the correct interpreter. Extra environment vars
-// can also be passed the script. Both stdout and stderr are directed to s.stdout.
-func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
+// Script returns a command that runs a script in the shell. The path is either
+// executed directly, or some kind of intepreter is executed in order to
+// interpret it (loosely: powershell.exe for .ps1 files, bash(.exe) for shell
+// scripts without shebang lines).
+func (s *Shell) Script(path string) (Command, error) {
 	var command string
 	var args []string
 
@@ -410,7 +315,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 		// Find Bash, either part of Cygwin or MSYS. Must be in the path
 		bashPath, err := s.AbsolutePath("bash.exe")
 		if err != nil {
-			return fmt.Errorf("Error finding bash.exe, needed to run scripts: %v. "+
+			return Command{}, fmt.Errorf("Error finding bash.exe, needed to run scripts: %v. "+
 				"Is Git for Windows installed and correctly in your PATH variable?", err)
 		}
 		command = bashPath
@@ -446,7 +351,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 			s.Warningf("Couldn't find bash (%v). Attempting to fall back to sh. This may cause issues for hooks and plugins that assume Bash features.", err)
 			shPath, err = s.AbsolutePath("sh")
 			if err != nil {
-				return fmt.Errorf("error finding a shell, needed to run scripts: %w", err)
+				return Command{}, fmt.Errorf("error finding a shell, needed to run scripts: %w", err)
 			}
 		}
 		command = shPath
@@ -458,18 +363,212 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 		args = nil
 	}
 
-	cmdCfg, err := s.buildCommand(command, args...)
+	return Command{
+		shell:   s,
+		command: command,
+		args:    args,
+	}, nil
+}
+
+// Run runs the command and waits for it to complete.
+func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
+	cfg := runConfig{
+		showPrompt: true,
+		showStderr: true,
+	}
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	// If prompt is enabled, or we're in debug mode, display the "prompt" showing
+	// the command being run.
+	if cfg.showPrompt || c.shell.debug {
+		formatted := process.FormatCommand(c.command, c.args)
+		if c.shell.stdin == nil {
+			c.shell.Promptf("%s", formatted)
+		} else {
+			// bash-syntax-compatible indication that input is coming from somewhere
+			c.shell.Promptf("%s < /dev/stdin", formatted)
+		}
+	}
+
+	// Build the process config for the command.
+	cmdCfg, err := c.shell.buildCommand(c.command, c.args...)
 	if err != nil {
-		s.Errorf("Error building command: %v", err)
+		c.shell.Errorf("Error building command: %v", err)
 		return err
 	}
 
-	// Combine the two slices of env, let the latter overwrite the former
-	environ := env.FromSlice(cmdCfg.Env)
-	environ.Merge(extra)
-	cmdCfg.Env = environ.ToSlice()
+	// Merge in any extra env vars.
+	if cfg.extraEnv != nil {
+		environ := env.FromSlice(cmdCfg.Env)
+		environ.Merge(cfg.extraEnv)
+		cmdCfg.Env = environ.ToSlice()
+	}
 
-	return s.executeCommand(ctx, cmdCfg, s.stdout, s.stdout, s.pty)
+	// By default, PTY and stdout are whatever the shell is configured with.
+	pty := c.shell.pty
+	stdout := c.shell.stdout
+
+	// If stdout is being captured, capture it to a string builder. Also we
+	// don't use a PTY.
+	if cfg.captureStdout != nil {
+		pty = false
+		sb := new(strings.Builder)
+		stdout = sb
+		defer func() { *cfg.captureStdout = strings.TrimSpace(sb.String()) }()
+	}
+
+	// Redirect stderr to the shell's usual stdout, unless it is discarded.
+	stderr := c.shell.stdout
+	if !cfg.showStderr {
+		stderr = io.Discard
+	}
+
+	// If we're performing a string search, wrap the current stdout and stderr
+	// in olfactors, and report which ones were detected through the map.
+	if cfg.smells != nil {
+		smells := make([]string, 0, len(cfg.smells))
+		for s := range cfg.smells {
+			smells = append(smells, s)
+		}
+		so, o1 := olfactor.New(stdout, smells)
+		se, o2 := olfactor.New(stderr, smells)
+		stdout, stderr = so, se
+
+		defer func() {
+			for _, smelt := range o1.AllSmelt() {
+				cfg.smells[smelt] = true
+			}
+			for _, smelt := range o2.AllSmelt() {
+				cfg.smells[smelt] = true
+			}
+		}()
+	}
+
+	return c.shell.executeCommand(ctx, cmdCfg, stdout, stderr, pty)
+}
+
+type runConfig struct {
+	captureStdout *string
+	showPrompt    bool
+	showStderr    bool
+	extraEnv      *env.Environment
+	smells        map[string]bool
+}
+
+// RunCommandOpt is the type of functional options that can be passed to
+// Command.Run.
+type RunCommandOpt = func(*runConfig)
+
+// CaptureStdout captures the entire stdout stream to a string instead of the
+// shell's stdout. By default, it is not captured. The string pointer is
+// updated with the stdout of the process after it has exited.
+func CaptureStdout(s *string) RunCommandOpt { return func(c *runConfig) { c.captureStdout = s } }
+
+// ShowStderr can be used to hide stderr from the shell's stdout. By default,
+// it is enabled (the process stderr is directed to the shell's stdout).
+func ShowStderr(show bool) RunCommandOpt { return func(c *runConfig) { c.showStderr = show } }
+
+// ShowPrompt causes the command and arguments being run to be printed in the
+// shell's stdout. By default this is enabled (prompt is shown).
+func ShowPrompt(show bool) RunCommandOpt { return func(c *runConfig) { c.showPrompt = show } }
+
+// WithExtraEnv can be used to set additional env vars for this run.
+func WithExtraEnv(e *env.Environment) RunCommandOpt { return func(c *runConfig) { c.extraEnv = e } }
+
+// WithStringSearch causes both the stdout and stderr streams of the process to
+// be searched for strings. (This does not require capturing either stream in
+// full.) After the process is finished, the map can be inspected to see which
+// ones were observed.
+func WithStringSearch(m map[string]bool) RunCommandOpt { return func(c *runConfig) { c.smells = m } }
+
+// Run runs a command, write stdout and stderr to the logger and return an error
+// if it fails.
+func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
+	return s.Command(command, arg...).Run(ctx)
+}
+
+// RunWithEnv runs the command with additional environment variables set, passing
+// both stdout and stderr to s.stdout.
+func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, command string, arg ...string) error {
+	return s.Command(command, arg...).Run(ctx, WithExtraEnv(environ))
+}
+
+// RunWithoutPrompt runs a command, writes stdout and stderr to s.stdout,
+// and returns an error if it fails. It doesn't show a "prompt".
+func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...string) error {
+	return s.Command(command, arg...).Run(ctx, ShowPrompt(false))
+}
+
+// RunWithOlfactor runs a command, writes stdout and stderr to s.stdout,
+// and returns an error if it fails. If the process exits with a non-zero exit code,
+// and `smell` was written to the logger (i.e. the combined stream of stdout and stderr),
+// the error will be of type `olfactor.OlfactoryError`. If the process exits 0, the error
+// will be nil whether or not the output contained `smell`.
+func (s *Shell) RunWithOlfactor(ctx context.Context, smells []string, command string, arg ...string) (*olfactor.Olfactor, error) {
+	formatted := process.FormatCommand(command, arg)
+	if s.stdin == nil {
+		s.Promptf("%s", formatted)
+	} else {
+		// bash-syntax-compatible indication that input is coming from somewhere
+		s.Promptf("%s < /dev/stdin", formatted)
+	}
+
+	cmd, err := s.buildCommand(command, arg...)
+	if err != nil {
+		s.Errorf("Error building command: %v", err)
+		return nil, err
+	}
+
+	w, o := olfactor.New(s.stdout, smells)
+	return o, s.executeCommand(ctx, cmd, w, w, s.pty)
+}
+
+// RunAndCapture runs a command and captures stdout of the command to a string
+// instead of s.stdout. Stderr is *discarded*.
+// If the shell is in debug mode then the command will be echoed and both stdout
+// and stderr will be written to the logger.
+// Note that a PTY is never used for RunAndCapture.
+func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string) (string, error) {
+	var out string
+	err := s.Command(command, arg...).Run(ctx,
+		ShowPrompt(false),
+		ShowStderr(false),
+		CaptureStdout(&out),
+	)
+	return out, err
+}
+
+// RunScript is like Run, but the target is an interpreted script which has
+// some extra checks to ensure it gets to the correct interpreter. Extra environment vars
+// can also be passed the script. Both stdout and stderr are directed to s.stdout.
+func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
+	c, err := s.Script(path)
+	if err != nil {
+		return err
+	}
+
+	return c.Run(ctx,
+		ShowPrompt(false),
+		WithExtraEnv(extra),
+	)
+}
+
+// injectTraceCtx adds tracing information to the given env vars to support
+// distributed tracing across jobs/builds.
+func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
+	span := opentracing.SpanFromContext(ctx)
+	// Not all shell runs will have tracing (nor do they really need to).
+	if span == nil {
+		return
+	}
+	if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
+		if s.debug {
+			s.Logger.Warningf("Failed to encode trace context: %v", err)
+		}
+		return
+	}
 }
 
 // buildCommand returns a command that can later be executed.
@@ -507,8 +606,6 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 	tracedEnv := env.FromSlice(cmdCfg.Env)
 	s.injectTraceCtx(ctx, tracedEnv)
 	cmdCfg.Env = tracedEnv.ToSlice()
-
-	cmdStr := process.FormatCommand(cmdCfg.Path, cmdCfg.Args)
 
 	if s.debug {
 		t := time.Now()
@@ -553,7 +650,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 	s.proc.Store(p)
 
 	if err := p.Run(ctx); err != nil {
-		return fmt.Errorf("error running %q: %w", cmdStr, err)
+		return fmt.Errorf("error running %q: %w", process.FormatCommand(cmdCfg.Path, cmdCfg.Args), err)
 	}
 
 	return p.WaitResult()
