@@ -443,18 +443,33 @@ func TestRunWithOlfactor(t *testing.T) {
 			sh, err := shell.New(shell.WithStdout(out))
 			assert.NilError(t, err)
 
-			o, err := sh.RunWithOlfactor(
+			smelled := make(map[string]bool)
+			for _, s := range test.smellsToSniff {
+				smelled[s] = false
+			}
+
+			err = sh.Command(test.command[0], test.command[1:]...).Run(
 				context.Background(),
-				test.smellsToSniff,
-				test.command[0],
-				test.command[1:]...,
+				shell.WithStringSearch(smelled),
 			)
 			if eerr := new(exec.ExitError); !errors.As(err, &eerr) {
 				assert.NilError(t, err)
 			}
-			assert.Equal(t, test.output, out.String())
+
+			if diff := cmp.Diff(out.String(), test.output); diff != "" {
+				t.Errorf("stdout diff (-got +want):\n%s", diff)
+			}
+
 			for _, smell := range test.smellsInOutput {
-				assert.Check(t, o.Smelt(smell))
+				if smelt := smelled[smell]; !smelt {
+					t.Errorf("smelled[%q] = %t, want true (smelt)", smell, smelt)
+				}
+				delete(smelled, smell)
+			}
+			for smell, smelt := range smelled {
+				if smelt {
+					t.Errorf("smelled[%q] = %t, want false (not smelt)", smell, smelt)
+				}
 			}
 		})
 	}

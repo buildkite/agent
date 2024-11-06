@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/olfactor"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/shellwords"
 )
@@ -44,17 +43,7 @@ func (e *gitError) Unwrap() error {
 	return e.error
 }
 
-type shellRunner interface {
-	Run(ctx context.Context, cmd string, args ...string) error
-	RunWithOlfactor(
-		ctx context.Context,
-		smells []string,
-		cmd string,
-		args ...string,
-	) (*olfactor.Olfactor, error)
-}
-
-func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, reference string) error {
+func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) error {
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
 		return err
@@ -68,8 +57,10 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 	commandArgs = append(commandArgs, reference)
 
 	const badReference = "fatal: reference is not a tree"
-	if o, err := sh.RunWithOlfactor(ctx, []string{badReference}, "git", commandArgs...); err != nil {
-		if o.Smelt(badReference) {
+	smelt := map[string]bool{badReference: false}
+
+	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+		if smelt[badReference] {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
 
@@ -85,7 +76,7 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 	return nil
 }
 
-func gitClone(ctx context.Context, sh shellRunner, gitCloneFlags, repository, dir string) error {
+func gitClone(ctx context.Context, sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
 	if err != nil {
 		return err
@@ -95,14 +86,14 @@ func gitClone(ctx context.Context, sh shellRunner, gitCloneFlags, repository, di
 	commandArgs = append(commandArgs, individualCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
-	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
 		return &gitError{error: err, Type: gitErrorClone}
 	}
 
 	return nil
 }
 
-func gitClean(ctx context.Context, sh shellRunner, gitCleanFlags string) error {
+func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -111,14 +102,14 @@ func gitClean(ctx context.Context, sh shellRunner, gitCleanFlags string) error {
 	commandArgs := []string{"clean"}
 	commandArgs = append(commandArgs, individualCleanFlags...)
 
-	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
 		return &gitError{error: err, Type: gitErrorClean}
 	}
 
 	return nil
 }
 
-func gitCleanSubmodules(ctx context.Context, sh shellRunner, gitCleanFlags string) error {
+func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -127,7 +118,7 @@ func gitCleanSubmodules(ctx context.Context, sh shellRunner, gitCleanFlags strin
 	gitCleanCommand := strings.Join(append([]string{"git", "clean"}, individualCleanFlags...), " ")
 	commandArgs := append([]string{"submodule", "foreach", "--recursive"}, gitCleanCommand)
 
-	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
 		return &gitError{error: err, Type: gitErrorCleanSubmodules}
 	}
 
@@ -136,7 +127,7 @@ func gitCleanSubmodules(ctx context.Context, sh shellRunner, gitCleanFlags strin
 
 func gitFetch(
 	ctx context.Context,
-	sh shellRunner,
+	sh *shell.Shell,
 	gitFetchFlags, repository string,
 	refSpec ...string,
 ) error {
@@ -160,24 +151,24 @@ func gitFetch(
 
 	const badObject = "fatal: bad object"
 	const badReference = "fatal: couldn't find remote ref"
-	if o, err := sh.RunWithOlfactor(
-		ctx,
-		[]string{badObject, badReference},
-		"git",
-		commandArgs...,
-	); err != nil {
+	smelt := map[string]bool{
+		badObject:    false,
+		badReference: false,
+	}
+
+	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
 		// "fatal: bad object" can happen when the local repo in the checkout
 		// directory is corrupted, not just the remote or the mirror.
 		// When using git mirrors, the existing checkout directory might have a
 		// reference to an object that it expects in the mirror, but the mirror
 		// no longer contains it (for whatever reason).
 		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-		if o.Smelt(badObject) {
+		if smelt[badObject] {
 			return &gitError{error: err, Type: gitErrorFetchBadObject}
 		}
 
 		// "fatal: couldn't find remote ref" can happen when the just the short commit hash is given.
-		if o.Smelt(badReference) {
+		if smelt[badReference] {
 			return &gitError{error: err, Type: gitErrorFetchBadReference}
 		}
 

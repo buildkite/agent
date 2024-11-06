@@ -501,30 +501,6 @@ func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...str
 	return s.Command(command, arg...).Run(ctx, ShowPrompt(false))
 }
 
-// RunWithOlfactor runs a command, writes stdout and stderr to s.stdout,
-// and returns an error if it fails. If the process exits with a non-zero exit code,
-// and `smell` was written to the logger (i.e. the combined stream of stdout and stderr),
-// the error will be of type `olfactor.OlfactoryError`. If the process exits 0, the error
-// will be nil whether or not the output contained `smell`.
-func (s *Shell) RunWithOlfactor(ctx context.Context, smells []string, command string, arg ...string) (*olfactor.Olfactor, error) {
-	formatted := process.FormatCommand(command, arg)
-	if s.stdin == nil {
-		s.Promptf("%s", formatted)
-	} else {
-		// bash-syntax-compatible indication that input is coming from somewhere
-		s.Promptf("%s < /dev/stdin", formatted)
-	}
-
-	cmd, err := s.buildCommand(command, arg...)
-	if err != nil {
-		s.Errorf("Error building command: %v", err)
-		return nil, err
-	}
-
-	w, o := olfactor.New(s.stdout, smells)
-	return o, s.executeCommand(ctx, cmd, w, w, s.pty)
-}
-
 // RunAndCapture runs a command and captures stdout of the command to a string
 // instead of s.stdout. Stderr is *discarded*.
 // If the shell is in debug mode then the command will be echoed and both stdout
