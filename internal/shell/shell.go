@@ -489,12 +489,6 @@ func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
 	return s.Command(command, arg...).Run(ctx)
 }
 
-// RunWithEnv runs the command with additional environment variables set, passing
-// both stdout and stderr to s.stdout.
-func (s *Shell) RunWithEnv(ctx context.Context, environ *env.Environment, command string, arg ...string) error {
-	return s.Command(command, arg...).Run(ctx, WithExtraEnv(environ))
-}
-
 // RunWithoutPrompt runs a command, writes stdout and stderr to s.stdout,
 // and returns an error if it fails. It doesn't show a "prompt".
 func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...string) error {

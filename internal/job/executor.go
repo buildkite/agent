@@ -416,7 +416,7 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, hookName string, hookCf
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	return e.shell.RunWithEnv(ctx, environ, hookCfg.Path)
+	return e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
 }
 
 func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
