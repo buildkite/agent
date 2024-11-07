@@ -1375,8 +1375,14 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	}()
 
 	// run hook
+	script, err := sh.Script(p)
+	if err != nil {
+		log.Error("%q hook: %v", hookName, err)
+		return err
+	}
+	// For these hooks, hide the interpreter from the "prompt".
 	sh.Promptf("%s", p)
-	if err = sh.RunScript(context.Background(), p, nil); err != nil {
+	if err := script.Run(context.TODO(), shell.ShowPrompt(false)); err != nil {
 		log.Error("%q hook: %v", hookName, err)
 		return err
 	}

@@ -504,21 +504,6 @@ func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string
 	return out, err
 }
 
-// RunScript is like Run, but the target is an interpreted script which has
-// some extra checks to ensure it gets to the correct interpreter. Extra environment vars
-// can also be passed the script. Both stdout and stderr are directed to s.stdout.
-func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
-	c, err := s.Script(path)
-	if err != nil {
-		return err
-	}
-
-	return c.Run(ctx,
-		ShowPrompt(false),
-		WithExtraEnv(extra),
-	)
-}
-
 // injectTraceCtx adds tracing information to the given env vars to support
 // distributed tracing across jobs/builds.
 func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {

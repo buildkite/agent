@@ -500,7 +500,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	const maxHookRetry = 30
 
 	// Run the wrapper script
-	if err := roko.NewRetrier(
+	err = roko.NewRetrier(
 		roko.WithStrategy(roko.Constant(100*time.Millisecond)),
 		roko.WithMaxAttempts(maxHookRetry),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
@@ -509,13 +509,20 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		// (which acquires open file descriptors of the parent process) and
 		// writing an executable (the script wrapper).
 		// See https://github.com/golang/go/issues/22315.
-		err := e.shell.RunScript(ctx, script.Path(), hookCfg.Env)
+		script, err := e.shell.Script(script.Path())
+		if err != nil {
+			r.Break()
+			return err
+		}
+		err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
 		if errors.Is(err, syscall.ETXTBSY) {
 			return err
 		}
 		r.Break()
 		return err
-	}); err != nil {
+	})
+
+	if err != nil {
 		exitCode := shell.ExitCode(err)
 		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
 
