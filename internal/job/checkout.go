@@ -382,12 +382,14 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 			// Fetch the PR head from the upstream repository into the mirror.
-			if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
+			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", refspec)
+			if err := cmd.Run(ctx); err != nil {
 				return "", err
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
-			if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", e.Branch); err != nil {
+			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", e.Branch)
+			if err := cmd.Run(ctx); err != nil {
 				return "", err
 			}
 		}
@@ -400,7 +402,8 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		// a clean host or with a clean checkout.)
 		// TODO: Investigate getting the ref from the main repo and passing
 		// that in here.
-		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin"); err != nil {
+		cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin")
+		if err := cmd.Run(ctx); err != nil {
 			return "", err
 		}
 	}
@@ -409,10 +412,10 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		// Let's opportunistically fsck and gc.
 		// 1. In case of remote URL confusion (bug introduced in #1959), and
 		// 2. There's possibly some object churn when remotes are renamed.
-		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fsck"); err != nil {
+		if err := e.shell.Command("git", "--git-dir", mirrorDir, "fsck").Run(ctx); err != nil {
 			e.shell.Logger.Warningf("Couldn't run git fsck: %v", err)
 		}
-		if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "gc"); err != nil {
+		if err := e.shell.Command("git", "--git-dir", mirrorDir, "gc").Run(ctx); err != nil {
 			e.shell.Logger.Warningf("Couldn't run git gc: %v", err)
 		}
 	}
@@ -468,7 +471,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 	if gitDir != "" {
 		args = append([]string{"--git-dir", gitDir}, args...)
 	}
-	return true, e.shell.Run(ctx, "git", args...)
+	return true, e.shell.Command("git", args...).Run(ctx)
 }
 
 func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
@@ -631,7 +634,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		// is only available in git version 1.8.1, so
 		// if the call fails, continue the job
 		// script, and show an informative error.
-		if err := e.shell.Run(ctx, "git", "submodule", "sync", "--recursive"); err != nil {
+		if err := e.shell.Command("git", "submodule", "sync", "--recursive").Run(ctx); err != nil {
 			gitVersionOutput, _ := e.shell.Command("git", "--version").RunAndCaptureStdout(ctx)
 			e.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
@@ -684,19 +687,20 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
 				}
 
-				if err := e.shell.Run(ctx, "git", submoduleArgs...); err != nil {
+				if err := e.shell.Command("git", submoduleArgs...).Run(ctx); err != nil {
 					return fmt.Errorf("updating submodules: %w", err)
 				}
 			}
 
 			if !mirrorSubmodules {
 				args = append(args, "submodule", "update", "--init", "--recursive", "--force")
-				if err := e.shell.Run(ctx, "git", args...); err != nil {
+				if err := e.shell.Command("git", args...).Run(ctx); err != nil {
 					return fmt.Errorf("updating submodules: %w", err)
 				}
 			}
 
-			if err := e.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
+			cmd := e.shell.Command("git", "submodule", "foreach", "--recursive", "git reset --hard")
+			if err := cmd.Run(ctx); err != nil {
 				return fmt.Errorf("resetting submodules: %w", err)
 			}
 		}
@@ -777,7 +781,8 @@ const CommitMetadataKey = "buildkite:git:commit"
 // note that we bail early if the key already exists, as we don't want to overwrite it
 func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	e.shell.Commentf("Checking to see if git commit information needs to be sent to Buildkite...")
-	if err := e.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", CommitMetadataKey); err == nil {
+	cmd := e.shell.Command("buildkite-agent", "meta-data", "exists", CommitMetadataKey)
+	if err := cmd.Run(ctx); err == nil {
 		// Command exited 0, ie the key exists, so we don't need to send it again
 		e.shell.Commentf("Git commit information has already been sent to Buildkite")
 		return nil
@@ -809,7 +814,8 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	}
 
 	stdin := strings.NewReader(out)
-	if err := e.shell.CloneWithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", CommitMetadataKey); err != nil {
+	cmd = e.shell.CloneWithStdin(stdin).Command("buildkite-agent", "meta-data", "set", CommitMetadataKey)
+	if err := cmd.Run(ctx); err != nil {
 		return fmt.Errorf("sending git commit information to Buildkite: %w", err)
 	}
 

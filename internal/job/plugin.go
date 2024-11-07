@@ -389,7 +389,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(2*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		return e.shell.Run(ctx, "git", args...)
+		return e.shell.Command("git", args...).Run(ctx)
 	})
 	if err != nil {
 		return nil, err
@@ -398,7 +398,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// Switch to the version if we need to
 	if p.Version != "" {
 		e.shell.Commentf("Checking out `%s`", p.Version)
-		if err = e.shell.Run(ctx, "git", "checkout", "-f", p.Version); err != nil {
+		if err = e.shell.Command("git", "checkout", "-f", p.Version).Run(ctx); err != nil {
 			return nil, err
 		}
 	}

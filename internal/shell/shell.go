@@ -495,12 +495,6 @@ func WithExtraEnv(e *env.Environment) RunCommandOpt { return func(c *runConfig) 
 // ones were observed.
 func WithStringSearch(m map[string]bool) RunCommandOpt { return func(c *runConfig) { c.smells = m } }
 
-// Run runs a command, write stdout and stderr to the logger and return an error
-// if it fails.
-func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
-	return s.Command(command, arg...).Run(ctx)
-}
-
 // injectTraceCtx adds tracing information to the given env vars to support
 // distributed tracing across jobs/builds.
 func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
