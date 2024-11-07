@@ -11,7 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/tempfile"
 	"gotest.tools/v3/assert"
 )
@@ -78,8 +78,13 @@ echo "hello world"
 
 			sh := shell.NewTestShell(t)
 
-			err = sh.RunScript(ctx, wrapper.Path(), nil)
-			assert.NilError(t, err, "sh.RunScript(context.Background(), %q, nil) = %v", wrapper.Path(), err)
+			script, err := sh.Script(wrapper.Path())
+			if err != nil {
+				t.Fatalf("sh.Script(%q) = %v", wrapper.Path(), err)
+			}
+			if err := script.Run(ctx, shell.ShowPrompt(false)); err != nil {
+				t.Fatalf("script(%q).Run(ctx, shell.ShowPrompt(false)) = %v", wrapper.Path(), err)
+			}
 
 			changes, err := wrapper.Changes()
 			assert.NilError(t, err, "wrapper.Changes() = %v", err)
@@ -172,8 +177,13 @@ echo hello world
 			err = sh.Chdir(hookWorkingDir)
 			assert.NilError(t, err, "sh.Chdir(%q) = %v", hookWorkingDir, err)
 
-			err = sh.RunScript(ctx, wrapper.Path(), nil)
-			assert.NilError(t, err, "sh.RunScript(context.Background(), %q, nil) = %v", wrapper.Path(), err)
+			script, err := sh.Script(wrapper.Path())
+			if err != nil {
+				t.Fatalf("sh.Script(%q) = %v", wrapper.Path(), err)
+			}
+			if err := script.Run(ctx, shell.ShowPrompt(false)); err != nil {
+				t.Fatalf("script(%q).Run(ctx, shell.ShowPrompt(false)) = %v", wrapper.Path(), err)
+			}
 
 			changes, err := wrapper.Changes()
 			assert.NilError(t, err, "wrapper.Changes() = %v", err)

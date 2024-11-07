@@ -14,8 +14,9 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
@@ -638,7 +639,9 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
 	r.agentLogger.Info("Running pre-bootstrap hook %q", hook)
 
-	sh, err := shell.New()
+	sh, err := shell.New(
+		shell.WithStdout(LogWriter{l: r.agentLogger}),
+	)
 	if err != nil {
 		return false, err
 	}
@@ -648,25 +651,26 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	// - Env files are designed to be validated by the pre-bootstrap hook
 	// - The pre-bootstrap hook may want to create annotations, so it can also
 	//   have a few necessary and global args as env vars.
-	sh.Env.Set("BUILDKITE_ENV_FILE", r.envShellFile.Name())
-	sh.Env.Set("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
+	environ := env.New()
+	environ.Set("BUILDKITE_ENV_FILE", r.envShellFile.Name())
+	environ.Set("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
+	environ.Set("BUILDKITE_JOB_ID", r.conf.Job.ID)
 	apiConfig := r.apiClient.Config()
-	sh.Env.Set("BUILDKITE_JOB_ID", r.conf.Job.ID)
-	sh.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", apiConfig.Token)
-	sh.Env.Set("BUILDKITE_AGENT_ENDPOINT", apiConfig.Endpoint)
-	sh.Env.Set("BUILDKITE_NO_HTTP2", fmt.Sprint(apiConfig.DisableHTTP2))
-	sh.Env.Set("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
-	sh.Env.Set("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
+	environ.Set("BUILDKITE_AGENT_ACCESS_TOKEN", apiConfig.Token)
+	environ.Set("BUILDKITE_AGENT_ENDPOINT", apiConfig.Endpoint)
+	environ.Set("BUILDKITE_NO_HTTP2", fmt.Sprint(apiConfig.DisableHTTP2))
+	environ.Set("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
+	environ.Set("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
 
-	sh.Writer = LogWriter{
-		l: r.agentLogger,
-	}
-
-	if err := sh.RunScript(ctx, hook, nil); err != nil {
-		r.agentLogger.Error("Finished pre-bootstrap hook %q: job rejected: %s", hook, err)
+	script, err := sh.Script(hook)
+	if err != nil {
+		r.agentLogger.Error("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
 		return false, err
 	}
-
+	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(environ)); err != nil {
+		r.agentLogger.Error("Finished pre-bootstrap hook %q: job rejected: %v", hook, err)
+		return false, err
+	}
 	r.agentLogger.Info("Finished pre-bootstrap hook %q: job accepted", hook)
 	return true, nil
 }

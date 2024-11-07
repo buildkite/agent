@@ -347,6 +347,10 @@ func (p *Process) Started() <-chan struct{} {
 
 // Interrupt the process on platforms that support it, terminate otherwise
 func (p *Process) Interrupt() error {
+	if p == nil {
+		return nil
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -370,6 +374,10 @@ func (p *Process) Interrupt() error {
 
 // Terminate the process
 func (p *Process) Terminate() error {
+	if p == nil {
+		return nil
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

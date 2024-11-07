@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 )
 
 // IsOpened returns true if the file at the given path is opened by the current process.

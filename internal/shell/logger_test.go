@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/google/go-cmp/cmp"
 )
 

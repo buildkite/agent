@@ -69,7 +69,7 @@ func (e *Executor) uploadArtifacts(ctx context.Context) error {
 		args = append(args, e.ArtifactUploadDestination)
 	}
 
-	if err = e.shell.Run(ctx, "buildkite-agent", args...); err != nil {
+	if err = e.shell.Command("buildkite-agent", args...).Run(ctx); err != nil {
 		return err
 	}
 
