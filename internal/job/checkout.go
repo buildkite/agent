@@ -270,7 +270,7 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 
 func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit string) bool {
 	// Resolve commit to an actual commit object
-	output, err := sh.RunAndCapture(ctx, "git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}")
+	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(ctx)
 	if err != nil {
 		return false
 	}
@@ -445,7 +445,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 	if gitDir != "" {
 		args = append([]string{"--git-dir", gitDir}, args...)
 	}
-	gotURL, err := e.shell.RunAndCapture(ctx, "git", args...)
+	gotURL, err := e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -577,7 +577,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			return fmt.Errorf("fetching PR refspec %q: %w", refspec, err)
 		}
 
-		gitFetchHead, _ := e.shell.RunAndCapture(ctx, "git", "rev-parse", "FETCH_HEAD")
+		gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
 		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
 		if e.Commit != "HEAD" {
@@ -632,7 +632,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		// if the call fails, continue the job
 		// script, and show an informative error.
 		if err := e.shell.Run(ctx, "git", "submodule", "sync", "--recursive"); err != nil {
-			gitVersionOutput, _ := e.shell.RunAndCapture(ctx, "git", "--version")
+			gitVersionOutput, _ := e.shell.Command("git", "--version").RunAndCaptureStdout(ctx)
 			e.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
 
@@ -754,7 +754,7 @@ func gitFetchCommitWithFallback(ctx context.Context, shell *shell.Shell, gitFetc
 	// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
 	// fetch all tags in addition to the default refspec, but pre 1.9.0 it
 	// excludes the default refspec.
-	gitFetchRefspec, err := shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
+	gitFetchRefspec, err := shell.Command("git", "config", "remote.origin.fetch").RunAndCaptureStdout(ctx)
 	if err != nil {
 		return fmt.Errorf("getting remote.origin.fetch: %w", err)
 	}
@@ -803,7 +803,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 		"--no-color",
 		"--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B",
 	}
-	out, err := e.shell.RunAndCapture(ctx, "git", gitArgs...)
+	out, err := e.shell.Command("git", gitArgs...).RunAndCaptureStdout(ctx)
 	if err != nil {
 		return fmt.Errorf("getting git commit information: %w", err)
 	}
@@ -822,7 +822,7 @@ func (e *Executor) resolveCommit(ctx context.Context) {
 		e.shell.Warningf("BUILDKITE_COMMIT was empty")
 		return
 	}
-	cmdOut, err := e.shell.RunAndCapture(ctx, "git", "rev-parse", commitRef)
+	cmdOut, err := e.shell.Command("git", "rev-parse", commitRef).RunAndCaptureStdout(ctx)
 	if err != nil {
 		e.shell.Warningf("Error running git rev-parse %q: %v", commitRef, err)
 		return

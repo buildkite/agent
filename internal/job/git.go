@@ -192,7 +192,7 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 	// submodule.bitbucket-https-docker-example.url\nhttps://lox24@bitbucket.org/lox24/docker-example.git\0
 	// submodule.github-git-docker-example.url\ngit@github.com:buildkite/docker-example.git\0
 	// submodule.github-https-docker-example.url\nhttps://github.com/buildkite/docker-example.git\0
-	output, err := sh.RunAndCapture(ctx, "git", "config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url")
+	output, err := sh.Command("git", "config", "--file", ".gitmodules", "--null", "--get-regexp", `submodule\..+\.url`).RunAndCaptureStdout(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, working
 	revParseArgs := []string{"--git-dir", gitDirectory, "--work-tree", workingDirectory, "rev-parse"}
 	revParseArgs = append(revParseArgs, extraRevParseArgs...)
 
-	return sh.RunAndCapture(ctx, "git", revParseArgs...)
+	return sh.Command("git", revParseArgs...).RunAndCaptureStdout(ctx)
 }
 
 var (
@@ -250,7 +250,7 @@ var gitHostAliasRegexp = regexp.MustCompile(`-[a-z0-9\-]+$`)
 
 func resolveGitHost(ctx context.Context, sh *shell.Shell, host string) string {
 	// ask SSH to print its configuration for this host, honouring .ssh/config
-	output, err := sh.RunAndCapture(ctx, "ssh", "-G", host)
+	output, err := sh.Command("ssh", "-G", host).RunAndCaptureStdout(ctx)
 	if err != nil {
 		// fall back to the old behaviour of just replacing strings
 		return gitHostAliasRegexp.ReplaceAllString(host, "")

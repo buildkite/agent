@@ -449,6 +449,18 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 	return c.shell.executeCommand(ctx, cmdCfg, stdout, stderr, pty)
 }
 
+// RunAndCaptureStdout is Run, but automatically sets options:
+// * ShowPrompt(false) (overridable)
+// * CaptureStdout() (not overridable)
+// and returns the captured output.
+func (c Command) RunAndCaptureStdout(ctx context.Context, opts ...RunCommandOpt) (string, error) {
+	var capture string
+	opts = append([]RunCommandOpt{ShowPrompt(false)}, opts...)
+	opts = append(opts, CaptureStdout(&capture))
+	err := c.Run(ctx, opts...)
+	return capture, err
+}
+
 type runConfig struct {
 	captureStdout *string
 	showPrompt    bool
@@ -487,21 +499,6 @@ func WithStringSearch(m map[string]bool) RunCommandOpt { return func(c *runConfi
 // if it fails.
 func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
 	return s.Command(command, arg...).Run(ctx)
-}
-
-// RunAndCapture runs a command and captures stdout of the command to a string
-// instead of s.stdout. Stderr is *discarded*.
-// If the shell is in debug mode then the command will be echoed and both stdout
-// and stderr will be written to the logger.
-// Note that a PTY is never used for RunAndCapture.
-func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string) (string, error) {
-	var out string
-	err := s.Command(command, arg...).Run(ctx,
-		ShowPrompt(false),
-		ShowStderr(false),
-		CaptureStdout(&out),
-	)
-	return out, err
 }
 
 // injectTraceCtx adds tracing information to the given env vars to support

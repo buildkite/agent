@@ -41,7 +41,7 @@ func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, erro
 			args = []string{"-p", hostParts[1], hostParts[0]}
 		}
 
-		out, err := sh.RunAndCapture(ctx, sshKeyScanPath, args...)
+		out, err := sh.Command(sshKeyScanPath, args...).RunAndCaptureStdout(ctx)
 		if err != nil {
 			keyScanError := fmt.Errorf("`%s` failed", sshKeyScanCommand)
 			sh.Warningf("%s (%s)", keyScanError, r)
@@ -75,7 +75,7 @@ func findPathToSSHTools(ctx context.Context, sh *shell.Shell) (string, error) {
 	}
 
 	if runtime.GOOS == "windows" {
-		execPath, _ := sh.RunAndCapture(ctx, "git", "--exec-path")
+		execPath, _ := sh.Command("git", "--exec-path").RunAndCaptureStdout(ctx)
 		if len(execPath) > 0 {
 			for _, path := range []string{
 				filepath.Join(execPath, "..", "..", "..", "usr", "bin", "ssh-keygen.exe"),

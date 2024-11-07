@@ -23,6 +23,7 @@ import (
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
@@ -30,6 +31,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}
 	defer sshKeygen.Close()
 
+	// WithPTY(true) should be overriden by RunAndCapture.
 	sh := newShellForTest(t, shell.WithPTY(true))
 
 	go func() {
@@ -38,7 +40,8 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 		call.Exit(0)
 	}()
 
-	got, err := sh.RunAndCapture(context.Background(), sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com")
+	cmd := sh.Command(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com")
+	got, err := cmd.RunAndCaptureStdout(ctx)
 	if err != nil {
 		t.Errorf(`sh.RunAndCapture(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") error = %v`, err)
 	}
@@ -50,6 +53,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 
 func TestRunAndCaptureWithExitCode(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
@@ -65,9 +69,9 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 		call.Exit(24)
 	}()
 
-	_, err = sh.RunAndCapture(context.Background(), sshKeygen.Path)
+	_, err = sh.Command(sshKeygen.Path).RunAndCaptureStdout(ctx)
 	if err == nil {
-		t.Errorf("sh.RunAndCapture(ssh-keygen) error = %v, want non-nil error", err)
+		t.Errorf("sh.Command(ssh-keygen).RunAndCaptureStdout(ctx) error = %v, want non-nil error", err)
 	}
 
 	if got, want := shell.ExitCode(err), 24; got != want {
@@ -222,6 +226,7 @@ func TestDefaultWorkingDirFromSystem(t *testing.T) {
 
 func TestWorkingDir(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	tempDir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {
@@ -271,13 +276,13 @@ func TestWorkingDir(t *testing.T) {
 
 		// there is no pwd for windows, and getting it requires using a shell builtin
 		if runtime.GOOS == "windows" {
-			out, err := sh.RunAndCapture(context.Background(), "cmd", "/c", "echo", "%cd%")
+			out, err := sh.Command("cmd", "/c", "echo", "%cd%").RunAndCaptureStdout(ctx)
 			if err != nil {
 				t.Fatalf("sh.RunAndCapture(cmd /c echo %%cd%%) error = %v", err)
 			}
 			pwd = out
 		} else {
-			out, err := sh.RunAndCapture(context.Background(), "pwd")
+			out, err := sh.Command("pwd").RunAndCaptureStdout(ctx)
 			if err != nil {
 				t.Fatalf("sh.RunAndCapture(pwd) error = %v", err)
 			}
