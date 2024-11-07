@@ -993,19 +993,19 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 
 	var cmdToExec string
 
-	// The shell gets parsed based on the operating system
-	shell, err := shellwords.Split(e.Shell)
+	// The interpreter gets parsed based on the operating system
+	interpreter, err := shellwords.Split(e.Shell)
 	if err != nil {
 		return fmt.Errorf("Failed to split shell (%q) into tokens: %w", e.Shell, err)
 	}
 
-	if len(shell) == 0 {
+	if len(interpreter) == 0 {
 		return fmt.Errorf("No shell set for job")
 	}
 
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
 	// a batch script so that it works, but we don't like it
-	if strings.ToUpper(filepath.Base(shell[0])) == "CMD.EXE" {
+	if strings.ToUpper(filepath.Base(interpreter[0])) == "CMD.EXE" {
 		batchScript, err := e.writeBatchScript(e.Command)
 		if err != nil {
 			return err
@@ -1076,7 +1076,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	}
 
 	var cmd []string
-	cmd = append(cmd, shell...)
+	cmd = append(cmd, interpreter...)
 	cmd = append(cmd, cmdToExec)
 
 	if e.Debug {
@@ -1085,7 +1085,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = e.shell.RunWithoutPrompt(ctx, cmd[0], cmd[1:]...)
+	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
 	return err
 }
 

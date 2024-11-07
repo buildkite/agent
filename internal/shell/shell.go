@@ -489,12 +489,6 @@ func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
 	return s.Command(command, arg...).Run(ctx)
 }
 
-// RunWithoutPrompt runs a command, writes stdout and stderr to s.stdout,
-// and returns an error if it fails. It doesn't show a "prompt".
-func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...string) error {
-	return s.Command(command, arg...).Run(ctx, ShowPrompt(false))
-}
-
 // RunAndCapture runs a command and captures stdout of the command to a string
 // instead of s.stdout. Stderr is *discarded*.
 // If the shell is in debug mode then the command will be echoed and both stdout

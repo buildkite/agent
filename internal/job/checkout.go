@@ -26,7 +26,7 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 	// This is important for the case where a user clones multiple repos in a step - ie, if we always crammed
 	// os.Getenv("BUILDKITE_REPO") into credential helper, we'd only ever get a token for the repo that the step is running
 	// in, and not for any other repos that the step might clone.
-	err := e.shell.RunWithoutPrompt(ctx, "git", "config", "--global", "credential.useHttpPath", "true")
+	err := e.shell.Command("git", "config", "--global", "credential.useHttpPath", "true").Run(ctx, shell.ShowPrompt(false))
 	if err != nil {
 		return fmt.Errorf("enabling git credential.useHttpPath: %w", err)
 	}
@@ -37,7 +37,7 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 	}
 
 	helper := fmt.Sprintf(`%s git-credentials-helper`, buildkiteAgent)
-	err = e.shell.RunWithoutPrompt(ctx, "git", "config", "--global", "credential.helper", helper)
+	err = e.shell.Command("git", "config", "--global", "credential.helper", helper).Run(ctx, shell.ShowPrompt(false))
 	if err != nil {
 		return fmt.Errorf("configuring git credential.helper: %w", err)
 	}
@@ -48,9 +48,9 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 // Disables SSH keyscan and configures git to use HTTPS instead of SSH for github.
 // We may later expand this for other SCMs.
 func (e *Executor) configureHTTPSInsteadOfSSH(ctx context.Context) error {
-	return e.shell.RunWithoutPrompt(ctx,
+	return e.shell.Command(
 		"git", "config", "--global", "url.https://github.com/.insteadOf", "git@github.com:",
-	)
+	).Run(ctx, shell.ShowPrompt(false))
 }
 
 func (e *Executor) removeCheckoutDir() error {

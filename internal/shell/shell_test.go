@@ -477,6 +477,7 @@ func TestRunWithOlfactor(t *testing.T) {
 
 func TestRunWithoutPrompt(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
 
 	out := &bytes.Buffer{}
 	sh, err := shell.New(shell.WithStdout(out))
@@ -484,15 +485,15 @@ func TestRunWithoutPrompt(t *testing.T) {
 		t.Fatalf("shell.New() error = %v", err)
 	}
 
-	if err := sh.RunWithoutPrompt(context.Background(), "echo", "hi"); err != nil {
-		t.Fatalf("sh.RunWithoutPrompt(echo hi) = %v", err)
+	if err := sh.Command("echo", "hi").Run(ctx, shell.ShowPrompt(false)); err != nil {
+		t.Fatalf(`sh.Command("echo", "hi").Run(ctx, shell.ShowPrompt(false)) = %v`, err)
 	}
 	if got, want := out.String(), "hi\n"; got != want {
-		t.Errorf("sh.RunWithoutPrompt(echo hi) output = %q, want %q", got, want)
+		t.Errorf(`sh.Command("echo", "hi").Run(ctx, shell.ShowPrompt(false)) output = %q, want %q`, got, want)
 	}
 
 	out.Reset()
-	if err := sh.RunWithoutPrompt(context.Background(), "asdasdasdasdzxczxczxzxc"); err == nil {
+	if err := sh.Command("asdasdasdasdzxczxczxzxc").Run(ctx, shell.ShowPrompt(false)); err == nil {
 		t.Errorf("sh.RunWithoutPrompt(asdasdasdasdzxczxczxzxc) = %v, want non-nil error", err)
 	}
 }
