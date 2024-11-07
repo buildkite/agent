@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
-	"github.com/buildkite/agent/v3/internal/job/hook"
+	"github.com/buildkite/agent/v3/internal/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/roko"
 )
