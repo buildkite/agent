@@ -86,7 +86,14 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Start with stdout and stderr as their usual selves.
 	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
 
+	// Create a logger to stderr that can be used for things prior to the
+	// redactor setup.
+	// Be careful not to log customer secrets here!
+	tempLog := shell.NewWriterLogger(stderr, true, e.DisabledWarnings)
+
 	if e.KubernetesExec {
+		tempLog.Commentf("Using Kubernetes support")
+
 		socket := &kubernetes.Client{ID: e.KubernetesContainerID}
 		if err := e.kubernetesSetup(ctx, socket); err != nil {
 			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
@@ -107,7 +114,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// setup the redactors here once and for the life of the executor
 	// they will be flushed at the end of each hook
 	environ := env.FromSlice(os.Environ())
-	preRedactedStdout, preRedactedLogger := e.setupRedactors(environ, stdout, stderr)
+	preRedactedStdout, preRedactedLogger := e.setupRedactors(tempLog, environ, stdout, stderr)
 
 	// Check if not nil to allow for tests to overwrite shell.
 	if e.shell == nil {
@@ -1166,21 +1173,18 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 // and
 //
 //	(returned shell.Logger) -> redactor 2 -> stderr
-func (e *Executor) setupRedactors(environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
-	// tempLogger exists so the redactor setup can log the warnings below.
-	tempLogger := shell.NewWriterLogger(stderr, true, e.DisabledWarnings)
-
+func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
 	varsToRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, environ.DumpPairs())
 	if err != nil {
-		tempLogger.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+		log.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
 	}
 	if len(short) > 0 {
 		slices.Sort(short)
-		tempLogger.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+		log.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
 	}
 
 	if e.Debug {
-		tempLogger.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
+		log.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
 	}
 
 	needles := make([]string, 0, len(varsToRedact))
@@ -1198,8 +1202,6 @@ func (e *Executor) setupRedactors(environ *env.Environment, stdout, stderr io.Wr
 }
 
 func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernetes.Client) error {
-	e.shell.Commentf("Using Kubernetes support")
-
 	rtr := roko.NewRetrier(
 		roko.WithMaxAttempts(7),
 		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
