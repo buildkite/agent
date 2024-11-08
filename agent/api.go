@@ -36,6 +36,7 @@ type APIClient interface {
 	SearchArtifacts(context.Context, string, *api.ArtifactSearchOptions) ([]*api.Artifact, *api.Response, error)
 	SetMetaData(context.Context, string, *api.MetaData) (*api.Response, error)
 	StartJob(context.Context, *api.Job) (*api.Response, error)
+	StepCancel(context.Context, string, *api.StepCancel) (*api.StepCancelResponse, *api.Response, error)
 	StepExport(context.Context, string, *api.StepExportRequest) (*api.StepExportResponse, *api.Response, error)
 	StepUpdate(context.Context, string, *api.StepUpdate) (*api.Response, error)
 	UpdateArtifacts(context.Context, string, []api.ArtifactState) (*api.Response, error)
