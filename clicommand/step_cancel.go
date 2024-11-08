@@ -27,7 +27,7 @@ Example:
 type StepCancelConfig struct {
 	StepOrKey string `cli:"step" validate:"required"`
 	Force     bool   `cli:"force"`
-	Build		  string `cli:"build"`
+	Build     string `cli:"build"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
