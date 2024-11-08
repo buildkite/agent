@@ -22,6 +22,7 @@ func TestStepCancel(t *testing.T) {
 
 		cfg := StepCancelConfig{
 			Force:            true,
+			Build:            "1",
 			StepOrKey:        "some-random-key",
 			AgentAccessToken: "agentaccesstoken",
 			Endpoint:         server.URL,

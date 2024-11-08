@@ -27,6 +27,7 @@ Example:
 type StepCancelConfig struct {
 	StepOrKey string `cli:"step" validate:"required"`
 	Force     bool   `cli:"force"`
+	Build		  string `cli:"build"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -52,6 +53,13 @@ var StepCancelCommand = cli.Command{
 			Value:  "",
 			Usage:  "The step to cancel. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
 			EnvVar: "BUILDKITE_STEP_ID",
+		},
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			Usage:  "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
+			EnvVar: "BUILDKITE_BUILD_ID",
+			Hidden: true,
 		},
 		cli.BoolFlag{
 			Name:   "force",
@@ -86,6 +94,7 @@ func cancelStep(ctx context.Context, cfg StepCancelConfig, l logger.Logger) erro
 
 	// Create the value to cancel
 	cancel := &api.StepCancel{
+		Build: cfg.Build,
 		Force: cfg.Force,
 	}
 
