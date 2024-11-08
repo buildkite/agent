@@ -1,5 +1,4 @@
-steps
-
+steps:
   - name: ":spiral_note_pad: Check Changelog"
     command: ".buildkite/steps/check-changelog.sh"
     key: "check_changelog"
@@ -207,7 +206,6 @@ steps
       - "publish_rpm_package_to_buildkite_packages"
       - "publish_debian_package"
       - "publish_debian_package_to_buildkite_packages"
-      - "publish_docker_images"
     command: ".buildkite/steps/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
     env:
