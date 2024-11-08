@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.85.0](https://github.com/buildkite/agent/tree/v3.85.0) (2024-11-07)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.84.0...v3.85.0)
+
+### Added
+- Create `buildkite-agent step cancel` subcommand [#3070](https://github.com/buildkite/agent/pull/3070) (@mitchbne)
+
+### Changed
+- Support installing specific versions via script [#3069](https://github.com/buildkite/agent/pull/3069) (@jordandcarter)
+- Promote polyglot-hooks experiment to default [#3063](https://github.com/buildkite/agent/pull/3063) (@DrJosh9000)
+- Use sha256 in the checksum verification [#3062](https://github.com/buildkite/agent/pull/3062) (@esenmarti)
+- Minor update to the 'redactor' CLI command examples. [#3060](https://github.com/buildkite/agent/pull/3060) (@gilesgas)
+
+### Fixed
+- Fix zzglob import path [#3057](https://github.com/buildkite/agent/pull/3057) (@DrJosh9000)
+
+### Internal
+- Shell package cleanup [#3068](https://github.com/buildkite/agent/pull/3068) (@DrJosh9000)
+- Remove .editorconfig [#3064](https://github.com/buildkite/agent/pull/3064) (@DrJosh9000)
+- Various dependency bumps: [#3066](https://github.com/buildkite/agent/pull/3066) [#3065](https://github.com/buildkite/agent/pull/3065) [#3067](https://github.com/buildkite/agent/pull/3067) (@dependabot[bot])
+
 ## [v3.84.0](https://github.com/buildkite/agent/tree/v3.84.0) (2024-10-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.83.1...v3.84.0)
 
