@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.85.1](https://github.com/buildkite/agent/tree/v3.85.1) (2024-11-09)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.85.0...v3.85.1)
+
+### Fixed
+- Fix another nil pointer panic in k8s mode [#3075](https://github.com/buildkite/agent/pull/3075) (@DrJosh9000)
+- Fix nil pointer panic in k8s mode [#3074](https://github.com/buildkite/agent/pull/3074) (@DrJosh9000)
+
 ## [v3.85.0](https://github.com/buildkite/agent/tree/v3.85.0) (2024-11-07)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.84.0...v3.85.0)
 
