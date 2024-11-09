@@ -86,6 +86,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Start with stdout and stderr as their usual selves.
 	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
 
+	// The shell environment is initially the current environment.
+	// It is mutated by kubernetesSetup and needed for setupRedactors.
+	environ := env.FromSlice(os.Environ())
+
 	// Create a logger to stderr that can be used for things prior to the
 	// redactor setup.
 	// Be careful not to log customer secrets here!
@@ -95,7 +99,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		tempLog.Commentf("Using Kubernetes support")
 
 		socket := &kubernetes.Client{ID: e.KubernetesContainerID}
-		if err := e.kubernetesSetup(ctx, socket); err != nil {
+		if err := e.kubernetesSetup(ctx, environ, socket); err != nil {
 			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
 			return 1
 		}
@@ -113,7 +117,6 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// setup the redactors here once and for the life of the executor
 	// they will be flushed at the end of each hook
-	environ := env.FromSlice(os.Environ())
 	preRedactedStdout, preRedactedLogger := e.setupRedactors(tempLog, environ, stdout, stderr)
 
 	// Check if not nil to allow for tests to overwrite shell.
@@ -1201,7 +1204,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	return stdoutRedactor, logger
 }
 
-func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernetes.Client) error {
+func (e *Executor) kubernetesSetup(ctx context.Context, environ *env.Environment, k8sAgentSocket *kubernetes.Client) error {
 	rtr := roko.NewRetrier(
 		roko.WithMaxAttempts(7),
 		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
@@ -1247,18 +1250,18 @@ func (e *Executor) kubernetesSetup(ctx context.Context, k8sAgentSocket *kubernet
 			// Just in case someone has tried to fiddle with this, set it
 			// unconditionally (to be compatible with pre-v3.74.1 / PR 2851
 			// behavior).
-			e.shell.Env.Set(n, v)
+			environ.Set(n, v)
 			if err := os.Setenv(n, v); err != nil {
 				return err
 			}
 			continue
 		}
 		// Skip any that are already set.
-		if e.shell.Env.Exists(n) {
+		if environ.Exists(n) {
 			continue
 		}
 		// Set it!
-		e.shell.Env.Set(n, v)
+		environ.Set(n, v)
 		if err := os.Setenv(n, v); err != nil {
 			return err
 		}
