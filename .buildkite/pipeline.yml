@@ -190,9 +190,9 @@ steps:
           setup:
             - "alpine"
             - "alpine-k8s"
-            - "ubuntu-18.04"
             - "ubuntu-20.04"
             - "ubuntu-22.04"
+            - "ubuntu-24.04"
             - "sidecar"
 
   - group: ":docker: Docker Image Tests"
@@ -216,9 +216,9 @@ steps:
             variant:
               - alpine
               - alpine-k8s
-              - ubuntu-18.04
               - ubuntu-20.04
               - ubuntu-22.04
+              - ubuntu-24.04
               - sidecar
 
       - name: ":docker: {{matrix.variant}} arm64 image test"
@@ -240,9 +240,9 @@ steps:
             variant:
               - alpine
               - alpine-k8s
-              - ubuntu-18.04
               - ubuntu-20.04
               - ubuntu-22.04
+              - ubuntu-24.04
               - sidecar
 
   - name: ":debian: Debian package build"

@@ -4,7 +4,7 @@ set -Eeufo pipefail
 
 ## This script can be run locally like this:
 ##
-## .buildkite/steps/build-docker-image.sh (alpine|alpine-k8s|ubuntu-18.04|ubuntu-20.04|ubuntu-22.04|sidecar) (image tag) (codename) (version)
+## .buildkite/steps/build-docker-image.sh (alpine|alpine-k8s|ubuntu-20.04|ubuntu-22.04|ubuntu-24.04|sidecar) (image tag) (codename) (version)
 ## e.g: .buildkite/steps/build-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
 ##
 ## You can then publish that image with
@@ -21,7 +21,7 @@ codename="${3:-}"
 version="${4:-}"
 push="${PUSH_IMAGE:-true}"
 
-if [[ ! "$variant" =~ ^(alpine|alpine-k8s|ubuntu-18\.04|ubuntu-20\.04|ubuntu-22\.04|sidecar)$ ]]; then
+if [[ ! "$variant" =~ ^(alpine|alpine-k8s|ubuntu-20\.04|ubuntu-22\.04|ubuntu-24\.04|sidecar)$ ]]; then
   echo "Unknown docker variant $variant"
   exit 1
 fi
