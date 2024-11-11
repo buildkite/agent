@@ -37,11 +37,11 @@ type S3Uploader struct {
 	logger logger.Logger
 }
 
-func NewS3Uploader(l logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
+func NewS3Uploader(ctx context.Context, l logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 	bucketName, bucketPath := ParseS3Destination(c.Destination)
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := NewS3Client(l, bucketName)
+	s3Client, err := NewS3Client(ctx, l, bucketName)
 	if err != nil {
 		return nil, err
 	}

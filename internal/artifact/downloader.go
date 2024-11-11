@@ -85,7 +85,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 
 	p := pool.New(pool.MaxConcurrencyLimit)
 	errors := []error{}
-	s3Clients, err := a.generateS3Clients(artifacts)
+	s3Clients, err := a.generateS3Clients(ctx, artifacts)
 	if err != nil {
 		return fmt.Errorf("failed to generate S3 clients for artifact upload: %w", err)
 	}
@@ -126,7 +126,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 // We want to have as few S3 clients as possible, as creating them is kind of an expensive operation
 // But it's also theoretically possible that we'll have multiple artifacts with different S3 buckets, and each
 // S3Client only applies to one bucket, so we need to store the S3 clients in a map, one for each bucket
-func (a *Downloader) generateS3Clients(artifacts []*api.Artifact) (map[string]*s3.S3, error) {
+func (a *Downloader) generateS3Clients(ctx context.Context, artifacts []*api.Artifact) (map[string]*s3.S3, error) {
 	s3Clients := map[string]*s3.S3{}
 
 	for _, artifact := range artifacts {
@@ -136,7 +136,7 @@ func (a *Downloader) generateS3Clients(artifacts []*api.Artifact) (map[string]*s
 
 		bucketName, _ := ParseS3Destination(artifact.UploadDestination)
 		if _, has := s3Clients[bucketName]; !has {
-			client, err := NewS3Client(a.logger, bucketName)
+			client, err := NewS3Client(ctx, a.logger, bucketName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create S3 client for bucket %s: %w", bucketName, err)
 			}

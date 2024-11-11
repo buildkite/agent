@@ -1,10 +1,12 @@
 package artifact
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -16,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/roko"
 )
 
 const (
@@ -113,15 +116,15 @@ func sharedCredentialsProvider() credentials.Provider {
 }
 
 func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRoleProvider {
-	return stscreds.NewWebIdentityRoleProvider(
+	return stscreds.NewWebIdentityRoleProviderWithOptions(
 		sts.New(sess),
 		os.Getenv("AWS_ROLE_ARN"),
 		os.Getenv("AWS_ROLE_SESSION_NAME"),
-		os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE"),
+		stscreds.FetchTokenPath(os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")),
 	)
 }
 
-func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
+func NewS3Client(ctx context.Context, l logger.Logger, bucket string) (*s3.S3, error) {
 	var sess *session.Session
 
 	regionHint := os.Getenv(regionHintEnvVar)
@@ -164,28 +167,37 @@ func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 
 	l.Debug("Testing AWS S3 credentials for bucket %q in region %q...", bucket, *sess.Config.Region)
 
-	s3client := s3.New(sess)
+	// Retry a couple of times (test whether flaky network causes this to fail)
+	retrier := roko.NewRetrier(
+		roko.WithMaxAttempts(3),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 5*time.Second)),
+		roko.WithJitter(),
+	)
+	return roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*s3.S3, error) {
+		s3client := s3.New(sess)
 
-	// Test the authentication by trying to list the first 0 objects in the bucket.
-	_, err := s3client.ListObjects(&s3.ListObjectsInput{
-		Bucket:  aws.String(bucket),
-		MaxKeys: aws.Int64(0),
-	})
-	if err != nil {
-		if errors.Is(err, credentials.ErrNoValidProvidersFoundInChain) {
-			hasProxy := os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != ""
-			hasNoProxyIdmsException := strings.Contains(os.Getenv("NO_PROXY"), "169.254.169.254")
+		// Test the authentication by trying to list the first 0 objects in the bucket.
+		_, err := s3client.ListObjects(&s3.ListObjectsInput{
+			Bucket:  aws.String(bucket),
+			MaxKeys: aws.Int64(0),
+		})
+		if err != nil {
+			if errors.Is(err, credentials.ErrNoValidProvidersFoundInChain) {
+				hasProxy := os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != ""
+				hasNoProxyIdmsException := strings.Contains(os.Getenv("NO_PROXY"), "169.254.169.254")
 
-			errorTitle := "Could not authenticate with AWS S3 using any of the included credential providers."
+				errorTitle := "Could not authenticate with AWS S3 using any of the included credential providers."
 
-			if hasProxy && !hasNoProxyIdmsException {
-				return nil, fmt.Errorf("%s Your HTTP proxy settings do not grant a NO_PROXY=169.254.169.254 exemption for the instance metadata service, instance profile credentials may not be retrievable via your HTTP proxy.", errorTitle)
+				if hasProxy && !hasNoProxyIdmsException {
+					retrier.Break()
+					return nil, fmt.Errorf("%s Your HTTP proxy settings do not grant a NO_PROXY=169.254.169.254 exemption for the instance metadata service, instance profile credentials may not be retrievable via your HTTP proxy.", errorTitle)
+				}
+
+				return nil, fmt.Errorf("%s You can authenticate by setting Buildkite environment variables (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY, BUILDKITE_S3_PROFILE), AWS environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_PROFILE), Web Identity environment variables (AWS_ROLE_ARN, AWS_ROLE_SESSION_NAME, AWS_WEB_IDENTITY_TOKEN_FILE), or if running on AWS EC2 ensuring network access to the EC2 Instance Metadata Service to use an instance profile’s IAM Role credentials.", errorTitle)
 			}
-
-			return nil, fmt.Errorf("%s You can authenticate by setting Buildkite environment variables (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY, BUILDKITE_S3_PROFILE), AWS environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_PROFILE), Web Identity environment variables (AWS_ROLE_ARN, AWS_ROLE_SESSION_NAME, AWS_WEB_IDENTITY_TOKEN_FILE), or if running on AWS EC2 ensuring network access to the EC2 Instance Metadata Service to use an instance profile’s IAM Role credentials.", errorTitle)
+			return nil, fmt.Errorf("Could not s3:ListObjects in your AWS S3 bucket %q in region %q: (%s)", bucket, *sess.Config.Region, err.Error())
 		}
-		return nil, fmt.Errorf("Could not s3:ListObjects in your AWS S3 bucket %q in region %q: (%s)", bucket, *sess.Config.Region, err.Error())
-	}
 
-	return s3client, nil
+		return s3client, nil
+	})
 }
