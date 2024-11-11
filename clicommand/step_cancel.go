@@ -22,12 +22,15 @@ Cancel all unfinished jobs for a step
 Example:
 
     $ buildkite-agent step cancel --step "key"
-    $ buildkite-agent step cancel --step "key" --force`
+    $ buildkite-agent step cancel --step "key" --force
+    $ buildkite-agent step cancel --step "key" --force --force-grace-period-seconds 30
+		`
 
 type StepCancelConfig struct {
-	StepOrKey string `cli:"step" validate:"required"`
-	Force     bool   `cli:"force"`
-	Build     string `cli:"build"`
+	StepOrKey               string `cli:"step" validate:"required"`
+	Force                   bool   `cli:"force"`
+	ForceGracePeriodSeconds int64  `cli:"force-grace-period-seconds"`
+	Build                   string `cli:"build"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -63,8 +66,15 @@ var StepCancelCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "force",
-			Usage:  "Don't wait for the agent to finish before cancelling the jobs",
+			Usage:  "Transition unfinished jobs to a canceled state instead of waiting for jobs to finish uploading artifacts",
 			EnvVar: "BUILDKITE_STEP_CANCEL_FORCE",
+		},
+
+		cli.Int64Flag{
+			Name:   "force-grace-period-seconds",
+			Value:  defaultCancelGracePeriod,
+			Usage:  "The number of seconds to wait for agents to finish uploading artifacts before transitioning unfinished jobs to a canceled state. ′--force′ must also be supplied for this to take affect",
+			EnvVar: "BUILDKITE_FORCE_GRACE_PERIOD_SECONDS,BUILDKITE_CANCEL_GRACE_PERIOD",
 		},
 
 		// API Flags
@@ -84,6 +94,10 @@ var StepCancelCommand = cli.Command{
 		ctx, cfg, l, _, done := setupLoggerAndConfig[StepCancelConfig](context.Background(), c)
 		defer done()
 
+		if cfg.ForceGracePeriodSeconds < 0 {
+			return fmt.Errorf("The value of ′--force-grace-period-seconds′ must be greater than or equal to 0")
+		}
+
 		return cancelStep(ctx, cfg, l)
 	},
 }
@@ -92,10 +106,10 @@ func cancelStep(ctx context.Context, cfg StepCancelConfig, l logger.Logger) erro
 	// Create the API client
 	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-	// Create the value to cancel
 	cancel := &api.StepCancel{
-		Build: cfg.Build,
-		Force: cfg.Force,
+		Build:                   cfg.Build,
+		Force:                   cfg.Force,
+		ForceGracePeriodSeconds: cfg.ForceGracePeriodSeconds,
 	}
 
 	// Post the change
