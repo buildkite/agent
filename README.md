@@ -68,9 +68,9 @@ For example, agent version 3.45.6 is published as:
 #### Supported operating systems
 
 - Alpine 3.18
-- Ubuntu 18.04 LTS (x86_64), supported to end of standard support for 18.04
 - Ubuntu 20.04 LTS (x86_64), supported to end of standard support for 20.04
 - Ubuntu 22.04 LTS (x86_64), supported to end of standard support for 22.04
+- Ubuntu 24.04 LTS (x86_64), supported to end of standard support for 24.04
 
 ## Starting
 
@@ -172,7 +172,7 @@ release).
 The agent binary is fairly portable and should run out of the box on most UNIX
 like systems, as well as Windows.
 
-- Ubuntu 18.04 and newer
+- Ubuntu 20.04 and newer
 - Debian 8 and newer
 - Red Hat RHEL 7 and newer
 - CentOS

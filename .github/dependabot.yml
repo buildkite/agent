@@ -5,9 +5,9 @@ updates:
       - /packaging/docker/alpine
       - /packaging/docker/alpine-k8s
       - /packaging/docker/sidecar
-      - /packaging/docker/ubuntu-18.04
       - /packaging/docker/ubuntu-20.04
       - /packaging/docker/ubuntu-22.04
+      - /packaging/docker/ubuntu-24.04
     schedule:
       interval: weekly
     ignore:
