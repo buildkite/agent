@@ -151,9 +151,11 @@ func gitFetch(
 
 	const badObject = "fatal: bad object"
 	const badReference = "fatal: couldn't find remote ref"
+	const badReferencePreGit221 = "fatal: Couldn't find remote ref"
 	smelt := map[string]bool{
-		badObject:    false,
-		badReference: false,
+		badObject:             false,
+		badReference:          false,
+		badReferencePreGit221: false,
 	}
 
 	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
@@ -167,8 +169,8 @@ func gitFetch(
 			return &gitError{error: err, Type: gitErrorFetchBadObject}
 		}
 
-		// "fatal: couldn't find remote ref" can happen when the just the short commit hash is given.
-		if smelt[badReference] {
+		// "fatal: [Cc]ouldn't find remote ref" can happen when just the short commit hash is given.
+		if smelt[badReference] || smelt[badReferencePreGit221] {
 			return &gitError{error: err, Type: gitErrorFetchBadReference}
 		}
 
