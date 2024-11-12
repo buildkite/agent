@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.86.0](https://github.com/buildkite/agent/tree/v3.86.0) (2024-11-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.85.1...v3.86.0)
+
+### Added
+- Add `force-grace-period-seconds` argument to `step cancel` command [#3084](https://github.com/buildkite/agent/pull/3084) (@mitchbne)
+
+### Changed
+- Rename env var to `BUILDKITE_STEP_CANCEL_FORCE_GRACE_PERIOD_SECONDS` [#3087](https://github.com/buildkite/agent/pull/3087) (@mitchbne)
+- Drop Ubuntu 18.04, add Ubuntu 24.04 [#3078](https://github.com/buildkite/agent/pull/3078) (@DrJosh9000)
+
+### Fixed
+- Handle older version of remote ref error message [#3082](https://github.com/buildkite/agent/pull/3082) (@steveh)
+
+### Internal
+- dependabot: Group Dockerfiles [#3077](https://github.com/buildkite/agent/pull/3077) (@DrJosh9000)
+- Various dependency bumps: [#3086](https://github.com/buildkite/agent/pull/3086), [#3085](https://github.com/buildkite/agent/pull/3085), [#3081](https://github.com/buildkite/agent/pull/3081), [#3079](https://github.com/buildkite/agent/pull/3079) (@dependabot[bot])
+
 ## [v3.85.1](https://github.com/buildkite/agent/tree/v3.85.1) (2024-11-09)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.85.0...v3.85.1)
 
