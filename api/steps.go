@@ -56,8 +56,9 @@ func (c *Client) StepUpdate(ctx context.Context, stepIdOrKey string, stepUpdate 
 }
 
 type StepCancel struct {
-	Build string `json:"build_id"`
-	Force bool   `json:"force,omitempty"`
+	Build                   string `json:"build_id"`
+	Force                   bool   `json:"force"`
+	ForceGracePeriodSeconds int64  `json:"force_grace_period"`
 }
 
 type StepCancelResponse struct {
