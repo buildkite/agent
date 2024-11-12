@@ -74,7 +74,7 @@ var StepCancelCommand = cli.Command{
 			Name:   "force-grace-period-seconds",
 			Value:  defaultCancelGracePeriod,
 			Usage:  "The number of seconds to wait for agents to finish uploading artifacts before transitioning unfinished jobs to a canceled state. ′--force′ must also be supplied for this to take affect",
-			EnvVar: "BUILDKITE_FORCE_GRACE_PERIOD_SECONDS,BUILDKITE_CANCEL_GRACE_PERIOD",
+			EnvVar: "BUILDKITE_STEP_CANCEL_FORCE_GRACE_PERIOD_SECONDS,BUILDKITE_CANCEL_GRACE_PERIOD",
 		},
 
 		// API Flags
