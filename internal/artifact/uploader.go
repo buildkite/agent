@@ -409,7 +409,7 @@ func (a *Uploader) createUploader(ctx context.Context) (_ workCreator, err error
 
 	case strings.HasPrefix(a.conf.Destination, "s3://"):
 		dest = "Amazon S3"
-		return NewS3Uploader(a.logger, S3UploaderConfig{
+		return NewS3Uploader(ctx, a.logger, S3UploaderConfig{
 			Destination: a.conf.Destination,
 		})
 

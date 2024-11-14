@@ -6,12 +6,14 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/roko"
 )
 
 type S3UploaderConfig struct {
@@ -37,11 +39,20 @@ type S3Uploader struct {
 	logger logger.Logger
 }
 
-func NewS3Uploader(l logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
+func NewS3Uploader(ctx context.Context, l logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 	bucketName, bucketPath := ParseS3Destination(c.Destination)
 
-	// Initialize the s3 client, and authenticate it
-	s3Client, err := NewS3Client(l, bucketName)
+	r := roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+		roko.WithJitter(),
+	)
+
+	s3Client, err := roko.DoFunc(ctx, r, func(*roko.Retrier) (*s3.S3, error) {
+		// Initialize the s3 client, and authenticate it
+		return NewS3Client(l, bucketName)
+	})
+
 	if err != nil {
 		return nil, err
 	}
