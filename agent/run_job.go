@@ -24,12 +24,11 @@ import (
 )
 
 const (
-	SignalReasonAgentRefused            = "agent_refused"
-	SignalReasonAgentStop               = "agent_stop"
-	SignalReasonCancel                  = "cancel"
-	SignalReasonSignatureRejected       = "signature_rejected"
-	SignalReasonUnableToVerifySignature = "unable_to_verify_signature"
-	SignalReasonProcessRunError         = "process_run_error"
+	SignalReasonAgentRefused      = "agent_refused"
+	SignalReasonAgentStop         = "agent_stop"
+	SignalReasonCancel            = "cancel"
+	SignalReasonSignatureRejected = "signature_rejected"
+	SignalReasonProcessRunError   = "process_run_error"
 )
 
 type missingKeyError struct {
@@ -98,7 +97,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 		if r.VerificationFailureBehavior == VerificationBehaviourBlock {
 			exit.Status = -1
-			exit.SignalReason = SignalReasonUnableToVerifySignature
+			exit.SignalReason = SignalReasonSignatureRejected
 			return nil
 		}
 	}
