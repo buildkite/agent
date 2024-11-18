@@ -24,12 +24,23 @@ import (
 )
 
 const (
-	SignalReasonAgentRefused            = "agent_refused"
-	SignalReasonAgentStop               = "agent_stop"
-	SignalReasonCancel                  = "cancel"
-	SignalReasonSignatureRejected       = "signature_rejected"
-	SignalReasonUnableToVerifySignature = "unable_to_verify_signature"
-	SignalReasonProcessRunError         = "process_run_error"
+	// Signal reasons
+	SignalReasonAgentRefused      = "agent_refused"
+	SignalReasonAgentStop         = "agent_stop"
+	SignalReasonCancel            = "cancel"
+	SignalReasonSignatureRejected = "signature_rejected"
+	SignalReasonProcessRunError   = "process_run_error"
+	// Don't add more signal reasons. If you must add a new signal reason, it must also be added to
+	// the Job::Event::SignalReason enum in the rails app.
+	//
+	// They are meant to represent the reason a job was stopped, but they've also been used to
+	// represent the reason a job wasn't started at all. This is fine but we don't want to pile more
+	// on as customers catch these signal reasons when configuring retry attempts. When we add more
+	// signal reasons we force customers to update their retry configurations to catch the new signal
+	// reasons.
+	//
+	// We should consider adding new fields 'not_run_reason' and 'not_run_details' instead of adding
+	// more signal reasons.
 )
 
 type missingKeyError struct {
@@ -98,7 +109,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 		if r.VerificationFailureBehavior == VerificationBehaviourBlock {
 			exit.Status = -1
-			exit.SignalReason = SignalReasonUnableToVerifySignature
+			exit.SignalReason = SignalReasonSignatureRejected
 			return nil
 		}
 	}

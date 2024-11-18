@@ -445,7 +445,7 @@ func TestJobVerification(t *testing.T) {
 			verificationJWKS:         nil,
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
 			expectedExitStatus:       "-1",
-			expectedSignalReason:     agent.SignalReasonUnableToVerifySignature,
+			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"+++ ⛔",
 				"cannot verify signature. JWK for pipeline verification is not configured",
