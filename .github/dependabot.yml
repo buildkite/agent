@@ -10,6 +10,11 @@ updates:
       - /packaging/docker/ubuntu-24.04
     schedule:
       interval: weekly
+    groups:
+      container-images:
+        patterns:
+          - "*"
+
   - package-ecosystem: gomod
     directory: /
     schedule:
