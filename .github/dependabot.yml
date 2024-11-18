@@ -10,8 +10,6 @@ updates:
       - /packaging/docker/ubuntu-24.04
     schedule:
       interval: weekly
-    ignore:
-      - dependency-name: ubuntu
   - package-ecosystem: gomod
     directory: /
     schedule:
@@ -20,12 +18,12 @@ updates:
     groups:
       otel:
         patterns:
-        - go.opentelemetry.io/*
+          - go.opentelemetry.io/*
       golang-x:
         patterns:
-        - golang.org/x/*
+          - golang.org/x/*
       cloud-providers:
         patterns:
-        - github.com/Azure/*
-        - github.com/aws/*
-        - google.golang.org/*
+          - github.com/Azure/*
+          - github.com/aws/*
+          - google.golang.org/*
