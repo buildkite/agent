@@ -270,7 +270,7 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 
 func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit string) bool {
 	// Resolve commit to an actual commit object
-	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(ctx)
+	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(ctx, shell.ShowStderr(false))
 	if err != nil {
 		return false
 	}
