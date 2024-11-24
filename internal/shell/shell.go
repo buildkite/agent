@@ -566,14 +566,18 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 	}
 
 	if s.debug {
-		// Tee output streams to debug logger.
-		stdOutStreamer := NewLoggerStreamer(s.Logger)
-		defer stdOutStreamer.Close()
-		cmdCfg.Stdout = io.MultiWriter(cmdCfg.Stdout, stdOutStreamer)
+		// Display normally-hidden output streams using log streamer.
+		if cmdCfg.Stdout == io.Discard {
+			stdOutStreamer := NewLoggerStreamer(s.Logger)
+			defer stdOutStreamer.Close()
+			cmdCfg.Stdout = stdOutStreamer
+		}
 
-		stdErrStreamer := NewLoggerStreamer(s.Logger)
-		defer stdErrStreamer.Close()
-		cmdCfg.Stderr = io.MultiWriter(cmdCfg.Stderr, stdErrStreamer)
+		if cmdCfg.Stderr == io.Discard {
+			stdErrStreamer := NewLoggerStreamer(s.Logger)
+			defer stdErrStreamer.Close()
+			cmdCfg.Stderr = stdErrStreamer
+		}
 	}
 
 	if s.commandLog != nil {
