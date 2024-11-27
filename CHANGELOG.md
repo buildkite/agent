@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.87.1](https://github.com/buildkite/agent/tree/v3.87.1) (2024-11-26)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.87.0...v3.87.1)
+
+### Fixed
+- Fix duplicated output when debug is enabled [#3108](https://github.com/buildkite/agent/pull/3108) (@DrJosh9000)
+
+### Changed
+- Small change to annotation example [#3106](https://github.com/buildkite/agent/pull/3106) (@PriyaSudip)
+
+### Internal
+- Use Ubuntu codename labels to refer to base images [#3103](https://github.com/buildkite/agent/pull/3103) (@DrJosh9000)
+
+### Dependabot
+- The usual updates: [#3111](https://github.com/buildkite/agent/pull/3111), [#3112](https://github.com/buildkite/agent/pull/3112), [#3110](https://github.com/buildkite/agent/pull/3110), [#3109](https://github.com/buildkite/agent/pull/3109), [#3113](https://github.com/buildkite/agent/pull/3113), [#3104](https://github.com/buildkite/agent/pull/3104), [#3098](https://github.com/buildkite/agent/pull/3098), [#3102](https://github.com/buildkite/agent/pull/3102), [#3097](https://github.com/buildkite/agent/pull/3097), [#3101](https://github.com/buildkite/agent/pull/3101) (@dependabot[bot])
+
 ## [v3.87.0](https://github.com/buildkite/agent/tree/v3.87.0) (2024-11-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.86.0...v3.87.0)
 
