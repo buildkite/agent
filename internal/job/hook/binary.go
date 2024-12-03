@@ -60,6 +60,16 @@ func isBinaryExecutable(path string) (bool, error) {
 		return false, fmt.Errorf("reading first four bytes of file %q: %w", path, err)
 	}
 
+	fileInfo, err := f.Stat()
+	if err != nil {
+		return false, fmt.Errorf("stat file %q: %w", path, err)
+	}
+
+	if fileInfo.Size() < 4 {
+		// there are less than four bytes in the file, there's nothing that we can do with it
+		return false, nil
+	}
+
 	if len(firstFour) < 4 {
 		// there are less than four bytes in the file, there's nothing that we can do with it
 		return false, nil
