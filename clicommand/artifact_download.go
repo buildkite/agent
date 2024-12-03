@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
 )
 
@@ -62,6 +62,7 @@ type ArtifactDownloadConfig struct {
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
+	TraceHTTP        bool   `cli:"trace-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
@@ -94,6 +95,7 @@ var ArtifactDownloadCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
+		TraceHTTPFlag,
 
 		// Global flags
 		NoColorFlag,
@@ -111,13 +113,15 @@ var ArtifactDownloadCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the downloader
-		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{
+		downloader := artifact.NewDownloader(l, client, artifact.DownloaderConfig{
 			Query:              cfg.Query,
 			Destination:        cfg.Destination,
 			BuildID:            cfg.Build,
 			Step:               cfg.Step,
 			IncludeRetriedJobs: cfg.IncludeRetriedJobs,
 			DebugHTTP:          cfg.DebugHTTP,
+			TraceHTTP:          cfg.TraceHTTP,
+			DisableHTTP2:       cfg.NoHTTP2,
 		})
 
 		// Download the artifacts

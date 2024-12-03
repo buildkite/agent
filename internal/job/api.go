@@ -3,6 +3,7 @@ package job
 import (
 	"fmt"
 
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
 )
@@ -36,6 +37,25 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_TOKEN", token)
+
+	matched, err := redact.MatchAny(e.RedactedVars, "BUILDKITE_AGENT_JOB_API_TOKEN")
+	if err != nil {
+		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against -redacted-vars: %v", err)
+	}
+	if matched {
+		// The Job API token lets the job talk to this executor. When the job ends,
+		// the socket should be closed and the token becomes meaningless. Also, the
+		// socket should only be accessible to the user running the agent on the
+		// local host.
+		// So it shouldn't matter if the token is leaked in the logs - in order
+		// to make any use of it, someone would have to be on the same host as the
+		// same local user at the same time the job is running.
+		// However, it looks confusing when an environment variable that looks like
+		// an access token with a name ending in _TOKEN is *not* redacted.
+		// Conclusion: if the name matches, redact the Job API token.
+		// This depends on startJobAPI being called after setupRedactors.
+		e.redactors.Add(token)
+	}
 
 	if err := srv.Start(); err != nil {
 		return cleanup, fmt.Errorf("starting Job API server: %w", err)

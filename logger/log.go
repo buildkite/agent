@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/version"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 const (
@@ -231,11 +231,7 @@ func ColorsSupported() bool {
 	}
 
 	// Colors can only be shown if STDOUT is a terminal
-	if terminal.IsTerminal(int(os.Stdout.Fd())) {
-		return true
-	}
-
-	return false
+	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 type JSONPrinter struct {

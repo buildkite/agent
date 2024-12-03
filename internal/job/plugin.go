@@ -13,7 +13,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/utils"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/roko"
 )
 
@@ -162,7 +162,7 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 			return fmt.Errorf("Failed to resolve vendored plugin path for plugin %s: %w", p.Name(), err)
 		}
 
-		if !utils.FileExists(pluginLocation) {
+		if !osutil.FileExists(pluginLocation) {
 			return fmt.Errorf("Vendored plugin path %s doesn't exist", p.Location)
 		}
 
@@ -324,7 +324,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
 	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
 	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
-	if e.ExecutorConfig.PluginsAlwaysCloneFresh && utils.FileExists(pluginDirectory) {
+	if e.ExecutorConfig.PluginsAlwaysCloneFresh && osutil.FileExists(pluginDirectory) {
 		e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
 		err = os.RemoveAll(pluginDirectory)
 		if err != nil {
@@ -333,7 +333,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		}
 	}
 
-	if utils.FileExists(pluginGitDirectory) {
+	if osutil.FileExists(pluginGitDirectory) {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
 		headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, pluginDirectory, "--short=7", "HEAD")
@@ -389,7 +389,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(2*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		return e.shell.Run(ctx, "git", args...)
+		return e.shell.Command("git", args...).Run(ctx)
 	})
 	if err != nil {
 		return nil, err
@@ -398,7 +398,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// Switch to the version if we need to
 	if p.Version != "" {
 		e.shell.Commentf("Checking out `%s`", p.Version)
-		if err = e.shell.Run(ctx, "git", "checkout", "-f", p.Version); err != nil {
+		if err = e.shell.Command("git", "checkout", "-f", p.Version).Run(ctx); err != nil {
 			return nil, err
 		}
 	}

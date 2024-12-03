@@ -40,20 +40,38 @@ steps:
           volumes:
             - "/yum.buildkite.com"
 
-  - name: ":redhat: Publish Edge RPM Package to Packagecloud"
-    command: ".buildkite/steps/publish-rpm-packagecloud.sh"
-    env:
-      REPOSITORY: "buildkite/agent-rpm-experimental"
-      DISTRO_VERSION: rpm_any/rpm_any
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-edge
-      - docker#v5.8.0:
-          image: "public.ecr.aws/docker/library/ruby:3.0"
-          entrypoint: bash
-          propagate-environment: true
-          mount-buildkite-agent: true
-    soft_fail: true
+  - group: ":redhat: Publish Edge RPM Package to Buildkite Packages"
+    steps:
+      - name: ":redhat: Publish Edge {{matrix.pkg_arch}} RPM Package to Buildkite Packages"
+        plugins:
+          - publish-to-packages#v2.2.0:
+              artifacts: "rpm/buildkite-agent_*_{{matrix.pkg_arch}}.rpm"
+              registry: "buildkite/agent-rpm-experimental"
+              artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
+              attestations:
+                - "buildkite-agent-linux-{{matrix.go_arch}}.build-attestation.json"
+                - "buildkite-agent-rpm-packages.package-attestation.json"
+        soft_fail: true
+        matrix:
+          setup:
+            go_arch:
+              - "amd64"
+              - "386"
+              - "arm64"
+              - "ppc64"
+              - "ppc64le"
+              - "riscv64"
+            pkg_arch:
+              - "SKIP_FAKE_ARCH"
+          adjustments:
+            - with: { go_arch: "amd64", pkg_arch: "x86_64" }
+            - with: { go_arch: "386", pkg_arch: "i386" }
+            - with: { go_arch: "arm64", pkg_arch: "aarch64" }
+            - with: { go_arch: "ppc64", pkg_arch: "ppc64" }
+            - with: { go_arch: "ppc64le", pkg_arch: "ppc64le" }
+            - with: { go_arch: "riscv64", pkg_arch: "riscv64" }
+            - with: { pkg_arch: "SKIP_FAKE_ARCH" }
+              skip: true
 
   - name: ":debian: Publish Edge Debian Package"
     command: ".buildkite/steps/publish-debian-package.sh"
@@ -81,28 +99,62 @@ steps:
         - exit_status: 1
           limit: 3
 
-  - name: ":debian: Publish Edge Debian Package to Packagecloud"
-    command: ".buildkite/steps/publish-debian-packagecloud.sh"
-    env:
-      REPOSITORY: "buildkite/agent-deb-experimental"
-      DISTRO_VERSION: any/any
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-edge
-      - docker#v5.8.0:
-          image: "public.ecr.aws/docker/library/ruby:3.0"
-          entrypoint: bash
-          propagate-environment: true
-          mount-buildkite-agent: true
-    soft_fail: true
+  - group: ":debian: Publish Edge Debian Package to Buildkite Packages"
+    steps:
+      - name: ":debian: Publish Edge {{matrix.pkg_arch}} Debian Package to Buildkite Packages"
+        plugins:
+          - publish-to-packages#v2.2.0:
+              artifacts: "deb/buildkite-agent_*_{{matrix.pkg_arch}}.deb"
+              registry: "buildkite/agent-deb-experimental"
+              artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
+              attestations:
+                - "buildkite-agent-linux-{{matrix.go_arch}}.build-attestation.json"
+                - "buildkite-agent-debian-packages.package-attestation.json"
+        soft_fail: true
+        matrix:
+          setup:
+            go_arch:
+              - "amd64"
+              - "386"
+              - "arm"
+              - "armhf"
+              - "arm64"
+              - "ppc64"
+              - "ppc64le"
+              - "riscv64"
+            pkg_arch:
+              - "SKIP_FAKE_ARCH"
+          adjustments:
+            - with: { go_arch: "amd64", pkg_arch: "x86_64" }
+            - with: { go_arch: "386", pkg_arch: "i386" }
+            - with: { go_arch: "arm", pkg_arch: "arm" }
+            - with: { go_arch: "armhf", pkg_arch: "armhf" }
+            - with: { go_arch: "arm64", pkg_arch: "arm64" }
+            - with: { go_arch: "ppc64", pkg_arch: "ppc64" }
+            - with: { go_arch: "ppc64le", pkg_arch: "ppc64el" }
+            - with: { go_arch: "riscv64", pkg_arch: "riscv64" }
+            - with: { pkg_arch: "SKIP_FAKE_ARCH" }
+              skip: true
 
-  - name: ":docker: Publish Edge Docker Images"
-    command: ".buildkite/steps/publish-docker-images.sh"
-    env:
-      CODENAME: "experimental"
-    plugins:
-      - aws-assume-role-with-web-identity:
-          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-edge
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "445615400570"
+  - group: ":docker: Publish Edge Docker Images"
+    steps:
+      - name: ":docker: Publish Edge Images to {{matrix.registry}}"
+        command: ".buildkite/steps/publish-docker-images.sh"
+        env:
+          CODENAME: "experimental"
+          REGISTRY: "{{matrix.registry}}"
+        plugins:
+          - aws-assume-role-with-web-identity:
+              role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-edge
+          - ecr#v2.7.0:
+              login: true
+              account-ids: "445615400570"
+        matrix:
+          setup:
+            registry:
+              - docker.io
+              - ghcr.io
+              - packages.buildkite.com
+          adjustments:
+            - with: { registry: "packages.buildkite.com" }
+              soft_fail: true

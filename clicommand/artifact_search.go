@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
 )
 
@@ -63,6 +63,8 @@ Format specifiers:
   %s    File size of the artifact in bytes
 
   %S    SHA1 checksum of the artifact
+
+  %T    SHA256 checksum of the artifact
 
   %u    Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead`
 
@@ -142,7 +144,7 @@ var ArtifactSearchCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the searcher and try get the artifacts
-		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
+		searcher := artifact.NewSearcher(l, client, cfg.Build)
 		artifacts, err := searcher.Search(ctx, cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
 		if err != nil {
 			return err
@@ -162,6 +164,7 @@ var ArtifactSearchCommand = cli.Command{
 				"%j", artifact.JobID,
 				"%s", strconv.FormatInt(artifact.FileSize, 10),
 				"%S", artifact.Sha1Sum,
+				"%T", artifact.Sha256Sum,
 				"%u", artifact.URL,
 				"%i", artifact.ID,
 			)

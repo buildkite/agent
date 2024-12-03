@@ -1,27 +1,8 @@
-FROM public.ecr.aws/docker/library/alpine:3.19.1@sha256:c5b1261d6d3e43071626931fc004f70149baeba2c8ec672bd4f27761f8e1ad6b
+# syntax=docker/dockerfile:1.4
 
+FROM public.ecr.aws/buildkite/agent-base:alpine@sha256:ca5f4d1ad243ebc18ed00711b2ff589dddf2a8c73029394dce7423122af37e56
 ARG TARGETOS
 ARG TARGETARCH
-
-RUN apk add --no-cache \
-    bash \
-    curl \
-    docker-cli \
-    docker-cli-compose \
-    docker-cli-buildx \
-    git \
-    jq \
-    libc6-compat \
-    openssh-client \
-    perl \
-    py-pip \
-    rsync \
-    run-parts \
-    su-exec \
-    tini \
-    tzdata
-
-COPY docker-compose /usr/local/bin/docker-compose
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 

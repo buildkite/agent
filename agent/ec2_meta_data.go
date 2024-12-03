@@ -2,6 +2,7 @@ package agent
 
 import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/buildkite/agent/v3/internal/awslib"
 )
 
 type EC2MetaData struct {
@@ -58,7 +59,7 @@ func (e EC2MetaData) Get() (map[string]string, error) {
 }
 
 func newAWSClient() (*ec2metadata.EC2Metadata, error) {
-	sess, err := awsSession()
+	sess, err := awslib.Session()
 	if err != nil {
 		return &ec2metadata.EC2Metadata{}, err
 	}

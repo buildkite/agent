@@ -8,6 +8,7 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/tracetools"
 )
 
 // Config provides the configuration for the job executor. Some of the keys are
@@ -165,8 +166,15 @@ type ExecutorConfig struct {
 	// Service name to use when reporting traces.
 	TracingServiceName string
 
+	// Encoding (within base64) for the trace context environment variable.
+	TraceContextCodec tracetools.Codec
+
 	// Whether to start the JobAPI
 	JobAPI bool
+
+	// Whether to enable Kubernetes support, and which container we're running in
+	KubernetesExec        bool
+	KubernetesContainerID int
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string

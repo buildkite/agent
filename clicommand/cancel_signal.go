@@ -1,16 +1,17 @@
 package clicommand
 
-import "github.com/urfave/cli"
+import (
+	"fmt"
+	"time"
+
+	"github.com/urfave/cli"
+)
 
 const (
 	defaultCancelGracePeriod = 10
-	defaultSignalGracePeriod = 9
 )
 
 var (
-	// cancel grace period must be strictly longer than signal grace period
-	_ uint = defaultCancelGracePeriod - defaultSignalGracePeriod - 1
-
 	cancelGracePeriodFlag = cli.IntFlag{
 		Name:  "cancel-grace-period",
 		Value: defaultCancelGracePeriod,
@@ -27,8 +28,40 @@ var (
 	signalGracePeriodSecondsFlag = cli.IntFlag{
 		Name: "signal-grace-period-seconds",
 		Usage: "The number of seconds given to a subprocess to handle being sent ′cancel-signal′. " +
-			"After this period has elapsed, SIGKILL will be sent.",
+			"After this period has elapsed, SIGKILL will be sent. " +
+			"Negative values are taken relative to ′cancel-grace-period′. " +
+			"The default is ′cancel-grace-period′ - 1.",
 		EnvVar: "BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
-		Value:  defaultSignalGracePeriod,
+		Value:  -1,
 	}
 )
+
+// signalGracePeriod computes the signal grace period based on the various
+// possible flag configurations:
+//   - If signalGracePeriodSecs is negative, it is relative to
+//     cancelGracePeriodSecs.
+//   - If cancelGracePeriodSecs is less than signalGracePeriodSecs that is an
+//     error.
+func signalGracePeriod(cancelGracePeriodSecs, signalGracePeriodSecs int) (time.Duration, error) {
+	// Treat a negative signal grace period as relative to the cancel grace period
+	if signalGracePeriodSecs < 0 {
+		if cancelGracePeriodSecs < -signalGracePeriodSecs {
+			return 0, fmt.Errorf(
+				"cancel-grace-period (%d) must be at least as big as signal-grace-period-seconds (%d)",
+				cancelGracePeriodSecs,
+				signalGracePeriodSecs,
+			)
+		}
+		signalGracePeriodSecs = cancelGracePeriodSecs + signalGracePeriodSecs
+	}
+
+	if cancelGracePeriodSecs <= signalGracePeriodSecs {
+		return 0, fmt.Errorf(
+			"cancel-grace-period (%d) must be greater than signal-grace-period-seconds (%d)",
+			cancelGracePeriodSecs,
+			signalGracePeriodSecs,
+		)
+	}
+
+	return time.Duration(signalGracePeriodSecs) * time.Second, nil
+}

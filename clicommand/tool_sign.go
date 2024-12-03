@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,14 +9,17 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/buildkite/agent/v3/internal/awslib"
 	"github.com/buildkite/agent/v3/internal/bkgql"
+	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/buildkite/interpolate"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
 )
@@ -32,9 +36,16 @@ type ToolSignConfig struct {
 	JWKSFile  string `cli:"jwks-file"`
 	JWKSKeyID string `cli:"jwks-key-id"`
 
+	// AWS KMS key used for signing pipelines
+	AWSKMSKeyID string `cli:"signing-aws-kms-key"`
+
+	// Enable debug logging for pipeline signing, this depends on debug logging also being enabled
+	DebugSigning bool `cli:"debug-signing"`
+
 	// Needed for to use GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
 	PipelineSlug     string `cli:"pipeline-slug"`
+	GraphQLEndpoint  string `cli:"graphql-endpoint"`
 
 	// Added to signature
 	Repository string `cli:"repo"`
@@ -73,7 +84,28 @@ UI so that the agents running these steps can verify the signatures.
 
 If a token is provided using the ′graphql-token′ flag, the tool will attempt to retrieve the
 pipeline definition and repo using the Buildkite GraphQL API. If ′update′ is also set, it will
-update the pipeline definition with the signed version using the GraphQL API too.`,
+update the pipeline definition with the signed version using the GraphQL API too.
+
+Examples:
+
+Retrieving the pipeline from the GraphQL API and signing it:
+
+    $ buildkite-agent tool sign \
+        --graphql-token <graphql token> \
+        --organization-slug <your org slug> \
+        --pipeline-slug <slug of the pipeline whose steps you want to sign \
+        --jwks-file /path/to/private/key.json \
+        --update
+
+Signing a pipeline from a file:
+
+    $ buildkite-agent tool sign pipeline.yml \
+        --jwks-file /path/to/private/key.json \
+        --repo <repo url for your pipeline>
+    # or
+    $ cat pipeline.yml | buildkite-agent tool sign \
+        --jwks-file /path/to/private/key.json \
+        --repo <repo url for your pipeline>`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "graphql-token",
@@ -102,6 +134,16 @@ update the pipeline definition with the signed version using the GraphQL API too
 			Usage:  "The JWKS key ID to use when signing the pipeline. If none is provided and the JWKS file contains only one key, that key will be used.",
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
 		},
+		cli.StringFlag{
+			Name:   "signing-aws-kms-key",
+			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
+			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
+		},
+		cli.BoolFlag{
+			Name:   "debug-signing",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
+		},
 
 		// These are required for GraphQL
 		cli.StringFlag{
@@ -113,6 +155,12 @@ update the pipeline definition with the signed version using the GraphQL API too
 			Name:   "pipeline-slug",
 			Usage:  "The pipeline slug. Required to connect to the GraphQL API.",
 			EnvVar: "BUILDKITE_PIPELINE_SLUG",
+		},
+		cli.StringFlag{
+			Name:   "graphql-endpoint",
+			Usage:  "The endpoint for the Buildkite GraphQL API. This is only needed if you are using the the graphql-token flag, and is mostly useful for development purposes",
+			Value:  bkgql.DefaultEndpoint,
+			EnvVar: "BUILDKITE_GRAPHQL_ENDPOINT",
 		},
 
 		// Added to signature
@@ -134,25 +182,68 @@ update the pipeline definition with the signed version using the GraphQL API too
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](context.Background(), c)
 		defer done()
 
-		key, err := jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
-		if err != nil {
-			return fmt.Errorf("couldn't read the signing key file: %w", err)
+		var (
+			key signature.Key
+			err error
+		)
+
+		switch {
+		case cfg.AWSKMSKeyID != "":
+			// load the AWS SDK V2 config
+			awscfg, err := awslib.GetConfigV2(ctx)
+			if err != nil {
+				return err
+			}
+
+			// assign a crypto signer which uses the KMS key to sign the pipeline
+			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.AWSKMSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't create KMS signer: %w", err)
+			}
+
+		default:
+			key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't read the signing key file: %w", err)
+			}
+
 		}
 
+		sign := signWithGraphQL
 		if cfg.GraphQLToken == "" {
-			return signOffline(c, l, key, &cfg)
+			sign = signOffline
 		}
 
-		return signWithGraphQL(ctx, c, l, key, &cfg)
+		err = sign(ctx, c, l, key, &cfg)
+		if err != nil {
+			return fmt.Errorf("Error signing pipeline: %w", err)
+		}
+
+		return nil
 	},
 }
 
-func signOffline(
-	c *cli.Context,
-	l logger.Logger,
-	key jwk.Key,
-	cfg *ToolSignConfig,
-) error {
+func validateNoInterpolations(pipelineString string) error {
+	expansions, err := interpolate.Identifiers(pipelineString)
+	if err != nil {
+		return fmt.Errorf("discovering interpolation expansions: %w", err)
+	}
+
+	if len(expansions) > 0 {
+		for i, e := range expansions {
+			// in interpolate, the identifiers of expansions don't have the $ prefix, and escaped expansions only have one
+			expansions[i] = "$" + e
+		}
+
+		return fmt.Errorf("pipeline contains environment interpolations, which are only supported when dynamically "+
+			"uploading a pipeline, and not when statically signing pipelines using this tool. "+
+			"Please remove the following interpolation directives: %s", strings.Join(expansions, ", "))
+	}
+
+	return nil
+}
+
+func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
 	if cfg.Repository == "" {
 		return ErrUseGraphQL
 	}
@@ -186,11 +277,23 @@ func signOffline(
 		return ErrNoPipeline
 	}
 
-	parsedPipeline, err := pipeline.Parse(input)
-	if w := warning.As(err); w != nil {
+	pipelineBytes, err := io.ReadAll(input)
+	if err != nil {
+		return fmt.Errorf("couldn't read pipeline: %w", err)
+	}
+
+	err = validateNoInterpolations(string(pipelineBytes))
+	if err != nil {
+		return err
+	}
+
+	parsedPipeline, err := pipeline.Parse(bytes.NewReader(pipelineBytes))
+	if err != nil {
+		w := warning.As(err)
+		if w == nil {
+			return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
+		}
 		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
-	} else if err != nil {
-		return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
 	}
 
 	if cfg.Debug {
@@ -202,7 +305,16 @@ func signOffline(
 		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
 	}
 
-	if err := signature.SignPipeline(parsedPipeline, key, cfg.Repository); err != nil {
+	err = signature.SignSteps(
+		ctx,
+		parsedPipeline.Steps,
+		key,
+		cfg.Repository,
+		signature.WithEnv(parsedPipeline.Env.ToMap()),
+		signature.WithLogger(l),
+		signature.WithDebugSigning(cfg.DebugSigning),
+	)
+	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
@@ -211,19 +323,13 @@ func signOffline(
 	return enc.Encode(parsedPipeline)
 }
 
-func signWithGraphQL(
-	ctx context.Context,
-	c *cli.Context,
-	l logger.Logger,
-	key jwk.Key,
-	cfg *ToolSignConfig,
-) error {
+func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
 	orgPipelineSlug := fmt.Sprintf("%s/%s", cfg.OrganizationSlug, cfg.PipelineSlug)
 	debugL := l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
 
 	l.Info("Retrieving pipeline from the GraphQL API")
 
-	client := bkgql.NewClient(cfg.GraphQLToken)
+	client := bkgql.NewClient(cfg.GraphQLEndpoint, cfg.GraphQLToken)
 
 	resp, err := bkgql.GetPipeline(ctx, client, orgPipelineSlug)
 	if err != nil {
@@ -240,13 +346,20 @@ func signWithGraphQL(
 	}
 
 	debugL.Debug("Pipeline retrieved successfully: %#v", resp)
-	l.Info("Signing pipeline with the repository URL:\n%s", resp.Pipeline.Repository.Url)
 
-	parsedPipeline, err := pipeline.Parse(strings.NewReader(resp.Pipeline.Steps.Yaml))
-	if w := warning.As(err); w != nil {
+	pipelineString := resp.Pipeline.Steps.Yaml
+	err = validateNoInterpolations(pipelineString)
+	if err != nil {
+		return err
+	}
+
+	parsedPipeline, err := pipeline.Parse(strings.NewReader(pipelineString))
+	if err != nil {
+		w := warning.As(err)
+		if w == nil {
+			return fmt.Errorf("pipeline parsing failed: %w", err)
+		}
 		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
-	} else if err != nil {
-		return fmt.Errorf("pipeline parsing failed: %w", err)
 	}
 
 	if cfg.Debug {
@@ -258,7 +371,7 @@ func signWithGraphQL(
 		debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
 	}
 
-	if err := signature.SignPipeline(parsedPipeline, key, resp.Pipeline.Repository.Url); err != nil {
+	if err := signature.SignSteps(ctx, parsedPipeline.Steps, key, resp.Pipeline.Repository.Url, signature.WithEnv(parsedPipeline.Env.ToMap()), signature.WithLogger(debugL), signature.WithDebugSigning(cfg.DebugSigning)); err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 

@@ -48,7 +48,7 @@ body entirely and providing a new style value.
 
 Example:
 
-    $ buildkite-agent annotate "All tests passed! :rocket:"
+    $ buildkite-agent annotate "All tests passed! :your-emoji: like :rocket:"
     $ cat annotation.md | buildkite-agent annotate --style "warning"
     $ buildkite-agent annotate --style "success" --context "junit"
     $ ./script/dynamic_annotation_generator | buildkite-agent annotate --style "success"`
@@ -97,8 +97,9 @@ var AnnotateCommand = cli.Command{
 		},
 		cli.IntFlag{
 			Name:   "priority",
-			Usage:  "Priority of the annotation (1 to 10). By default annotations have a priority of 3. Annotations with a priority of 10 will be shown first, and annotations with a priority of 1 will be shown last.",
+			Usage:  "The priority of the annotation (′1′ to ′10′). Annotations with a priority of ′10′ are shown first, while annotations with a priority of ′1′ are shown last.",
 			EnvVar: "BUILDKITE_ANNOTATION_PRIORITY",
+			Value:  3,
 		},
 		cli.StringFlag{
 			Name:   "job",

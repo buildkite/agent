@@ -8,10 +8,10 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/urfave/cli"
 )
 
@@ -91,12 +91,16 @@ type BootstrapConfig struct {
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
 	CancelSignal                 string   `cli:"cancel-signal"`
+	CancelGracePeriod            int      `cli:"cancel-grace-period"`
 	SignalGracePeriodSeconds     int      `cli:"signal-grace-period-seconds"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
+	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
+	KubernetesExec               bool     `cli:"kubernetes-exec"`
+	KubernetesContainerID        int      `cli:"kubernetes-container-id"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -339,13 +343,6 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
-		cancelSignalFlag,
-		signalGracePeriodSecondsFlag,
-		cli.StringSliceFlag{
-			Name:   "redacted-vars",
-			Usage:  "Pattern of environment variable names containing sensitive values",
-			EnvVar: "BUILDKITE_REDACTED_VARS",
-		},
 		cli.StringFlag{
 			Name:   "tracing-backend",
 			Usage:  "The name of the tracing backend to use.",
@@ -368,11 +365,26 @@ var BootstrapCommand = cli.Command{
 			Usage:  "A list of warning IDs to disable",
 			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
 		},
+		cli.IntFlag{
+			Name: "kubernetes-container-id",
+			Usage: "This is intended to be used only by the Buildkite k8s stack " +
+				"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
+				"used to identify this container within the pod",
+			EnvVar: "BUILDKITE_CONTAINER_ID",
+		},
+		cancelSignalFlag,
+		cancelGracePeriodFlag,
+		signalGracePeriodSecondsFlag,
+
+		// Global flags
 		DebugFlag,
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		RedactedVars,
 		StrictSingleHooksFlag,
+		KubernetesExecFlag,
+		TraceContextEncodingFlag,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -400,7 +412,15 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
-		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
+		signalGracePeriod, err := signalGracePeriod(cfg.CancelGracePeriod, cfg.SignalGracePeriodSeconds)
+		if err != nil {
+			return err
+		}
+
+		traceContextCodec, err := tracetools.ParseEncoding(cfg.TraceContextEncoding)
+		if err != nil {
+			return fmt.Errorf("while parsing trace context encoding: %v", err)
+		}
 
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
@@ -452,8 +472,11 @@ var BootstrapCommand = cli.Command{
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
+			TraceContextCodec:            traceContextCodec,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
+			KubernetesExec:               cfg.KubernetesExec,
+			KubernetesContainerID:        cfg.KubernetesContainerID,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)

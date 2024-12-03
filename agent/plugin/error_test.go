@@ -2,27 +2,27 @@ package plugin
 
 import (
 	"errors"
-	"math/rand"
+	"math/bits"
+	"math/rand/v2"
 	"testing"
 	"time"
 )
 
-func cyclicPermute[T any](arr []T) {
+func shuffle[T any](rnd *rand.Rand, arr []T) {
 	if len(arr) < 2 {
 		return
 	}
-
-	for i := len(arr) - 1; i > 0; i-- {
-		j := rand.Intn(i)
+	rnd.Shuffle(len(arr), func(i, j int) {
 		arr[i], arr[j] = arr[j], arr[i]
-	}
+	})
 }
 
 func TestDeprecatedNameErrorsOrder(t *testing.T) {
 	t.Parallel()
-	seed := time.Now().UnixNano() % ((1 << 31) - 1)
-	t.Logf("seed = %d", seed)
-	rand.Seed(seed)
+
+	seed1 := uint64(time.Now().UnixNano())
+	seed2 := bits.Reverse64(uint64(time.Now().UnixNano()))
+	t.Logf("seed1 = %d, seed2 = %d", seed1, seed2)
 
 	for _, test := range []struct {
 		name string
@@ -95,9 +95,11 @@ func TestDeprecatedNameErrorsOrder(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
+
+			randSrc := rand.New(rand.NewPCG(seed1, seed2))
 			errs := make([]DeprecatedNameError, len(test.errs))
 			copy(errs, test.errs)
-			cyclicPermute(errs)
+			shuffle(randSrc, errs)
 
 			var err1, err2 *DeprecatedNameErrors
 			err1 = err1.Append(test.errs...)

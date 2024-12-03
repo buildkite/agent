@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 )
 
 var dockerEnv = []string{
@@ -61,7 +61,7 @@ func tearDownDeprecatedDockerIntegration(ctx context.Context, sh *shell.Shell) e
 	if container, ok := sh.Env.Get("DOCKER_CONTAINER"); ok {
 		sh.Printf("~~~ Cleaning up Docker containers")
 
-		if err := sh.Run(ctx, "docker", "rm", "-f", "-v", container); err != nil {
+		if err := sh.Command("docker", "rm", "-f", "-v", container).Run(ctx); err != nil {
 			return err
 		}
 	} else if projectName, ok := sh.Env.Get("COMPOSE_PROJ_NAME"); ok {
@@ -98,12 +98,14 @@ func runDockerCommand(ctx context.Context, sh *shell.Shell, cmd []string) error 
 	sh.Env.Set("DOCKER_IMAGE", dockerImage)
 
 	sh.Printf("~~~ :docker: Building Docker image %s", dockerImage)
-	if err := sh.Run(ctx, "docker", "build", "-f", dockerFile, "-t", dockerImage, "."); err != nil {
+	shCmd := sh.Command("docker", "build", "-f", dockerFile, "-t", dockerImage, ".")
+	if err := shCmd.Run(ctx); err != nil {
 		return err
 	}
 
 	sh.Headerf(":docker: Running command (in Docker container)")
-	if err := sh.Run(ctx, "docker", append([]string{"run", "--name", dockerContainer, dockerImage}, cmd...)...); err != nil {
+	shCmd = sh.Command("docker", append([]string{"run", "--name", dockerContainer, dockerImage}, cmd...)...)
+	if err := shCmd.Run(ctx); err != nil {
 		return err
 	}
 
@@ -159,5 +161,5 @@ func runDockerCompose(ctx context.Context, sh *shell.Shell, projectName string, 
 	}
 
 	args = append(args, commandArgs...)
-	return sh.Run(ctx, "docker-compose", args...)
+	return sh.Command("docker-compose", args...).Run(ctx)
 }

@@ -24,13 +24,12 @@ const (
 const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
+	AllowArtifactPathTraversal     = "allow-artifact-path-traversal"
 	DescendingSpawnPriority        = "descending-spawn-priority"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
-	KubernetesExec                 = "kubernetes-exec"
 	NormalisedUploadPaths          = "normalised-upload-paths"
 	OverrideZeroExitOnCancel       = "override-zero-exit-on-cancel"
 	PTYRaw                         = "pty-raw"
-	PolyglotHooks                  = "polyglot-hooks"
 	ResolveCommitAfterCheckout     = "resolve-commit-after-checkout"
 	UseZZGlob                      = "use-zzglob"
 
@@ -42,17 +41,18 @@ const (
 	InbuiltStatusPage      = "inbuilt-status-page"
 	IsolatedPluginCheckout = "isolated-plugin-checkout"
 	JobAPI                 = "job-api"
+	KubernetesExec         = "kubernetes-exec"
+	PolyglotHooks          = "polyglot-hooks"
 )
 
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
+		AllowArtifactPathTraversal:     {},
 		DescendingSpawnPriority:        {},
 		InterpolationPrefersRuntimeEnv: {},
-		KubernetesExec:                 {},
 		NormalisedUploadPaths:          {},
 		OverrideZeroExitOnCancel:       {},
-		PolyglotHooks:                  {},
 		ResolveCommitAfterCheckout:     {},
 		UseZZGlob:                      {},
 	}
@@ -65,6 +65,8 @@ var (
 		InbuiltStatusPage:      standardPromotionMsg(InbuiltStatusPage, "v3.48.0"),
 		IsolatedPluginCheckout: standardPromotionMsg(IsolatedPluginCheckout, "v3.67.0"),
 		JobAPI:                 standardPromotionMsg(JobAPI, "v3.64.0"),
+		KubernetesExec:         "The kubernetes-exec experiment has been replaced with the --kubernetes-exec flag as of agent v3.74.0",
+		PolyglotHooks:          standardPromotionMsg(PolyglotHooks, "v3.85.0"),
 	}
 
 	// Used to track experiments possibly in use.

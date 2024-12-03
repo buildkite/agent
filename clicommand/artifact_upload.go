@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
 )
 
@@ -81,6 +81,7 @@ type ArtifactUploadConfig struct {
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
+	TraceHTTP        bool   `cli:"trace-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
@@ -88,6 +89,7 @@ type ArtifactUploadConfig struct {
 	// Uploader flags
 	GlobResolveFollowSymlinks bool `cli:"glob-resolve-follow-symlinks"`
 	UploadSkipSymlinks        bool `cli:"upload-skip-symlinks"`
+	NoMultipartUpload         bool `cli:"no-multipart-artifact-upload"`
 
 	// deprecated
 	FollowSymlinks bool `cli:"follow-symlinks" deprecated-and-renamed-to:"GlobResolveFollowSymlinks"`
@@ -131,6 +133,7 @@ var ArtifactUploadCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
+		TraceHTTPFlag,
 
 		// Global flags
 		NoColorFlag,
@@ -138,6 +141,7 @@ var ArtifactUploadCommand = cli.Command{
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		NoMultipartArtifactUploadFlag,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -148,12 +152,16 @@ var ArtifactUploadCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the uploader
-		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
-			JobID:       cfg.Job,
-			Paths:       cfg.UploadPaths,
-			Destination: cfg.Destination,
-			ContentType: cfg.ContentType,
-			DebugHTTP:   cfg.DebugHTTP,
+		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
+			JobID:        cfg.Job,
+			Paths:        cfg.UploadPaths,
+			Destination:  cfg.Destination,
+			ContentType:  cfg.ContentType,
+			DebugHTTP:    cfg.DebugHTTP,
+			TraceHTTP:    cfg.TraceHTTP,
+			DisableHTTP2: cfg.NoHTTP2,
+
+			AllowMultipart: !cfg.NoMultipartUpload,
 
 			// If the deprecated flag was set to true, pretend its replacement was set to true too
 			// this works as long as the user only sets one of the two flags

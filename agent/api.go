@@ -13,6 +13,7 @@ type APIClient interface {
 	AcquireJob(context.Context, string, ...api.Header) (*api.Job, *api.Response, error)
 	Annotate(context.Context, string, *api.Annotation) (*api.Response, error)
 	AnnotationRemove(context.Context, string, string) (*api.Response, error)
+	CancelBuild(context.Context, string) (*api.Build, *api.Response, error)
 	Config() api.Config
 	Connect(context.Context) (*api.Response, error)
 	CreateArtifacts(context.Context, string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error)
@@ -35,9 +36,10 @@ type APIClient interface {
 	SearchArtifacts(context.Context, string, *api.ArtifactSearchOptions) ([]*api.Artifact, *api.Response, error)
 	SetMetaData(context.Context, string, *api.MetaData) (*api.Response, error)
 	StartJob(context.Context, *api.Job) (*api.Response, error)
+	StepCancel(context.Context, string, *api.StepCancel) (*api.StepCancelResponse, *api.Response, error)
 	StepExport(context.Context, string, *api.StepExportRequest) (*api.StepExportResponse, *api.Response, error)
 	StepUpdate(context.Context, string, *api.StepUpdate) (*api.Response, error)
-	UpdateArtifacts(context.Context, string, map[string]string) (*api.Response, error)
+	UpdateArtifacts(context.Context, string, []api.ArtifactState) (*api.Response, error)
 	UploadChunk(context.Context, string, *api.Chunk) (*api.Response, error)
 	UploadPipeline(context.Context, string, *api.PipelineChange, ...api.Header) (*api.Response, error)
 }

@@ -46,6 +46,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "1", // step env overrides pipeline env
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithNoPluginConfig = api.Job{
@@ -67,6 +68,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "1", // step env overrides pipeline env
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithNoPlugins = api.Job{
@@ -82,6 +84,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "0",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithNullPlugins = api.Job{
@@ -97,6 +100,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "0",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithMismatchedStepAndJob = api.Job{
@@ -110,6 +114,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "0",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithMismatchedPlugins = api.Job{
@@ -130,6 +135,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "0",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithMissingPlugins = api.Job{
@@ -150,6 +156,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "0",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithMismatchedEnv = api.Job{
@@ -163,6 +170,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "crimes",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithStepEnvButNoCorrespondingJobEnv = api.Job{
@@ -177,6 +185,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "0",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithPipelineEnvButNoCorrespondingJobEnv = api.Job{
@@ -189,6 +198,7 @@ var (
 			"BUILDKITE_COMMAND": "echo hello world",
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithMatrix = api.Job{
@@ -206,6 +216,7 @@ var (
 			"greeting": "hello",
 			"object":   "world",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithInvalidMatrixPermutation = api.Job{
@@ -223,6 +234,7 @@ var (
 			"greeting": "goodbye",
 			"object":   "mister anderson",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithMatrixMismatch = api.Job{
@@ -240,6 +252,7 @@ var (
 			"greeting": "hello",
 			"object":   "world",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithPipelineInvariantsInEnv = api.Job{
@@ -253,6 +266,7 @@ var (
 			"BUILDKITE_REPO":    defaultRepositoryURL,
 			"DEPLOY":            "0",
 		},
+		Token: "bkaj_job-token",
 	}
 
 	jobWithInvalidPipelineInvariantsInEnv = api.Job{
@@ -266,6 +280,7 @@ var (
 			"BUILDKITE_REPO":    "https://github.com/haxors/agent.git",
 			"DEPLOY":            "0",
 		},
+		Token: "bkaj_job-token",
 	}
 )
 
@@ -423,7 +438,7 @@ func TestJobVerification(t *testing.T) {
 		},
 		{
 			name:                     "when the step has a signature, but the JobRunner doesn't have a verification key, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{},
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      job,
 			repositoryURL:            defaultRepositoryURL,
 			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
@@ -433,7 +448,22 @@ func TestJobVerification(t *testing.T) {
 			expectedSignalReason:     agent.SignalReasonSignatureRejected,
 			expectLogsContain: []string{
 				"+++ ⛔",
-				"but no verification key was provided",
+				"cannot verify signature. JWK for pipeline verification is not configured",
+			},
+		},
+		{
+			name:                     "when the step has a signature, but the JobRunner doesn't have a verification key, and JobVerificationFailureBehaviour is warn, it warns and runs the job",
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourWarn},
+			job:                      job,
+			repositoryURL:            defaultRepositoryURL,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         nil,
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+			expectLogsContain: []string{
+				"+++ ⛔",
+				"cannot verify signature. JWK for pipeline verification is not configured",
 			},
 		},
 		{
@@ -568,7 +598,7 @@ func TestJobVerification(t *testing.T) {
 				RepositoryURL: tc.repositoryURL,
 			}
 
-			tc.job.Step = signStep(t, tc.signingKey, pipelineUploadEnv, stepWithInvariants)
+			tc.job.Step = signStep(t, ctx, tc.signingKey, pipelineUploadEnv, stepWithInvariants)
 			err := runJob(t, ctx, testRunJobConfig{
 				job:              &tc.job,
 				server:           server,
@@ -659,6 +689,7 @@ func jwksFromKeys(t *testing.T, jwkes ...jwk.Key) jwk.Set {
 
 func signStep(
 	t *testing.T,
+	ctx context.Context,
 	key jwk.Key,
 	env map[string]string,
 	stepWithInvariants signature.CommandStepWithInvariants,
@@ -670,7 +701,7 @@ func signStep(
 		return stepWithInvariants.CommandStep
 	}
 
-	signature, err := signature.Sign(key, env, &stepWithInvariants)
+	signature, err := signature.Sign(ctx, key, &stepWithInvariants, signature.WithEnv(env))
 	if err != nil {
 		t.Fatalf("signing step: %v", err)
 	}

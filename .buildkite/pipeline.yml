@@ -1,7 +1,13 @@
 env:
   DRY_RUN: false # set to true to disable publishing releases
+  AGENT_RUNNERS_LINUX_QUEUE: "${AGENT_RUNNERS_LINUX_QUEUE:-agent-runners-linux-amd64}"
+  AGENT_RUNNERS_LINUX_ARM64_QUEUE: "${AGENT_RUNNERS_LINUX_ARM64_QUEUE:-agent-runners-linux-arm64}"
+  AGENT_RUNNERS_WINDOWS_QUEUE: "${AGENT_RUNNERS_WINDOWS_QUEUE:-agent-runners-windows-amd64}"
+  AGENT_BUILDERS_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
+  AGENT_BUILDERS_ARM64_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
+
 agents:
-  queue: agent-runners-linux-amd64
+  queue: "$AGENT_RUNNERS_LINUX_QUEUE"
 
 steps:
   - name: ":go::robot_face: Check Code Committed"
@@ -33,7 +39,7 @@ steps:
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
     agents:
-      queue: agent-runners-linux-arm64
+      queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -50,7 +56,7 @@ steps:
     command: ".buildkite/steps/tests.sh -race"
     artifact_paths: junit-*.xml
     agents:
-      queue: agent-runners-linux-arm64
+      queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -67,7 +73,7 @@ steps:
     command: "bash .buildkite\\steps\\tests.sh"
     artifact_paths: junit-*.xml
     agents:
-      queue: agent-runners-windows-amd64
+      queue: $AGENT_RUNNERS_WINDOWS_QUEUE
     plugins:
       - test-collector#v1.2.0:
           files: "junit-*.xml"
@@ -88,51 +94,55 @@ steps:
 
   - group: ":hammer_and_wrench: Binary builds"
     steps:
-    - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-      command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
-      key: build-binary
-      depends_on:
-        # don't wait for slower windows tests
-        - test-linux-amd64
-        - test-linux-arm64
-      artifact_paths: "pkg/*"
-      plugins:
-        docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: agent
-      matrix:
-        setup:
-          os:
-            - darwin
-            - freebsd
-            - linux
-            - openbsd
-            - windows
-          arch:
-            - "386"
-            - amd64
-            - arm64
-        adjustments:
-          - with: { os: darwin, arch: "386" }
-            skip: "macOS no longer supports x86 binaries"
+      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
+        command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
+        key: build-binary
+        depends_on:
+          # don't wait for slower windows tests
+          - test-linux-amd64
+          - test-linux-arm64
+        artifact_paths: "pkg/*"
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              run: agent
+          - generate-provenance-attestation#v1.1.0:
+              artifacts: "pkg/*"
+              attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
+        matrix:
+          setup:
+            os:
+              - darwin
+              - freebsd
+              - linux
+              - openbsd
+              - windows
+            arch:
+              - "386"
+              - amd64
+              - arm64
+          adjustments:
+            - with: { os: darwin, arch: "386" }
+              skip: "macOS no longer supports x86 binaries"
 
-          - with: { os: dragonflybsd, arch: amd64 }
+            - with: { os: dragonflybsd, arch: amd64 }
 
-          - with: { os: freebsd, arch: arm64 }
-            skip: "arm64 FreeBSD is not currently supported"
+            - with: { os: freebsd, arch: arm64 }
+              skip: "arm64 FreeBSD is not currently supported"
 
-          - with: { os: linux, arch: arm }
-          - with: { os: linux, arch: armhf }
-          - with: { os: linux, arch: ppc64 }
-          - with: { os: linux, arch: ppc64le }
-          - with: { os: linux, arch: mips64le }
-          - with: { os: linux, arch: s390x }
+            - with: { os: linux, arch: arm }
+            - with: { os: linux, arch: armhf }
+            - with: { os: linux, arch: ppc64 }
+            - with: { os: linux, arch: ppc64le }
+            - with: { os: linux, arch: mips64le }
+            - with: { os: linux, arch: s390x }
+            - with: { os: linux, arch: riscv64 }
 
-          - with: { os: netbsd, arch: amd64 }
+            - with: { os: netbsd, arch: amd64 }
 
-          - with: { os: openbsd, arch: arm64 }
-            skip: "arm64 OpenBSD is not currently supported"
+            - with: { os: openbsd, arch: arm64 }
+              skip: "arm64 OpenBSD is not currently supported"
 
   - label: ":bathtub: Check version string is clean"
     key: check-version-string
@@ -144,16 +154,16 @@ steps:
     depends_on: build-binary
     command: ".buildkite/steps/test-bk.sh"
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        run: agent
-        env:
-          - BUILDKITE_AGENT_ACCESS_TOKEN
-          - BUILDKITE_BUILD_ID
-          - BUILDKITE_JOB_ID
-        volumes:
-          - "/usr/bin/buildkite-agent:/usr/bin/buildkite-agent"
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_BUILD_ID
+            - BUILDKITE_JOB_ID
+          volumes:
+            - "/usr/bin/buildkite-agent:/usr/bin/buildkite-agent"
 
   - name: ":mag: Extract Agent Version Metadata"
     key: set-metadata
@@ -163,8 +173,15 @@ steps:
     steps:
       - name: ":docker: {{matrix}} image build"
         key: build-docker
+        plugins:
+          - aws-assume-role-with-web-identity#v1.0.0:
+              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - ecr#v2.9.0:
+              login: true
+              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+              region: "us-east-1"
         agents:
-          queue: elastic-builders
+          queue: $AGENT_BUILDERS_QUEUE
         depends_on:
           - build-binary
           - set-metadata
@@ -173,9 +190,9 @@ steps:
           setup:
             - "alpine"
             - "alpine-k8s"
-            - "ubuntu-18.04"
             - "ubuntu-20.04"
             - "ubuntu-22.04"
+            - "ubuntu-24.04"
             - "sidecar"
 
   - group: ":docker: Docker Image Tests"
@@ -183,24 +200,38 @@ steps:
       - name: ":docker: {{matrix.variant}} amd64 image test"
         key: test-docker-amd64
         agents:
-          queue: elastic-builders
+          queue: $AGENT_BUILDERS_QUEUE
         depends_on:
           - build-docker
         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+        plugins:
+          - aws-assume-role-with-web-identity#v1.0.0:
+              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - ecr#v2.9.0:
+              login: true
+              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+              region: "us-east-1"
         matrix:
           setup:
             variant:
               - alpine
               - alpine-k8s
-              - ubuntu-18.04
               - ubuntu-20.04
               - ubuntu-22.04
+              - ubuntu-24.04
               - sidecar
 
       - name: ":docker: {{matrix.variant}} arm64 image test"
+        plugins:
+          - aws-assume-role-with-web-identity#v1.0.0:
+              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - ecr#v2.9.0:
+              login: true
+              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+              region: "us-east-1"
         key: test-docker-arm64
         agents:
-          queue: elastic-builders-arm64
+          queue: $AGENT_BUILDERS_ARM64_QUEUE
         depends_on:
           - build-docker
         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
@@ -209,9 +240,9 @@ steps:
             variant:
               - alpine
               - alpine-k8s
-              - ubuntu-18.04
               - ubuntu-20.04
               - ubuntu-22.04
+              - ubuntu-24.04
               - sidecar
 
   - name: ":debian: Debian package build"
@@ -221,6 +252,10 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
+    plugins:
+      - generate-provenance-attestation#v1.1.0:
+          artifacts: "deb/*"
+          attestation_name: "buildkite-agent-debian-packages.package-attestation.json"
 
   - name: ":redhat: RPM Package build"
     key: build-rpm-packages
@@ -229,6 +264,10 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
+    plugins:
+      - generate-provenance-attestation#v1.1.0:
+          artifacts: "rpm/*"
+          attestation_name: "buildkite-agent-rpm-packages.package-attestation.json"
 
   - name: ":github: Build Github Release"
     key: build-github-release
@@ -238,9 +277,12 @@ steps:
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
     plugins:
-      docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.release.yml
-        run: github-release
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.release.yml
+          run: github-release
+      - generate-provenance-attestation#v1.1.0:
+          artifacts: "releases/*.tar.gz;releases/*.zip"
+          attestation_name: "buildkite-agent-github-releases.attestation.json"
 
   - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps

@@ -10,14 +10,17 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/awslib"
+	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/stdin"
@@ -28,7 +31,9 @@ import (
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
+	"github.com/buildkite/interpolate"
 	"github.com/urfave/cli"
+	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 )
 
@@ -74,8 +79,10 @@ type PipelineUploadConfig struct {
 	RejectSecrets   bool     `cli:"reject-secrets"`
 
 	// Used for signing
-	JWKSFile  string `cli:"jwks-file"`
-	JWKSKeyID string `cli:"jwks-key-id"`
+	JWKSFile         string `cli:"jwks-file"`
+	JWKSKeyID        string `cli:"jwks-key-id"`
+	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	DebugSigning     bool   `cli:"debug-signing"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -140,6 +147,16 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "jwks-key-id",
 			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
 			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
+		},
+		cli.StringFlag{
+			Name:   "signing-aws-kms-key",
+			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
+			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
+		},
+		cli.BoolFlag{
+			Name:   "debug-signing",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
 		},
 
 		// API Flags
@@ -242,20 +259,9 @@ var PipelineUploadCommand = cli.Command{
 
 		environ := env.FromSlice(os.Environ())
 
-		if !cfg.NoInterpolation {
-			// Load environment to pass into parser
-
+		if !cfg.NoInterpolation { // yes, interpolation
 			// resolve BUILDKITE_COMMIT based on the local git repo
-			if commitRef, ok := environ.Get("BUILDKITE_COMMIT"); ok {
-				cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
-				if err != nil {
-					l.Warn("Error running git rev-parse %q: %v", commitRef, err)
-				} else {
-					trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-					l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
-					environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
-				}
-			}
+			resolveCommit(l, environ)
 		}
 
 		src := filename
@@ -264,25 +270,56 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		result, err := cfg.parseAndInterpolate(ctx, src, input, environ)
-		if w := warning.As(err); w != nil {
+		if err != nil {
+			w := warning.As(err)
+			if w == nil {
+				return err
+			}
 			l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
-		} else if err != nil {
-			return err
 		}
 
 		if len(cfg.RedactedVars) > 0 {
 			// Secret detection uses the original environment, since
 			// Interpolate merges the pipeline's env block into `environ`.
-			searchForSecrets(l, &cfg, environ.Dump(), result, src)
+			searchForSecrets(l, &cfg, environ, result, src)
 		}
 
-		if cfg.JWKSFile != "" {
-			key, err := jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
+		var (
+			key signature.Key
+		)
+
+		switch {
+		case cfg.SigningAWSKMSKey != "":
+			awscfg, err := awslib.GetConfigV2(ctx)
+			if err != nil {
+				return err
+			}
+
+			// assign a crypto signer which uses the KMS key to sign the pipeline
+			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
+			if err != nil {
+				return fmt.Errorf("couldn't create KMS signer: %w", err)
+			}
+
+		case cfg.JWKSFile != "":
+			key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
 			if err != nil {
 				return fmt.Errorf("couldn't read the signing key file: %w", err)
 			}
+		}
 
-			if err := signature.SignPipeline(result, key, os.Getenv("BUILDKITE_REPO")); err != nil {
+		if key != nil {
+
+			err = signature.SignSteps(
+				ctx,
+				result.Steps,
+				key,
+				os.Getenv("BUILDKITE_REPO"),
+				signature.WithEnv(result.Env.ToMap()),
+				signature.WithLogger(l),
+				signature.WithDebugSigning(cfg.DebugSigning),
+			)
+			if err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
 		}
@@ -344,40 +381,156 @@ var PipelineUploadCommand = cli.Command{
 	},
 }
 
+// resolveCommit resolves and replaces BUILDKITE_COMMIT with the resolved value.
+func resolveCommit(l logger.Logger, environ *env.Environment) {
+	commitRef, has := environ.Get("BUILDKITE_COMMIT")
+	if !has {
+		return
+	}
+	cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
+	if err != nil {
+		l.Warn("Error running git rev-parse %q: %v", commitRef, err)
+		return
+	}
+	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
+	l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
+	environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
+}
+
+// allEnvVars recursively iterates env vars from any object that contains them:
+// the pipeline itself, or command steps (which may be nested inside group
+// steps).
+func allEnvVars(o any, f func(p env.Pair)) {
+	switch x := o.(type) {
+	case *pipeline.Pipeline:
+		// First iterate through all pipeline env vars.
+		x.Env.Range(func(k, v string) error {
+			f(env.Pair{Name: k, Value: v})
+			return nil
+		})
+		// Recurse through each step.
+		for _, s := range x.Steps {
+			allEnvVars(s, f)
+		}
+
+	case *pipeline.CommandStep:
+		// Iterate through the step env vars.
+		for n, v := range x.Env {
+			f(env.Pair{Name: n, Value: v})
+		}
+
+	case *pipeline.GroupStep:
+		// Recurse through each step.
+		for _, s := range x.Steps {
+			allEnvVars(s, f)
+		}
+	}
+}
+
+// isPureSubstitution reports whether value is a shell variable substitution
+// without any default or surrounding text.
+func isPureSubstitution(value string) bool {
+	if !strings.HasPrefix(value, "$") {
+		return false
+	}
+	interp, err := interpolate.Interpolate(nil, value)
+	if err != nil {
+		// Wasn't a valid substitution.
+		return false
+	}
+	// If it was purely a substitution, then the interpolation result using an
+	// empty env should be empty.
+	return interp == ""
+}
+
 func searchForSecrets(
 	l logger.Logger,
 	cfg *PipelineUploadConfig,
-	environ map[string]string,
-	result *pipeline.Pipeline,
+	environ *env.Environment,
+	pp *pipeline.Pipeline,
 	src string,
 ) error {
-	// Get vars to redact, as both a map and a slice.
-	vars := redact.Vars(shell.StderrLogger, cfg.RedactedVars, environ)
-	needles := make([]string, 0, len(vars))
-	for _, needle := range vars {
-		needles = append(needles, needle)
+	secretsFound := make(map[string]struct{})
+	shortValues := make(map[string]struct{})
+
+	// The pipeline being uploaded can also contain secret-shaped environment
+	// variables in the env maps strewn throughout the pipeline (pipeline env
+	// and step env).
+	// Just because it's a variable written in the pipeline YAML, doesn't mean
+	// it's not a secret that needs rejecting from the upload!
+	var allVars []env.Pair
+	allEnvVars(pp, func(pair env.Pair) {
+		// Variables declared within the pipeline might look like this after
+		// interpolation:
+		//
+		//   env:
+		//     MY_SECRET: $RUNTIME_SECRET
+		//
+		// MY_SECRET is actually defined at job runtime, not now, and its
+		// value is not currently known. So it's not a secret. We can skip it.
+		if isPureSubstitution(pair.Value) {
+			return
+		}
+		allVars = append(allVars, pair)
+	})
+
+	// Unlike env vars from the env, we know these exist in the pipeline YAML!
+	// So we can declare the secrets to be found if they match the usual rules.
+	matched, short, err := redact.Vars(cfg.RedactedVars, allVars)
+	if err != nil {
+		l.Warn("Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	for _, name := range short {
+		shortValues[name] = struct{}{}
+	}
+	for _, pair := range matched {
+		secretsFound[pair.Name] = struct{}{}
+	}
+
+	// Now consider env vars from the environment.
+	// Filter these down to the vars normally redacted.
+	matched, short, err = redact.Vars(cfg.RedactedVars, environ.DumpPairs())
+	if err != nil {
+		l.Warn("Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	for _, name := range short {
+		shortValues[name] = struct{}{}
+	}
+
+	// Create a slice of values to search the pipeline for.
+	needles := make([]string, 0, len(matched))
+	for _, pair := range matched {
+		needles = append(needles, pair.Value)
 	}
 
 	// Use a streaming replacer as a string searcher.
-	secretsFound := make([]string, 0, len(needles))
 	searcher := replacer.New(io.Discard, needles, func(found []byte) []byte {
 		// It matched some of the needles, but which ones?
 		// (This information could be plumbed through the replacer, if
 		// we wanted to make it even more complicated.)
-		for needleKey, needle := range vars {
-			if strings.Contains(string(found), needle) {
-				secretsFound = append(secretsFound, needleKey)
+		for _, pair := range matched {
+			if strings.Contains(string(found), pair.Value) {
+				secretsFound[pair.Name] = struct{}{}
 			}
 		}
 		return nil
 	})
 
 	// Encode the pipeline as JSON into the searcher.
-	if err := json.NewEncoder(searcher).Encode(result); err != nil {
+	if err := json.NewEncoder(searcher).Encode(pp); err != nil {
 		return fmt.Errorf("couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%w)", src, err)
 	}
 
+	if len(shortValues) > 0 {
+		vars := maps.Keys(shortValues)
+		slices.Sort(vars)
+		l.Warn("Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(vars, ", "))
+	}
+
 	if len(secretsFound) > 0 {
+		secretsFound := maps.Keys(secretsFound)
+		slices.Sort(secretsFound)
+
 		if cfg.RejectSecrets {
 			return fmt.Errorf("pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
 		}
@@ -395,18 +548,21 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 	if err != nil && !warning.Is(err) {
 		return nil, fmt.Errorf("pipeline parsing of %q failed: %w", src, err)
 	}
-	if !cfg.NoInterpolation {
-		if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
-			if result.Env == nil {
-				result.Env = ordered.NewMap[string, string](1)
-			}
-			result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
-		}
-		preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
-		if err := result.Interpolate(environ, preferRuntimeEnv); err != nil {
-			return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
-		}
+	if cfg.NoInterpolation {
+		// Note that err may be nil or a non-nil warning from pipeline.Parse
+		return result, err
 	}
-	// err may be nil or a warning from pipeline.Parse
+	// Pass the trace context from our environment to the pipeline.
+	if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
+		if result.Env == nil {
+			result.Env = ordered.NewMap[string, string](1)
+		}
+		result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
+	}
+	// Do the interpolation.
+	preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
+	if err := result.Interpolate(environ, preferRuntimeEnv); err != nil {
+		return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
+	}
 	return result, err
 }

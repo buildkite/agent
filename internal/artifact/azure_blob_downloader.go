@@ -16,6 +16,7 @@ type AzureBlobDownloaderConfig struct {
 	Destination string
 	Retries     int
 	DebugHTTP   bool
+	TraceHTTP   bool
 }
 
 // AzureBlobDownloader downloads files from Azure Blob storage.

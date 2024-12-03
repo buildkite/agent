@@ -34,7 +34,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 	t.Parallel()
 
 	ctx, _ := experiments.Enable(mainCtx, experiments.ResolveCommitAfterCheckout)
-	tester, err := NewBootstrapTester(ctx)
+	tester, err := NewExecutorTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -74,7 +74,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 func TestCheckingOutLocalGitProject(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		t.Skip()
 	}
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -184,7 +184,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		t.Skip()
 	}
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -240,7 +240,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -279,7 +279,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	assert.NilError(t, err)
 	defer tester.Close()
 
@@ -301,7 +301,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// Git should attempt to fetch the shortHash, but fail. Then fallback to fetching
-	// all the heads and tags and checking out the short hash.
+	// all the heads and tags and checking out the short commit hash.
 	git.ExpectAll([][]any{
 		{"remote", "get-url", "origin"},
 		{"clean", "-ffxdq"},
@@ -310,7 +310,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 		{"fetch", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
 		{"checkout", "-f", shortCommitHash},
 		{"clean", "-ffxdq"},
-		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"--no-pager", "log", "-1", shortCommitHash, "-s", "--no-color", gitShowFormatArg},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -331,10 +331,215 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	assert.Equal(t, checkoutRepoCommit, commitHash)
 }
 
+func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", strings.TrimSpace(commitHash)),
+	}
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
+func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local",                               // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_GIT_FETCH_FLAGS=--refmap=+refs/pull/*:refs/pull/origin/*", // Track remote pull request refs locally
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", strings.TrimSpace(commitHash)),
+	}
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+
+	// This local ref should match remote refs/pull/123/head
+	localPullRefCommit, err := checkoutRepo.RevParse("refs/pull/origin/123/head")
+	assert.NilError(t, err)
+	assert.Equal(t, localPullRefCommit, commitHash)
+}
+
+func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", strings.TrimSpace(commitHash)),
+	}
+
+	// Amend the pull request, so commitHash is no longer reachable from refs/pull/123/head
+	err = tester.Repo.CheckoutBranch("update-test-txt")
+	assert.NilError(t, err)
+
+	err = os.WriteFile(
+		filepath.Join(tester.Repo.Path, "test.txt"),
+		[]byte("This is an amended test pull request"),
+		0o600,
+	)
+	assert.NilError(t, err)
+
+	err = tester.Repo.Add("test.txt")
+	assert.NilError(t, err)
+
+	_, err = tester.Repo.Execute("commit", "--amend", "-m", "Amended PR Commit")
+	assert.NilError(t, err)
+
+	_, err = tester.Repo.Execute("update-ref", "refs/pull/123/head", "HEAD")
+	assert.NilError(t, err)
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
+func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+	shortCommitHash := commitHash[:7]
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", shortCommitHash),
+	}
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
+func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		"BUILDKITE_COMMIT=HEAD",
+	}
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
+func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
+	assert.NilError(t, err)
+
+	// Remove the branch ref to simulate this being a PR from a fork
+	_, err = tester.Repo.Execute("branch", "-D", "update-test-txt")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=forker:update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		"BUILDKITE_COMMIT=HEAD",
+	}
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
 func TestCheckoutErrorIsRetried(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -397,7 +602,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 func TestFetchErrorIsRetried(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -459,7 +664,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -475,7 +680,7 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -503,7 +708,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -524,7 +729,7 @@ func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -553,7 +758,7 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -589,7 +794,7 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 func TestForcingACleanCheckout(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -611,7 +816,7 @@ func TestForcingACleanCheckout(t *testing.T) {
 func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -638,7 +843,7 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -666,7 +871,7 @@ func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
 func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -692,7 +897,7 @@ func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
 func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -725,7 +930,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 		t.Skip("Not supported on windows")
 	}
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}

@@ -12,7 +12,7 @@ import (
 func TestArtifactsUploadAfterCommand(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -41,7 +41,7 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -75,7 +75,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}

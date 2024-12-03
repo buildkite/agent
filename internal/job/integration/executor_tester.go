@@ -18,10 +18,11 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"gotest.tools/v3/assert"
 
 	"github.com/buildkite/bintest/v3"
@@ -47,7 +48,7 @@ type ExecutorTester struct {
 	mocks    []*bintest.Mock
 }
 
-func NewBootstrapTester(ctx context.Context) (*ExecutorTester, error) {
+func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 	// The job API experiment adds a unix domain socket to a directory in the home directory
 	// UDS names are limited to 108 characters, so we need to use a shorter home directory
 	// Who knows what's going on in windowsland
@@ -109,7 +110,8 @@ func NewBootstrapTester(ctx context.Context) (*ExecutorTester, error) {
 			"BUILDKITE_ARTIFACT_PATHS=",
 			"BUILDKITE_COMMAND=true",
 			"BUILDKITE_JOB_ID=1111-1111-1111-1111",
-			"BUILDKITE_AGENT_ACCESS_TOKEN=test",
+			"BUILDKITE_AGENT_ACCESS_TOKEN=test-token-please-ignore",
+			fmt.Sprintf("BUILDKITE_REDACTED_VARS=%s", strings.Join(*clicommand.RedactedVars.Value, ",")),
 		},
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
@@ -133,6 +135,7 @@ func NewBootstrapTester(ctx context.Context) (*ExecutorTester, error) {
 			"PATHEXT="+os.Getenv("PATHEXT"),
 			"TMP="+os.Getenv("TMP"),
 			"TEMP="+os.Getenv("TEMP"),
+			"USERPROFILE="+homeDir,
 		)
 	} else {
 		bt.Env = append(bt.Env, "PATH="+pathDir+":"+os.Getenv("PATH"))
@@ -335,7 +338,7 @@ func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
-	if err := e.Run(t, env...); shell.GetExitCode(err) != 0 {
+	if err := e.Run(t, env...); shell.ExitCode(err) != 0 {
 		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
 	}
 

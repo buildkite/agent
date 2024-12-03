@@ -11,17 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
-
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
 )
 
 func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -65,7 +63,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -125,7 +123,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -159,7 +157,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 }
 
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -196,7 +194,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -226,7 +224,7 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 func TestReplacingCheckoutHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -255,7 +253,7 @@ func TestReplacingCheckoutHook(t *testing.T) {
 func TestReplacingGlobalCommandHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -280,7 +278,7 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 func TestReplacingLocalCommandHook(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -306,7 +304,7 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -325,7 +323,7 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 func TestPreExitHooksDoesNotFireWithoutCommandPhase(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -418,7 +416,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 		t.Run(tc.failingHook, func(t *testing.T) {
 			t.Parallel()
 
-			tester, err := NewBootstrapTester(ctx)
+			tester, err := NewExecutorTester(ctx)
 			if err != nil {
 				t.Fatalf("NewBootstrapTester() error = %v", err)
 			}
@@ -468,7 +466,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -504,7 +502,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 		// "post-artifact",
 	} {
 		t.Run(hook, func(t *testing.T) {
-			tester, err := NewBootstrapTester(ctx)
+			tester, err := NewExecutorTester(ctx)
 			if err != nil {
 				t.Fatalf("NewBootstrapTester() error = %v", err)
 			}
@@ -517,7 +515,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 			if err == nil {
 				t.Fatalf("tester.Run(t) = %v, want non-nil error", err)
 			}
-			if got, want := shell.GetExitCode(err), 5; got != want {
+			if got, want := shell.ExitCode(err), 5; got != want {
 				t.Fatalf("shell.GetExitCode(%v) = %d, want %d", err, got, want)
 			}
 
@@ -534,7 +532,7 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 		t.Skip()
 	}
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -579,9 +577,9 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 		t.Fatal("ruby not found in $PATH. This test requires ruby to be installed on the host")
 	}
 
-	ctx, _ := experiments.Enable(mainCtx, experiments.PolyglotHooks)
+	ctx := mainCtx
 
-	tester, err := NewBootstrapTester(ctx)
+	tester, err := NewExecutorTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -608,9 +606,8 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 	t.Parallel()
 
 	ctx := mainCtx
-	ctx, _ = experiments.Enable(ctx, experiments.PolyglotHooks)
 
-	tester, err := NewBootstrapTester(ctx)
+	tester, err := NewExecutorTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,21 +34,26 @@ func TestDisconnect(t *testing.T) {
 
 	ctx := context.Background()
 
-	client := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
 	l := logger.NewBuffer()
+	client := &core.Client{
+		APIClient: apiClient,
+		Logger:    l,
+		RetrySleepFunc: func(time.Duration) {
+			t.Error("unexpected retrier sleep")
+		},
+	}
 
 	worker := &AgentWorker{
 		logger:             l,
 		agent:              nil,
-		apiClient:          client,
+		apiClient:          apiClient,
+		client:             client,
 		agentConfiguration: AgentConfiguration{},
-		retrySleepFunc: func(time.Duration) {
-			t.Error("unexpected retrier sleep")
-		},
 	}
 
 	err := worker.Disconnect(ctx)
@@ -77,24 +83,28 @@ func TestDisconnectRetry(t *testing.T) {
 
 	ctx := context.Background()
 
-	client := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
 	l := logger.NewBuffer()
-
 	retrySleeps := make([]time.Duration, 0)
 	retrySleepFunc := func(d time.Duration) {
 		retrySleeps = append(retrySleeps, d)
+	}
+	client := &core.Client{
+		APIClient:      apiClient,
+		Logger:         l,
+		RetrySleepFunc: retrySleepFunc,
 	}
 
 	worker := &AgentWorker{
 		logger:             l,
 		agent:              nil,
-		apiClient:          client,
+		apiClient:          apiClient,
+		client:             client,
 		agentConfiguration: AgentConfiguration{},
-		retrySleepFunc:     retrySleepFunc,
 	}
 
 	err := worker.Disconnect(ctx)
@@ -128,21 +138,25 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
 	worker := &AgentWorker{
-		logger:             logger.Discard,
-		agent:              nil,
-		apiClient:          client,
+		logger:    logger.Discard,
+		agent:     nil,
+		apiClient: apiClient,
+		client: &core.Client{
+			APIClient: apiClient,
+			Logger:    logger.Discard,
+		},
 		agentConfiguration: AgentConfiguration{},
 	}
 
 	err := worker.AcquireAndRunJob(ctx, jobID)
-	if !errors.Is(err, ErrJobAcquisitionFailure) {
-		t.Fatalf("expected worker.AcquireAndRunJob(%q) = ErrJobAcquisitionFailure, got %v", jobID, err)
+	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
+		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
 }
 
@@ -173,7 +187,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
@@ -182,26 +196,31 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	retrySleepFunc := func(d time.Duration) {
 		retrySleeps = append(retrySleeps, d)
 	}
+	client := &core.Client{
+		APIClient:      apiClient,
+		Logger:         logger.Discard,
+		RetrySleepFunc: retrySleepFunc,
+	}
 
 	worker := &AgentWorker{
 		logger:             logger.Discard,
 		agent:              nil,
-		apiClient:          client,
+		apiClient:          apiClient,
+		client:             client,
 		agentConfiguration: AgentConfiguration{},
-		retrySleepFunc:     retrySleepFunc,
 	}
 
 	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
 	assert.ErrorContains(t, err, "423")
 
-	if errors.Is(err, ErrJobAcquisitionFailure) {
-		t.Fatalf("expected worker.AcquireAndRunJob(%q) not to be a ErrJobAcquisitionFailure, but it was: %v", "waitinguuid", err)
+	if errors.Is(err, core.ErrJobAcquisitionRejected) {
+		t.Fatalf("expected worker.AcquireAndRunJob(%q) not to be core.ErrJobAcquisitionRejected, but it was: %v", "waitinguuid", err)
 	}
 
 	// the last Retry-After is not recorded as the retries loop exits before using it
-	exptectedSleeps := make([]time.Duration, 0, 9)
+	expectedSleeps := make([]time.Duration, 0, 9)
 	for d := 1; d <= 1<<8; d *= 2 {
-		exptectedSleeps = append(exptectedSleeps, time.Duration(d)*time.Second)
+		expectedSleeps = append(expectedSleeps, time.Duration(d)*time.Second)
 	}
-	assert.Equal(t, exptectedSleeps, retrySleeps)
+	assert.Equal(t, expectedSleeps, retrySleeps)
 }

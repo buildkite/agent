@@ -4,13 +4,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/buildkite/agent/v3/internal/awslib"
 )
 
 type EC2Tags struct {
 }
 
 func (e EC2Tags) Get() (map[string]string, error) {
-	sess, err := awsSession()
+	sess, err := awslib.Session()
 	if err != nil {
 		return nil, err
 	}

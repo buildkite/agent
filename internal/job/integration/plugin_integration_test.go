@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
 	"gotest.tools/v3/assert"
 )
@@ -18,7 +18,7 @@ import (
 func TestRunningPlugins(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -79,7 +79,7 @@ func TestRunningPlugins(t *testing.T) {
 func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -116,7 +116,7 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	if err == nil {
 		t.Fatalf("tester.Run(t, %v) = %v, want non-nil error", env, err)
 	}
-	if got, want := shell.GetExitCode(err), 5; got != want {
+	if got, want := shell.ExitCode(err), 5; got != want {
 		t.Fatalf("shell.GetExitCode(%v) = %d, want %d", err, got, want)
 	}
 
@@ -126,7 +126,7 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -150,7 +150,7 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 func TestOverlappingPluginHooks(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -214,7 +214,7 @@ func TestPluginCloneRetried(t *testing.T) {
 		t.Skip("Not passing on windows, needs investigation")
 	}
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -283,7 +283,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	ctx := mainCtx
 
-	tester, err := NewBootstrapTester(ctx)
+	tester, err := NewExecutorTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -350,7 +350,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 
 	// Now, we want to "repeat" the test build, having modified the plugin's contents.
-	tester2, err := NewBootstrapTester(ctx)
+	tester2, err := NewExecutorTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -396,7 +396,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	ctx := mainCtx
 
-	tester, err := NewBootstrapTester(mainCtx)
+	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
@@ -453,7 +453,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester.RunAndCheck(t, env...)
 
-	tester2, err := NewBootstrapTester(ctx)
+	tester2, err := NewExecutorTester(ctx)
 	if err != nil {
 		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}

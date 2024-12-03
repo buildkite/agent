@@ -3,8 +3,6 @@ package agent
 import (
 	"regexp"
 	"time"
-
-	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 // AgentConfiguration is the run-time configuration for an agent that
@@ -35,29 +33,34 @@ type AgentConfiguration struct {
 	LocalHooksEnabled           bool
 	StrictSingleHooks           bool
 	RunInPty                    bool
+	KubernetesExec              bool
 
 	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
 	SigningJWKSKeyID string // The key ID to sign pipeline uploads with
+	SigningAWSKMSKey string // The KMS key ID to sign pipeline uploads with
+	DebugSigning     bool   // Whether to print step payloads when signing them
 
-	VerificationJWKS             jwk.Set // The set of keys to verify jobs with
-	VerificationFailureBehaviour string  // What to do if job verification fails (one of `block` or `warn`)
+	VerificationJWKS             any    // The set of keys to verify jobs with
+	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
 
-	ANSITimestamps             bool
-	TimestampLines             bool
-	HealthCheckAddr            string
-	DisconnectAfterJob         bool
-	DisconnectAfterIdleTimeout int
-	CancelGracePeriod          int
-	SignalGracePeriod          time.Duration
-	EnableJobLogTmpfile        bool
-	JobLogPath                 string
-	WriteJobLogsToStdout       bool
-	LogFormat                  string
-	Shell                      string
-	Profile                    string
-	RedactedVars               []string
-	AcquireJob                 string
-	TracingBackend             string
-	TracingServiceName         string
-	DisableWarningsFor         []string
+	ANSITimestamps               bool
+	TimestampLines               bool
+	HealthCheckAddr              string
+	DisconnectAfterJob           bool
+	DisconnectAfterIdleTimeout   int
+	CancelGracePeriod            int
+	SignalGracePeriod            time.Duration
+	EnableJobLogTmpfile          bool
+	JobLogPath                   string
+	WriteJobLogsToStdout         bool
+	LogFormat                    string
+	Shell                        string
+	Profile                      string
+	RedactedVars                 []string
+	AcquireJob                   string
+	TracingBackend               string
+	TracingServiceName           string
+	TraceContextEncoding         string
+	DisableWarningsFor           []string
+	AllowMultipartArtifactUpload bool
 }

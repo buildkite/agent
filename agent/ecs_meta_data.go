@@ -3,18 +3,24 @@ package agent
 import (
 	"context"
 	"fmt"
-	metadata "github.com/brunoscheufler/aws-ecs-metadata-go"
-	"net/http"
 	"strconv"
+
+	metadata "github.com/brunoscheufler/aws-ecs-metadata-go"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 )
 
 type ECSMetadata struct {
+	DisableHTTP2 bool
 }
 
-func (e ECSMetadata) Get() (map[string]string, error) {
+func (e ECSMetadata) Get(ctx context.Context) (map[string]string, error) {
 	metaData := make(map[string]string)
 
-	taskMeta, err := metadata.GetTask(context.Background(), &http.Client{})
+	client := agenthttp.NewClient(
+		agenthttp.WithAllowHTTP2(!e.DisableHTTP2),
+	)
+
+	taskMeta, err := metadata.GetTask(ctx, client)
 	if err != nil {
 		return metaData, err
 	}
@@ -46,7 +52,7 @@ func (e ECSMetadata) Get() (map[string]string, error) {
 		return metaData, fmt.Errorf("ecs metadata returned unknown type %T", m)
 	}
 
-	containerMeta, err := metadata.GetContainer(context.Background(), &http.Client{})
+	containerMeta, err := metadata.GetContainer(ctx, client)
 	if err != nil {
 		return metaData, err
 	}

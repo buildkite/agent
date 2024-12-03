@@ -81,17 +81,18 @@ func TestTimestamper_WithTimeout(t *testing.T) {
 
 	// Another write on the same line immediately should _not_ trigger a new
 	// timestamp
-	if _, err := pw.Write([]byte("shiver with antici")); err != nil {
-		t.Fatalf("pw.Write(`shiver with antici`) error = %v", err)
+	if _, err := pw.Write([]byte("shiver with antici\x1b[")); err != nil {
+		t.Fatalf("pw.Write(`shiver with antici\x1b[`) error = %v", err)
 	}
 
 	// A write on the same line some time later should trigger a new timestamp
+	// but not in the middle of an ANSI sequence
 	time.Sleep(100 * time.Millisecond)
-	if _, err := pw.Write([]byte("pation")); err != nil {
-		t.Fatalf("pw.Write(`pation`) error = %v", err)
+	if _, err := pw.Write([]byte("1mpation")); err != nil {
+		t.Fatalf("pw.Write(`1mpation`) error = %v", err)
 	}
 
-	want := "...I see you shiver with antici...pation"
+	want := "...I see you shiver with antici\x1b[1m...pation"
 	if diff := cmp.Diff(out.String(), want); diff != "" {
 		t.Errorf("timestamper output diff (-got +want):\n%s", diff)
 	}

@@ -16,20 +16,20 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
-	"github.com/buildkite/agent/v3/internal/utils"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -59,7 +59,9 @@ type Executor struct {
 	cleanupDirs []string
 
 	// A channel to track cancellation
-	cancelCh chan struct{}
+	cancelMu  sync.Mutex
+	cancelCh  chan struct{}
+	cancelled bool
 
 	// redactors for the job logs. The will be populated with values both from environment variable and through the Job API.
 	// In order for the latter to happen, a reference is passed into the the Job API server as well
@@ -81,49 +83,70 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Check if not nil to allow for tests to overwrite shell
-	if e.shell == nil {
-		var err error
-		logger := shell.StderrLogger
-		logger.DisabledWarningIDs = e.DisabledWarnings
-		e.shell, err = shell.New(shell.WithLogger(logger))
-		if err != nil {
-			fmt.Printf("Error creating shell: %v", err)
+	// Start with stdout and stderr as their usual selves.
+	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
+
+	// The shell environment is initially the current environment.
+	// It is mutated by kubernetesSetup and needed for setupRedactors.
+	environ := env.FromSlice(os.Environ())
+
+	// Create a logger to stderr that can be used for things prior to the
+	// redactor setup.
+	// Be careful not to log customer secrets here!
+	tempLog := shell.NewWriterLogger(stderr, true, e.DisabledWarnings)
+
+	if e.KubernetesExec {
+		tempLog.Commentf("Using Kubernetes support")
+
+		socket := &kubernetes.Client{ID: e.KubernetesContainerID}
+		if err := e.kubernetesSetup(ctx, environ, socket); err != nil {
+			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
 			return 1
 		}
 
-		e.shell.PTY = e.ExecutorConfig.RunInPty
-		e.shell.Debug = e.ExecutorConfig.Debug
-		e.shell.InterruptSignal = e.ExecutorConfig.CancelSignal
-		e.shell.SignalGracePeriod = e.ExecutorConfig.SignalGracePeriod
-	}
-	if experiments.IsEnabled(ctx, experiments.KubernetesExec) {
-		kubernetesClient := &kubernetes.Client{}
-		if err := e.startKubernetesClient(ctx, kubernetesClient); err != nil {
-			e.shell.Errorf("Failed to start kubernetes client: %v", err)
-			return 1
-		}
+		// Tee both stdout and stderr to the k8s socket client, so that the
+		// logs are shipped to the agent container and then to Buildkite, but
+		// are also visible as container logs.
+		stdout = io.MultiWriter(stdout, socket)
+		stderr = io.MultiWriter(stderr, socket)
+
 		defer func() {
-			_ = kubernetesClient.Exit(exitCode)
+			_ = socket.Exit(exitCode)
 		}()
 	}
 
 	// setup the redactors here once and for the life of the executor
 	// they will be flushed at the end of each hook
-	e.setupRedactors()
+	preRedactedStdout, preRedactedLogger := e.setupRedactors(tempLog, environ, stdout, stderr)
+
+	// Check if not nil to allow for tests to overwrite shell.
+	if e.shell == nil {
+		sh, err := shell.New(
+			shell.WithDebug(e.ExecutorConfig.Debug),
+			shell.WithEnv(environ),
+			shell.WithLogger(preRedactedLogger), // shell -> logger -> redactor -> real stderr
+			shell.WithInterruptSignal(e.ExecutorConfig.CancelSignal),
+			shell.WithPTY(e.ExecutorConfig.RunInPty),
+			shell.WithStdout(preRedactedStdout), // shell -> redactor -> real stdout
+			shell.WithSignalGracePeriod(e.ExecutorConfig.SignalGracePeriod),
+			shell.WithTraceContextCodec(e.TraceContextCodec),
+		)
+		if err != nil {
+			fmt.Printf("Error creating shell: %v", err)
+			return 1
+		}
+		e.shell = sh
+	}
 
 	var err error
 	span, ctx, stopper := e.startTracing(ctx)
 	defer stopper()
 	defer func() { span.FinishWithError(err) }()
 
-	// kind of a weird series of events - wrap a context in a cancellation (at the top of the func), then pull the cancellation
-	// out again, but some of the stuff we need to do in the executor (namely the teardown) needs to be able to "survive"
-	// a cancellation so we need to be able to pass a cancellable context to the non-teardown stuff, and an uncancellable
-	// context to the teardown stuff
-	nonCancelCtx := context.WithoutCancel(ctx)
-
-	// Listen for cancellation
+	// Listen for cancellation. Once ctx is cancelled, some tasks can run
+	// afterwards during the signal grace period. These use graceCtx.
+	graceCtx, graceCancel := withGracePeriod(ctx, e.SignalGracePeriod)
+	defer graceCancel()
 	go func() {
 		<-e.cancelCh
 		e.shell.Commentf("Received cancellation signal, interrupting")
@@ -147,11 +170,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
-		if err = e.tearDown(nonCancelCtx); err != nil {
+		// We strive to let the executor tear-down happen whether or not the job
+		// (and thus ctx) is cancelled, so it can run during the grace period.
+		if err := e.tearDown(graceCtx); err != nil {
 			e.shell.Errorf("Error tearing down job executor: %v", err)
 
 			// this gets passed back via the named return
-			exitCode = shell.GetExitCode(err)
+			exitCode = shell.ExitCode(err)
 		}
 	}()
 
@@ -165,21 +190,21 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		err := e.configureGitCredentialHelper(ctx)
 		if err != nil {
 			e.shell.Errorf("Error configuring git credential helper: %v", err)
-			return shell.GetExitCode(err)
+			return shell.ExitCode(err)
 		}
 
 		// so that the new credential helper will be used for all github urls
 		err = e.configureHTTPSInsteadOfSSH(ctx)
 		if err != nil {
 			e.shell.Errorf("Error configuring https instead of ssh: %v", err)
-			return shell.GetExitCode(err)
+			return shell.ExitCode(err)
 		}
 	}
 
 	// Initialize the environment, a failure here will still call the tearDown
 	if err = e.setUp(ctx); err != nil {
 		e.shell.Errorf("Error setting up job executor: %v", err)
-		return shell.GetExitCode(err)
+		return shell.ExitCode(err)
 	}
 
 	// Execute the job phases in order
@@ -233,8 +258,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			span.RecordError(commandErr)
 		}
 
-		// Only upload artifacts as part of the command phase
-		if err = e.artifactPhase(ctx); err != nil {
+		// Only upload artifacts as part of the command phase.
+		// The artifacts might be relevant for debugging job timeouts, so it can
+		// run during the grace period.
+		if err := e.artifactPhase(graceCtx); err != nil {
 			e.shell.Errorf("%v", err)
 
 			if commandErr != nil {
@@ -244,7 +271,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 				// error reporting below.
 			} else {
 				// Only upload has errored, report its error.
-				return shell.GetExitCode(err)
+				return shell.ExitCode(err)
 			}
 		}
 	}
@@ -254,7 +281,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	if phaseErr != nil {
 		err = phaseErr
 		e.shell.Errorf("%v", phaseErr)
-		return shell.GetExitCode(phaseErr)
+		return shell.ExitCode(phaseErr)
 	}
 
 	// Use the exit code from the command phase
@@ -271,9 +298,18 @@ func (e *Executor) includePhase(phase string) bool {
 	return slices.Contains(e.Phases, phase)
 }
 
-// Cancel interrupts any running shell processes and causes the job to stop
+// Cancel interrupts any running shell processes and causes the job to stop.
 func (e *Executor) Cancel() error {
-	e.cancelCh <- struct{}{}
+	// Closing e.cancelCh broadcasts to any goroutine receiving that the job is
+	// being cancelled/stopped.
+	// Double-closing a channel is a panic, so guard it with a bool and a mutex.
+	e.cancelMu.Lock()
+	defer e.cancelMu.Unlock()
+	if e.cancelled {
+		return errors.New("already cancelled")
+	}
+	e.cancelled = true
+	close(e.cancelCh)
 	return nil
 }
 
@@ -324,7 +360,7 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	}
 	hookName += " " + hookCfg.Name
 
-	if !utils.FileExists(hookCfg.Path) {
+	if !osutil.FileExists(hookCfg.Path) {
 		if e.Debug {
 			e.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
 		}
@@ -332,10 +368,6 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	}
 
 	e.shell.Headerf("Running %s hook", hookName)
-
-	if !experiments.IsEnabled(ctx, experiments.PolyglotHooks) {
-		return e.runWrappedShellScriptHook(ctx, hookName, hookCfg)
-	}
 
 	hookType, err := hook.Type(hookCfg.Path)
 	if err != nil {
@@ -394,7 +426,7 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, hookName string, hookCf
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	return e.shell.RunWithEnv(ctx, environ, hookCfg.Path)
+	return e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
 }
 
 func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
@@ -406,7 +438,7 @@ func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
 		} else {
 			l.Errorf("The %s hook failed to run the %s process has the hook file open", hookName, procPath)
 		}
-	case utils.FileExists("/dev/fd"):
+	case osutil.FileExists("/dev/fd"):
 		isOpened, err := file.IsOpened(l, debug, path)
 		if err == nil {
 			if isOpened {
@@ -422,7 +454,7 @@ func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
 	}
 }
 
-func logMissingHookInfo(l shell.Logger, wrapperPath string) {
+func logMissingHookInfo(l shell.Logger, hookName, wrapperPath string) {
 	// It's unlikely, but possible, that the script wrapper was spontaneously
 	// deleted or corrupted (it's usually in /tmp, which is fair game).
 	// A common setup error is to try to run a Bash hook in a container or other
@@ -431,7 +463,7 @@ func logMissingHookInfo(l shell.Logger, wrapperPath string) {
 	if err != nil {
 		// It's reasonable to assume the script wrapper was spontaneously
 		// deleted, or had something equally horrible happen to it.
-		l.Errorf("The %s hook failed to run - perhaps the wrapper script %q was spontaneously deleted", wrapperPath)
+		l.Errorf("The %s hook failed to run - perhaps the wrapper script %q was spontaneously deleted", hookName, wrapperPath)
 		return
 	}
 	interpreter := strings.TrimPrefix(shebang, "#!")
@@ -444,7 +476,7 @@ func logMissingHookInfo(l shell.Logger, wrapperPath string) {
 		// than ENOENT.
 		return
 	}
-	l.Errorf("The %s hook failed to run - perhaps the script interpreter %q is missing", interpreter)
+	l.Errorf("The %s hook failed to run - perhaps the script interpreter %q is missing", hookName, interpreter)
 }
 
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
@@ -478,7 +510,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	const maxHookRetry = 30
 
 	// Run the wrapper script
-	if err := roko.NewRetrier(
+	err = roko.NewRetrier(
 		roko.WithStrategy(roko.Constant(100*time.Millisecond)),
 		roko.WithMaxAttempts(maxHookRetry),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
@@ -487,22 +519,29 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		// (which acquires open file descriptors of the parent process) and
 		// writing an executable (the script wrapper).
 		// See https://github.com/golang/go/issues/22315.
-		err := e.shell.RunScript(ctx, script.Path(), hookCfg.Env)
+		script, err := e.shell.Script(script.Path())
+		if err != nil {
+			r.Break()
+			return err
+		}
+		err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
 		if errors.Is(err, syscall.ETXTBSY) {
 			return err
 		}
 		r.Break()
 		return err
-	}); err != nil {
-		exitCode := shell.GetExitCode(err)
-		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
+	})
+
+	if err != nil {
+		exitCode := shell.ExitCode(err)
+		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
 
 		// If the hook exited with a non-zero exit code, then we should pass that back to the executor
 		// so it may inform the Buildkite API
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
-				Code:    exitCode,
-				Message: fmt.Sprintf("The %s hook exited with status %d", hookName, exitCode),
+				Code: exitCode,
+				Err:  fmt.Errorf("The %s hook exited with status %d", hookName, exitCode),
 			}
 		}
 
@@ -517,7 +556,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 			// program we tried to exec, even if the missing file/directory was
 			// actually the interpreter specified on the shebang line.
 			// Try to figure out which part is missing from the wrapper.
-			logMissingHookInfo(e.shell.Logger, script.Path())
+			logMissingHookInfo(e.shell.Logger, hookName, script.Path())
 		}
 
 		return err
@@ -565,7 +604,18 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	e.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	e.redactors.Add(redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())...)
+	toRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())
+	if err != nil {
+		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	if len(short) > 0 {
+		slices.Sort(short)
+		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+	}
+
+	for _, pair := range toRedact {
+		e.redactors.Add(pair.Value)
+	}
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
@@ -690,7 +740,7 @@ func dirForRepository(repository string) string {
 
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
 func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repository string) {
-	if utils.FileExists(repository) {
+	if osutil.FileExists(repository) {
 		return
 	}
 
@@ -733,7 +783,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored
 	// or overwritten. This shows a warning to the user so they don't get confused
 	// when their environment changes don't seem to do anything
-	if ignored, exists := e.shell.Env.Get("BUILDKITE_IGNORED_ENV"); exists {
+	if ignored, _ := e.shell.Env.Get("BUILDKITE_IGNORED_ENV"); ignored != "" {
 		e.shell.Headerf("Detected protected environment variables")
 		e.shell.Commentf("Your pipeline environment has protected environment variables set. " +
 			"These can only be set via hooks, plugins or the agent configuration.")
@@ -807,58 +857,48 @@ func (e *Executor) tearDown(ctx context.Context) error {
 }
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
-func (e *Executor) runPreCommandHooks(ctx context.Context) error {
+func (e *Executor) runPreCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-command"); err != nil {
+	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "pre-command"); err != nil {
+	if err := e.executeLocalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = e.executePluginHook(ctx, "pre-command", e.pluginCheckouts); err != nil {
-		return err
-	}
-	return nil
+	return e.executePluginHook(ctx, "pre-command", e.pluginCheckouts)
 }
 
 // runCommand runs the command and adds tracing spans.
 func (e *Executor) runCommand(ctx context.Context) error {
-	var err error
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case e.hasPluginHook("command"):
-		err = e.executePluginHook(ctx, "command", e.pluginCheckouts)
+		return e.executePluginHook(ctx, "command", e.pluginCheckouts)
 	case e.hasLocalHook("command"):
-		err = e.executeLocalHook(ctx, "command")
+		return e.executeLocalHook(ctx, "command")
 	case e.hasGlobalHook("command"):
-		err = e.executeGlobalHook(ctx, "command")
+		return e.executeGlobalHook(ctx, "command")
 	default:
-		err = e.defaultCommandPhase(ctx)
+		return e.defaultCommandPhase(ctx)
 	}
-	return err
 }
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
-func (e *Executor) runPostCommandHooks(ctx context.Context) error {
+func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if err = e.executeGlobalHook(ctx, "post-command"); err != nil {
+	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "post-command"); err != nil {
+	if err := e.executeLocalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = e.executePluginHook(ctx, "post-command", e.pluginCheckouts); err != nil {
-		return err
-	}
-	return nil
+	return e.executePluginHook(ctx, "post-command", e.pluginCheckouts)
 }
 
 // CommandPhase determines how to run the build, and then runs it
@@ -876,7 +916,11 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 		if preCommandErr != nil {
 			return
 		}
-		hookErr = e.runPostCommandHooks(ctx)
+		// Because post-command hooks are often used for post-job cleanup, they
+		// can run during the grace period.
+		graceCtx, cancel := withGracePeriod(ctx, e.SignalGracePeriod)
+		defer cancel()
+		hookErr = e.runPostCommandHooks(graceCtx)
 	}()
 
 	// Run pre-command hooks
@@ -891,7 +935,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 	// error this will be zero. It's used to set the exit code later, so it's important
 	e.shell.Env.Set(
 		"BUILDKITE_COMMAND_EXIT_STATUS",
-		fmt.Sprintf("%d", shell.GetExitCode(commandErr)),
+		strconv.Itoa(shell.ExitCode(commandErr)),
 	)
 
 	// Exit early if there was no error
@@ -916,7 +960,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 		// TODO: investigate phasing this out under a experiment
 		return nil, nil
 	case isExitError && !isExitSignaled:
-		e.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandErr))
+		e.shell.Errorf("The command exited with status %d", shell.ExitCode(commandErr))
 		return nil, commandErr
 	default:
 		e.shell.Errorf("%s", commandErr)
@@ -946,7 +990,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 
 	scriptFileName := strings.Replace(e.Command, "\n", "", -1)
 	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
-	commandIsScript := err == nil && utils.FileExists(pathToCommand)
+	commandIsScript := err == nil && osutil.FileExists(pathToCommand)
 	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
 
 	// If the command isn't a script, then it's something we need
@@ -966,19 +1010,19 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 
 	var cmdToExec string
 
-	// The shell gets parsed based on the operating system
-	shell, err := shellwords.Split(e.Shell)
+	// The interpreter gets parsed based on the operating system
+	interpreter, err := shellwords.Split(e.Shell)
 	if err != nil {
 		return fmt.Errorf("Failed to split shell (%q) into tokens: %w", e.Shell, err)
 	}
 
-	if len(shell) == 0 {
+	if len(interpreter) == 0 {
 		return fmt.Errorf("No shell set for job")
 	}
 
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
 	// a batch script so that it works, but we don't like it
-	if strings.ToUpper(filepath.Base(shell[0])) == "CMD.EXE" {
+	if strings.ToUpper(filepath.Base(interpreter[0])) == "CMD.EXE" {
 		batchScript, err := e.writeBatchScript(e.Command)
 		if err != nil {
 			return err
@@ -1020,7 +1064,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		// shouldn't be vulnerable to this!
 		if e.ExecutorConfig.CommandEval {
 			// Make script executable
-			if err = utils.ChmodExecutable(pathToCommand); err != nil {
+			if err = osutil.ChmodExecutable(pathToCommand); err != nil {
 				e.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
 				return err
 			}
@@ -1049,7 +1093,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	}
 
 	var cmd []string
-	cmd = append(cmd, shell...)
+	cmd = append(cmd, interpreter...)
 	cmd = append(cmd, cmdToExec)
 
 	if e.Debug {
@@ -1058,7 +1102,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = e.shell.RunWithoutPrompt(ctx, cmd[0], cmd[1:]...)
+	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
 	return err
 }
 
@@ -1120,96 +1164,128 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 	return scriptFile.Name(), nil
 }
 
-// setupRedactors wraps shell output and logging in Redactors if any redaction
-// is necessary based on RedactedVars configuration and the existence of
-// matching environment vars. It will store the redactors in the Executor so
-// that they may be updated when the environment changes.
+// setupRedactors creates new stdout and [shell.Logger] to use for a new shell,
+// that write to stdout and stderr respectively, each via a [replacer.Replacer]
+// set up as a secret redactor. References to the redactors are retained in
+// e.redactors so they can be updated with new secrets.
 //
-// The returned method will remove the redactors from the Executor and Flush them.
-func (e *Executor) setupRedactors() {
-	valuesToRedact := redact.Values(e.shell, e.ExecutorConfig.RedactedVars, e.shell.Env.Dump())
-	if len(valuesToRedact) == 0 {
-		return
+// Pictorally:
+//
+//	(returned io.Writer) == redactor 1 -> stdout
+//
+// and
+//
+//	(returned shell.Logger) -> redactor 2 -> stderr
+func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
+	varsToRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, environ.DumpPairs())
+	if err != nil {
+		log.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	if len(short) > 0 {
+		slices.Sort(short)
+		log.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
 	}
 
 	if e.Debug {
-		e.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
+		log.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
 	}
 
-	// If the shell Writer is already a Replacer, reset the values to redact.
-	if rdc, ok := e.shell.Writer.(*replacer.Replacer); ok {
-		// There may have been some redactees in the redactor already, so we
-		// propagate them to any new redactor.
-		valuesToRedact = append(valuesToRedact, rdc.Needles()...)
-		e.redactors.Append(rdc)
-	} else {
-		rdc := replacer.New(e.shell.Writer, valuesToRedact, redact.Redact)
-		e.shell.Writer = rdc
-		e.redactors.Append(rdc)
+	needles := make([]string, 0, len(varsToRedact))
+	for _, pair := range varsToRedact {
+		needles = append(needles, pair.Value)
 	}
 
-	// If the shell.Logger is already a redacted WriterLogger, reset the values to redact.
-	// (maybe there's a better way to do two levels of type assertion? ...
-	// shell.Logger may be a WriterLogger, and its Writer may be a Redactor)
-	var shellWriterLogger *shell.WriterLogger
-	var shellLoggerRedactor *replacer.Replacer
-	if logger, ok := e.shell.Logger.(*shell.WriterLogger); ok {
-		shellWriterLogger = logger
-		if redactor, ok := logger.Writer.(*replacer.Replacer); ok {
-			shellLoggerRedactor = redactor
-		}
-	}
-	if rdc := shellLoggerRedactor; rdc != nil {
-		// There may have been some redactees in the redactor already, so we
-		// propagate them to any new redactor.
-		valuesToRedact = append(valuesToRedact, rdc.Needles()...)
-		e.redactors.Append(rdc)
-	} else if shellWriterLogger != nil {
-		rdc := replacer.New(e.shell.Writer, valuesToRedact, redact.Redact)
-		shellWriterLogger.Writer = rdc
-		e.redactors.Append(rdc)
-	}
+	stdoutRedactor := replacer.New(stdout, needles, redact.Redact)
+	e.redactors.Append(stdoutRedactor)
+	loggerRedactor := replacer.New(stderr, needles, redact.Redact)
+	e.redactors.Append(loggerRedactor)
 
-	e.redactors.Add(valuesToRedact...)
+	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)
+	return stdoutRedactor, logger
 }
 
-func (e *Executor) startKubernetesClient(ctx context.Context, kubernetesClient *kubernetes.Client) error {
-	e.shell.Commentf("Using experimental Kubernetes support")
-	err := roko.NewRetrier(
+func (e *Executor) kubernetesSetup(ctx context.Context, environ *env.Environment, k8sAgentSocket *kubernetes.Client) error {
+	rtr := roko.NewRetrier(
 		roko.WithMaxAttempts(7),
 		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-	).Do(func(rtr *roko.Retrier) error {
-		id, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_ID"))
-		if err != nil {
-			return fmt.Errorf("failed to parse container id, %s", os.Getenv("BUILDKITE_CONTAINER_ID"))
-		}
-		kubernetesClient.ID = id
-		connect, err := kubernetesClient.Connect(ctx)
-		if err != nil {
-			return err
-		}
-		os.Setenv("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
-		e.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
-		writer := io.MultiWriter(os.Stdout, kubernetesClient)
-		e.shell.Writer = writer
-		e.shell.Logger = shell.NewWriterLogger(writer, true, e.DisabledWarnings)
-
-		return nil
+	)
+	regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
+		return k8sAgentSocket.Connect(ctx)
 	})
-
 	if err != nil {
 		return fmt.Errorf("error connecting to kubernetes runner: %w", err)
 	}
 
-	if err := kubernetesClient.Await(ctx, kubernetes.RunStateStart); err != nil {
+	// Set our environment vars based on the registration response.
+	// But note that the k8s stack interprets the job definition itself,
+	// and sets a variety of env vars (e.g. BUILDKITE_COMMAND) that
+	// *could* be different to the ones the agent normally supplies.
+	// Examples:
+	// * The command container could be passed a specific
+	//   BUILDKITE_COMMAND that is computed from the command+args
+	//   podSpec attributes (in the kubernetes "plugin"), instead of the
+	//   "command" attribute of the step.
+	// * BUILDKITE_PLUGINS is pre-processed by the k8s stack to remove
+	//   the kubernetes "plugin". If we used the agent's default
+	//   BUILDKITE_PLUGINS, we'd be trying to find a kubernetes plugin
+	//   that doesn't exist.
+	// So we should skip setting any vars that are already set, and
+	// specifically any that could be deliberately *unset* by the
+	// k8s stack (BUILDKITE_PLUGINS could be unset if kubernetes is
+	// the only "plugin" in the step).
+	// (Maybe we could move some of the k8s stack processing in here?)
+	//
+	// To think about: how to obtain the env vars early enough to set
+	// them in ExecutorConfig (because of how urfave/cli works, it
+	// must happen before App.Run, which is before the program even knows
+	// which subcommand is running).
+	for n, v := range env.FromSlice(regResp.Env).Dump() {
+		// Skip these ones specifically.
+		// See agent-stack-k8s/internal/controller/scheduler/scheduler.go#(*jobWrapper).Build
+		switch n {
+		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS":
+			continue
+
+		case "BUILDKITE_AGENT_ACCESS_TOKEN":
+			// Just in case someone has tried to fiddle with this, set it
+			// unconditionally (to be compatible with pre-v3.74.1 / PR 2851
+			// behavior).
+			environ.Set(n, v)
+			if err := os.Setenv(n, v); err != nil {
+				return err
+			}
+			continue
+		}
+		// Skip any that are already set.
+		if environ.Exists(n) {
+			continue
+		}
+		// Set it!
+		environ.Set(n, v)
+		if err := os.Setenv(n, v); err != nil {
+			return err
+		}
+	}
+
+	// Proceed when ready
+	if err := k8sAgentSocket.Await(ctx, kubernetes.RunStateStart); err != nil {
 		return fmt.Errorf("error waiting for client to become ready: %w", err)
 	}
 
 	go func() {
-		if err := kubernetesClient.Await(ctx, kubernetes.RunStateInterrupt); err != nil {
+		// If the k8s client is interrupted because the "server" agent is
+		// stopped or unreachable, we should stop running the job.
+		err := k8sAgentSocket.Await(ctx, kubernetes.RunStateInterrupt)
+		// If the k8s client is interrupted because our own ctx was cancelled,
+		// then the job is already stopping, so there's no point logging an
+		// error.
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		if err != nil {
 			e.shell.Errorf("Error waiting for client interrupt: %v", err)
 		}
-		e.cancelCh <- struct{}{}
+		e.Cancel()
 	}()
 	return nil
 }

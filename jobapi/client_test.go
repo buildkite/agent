@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -124,13 +124,27 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestClient_NoSocket(t *testing.T) {
+	// t.Parallel() // Can't be parallelised, because it uses the t.Setenv() function
+
 	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(canc)
 
-	// This may be set if the test is being run by a buildkite agent!
-	os.Unsetenv("BUILDKITE_AGENT_JOB_API_SOCKET")
+	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "") // This may be set if the test is being run by a buildkite agent!
 	_, err := NewDefaultClient(ctx)
-	assert.ErrorIs(t, err, errNoSocketEnv, "NewDefaultClient() error = %v, want %v", err, errNoSocketEnv)
+	assert.ErrorIs(t, err, errNoJobAPISocketEnv, "NewDefaultClient() error = %v, want %v", err, errNoJobAPISocketEnv)
+}
+
+func TestClient_NoToken(t *testing.T) {
+	// t.Parallel() // Can't be parallelised, because it uses the t.Setenv() function
+
+	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(canc)
+
+	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "/tmp/fake-socket") // Just to make sure it's set
+	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")                  // This may be set if the test is being run by a buildkite agent!
+
+	_, err := NewDefaultClient(ctx)
+	assert.ErrorIs(t, err, errNoJobAPITokenEnv, "NewDefaultClient() error = %v, want %v", err, errNoJobAPITokenEnv)
 }
 
 func TestClientEnvGet(t *testing.T) {

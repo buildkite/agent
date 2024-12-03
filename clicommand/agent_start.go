@@ -18,13 +18,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/internal/awslib"
+	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/utils"
+	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -33,7 +39,6 @@ import (
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
 )
@@ -82,8 +87,11 @@ type AgentStartConfig struct {
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
-	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
 	SigningJWKSKeyID string `cli:"signing-jwks-key-id"`
+
+	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
+	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	DebugSigning     bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
 	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
@@ -159,15 +167,19 @@ type AgentStartConfig struct {
 	TracingServiceName          string `cli:"tracing-service-name"`
 
 	// Global flags
-	Debug             bool     `cli:"debug"`
-	LogLevel          string   `cli:"log-level"`
-	NoColor           bool     `cli:"no-color"`
-	Experiments       []string `cli:"experiment" normalize:"list"`
-	Profile           string   `cli:"profile"`
-	StrictSingleHooks bool     `cli:"strict-single-hooks"`
+	Debug                     bool     `cli:"debug"`
+	LogLevel                  string   `cli:"log-level"`
+	NoColor                   bool     `cli:"no-color"`
+	Experiments               []string `cli:"experiment" normalize:"list"`
+	Profile                   string   `cli:"profile"`
+	StrictSingleHooks         bool     `cli:"strict-single-hooks"`
+	KubernetesExec            bool     `cli:"kubernetes-exec"`
+	TraceContextEncoding      string   `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload bool     `cli:"no-multipart-artifact-upload"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
+	TraceHTTP bool   `cli:"trace-http"`
 	Token     string `cli:"token" validate:"required"`
 	Endpoint  string `cli:"endpoint" validate:"required"`
 	NoHTTP2   bool   `cli:"no-http2"`
@@ -646,7 +658,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "signing-jwks-file",
-			Usage:  "Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key",
+			Usage:  `Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key. When using Docker containers to upload pipeline steps dynamically, use environment variable propagation (for example, "docker run -e BUILDKITE_AGENT_JWKS_FILE") to allow all steps within the pipeline to be signed.`,
 			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_FILE",
 		},
 		cli.StringFlag{
@@ -655,9 +667,19 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID",
 		},
 		cli.StringFlag{
+			Name:   "signing-aws-kms-key",
+			Usage:  "The KMS KMS key ID, or key alias used when signing and verifying the pipeline.",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY",
+		},
+		cli.BoolFlag{
+			Name:   "debug-signing",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
+		},
+		cli.StringFlag{
 			Name:   "verification-failure-behavior",
 			Value:  agent.VerificationBehaviourBlock,
-			Usage:  fmt.Sprintf("The behavior when a job is received without a signature. One of: %v. Defaults to %s", verificationFailureBehaviors, agent.VerificationBehaviourBlock),
+			Usage:  fmt.Sprintf("The behavior when a job is received without a valid verifiable signature (without a signature, with an invalid signature, or with a signature that fails verification). One of: %v. Defaults to %s", verificationFailureBehaviors, agent.VerificationBehaviourBlock),
 			EnvVar: "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
 		},
 		cli.StringSliceFlag{
@@ -671,6 +693,7 @@ var AgentStartCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
+		TraceHTTPFlag,
 
 		// Global flags
 		NoColorFlag,
@@ -680,6 +703,9 @@ var AgentStartCommand = cli.Command{
 		ProfileFlag,
 		RedactedVars,
 		StrictSingleHooksFlag,
+		KubernetesExecFlag,
+		TraceContextEncodingFlag,
+		NoMultipartArtifactUploadFlag,
 
 		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
@@ -835,15 +861,14 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		if cfg.CancelGracePeriod <= cfg.SignalGracePeriodSeconds {
-			return fmt.Errorf(
-				"cancel-grace-period (%d) must be greater than signal-grace-period-seconds (%d)",
-				cfg.CancelGracePeriod,
-				cfg.SignalGracePeriodSeconds,
-			)
+		signalGracePeriod, err := signalGracePeriod(cfg.CancelGracePeriod, cfg.SignalGracePeriodSeconds)
+		if err != nil {
+			return err
 		}
 
-		signalGracePeriod := time.Duration(cfg.SignalGracePeriodSeconds) * time.Second
+		if _, err := tracetools.ParseEncoding(cfg.TraceContextEncoding); err != nil {
+			return fmt.Errorf("while parsing trace context encoding: %v", err)
+		}
 
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
 			Datadog:              cfg.MetricsDatadog,
@@ -868,8 +893,36 @@ var AgentStartCommand = cli.Command{
 			defer shutdown()
 		}
 
-		var verificationJWKS jwk.Set
-		if cfg.VerificationJWKSFile != "" {
+		// if the agent is provided a KMS key ID, it should use the KMS signer, otherwise
+		// it should load the JWKS from the file
+		var verificationJWKS any
+		switch {
+		case cfg.SigningAWSKMSKey != "":
+
+			var logMode aws.ClientLogMode
+			// log requests and retries if we are debugging signing
+			// see https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/logging/
+			if cfg.DebugSigning {
+				logMode = aws.LogRetries | aws.LogRequest
+			}
+
+			// this is currently loaded here to ensure it is ONLY loaded if the agent is using KMS for signing
+			// this will limit the possible impact of this new SDK on the rest of the agent users
+			awscfg, err := awslib.GetConfigV2(
+				ctx,
+				config.WithClientLogMode(logMode),
+			)
+			if err != nil {
+				return err
+			}
+
+			// assign a crypto signer which uses the KMS key to sign the pipeline
+			verificationJWKS, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
+			if err != nil {
+				return fmt.Errorf("couldn't create KMS signer: %w", err)
+			}
+
+		case cfg.VerificationJWKSFile != "":
 			var err error
 			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
 			if err != nil {
@@ -942,12 +995,17 @@ var AgentStartCommand = cli.Command{
 			AcquireJob:                   cfg.AcquireJob,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
-			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
+			TraceContextEncoding:         cfg.TraceContextEncoding,
+			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
+			KubernetesExec:               cfg.KubernetesExec,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
+			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
+			DebugSigning:     cfg.DebugSigning,
 
-			VerificationJWKS: verificationJWKS,
+			VerificationJWKS:             verificationJWKS,
+			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
 
 			DisableWarningsFor: cfg.DisableWarningsFor,
 		}
@@ -978,7 +1036,7 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("invalid log format %q. Only 'text' or 'json' are allowed.", cfg.LogFormat)
 		}
 
-		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), fmt.Sprintf("%d", os.Getpid()))
+		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), strconv.Itoa(os.Getpid()))
 		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 		l.Notice("For questions and support, email us at: hello@buildkite.com")
 
@@ -1028,6 +1086,7 @@ var AgentStartCommand = cli.Command{
 				}
 				agentConf.AllowedRepositories = append(agentConf.AllowedRepositories, r)
 			}
+			l.Info("Allowed repositories patterns: %q", agentConf.AllowedRepositories)
 		}
 
 		if len(cfg.AllowedPlugins) > 0 {
@@ -1039,6 +1098,7 @@ var AgentStartCommand = cli.Command{
 				}
 				agentConf.AllowedPlugins = append(agentConf.AllowedPlugins, r)
 			}
+			l.Info("Allowed plugins patterns: %q", agentConf.AllowedPlugins)
 		}
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
@@ -1048,6 +1108,7 @@ var AgentStartCommand = cli.Command{
 
 		tags := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 			Tags:                      cfg.Tags,
+			TagsFromK8s:               cfg.KubernetesExec,
 			TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
 			TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
 			TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
@@ -1075,7 +1136,7 @@ var AgentStartCommand = cli.Command{
 
 		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
 		// so we may as well check that'll work now and fail early if it's a problem
-		if !utils.FileExists(agentConf.BuildPath) {
+		if !osutil.FileExists(agentConf.BuildPath) {
 			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
 			// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 			if err := os.MkdirAll(agentConf.BuildPath, 0o777); err != nil {
@@ -1083,8 +1144,9 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, "Token"))
+		// Create the API apiClient
+		apiClient := api.NewClient(l, loadAPIClientConfig(cfg, "Token"))
+		client := &core.Client{APIClient: apiClient, Logger: l}
 
 		// The registration request for all agents
 		registerReq := api.AgentRegisterRequest{
@@ -1136,7 +1198,7 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Register the agent with the buildkite API
-			ag, err := agent.Register(ctx, l, client, registerReq)
+			ag, err := client.Register(ctx, registerReq)
 			if err != nil {
 				return err
 			}
@@ -1146,7 +1208,7 @@ var AgentStartCommand = cli.Command{
 				l.WithFields(logger.StringField("agent", ag.Name)),
 				ag,
 				mc,
-				client,
+				apiClient,
 				agent.AgentWorkerConfig{
 					AgentConfiguration: agentConf,
 					CancelSignal:       cancelSig,
@@ -1183,7 +1245,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		err = pool.Start(ctx)
-		if errors.Is(err, agent.ErrJobAcquisitionFailure) {
+		if errors.Is(err, core.ErrJobAcquisitionRejected) {
 			// If the agent tried to acquire a job, but it couldn't because the job was already taken, we should exit with a
 			// specific exit code so that the caller can know that this job can't be acquired.
 
@@ -1289,16 +1351,18 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		}
 		return nil
 	}
-	sh, err := shell.New()
+
+	// pipe from hook output to logger
+	r, w := io.Pipe()
+	sh, err := shell.New(
+		shell.WithStdout(w),
+		shell.WithLogger(shell.NewWriterLogger(w, !cfg.NoColor, nil)), // for Promptf
+	)
 	if err != nil {
 		log.Error("creating shell for %q hook: %v", hookName, err)
 		return err
 	}
 
-	// pipe from hook output to logger
-	r, w := io.Pipe()
-	sh.Logger = shell.NewWriterLogger(w, !cfg.NoColor, nil) // for Promptf
-	sh.Writer = w                                           // for stdout+stderr
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -1311,8 +1375,14 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	}()
 
 	// run hook
+	script, err := sh.Script(p)
+	if err != nil {
+		log.Error("%q hook: %v", hookName, err)
+		return err
+	}
+	// For these hooks, hide the interpreter from the "prompt".
 	sh.Promptf("%s", p)
-	if err = sh.RunScript(context.Background(), p, nil); err != nil {
+	if err := script.Run(context.TODO(), shell.ShowPrompt(false)); err != nil {
 		log.Error("%q hook: %v", hookName, err)
 		return err
 	}
@@ -1324,7 +1394,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 }
 
 func defaultSocketsPath() string {
-	home, err := homedir.Dir()
+	home, err := osutil.UserHomeDir()
 	if err != nil {
 		return filepath.Join(os.TempDir(), "buildkite-sockets")
 	}

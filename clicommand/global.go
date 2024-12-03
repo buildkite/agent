@@ -21,93 +21,122 @@ const (
 	DefaultEndpoint = "https://agent.buildkite.com/v3"
 )
 
-var AgentAccessTokenFlag = cli.StringFlag{
-	Name:   "agent-access-token",
-	Value:  "",
-	Usage:  "The access token used to identify the agent",
-	EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
-}
+var (
+	AgentAccessTokenFlag = cli.StringFlag{
+		Name:   "agent-access-token",
+		Value:  "",
+		Usage:  "The access token used to identify the agent",
+		EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
+	}
 
-var AgentRegisterTokenFlag = cli.StringFlag{
-	Name:   "token",
-	Value:  "",
-	Usage:  "Your account agent token",
-	EnvVar: "BUILDKITE_AGENT_TOKEN",
-}
+	AgentRegisterTokenFlag = cli.StringFlag{
+		Name:   "token",
+		Value:  "",
+		Usage:  "Your account agent token",
+		EnvVar: "BUILDKITE_AGENT_TOKEN",
+	}
 
-var EndpointFlag = cli.StringFlag{
-	Name:   "endpoint",
-	Value:  DefaultEndpoint,
-	Usage:  "The Agent API endpoint",
-	EnvVar: "BUILDKITE_AGENT_ENDPOINT",
-}
+	EndpointFlag = cli.StringFlag{
+		Name:   "endpoint",
+		Value:  DefaultEndpoint,
+		Usage:  "The Agent API endpoint",
+		EnvVar: "BUILDKITE_AGENT_ENDPOINT",
+	}
 
-var NoHTTP2Flag = cli.BoolFlag{
-	Name:   "no-http2",
-	Usage:  "Disable HTTP2 when communicating with the Agent API.",
-	EnvVar: "BUILDKITE_NO_HTTP2",
-}
+	NoHTTP2Flag = cli.BoolFlag{
+		Name:   "no-http2",
+		Usage:  "Disable HTTP2 when communicating with the Agent API.",
+		EnvVar: "BUILDKITE_NO_HTTP2",
+	}
 
-var DebugFlag = cli.BoolFlag{
-	Name:   "debug",
-	Usage:  "Enable debug mode. Synonym for ′--log-level debug′. Takes precedence over ′--log-level′",
-	EnvVar: "BUILDKITE_AGENT_DEBUG",
-}
+	DebugFlag = cli.BoolFlag{
+		Name:   "debug",
+		Usage:  "Enable debug mode. Synonym for ′--log-level debug′. Takes precedence over ′--log-level′",
+		EnvVar: "BUILDKITE_AGENT_DEBUG",
+	}
 
-var LogLevelFlag = cli.StringFlag{
-	Name:   "log-level",
-	Value:  "notice",
-	Usage:  "Set the log level for the agent, making logging more or less verbose. Defaults to notice. Allowed values are: debug, info, error, warn, fatal",
-	EnvVar: "BUILDKITE_AGENT_LOG_LEVEL",
-}
+	LogLevelFlag = cli.StringFlag{
+		Name:   "log-level",
+		Value:  "notice",
+		Usage:  "Set the log level for the agent, making logging more or less verbose. Defaults to notice. Allowed values are: debug, info, error, warn, fatal",
+		EnvVar: "BUILDKITE_AGENT_LOG_LEVEL",
+	}
 
-var ProfileFlag = cli.StringFlag{
-	Name:   "profile",
-	Usage:  "Enable a profiling mode, either cpu, memory, mutex or block",
-	EnvVar: "BUILDKITE_AGENT_PROFILE",
-}
+	ProfileFlag = cli.StringFlag{
+		Name:   "profile",
+		Usage:  "Enable a profiling mode, either cpu, memory, mutex or block",
+		EnvVar: "BUILDKITE_AGENT_PROFILE",
+	}
 
-var DebugHTTPFlag = cli.BoolFlag{
-	Name:   "debug-http",
-	Usage:  "Enable HTTP debug mode, which dumps all request and response bodies to the log",
-	EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
-}
+	DebugHTTPFlag = cli.BoolFlag{
+		Name:   "debug-http",
+		Usage:  "Enable HTTP debug mode, which dumps all request and response bodies to the log",
+		EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
+	}
 
-var NoColorFlag = cli.BoolFlag{
-	Name:   "no-color",
-	Usage:  "Don't show colors in logging",
-	EnvVar: "BUILDKITE_AGENT_NO_COLOR",
-}
+	TraceHTTPFlag = cli.BoolFlag{
+		Name:   "trace-http",
+		Usage:  "Enable HTTP trace mode, which logs timings for each HTTP request. Timings are logged at the debug level unless a request fails at the network level in which case they are logged at the error level",
+		EnvVar: "BUILDKITE_AGENT_TRACE_HTTP",
+	}
 
-var StrictSingleHooksFlag = cli.BoolFlag{
-	Name:   "strict-single-hooks",
-	Usage:  "Enforces that only one checkout hook, and only one command hook, can be run",
-	EnvVar: "BUILDKITE_STRICT_SINGLE_HOOKS",
-}
+	NoColorFlag = cli.BoolFlag{
+		Name:   "no-color",
+		Usage:  "Don't show colors in logging",
+		EnvVar: "BUILDKITE_AGENT_NO_COLOR",
+	}
 
-var ExperimentsFlag = cli.StringSliceFlag{
-	Name:   "experiment",
-	Value:  &cli.StringSlice{},
-	Usage:  "Enable experimental features within the buildkite-agent",
-	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
-}
+	StrictSingleHooksFlag = cli.BoolFlag{
+		Name:   "strict-single-hooks",
+		Usage:  "Enforces that only one checkout hook, and only one command hook, can be run",
+		EnvVar: "BUILDKITE_STRICT_SINGLE_HOOKS",
+	}
 
-var RedactedVars = cli.StringSliceFlag{
-	Name:   "redacted-vars",
-	Usage:  "Pattern of environment variable names containing sensitive values",
-	EnvVar: "BUILDKITE_REDACTED_VARS",
-	Value: &cli.StringSlice{
-		"*_PASSWORD",
-		"*_SECRET",
-		"*_TOKEN",
-		"*_PRIVATE_KEY",
-		"*_ACCESS_KEY",
-		"*_SECRET_KEY",
-		// Connection strings frequently contain passwords, e.g.
-		// https://user:pass@host/ or Server=foo;Database=my-db;User Id=user;Password=pass;
-		"*_CONNECTION_STRING",
-	},
-}
+	KubernetesExecFlag = cli.BoolFlag{
+		Name: "kubernetes-exec",
+		Usage: "This is intended to be used only by the Buildkite k8s stack " +
+			"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
+			"logs and exit statuses between containers in a pod",
+		EnvVar: "BUILDKITE_KUBERNETES_EXEC",
+	}
+
+	NoMultipartArtifactUploadFlag = cli.BoolFlag{
+		Name:   "no-multipart-artifact-upload",
+		Usage:  "For Buildkite-hosted artifacts, disables the use of multipart uploads. Has no effect on uploads to other destinations such as custom cloud buckets",
+		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
+	}
+
+	ExperimentsFlag = cli.StringSliceFlag{
+		Name:   "experiment",
+		Value:  &cli.StringSlice{},
+		Usage:  "Enable experimental features within the buildkite-agent",
+		EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
+	}
+
+	RedactedVars = cli.StringSliceFlag{
+		Name:   "redacted-vars",
+		Usage:  "Pattern of environment variable names containing sensitive values",
+		EnvVar: "BUILDKITE_REDACTED_VARS",
+		Value: &cli.StringSlice{
+			"*_PASSWORD",
+			"*_SECRET",
+			"*_TOKEN",
+			"*_PRIVATE_KEY",
+			"*_ACCESS_KEY",
+			"*_SECRET_KEY",
+			// Connection strings frequently contain passwords, e.g.
+			// https://user:pass@host/ or Server=foo;Database=my-db;User Id=user;Password=pass;
+			"*_CONNECTION_STRING",
+		},
+	}
+
+	TraceContextEncodingFlag = cli.StringFlag{
+		Name:   "trace-context-encoding",
+		Usage:  "Sets the inner encoding for BUILDKITE_TRACE_CONTEXT. Must be either json or gob",
+		Value:  "gob",
+		EnvVar: "BUILDKITE_TRACE_CONTEXT_ENCODING",
+	}
+)
 
 func globalFlags() []cli.Flag {
 	return []cli.Flag{
@@ -258,6 +287,11 @@ func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 	debugHTTP, err := reflections.GetField(cfg, "DebugHTTP")
 	if debugHTTP == true && err == nil {
 		conf.DebugHTTP = true
+	}
+
+	traceHTTP, err := reflections.GetField(cfg, "TraceHTTP")
+	if traceHTTP == true && err == nil {
+		conf.TraceHTTP = true
 	}
 
 	endpoint, err := reflections.GetField(cfg, "Endpoint")

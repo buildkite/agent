@@ -29,9 +29,25 @@ type SecretGetConfig struct {
 }
 
 var SecretGetCommand = cli.Command{
-	Name:        "get",
-	Usage:       "Get a secret by its key",
-	Description: "Get a secret by key from Buildkite Pipelines Secrets and print it to stdout.",
+	Name:  "get",
+	Usage: "Get a secret by its key and print it to stdout",
+	Description: `Usage:
+
+    buildkite-agent secret get [key] [options...]
+
+Description:
+
+Gets a secret from Buildkite secrets and prints it to stdout. The ′key′
+specified in this command is the key's name defined for the secret in its
+cluster. The key's name is case insensitive in this command, and the
+key's value is automatically redacted in the build logs.
+
+Examples:
+
+The following examples reference the same Buildkite secret ′key′:
+
+    $ buildkite-agent secret get deploy_key
+    $ buildkite-agent secret get DEPLOY_KEY`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",

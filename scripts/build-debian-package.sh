@@ -36,6 +36,8 @@ elif [ "$BUILD_ARCH" == "ppc64" ]; then
   ARCH="ppc64"
 elif [ "$BUILD_ARCH" == "ppc64le" ]; then
   ARCH="ppc64el"
+elif [ "$BUILD_ARCH" == "riscv64" ]; then
+  ARCH="riscv64"
 else
   echo "Unknown architecture: $BUILD_ARCH"
   exit 1

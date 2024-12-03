@@ -2,12 +2,11 @@
 package redact
 
 import (
+	"fmt"
 	"path"
-	"sort"
-	"strings"
+	"slices"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
-	"golang.org/x/exp/maps"
+	"github.com/buildkite/agent/v3/env"
 )
 
 // LengthMin is the shortest string length that will be considered a
@@ -24,58 +23,56 @@ func Redact([]byte) []byte {
 	return redacted
 }
 
-// Values returns the variable Values to be redacted, given a
-// redaction config string and an environment map.
-func Values(logger shell.Logger, patterns []string, environment map[string]string) []string {
-	vars := Vars(logger, patterns, environment)
-	if len(vars) == 0 {
-		return nil
-	}
+// MatchAny reports if the name matches any of the patterns.
+func MatchAny(patterns []string, name string) (matched bool, err error) {
+	// Track patterns that couldn't be parsed by path.Match, and report them
+	// in a single error.
+	var badPatterns []string
+	defer func() {
+		if len(badPatterns) > 0 {
+			slices.Sort(badPatterns)
+			err = fmt.Errorf("bad patterns: %q", badPatterns)
+		}
+	}()
 
-	vals := make([]string, 0, len(vars))
-	for _, val := range vars {
-		vals = append(vals, val)
-	}
+	for _, pattern := range patterns {
+		matched, err := path.Match(pattern, name)
+		if err != nil {
+			badPatterns = append(badPatterns, pattern)
+			continue
+		}
 
-	return vals
+		if matched {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Vars returns the variable names and values to be redacted, given a
-// redaction config string and an environment map.
-func Vars(logger shell.Logger, patterns []string, environment map[string]string) map[string]string {
-	// Lifted out of Bootstrap.setupRedactors to facilitate testing
-	vars := make(map[string]string)
-	shortVars := make(map[string]struct{})
-
-	for name, val := range environment {
-		for _, pattern := range patterns {
-			matched, err := path.Match(pattern, name)
-			if err != nil {
-				// path.ErrBadPattern is the only error returned by path.Match
-				logger.Warningf("Bad redacted vars pattern: %s", pattern)
-				continue
-			}
-
-			if !matched {
-				continue
-			}
-			if len(val) < LengthMin {
-				if len(val) > 0 {
-					shortVars[name] = struct{}{}
-				}
-				continue
-			}
-
-			vars[name] = val
-			break // Break pattern loop, continue to next env var
+// redaction config string and an environment map. It also returned variables
+// whose names match the redacted-vars config, but whose values were too short.
+func Vars(patterns []string, environment []env.Pair) (matched []env.Pair, short []string, err error) {
+	for _, pair := range environment {
+		// Does the name match any of the patterns?
+		m, err := MatchAny(patterns, pair.Name)
+		if err != nil {
+			return nil, nil, err
 		}
+		if !m {
+			continue
+		}
+
+		// The name matched, now test the length of the value.
+		if len(pair.Value) < LengthMin {
+			if len(pair.Value) > 0 {
+				short = append(short, pair.Name)
+			}
+			continue
+		}
+
+		matched = append(matched, pair)
 	}
 
-	if len(shortVars) > 0 {
-		// TODO: Use stdlib maps when it gets a Keys function (Go 1.22?)
-		vars := maps.Keys(shortVars)
-		sort.Strings(vars)
-		logger.Warningf("Some variables have values below minimum length (%d bytes) and will not be redacted: %s", LengthMin, strings.Join(vars, ", "))
-	}
-	return vars
+	return matched, short, nil
 }
