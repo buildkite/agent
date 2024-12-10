@@ -641,6 +641,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 		args := []string{}
 		for _, config := range e.GitSubmoduleCloneConfig {
+			// -c foo=bar is valid, -c foo= is valid, -c foo is valid, but...
+			// -c (nothing) is invalid.
+			// This could happen because the env var was set to an empty value.
+			if config == "" {
+				continue
+			}
 			args = append(args, "-c", config)
 		}
 
