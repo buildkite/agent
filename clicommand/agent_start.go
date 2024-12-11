@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
@@ -758,6 +759,18 @@ var AgentStartCommand = cli.Command{
 		))
 		defer done()
 
+		// Verify that the bootstrap buildkite-agent executable matches the current host agent
+		// executable. In development builds, it exits on mismatch; otherwise it only logs a warning.
+		// This is to avoid confusion when making changes to the buildkite-agent but forgetting to
+		// update the buildkite-agent binary available from $PATH
+		if err := checkBinaryPaths(); err != nil {
+			if version.IsDevelopmentBuild() {
+				return fmt.Errorf("check binary paths: %s", err)
+			} else {
+				l.Warn("check binary paths: %s", err)
+			}
+		}
+
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
 			return fmt.Errorf("failed to unset config from environment: %w", err)
@@ -1255,6 +1268,28 @@ var AgentStartCommand = cli.Command{
 
 		return err
 	},
+}
+
+// checkBinaryPaths looks up both the bootstrap and host buildkite-agent paths,
+// and returns an error if they do not match or if either cannot be determined.
+func checkBinaryPaths() error {
+	bootstrapPath, err := exec.LookPath("buildkite-agent")
+	if err != nil {
+		return fmt.Errorf("failed to locate bootstrap buildkite-agent: %w", err)
+	}
+
+	hostPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to determine host buildkite-agent executable: %w", err)
+	}
+
+	if hostPath != bootstrapPath {
+		return fmt.Errorf(
+			"mismatched buildkite-agent paths: host=%q bootstrap=%q",
+			hostPath, bootstrapPath,
+		)
+	}
+	return nil
 }
 
 func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set, error) {

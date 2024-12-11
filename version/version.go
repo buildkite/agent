@@ -38,6 +38,10 @@ func BuildNumber() string {
 	return buildNumber
 }
 
+func IsDevelopmentBuild() bool {
+	return buildNumber == "x"
+}
+
 // commitInfo returns a string consisting of the commit hash and whether the the build was made in a
 // `dirty` working directory or not. A dirty working directory is one that has uncommitted changes
 // to files that git would track.
