@@ -654,29 +654,59 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 }
 
 func (e *Executor) hasGlobalHook(name string) bool {
-	_, err := e.globalHookPath(name)
-	return err == nil
+	_, err := hook.Find(e.HooksPath, name)
+	if err == nil {
+		return true
+	}
+	for _, additional := range e.AdditionalHooksPaths {
+		_, err := hook.Find(additional, name)
+		if err == nil {
+			return true
+		}
+	}
+	return false
 }
 
-// Returns the absolute path to a global hook, or os.ErrNotExist if none is found
-func (e *Executor) globalHookPath(name string) (string, error) {
-	return hook.Find(e.HooksPath, name)
+// find all matching paths for the specified hook
+func (e *Executor) getAllGlobalHookPaths(name string) ([]string, error) {
+	hooks := []string{}
+	p, err := hook.Find(e.HooksPath, name)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return []string{}, err
+		}
+	} else {
+		hooks = append(hooks, p)
+	}
+
+	for _, additional := range e.AdditionalHooksPaths {
+		p, err = hook.Find(additional, name)
+		// as this is an additional hook, don't fail if there's a problem here
+		if err == nil {
+			hooks = append(hooks, p)
+		}
+	}
+
+	return hooks, nil
 }
 
 // Executes a global hook if one exists
 func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
-	if !e.hasGlobalHook(name) {
+	allHooks, err := e.getAllGlobalHookPaths(name)
+	if err != nil {
 		return nil
 	}
-	p, err := e.globalHookPath(name)
-	if err != nil {
-		return err
+	for _, h := range allHooks {
+		err = e.executeHook(ctx, HookConfig{
+			Scope: "global",
+			Name:  name,
+			Path:  h,
+		})
+		if err != nil {
+			return err
+		}
 	}
-	return e.executeHook(ctx, HookConfig{
-		Scope: "global",
-		Name:  name,
-		Path:  p,
-	})
+	return nil
 }
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found

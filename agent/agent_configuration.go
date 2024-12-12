@@ -12,6 +12,7 @@ type AgentConfiguration struct {
 	BootstrapScript             string
 	BuildPath                   string
 	HooksPath                   string
+	AdditionalHooksPaths        []string
 	SocketsPath                 string
 	GitMirrorsPath              string
 	GitMirrorsLockTimeout       int

@@ -110,10 +110,11 @@ type AgentStartConfig struct {
 	WriteJobLogsToStdout bool     `cli:"write-job-logs-to-stdout"`
 	DisableWarningsFor   []string `cli:"disable-warnings-for" normalize:"list"`
 
-	BuildPath   string `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath   string `cli:"hooks-path" normalize:"filepath"`
-	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
-	PluginsPath string `cli:"plugins-path" normalize:"filepath"`
+	BuildPath            string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath            string   `cli:"hooks-path" normalize:"filepath"`
+	AdditionalHooksPaths []string `cli:"additional-hooks-paths" normalize:"list"`
+	SocketsPath          string   `cli:"sockets-path" normalize:"filepath"`
+	PluginsPath          string   `cli:"plugins-path" normalize:"filepath"`
 
 	Shell           string `cli:"shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
@@ -508,6 +509,12 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
+		},
+		cli.StringSliceFlag{
+			Name:   "additional-hooks-paths",
+			Value:  &cli.StringSlice{},
+			Usage:  "Additional directories to look for agent hooks",
+			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
 		},
 		cli.StringFlag{
 			Name:   "sockets-path",
@@ -978,6 +985,7 @@ var AgentStartCommand = cli.Command{
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			HooksPath:                    cfg.HooksPath,
+			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
 			PluginsPath:                  cfg.PluginsPath,
 			GitCheckoutFlags:             cfg.GitCheckoutFlags,
 			GitCloneFlags:                cfg.GitCloneFlags,
@@ -1060,6 +1068,7 @@ var AgentStartCommand = cli.Command{
 		l.Debug("Bootstrap command: %s", agentConf.BootstrapScript)
 		l.Debug("Build path: %s", agentConf.BuildPath)
 		l.Debug("Hooks directory: %s", agentConf.HooksPath)
+		l.Debug("Additional hooks directories: %v", agentConf.AdditionalHooksPaths)
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
 
 		if exps := experiments.KnownAndEnabled(ctx); len(exps) > 0 {
@@ -1389,13 +1398,27 @@ func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
 // agent logger. Exit status failure is logged and returned for the caller to handle
 func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig) error {
 	// search for hook (including .bat & .ps1 files on Windows)
+	hooks := []string{}
 	p, err := hook.Find(cfg.HooksPath, hookName)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Error("Error finding %q hook: %v", hookName, err)
 			return err
 		}
-		return nil
+	} else {
+		hooks = append(hooks, p)
+	}
+
+	// also search for hook in any additionally provided locations
+	for _, h := range cfg.AdditionalHooksPaths {
+		p, err = hook.Find(h, hookName)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				log.Error("Error finding %q hook: %v", hookName, err)
+			}
+		} else {
+			hooks = append(hooks, p)
+		}
 	}
 
 	// pipe from hook output to logger
@@ -1420,22 +1443,24 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		}
 	}()
 
-	// run hook
-	script, err := sh.Script(p)
-	if err != nil {
-		log.Error("%q hook: %v", hookName, err)
-		return err
-	}
-	// For these hooks, hide the interpreter from the "prompt".
-	sh.Promptf("%s", p)
-	if err := script.Run(context.TODO(), shell.ShowPrompt(false)); err != nil {
-		log.Error("%q hook: %v", hookName, err)
-		return err
-	}
-	w.Close() // goroutine scans until pipe is closed
+	// run hooks
+	for _, p = range hooks {
+		script, err := sh.Script(p)
+		if err != nil {
+			log.Error("%q hook: %v", hookName, err)
+			return err
+		}
+		// For these hooks, hide the interpreter from the "prompt".
+		sh.Promptf("%s", p)
+		if err := script.Run(context.TODO(), shell.ShowPrompt(false)); err != nil {
+			log.Error("%q hook: %v", hookName, err)
+			return err
+		}
+		w.Close() // goroutine scans until pipe is closed
 
-	// wait for hook to finish and output to flush to logger
-	wg.Wait()
+		// wait for hook to finish and output to flush to logger
+		wg.Wait()
+	}
 	return nil
 }
 
