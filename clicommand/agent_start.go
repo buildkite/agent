@@ -109,10 +109,11 @@ type AgentStartConfig struct {
 	WriteJobLogsToStdout bool     `cli:"write-job-logs-to-stdout"`
 	DisableWarningsFor   []string `cli:"disable-warnings-for" normalize:"list"`
 
-	BuildPath   string `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath   string `cli:"hooks-path" normalize:"filepath"`
-	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
-	PluginsPath string `cli:"plugins-path" normalize:"filepath"`
+	BuildPath            string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath            string   `cli:"hooks-path" normalize:"filepath"`
+	AdditionalHooksPaths []string `cli:"additional-hooks-paths" normalize:"list"`
+	SocketsPath          string   `cli:"sockets-path" normalize:"filepath"`
+	PluginsPath          string   `cli:"plugins-path" normalize:"filepath"`
 
 	Shell           string `cli:"shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
@@ -507,6 +508,12 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
+		},
+		cli.StringSliceFlag{
+			Name:   "additional-hooks-paths",
+			Value:  &cli.StringSlice{},
+			Usage:  "Additional directories to look for agent hooks",
+			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
 		},
 		cli.StringFlag{
 			Name:   "sockets-path",
@@ -965,6 +972,7 @@ var AgentStartCommand = cli.Command{
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			HooksPath:                    cfg.HooksPath,
+			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
 			PluginsPath:                  cfg.PluginsPath,
 			GitCheckoutFlags:             cfg.GitCheckoutFlags,
 			GitCloneFlags:                cfg.GitCloneFlags,
@@ -1047,6 +1055,7 @@ var AgentStartCommand = cli.Command{
 		l.Debug("Bootstrap command: %s", agentConf.BootstrapScript)
 		l.Debug("Build path: %s", agentConf.BuildPath)
 		l.Debug("Hooks directory: %s", agentConf.HooksPath)
+		l.Debug("Additional hooks directories: %v", agentConf.AdditionalHooksPaths)
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
 
 		if exps := experiments.KnownAndEnabled(ctx); len(exps) > 0 {
@@ -1350,6 +1359,18 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 			return err
 		}
 		return nil
+	}
+
+	// also search for hook in any additionally provided locations
+	for _, h := range cfg.AdditionalHooksPaths {
+		p, err = hook.Find(h, hookName)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				log.Error("Error finding %q hook: %v", hookName, err)
+				return err
+			}
+			return nil
+		}
 	}
 
 	// pipe from hook output to logger
