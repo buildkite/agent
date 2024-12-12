@@ -5,6 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.87.1](https://github.com/buildkite/agent/tree/v3.87.1) (2024-11-26)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.87.0...v3.87.1)
+
+### Fixed
+- Fix duplicated output when debug is enabled [#3108](https://github.com/buildkite/agent/pull/3108) (@DrJosh9000)
+
+### Changed
+- Small change to annotation example [#3106](https://github.com/buildkite/agent/pull/3106) (@PriyaSudip)
+
+### Internal
+- Use Ubuntu codename labels to refer to base images [#3103](https://github.com/buildkite/agent/pull/3103) (@DrJosh9000)
+
+### Dependabot
+- The usual updates: [#3111](https://github.com/buildkite/agent/pull/3111), [#3112](https://github.com/buildkite/agent/pull/3112), [#3110](https://github.com/buildkite/agent/pull/3110), [#3109](https://github.com/buildkite/agent/pull/3109), [#3113](https://github.com/buildkite/agent/pull/3113), [#3104](https://github.com/buildkite/agent/pull/3104), [#3098](https://github.com/buildkite/agent/pull/3098), [#3102](https://github.com/buildkite/agent/pull/3102), [#3097](https://github.com/buildkite/agent/pull/3097), [#3101](https://github.com/buildkite/agent/pull/3101) (@dependabot[bot])
+
+## [v3.87.0](https://github.com/buildkite/agent/tree/v3.87.0) (2024-11-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.86.0...v3.87.0)
+
+### Changed
+- Remove signal reason unable\_to\_verify\_signature and replace with signature\_rejected [#3094](https://github.com/buildkite/agent/pull/3094) (@jordandcarter)
+
+### Fixed
+- Don't surface expected stderr output from git rev-parse [#3095](https://github.com/buildkite/agent/pull/3095) (@CerealBoy)
+- Add retry around NewS3Client [#3092](https://github.com/buildkite/agent/pull/3092) (@l-suzuki)
+
+### Internal
+- Soft fail upload of packages docker images [#3093](https://github.com/buildkite/agent/pull/3093) (@tommeier)
+- Switch to agent-base images [#3091](https://github.com/buildkite/agent/pull/3091) (@DrJosh9000)
+
+## [v3.86.0](https://github.com/buildkite/agent/tree/v3.86.0) (2024-11-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.85.1...v3.86.0)
+
+### Added
+- Add `force-grace-period-seconds` argument to `step cancel` command [#3084](https://github.com/buildkite/agent/pull/3084) (@mitchbne)
+
+### Changed
+- Rename env var to `BUILDKITE_STEP_CANCEL_FORCE_GRACE_PERIOD_SECONDS` [#3087](https://github.com/buildkite/agent/pull/3087) (@mitchbne)
+- Drop Ubuntu 18.04, add Ubuntu 24.04 [#3078](https://github.com/buildkite/agent/pull/3078) (@DrJosh9000)
+
+### Fixed
+- Handle older version of remote ref error message [#3082](https://github.com/buildkite/agent/pull/3082) (@steveh)
+
+### Internal
+- dependabot: Group Dockerfiles [#3077](https://github.com/buildkite/agent/pull/3077) (@DrJosh9000)
+- Various dependency bumps: [#3086](https://github.com/buildkite/agent/pull/3086), [#3085](https://github.com/buildkite/agent/pull/3085), [#3081](https://github.com/buildkite/agent/pull/3081), [#3079](https://github.com/buildkite/agent/pull/3079) (@dependabot[bot])
+
+## [v3.85.1](https://github.com/buildkite/agent/tree/v3.85.1) (2024-11-09)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.85.0...v3.85.1)
+
+### Fixed
+- Fix another nil pointer panic in k8s mode [#3075](https://github.com/buildkite/agent/pull/3075) (@DrJosh9000)
+- Fix nil pointer panic in k8s mode [#3074](https://github.com/buildkite/agent/pull/3074) (@DrJosh9000)
+
+## [v3.85.0](https://github.com/buildkite/agent/tree/v3.85.0) (2024-11-07)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.84.0...v3.85.0)
+
+### Added
+- Create `buildkite-agent step cancel` subcommand [#3070](https://github.com/buildkite/agent/pull/3070) (@mitchbne)
+
+### Changed
+- Support installing specific versions via script [#3069](https://github.com/buildkite/agent/pull/3069) (@jordandcarter)
+- Promote polyglot-hooks experiment to default [#3063](https://github.com/buildkite/agent/pull/3063) (@DrJosh9000)
+- Use sha256 in the checksum verification [#3062](https://github.com/buildkite/agent/pull/3062) (@esenmarti)
+- Minor update to the 'redactor' CLI command examples. [#3060](https://github.com/buildkite/agent/pull/3060) (@gilesgas)
+
+### Fixed
+- Fix zzglob import path [#3057](https://github.com/buildkite/agent/pull/3057) (@DrJosh9000)
+
+### Internal
+- Shell package cleanup [#3068](https://github.com/buildkite/agent/pull/3068) (@DrJosh9000)
+- Remove .editorconfig [#3064](https://github.com/buildkite/agent/pull/3064) (@DrJosh9000)
+- Various dependency bumps: [#3066](https://github.com/buildkite/agent/pull/3066) [#3065](https://github.com/buildkite/agent/pull/3065) [#3067](https://github.com/buildkite/agent/pull/3067) (@dependabot[bot])
+
 ## [v3.84.0](https://github.com/buildkite/agent/tree/v3.84.0) (2024-10-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.83.1...v3.84.0)
 

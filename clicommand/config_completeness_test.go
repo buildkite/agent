@@ -42,6 +42,7 @@ var commandConfigPairs = []configCommandPair{
 	{Config: PipelineUploadConfig{}, Command: PipelineUploadCommand},
 	{Config: RedactorAddConfig{}, Command: RedactorAddCommand},
 	{Config: SecretGetConfig{}, Command: SecretGetCommand},
+	{Config: StepCancelConfig{}, Command: StepCancelCommand},
 	{Config: StepGetConfig{}, Command: StepGetCommand},
 	{Config: StepUpdateConfig{}, Command: StepUpdateCommand},
 	{Config: ToolKeygenConfig{}, Command: ToolKeygenCommand},

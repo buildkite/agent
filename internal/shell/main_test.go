@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 )
 
 var errMissingFilename = errors.New("missing file name")

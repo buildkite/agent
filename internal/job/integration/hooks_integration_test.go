@@ -12,8 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/job"
-
-	"github.com/buildkite/agent/v3/internal/job/shell"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -516,7 +515,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 			if err == nil {
 				t.Fatalf("tester.Run(t) = %v, want non-nil error", err)
 			}
-			if got, want := shell.GetExitCode(err), 5; got != want {
+			if got, want := shell.ExitCode(err), 5; got != want {
 				t.Fatalf("shell.GetExitCode(%v) = %d, want %d", err, got, want)
 			}
 

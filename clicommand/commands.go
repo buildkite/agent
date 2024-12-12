@@ -96,10 +96,11 @@ var BuildkiteAgentCommands = []cli.Command{
 	},
 	{
 		Name:  "step",
-		Usage: "Get or update an attribute of a build step",
+		Usage: "Get or update an attribute of a build step, or cancel unfinished jobs for a step",
 		Subcommands: []cli.Command{
 			StepGetCommand,
 			StepUpdateCommand,
+			StepCancelCommand,
 		},
 	},
 	{

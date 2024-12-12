@@ -6,11 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/job/shell"
-	"github.com/buildkite/agent/v3/internal/olfactor"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestParseGittableURL(t *testing.T) {
@@ -181,91 +178,131 @@ func TestGitCheckRefFormat(t *testing.T) {
 
 func TestGitCheckoutValidatesRef(t *testing.T) {
 	t.Parallel()
-	sh := new(mockShellRunner)
-	defer sh.Check(t)
-	err := gitCheckout(context.Background(), &shell.Shell{}, "", "--nope")
-	assert.EqualError(t, err, `"--nope" is not a valid git ref format`)
+	ctx := context.Background()
+	sh := shell.NewTestShell(t, shell.WithDryRun(true))
+	err := gitCheckout(ctx, sh, "", "--nope")
+	if got, want := err.Error(), `"--nope" is not a valid git ref format`; got != want {
+		t.Errorf(`gitCheckout(ctx, sh, "", "--nope") error = %q, want %q`, got, want)
+	}
 }
 
 func TestGitCheckout(t *testing.T) {
 	t.Parallel()
-	sh := new(mockShellRunner).Expect("git", "checkout", "-f", "-q", "main")
-	defer sh.Check(t)
-	err := gitCheckout(context.Background(), sh, "-f -q", "main")
-	require.NoError(t, err)
+	ctx := context.Background()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	if err := gitCheckout(ctx, sh, "-f -q", "main"); err != nil {
+		t.Fatalf(`gitCheckout(ctx, sh, "-f -q", "main") = %v`, err)
+	}
+
+	wantLog := [][]string{{absoluteGit, "checkout", "-f", "-q", "main"}}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestGitCheckoutSketchyArgs(t *testing.T) {
 	t.Parallel()
-	sh := new(mockShellRunner)
-	defer sh.Check(t)
-	err := gitCheckout(context.Background(), sh, "-f -q", "  --hello")
-	assert.EqualError(t, err, `"  --hello" is not a valid git ref format`)
+	ctx := context.Background()
+
+	sh := shell.NewTestShell(t, shell.WithDryRun(true))
+	err := gitCheckout(ctx, sh, "-f -q", "  --hello")
+	if got, want := err.Error(), `"  --hello" is not a valid git ref format`; got != want {
+		t.Errorf(`gitCheckout(ctx, sh, "-f -q", "  --hello") error = %q, want %q`, got, want)
+	}
 }
 
 func TestGitClone(t *testing.T) {
 	t.Parallel()
-	sh := new(mockShellRunner).Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
-	defer sh.Check(t)
-	err := gitClone(context.Background(), sh, "-v --references url", "repo", "dir")
-	require.NoError(t, err)
+	ctx := context.Background()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	if err := gitClone(ctx, sh, "-v --references url", "repo", "dir"); err != nil {
+		t.Fatalf(`gitClone(ctx, sh, "-v --references url", "repo", "dir") = %v`, err)
+	}
+
+	wantLog := [][]string{{absoluteGit, "clone", "-v", "--references", "url", "--", "repo", "dir"}}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestGitClean(t *testing.T) {
 	t.Parallel()
-	sh := new(mockShellRunner).Expect("git", "clean", "--foo", "--bar")
-	defer sh.Check(t)
-	err := gitClean(context.Background(), sh, "--foo --bar")
-	require.NoError(t, err)
+	ctx := context.Background()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	if err := gitClean(ctx, sh, "--foo --bar"); err != nil {
+		t.Fatalf(`gitClean(ctx, sh, "--foo --bar") = %v`, err)
+	}
+
+	wantLog := [][]string{{absoluteGit, "clean", "--foo", "--bar"}}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestGitCleanSubmodules(t *testing.T) {
 	t.Parallel()
-	sh := new(mockShellRunner).
-		Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
-	defer sh.Check(t)
-	err := gitCleanSubmodules(context.Background(), sh, "--foo --bar")
-	require.NoError(t, err)
+	ctx := context.Background()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	if err := gitCleanSubmodules(ctx, sh, "--foo --bar"); err != nil {
+		t.Fatalf(`gitCleanSubmodules(ctx, sh, "--foo --bar") = %v`, err)
+	}
+
+	wantLog := [][]string{{absoluteGit, "submodule", "foreach", "--recursive", "git clean --foo --bar"}}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestGitFetch(t *testing.T) {
 	t.Parallel()
-	sh := new(mockShellRunner).Expect("git", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2")
-	defer sh.Check(t)
-	err := gitFetch(context.Background(), sh, "--foo --bar", "repo", "ref1", "ref2")
-	require.NoError(t, err)
-}
+	ctx := context.Background()
 
-var _ shellRunner = (*mockShellRunner)(nil)
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
 
-// mockShellRunner implements shellRunner for testing expected calls.
-type mockShellRunner struct {
-	got, want [][]string
-}
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
 
-func (r *mockShellRunner) Expect(cmd string, args ...string) *mockShellRunner {
-	r.want = append(r.want, append([]string{cmd}, args...))
-	return r
-}
+	if err := gitFetch(ctx, sh, "--foo --bar", "repo", "ref1", "ref2"); err != nil {
+		t.Fatalf(`gitFetch(ctx, sh, "--foo --bar", "repo", "ref1", "ref2") = %v`, err)
+	}
 
-func (r *mockShellRunner) Run(_ context.Context, cmd string, args ...string) error {
-	r.got = append(r.got, append([]string{cmd}, args...))
-	return nil
-}
-
-func (r *mockShellRunner) RunWithOlfactor(
-	_ context.Context,
-	_ []string,
-	cmd string,
-	args ...string,
-) (*olfactor.Olfactor, error) {
-	r.got = append(r.got, append([]string{cmd}, args...))
-	return nil, nil
-}
-
-func (r *mockShellRunner) Check(t *testing.T) {
-	t.Helper()
-	if diff := cmp.Diff(r.got, r.want); diff != "" {
-		t.Errorf("mockShellRunner diff (-got +want):\n%s", diff)
+	wantLog := [][]string{{absoluteGit, "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2"}}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
 	}
 }

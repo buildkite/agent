@@ -1,39 +1,20 @@
 version: 2
 updates:
   - package-ecosystem: docker
-    directory: /packaging/docker/alpine
+    directories:
+      - /packaging/docker/alpine
+      - /packaging/docker/alpine-k8s
+      - /packaging/docker/sidecar
+      - /packaging/docker/ubuntu-20.04
+      - /packaging/docker/ubuntu-22.04
+      - /packaging/docker/ubuntu-24.04
     schedule:
       interval: weekly
-  - package-ecosystem: docker
-    directory: /packaging/docker/alpine-k8s
-    schedule:
-      interval: weekly
-  - package-ecosystem: docker
-    directory: /packaging/docker/sidecar
-    schedule:
-      interval: weekly
-  - package-ecosystem: docker
-    directory: /packaging/docker/ubuntu-18.04
-    schedule:
-      interval: weekly
-    ignore:
-      - dependency-name: ubuntu
-  - package-ecosystem: docker
-    directory: /packaging/docker/ubuntu-20.04
-    schedule:
-      interval: weekly
-    ignore:
-      - dependency-name: ubuntu
-  - package-ecosystem: docker
-    directory: /packaging/docker/ubuntu-22.04
-    schedule:
-      interval: weekly
-    ignore:
-      - dependency-name: ubuntu
-  - package-ecosystem: docker
-    directory: /.buildkite
-    schedule:
-      interval: weekly
+    groups:
+      container-images:
+        patterns:
+          - "*"
+
   - package-ecosystem: gomod
     directory: /
     schedule:
@@ -42,12 +23,12 @@ updates:
     groups:
       otel:
         patterns:
-        - go.opentelemetry.io/*
+          - go.opentelemetry.io/*
       golang-x:
         patterns:
-        - golang.org/x/*
+          - golang.org/x/*
       cloud-providers:
         patterns:
-        - github.com/Azure/*
-        - github.com/aws/*
-        - google.golang.org/*
+          - github.com/Azure/*
+          - github.com/aws/*
+          - google.golang.org/*

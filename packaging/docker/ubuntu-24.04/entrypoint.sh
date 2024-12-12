@@ -8,4 +8,4 @@ if [[ -d "$DIR" ]] ; then
   /bin/run-parts --exit-on-error "$DIR"
 fi
 
-exec /sbin/tini -- ssh-env-config.sh /usr/local/bin/buildkite-agent "$@"
+exec /usr/bin/tini -- ssh-env-config.sh /usr/local/bin/buildkite-agent "$@"

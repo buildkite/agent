@@ -155,3 +155,6 @@ steps:
               - docker.io
               - ghcr.io
               - packages.buildkite.com
+          adjustments:
+            - with: { registry: "packages.buildkite.com" }
+              soft_fail: true

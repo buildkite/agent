@@ -7,7 +7,7 @@ import (
 )
 
 func signalProcess(cmd *exec.Cmd, sig os.Signal) error {
-	if cmd.Process != nil {
+	if cmd.Process == nil {
 		return errors.New("Process doesn't exist yet")
 	}
 	return cmd.Process.Signal(sig)

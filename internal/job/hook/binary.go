@@ -54,6 +54,17 @@ func isBinaryExecutable(path string) (bool, error) {
 	}
 
 	defer f.Close()
+
+	fileInfo, err := f.Stat()
+	if err != nil {
+		return false, fmt.Errorf("stat file %q: %w", path, err)
+	}
+
+	if fileInfo.Size() < 4 {
+		// there are less than four bytes in the file, we assume it is an empty file and there's nothing that we can do with it
+		return false, nil
+	}
+
 	r := bufio.NewReader(f)
 	firstFour, err := r.Peek(4)
 	if err != nil {

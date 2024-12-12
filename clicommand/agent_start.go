@@ -29,8 +29,8 @@ import (
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/job/shell"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -1351,16 +1351,18 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		}
 		return nil
 	}
-	sh, err := shell.New()
+
+	// pipe from hook output to logger
+	r, w := io.Pipe()
+	sh, err := shell.New(
+		shell.WithStdout(w),
+		shell.WithLogger(shell.NewWriterLogger(w, !cfg.NoColor, nil)), // for Promptf
+	)
 	if err != nil {
 		log.Error("creating shell for %q hook: %v", hookName, err)
 		return err
 	}
 
-	// pipe from hook output to logger
-	r, w := io.Pipe()
-	sh.Logger = shell.NewWriterLogger(w, !cfg.NoColor, nil) // for Promptf
-	sh.Writer = w                                           // for stdout+stderr
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -1373,8 +1375,14 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	}()
 
 	// run hook
+	script, err := sh.Script(p)
+	if err != nil {
+		log.Error("%q hook: %v", hookName, err)
+		return err
+	}
+	// For these hooks, hide the interpreter from the "prompt".
 	sh.Promptf("%s", p)
-	if err = sh.RunScript(context.Background(), p, nil); err != nil {
+	if err := script.Run(context.TODO(), shell.ShowPrompt(false)); err != nil {
 		log.Error("%q hook: %v", hookName, err)
 		return err
 	}
