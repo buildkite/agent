@@ -1278,17 +1278,28 @@ func checkBinaryPaths() error {
 		return fmt.Errorf("failed to locate bootstrap buildkite-agent: %w", err)
 	}
 
+	evalBootstrapPath, err := filepath.EvalSymlinks(bootstrapPath)
+	if err != nil {
+		return fmt.Errorf("failed to locate bootstrap buildkite-agent: %w", err)
+	}
+
 	hostPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to determine host buildkite-agent executable: %w", err)
 	}
 
-	if hostPath != bootstrapPath {
+	evalHostPath, err := filepath.EvalSymlinks(hostPath)
+	if err != nil {
+		return fmt.Errorf("failed to determine host buildkite-agent executable: %w", err)
+	}
+
+	if evalHostPath != evalBootstrapPath {
 		return fmt.Errorf(
 			"mismatched buildkite-agent paths: host=%q bootstrap=%q",
-			hostPath, bootstrapPath,
+			evalHostPath, evalBootstrapPath,
 		)
 	}
+
 	return nil
 }
 
