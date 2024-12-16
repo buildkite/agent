@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.88.0](https://github.com/buildkite/agent/tree/v3.88.0) (2024-12-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.87.1...v3.88.0)
+
+### Changed
+- Prefix fatal error message with 'buildkite-agent:' [#3135](https://github.com/buildkite/agent/pull/3135) (@jordandcarter)
+- Notify when host and bootstrap agent paths mismatch [#3123](https://github.com/buildkite/agent/pull/3123) (@jordandcarter)
+
+### Fixed
+- Enable process debug logging [#3134](https://github.com/buildkite/agent/pull/3134) (@patrobinson)
+- Ignore empty submodule clone configs [#3122](https://github.com/buildkite/agent/pull/3122) (@DrJosh9000)
+- fix: allow for empty files on hook check [#3117](https://github.com/buildkite/agent/pull/3117) (@nzspambot)
+- Parse more standalone `$` cases as literal `$`s and not variable expansions:
+  - Bump github.com/buildkite/go-pipeline from 0.13.2 to 0.13.3 [#3137](https://github.com/buildkite/agent/pull/3137) (@dependabot[bot])
+  - Bump github.com/buildkite/interpolate from 0.1.4 to 0.1.5 [#3138](https://github.com/buildkite/agent/pull/3138) (@dependabot[bot])
+
+### Dependabot
+- [#3136](https://github.com/buildkite/agent/pull/3136), [#3127](https://github.com/buildkite/agent/pull/3127), [#3129](https://github.com/buildkite/agent/pull/3129), [#3128](https://github.com/buildkite/agent/pull/3128), [#3130](https://github.com/buildkite/agent/pull/3130), [#3132](https://github.com/buildkite/agent/pull/3132), [#3131](https://github.com/buildkite/agent/pull/3131), [#3133](https://github.com/buildkite/agent/pull/3133), [#3125](https://github.com/buildkite/agent/pull/3125), [#3119](https://github.com/buildkite/agent/pull/3119), [#3120](https://github.com/buildkite/agent/pull/3120), [#3121](https://github.com/buildkite/agent/pull/3121), [#3116](https://github.com/buildkite/agent/pull/3116), [#3115](https://github.com/buildkite/agent/pull/3115) (@dependabot[bot])
+
 ## [v3.87.1](https://github.com/buildkite/agent/tree/v3.87.1) (2024-11-26)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.87.0...v3.87.1)
 
