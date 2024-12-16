@@ -3,7 +3,7 @@ module github.com/buildkite/agent/v3
 go 1.22.6
 
 require (
-	cloud.google.com/go/compute/metadata v0.5.2
+	cloud.google.com/go/compute/metadata v0.6.0
 	drjosh.dev/zzglob v0.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.5.0
