@@ -565,6 +565,9 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		cmdCfg.Stderr = io.Discard
 	}
 
+	var processLogger logger.Logger
+	processLogger = logger.Discard
+
 	if s.debug {
 		// Display normally-hidden output streams using log streamer.
 		if cmdCfg.Stdout == io.Discard {
@@ -578,6 +581,9 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 			defer stdErrStreamer.Close()
 			cmdCfg.Stderr = stdErrStreamer
 		}
+
+		// This should respect the log format we set for the agent
+		processLogger = logger.NewConsoleLogger(logger.NewTextPrinter(cmdCfg.Stderr), os.Exit)
 	}
 
 	if s.commandLog != nil {
@@ -590,7 +596,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		return nil
 	}
 
-	p := process.New(logger.Discard, cmdCfg)
+	p := process.New(processLogger, cmdCfg)
 	s.proc.Store(p)
 
 	if err := p.Run(ctx); err != nil {
