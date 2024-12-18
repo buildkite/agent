@@ -112,8 +112,8 @@ github.com/buildkite/bintest/v3 v3.3.0 h1:RTWcSaJRlOT6t/K311ejPf+0J3LE/QEODzVG3v
 github.com/buildkite/bintest/v3 v3.3.0/go.mod h1:btqpTsVODiJcb0NMdkkmtMQ6xoFc2W/nY5yy+3I0zcs=
 github.com/buildkite/go-pipeline v0.13.2 h1:M378/FoxOVvu7F5J+iG4/p3jQDMl3VNP1i/Nc4eWF0o=
 github.com/buildkite/go-pipeline v0.13.2/go.mod h1:Lbtal6Q/xxLC1PZFygMqtXzM7ppSkiclll0kVqY8yNQ=
-github.com/buildkite/interpolate v0.1.4 h1:qacB5WR+7+Ol1xiJ4xZajHh/CGDdhcMesXR+V3thZPA=
-github.com/buildkite/interpolate v0.1.4/go.mod h1:dHnrwHew5O8VNOAgMDpwRlFnhL5VSN6M1bHVmRZ9Ccc=
+github.com/buildkite/interpolate v0.1.5 h1:v2Ji3voik69UZlbfoqzx+qfcsOKLA61nHdU79VV+tPU=
+github.com/buildkite/interpolate v0.1.5/go.mod h1:dHnrwHew5O8VNOAgMDpwRlFnhL5VSN6M1bHVmRZ9Ccc=
 github.com/buildkite/roko v1.2.0 h1:hbNURz//dQqNl6Eo9awjQOVOZwSDJ8VEbBDxSfT9rGQ=
 github.com/buildkite/roko v1.2.0/go.mod h1:23R9e6nHxgedznkwwfmqZ6+0VJZJZ2Sg/uVcp2cP46I=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000 h1:hiVSLk7s3yFKFOHF/huoShLqrj13RMguWX2yzfvy7es=
