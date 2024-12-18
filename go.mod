@@ -56,14 +56,14 @@ require (
 	golang.org/x/oauth2 v0.24.0
 	golang.org/x/sys v0.28.0
 	golang.org/x/term v0.27.0
-	google.golang.org/api v0.211.0
+	google.golang.org/api v0.213.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.70.1
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
 )
 
 require (
-	cloud.google.com/go/auth v0.12.1 // indirect
+	cloud.google.com/go/auth v0.13.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.6 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
