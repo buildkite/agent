@@ -132,6 +132,9 @@ type ExecutorConfig struct {
 	// Path to the global hooks
 	HooksPath string
 
+	// Additional hooks directories that can be provided
+	AdditionalHooksPaths []string
+
 	// Path to the plugins directory
 	PluginsPath string
 
