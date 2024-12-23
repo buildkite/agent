@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "olfactor",
+    srcs = ["olfactor.go"],
+    importpath = "github.com/buildkite/agent/v3/internal/olfactor",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/replacer",
+        "//internal/trie",
+    ],
+)
+
+go_test(
+    name = "olfactor_test",
+    srcs = ["olfactor_test.go"],
+    deps = [
+        ":olfactor",
+        "@tools_gotest_v3//assert",
+    ],
+)

@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "agentapi",
+    srcs = [
+        "client.go",
+        "doc.go",
+        "lock_server.go",
+        "lock_state.go",
+        "paths.go",
+        "payloads.go",
+        "routes.go",
+        "server.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/agentapi",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/socket",
+        "//logger",
+        "@com_github_go_chi_chi_v5//:chi",
+        "@com_github_go_chi_chi_v5//middleware",
+    ],
+)
+
+go_test(
+    name = "agentapi_test",
+    srcs = ["client_server_test.go"],
+    embed = [":agentapi"],
+    deps = ["//logger"],
+)

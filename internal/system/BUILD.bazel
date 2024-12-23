@@ -1,0 +1,79 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "system",
+    srcs = [
+        "doc.go",
+        "version_dump.go",
+        "version_dump_windows.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/system",
+    visibility = ["//:__subpackages__"],
+    deps = select({
+        "@rules_go//go/platform:aix": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:android": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:darwin": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:dragonfly": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:freebsd": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:illumos": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:ios": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:js": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:linux": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:netbsd": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:openbsd": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:osx": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:plan9": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:qnx": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:solaris": [
+            "//logger",
+            "//process",
+        ],
+        "@rules_go//go/platform:windows": [
+            "//logger",
+            "@org_golang_x_sys//windows",
+        ],
+        "//conditions:default": [],
+    }),
+)
