@@ -1,0 +1,16 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "env",
+    srcs = ["environment.go"],
+    importpath = "github.com/buildkite/agent/v3/env",
+    visibility = ["//visibility:public"],
+    deps = ["@com_github_puzpuzpuz_xsync_v2//:xsync"],
+)
+
+go_test(
+    name = "env_test",
+    srcs = ["environment_test.go"],
+    embed = [":env"],
+    deps = ["@com_github_stretchr_testify//assert"],
+)
