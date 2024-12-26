@@ -564,6 +564,7 @@ def go_dependencies():
         build_directives = [
             "gazelle:resolve go github.com/DataDog/sketches-go/ddsketch/pb/sketchpb //ddsketch/pb/sketchpb",  # keep
         ],
+        build_file_generation = "off",
         importpath = "github.com/DataDog/sketches-go",
         build_file_proto_mode = "disable",
         sum = "h1:ki7VfeNz7IcNafq7yI/j5U/YCkO3LJiMDtXz9OMQbyE=",
