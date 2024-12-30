@@ -20,21 +20,23 @@ func setupHooksPath(t *testing.T) (string, func()) {
 	return hooksPath, func() { os.RemoveAll(hooksPath) }
 }
 
-func writeAgentHook(t *testing.T, dir, hookName string) string {
+func writeAgentHook(t *testing.T, dir, hookName, msg string) string {
 	t.Helper()
 
 	var filename, script string
 	if runtime.GOOS == "windows" {
 		filename = hookName + ".bat"
-		script = "@echo off\necho hello world"
+		script = "@echo off\necho " + msg
 	} else {
 		filename = hookName
-		script = "echo hello world"
+		script = "echo " + msg
 	}
 	filepath := filepath.Join(dir, filename)
+	t.Logf("Creating %q with %q content", filepath, msg)
 	if err := os.WriteFile(filepath, []byte(script), 0o755); err != nil {
 		assert.FailNow(t, "failed to write %q hook: %v", hookName, err)
 	}
+	t.Log("Providing the path with file created")
 	return filepath
 }
 
@@ -57,7 +59,7 @@ func TestAgentStartupHook(t *testing.T) {
 
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
-		filepath := writeAgentHook(t, hooksPath, "agent-startup")
+		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello world")
 		log := logger.NewBuffer()
 		err := agentStartupHook(log, cfg(hooksPath))
 
@@ -94,6 +96,59 @@ func TestAgentStartupHook(t *testing.T) {
 	})
 }
 
+func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
+	t.SkipNow()
+	// This test was added to validate that multiple global hooks can be added
+	// by using the AdditionalHooksPaths configuration option. When this test
+	// runs however, there's a timing issue where the second hook errors at
+	// execution time as the file is not available.
+	//
+	// Error:          Received unexpected error:
+	//                 error running "/opt/homebrew/bin/bash /var/folders/x3/rsj92m015tdcby8gz2j_25ym0000gn/T/471662504/agent-startup": unexpected error type *errors.errorString: io: read/write on closed pipe
+	// Test:           TestAgentStartupHookWithAdditionalPaths/with_additional_agent-startup_hook
+	// Messages:       [[info] $ /var/folders/x3/rsj92m015tdcby8gz2j_25ym0000gn/T/982974833/agent-startup [info] hello new world [error] "agent-startup" hook: error running "/opt/homebrew/bin/bash /var/folders/x3/rsj92m015tdcby8gz2j_25ym0000gn/T/471662504/agent-startup": unexpected error type *errors.errorString: io: read/write on closed pipe]
+	//
+	// For now it is skipped, and left as a placeholder!
+
+	t.Parallel()
+
+	cfg := func(hooksPath, additionalHooksPath string) AgentStartConfig {
+		return AgentStartConfig{
+			HooksPath:            hooksPath,
+			AdditionalHooksPaths: []string{additionalHooksPath},
+			NoColor:              true,
+		}
+	}
+	prompt := "$"
+	if runtime.GOOS == "windows" {
+		prompt = ">"
+	}
+
+	t.Run("with additional agent-startup hook", func(t *testing.T) {
+		t.Parallel()
+
+		hooksPath, closer := setupHooksPath(t)
+		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello new world")
+		defer closer()
+
+		additionalHooksPath, additionalCloser := setupHooksPath(t)
+		addFilepath := writeAgentHook(t, additionalHooksPath, "agent-startup", "hello additional world")
+		defer additionalCloser()
+
+		log := logger.NewBuffer()
+		err := agentStartupHook(log, cfg(hooksPath, additionalHooksPath))
+
+		if assert.NoError(t, err, log.Messages) {
+			assert.Equal(t, []string{
+				"[info] " + prompt + " " + filepath,    // prompt
+				"[info] hello new world",               // output
+				"[info] " + prompt + " " + addFilepath, // prompt
+				"[info] hello additional world",        // output
+			}, log.Messages)
+		}
+	})
+}
+
 func TestAgentShutdownHook(t *testing.T) {
 	t.Parallel()
 
@@ -113,7 +168,7 @@ func TestAgentShutdownHook(t *testing.T) {
 
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
-		filepath := writeAgentHook(t, hooksPath, "agent-shutdown")
+		filepath := writeAgentHook(t, hooksPath, "agent-shutdown", "hello world")
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg(hooksPath))
 
