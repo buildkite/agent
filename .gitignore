@@ -27,3 +27,6 @@ packaging/docker/*/hooks/
 
 # Editor config boils down to personal preference
 .editorconfig
+
+# Bazel related paths
+bazel-*

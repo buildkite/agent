@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "cliconfig",
+    srcs = [
+        "file.go",
+        "loader.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/cliconfig",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/osutil",
+        "//logger",
+        "@com_github_oleiade_reflections//:reflections",
+        "@com_github_urfave_cli//:cli",
+    ],
+)

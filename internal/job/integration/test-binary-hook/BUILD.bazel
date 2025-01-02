@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "test-binary-hook_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/buildkite/agent/v3/internal/job/integration/test-binary-hook",
+    visibility = ["//visibility:private"],
+    deps = ["//jobapi"],
+)
+
+go_binary(
+    name = "test-binary-hook",
+    embed = [":test-binary-hook_lib"],
+    visibility = ["//:__subpackages__"],
+)

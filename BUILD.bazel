@@ -1,0 +1,34 @@
+load("@gazelle//:def.bzl", "gazelle")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+# gazelle:prefix github.com/buildkite/agent/v3
+gazelle(name = "gazelle")
+
+gazelle(
+    name = "gazelle-update-repos",
+    args = [
+        "-from_file=go.mod",
+        "-to_macro=deps.bzl%go_dependencies",
+        "-prune",
+    ],
+    command = "update-repos",
+)
+
+go_binary(
+    name = "agent",
+    embed = [":agent_lib"],
+    pure = "on",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "agent_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/buildkite/agent/v3",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//clicommand",
+        "//version",
+        "@com_github_urfave_cli//:cli",
+    ],
+)
