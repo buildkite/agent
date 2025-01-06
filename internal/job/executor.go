@@ -100,7 +100,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 		socket := &kubernetes.Client{ID: e.KubernetesContainerID}
 		if err := e.kubernetesSetup(ctx, environ, socket); err != nil {
-			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
+			tempLog.Errorf("Failed to start kubernetes socket client: %v", err)
 			return 1
 		}
 
