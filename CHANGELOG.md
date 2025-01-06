@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.89.0](https://github.com/buildkite/agent/tree/v3.89.0) (2025-01-06)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.88.0...v3.89.0)
+
+### Added
+- Adding support for Additional Hooks Paths [#3124](https://github.com/buildkite/agent/pull/3124) (@CerealBoy)
+
+### Internal
+- Bump the container-images group across 5 directories with 2 updates [#3143](https://github.com/buildkite/agent/pull/3143) (@dependabot[bot])
+- Update golang.org/x/net [#3140](https://github.com/buildkite/agent/pull/3140) (@yob)
+
 ## [v3.88.0](https://github.com/buildkite/agent/tree/v3.88.0) (2024-12-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.87.1...v3.88.0)
 
