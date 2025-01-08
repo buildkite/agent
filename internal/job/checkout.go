@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -780,12 +781,21 @@ func gitFetchCommitWithFallback(ctx context.Context, shell *shell.Shell, gitFetc
 
 const CommitMetadataKey = "buildkite:git:commit"
 
+var potentiallyValidGitSHA = regexp.MustCompile(`^[a-f0-9]{40}$`)
+
 // sendCommitToBuildkite sends commit information (commit, author, subject, body) to Buildkite, as the BK backend doesn't
 // have access to user's VCSes. To do this, we set a special meta-data key in the build, but only if it isn't already present
 // Functionally, this means that the first job in a build (usually a pipeline upload or similar) will push the commit info
 // to buildkite, which uses this info to display commit info in the UI eg in the title for the build
 // note that we bail early if the key already exists, as we don't want to overwrite it
 func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
+	commitRef, _ := e.shell.Env.Get("BUILDKITE_COMMIT")
+	if commitRef != "HEAD" && potentiallyValidGitSHA.MatchString(commitRef) {
+		// we can skip the metadata shenanigans here and push straight through
+		e.shell.Commentf("Skipping the meta-data git commit steps and assuming %q is correct...", commitRef)
+		return nil
+	}
+
 	e.shell.Commentf("Checking to see if git commit information needs to be sent to Buildkite...")
 	cmd := e.shell.Command("buildkite-agent", "meta-data", "exists", CommitMetadataKey)
 	if err := cmd.Run(ctx); err == nil {
