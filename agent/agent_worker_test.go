@@ -218,8 +218,8 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	}
 
 	// the last Retry-After is not recorded as the retries loop exits before using it
-	expectedSleeps := make([]time.Duration, 0, 9)
-	for d := 1; d <= 1<<8; d *= 2 {
+	expectedSleeps := make([]time.Duration, 0, 6)
+	for d := 1; d <= 1<<5; d *= 2 {
 		expectedSleeps = append(expectedSleeps, time.Duration(d)*time.Second)
 	}
 	assert.Equal(t, expectedSleeps, retrySleeps)

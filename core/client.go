@@ -56,19 +56,20 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 	// large if the job is in the waiting state.
 	//
 	// If there were no delays or jitter, the attempts would happen at t = 0, 1, 2, 4, ..., 128s
-	// after the initial one. Therefore, there are 9 attempts taking at least 255s. If the jitter
-	// always hit the max of 1s, then another 8s is added to that. This is still comfortably within
-	// the timeout of 270s, and the bound seems tight enough so that the agent is not wasting time
+	// after the initial one. Therefore, there are 7 attempts taking at least 255s. If the jitter
+	// always hit the max of 5s, then another 40s is added to that. This is still comfortably within
+	// the timeout of 330s, and the bound seems tight enough so that the agent is not wasting time
 	// waiting for a retry that will never happen.
-	timeoutCtx, cancel := context.WithTimeout(ctx, 270*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 330*time.Second)
 	defer cancel()
 
 	// Acquire the job using the ID we were provided. We'll retry as best we can on non 422 error.
 	// Except for 423 errors, in which we exponentially back off under the direction of the API
 	// setting the Retry-After header
 	r := roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.Constant(3*time.Second)),
+		roko.WithMaxAttempts(7),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+		roko.WithJitterRange(-time.Second, 5*time.Second),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	)
 
