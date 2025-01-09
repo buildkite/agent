@@ -550,6 +550,17 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 // state. If the job is in an unassignable state, it will return an error immediately.
 // Otherwise, it will retry every 3s for 30 s. The whole operation will timeout after 5 min.
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		for {
+			time.Sleep(500 * time.Millisecond)
+			if a.stopping {
+				cancel()
+				return
+			}
+		}
+	}()
+
 	job, err := a.client.AcquireJob(ctx, jobId)
 	if err != nil {
 		return fmt.Errorf("failed to acquire job: %w", err)
