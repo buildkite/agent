@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.90.0](https://github.com/buildkite/agent/tree/v3.90.0) (2025-01-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.89.0...v3.90.0)
+
+### Changed
+- Use exponential in acquire-job mode when job acquisition fails [#3153](https://github.com/buildkite/agent/pull/3153) (@moskyb)
+
+### Fixed
+- Fix nil pointer deref in certain Kubernetes environments [#3150](https://github.com/buildkite/agent/pull/3150) (@DrJosh9000)
+
 ## [v3.89.0](https://github.com/buildkite/agent/tree/v3.89.0) (2025-01-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.88.0...v3.89.0)
 
