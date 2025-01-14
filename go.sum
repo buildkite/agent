@@ -114,8 +114,8 @@ github.com/buildkite/go-pipeline v0.13.3 h1:llI7sAdZ7sqYE7r8ePlmDADRhJ1K0Kua2+gv
 github.com/buildkite/go-pipeline v0.13.3/go.mod h1:1uC2XdHkTV1G5jYv9K8omERIwrsYbBruBrPx1Zu1uFw=
 github.com/buildkite/interpolate v0.1.5 h1:v2Ji3voik69UZlbfoqzx+qfcsOKLA61nHdU79VV+tPU=
 github.com/buildkite/interpolate v0.1.5/go.mod h1:dHnrwHew5O8VNOAgMDpwRlFnhL5VSN6M1bHVmRZ9Ccc=
-github.com/buildkite/roko v1.3.0 h1:Lgv5XK0rr0uCCZQqssavdwjFs550j8ovyVmnnLMfS/E=
-github.com/buildkite/roko v1.3.0/go.mod h1:23R9e6nHxgedznkwwfmqZ6+0VJZJZ2Sg/uVcp2cP46I=
+github.com/buildkite/roko v1.3.1 h1:t7K30ceLLYn6k7hQP4oq1c7dVlhgD5nRcuSRDEEnY1s=
+github.com/buildkite/roko v1.3.1/go.mod h1:23R9e6nHxgedznkwwfmqZ6+0VJZJZ2Sg/uVcp2cP46I=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000 h1:hiVSLk7s3yFKFOHF/huoShLqrj13RMguWX2yzfvy7es=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000/go.mod h1:gv0DYOzHEsKgo31lTCDGauIg4DTTGn41Bzp+t3wSOlk=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
