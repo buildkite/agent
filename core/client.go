@@ -132,7 +132,10 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 }
 
 func handleRetriableJobAcquisitionError(warning string, resp *api.Response, r *roko.Retrier, logger logger.Logger) {
-	logger.Warn("%s (%s)", warning, r)
+	// log the warning and the retrier state at the end of this function. if we logged the error before the call to
+	// `r.SetNextInterval`, the `Retrying in ...` message wouldn't include the server-set Retry-After, if it was set
+	defer func(r *roko.Retrier) { logger.Warn("%s (%s)", warning, r) }(r)
+
 	if resp != nil {
 		retryAfter := resp.Header.Get("Retry-After")
 
