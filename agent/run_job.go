@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strconv"
@@ -416,7 +417,38 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 		return
 	}
 
+	const processInterval = 1 * time.Second // TODO: make configurable?
+	intervalTicker := time.NewTicker(processInterval)
+	defer intervalTicker.Stop()
+	first := make(chan struct{}, 1)
+	first <- struct{}{}
+
 	for {
+		setStat("😴 Waiting for next log processing interval tick")
+		select {
+		case <-first:
+			// continue below
+		case <-intervalTicker.C:
+			// continue below
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+
+		// Within the interval, wait a random amount of time to avoid
+		// spontaneous synchronisation across agents.
+		jitter := rand.N(processInterval)
+		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
+		select {
+		case <-time.After(jitter):
+			// continue below
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+
 		setStat("📨 Sending process output to log streamer")
 
 		// Send the output of the process to the log streamer for processing
@@ -428,17 +460,6 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 			// future Writes to return io.ErrClosedPipe, typically SIGPIPE-ing
 			// the running process (if it is still running).
 			r.output.Close()
-			return
-		}
-
-		setStat("😴 Sleeping for a bit")
-
-		// Sleep for a bit, or until the job is finished
-		select {
-		case <-time.After(1 * time.Second):
-		case <-ctx.Done():
-			return
-		case <-r.process.Done():
 			return
 		}
 	}

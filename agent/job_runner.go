@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -697,7 +698,37 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		return
 	}
 
+	intervalTicker := time.NewTicker(r.conf.JobStatusInterval)
+	defer intervalTicker.Stop()
+	first := make(chan struct{}, 1)
+	first <- struct{}{}
+
 	for {
+		setStat("😴 Waiting for next job status interval tick")
+		select {
+		case <-first:
+			// continue below
+		case <-intervalTicker.C:
+			// continue below
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+
+		// Within the interval, wait a random amount of time to avoid
+		// spontaneous synchronisation across agents.
+		jitter := rand.N(r.conf.JobStatusInterval)
+		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
+		select {
+		case <-time.After(jitter):
+			// continue below
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+
 		setStat("📡 Fetching job state from Buildkite")
 
 		// Re-get the job and check its status to see if it's been cancelled
@@ -717,17 +748,6 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 			if err := r.Cancel(); err != nil {
 				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
-		}
-
-		setStat("😴 Sleeping for a bit")
-
-		// Sleep for a bit, or until the job is finished
-		select {
-		case <-time.After(r.conf.JobStatusInterval):
-		case <-ctx.Done():
-			return
-		case <-r.process.Done():
-			return
 		}
 	}
 }
