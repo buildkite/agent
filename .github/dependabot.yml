@@ -2,6 +2,7 @@ version: 2
 updates:
   - package-ecosystem: docker
     directories:
+      - /.buildkite
       - /packaging/docker/alpine
       - /packaging/docker/alpine-k8s
       - /packaging/docker/sidecar
