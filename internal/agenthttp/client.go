@@ -26,6 +26,18 @@ func NewClient(opts ...ClientOption) *http.Client {
 		opt(&conf)
 	}
 
+	switch conf.HTTPClientProfile {
+	case "stdlib":
+		return &http.Client{
+			Timeout: conf.Timeout,
+			Transport: &authenticatedTransport{
+				Bearer:   conf.Bearer,
+				Token:    conf.Token,
+				Delegate: http.DefaultTransport,
+			},
+		}
+	}
+
 	cacheKey := transportCacheKey{
 		AllowHTTP2: conf.AllowHTTP2,
 		TLSConfig:  conf.TLSConfig,
@@ -65,6 +77,9 @@ func WithAllowHTTP2(a bool) ClientOption       { return func(c *clientConfig) { 
 func WithTimeout(d time.Duration) ClientOption { return func(c *clientConfig) { c.Timeout = d } }
 func WithNoTimeout(c *clientConfig)            { c.Timeout = 0 }
 func WithTLSConfig(t *tls.Config) ClientOption { return func(c *clientConfig) { c.TLSConfig = t } }
+func WithHTTPClientProfile(p string) ClientOption {
+	return func(c *clientConfig) { c.HTTPClientProfile = p }
+}
 
 type ClientOption = func(*clientConfig)
 
@@ -122,6 +137,9 @@ type clientConfig struct {
 
 	// optional TLS configuration primarily used for testing
 	TLSConfig *tls.Config
+
+	// HTTPClientProfile profile to use for the http client
+	HTTPClientProfile string
 }
 
 // The underlying http.Transport is cached, mainly so that multiple clients with
