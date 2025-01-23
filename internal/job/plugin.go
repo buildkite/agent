@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/roko"
+	"github.com/buildkite/shellwords"
 )
 
 type pluginCheckout struct {
@@ -346,7 +347,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		return checkout, nil
 	}
 
-	e.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, pluginDirectory)
+	e.shell.Commentf("Plugin %q will be checked out to %q", p.Location, pluginDirectory)
 
 	repo, err := p.Repository()
 	if err != nil {
@@ -357,8 +358,10 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, repo)
 	}
 
-	// Make the directory
-	tempDir, err := os.MkdirTemp(e.PluginsPath, id)
+	// Make the directory. Use a random name that _doesn't_ look like a plugin
+	// name, to avoid the `cd ...` line looking like it contains the final path.
+	e.shell.Promptf("mktemp -dp %s", shellwords.Quote(e.PluginsPath))
+	tempDir, err := os.MkdirTemp(e.PluginsPath, "")
 	if err != nil {
 		return nil, err
 	}
@@ -404,6 +407,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	}
 
 	e.shell.Commentf("Moving temporary plugin directory to final location")
+	e.shell.Promptf("mv %s %s", shellwords.Quote(tempDir), shellwords.Quote(pluginDirectory))
 	err = os.Rename(tempDir, pluginDirectory)
 	if err != nil {
 		return nil, err
