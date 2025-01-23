@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -69,6 +70,7 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 		JWKS:               cfg.verificationJWKS,
 		AgentConfiguration: cfg.agentCfg,
 		MetricsScope:       scope,
+		JobStatusInterval:  1 * time.Second,
 	})
 
 	if err != nil {
