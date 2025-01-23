@@ -45,8 +45,8 @@ var (
 
 	HTTPClientProfileFlag = cli.StringFlag{
 		Name:   "http-client-profile",
-		Usage:  "Enable a http client profile, either standard, gcp or stdlib",
-		Value:  "standard",
+		Usage:  "Enable a http client profile, either default or stdlib",
+		Value:  "default",
 		EnvVar: "BUILDKITE_AGENT_HTTP_CLIENT_PROFILE",
 	}
 

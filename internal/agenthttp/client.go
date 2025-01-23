@@ -11,6 +11,10 @@ import (
 	"golang.org/x/net/http2"
 )
 
+var (
+	ValidHTTPClientProfiles = []string{"stdlib", "default"}
+)
+
 // NewClient creates a HTTP client. Note that the default timeout is 60 seconds;
 // for some use cases (e.g. artifact operations) use [WithNoTimeout].
 func NewClient(opts ...ClientOption) *http.Client {
@@ -46,6 +50,8 @@ func NewClient(opts ...ClientOption) *http.Client {
 			},
 		}
 	}
+
+	// fall back to the default http client profile
 
 	cacheKey := transportCacheKey{
 		AllowHTTP2: conf.AllowHTTP2,
