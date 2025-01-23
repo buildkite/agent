@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
@@ -1121,6 +1122,10 @@ var AgentStartCommand = cli.Command{
 		}
 
 		l.Info("Using http client profile: %s", cfg.HTTPClientProfile)
+
+		if !slices.Contains(agenthttp.ValidHTTPClientProfiles, cfg.HTTPClientProfile) {
+			l.Fatal("HTTP client profile %s is not in list of valid profiles: %v", cfg.HTTPClientProfile, agenthttp.ValidHTTPClientProfiles)
+		}
 
 		if len(cfg.AllowedRepositories) > 0 {
 			agentConf.AllowedRepositories = make([]*regexp.Regexp, 0, len(cfg.AllowedRepositories))
