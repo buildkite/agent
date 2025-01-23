@@ -26,14 +26,23 @@ func NewClient(opts ...ClientOption) *http.Client {
 		opt(&conf)
 	}
 
+	// http client profile is used to switch between different http client implementations
+	// - stdlib: uses the standard library http client
 	switch conf.HTTPClientProfile {
 	case "stdlib":
+		// Base any modifications on the default transport.
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+
+		if conf.TLSConfig != nil {
+			transport.TLSClientConfig = conf.TLSConfig
+		}
+
 		return &http.Client{
 			Timeout: conf.Timeout,
 			Transport: &authenticatedTransport{
 				Bearer:   conf.Bearer,
 				Token:    conf.Token,
-				Delegate: http.DefaultTransport,
+				Delegate: transport,
 			},
 		}
 	}
