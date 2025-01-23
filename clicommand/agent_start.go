@@ -1101,6 +1101,8 @@ var AgentStartCommand = cli.Command{
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
 		}
 
+		l.Info("Using http client profile: %s", cfg.HTTPClientProfile)
+
 		if len(cfg.AllowedRepositories) > 0 {
 			agentConf.AllowedRepositories = make([]*regexp.Regexp, 0, len(cfg.AllowedRepositories))
 			for _, v := range cfg.AllowedRepositories {
