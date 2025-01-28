@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.91.0](https://github.com/buildkite/agent/tree/v3.91.0) (2025-01-28)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.90.0...v3.91.0)
+
+### Changed
+- Jitter within ping, status, log loops [#3164](https://github.com/buildkite/agent/pull/3164) (@DrJosh9000)
+
+### Fixed
+- Roko v1.3.1 [#3157](https://github.com/buildkite/agent/pull/3157) (@moskyb)
+- Better plugin checkout logging [#3166](https://github.com/buildkite/agent/pull/3166) (@DrJosh9000)
+
+### Internal
+- Add /.buildkite dir for Dockerfile updates [#3162](https://github.com/buildkite/agent/pull/3162) (@DrJosh9000)
+
+<details>
+<summary><h3>Dependency bumps</h3></summary>
+
+- Bump the cloud-providers group with 6 updates [#3167](https://github.com/buildkite/agent/pull/3167) (@dependabot[bot])
+- Bump gopkg.in/DataDog/dd-trace-go.v1 from 1.70.3 to 1.71.0 [#3168](https://github.com/buildkite/agent/pull/3168) (@dependabot[bot])
+- Bump the container-images group across 5 directories with 2 updates [#3169](https://github.com/buildkite/agent/pull/3169) (@dependabot[bot])
+- Bump the otel group with 9 updates [#3159](https://github.com/buildkite/agent/pull/3159) (@dependabot[bot])
+- Bump the container-images group across 6 directories with 2 updates [#3161](https://github.com/buildkite/agent/pull/3161) (@dependabot[bot])
+- Bump the cloud-providers group across 1 directory with 7 updates [#3160](https://github.com/buildkite/agent/pull/3160) (@dependabot[bot])
+- Bump gopkg.in/DataDog/dd-trace-go.v1 from 1.70.1 to 1.70.3 [#3155](https://github.com/buildkite/agent/pull/3155) (@dependabot[bot])
+- Bump the golang-x group across 1 directory with 5 updates [#3151](https://github.com/buildkite/agent/pull/3151) (@dependabot[bot])
+- Bump buildkite/agent-base from `e46604b` to `2520343` in /packaging/docker/ubuntu-22.04 in the container-images group across 1 directory [#3146](https://github.com/buildkite/agent/pull/3146) (@dependabot[bot])
+
+</details>
+
 ## [v3.90.0](https://github.com/buildkite/agent/tree/v3.90.0) (2025-01-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.89.0...v3.90.0)
 
