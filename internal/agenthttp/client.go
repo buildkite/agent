@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	// ValidHTTPClientProfiles lists accepted values for Config.HTTPClientProfile.
 	ValidHTTPClientProfiles = []string{"stdlib", "default"}
 )
 
