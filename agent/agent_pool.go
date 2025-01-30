@@ -3,10 +3,10 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
-	"sync"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/status"
@@ -56,31 +56,23 @@ func (r *AgentPool) Start(ctx context.Context) error {
 	defer done()
 	setStat("🏃 Spawning workers...")
 
-	var wg sync.WaitGroup
-	var spawn int = len(r.workers)
-	var errs = make(chan error, spawn)
+	errCh := make(chan error)
 
-	// Spawn goroutines for each parallel worker
+	// Spawn each worker "in parallel" (in its own goroutine)
 	for _, worker := range r.workers {
-		wg.Add(1)
-
-		go func(worker *AgentWorker) {
-			defer wg.Done()
-
-			if err := r.runWorker(ctx, worker); err != nil {
-				errs <- err
-			}
-		}(worker)
+		go func() {
+			errCh <- r.runWorker(ctx, worker)
+		}()
 	}
 
 	setStat("✅ Workers spawned!")
 
-	go func() {
-		wg.Wait()
-		close(errs)
-	}()
-
-	return <-errs
+	// Number of receives = number of sends
+	errs := make([]error, 0, len(r.workers))
+	for range r.workers {
+		errs = append(errs, <-errCh)
+	}
+	return errors.Join(errs...) // nil if all errs are nil
 }
 
 func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker) error {
