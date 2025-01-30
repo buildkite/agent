@@ -149,9 +149,10 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 		os.RemoveAll(tempDir)
 	})
 	runner := NewRunner(logger.Discard, RunnerConfig{
-		SocketPath:        socketPath,
-		ClientCount:       clientCount,
-		ClientLostTimeout: 2 * time.Second,
+		SocketPath:         socketPath,
+		ClientCount:        clientCount,
+		ClientStartTimeout: 10 * time.Minute,
+		ClientLostTimeout:  2 * time.Second,
 	})
 	runnerCtx, cancelRunner := context.WithCancel(context.Background())
 	go runner.Run(runnerCtx)

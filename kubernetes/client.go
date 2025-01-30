@@ -68,26 +68,37 @@ func (c *Client) Write(p []byte) (int, error) {
 var ErrInterrupt = errors.New("interrupt signal received")
 
 func (c *Client) Await(ctx context.Context, desiredState RunState) error {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	// Because [time.Ticker] doesn't tick until after the duration (time.Second),
+	// but we want to call the RPC method in the first loop iteration without
+	// waiting, here's a channel (first) that can be received from once and then
+	// never again, providing a non-blocking path through the select on the
+	// first iteration.
+	first := make(chan struct{}, 1)
+	first <- struct{}{}
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-			var current RunState
-			if err := c.client.Call("Runner.Status", c.ID, &current); err != nil {
-				return err
-			}
-			if current == desiredState {
-				return nil
-			}
-			if current == RunStateInterrupt {
-				return ErrInterrupt
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(time.Second):
-			}
+
+		case <-first:
+			// continue below
+
+		case <-ticker.C:
+			// continue below
+		}
+
+		var current RunState
+		if err := c.client.Call("Runner.Status", c.ID, &current); err != nil {
+			return err
+		}
+		if current == desiredState {
+			return nil
+		}
+		if current == RunStateInterrupt {
+			return ErrInterrupt
 		}
 	}
 }
