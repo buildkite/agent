@@ -12,8 +12,11 @@ import (
 )
 
 var (
+	ClientProfileDefault = "default"
+	ClientProfileStdlib  = "stdlib"
+
 	// ValidHTTPClientProfiles lists accepted values for Config.HTTPClientProfile.
-	ValidHTTPClientProfiles = []string{"stdlib", "default"}
+	ValidClientProfiles = []string{ClientProfileDefault, ClientProfileStdlib}
 )
 
 // NewClient creates a HTTP client. Note that the default timeout is 60 seconds;
@@ -34,7 +37,7 @@ func NewClient(opts ...ClientOption) *http.Client {
 	// http client profile is used to switch between different http client implementations
 	// - stdlib: uses the standard library http client
 	switch conf.HTTPClientProfile {
-	case "stdlib":
+	case ClientProfileStdlib:
 		// Base any modifications on the default transport.
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 
