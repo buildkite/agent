@@ -1123,8 +1123,12 @@ var AgentStartCommand = cli.Command{
 
 		l.Info("Using http client profile: %s", cfg.HTTPClientProfile)
 
-		if !slices.Contains(agenthttp.ValidHTTPClientProfiles, cfg.HTTPClientProfile) {
-			l.Fatal("HTTP client profile %s is not in list of valid profiles: %v", cfg.HTTPClientProfile, agenthttp.ValidHTTPClientProfiles)
+		if !slices.Contains(agenthttp.ValidClientProfiles, cfg.HTTPClientProfile) {
+			l.Fatal("HTTP client profile %s is not in list of valid profiles: %v", cfg.HTTPClientProfile, agenthttp.ValidClientProfiles)
+		}
+
+		if cfg.HTTPClientProfile == agenthttp.ClientProfileStdlib && cfg.NoHTTP2 {
+			l.Fatal("NoHTTP2 is not supported with the standard library (%s) HTTP client profile, use GODEBUG see https://pkg.go.dev/net/http#hdr-HTTP_2", agenthttp.ClientProfileStdlib)
 		}
 
 		if len(cfg.AllowedRepositories) > 0 {
