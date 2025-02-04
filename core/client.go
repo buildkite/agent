@@ -219,7 +219,7 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 	return roko.NewRetrier(
 		// retry for ~a day with exponential backoff
 		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-		roko.WithMaxAttempts(20),
+		roko.WithMaxAttempts(12), // 12 attempts will take 26 minutes
 		roko.WithJitter(),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
@@ -354,7 +354,7 @@ func (c *Client) UploadChunk(ctx context.Context, jobID string, chunk *api.Chunk
 	return roko.NewRetrier(
 		// retry for ~a day with exponential backoff
 		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-		roko.WithMaxAttempts(20),
+		roko.WithMaxAttempts(12), // 12 attempts will take 26 minutes
 		roko.WithJitter(),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
