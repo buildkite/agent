@@ -27,3 +27,9 @@ packaging/docker/*/hooks/
 
 # Editor config boils down to personal preference
 .editorconfig
+
+# Bazel-generated symlinks to Bazel-generated output
+/bazel-agent
+/bazel-bin
+/bazel-out
+/bazel-testlogs
