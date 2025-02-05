@@ -213,13 +213,13 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 	c.Logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
 		job.ExitStatus, job.Signal, job.SignalReason)
 
-	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
 	defer cancel()
 
 	return roko.NewRetrier(
 		// retry for ~a day with exponential backoff
 		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-		roko.WithMaxAttempts(20),
+		roko.WithMaxAttempts(12), // 12 attempts will take 26 minutes
 		roko.WithJitter(),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
@@ -348,13 +348,13 @@ func (c *Client) UploadChunk(ctx context.Context, jobID string, chunk *api.Chunk
 	// This code will retry for a long time until we get back a successful
 	// response from Buildkite that it's considered the chunk (a 4xx will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
-	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
 	defer cancel()
 
 	return roko.NewRetrier(
 		// retry for ~a day with exponential backoff
 		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-		roko.WithMaxAttempts(20),
+		roko.WithMaxAttempts(12), // 12 attempts will take 26 minutes
 		roko.WithJitter(),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
