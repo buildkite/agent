@@ -37,7 +37,7 @@ func TestStepCancel(t *testing.T) {
 
 	t.Run("failed", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			rw.WriteHeader(http.StatusInternalServerError)
+			rw.WriteHeader(http.StatusBadRequest)
 		}))
 
 		cfg := StepCancelConfig{
