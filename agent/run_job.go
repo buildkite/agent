@@ -355,7 +355,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	r.logStreamer.Process(ctx, r.output.ReadAndTruncate())
 
 	// Stop the log streamer. This will block until all the chunks have been uploaded
-	r.logStreamer.Stop()
+	r.logStreamer.Stop(true)
 
 	// Stop the header time streamer. This will block until all the chunks have been uploaded
 	r.headerTimesStreamer.Stop()
@@ -471,6 +471,7 @@ func (r *JobRunner) CancelAndStop() error {
 	r.cancelLock.Lock()
 	r.stopped = true
 	r.cancelLock.Unlock()
+	r.logStreamer.Stop(false)
 	return r.Cancel()
 }
 

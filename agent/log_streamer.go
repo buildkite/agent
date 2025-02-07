@@ -66,6 +66,9 @@ type LogStreamer struct {
 
 	// Have we stopped?
 	stopped bool
+
+	// have we been asked to exit immediately?
+	exitImmediately bool
 }
 
 // NewLogStreamer creates a new instance of the log streamer.
@@ -161,7 +164,7 @@ func (ls *LogStreamer) Process(ctx context.Context, output []byte) error {
 }
 
 // Stop stops the streamer.
-func (ls *LogStreamer) Stop() {
+func (ls *LogStreamer) Stop(graceful bool) {
 	ls.processMutex.Lock()
 	if ls.stopped {
 		ls.processMutex.Unlock()
@@ -171,8 +174,13 @@ func (ls *LogStreamer) Stop() {
 	close(ls.queue)
 	ls.processMutex.Unlock()
 
-	ls.logger.Debug("[LogStreamer] Waiting for workers to shut down")
-	ls.workerWG.Wait()
+	if graceful {
+		ls.workerWG.Wait()
+		ls.logger.Info("[LogStreamer] Waiting for workers to shut down and outstanding chunks to be uploaded")
+	} else {
+		ls.exitImmediately = true
+		ls.logger.Warn("[LogStreamer] NOT waiting for outstanding chunks to be uploaded")
+	}
 }
 
 // The actual log streamer worker
@@ -189,6 +197,15 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 	for {
 		setStat("⌚️ Waiting for a chunk")
 
+		if len(ls.queue) > 0 {
+			ls.logger.Debug("[LogStreamer/Worker#%d] Queue length: %d", id, len(ls.queue))
+		}
+
+		if ls.exitImmediately {
+			ls.logger.Warn("[LogStreamer/Worker#%d] Worker is shutting down immediately, Outstanding Queue length: %d", id, len(ls.queue))
+			return
+		}
+
 		// Get the next chunk (pointer) from the queue. This will block
 		// until something is returned.
 		var chunk *api.Chunk
@@ -200,6 +217,9 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 		case <-ctx.Done(): // pack it up
 			return
 		}
+
+		// used to simulate a slow upload
+		// time.Sleep(30 * time.Second)
 
 		setStat("📨 Uploading chunk")
 
