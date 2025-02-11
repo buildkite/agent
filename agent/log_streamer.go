@@ -41,7 +41,7 @@ type LogStreamer struct {
 	logger logger.Logger
 
 	// A counter of how many chunks failed to upload
-	chunksFailedCount int32
+	chunksFailedCount atomic.Int32
 
 	// The callback called when a chunk is ready for upload
 	callback func(context.Context, *api.Chunk) error
@@ -68,7 +68,7 @@ type LogStreamer struct {
 	stopped bool
 
 	// have we been asked to exit immediately?
-	exitImmediately bool
+	exitImmediately atomic.Bool
 }
 
 // NewLogStreamer creates a new instance of the log streamer.
@@ -104,7 +104,7 @@ func (ls *LogStreamer) Start(ctx context.Context) error {
 }
 
 func (ls *LogStreamer) FailedChunks() int {
-	return int(atomic.LoadInt32(&ls.chunksFailedCount))
+	return int(ls.chunksFailedCount.Load())
 }
 
 // Process streams the output. It returns an error if the output data cannot be
@@ -178,7 +178,7 @@ func (ls *LogStreamer) Stop(graceful bool) {
 		ls.workerWG.Wait()
 		ls.logger.Info("[LogStreamer] Waiting for workers to shut down and outstanding chunks to be uploaded")
 	} else {
-		ls.exitImmediately = true
+		ls.exitImmediately.Store(true)
 		ls.logger.Warn("[LogStreamer] NOT waiting for outstanding chunks to be uploaded")
 	}
 }
@@ -201,7 +201,7 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 			ls.logger.Debug("[LogStreamer/Worker#%d] Queue length: %d", id, len(ls.queue))
 		}
 
-		if ls.exitImmediately {
+		if ls.exitImmediately.Load() {
 			ls.logger.Warn("[LogStreamer/Worker#%d] Worker is shutting down immediately, Outstanding Queue length: %d", id, len(ls.queue))
 			return
 		}
@@ -226,7 +226,7 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 		// Upload the chunk
 		err := ls.callback(ctx, chunk)
 		if err != nil {
-			atomic.AddInt32(&ls.chunksFailedCount, 1)
+			ls.chunksFailedCount.Add(1)
 
 			ls.logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Sequence)
 		}
