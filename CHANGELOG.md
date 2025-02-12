@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.92.0](https://github.com/buildkite/agent/tree/v3.92.0) (2025-02-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.91.0...v3.92.0)
+
+# Fixed
+- Ensure the log streamer respects forced shutdown of the agent [#3180](https://github.com/buildkite/agent/pull/3180) (@wolfeidau)
+- Fix data race on exitImmediately [#3187](https://github.com/buildkite/agent/pull/3187) (@DrJosh9000)
+- Reduce timeout for these two operations to avoid holding up compute [#3177](https://github.com/buildkite/agent/pull/3177) (@wolfeidau)
+- Timeout waiting for client containers [#3172](https://github.com/buildkite/agent/pull/3172) (@DrJosh9000)
+- Clean up worker pool implementation [#3171](https://github.com/buildkite/agent/pull/3171) (@DrJosh9000)
+
+### Internal
+- rm bazel-*, add to .gitignore [#3178](https://github.com/buildkite/agent/pull/3178) (@DrJosh9000)
+- Speed up needlessly slow tests [#3179](https://github.com/buildkite/agent/pull/3179) (@DrJosh9000)
+
+### Dependabot
+- The usual updates: [#3184](https://github.com/buildkite/agent/pull/3184), [#3182](https://github.com/buildkite/agent/pull/3182), [#3174](https://github.com/buildkite/agent/pull/3174), [#3173](https://github.com/buildkite/agent/pull/3173), [#3176](https://github.com/buildkite/agent/pull/3176) (@dependabot[bot])
+
 ## [v3.91.0](https://github.com/buildkite/agent/tree/v3.91.0) (2025-01-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.90.0...v3.91.0)
 
