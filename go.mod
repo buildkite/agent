@@ -59,7 +59,7 @@ require (
 	google.golang.org/api v0.220.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.71.1
 	gopkg.in/yaml.v3 v3.0.1
-	gotest.tools/v3 v3.5.1
+	gotest.tools/v3 v3.5.2
 )
 
 require (
