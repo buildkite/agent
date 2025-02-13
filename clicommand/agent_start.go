@@ -236,6 +236,10 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "no-script-eval")
 	}
 
+	if asc.NoHTTP2 {
+		features = append(features, "no-http2")
+	}
+
 	if len(asc.AllowedRepositories) > 0 {
 		features = append(features, "allowed-repositories")
 	}
@@ -246,6 +250,14 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 
 	for _, exp := range experiments.Enabled(ctx) {
 		features = append(features, fmt.Sprintf("experiment-%s", exp))
+	}
+
+	if envHasKey("HTTP_PROXY") || envHasKey("http_proxy") {
+		features = append(features, "env-http-proxy")
+	}
+
+	if envHasKey("GODEBUG") {
+		features = append(features, "env-godebug")
 	}
 
 	return features
@@ -1540,4 +1552,10 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 			os.Symlink(path, leaderPath)
 		}
 	}
+}
+
+func envHasKey(key string) bool {
+	_, ok := os.LookupEnv(key)
+	return ok
+
 }
