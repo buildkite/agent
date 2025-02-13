@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.92.1](https://github.com/buildkite/agent/tree/v3.92.1) (2025-02-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.92.0...v3.92.1)
+
+### Removed
+
+- Revert "Ensure the log streamer respects forced shutdown of the agent" [#3191](https://github.com/buildkite/agent/pull/3191) (@wolfeidau)
+- Revert "Fix data race on exitImmediately" [#3190](https://github.com/buildkite/agent/pull/3190) (@wolfeidau)
+
+### Dependabot
+- The usual updates: [#3188](https://github.com/buildkite/agent/pull/3188), [#3185](https://github.com/buildkite/agent/pull/3185) (@dependabot[bot])
+
+> [!NOTE]
+> Reverted [#3180](https://github.com/buildkite/agent/pull/3180) and [#3187](https://github.com/buildkite/agent/pull/3187) as this change introduced a bug which resulted in truncated log output. Will re-think this fix and push it out again in another release after we do some more testing.
+
 ## [v3.92.0](https://github.com/buildkite/agent/tree/v3.92.0) (2025-02-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.91.0...v3.92.0)
 
