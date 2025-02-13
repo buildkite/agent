@@ -46,7 +46,7 @@ func TestLogStreamer(t *testing.T) {
 		t.Errorf("LogStreamer.Process(ctx, %q) = %v", input, err)
 	}
 
-	ls.Stop(true)
+	ls.Stop()
 
 	want := []*api.Chunk{
 		{
@@ -92,49 +92,5 @@ func TestLogStreamer(t *testing.T) {
 	input = "¿more log after stop?"
 	if err := ls.Process(ctx, []byte(input)); !errors.Is(err, errStreamerStopped) {
 		t.Errorf("after Stop: LogStreamer.Process(ctx, %q) err = %v, want %v", input, err, errStreamerStopped)
-	}
-}
-
-func TestLogStreamerExitImmediately(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-
-	logger := logger.NewConsoleLogger(
-		logger.NewTextPrinter(os.Stderr),
-		func(c int) { t.Errorf("exit(%d)", c) },
-	)
-
-	var mu sync.Mutex
-	var got []*api.Chunk
-	callback := func(ctx context.Context, chunk *api.Chunk) error {
-		mu.Lock()
-		got = append(got, chunk)
-		mu.Unlock()
-		return nil
-	}
-
-	ls := NewLogStreamer(logger, callback, LogStreamerConfig{
-		Concurrency:       3,
-		MaxChunkSizeBytes: 10,
-		MaxSizeBytes:      30,
-	})
-
-	if err := ls.Start(ctx); err != nil {
-		t.Fatalf("LogStreamer.Start(ctx) = %v", err)
-	}
-
-	input := "0123456789abcdefghijklmnopqrstuvwxyz!@#$%^&*()" // 46 bytes
-	if err := ls.Process(ctx, []byte(input)); err != nil {
-		t.Errorf("LogStreamer.Process(ctx, %q) = %v", input, err)
-	}
-
-	ls.Stop(false)
-
-	if !ls.exitImmediately {
-		t.Errorf("LogStreamer.Stop(false) did not set exitImmediately")
-	}
-
-	if len(got) > 0 {
-		t.Errorf("LogStreamer.Stop(false) did not exit immediately")
 	}
 }
