@@ -130,7 +130,7 @@ func TestLogStreamerExitImmediately(t *testing.T) {
 
 	ls.Stop(false)
 
-	if !ls.exitImmediately.Load() {
+	if !ls.exitImmediately {
 		t.Errorf("LogStreamer.Stop(false) did not set exitImmediately")
 	}
 
