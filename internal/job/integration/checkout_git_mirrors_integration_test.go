@@ -93,14 +93,8 @@ func TestWithResolvingCommitExperiment_WithGitMirrors(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 		{"rev-parse", "HEAD"},
 	})
-
-	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
-	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
-	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
