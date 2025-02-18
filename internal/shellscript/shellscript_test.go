@@ -12,8 +12,8 @@ func TestShebangLine(t *testing.T) {
 	}{
 		{
 			name:     "bash",
-			contents: "#!/bin/bash\necho 'Llamas!'",
-			want:     "#!/bin/bash",
+			contents: "#!/usr/bin/env bash\necho 'Llamas!'",
+			want:     "#!/usr/bin/env bash",
 		},
 		{
 			name:     "python3",
@@ -77,7 +77,7 @@ func TestIsPOSIXShell(t *testing.T) {
 		{"garbage", false},
 		{"/bin/sh", true},
 		{"/bin/fish", false},
-		{"#!/bin/bash", true},
+		{"#!/usr/bin/env bash", true},
 		{"#!/bin/cat", false},
 		{"#!/usr/bin/env bash", true},
 		{"#!/usr/bin/env python3", false},

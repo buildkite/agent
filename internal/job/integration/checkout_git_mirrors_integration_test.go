@@ -651,7 +651,7 @@ func TestRepositorylessCheckout_WithGitMirrors(t *testing.T) {
 	}
 
 	var script = []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"export BUILDKITE_REPO=",
 	}
 

@@ -937,7 +937,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 	defer tester.Close()
 
 	var script = []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"export BUILDKITE_REPO=",
 	}
 

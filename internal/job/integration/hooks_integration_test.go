@@ -27,7 +27,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 
 	filename := "environment"
 	script := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"export LLAMAS_ROCK=absolutely",
 	}
 	if runtime.GOOS == "windows" {
@@ -71,11 +71,11 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 
 	preCmdFile, postCmdFile := "pre-command", "post-command"
 	preCommand := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"export LLAMAS_ROCK=absolutely",
 	}
 	postCommand := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"unset LLAMAS_ROCK",
 	}
 
@@ -134,7 +134,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	}
 
 	script := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"mkdir -p ./mysubdir",
 		"export MY_CUSTOM_SUBDIR=$(cd mysubdir; pwd)",
 		"cd ./mysubdir",
@@ -168,7 +168,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 	}
 
 	script := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"mkdir -p ./mysubdir",
 		"export MY_CUSTOM_SUBDIR=$(cd mysubdir; pwd)",
 		"cd ./mysubdir",

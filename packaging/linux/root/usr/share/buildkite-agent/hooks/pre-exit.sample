@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # The `pre-exit` hook will run just before your build job finishes
 
