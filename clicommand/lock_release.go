@@ -24,7 +24,7 @@ with the ′agent-api′ experiment enabled.
 
 Examples:
 
-    #!/bin/bash
+    #!/usr/bin/env bash
     token=$(buildkite-agent lock acquire llama)
     # your critical section here...
     buildkite-agent lock release llama "${token}"`

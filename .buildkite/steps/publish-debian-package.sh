@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build" )

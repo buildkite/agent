@@ -28,7 +28,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export LLAMAS_ROCK=absolutely",
 			pluginMock.Path + " testing",
 		},
@@ -87,7 +87,7 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"exit 5",
 		},
 	}
@@ -169,7 +169,7 @@ func TestOverlappingPluginHooks(t *testing.T) {
 				}
 			} else {
 				fakeHooks[hook] = []string{
-					"#!/bin/bash",
+					"#!/usr/bin/env bash",
 					pluginMock.Path + " " + hook,
 				}
 			}
@@ -222,7 +222,7 @@ func TestPluginCloneRetried(t *testing.T) {
 
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export LLAMAS_ROCK=absolutely",
 		},
 	}
@@ -306,7 +306,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	// Create a test plugin that sets an environment variable.
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export OSTRICH_EGGS=quite_large",
 		},
 	}
@@ -362,7 +362,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	hooks2 := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export OSTRICH_EGGS=huge_actually",
 		},
 	}
@@ -415,7 +415,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export OSTRICH_EGGS=quite_large",
 		},
 	}
@@ -467,7 +467,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	hooks2 := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export OSTRICH_EGGS=huge_actually",
 		},
 	}

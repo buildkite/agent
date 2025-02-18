@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # The `post-checkout` hook will run after the bootstrap script has checked out
 # your pipelines source code.
