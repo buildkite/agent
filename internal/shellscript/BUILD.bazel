@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "shellscript",
+    srcs = ["shellscript.go"],
+    importpath = "github.com/buildkite/agent/v3/internal/shellscript",
+    visibility = ["//:__subpackages__"],
+    deps = ["@com_github_buildkite_shellwords//:shellwords"],
+)
+
+go_test(
+    name = "shellscript_test",
+    srcs = ["shellscript_test.go"],
+    embed = [":shellscript"],
+)
