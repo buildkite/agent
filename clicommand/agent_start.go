@@ -162,11 +162,14 @@ type AgentStartConfig struct {
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
+	// Datadog statsd metrics config
 	MetricsDatadog              bool   `cli:"metrics-datadog"`
 	MetricsDatadogHost          string `cli:"metrics-datadog-host"`
 	MetricsDatadogDistributions bool   `cli:"metrics-datadog-distributions"`
-	TracingBackend              string `cli:"tracing-backend"`
-	TracingServiceName          string `cli:"tracing-service-name"`
+
+	// Tracing config
+	TracingBackend     string `cli:"tracing-backend"`
+	TracingServiceName string `cli:"tracing-service-name"`
 
 	// Global flags
 	Debug                     bool     `cli:"debug"`
@@ -258,6 +261,10 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 
 	if envHasKey("GODEBUG") {
 		features = append(features, "env-godebug")
+	}
+
+	if asc.MetricsDatadog {
+		features = append(features, "datadog-metrics")
 	}
 
 	return features
