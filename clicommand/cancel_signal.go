@@ -30,7 +30,7 @@ var (
 		Usage: "The number of seconds given to a subprocess to handle being sent ′cancel-signal′. " +
 			"After this period has elapsed, SIGKILL will be sent. " +
 			"Negative values are taken relative to ′cancel-grace-period′. " +
-			"The default is ′signal-grace-period-seconds′ - 1.",
+			"The default value (-1) means that the effective signal grace period is equal to ′cancel-grace-period-seconds′ minus 1.",
 		EnvVar: "BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
 		Value:  -1,
 	}
