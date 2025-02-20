@@ -39,6 +39,7 @@ type APIClient interface {
 	StepCancel(context.Context, string, *api.StepCancel) (*api.StepCancelResponse, *api.Response, error)
 	StepExport(context.Context, string, *api.StepExportRequest) (*api.StepExportResponse, *api.Response, error)
 	StepUpdate(context.Context, string, *api.StepUpdate) (*api.Response, error)
+	Stop(context.Context, *api.AgentStopRequest) (*api.Response, error)
 	UpdateArtifacts(context.Context, string, []api.ArtifactState) (*api.Response, error)
 	UploadChunk(context.Context, string, *api.Chunk) (*api.Response, error)
 	UploadPipeline(context.Context, string, *api.PipelineChange, ...api.Header) (*api.Response, error)
