@@ -67,3 +67,18 @@ func (c *Client) Disconnect(ctx context.Context) (*Response, error) {
 
 	return c.doRequest(req, nil)
 }
+
+// AgentStopRequest is a call to stop the agent via the Buildkite Agent API
+type AgentStopRequest struct {
+	Force bool `json:"force",omitempty`
+}
+
+// Stops the agent via the Buildkite Agent API
+func (c *Client) Stop(ctx context.Context, stopReq *AgentStopRequest) (*Response, error) {
+	req, err := c.newRequest(ctx, "POST", "stop", stopReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req, nil)
+}

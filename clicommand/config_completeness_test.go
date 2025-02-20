@@ -16,6 +16,7 @@ type configCommandPair struct {
 var commandConfigPairs = []configCommandPair{
 	{Config: AcknowledgementsConfig{}, Command: AcknowledgementsCommand},
 	{Config: AgentStartConfig{}, Command: AgentStartCommand},
+	{Config: AgentStopConfig{}, Command: AgentStopCommand},
 	{Config: AnnotateConfig{}, Command: AnnotateCommand},
 	{Config: AnnotationRemoveConfig{}, Command: AnnotationRemoveCommand},
 	{Config: ArtifactDownloadConfig{}, Command: ArtifactDownloadCommand},
