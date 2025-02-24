@@ -1,8 +1,8 @@
 module github.com/buildkite/agent/v3
 
-go 1.22.7
+go 1.23.0
 
-toolchain go1.23.3
+toolchain go1.24.0
 
 require (
 	cloud.google.com/go/compute/metadata v0.6.0
@@ -50,10 +50,10 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.34.0
 	go.opentelemetry.io/otel/sdk v1.34.0
 	go.opentelemetry.io/otel/trace v1.34.0
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.35.0
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 	golang.org/x/net v0.35.0
-	golang.org/x/oauth2 v0.26.0
+	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/term v0.29.0
 	google.golang.org/api v0.221.0
