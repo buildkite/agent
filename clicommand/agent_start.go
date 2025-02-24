@@ -29,6 +29,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -62,6 +63,8 @@ Example:
     $ buildkite-agent start --token xxx`
 
 var (
+	minGracePeriod = 10
+
 	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
@@ -785,6 +788,9 @@ var AgentStartCommand = cli.Command{
 		))
 		defer done()
 
+		// used later to force the shutdown of the agent
+		ctx, cancel := context.WithCancel(ctx)
+
 		// Verify that the bootstrap buildkite-agent executable matches the current host agent
 		// executable. In development builds, it exits on mismatch; otherwise it only logs a warning.
 		// This is to avoid confusion when making changes to the buildkite-agent but forgetting to
@@ -1274,7 +1280,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Handle process signals
-		signals := handlePoolSignals(ctx, l, pool)
+		signals := handlePoolSignals(ctx, l, pool, cancel, cfg.CancelGracePeriod)
 		defer close(signals)
 
 		l.Info("Starting %d Agent(s)", cfg.Spawn)
@@ -1362,7 +1368,7 @@ func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set
 	return jwks, nil
 }
 
-func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPool) chan os.Signal {
+func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPool, cancel context.CancelFunc, cancelGracePeriod int) chan os.Signal {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt,
 		syscall.SIGHUP,
@@ -1392,8 +1398,30 @@ func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPo
 					l.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
 					pool.Stop(true)
 				} else {
-					l.Info("Forcefully stopping running jobs and stopping the agent(s)")
-					pool.Stop(false)
+					l.Info("Forcefully stopping running jobs and stopping the agent(s) in %d seconds", cancelGracePeriod)
+
+					gracefulContext, _ := job.WithGracePeriod(ctx, time.Duration(max(cancelGracePeriod, minGracePeriod))*time.Second)
+
+					go func() {
+						l.Info("Forced agent(s) to stop")
+						pool.Stop(false) // one last chance to stop
+
+						// Wait half the grace period before cancelling the context
+						time.Sleep(time.Duration(max(cancelGracePeriod/2, minGracePeriod/2)) * time.Second)
+
+						l.Info("Cancelling all internal tasks and API requests")
+						cancel() // cancel the context to stop all network operations
+					}()
+
+					// Once pending retries and requests are cancelled,
+					// the main goroutine should exit before this grace period expires, ending the program.
+					// If that doesn't happen, exit 1 below.
+					<-gracefulContext.Done()
+					l.Info("exiting with status 1")
+
+					// this should only be called if the context cancellation and forceful stop fails
+					os.Exit(1)
+
 				}
 			default:
 				l.Debug("Ignoring signal `%s`", sig.String())
