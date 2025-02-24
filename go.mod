@@ -51,13 +51,13 @@ require (
 	go.opentelemetry.io/otel/sdk v1.34.0
 	go.opentelemetry.io/otel/trace v1.34.0
 	golang.org/x/crypto v0.33.0
-	golang.org/x/exp v0.0.0-20231108232855-2478ac86f678
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 	golang.org/x/net v0.35.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/term v0.29.0
 	google.golang.org/api v0.221.0
-	gopkg.in/DataDog/dd-trace-go.v1 v1.71.1
+	gopkg.in/DataDog/dd-trace-go.v1 v1.72.1
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.2
 )
