@@ -63,6 +63,8 @@ Example:
     $ buildkite-agent start --token xxx`
 
 var (
+	minGracePeriod = 10
+
 	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
@@ -1398,18 +1400,22 @@ func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPo
 				} else {
 					l.Info("Forcefully stopping running jobs and stopping the agent(s) in %d seconds", cancelGracePeriod)
 
-					gracefulContext, _ := job.WithGracePeriod(ctx, cancelGracePeriodDuration(cancelGracePeriod)*time.Second)
+					gracefulContext, _ := job.WithGracePeriod(ctx, time.Duration(max(cancelGracePeriod, minGracePeriod))*time.Second)
 
 					go func() {
 						l.Info("Forced agent(s) to stop")
 						pool.Stop(false) // one last chance to stop
 
-						time.Sleep(cancelGracePeriodDuration(cancelGracePeriod/2) * time.Second)
+						// Wait half the grace period before cancelling the context
+						time.Sleep(time.Duration(max(cancelGracePeriod/2, minGracePeriod/2)) * time.Second)
 
 						l.Info("Cancelling all internal tasks and API requests")
 						cancel() // cancel the context to stop all network operations
 					}()
 
+					// Once pending retries and requests are cancelled,
+					// the main goroutine should exit before this grace period expires, ending the program.
+					// If that doesn't happen, exit 1 below.
 					<-gracefulContext.Done()
 					l.Info("exiting with status 1")
 
@@ -1587,12 +1593,4 @@ func envHasKey(key string) bool {
 	_, ok := os.LookupEnv(key)
 	return ok
 
-}
-
-func cancelGracePeriodDuration(cancelGracePeriod int) time.Duration {
-	if cancelGracePeriod < 10 {
-		return 10 // minimum 10 seconds for forceful shutdown
-	}
-
-	return time.Duration(cancelGracePeriod)
 }
