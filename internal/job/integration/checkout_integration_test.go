@@ -30,6 +30,29 @@ var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit
 // We expect this arg multiple times, just define it once.
 const gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
 
+func TestCommitResolvedSkipsMetadata(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		"BUILDKITE_COMMIT_RESOLVED=true",
+	}
+
+	// We expect to skip the meta-data commands
+	tester.MockAgent(t)
+
+	tester.RunAndCheck(t, env...)
+
+	if !strings.Contains(tester.Output, "BUILDKITE_COMMIT is already resolved") {
+		t.Fatal(`tester.Output does not contain "BUILDKITE_COMMIT is already resolved"`)
+	}
+}
+
 func TestWithResolvingCommitExperiment(t *testing.T) {
 	t.Parallel()
 
