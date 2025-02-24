@@ -791,7 +791,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	commitResolved, _ := e.shell.Env.Get("BUILDKITE_COMMIT_RESOLVED")
 	if commitResolved == "true" {
 		// we can skip the metadata shenanigans here and push straight through
-		e.shell.Commentf("BUILDKITE_COMMIT is already resolved and meta-data populated, skipping...")
+		e.shell.Commentf("BUILDKITE_COMMIT is already resolved and meta-data populated, skipping")
 		return nil
 	}
 
