@@ -27,6 +27,7 @@ const defaultSocketPath = "/workspace/buildkite.sock"
 type RunnerConfig struct {
 	SocketPath         string
 	ClientCount        int
+	Stdin              io.Reader // TODO: use this
 	Stdout, Stderr     io.Writer
 	Env                []string
 	ClientStartTimeout time.Duration

@@ -83,7 +83,8 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Start with stdout and stderr as their usual selves.
+	// Start with stdin, stdout, stderr as their usual selves.
+	stdin := io.Reader(os.Stdin)
 	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
 
 	// The shell environment is initially the current environment.
@@ -103,6 +104,9 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			tempLog.Errorf("Failed to start kubernetes socket client: %v", err)
 			return 1
 		}
+
+		// TODO: Invent a way to pass env vars across the socket after start
+		stdin = nil
 
 		// Tee both stdout and stderr to the k8s socket client, so that the
 		// logs are shipped to the agent container and then to Buildkite, but
@@ -155,6 +159,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Create an empty env for us to keep track of our env changes in
 	e.shell.Env = env.FromSlice(os.Environ())
+
+	// Run the goroutine that reads stdin for extra env vars from the agent
+	go func() {
+		e.shell.Logger.Warningf("Starting readVarsFromStdin")
+		err := readVarsFromStdin(e.shell, stdin)
+		e.shell.Logger.Warningf("readVarsFromStdin ended: %v", err)
+	}()
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
 	if e.JobAPI {

@@ -135,6 +135,9 @@ type JobRunner struct {
 	// The internal process of the job
 	process jobAPI
 
+	// Writes input to the internal process of the job
+	processStdin io.Writer
+
 	// The internal buffer of the process output
 	output *process.Buffer
 
@@ -357,6 +360,11 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	// take precedence over the agent
 	processEnv := append(os.Environ(), env...)
 
+	// Convert the stdin (reader) into something that can be written to
+	// (but note that pipes are blocking).
+	stdinReader, stdinWriter := io.Pipe()
+	r.processStdin = stdinWriter
+
 	// The process that will run the bootstrap script
 	if conf.KubernetesExec {
 		// Thank you Mario, but our bootstrap is in another container
@@ -364,7 +372,8 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
 		}
-		r.process = kubernetes.NewRunner(r.agentLogger, kubernetes.RunnerConfig{
+		k8sRunner := kubernetes.NewRunner(r.agentLogger, kubernetes.RunnerConfig{
+			Stdin:              stdinReader,
 			Stdout:             r.jobLogs,
 			Stderr:             r.jobLogs,
 			ClientCount:        containerCount,
@@ -372,6 +381,8 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 			ClientStartTimeout: 5 * time.Minute,
 			ClientLostTimeout:  30 * time.Second,
 		})
+		r.process = k8sRunner
+
 	} else { // not Kubernetes
 		// The bootstrap-script gets parsed based on the operating system
 		cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
@@ -385,6 +396,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 			Dir:               conf.AgentConfiguration.BuildPath,
 			Env:               processEnv,
 			PTY:               conf.AgentConfiguration.RunInPty,
+			Stdin:             stdinReader,
 			Stdout:            r.jobLogs,
 			Stderr:            r.jobLogs,
 			InterruptSignal:   conf.CancelSignal,
@@ -738,7 +750,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
 				r.agentLogger.Error("Invalid access token, cancelling job %s", r.conf.Job.ID)
-				if err := r.Cancel(); err != nil {
+				if err := r.Cancel(false); err != nil {
 					r.agentLogger.Error("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
 				}
 			} else {
@@ -746,7 +758,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 				r.agentLogger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
 			}
 		} else if jobState.State == "canceling" || jobState.State == "canceled" {
-			if err := r.Cancel(); err != nil {
+			if err := r.Cancel(false); err != nil {
 				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}

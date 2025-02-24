@@ -468,15 +468,14 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 }
 
 func (r *JobRunner) CancelAndStop() error {
-	r.cancelLock.Lock()
-	r.stopped = true
-	r.cancelLock.Unlock()
-	return r.Cancel()
+	return r.Cancel(true)
 }
 
-func (r *JobRunner) Cancel() error {
+func (r *JobRunner) Cancel(stopped bool) error {
 	r.cancelLock.Lock()
 	defer r.cancelLock.Unlock()
+
+	r.stopped = stopped
 
 	if r.cancelled {
 		return nil
@@ -488,8 +487,16 @@ func (r *JobRunner) Cancel() error {
 	}
 
 	reason := ""
+	sigReason := SignalReasonCancel
 	if r.stopped {
 		reason = "(agent stopping)"
+		sigReason = SignalReasonAgentStop
+	}
+
+	if r.processStdin != nil {
+		// Let the subprocess know the signal reason by passing an env var over
+		// stdin.
+		fmt.Fprintf(r.processStdin, "BUILDKITE_SIGNAL_REASON=%s\n", sigReason)
 	}
 
 	r.agentLogger.Info(

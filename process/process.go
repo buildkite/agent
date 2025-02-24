@@ -204,6 +204,11 @@ func (p *Process) Run(ctx context.Context) error {
 		go func() {
 			p.logger.Debug("[Process] Starting to copy PTY to the buffer")
 
+			// Concurrently copy stdin to the pty ("best effort" basis).
+			if p.conf.Stdin != nil {
+				go io.Copy(pty, p.conf.Stdin)
+			}
+
 			// Copy the pty to our writer. This will block until it EOFs or something breaks.
 			_, err = io.Copy(p.conf.Stdout, pty)
 			switch {
