@@ -6,13 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/mocktracer"
-	"golang.org/x/exp/maps"
 )
 
 // nullLogger is meant to make Datadog tracing logs go nowhere during tests.
@@ -142,9 +142,10 @@ func TestEncodeTraceContext(t *testing.T) {
 			}
 			// The content of the trace context will vary, but the keys should
 			// remain the same.
-			gotKeys := maps.Keys(textmap)
+			gotKeys := slices.Collect(maps.Keys(textmap))
 			slices.Sort(gotKeys)
-			wantKeys := maps.Keys(test.want)
+
+			wantKeys := slices.Collect(maps.Keys(test.want))
 			slices.Sort(wantKeys)
 			if diff := cmp.Diff(gotKeys, wantKeys); diff != "" {
 				t.Errorf("decoded textmap keys diff (-got +want):\n%s", diff)
