@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"maps"
 	"net/http"
 	"os"
 	"os/user"
@@ -124,9 +125,7 @@ func (i *baseItem) Items() map[string]item {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
 	icopy := make(map[string]item, len(i.items))
-	for k, v := range i.items {
-		icopy[k] = v
-	}
+	maps.Copy(icopy, i.items)
 	return icopy
 }
 

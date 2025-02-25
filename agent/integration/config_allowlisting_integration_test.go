@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"maps"
 	"regexp"
 	"strings"
 	"testing"
@@ -122,9 +123,7 @@ func TestConfigAllowlisting(t *testing.T) {
 				Token: "bkaj_job-token",
 			}
 
-			for k, v := range tc.extraEnv {
-				job.Env[k] = v
-			}
+			maps.Copy(job.Env, tc.extraEnv)
 
 			e := createTestAgentEndpoint()
 			server := e.server()
