@@ -787,6 +787,14 @@ const CommitMetadataKey = "buildkite:git:commit"
 // note that we bail early if the key already exists, as we don't want to overwrite it
 func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	e.shell.Commentf("Checking to see if git commit information needs to be sent to Buildkite...")
+
+	commitResolved, _ := e.shell.Env.Get("BUILDKITE_COMMIT_RESOLVED")
+	if commitResolved == "true" {
+		// we can skip the metadata shenanigans here and push straight through
+		e.shell.Commentf("BUILDKITE_COMMIT is already resolved and meta-data populated, skipping")
+		return nil
+	}
+
 	cmd := e.shell.Command("buildkite-agent", "meta-data", "exists", CommitMetadataKey)
 	if err := cmd.Run(ctx); err == nil {
 		// Command exited 0, ie the key exists, so we don't need to send it again

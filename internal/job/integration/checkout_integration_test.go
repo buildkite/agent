@@ -59,14 +59,8 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 		{"rev-parse", "HEAD"},
 	})
-
-	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
-	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
-	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
@@ -954,6 +948,89 @@ func TestRepositorylessCheckout(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
+}
+
+func TestGitCheckoutWithCommitResolved(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{"BUILDKITE_COMMIT_RESOLVED=true"}
+
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Exactly(0)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{"BUILDKITE_COMMIT_RESOLVED=false"}
+
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0).Exactly(1)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewBootstrapTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{"BUILDKITE_COMMIT_RESOLVED=false"}
+
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1).Exactly(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
 }
 
 type subDirMatcher struct {
