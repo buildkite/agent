@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -24,9 +25,7 @@ func HeadersMiddleware(headers http.Header) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
-			for k, v := range headers {
-				h[k] = v
-			}
+			maps.Copy(h, headers)
 			next.ServeHTTP(w, r)
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -657,7 +658,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		} else {
 			mirrorSubmodules := e.ExecutorConfig.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
-				submoduleArgs := append([]string(nil), args...)
+				submoduleArgs := slices.Clone(args)
 				// submodules might need their fingerprints verified too
 				if e.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)

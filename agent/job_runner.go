@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -426,9 +427,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// sent by Buildkite. The variables below should always take
 	// precedence.
 	env := make(map[string]string)
-	for key, value := range r.conf.Job.Env {
-		env[key] = value
-	}
+	maps.Copy(env, r.conf.Job.Env)
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")

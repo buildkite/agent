@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -252,17 +253,15 @@ func DDTracingExtras() map[string]any {
 	}
 }
 
-func Merge(maps ...map[string]any) map[string]any {
+func Merge(ms ...map[string]any) map[string]any {
 	fullCap := 0
-	for _, m := range maps {
+	for _, m := range ms {
 		fullCap += len(m)
 	}
 
 	merged := make(map[string]any, fullCap)
-	for _, m := range maps {
-		for key, val := range m {
-			merged[key] = val
-		}
+	for _, m := range ms {
+		maps.Copy(merged, m)
 	}
 
 	return merged

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -19,12 +20,7 @@ var dockerEnv = []string{
 }
 
 func hasDeprecatedDockerIntegration(sh *shell.Shell) bool {
-	for _, k := range dockerEnv {
-		if sh.Env.Exists(k) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(dockerEnv, sh.Env.Exists)
 }
 
 func runDeprecatedDockerIntegration(ctx context.Context, sh *shell.Shell, cmd []string) error {
