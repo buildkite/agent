@@ -3,11 +3,12 @@ package jobapi
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/internal/socket"
-	"golang.org/x/exp/maps"
 )
 
 func (s *Server) getEnv(w http.ResponseWriter, _ *http.Request) {
@@ -35,7 +36,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 
 	added := make([]string, 0, len(req.Env))
 	updated := make([]string, 0, len(req.Env))
-	protected := checkProtected(maps.Keys(req.Env))
+	protected := checkProtected(slices.Collect(maps.Keys(req.Env)))
 
 	if len(protected) > 0 {
 		err := socket.WriteError(

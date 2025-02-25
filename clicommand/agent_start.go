@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -42,7 +43,6 @@ import (
 	"github.com/buildkite/shellwords"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/urfave/cli"
-	"golang.org/x/exp/maps"
 )
 
 const startDescription = `Usage:
@@ -926,7 +926,7 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf(
 				"the given tracing backend %q is not supported. Valid backends are: %q",
 				cfg.TracingBackend,
-				maps.Keys(tracetools.ValidTracingBackends),
+				slices.Collect(maps.Keys(tracetools.ValidTracingBackends)),
 			)
 		}
 

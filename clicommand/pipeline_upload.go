@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -33,7 +34,6 @@ import (
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/buildkite/interpolate"
 	"github.com/urfave/cli"
-	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 )
 
@@ -522,13 +522,13 @@ func searchForSecrets(
 	}
 
 	if len(shortValues) > 0 {
-		vars := maps.Keys(shortValues)
+		vars := slices.Collect(maps.Keys(shortValues))
 		slices.Sort(vars)
 		l.Warn("Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(vars, ", "))
 	}
 
 	if len(secretsFound) > 0 {
-		secretsFound := maps.Keys(secretsFound)
+		secretsFound := slices.Collect(maps.Keys(secretsFound))
 		slices.Sort(secretsFound)
 
 		if cfg.RejectSecrets {
