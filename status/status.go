@@ -124,9 +124,7 @@ func (i *baseItem) delSubItem(title string) {
 func (i *baseItem) Items() map[string]item {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	icopy := make(map[string]item, len(i.items))
-	maps.Copy(icopy, i.items)
-	return icopy
+	return maps.Clone(i.items)
 }
 
 // SimpleItem is for untemplated status items that only report a simple non-HTML string.
