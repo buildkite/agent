@@ -87,9 +87,8 @@ type AgentWorker struct {
 	cancelSig process.Signal
 
 	// Stop controls
-	stopMutex sync.Mutex
-	stop      chan struct{}
-	stopping  bool
+	stopOnce sync.Once // prevents double-closing the channel
+	stop     chan struct{}
 
 	// The index of this agent worker
 	spawnIndex int
@@ -102,9 +101,9 @@ type AgentWorker struct {
 	agentStdout io.Writer
 
 	// Are we doing something right now?
+	stateMtx     sync.Mutex
 	state        agentWorkerState
 	currentJobID string
-	stateMtx     sync.Mutex
 }
 
 type agentWorkerState string
@@ -229,8 +228,10 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 
 	go a.runHeartbeatLoop(heartbeatCtx)
 
-	// If the agent is booted in acquisition mode, then we don't need to
-	// bother about starting the ping loop.
+	// If the agent is booted in acquisition mode, acquire that particular job
+	// before running the ping loop.
+	// (Why run a ping loop at all? To find out if the agent is paused, which
+	// affects whether it terminates after the job.)
 	if a.agentConfiguration.AcquireJob != "" {
 		// When in acquisition mode, there can't be any agents, so
 		// there's really no point in letting the idle monitor know
@@ -238,7 +239,9 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 		// measure.
 		idleMonitor.MarkBusy(a.agent.UUID)
 
-		return a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob)
+		if err := a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob); err != nil {
+			a.logger.Error("Failed to acquire and run job: %v", err)
+		}
 	}
 
 	return a.runPingLoop(ctx, idleMonitor)
@@ -296,7 +299,9 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	first <- struct{}{}
 
 	lastActionTime := time.Now()
-	a.logger.Info("Waiting for work...")
+	a.logger.Info("Waiting for instructions...")
+
+	wasPaused := false
 
 	// Continue this loop until the closing of the stop channel signals termination
 	for {
@@ -321,22 +326,43 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 			return nil
 		}
 
-		a.stopMutex.Lock()
-		stopping := a.stopping
-		a.stopMutex.Unlock()
-		if stopping {
-			return nil
-		}
-
-		setStat("📡 Pinging Buildkite for work")
-		job, err := a.Ping(ctx)
+		setStat("📡 Pinging Buildkite for instructions")
+		job, action, err := a.Ping(ctx)
 		if err != nil {
 			if errors.Is(err, &errUnrecoverable{}) {
 				a.logger.Error("%v", err)
 			} else {
 				a.logger.Warn("%v", err)
 			}
-		} else if job != nil {
+		}
+
+		switch action {
+		case "disconnect":
+			a.Stop(false)
+			return nil
+
+		case "pause":
+			// An agent is not dispatched any jobs while it is paused, but the
+			// paused agent is expected to remain alive and pinging for
+			// instructions.
+			// *This includes acquire-job and disconnect-after-idle-timeout.*
+			wasPaused = true
+			continue
+		}
+
+		// At this point, action was neither "disconnect" nor "pause".
+		if wasPaused {
+			a.logger.Info("Agent has resumed after being paused")
+			wasPaused = false
+		}
+
+		// Exit after acquire-job.
+		if a.agentConfiguration.AcquireJob != "" {
+			return nil
+		}
+
+		// Note that Ping only returns a job if err == nil.
+		if job != nil {
 			// Let other agents know this agent is now busy and
 			// not to idle terminate
 			idleMonitor.MarkBusy(a.agent.UUID)
@@ -395,15 +421,12 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 // Stops the agent from accepting new work and cancels any current work it's
 // running
 func (a *AgentWorker) Stop(graceful bool) {
-	// Only allow one stop to run at a time (because we're playing with
-	// channels)
-	a.stopMutex.Lock()
-	defer a.stopMutex.Unlock()
-
 	if graceful {
-		if a.stopping {
+		select {
+		case <-a.stop:
 			a.logger.Warn("Agent is already gracefully stopping...")
-		} else {
+
+		default:
 			// If we have a job, tell the user that we'll wait for
 			// it to finish before disconnecting
 			if a.jobRunner != nil {
@@ -429,18 +452,11 @@ func (a *AgentWorker) Stop(graceful bool) {
 		}
 	}
 
-	// We don't need to do the below operations again since we've already
-	// done them before
-	if a.stopping {
-		return
-	}
-
-	// Use the closure of the stop channel as a signal to the main run loop in Start()
-	// to stop looping and terminate
-	close(a.stop)
-
-	// Mark the agent as stopping
-	a.stopping = true
+	a.stopOnce.Do(func() {
+		// Use the closure of the stop channel as a signal to the main run loop in Start()
+		// to stop looping and terminate
+		close(a.stop)
+	})
 }
 
 // Connects the agent to the Buildkite Agent API, retrying up to 10 times if it
@@ -491,7 +507,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 
 // Performs a ping that checks Buildkite for a job or action to take
 // Returns a job, or nil if none is found
-func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
+func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, err error) {
 	ping, resp, pingErr := a.apiClient.Ping(ctx)
 	// wait a minute, where's my if err != nil block? TL;DR look for pingErr ~20 lines down
 	// the api client returns an error if the response code isn't a 2xx, but there's still information in resp and ping
@@ -504,11 +520,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 			a.logger.Info(ping.Message)
 		}
 
-		// Should the agent disconnect?
-		if ping.Action == "disconnect" {
-			a.Stop(false)
-			return nil, nil
-		}
+		action = ping.Action
 	}
 
 	if pingErr != nil {
@@ -517,7 +529,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 		// responses with non-retryable statuses
 		if resp != nil && !api.IsRetryableStatus(resp) {
 			a.Stop(false)
-			return nil, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
+			return nil, action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
 		}
 
 		// Get the last ping time to the nearest microsecond
@@ -527,9 +539,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		if a.stats.lastPing.IsZero() {
-			return nil, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
+			return nil, action, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
 		} else {
-			return nil, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
+			return nil, action, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
 		}
 	}
 
@@ -556,11 +568,12 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 	}
 
 	// If we don't have a job, there's nothing to do!
-	if ping.Job == nil {
-		return nil, nil
+	// If we're paused, job should be nil, but in case it isn't, ignore it.
+	if ping.Job == nil || action == "pause" {
+		return nil, action, nil
 	}
 
-	return ping.Job, nil
+	return ping.Job, action, nil
 }
 
 // AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
@@ -682,45 +695,4 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 			}
 		}
 	}
-}
-
-// This monitor has a 3rd implicit state we will call "initializing" that all agents start in
-// Agents can transition to busy and/or idle but always start in the "initializing" state
-/*
-//                -> Busy
-//              /     ^
-// Initializing       |
-//              \     v
-//                -> Idle
-*/
-// This (intentionally?) ensures the DisconnectAfterIdleTimeout doesn't fire before agents have had a chance to run a job
-type IdleMonitor struct {
-	sync.Mutex
-	totalAgents int
-	idle        map[string]struct{}
-}
-
-func NewIdleMonitor(totalAgents int) *IdleMonitor {
-	return &IdleMonitor{
-		totalAgents: totalAgents,
-		idle:        map[string]struct{}{},
-	}
-}
-
-func (i *IdleMonitor) Idle() bool {
-	i.Lock()
-	defer i.Unlock()
-	return len(i.idle) == i.totalAgents
-}
-
-func (i *IdleMonitor) MarkIdle(agentUUID string) {
-	i.Lock()
-	defer i.Unlock()
-	i.idle[agentUUID] = struct{}{}
-}
-
-func (i *IdleMonitor) MarkBusy(agentUUID string) {
-	i.Lock()
-	defer i.Unlock()
-	delete(i.idle, agentUUID)
 }
