@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.93.0](https://github.com/buildkite/agent/tree/v3.93.0) (2025-02-26)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.92.1...v3.93.0)
+
+### Added
+- Handle pause actions [#3211](https://github.com/buildkite/agent/pull/3211) (@DrJosh9000)
+- Add agent stop command [#3198](https://github.com/buildkite/agent/pull/3198) (@sj26)
+
+### Changed
+- Skip pushing the git commit metadata if BUILDKITE_COMMIT_RESOLVED=true [#3152](https://github.com/buildkite/agent/pull/3152) (@CerealBoy)
+- Update cancel_signal.go [#3197](https://github.com/buildkite/agent/pull/3197) (@karensawrey)
+- Capture datadog metrics usage from registering agents [#3195](https://github.com/buildkite/agent/pull/3195) (@wolfeidau)
+- Capture some HTTP client details from registering agents [#3193](https://github.com/buildkite/agent/pull/3193) (@yob)
+
+### Fixed
+- Change the signal handler to ensure the agent quits after the grace period [#3200](https://github.com/buildkite/agent/pull/3200) (@wolfeidau)
+- Don't fail if the interrupt fails when the PID is already exited [#3199](https://github.com/buildkite/agent/pull/3199) (@wolfeidau)
+- bash shouldn't be assumed to be in /bin for portability [#1534](https://github.com/buildkite/agent/pull/1534) (@jgedarovich)
+
+### Internal
+- Fixes from the new modernize analyzer from the Go team [#3209](https://github.com/buildkite/agent/pull/3209) (@wolfeidau)
+- Kill exp/maps and replace with stdlib maps [#3210](https://github.com/buildkite/agent/pull/3210) (@moskyb)
+
+### Dependabot
+- Dependencies - they just keep being updated! [#3203](https://github.com/buildkite/agent/pull/3203), [#3208](https://github.com/buildkite/agent/pull/3208), [#3205](https://github.com/buildkite/agent/pull/3205), [#3204](https://github.com/buildkite/agent/pull/3204), [#3207](https://github.com/buildkite/agent/pull/3207), [#3183](https://github.com/buildkite/agent/pull/3183), [#3186](https://github.com/buildkite/agent/pull/3186), [#3194](https://github.com/buildkite/agent/pull/3194) (@dependabot[bot])
+
+
 ## [v3.92.1](https://github.com/buildkite/agent/tree/v3.92.1) (2025-02-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.92.0...v3.92.1)
 
