@@ -54,7 +54,7 @@ func (e *missingKeyError) Error() string {
 
 // Runs the job
 func (r *JobRunner) Run(ctx context.Context) error {
-	r.agentLogger.Info("Starting job %s", r.conf.Job.ID)
+	r.agentLogger.Info("Starting job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
 	defer done()
@@ -396,7 +396,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
 	r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks())
 
-	r.agentLogger.Info("Finished job %s", r.conf.Job.ID)
+	r.agentLogger.Info("Finished job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 }
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
