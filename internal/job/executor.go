@@ -309,6 +309,7 @@ func (e *Executor) Cancel() error {
 		return errors.New("already cancelled")
 	}
 	e.cancelled = true
+	e.shell.Env.Set("BUILDKITE_JOB_CANCELLED", "true")
 	close(e.cancelCh)
 	return nil
 }
