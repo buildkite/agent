@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "file",
+    srcs = [
+        "is_opened.go",
+        "opened_by.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/file",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/shell"],
+)
