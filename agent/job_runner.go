@@ -432,6 +432,16 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
 
+	// Wrap setting values in env, so that when any that were already present in
+	// supplied Job env are overwritten, they can be added to ignoredEnv.
+	var ignoredEnv []string
+	setEnv := func(name, value string) {
+		if _, exists := env[name]; exists {
+			ignoredEnv = append(ignoredEnv, name)
+		}
+		env[name] = value
+	}
+
 	// Write out the job environment to file:
 	// - envShellFile: in k="v" format, with newlines escaped
 	// - envJSONFile: as a single JSON object {"k":"v",...}, escaped appropriately for JSON.
@@ -458,41 +468,27 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// Now that the env files have been written, we can add their corresponding
 	// paths to the job env.
 	if r.envShellFile != nil {
-		env["BUILDKITE_ENV_FILE"] = r.envShellFile.Name()
+		setEnv("BUILDKITE_ENV_FILE", r.envShellFile.Name())
 	}
 	if r.envJSONFile != nil {
-		env["BUILDKITE_ENV_JSON_FILE"] = r.envJSONFile.Name()
-	}
-
-	var ignoredEnv []string
-
-	// Check if the user has defined any protected env
-	for k := range ProtectedEnv {
-		if _, exists := r.conf.Job.Env[k]; exists {
-			ignoredEnv = append(ignoredEnv, k)
-		}
+		setEnv("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
 	}
 
 	cache := r.conf.Job.Step.Cache
 	if cache != nil && len(cache.Paths) > 0 {
-		env["BUILDKITE_AGENT_CACHE_PATHS"] = strings.Join(cache.Paths, ",")
-	}
-
-	// Set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings
-	if len(ignoredEnv) > 0 {
-		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
+		setEnv("BUILDKITE_AGENT_CACHE_PATHS", strings.Join(cache.Paths, ","))
 	}
 
 	// Add the API configuration
 	apiConfig := r.apiClient.Config()
-	env["BUILDKITE_AGENT_ENDPOINT"] = apiConfig.Endpoint
-	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = apiConfig.Token
-	env["BUILDKITE_NO_HTTP2"] = fmt.Sprint(apiConfig.DisableHTTP2)
+	setEnv("BUILDKITE_AGENT_ENDPOINT", apiConfig.Endpoint)
+	setEnv("BUILDKITE_AGENT_ACCESS_TOKEN", apiConfig.Token)
+	setEnv("BUILDKITE_NO_HTTP2", fmt.Sprint(apiConfig.DisableHTTP2))
 
 	// Add agent environment variables
-	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprint(r.conf.Debug)
-	env["BUILDKITE_AGENT_DEBUG_HTTP"] = fmt.Sprint(r.conf.DebugHTTP)
-	env["BUILDKITE_AGENT_PID"] = strconv.Itoa(os.Getpid())
+	setEnv("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
+	setEnv("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
+	setEnv("BUILDKITE_AGENT_PID", strconv.Itoa(os.Getpid()))
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)
@@ -504,76 +500,76 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	env["BUILDKITE_BIN_PATH"] = dir
+	setEnv("BUILDKITE_BIN_PATH", dir)
 
 	// Add options from the agent configuration
-	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
-	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
-	env["BUILDKITE_SOCKETS_PATH"] = r.conf.AgentConfiguration.SocketsPath
-	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
-	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
-	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
-	env["BUILDKITE_ADDITIONAL_HOOKS_PATHS"] = strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ",")
-	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
-	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan)
-	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules)
-	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprint(r.conf.AgentConfiguration.CommandEval)
-	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled)
-	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled)
-	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
-	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
-	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
-	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
-	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
-	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout)
-	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
-	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(ctx), ",")
-	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
-	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks)
-	env["BUILDKITE_CANCEL_GRACE_PERIOD"] = strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod)
-	env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod / time.Second))
-	env["BUILDKITE_TRACE_CONTEXT_ENCODING"] = r.conf.AgentConfiguration.TraceContextEncoding
+	setEnv("BUILDKITE_CONFIG_PATH", r.conf.AgentConfiguration.ConfigPath)
+	setEnv("BUILDKITE_BUILD_PATH", r.conf.AgentConfiguration.BuildPath)
+	setEnv("BUILDKITE_SOCKETS_PATH", r.conf.AgentConfiguration.SocketsPath)
+	setEnv("BUILDKITE_GIT_MIRRORS_PATH", r.conf.AgentConfiguration.GitMirrorsPath)
+	setEnv("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate))
+	setEnv("BUILDKITE_HOOKS_PATH", r.conf.AgentConfiguration.HooksPath)
+	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
+	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
+	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
+	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
+	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
+	setEnv("BUILDKITE_LOCAL_HOOKS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled))
+	setEnv("BUILDKITE_GIT_CHECKOUT_FLAGS", r.conf.AgentConfiguration.GitCheckoutFlags)
+	setEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
+	setEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
+	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
+	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
+	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
+	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
+	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
+	setEnv("BUILDKITE_REDACTED_VARS", strings.Join(r.conf.AgentConfiguration.RedactedVars, ","))
+	setEnv("BUILDKITE_STRICT_SINGLE_HOOKS", fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks))
+	setEnv("BUILDKITE_CANCEL_GRACE_PERIOD", strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod))
+	setEnv("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod/time.Second)))
+	setEnv("BUILDKITE_TRACE_CONTEXT_ENCODING", r.conf.AgentConfiguration.TraceContextEncoding)
 
 	if r.conf.KubernetesExec {
-		env["BUILDKITE_KUBERNETES_EXEC"] = "true"
+		setEnv("BUILDKITE_KUBERNETES_EXEC", "true")
 	}
 
 	if !r.conf.AgentConfiguration.AllowMultipartArtifactUpload {
-		env["BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD"] = "true"
+		setEnv("BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", "true")
 	}
 
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
 	if r.conf.CancelSignal != process.SIGTERM {
-		env["BUILDKITE_CANCEL_SIGNAL"] = r.conf.CancelSignal.String()
+		setEnv("BUILDKITE_CANCEL_SIGNAL", r.conf.CancelSignal.String())
 	}
 
 	// Whether to enable profiling in the bootstrap
 	if r.conf.AgentConfiguration.Profile != "" {
-		env["BUILDKITE_AGENT_PROFILE"] = r.conf.AgentConfiguration.Profile
+		setEnv("BUILDKITE_AGENT_PROFILE", r.conf.AgentConfiguration.Profile)
 	}
 
 	// PTY-mode is enabled by default in `start` and `bootstrap`, so we only need
 	// to propagate it if it's explicitly disabled.
 	if !r.conf.AgentConfiguration.RunInPty {
-		env["BUILDKITE_PTY"] = "false"
+		setEnv("BUILDKITE_PTY", "false")
 	}
 
 	// pass through the KMS key ID for signing
 	if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
-		env["BUILDKITE_AGENT_AWS_KMS_KEY"] = r.conf.AgentConfiguration.SigningAWSKMSKey
+		setEnv("BUILDKITE_AGENT_AWS_KMS_KEY", r.conf.AgentConfiguration.SigningAWSKMSKey)
 	}
 
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
 	if r.conf.AgentConfiguration.SigningJWKSFile != "" {
-		env["BUILDKITE_AGENT_JWKS_FILE"] = r.conf.AgentConfiguration.SigningJWKSFile
+		setEnv("BUILDKITE_AGENT_JWKS_FILE", r.conf.AgentConfiguration.SigningJWKSFile)
 	}
 
 	if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
-		env["BUILDKITE_AGENT_JWKS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKeyID
+		setEnv("BUILDKITE_AGENT_JWKS_KEY_ID", r.conf.AgentConfiguration.SigningJWKSKeyID)
 	}
 
 	if r.conf.AgentConfiguration.DebugSigning {
-		env["BUILDKITE_AGENT_DEBUG_SIGNING"] = "true"
+		setEnv("BUILDKITE_AGENT_DEBUG_SIGNING", "true")
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
@@ -585,19 +581,24 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 			enablePluginValidation = true
 		}
 	}
-	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprint(enablePluginValidation)
+	setEnv("BUILDKITE_PLUGIN_VALIDATION", fmt.Sprint(enablePluginValidation))
 
 	if r.conf.AgentConfiguration.TracingBackend != "" {
-		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
-		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
+		setEnv("BUILDKITE_TRACING_BACKEND", r.conf.AgentConfiguration.TracingBackend)
+		setEnv("BUILDKITE_TRACING_SERVICE_NAME", r.conf.AgentConfiguration.TracingServiceName)
 	}
 
-	env["BUILDKITE_AGENT_DISABLE_WARNINGS_FOR"] = strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ",")
+	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
 
 	// see documentation for BuildkiteMessageMax
 	if err := truncateEnv(r.agentLogger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
 		r.agentLogger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)
 		// attempt to continue anyway
+	}
+
+	// Finally, set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings.
+	if len(ignoredEnv) > 0 {
+		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
 
 	// Convert the env map into a slice (which is what the script gear
