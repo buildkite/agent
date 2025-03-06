@@ -126,6 +126,9 @@ func TestDisconnectRetry(t *testing.T) {
 }
 
 func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	jobID := "some-uuid"
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -156,13 +159,16 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.AcquireAndRunJob(t.Context(), jobID)
+	err := worker.AcquireAndRunJob(ctx, jobID)
 	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
 }
 
 func TestAcquireAndRunJobWaiting(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/jobs/waitinguuid/acquire":
@@ -209,7 +215,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.AcquireAndRunJob(t.Context(), "waitinguuid")
+	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
 	assert.ErrorContains(t, err, "423")
 
 	if errors.Is(err, core.ErrJobAcquisitionRejected) {
@@ -225,6 +231,9 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 }
 
 func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	jobUUID := uuid.New().String()
 	jobToken := uuid.New().String()
 	jobAcquired := false
@@ -349,7 +358,7 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 
 	idleMonitor := NewIdleMonitor(1)
 
-	if err := worker.Start(t.Context(), idleMonitor); err != nil {
+	if err := worker.Start(ctx, idleMonitor); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 

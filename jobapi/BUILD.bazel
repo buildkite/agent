@@ -22,7 +22,6 @@ go_library(
         "//internal/socket",
         "@com_github_go_chi_chi_v5//:chi",
         "@com_github_go_chi_chi_v5//middleware",
-        "@org_golang_x_exp//maps",
     ],
 )
 
