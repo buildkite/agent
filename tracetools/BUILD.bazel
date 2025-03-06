@@ -35,12 +35,10 @@ go_test(
         "@com_github_opentracing_opentracing_go//log",
         "@com_github_opentracing_opentracing_go//mocktracer",
         "@com_github_stretchr_testify//assert",
-        "@in_gopkg_datadog_dd_trace_go_v1//ddtrace/opentracer",
         "@in_gopkg_datadog_dd_trace_go_v1//ddtrace/tracer",
         "@io_opentelemetry_go_otel//attribute",
         "@io_opentelemetry_go_otel//codes",
         "@io_opentelemetry_go_otel_trace//:trace",
         "@io_opentelemetry_go_otel_trace//embedded",
-        "@org_golang_x_exp//maps",
     ],
 )
