@@ -53,6 +53,7 @@ var (
 		InterpolationPrefersRuntimeEnv: {},
 		NormalisedUploadPaths:          {},
 		OverrideZeroExitOnCancel:       {},
+		PTYRaw:                         {},
 		ResolveCommitAfterCheckout:     {},
 		UseZZGlob:                      {},
 	}

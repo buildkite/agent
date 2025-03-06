@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"drjosh.dev/zzglob"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -78,6 +79,10 @@ type PipelineUploadConfig struct {
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 	RejectSecrets   bool     `cli:"reject-secrets"`
 
+	// Used for skip_if_unchanged processing
+	ApplySkipIfUnchanged bool   `cli:"apply-skip-if-unchanged"`
+	GitDiffBase          string `cli:"git-diff-base"`
+
 	// Used for signing
 	JWKSFile         string `cli:"jwks-file"`
 	JWKSKeyID        string `cli:"jwks-key-id"`
@@ -134,6 +139,17 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "reject-secrets",
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+		},
+		cli.StringFlag{
+			Name:   "apply-skip-if-unchanged",
+			Usage:  "When set, enables filtering of steps containing 'skip_if_unchanged' patterns using the git diff",
+			EnvVar: "BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED",
+		},
+		cli.StringFlag{
+			Name:   "git-diff-base",
+			Usage:  "Provides the base from which to find the git diff when processing 'skip_if_unchanged'",
+			Value:  "origin/main",
+			EnvVar: "BUILDKITE_GIT_DIFF_BASE,BUILDKITE_PULL_REQUEST_BASE_BRANCH",
 		},
 
 		// Note: changes to these environment variables need to be reflected in the environment created
@@ -309,8 +325,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if key != nil {
-
-			err = signature.SignSteps(
+			err := signature.SignSteps(
 				ctx,
 				result.Steps,
 				key,
@@ -322,6 +337,23 @@ var PipelineUploadCommand = cli.Command{
 			if err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
+		}
+
+		if cfg.ApplySkipIfUnchanged {
+			func() {
+				gitDiff, err := exec.Command("git", "diff", "--name-only", "--merge-base", cfg.GitDiffBase).Output()
+				if err != nil {
+					l.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
+					return
+				}
+				changedPaths := slices.DeleteFunc(
+					strings.Split(string(gitDiff), "\n"),
+					func(s string) bool {
+						return strings.TrimSpace(s) == ""
+					},
+				)
+				applySkipIfUnchanged(l, result.Steps, changedPaths)
+			}()
 		}
 
 		// In dry-run mode we just output the generated pipeline to stdout.
@@ -565,4 +597,45 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 		return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 	}
 	return result, err
+}
+
+// applySkipIfUnchanged converts "skip_if_unchanged" into "skip" where the glob
+// matches no files in the change.
+func applySkipIfUnchanged(logger logger.Logger, steps pipeline.Steps, changedPaths []string) {
+stepsLoop:
+	for _, step := range steps {
+		switch st := step.(type) {
+		case *pipeline.GroupStep:
+			// Recurse into group steps
+			applySkipIfUnchanged(logger, st.Steps, changedPaths)
+
+		case *pipeline.CommandStep:
+			// Do the thing.
+			siu := st.RemainingFields["skip_if_unchanged"]
+			if siu == nil {
+				continue
+			}
+			delete(st.RemainingFields, "skip_if_unchanged")
+
+			pattern, ok := siu.(string)
+			if !ok {
+				logger.Warn("skip_if_unchanged value must be a string containing a glob pattern (was a %T)", siu)
+				continue
+			}
+
+			glob, err := zzglob.Parse(pattern)
+			if err != nil {
+				logger.Warn("skip_if_unchanged couldn't be parsed as a glob pattern: %v", err)
+				continue
+			}
+			for _, c := range changedPaths {
+				if glob.Match(c) {
+					continue stepsLoop // one of the paths changed
+				}
+			}
+
+			// Glob matched no changed file paths - skip this step.
+			st.RemainingFields["skip"] = fmt.Sprintf("pattern %q did not match any paths changed in this build", pattern)
+		}
+	}
 }
