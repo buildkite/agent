@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "stdin",
+    srcs = ["stdin.go"],
+    importpath = "github.com/buildkite/agent/v3/internal/stdin",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "stdin_test",
+    srcs = ["main_test.go"],
+    deps = [":stdin"],
+)

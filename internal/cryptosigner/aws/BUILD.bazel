@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "aws",
+    srcs = ["kms.go"],
+    importpath = "github.com/buildkite/agent/v3/internal/cryptosigner/aws",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_aws_aws_sdk_go_v2//aws",
+        "@com_github_aws_aws_sdk_go_v2_service_kms//:kms",
+        "@com_github_aws_aws_sdk_go_v2_service_kms//types",
+        "@com_github_lestrrat_go_jwx_v2//jwa",
+    ],
+)
