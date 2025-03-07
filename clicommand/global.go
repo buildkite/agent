@@ -43,6 +43,13 @@ var (
 		EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 	}
 
+	HTTPClientProfileFlag = cli.StringFlag{
+		Name:   "http-client-profile",
+		Usage:  "Enable a http client profile, either default or stdlib",
+		Value:  "default",
+		EnvVar: "BUILDKITE_AGENT_HTTP_CLIENT_PROFILE",
+	}
+
 	NoHTTP2Flag = cli.BoolFlag{
 		Name:   "no-http2",
 		Usage:  "Disable HTTP2 when communicating with the Agent API.",
@@ -307,6 +314,11 @@ func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 	noHTTP2, err := reflections.GetField(cfg, "NoHTTP2")
 	if err == nil {
 		conf.DisableHTTP2 = noHTTP2.(bool)
+	}
+
+	httpClientProfile, err := reflections.GetField(cfg, "HTTPClientProfile")
+	if err == nil {
+		conf.HTTPClientProfile = httpClientProfile.(string)
 	}
 
 	return conf
