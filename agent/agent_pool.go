@@ -136,7 +136,7 @@ func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
 
 func healthHandler(l logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		l.Info("%s %s", r.Method, r.URL.Path)
+		l.Debug("agent_pool.go/healthHandler: %s %s", r.Method, r.URL.Path)
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 		} else {
