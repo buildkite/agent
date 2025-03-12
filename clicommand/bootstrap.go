@@ -97,6 +97,7 @@ type BootstrapConfig struct {
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
+	TracingTraceParent           string   `cli:"tracing-traceparent"`
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
@@ -358,6 +359,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
 			Value:  "buildkite-agent",
 		},
+		cli.StringFlag{
+			Name:   "tracing-traceparent",
+			Usage:  "W3C Trace Parent for tracing",
+			EnvVar: "BUILDKITE_TRACING_TRACEPARENT",
+			Value:  "",
+		},
 		cli.BoolFlag{
 			Name:   "no-job-api",
 			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job.",
@@ -471,6 +478,7 @@ var BootstrapCommand = cli.Command{
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
 			TraceContextCodec:            traceContextCodec,
+			TracingTraceParent:           cfg.TracingTraceParent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			KubernetesExec:               cfg.KubernetesExec,
