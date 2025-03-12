@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -168,6 +169,21 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
+	// if we have server side tracing enabled, we provide the parent tracing context
+	if e.ExecutorConfig.TracingTraceParent != "" {
+		traceID, spanID, err := extractTraceParent(e.ExecutorConfig.TracingTraceParent)
+		if err != nil {
+			e.shell.Warningf("error extracting tracing context: %v", err)
+		} else {
+			spanContext := trace.NewSpanContext(trace.SpanContextConfig{
+				TraceID:    traceID,
+				SpanID:     spanID,
+				TraceFlags: trace.FlagsSampled,
+			})
+			ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
+		}
+	}
+
 	ctx, span := tracer.Start(ctx, e.otRootSpanName(),
 		trace.WithAttributes(
 			attribute.String("analytics.event", "true"),
@@ -181,6 +197,32 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	}
 
 	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
+}
+
+// parse W3C trace context traceparent header format
+// https://www.w3.org/TR/trace-context/#traceparent-header
+func extractTraceParent(traceParent string) (trace.TraceID, trace.SpanID, error) {
+	parts := strings.SplitN(traceParent, "-", 4)
+	if len(parts) != 4 {
+		return trace.TraceID{}, trace.SpanID{}, fmt.Errorf("invalid traceparent value: %q, must contain 4 parts", traceParent)
+	}
+
+	if parts[0] != "00" {
+		return trace.TraceID{}, trace.SpanID{}, fmt.Errorf("invalid traceparent value: %q, only version 0 supported", traceParent)
+	}
+
+	traceID, err := trace.TraceIDFromHex(strings.ToLower(parts[1]))
+	valid := traceID.IsValid()
+	if err != nil {
+		return trace.TraceID{}, trace.SpanID{}, fmt.Errorf("invalid traceparent value: %q, trace ID is not valid: %w", traceParent, err)
+	}
+	spanID, err := trace.SpanIDFromHex(strings.ToLower(parts[2]))
+	valid = valid && spanID.IsValid()
+	if err != nil {
+		return trace.TraceID{}, trace.SpanID{}, fmt.Errorf("invalid traceparent value: %q, span ID is not valid: %w", traceParent, err)
+	}
+
+	return traceID, spanID, nil
 }
 
 func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {

@@ -169,6 +169,9 @@ type ExecutorConfig struct {
 	// Service name to use when reporting traces.
 	TracingServiceName string
 
+	// Traceing context information
+	TracingTraceParent string
+
 	// Encoding (within base64) for the trace context environment variable.
 	TraceContextCodec tracetools.Codec
 
