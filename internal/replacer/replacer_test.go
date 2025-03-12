@@ -217,66 +217,85 @@ func TestReplacerMultibyte(t *testing.T) {
 func TestReplacerMultiLine(t *testing.T) {
 	t.Parallel()
 
-	var buf strings.Builder
+	const secret = "-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"
 
-	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
-
-	fmt.Fprintln(replacer, "lalalala")
-	fmt.Fprintln(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----")
-	fmt.Fprintln(replacer, "asdf")
-	fmt.Fprintln(replacer, "-----END OPENSSH PRIVATE KEY-----")
-	fmt.Fprintln(replacer, "lalalala")
-	replacer.Flush()
-
-	want := "lalalala\n[REDACTED]lalalala\n"
-
-	if diff := cmp.Diff(buf.String(), want); diff != "" {
-		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+	tests := []struct {
+		name  string
+		input []string
+		want  string
+	}{
+		{
+			name: "exact",
+			input: []string{
+				"lalalala\n",
+				"-----BEGIN OPENSSH PRIVATE KEY-----\n",
+				"asdf\n",
+				"-----END OPENSSH PRIVATE KEY-----\n",
+				"lalalala\n",
+			},
+			want: "lalalala\n[REDACTED]\nlalalala\n",
+		},
+		{
+			name: "cr-lf line endings",
+			input: []string{
+				"lalalala\r\n",
+				"-----BEGIN OPENSSH PRIVATE KEY-----\r\n",
+				"asdf\r\n",
+				"-----END OPENSSH PRIVATE KEY-----\r\n",
+				"lalalala\r\n",
+			},
+			want: "lalalala\r\n[REDACTED]\r\nlalalala\r\n",
+		},
+		{
+			name: "cr-cr-lf line endings",
+			// Thanks to some combination of baked-mode PTY and other processing, log
+			// output linebreaks often look like \r\r\n, which is annoying both when
+			// redacting secrets and when opening them in a text editor.
+			input: []string{
+				"lalalala\r\r\n",
+				"-----BEGIN OPENSSH PRIVATE KEY-----\r\r\n",
+				"asdf\r\r\n",
+				"-----END OPENSSH PRIVATE KEY-----\r\r\n",
+				"lalalala\r\r\n",
+			},
+			want: "lalalala\r\r\n[REDACTED]\r\r\nlalalala\r\r\n",
+		},
+		{
+			name: "spaces instead of newlines",
+			input: []string{
+				"lalalala -----BEGIN OPENSSH PRIVATE KEY----- asdf -----END OPENSSH PRIVATE KEY----- lalalala\n",
+			},
+			want: "lalalala [REDACTED] lalalala\n",
+		},
+		{
+			name: "mixed whitespace garbage",
+			input: []string{
+				"lalalala\n\n\r\n",
+				"-----BEGIN OPENSSH PRIVATE KEY-----\n\n \n\v",
+				"asdf\n\t\t\n  \n",
+				"-----END OPENSSH PRIVATE KEY-----\n\n\n",
+				"lalalala",
+			},
+			want: "lalalala\n\n\r\n[REDACTED]\n\n\nlalalala",
+		},
 	}
-}
 
-func TestReplacerMultiLineCrLf(t *testing.T) {
-	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	var buf strings.Builder
+			var buf strings.Builder
+			r := replacer.New(&buf, []string{secret}, redact.Redact)
 
-	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
+			for _, line := range test.input {
+				fmt.Fprint(r, line)
+			}
+			r.Flush()
 
-	fmt.Fprint(replacer, "lalalala\r\n")
-	fmt.Fprint(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----\r\n")
-	fmt.Fprint(replacer, "asdf\r\n")
-	fmt.Fprint(replacer, "-----END OPENSSH PRIVATE KEY-----\r\n")
-	fmt.Fprint(replacer, "lalalala\r\n")
-	replacer.Flush()
-
-	want := "lalalala\r\n[REDACTED]lalalala\r\n"
-
-	if diff := cmp.Diff(buf.String(), want); diff != "" {
-		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestReplacerMultiLineCrCrLf(t *testing.T) {
-	t.Parallel()
-
-	var buf strings.Builder
-
-	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
-
-	// Thanks to some combination of baked-mode PTY and other processing, log
-	// output linebreaks often look like \r\r\n, which is annoying both when
-	// redacting secrets and when opening them in a text editor.
-	fmt.Fprint(replacer, "lalalala\r\r\n")
-	fmt.Fprint(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----\r\r\n")
-	fmt.Fprint(replacer, "asdf\r\r\n")
-	fmt.Fprint(replacer, "-----END OPENSSH PRIVATE KEY-----\r\r\n")
-	fmt.Fprint(replacer, "lalalala\r\r\n")
-	replacer.Flush()
-
-	want := "lalalala\r\r\n[REDACTED]lalalala\r\r\n"
-
-	if diff := cmp.Diff(buf.String(), want); diff != "" {
-		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+			if diff := cmp.Diff(buf.String(), test.want); diff != "" {
+				t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+			}
+		})
 	}
 }
 

@@ -4,11 +4,10 @@ package replacer
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 )
-
-type unit struct{}
 
 // Replacer is a straightforward streaming string replacer suitable for
 // detecting or redacting secrets in a stream.
@@ -25,7 +24,7 @@ type Replacer struct {
 	// organised by first byte.
 	// Why first byte? Because looking up needles by the first byte is a lot
 	// faster than _filtering_ all the needles by first byte.
-	needlesByFirstByte [256]map[string]unit
+	needlesByFirstByte [256][]string
 
 	// For synchronising writes. Each write can touch everything below.
 	mu sync.Mutex
@@ -122,27 +121,39 @@ func (r *Replacer) Write(b []byte) (int, error) {
 
 		// In the middle of matching?
 		for _, s := range r.partialMatches {
+			// It's one more byte from the stream that matched (if s survives
+			// and is added to nextMatches).
+			s.matched++
+
 			// Does the needle match on this byte?
 			switch s.needle[s.position] {
+			case '\n':
+				// Special-case \n since PTY cooked-mode turns \n into \r\n,
+				// and `set -x` or even `echo` can turn it into ' ', and
+				// multiline needles are normalised to a single \n where there
+				// were multiple.
+
+				switch c {
+				case '\t', '\n', '\v', '\f', '\r', ' ':
+					// Match repetitions of arbitrary whitespace.
+					// State which continues matching \n:
+					r.nextMatches = append(r.nextMatches, s)
+					// State that has finished matching \n:
+					s.position++ // and continue below
+
+				default:
+					continue
+				}
+
 			case c:
 				// It matched!
 				s.position++
-
-			case '\n':
-				// Special-case \n since PTY cooked-mode turns \n into \r\n.
-				// Allow repetitions of \r, as long as it is followed by \n
-				// (so don't increment s.position - \n should be matched later.
-				if c != '\r' {
-					continue
-				}
+				// continues below.
 
 			default:
 				// Did not match. Drop this partial match.
 				continue
 			}
-
-			// It's one more byte from the stream that matched.
-			s.matched++
 
 			// Have we fully matched this needle?
 			if s.position < len(s.needle) {
@@ -159,7 +170,7 @@ func (r *Replacer) Write(b []byte) (int, error) {
 		}
 
 		// Start matching something?
-		for s, _ := range r.needlesByFirstByte[c] {
+		for _, s := range r.needlesByFirstByte[c] {
 			if len(s) == 1 {
 				// A pathological case; in practice we don't redact secrets
 				// smaller than RedactLengthMin.
@@ -177,7 +188,7 @@ func (r *Replacer) Write(b []byte) (int, error) {
 		}
 
 		// r.nextMatches now contains the new set of partial matches.
-		// Re-use the array underlying the old r.partialMatches for the new
+		// Re-use the storage for the old r.partialMatches for the new
 		// r.nextMatches, instead of allocating a new one.
 		r.partialMatches, r.nextMatches = r.nextMatches, r.partialMatches[:0]
 	}
@@ -319,9 +330,7 @@ func (r *Replacer) Needles() []string {
 
 	needles := make([]string, 0, r.Size())
 	for _, m := range r.needlesByFirstByte {
-		for n := range m {
-			needles = append(needles, n)
-		}
+		needles = append(needles, m...)
 	}
 	return needles
 }
@@ -358,21 +367,33 @@ func (r *Replacer) Add(needles ...string) {
 
 func (r *Replacer) unsafeAdd(needles []string) {
 	for _, s := range needles {
-		// Normalise all \r\n to \n in case a needle is supplied with \r\n line
-		// breaks but is output with \n for some reason. Note that the matcher
-		// matches \r+\n to \n, but one or more \r... without a \n afterwards
-		// in a needle should still be matched exactly.
-		s = strings.ReplaceAll(s, "\r\n", "\n")
+		s = NormaliseMultiline(s)
 		if len(s) == 0 {
 			continue
 		}
 		firstByte := s[0]
-		if r.needlesByFirstByte[firstByte] == nil {
-			r.needlesByFirstByte[firstByte] = map[string]unit{s: {}}
+		// Check for the needle in the slice first (deduplication).
+		// There aren't expected to be so many that this would be slow.
+		if slices.Contains(r.needlesByFirstByte[firstByte], s) {
 			continue
 		}
-		r.needlesByFirstByte[firstByte][s] = unit{}
+		r.needlesByFirstByte[firstByte] = append(r.needlesByFirstByte[firstByte], s)
 	}
+}
+
+func NormaliseMultiline(needle string) string {
+	// Normalise multiline needles by splitting, trimming ' ' and \r from
+	// each line, and reassembling.
+	inLines := strings.Split(needle, "\n")
+	outLines := make([]string, 0, len(inLines))
+	for _, line := range inLines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		outLines = append(outLines, trimmed)
+	}
+	return strings.Join(outLines, "\n")
 }
 
 // partialMatch tracks how far through one of the needles we have matched.
