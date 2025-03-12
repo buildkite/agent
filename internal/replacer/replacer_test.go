@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/google/go-cmp/cmp"
-	"gotest.tools/v3/assert"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 const lipsum = "Lorem ipsum dolor sit amet"
@@ -302,31 +301,42 @@ func TestReplacerMultiLine(t *testing.T) {
 func TestAddingNeedles(t *testing.T) {
 	t.Parallel()
 
-	needles := []string{"secret1111", "secret2222"}
-	afterAddExpectedNeedles := []string{"secret1111", "secret2222", "pre-secret3333"}
+	sortSlices := cmpopts.SortSlices(func(a, b string) bool { return a < b })
 
 	var buf strings.Builder
-	replacer := replacer.New(&buf, needles, redact.Redact)
-	actualNeedles := replacer.Needles()
+	replacer := replacer.New(&buf, []string{"secret1111", "secret2222"}, redact.Redact)
+	gotNeedles := replacer.Needles()
+	wantNeedles := []string{"secret1111", "secret2222"}
 
-	slices.Sort(needles)
-	slices.Sort(actualNeedles)
-	assert.DeepEqual(t, actualNeedles, needles)
+	if diff := cmp.Diff(gotNeedles, wantNeedles, sortSlices); diff != "" {
+		t.Errorf("replacer.Needles() diff (-got +want):\n%s", diff)
+	}
 
-	_, err := replacer.Write([]byte("redact secret1111 and secret2222 but not pre-secret3333\n"))
-	assert.NilError(t, err)
+	input1 := "redact secret1111 and secret2222 but not pre-secret3333\n"
+	if _, err := replacer.Write([]byte(input1)); err != nil {
+		t.Errorf("replacer.Write(%q) error = %v", input1, err)
+	}
 
 	replacer.Add("pre-secret3333")
-	actualNeedles = replacer.Needles()
-	slices.Sort(actualNeedles)
-	slices.Sort(afterAddExpectedNeedles)
-	assert.DeepEqual(t, actualNeedles, afterAddExpectedNeedles)
+	gotNeedles = replacer.Needles()
+	wantNeedles = []string{"secret1111", "secret2222", "pre-secret3333"}
 
-	_, err = replacer.Write([]byte("now redact secret1111, secret2222, and pre-secret3333\n"))
-	assert.NilError(t, err)
-	assert.NilError(t, replacer.Flush())
+	if diff := cmp.Diff(gotNeedles, wantNeedles, sortSlices); diff != "" {
+		t.Errorf("replacer.Needles() diff (-got +want):\n%s", diff)
+	}
 
-	assert.Equal(t, buf.String(), "redact [REDACTED] and [REDACTED] but not pre-secret3333\nnow redact [REDACTED], [REDACTED], and [REDACTED]\n")
+	input2 := "now redact secret1111, secret2222, and pre-secret3333\n"
+	if _, err := replacer.Write([]byte(input2)); err != nil {
+		t.Errorf("replacer.Write(%q) error = %v", input2, err)
+	}
+	if err := replacer.Flush(); err != nil {
+		t.Errorf("replacer.Flush() = %v", err)
+	}
+
+	got, want := buf.String(), "redact [REDACTED] and [REDACTED] but not pre-secret3333\nnow redact [REDACTED], [REDACTED], and [REDACTED]\n"
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("replacer output diff (-got +want):\n%s", diff)
+	}
 }
 
 func BenchmarkReplacer(b *testing.B) {
