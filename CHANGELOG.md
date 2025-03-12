@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.94.0](https://github.com/buildkite/agent/tree/v3.94.0) (2025-03-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.93.1...v3.94.0)
+
+### Security
+- Fix redaction of multiline secrets printed as single lines [#3233](https://github.com/buildkite/agent/pull/3233) (@DrJosh9000)
+
+### Changed
+- Change healthHandler to log requests at debug level [#3232](https://github.com/buildkite/agent/pull/3232) (@DrJosh9000)
+- go.mod: go 1.23.0, toolchain go1.23.7 [#3225](https://github.com/buildkite/agent/pull/3225) (@DrJosh9000)
+- Record build URL in the buildkite-agent log for easier traceability [#3215](https://github.com/buildkite/agent/pull/3215) (@mkrapivner-zipline)
+
+### Added
+- Adding an initial bazel configuration [#3141](https://github.com/buildkite/agent/pull/3141) (@CerealBoy)
+
+### Dependency bumps
+- [#3228](https://github.com/buildkite/agent/pull/3228), [#3230](https://github.com/buildkite/agent/pull/3230), [#3229](https://github.com/buildkite/agent/pull/3229), [#3231](https://github.com/buildkite/agent/pull/3231), [#3222](https://github.com/buildkite/agent/pull/3222), [#3220](https://github.com/buildkite/agent/pull/3220), [#3221](https://github.com/buildkite/agent/pull/3221), [#3216](https://github.com/buildkite/agent/pull/3216), [#3217](https://github.com/buildkite/agent/pull/3217), [#3218](https://github.com/buildkite/agent/pull/3218) (@dependabot[bot])
+
 ## [v3.93.1](https://github.com/buildkite/agent/tree/v3.93.1) (2025-02-27)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.93.0...v3.93.1)
 
