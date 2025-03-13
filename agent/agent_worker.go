@@ -301,6 +301,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	lastActionTime := time.Now()
 	a.logger.Info("Waiting for instructions...")
 
+	ranJob := false
 	wasPaused := false
 
 	// Continue this loop until the closing of the stop channel signals termination
@@ -361,37 +362,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 			return nil
 		}
 
-		// Note that Ping only returns a job if err == nil.
-		if job != nil {
-			// Let other agents know this agent is now busy and
-			// not to idle terminate
-			idleMonitor.MarkBusy(a.agent.UUID)
-
-			setStat("💼 Accepting job")
-
-			// Runs the job, only errors if something goes wrong
-			if runErr := a.AcceptAndRunJob(ctx, job); runErr != nil {
-				a.logger.Error("%v", runErr)
-			} else {
-				if a.agentConfiguration.DisconnectAfterJob {
-					a.logger.Info("Job finished. Disconnecting...")
-					return nil
-				}
-				lastActionTime = time.Now()
-
-				// Observation: jobs are rarely the last within a pipeline,
-				// thus if this worker just completed a job,
-				// there is likely another immediately available.
-				// Skip waiting for the ping interval until
-				// a ping without a job has occurred,
-				// but in exchange, ensure the next ping must wait a full
-				// pingInterval to avoid too much server load.
-
-				pingTicker.Reset(pingInterval)
-
-				continue
-			}
-			setStat("✅ Finished job")
+		// Exit after disconnect-after-job.
+		if ranJob && a.agentConfiguration.DisconnectAfterJob {
+			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
+			return nil
 		}
 
 		// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout)
@@ -415,6 +389,42 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 				}
 			}
 		}
+
+		// Note that Ping only returns a job if err == nil.
+		if job == nil {
+			continue
+		}
+
+		// Let other agents know this agent is now busy and
+		// not to idle terminate
+		idleMonitor.MarkBusy(a.agent.UUID)
+
+		setStat("💼 Accepting job")
+
+		// Runs the job, only errors if something goes wrong
+		if runErr := a.AcceptAndRunJob(ctx, job); runErr != nil {
+			a.logger.Error("%v", runErr)
+		} else { // runErr == nil
+			ranJob = true
+			if a.agentConfiguration.DisconnectAfterJob {
+				// Unless paused, this agent disconnects after the next ping.
+				continue
+			}
+			lastActionTime = time.Now()
+
+			// Observation: jobs are rarely the last within a pipeline,
+			// thus if this worker just completed a job,
+			// there is likely another immediately available.
+			// Skip waiting for the ping interval until
+			// a ping without a job has occurred,
+			// but in exchange, ensure the next ping must wait a full
+			// pingInterval to avoid too much server load.
+
+			pingTicker.Reset(pingInterval)
+
+			continue
+		}
+		setStat("✅ Finished job")
 	}
 }
 
