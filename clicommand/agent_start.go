@@ -27,6 +27,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
@@ -186,11 +187,12 @@ type AgentStartConfig struct {
 	NoMultipartArtifactUpload bool     `cli:"no-multipart-artifact-upload"`
 
 	// API config
-	DebugHTTP bool   `cli:"debug-http"`
-	TraceHTTP bool   `cli:"trace-http"`
-	Token     string `cli:"token" validate:"required"`
-	Endpoint  string `cli:"endpoint" validate:"required"`
-	NoHTTP2   bool   `cli:"no-http2"`
+	DebugHTTP         bool   `cli:"debug-http"`
+	TraceHTTP         bool   `cli:"trace-http"`
+	Token             string `cli:"token" validate:"required"`
+	Endpoint          string `cli:"endpoint" validate:"required"`
+	NoHTTP2           bool   `cli:"no-http2"`
+	HTTPClientProfile string `cli:"http-client-profile"`
 
 	// Deprecated
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -724,6 +726,7 @@ var AgentStartCommand = cli.Command{
 		NoHTTP2Flag,
 		DebugHTTPFlag,
 		TraceHTTPFlag,
+		HTTPClientProfileFlag,
 
 		// Global flags
 		NoColorFlag,
@@ -1122,6 +1125,16 @@ var AgentStartCommand = cli.Command{
 
 		if agentConf.DisconnectAfterIdleTimeout > 0 {
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
+		}
+
+		l.Info("Using http client profile: %s", cfg.HTTPClientProfile)
+
+		if !slices.Contains(agenthttp.ValidClientProfiles, cfg.HTTPClientProfile) {
+			l.Fatal("HTTP client profile %s is not in list of valid profiles: %v", cfg.HTTPClientProfile, agenthttp.ValidClientProfiles)
+		}
+
+		if cfg.HTTPClientProfile == agenthttp.ClientProfileStdlib && cfg.NoHTTP2 {
+			l.Fatal("NoHTTP2 is not supported with the standard library (%s) HTTP client profile, use GODEBUG see https://pkg.go.dev/net/http#hdr-HTTP_2", agenthttp.ClientProfileStdlib)
 		}
 
 		if len(cfg.AllowedRepositories) > 0 {
