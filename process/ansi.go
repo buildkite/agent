@@ -11,8 +11,8 @@ type ansiParser struct {
 	state ansiParserState
 }
 
-// feed passes more bytes through the parser.
-func (m *ansiParser) feed(data ...byte) {
+// Write passes more bytes through the parser.
+func (m *ansiParser) Write(data []byte) (int, error) {
 	for _, b := range data {
 		if m.state != nil {
 			m.state = m.state[b]
@@ -22,6 +22,7 @@ func (m *ansiParser) feed(data ...byte) {
 			m.state = initialANSIState
 		}
 	}
+	return len(data), nil
 }
 
 // insideCode reports if the data is in the middle of an ANSI sequence.
