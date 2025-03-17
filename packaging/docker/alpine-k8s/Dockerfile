@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM public.ecr.aws/buildkite/agent-base:alpine-k8s@sha256:7f460d2778b0b2317344a7712dae7da8be55d84f751f303637bf0ccb77782c3e
+FROM public.ecr.aws/buildkite/agent-base:alpine-k8s@sha256:bd15750d2f57d1f39946d3798e0c6b244a52827dab1adc045dab4a73843521cd
 ARG TARGETOS
 ARG TARGETARCH
 
