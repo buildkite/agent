@@ -213,8 +213,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 		"agent_name": a.agent.Name,
 	})
 
-	ctx, done := status.AddItem(ctx, fmt.Sprintf("Worker %d", a.spawnIndex), workerStatusPart, a.statusCallback)
-	defer done()
+	ctx, _ = status.AddItem(ctx, fmt.Sprintf("Worker %d", a.spawnIndex), workerStatusPart, a.statusCallback)
 
 	// Start running our metrics collector
 	if err := a.metricsCollector.Start(); err != nil {
@@ -248,8 +247,8 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 }
 
 func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) {
-	ctx, setStat, done := status.AddSimpleItem(ctx, "Heartbeat loop")
-	defer done()
+	ctx, setStat, _ := status.AddSimpleItem(ctx, "Heartbeat loop")
+	defer setStat("💔 Heartbeat loop stopped!")
 	setStat("🏃 Starting...")
 
 	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
@@ -286,8 +285,8 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) {
 }
 
 func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor) error {
-	ctx, setStat, done := status.AddSimpleItem(ctx, "Ping loop")
-	defer done()
+	ctx, setStat, _ := status.AddSimpleItem(ctx, "Ping loop")
+	defer setStat("🛑 Ping loop stopped!")
 	setStat("🏃 Starting...")
 
 	// Create the ticker
@@ -301,9 +300,17 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	lastActionTime := time.Now()
 	a.logger.Info("Waiting for instructions...")
 
+	ranJob := false
 	wasPaused := false
 
-	// Continue this loop until the closing of the stop channel signals termination
+	// Continue this loop until one of:
+	// * the context is cancelled
+	// * the stop channel is closed (a.Stop)
+	// * the agent is in acquire mode and the ping action isn't "pause"
+	// * the agent is in disconnect-after-job mode, the job is finished, and the
+	//   ping action isn't "pause",
+	// * the agent is in disconnect-after-idle-timeout mode, has been idle for
+	//   longer than the idle timeout, and the ping action isn't "pause".
 	for {
 		setStat("😴 Waiting until next ping interval tick")
 		select {
@@ -313,6 +320,8 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 			// continue below
 		case <-a.stop:
 			return nil
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 
 		// Within the interval, wait a random amount of time to avoid
@@ -324,6 +333,8 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 			// continue below
 		case <-a.stop:
 			return nil
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 
 		setStat("📡 Pinging Buildkite for instructions")
@@ -361,37 +372,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 			return nil
 		}
 
-		// Note that Ping only returns a job if err == nil.
-		if job != nil {
-			// Let other agents know this agent is now busy and
-			// not to idle terminate
-			idleMonitor.MarkBusy(a.agent.UUID)
-
-			setStat("💼 Accepting job")
-
-			// Runs the job, only errors if something goes wrong
-			if runErr := a.AcceptAndRunJob(ctx, job); runErr != nil {
-				a.logger.Error("%v", runErr)
-			} else {
-				if a.agentConfiguration.DisconnectAfterJob {
-					a.logger.Info("Job finished. Disconnecting...")
-					return nil
-				}
-				lastActionTime = time.Now()
-
-				// Observation: jobs are rarely the last within a pipeline,
-				// thus if this worker just completed a job,
-				// there is likely another immediately available.
-				// Skip waiting for the ping interval until
-				// a ping without a job has occurred,
-				// but in exchange, ensure the next ping must wait a full
-				// pingInterval to avoid too much server load.
-
-				pingTicker.Reset(pingInterval)
-
-				continue
-			}
-			setStat("✅ Finished job")
+		// Exit after disconnect-after-job.
+		if ranJob && a.agentConfiguration.DisconnectAfterJob {
+			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
+			return nil
 		}
 
 		// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout)
@@ -415,6 +399,41 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 				}
 			}
 		}
+
+		// Note that Ping only returns a job if err == nil.
+		if job == nil {
+			continue
+		}
+
+		// Let other agents know this agent is now busy and
+		// not to idle terminate
+		idleMonitor.MarkBusy(a.agent.UUID)
+
+		setStat("💼 Accepting job")
+
+		// Runs the job, only errors if something goes wrong
+		if err := a.AcceptAndRunJob(ctx, job); err != nil {
+			a.logger.Error("%v", err)
+			setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
+			continue
+		}
+
+		ranJob = true
+		if a.agentConfiguration.DisconnectAfterJob {
+			// Unless paused, this agent disconnects after the next ping.
+			continue
+		}
+		lastActionTime = time.Now()
+
+		// Observation: jobs are rarely the last within a pipeline,
+		// thus if this worker just completed a job,
+		// there is likely another immediately available.
+		// Skip waiting for the ping interval until
+		// a ping without a job has occurred,
+		// but in exchange, ensure the next ping must wait a full
+		// pingInterval to avoid too much server load.
+
+		pingTicker.Reset(pingInterval)
 	}
 }
 

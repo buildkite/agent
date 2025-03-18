@@ -25,6 +25,8 @@ import (
 )
 
 func TestDisconnect(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/disconnect":
@@ -68,6 +70,8 @@ func TestDisconnect(t *testing.T) {
 }
 
 func TestDisconnectRetry(t *testing.T) {
+	t.Parallel()
+
 	tries := 0
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
@@ -126,6 +130,8 @@ func TestDisconnectRetry(t *testing.T) {
 }
 
 func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -166,6 +172,8 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 }
 
 func TestAcquireAndRunJobWaiting(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -231,6 +239,8 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 }
 
 func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -275,6 +285,10 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 				http.Error(rw, `{"message":"job not yet assigned"}`, http.StatusUnprocessableEntity)
 				return
 			}
+			if jobStarted {
+				http.Error(rw, `{"message":"job already started"}`, http.StatusUnprocessableEntity)
+				return
+			}
 
 			jobStarted = true
 
@@ -294,16 +308,24 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 			rw.WriteHeader(http.StatusOK)
 
 		case "/ping":
-			pingCount++
-			resp := api.Ping{
-				Action:  "pause",
-				Message: "Agent has been paused",
-			}
-			if pingCount > 1 {
+			var resp api.Ping
+			switch pingCount {
+			case 0:
+				resp = api.Ping{
+					Action:  "pause",
+					Message: "Agent has been paused",
+				}
+			case 1:
 				resp = api.Ping{
 					Action: "idle",
 				}
+			default:
+				http.Error(rw, `{"message":"too many pings"}`, http.StatusUnprocessableEntity)
+				return
 			}
+
+			pingCount++
+
 			if err := json.NewEncoder(rw).Encode(resp); err != nil {
 				t.Errorf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", resp, err)
 			}
@@ -367,6 +389,176 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	}
 	if !jobAcquired {
 		t.Errorf("jobAcquired = %t, want true", jobAcquired)
+	}
+	if !jobStarted {
+		t.Errorf("jobStarted = %t, want true", jobStarted)
+	}
+	if !jobFinished {
+		t.Errorf("jobFinished = %t, want true", jobFinished)
+	}
+}
+
+func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	jobUUID := uuid.New().String()
+	jobToken := uuid.New().String()
+	jobAssigned := false
+	jobAccepted := false
+	jobStarted := false
+	jobFinished := false
+
+	pingCount := 0
+
+	job := &api.Job{
+		ID: jobUUID,
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo echo",
+		},
+		ChunksMaxSizeBytes: 1024,
+		Token:              jobToken,
+	}
+
+	// This could almost be made into a reusable fake...
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case fmt.Sprintf("/jobs/%s/accept", jobUUID):
+			if !jobAssigned {
+				http.Error(rw, `{"message":"job not yet assigned"}`, http.StatusUnprocessableEntity)
+				return
+			}
+			if jobAccepted {
+				http.Error(rw, `{"message":"job already accepted"}`, http.StatusUnprocessableEntity)
+				return
+			}
+			jobAccepted = true
+			if err := json.NewEncoder(rw).Encode(job); err != nil {
+				t.Errorf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", job, err)
+			}
+
+		case fmt.Sprintf("/jobs/%s/acquire", jobUUID):
+			http.Error(rw, `{"message":"job should be received through ping, not acquire"}`, http.StatusBadRequest)
+
+		case fmt.Sprintf("/jobs/%s/start", jobUUID):
+			if !jobAccepted {
+				http.Error(rw, `{"message":"job not yet accepted"}`, http.StatusUnprocessableEntity)
+				return
+			}
+			if jobStarted {
+				http.Error(rw, `{"message":"job already started"}`, http.StatusUnprocessableEntity)
+				return
+			}
+			jobStarted = true
+			rw.Write([]byte("{}"))
+
+		case fmt.Sprintf("/jobs/%s/finish", jobUUID):
+			if !jobStarted {
+				http.Error(rw, `{"message":"job not yet started"}`, http.StatusUnprocessableEntity)
+				return
+			}
+
+			jobFinished = true
+			rw.Write([]byte("{}"))
+
+		case fmt.Sprintf("/jobs/%s/chunks", jobUUID):
+			// Log chunks are not the focus of this test
+			rw.WriteHeader(http.StatusOK)
+
+		case "/ping":
+			var resp api.Ping
+			switch pingCount {
+			case 0:
+				// Assign job
+				resp = api.Ping{
+					Job: job,
+				}
+				jobAssigned = true
+
+			case 1:
+				resp = api.Ping{
+					Action:  "pause",
+					Message: "Agent has been paused",
+				}
+			case 2:
+				resp = api.Ping{
+					Action: "idle", // un-pause
+				}
+			case 3:
+				http.Error(rw, `{"message":"too many pings"}`, http.StatusUnprocessableEntity)
+				return
+			}
+
+			pingCount++
+
+			if err := json.NewEncoder(rw).Encode(resp); err != nil {
+				t.Errorf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", resp, err)
+			}
+
+		case "/heartbeat":
+			var hb api.Heartbeat
+			if err := json.NewDecoder(req.Body).Decode(&hb); err != nil {
+				http.Error(rw, fmt.Sprintf(`{"message":%q}`, err), http.StatusBadRequest)
+				return
+			}
+			hb.ReceivedAt = time.Now().Format(time.RFC3339)
+			if err := json.NewEncoder(rw).Encode(hb); err != nil {
+				t.Errorf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", hb, err)
+			}
+
+		default:
+			http.Error(rw, "Not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       "alpacas",
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 1,
+			HeartbeatInterval: 10,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{
+			SpawnIndex: 1,
+			AgentConfiguration: AgentConfiguration{
+				BootstrapScript:    "./dummy_bootstrap.sh",
+				BuildPath:          filepath.Join(os.TempDir(), t.Name(), "build"),
+				HooksPath:          filepath.Join(os.TempDir(), t.Name(), "hooks"),
+				DisconnectAfterJob: true,
+			},
+		},
+	)
+
+	idleMonitor := NewIdleMonitor(1)
+
+	if err := worker.Start(ctx, idleMonitor); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	if got, want := pingCount, 3; got != want {
+		t.Errorf("pingCount = %d, want %d", got, want)
+	}
+	if !jobAssigned {
+		t.Errorf("jobAssigned = %t, want true", jobAssigned)
+	}
+	if !jobAccepted {
+		t.Errorf("jobAccepted = %t, want true", jobAccepted)
 	}
 	if !jobStarted {
 		t.Errorf("jobStarted = %t, want true", jobStarted)
