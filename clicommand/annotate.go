@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
@@ -62,11 +63,12 @@ type AnnotateConfig struct {
 	Job      string `cli:"job" validate:"required"`
 
 	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	Debug        bool     `cli:"debug"`
+	LogLevel     string   `cli:"log-level"`
+	NoColor      bool     `cli:"no-color"`
+	Experiments  []string `cli:"experiment" normalize:"list"`
+	Profile      string   `cli:"profile"`
+	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -120,6 +122,7 @@ var AnnotateCommand = cli.Command{
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		RedactedVars,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -148,8 +151,16 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 			return fmt.Errorf("failed to read from STDIN: %w", err)
 		}
 
-		body = string(stdin[:])
+		body = string(stdin)
 	}
+
+	// Apply secret redaction! Assume the agent has already logged messages
+	// about "short" vars.
+	needles, _, err := redact.NeedlesFromEnv(cfg.RedactedVars)
+	if err != nil {
+		return err
+	}
+	body = redact.String(body, needles)
 
 	if bodySize := len(body); bodySize > maxBodySize {
 		return fmt.Errorf("annotation body size (%dB) exceeds maximum (%dB)", bodySize, maxBodySize)
