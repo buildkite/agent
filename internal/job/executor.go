@@ -1226,9 +1226,9 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 		needles = append(needles, pair.Value)
 	}
 
-	stdoutRedactor := replacer.New(stdout, needles, redact.Redact)
+	stdoutRedactor := replacer.New(stdout, needles, redact.Redacted)
 	e.redactors.Append(stdoutRedactor)
-	loggerRedactor := replacer.New(stderr, needles, redact.Redact)
+	loggerRedactor := replacer.New(stderr, needles, redact.Redacted)
 	e.redactors.Append(loggerRedactor)
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)

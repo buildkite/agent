@@ -100,7 +100,7 @@ func TestReplacerLoremIpsum(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			replacer := replacer.New(&buf, test.needles, redact.Redact)
+			replacer := replacer.New(&buf, test.needles, redact.Redacted)
 			fmt.Fprint(replacer, lipsum)
 			replacer.Flush()
 
@@ -114,7 +114,7 @@ func TestReplacerLoremIpsum(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			replacer := replacer.New(&buf, test.needles, redact.Redact)
+			replacer := replacer.New(&buf, test.needles, redact.Redacted)
 			for _, c := range []byte(lipsum) {
 				replacer.Write([]byte{c})
 			}
@@ -164,7 +164,7 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 			t.Parallel()
 			var buf strings.Builder
 
-			replacer := replacer.New(&buf, test.needles, redact.Redact)
+			replacer := replacer.New(&buf, test.needles, redact.Redacted)
 
 			for _, input := range test.inputs {
 				fmt.Fprint(replacer, input)
@@ -182,7 +182,7 @@ func TestReplacerResetMidStream(t *testing.T) {
 	t.Parallel()
 
 	var buf strings.Builder
-	replacer := replacer.New(&buf, []string{"secret1111"}, redact.Redact)
+	replacer := replacer.New(&buf, []string{"secret1111"}, redact.Redacted)
 
 	// start writing to the stream (no trailing newline, to be extra tricky)
 	replacer.Write([]byte("redact secret1111 but don't redact secret2222 until"))
@@ -204,7 +204,7 @@ func TestReplacerMultibyte(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	replacer := replacer.New(&buf, []string{"ÿ"}, redact.Redact)
+	replacer := replacer.New(&buf, []string{"ÿ"}, redact.Redacted)
 
 	replacer.Write([]byte("fooÿbar"))
 	replacer.Flush()
@@ -285,7 +285,7 @@ func TestReplacerMultiLine(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			r := replacer.New(&buf, []string{secret}, redact.Redact)
+			r := replacer.New(&buf, []string{secret}, redact.Redacted)
 
 			for _, line := range test.input {
 				fmt.Fprint(r, line)
@@ -306,7 +306,7 @@ func TestAddingNeedles(t *testing.T) {
 	afterAddExpectedNeedles := []string{"secret1111", "secret2222", "pre-secret3333"}
 
 	var buf strings.Builder
-	replacer := replacer.New(&buf, needles, redact.Redact)
+	replacer := replacer.New(&buf, needles, redact.Redacted)
 	actualNeedles := replacer.Needles()
 
 	slices.Sort(needles)
@@ -331,7 +331,7 @@ func TestAddingNeedles(t *testing.T) {
 
 func BenchmarkReplacer(b *testing.B) {
 	b.ResetTimer()
-	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redact)
+	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redacted)
 	for range b.N {
 		fmt.Fprintln(r, bigLipsum)
 	}
@@ -363,7 +363,7 @@ func FuzzReplacer(f *testing.F) {
 		}
 
 		var sb strings.Builder
-		replacer := replacer.New(&sb, secrets, redact.Redact)
+		replacer := replacer.New(&sb, secrets, redact.Redacted)
 		if split < 0 || split >= len(plaintext) {
 			fmt.Fprint(replacer, plaintext)
 		} else {
