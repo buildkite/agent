@@ -106,7 +106,7 @@ var AnnotateCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
-			Usage:  "Which job should the annotation come from",
+			Usage:  "Which job should the annotation come from. Effectively, specifying the current job ID has no impact on UI placement — it will execute, but it would not produce any visual changes in the Buildkite interface.",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
