@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.95.0](https://github.com/buildkite/agent/tree/v3.95.0) (2025-03-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.94.0...v3.95.0)
+
+> [!IMPORTANT]
+> Secrets (as visible to the agent in environment variables) are now redacted from annotations, meta-data values, and step updates, similar to how secrets are redacted from job logs.
+> If needed, this can be disabled by passing the flag `--redacted-vars=''` to the `annotate`, `meta-data set`, or `step update` command.
+
+### Changed
+- Redact meta-data values and step attribute updates with warnings [#3243](https://github.com/buildkite/agent/pull/3243) (@DrJosh9000)
+- Redact annotations [#3242](https://github.com/buildkite/agent/pull/3242) (@DrJosh9000)
+- ANSI parser speedup [#3237](https://github.com/buildkite/agent/pull/3237) (@DrJosh9000)
+
+### Fixed
+- Agents running with disconnect-after-job or disconnect-after-idle-timeout can now be kept alive with agent pausing [#3238](https://github.com/buildkite/agent/pull/3238) (@DrJosh9000)
+- The `pty-raw` experiment no longer causes a warning to be logged [#3241](https://github.com/buildkite/agent/pull/3241) (@DrJosh9000)
+
+### Dependency updates
+- Bump google.golang.org/api from 0.224.0 to 0.226.0 in the cloud-providers group [#3240](https://github.com/buildkite/agent/pull/3240) (@dependabot[bot])
+- Bump the container-images group across 7 directories with 3 updates [#3239](https://github.com/buildkite/agent/pull/3239) (@dependabot[bot])
+
 ## [v3.94.0](https://github.com/buildkite/agent/tree/v3.94.0) (2025-03-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.93.1...v3.94.0)
 
