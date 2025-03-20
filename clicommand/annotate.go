@@ -160,7 +160,10 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 	if err != nil {
 		return err
 	}
-	body = redact.String(body, needles)
+	if redactedBody := redact.String(body, needles); redactedBody != body {
+		l.Warn("Annotation body contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret")
+		body = redactedBody
+	}
 
 	if bodySize := len(body); bodySize > maxBodySize {
 		return fmt.Errorf("annotation body size (%dB) exceeds maximum (%dB)", bodySize, maxBodySize)
