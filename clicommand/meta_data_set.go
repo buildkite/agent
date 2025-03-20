@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -40,11 +41,12 @@ type MetaDataSetConfig struct {
 	Job   string `cli:"job" validate:"required"`
 
 	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	Debug        bool     `cli:"debug"`
+	LogLevel     string   `cli:"log-level"`
+	NoColor      bool     `cli:"no-color"`
+	Experiments  []string `cli:"experiment" normalize:"list"`
+	Profile      string   `cli:"profile"`
+	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -77,6 +79,7 @@ var MetaDataSetCommand = cli.Command{
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		RedactedVars,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -100,6 +103,16 @@ var MetaDataSetCommand = cli.Command{
 
 		if strings.TrimSpace(cfg.Value) == "" {
 			return errors.New("value cannot be empty, or composed of only whitespace characters")
+		}
+
+		// Apply secret redaction to the value.
+		needles, _, err := redact.NeedlesFromEnv(cfg.RedactedVars)
+		if err != nil {
+			return err
+		}
+		if redactedValue := redact.String(cfg.Value, needles); redactedValue != cfg.Value {
+			l.Warn("Meta-data value for key %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.Key)
+			cfg.Value = redactedValue
 		}
 
 		// Create the API client
