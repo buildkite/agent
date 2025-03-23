@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.95.1](https://github.com/buildkite/agent/tree/v3.95.1) (2025-03-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.95.0...v3.95.1)
+
+> [!IMPORTANT]
+> Secrets (as visible to the agent in environment variables) are now redacted from annotations, meta-data values, and step updates, similar to how secrets are redacted from job logs.
+> If needed, this can be disabled by passing the flag `--redacted-vars=''` to the `annotate`, `meta-data set`, or `step update` command.
+
+### Security
+- Fix incomplete processing in newly-redacted operations [#3246](https://github.com/buildkite/agent/pull/3246) (@DrJosh9000)
+- Bump github.com/golang-jwt/jwt/v5 from 5.2.1 to 5.2.2 (resolves CVE-2025-30204) [#3247](https://github.com/buildkite/agent/pull/3247) (@dependabot[bot])
+
 ## [v3.95.0](https://github.com/buildkite/agent/tree/v3.95.0) (2025-03-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.94.0...v3.95.0)
 
