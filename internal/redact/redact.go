@@ -32,7 +32,9 @@ func String(input string, needles []string) string {
 	var sb strings.Builder
 	// strings.Builder.Write doesn't return an error, so neither should a
 	// Replacer that writes to it.
-	New(&sb, needles).Write([]byte(input))
+	repl := New(&sb, needles)
+	repl.Write([]byte(input))
+	repl.Flush()
 	return sb.String()
 }
 

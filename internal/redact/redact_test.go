@@ -55,3 +55,43 @@ func TestValuesToRedactEmpty(t *testing.T) {
 		t.Errorf("Vars(%q, %q) = %q, want empty slice", redactConfig, environment, got)
 	}
 }
+
+func TestRedactString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		needles []string
+		input   string
+		want    string
+	}{
+		{
+			name:    "no needles",
+			needles: nil,
+			input:   "secret 1 secret 2 secret 3 s",
+			want:    "secret 1 secret 2 secret 3 s",
+		},
+		{
+			name:    "one needle",
+			needles: []string{"secret 2"},
+			input:   "secret 1 secret 2 secret 3 s",
+			want:    "secret 1 [REDACTED] secret 3 s",
+		},
+		{
+			name:    "three needles",
+			needles: []string{"secret 1", "secret 2", "secret 3"},
+			input:   "secret 1 secret 2 secret 3 s",
+			want:    "[REDACTED] [REDACTED] [REDACTED] s",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := String(test.input, test.needles); got != test.want {
+				t.Errorf("String(%q, %q) = %q, want %q", test.input, test.needles, got, test.want)
+			}
+		})
+	}
+}
