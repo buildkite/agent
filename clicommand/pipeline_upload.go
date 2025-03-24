@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
@@ -369,7 +368,6 @@ var PipelineUploadCommand = cli.Command{
 				Replace:  cfg.Replace,
 				Pipeline: result,
 			},
-			RetrySleepFunc: time.Sleep,
 		}
 		if err := uploader.Upload(ctx, l); err != nil {
 			return err

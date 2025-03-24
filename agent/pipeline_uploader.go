@@ -71,7 +71,12 @@ func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 		return nil
 	}
 
-	time.Sleep(result.sleepDuration)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(result.sleepDuration):
+		// continue below
+	}
 
 	jobIDFromResponse, uuidFromResponse, err := extractJobIdUUID(result.pipelineStatusURL.String())
 	if err != nil {
