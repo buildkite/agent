@@ -2,8 +2,6 @@ module github.com/buildkite/agent/v3
 
 go 1.23.0
 
-toolchain go1.23.7
-
 require (
 	cloud.google.com/go/compute/metadata v0.6.0
 	drjosh.dev/zzglob v0.4.0
@@ -52,7 +50,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
 	golang.org/x/crypto v0.36.0
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	golang.org/x/oauth2 v0.28.0
 	golang.org/x/sys v0.31.0
 	golang.org/x/term v0.30.0
