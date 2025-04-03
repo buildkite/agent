@@ -12,6 +12,8 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/opentracing/opentracing-go"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/expfmt"
 	"go.opentelemetry.io/contrib/propagators/aws/xray"
 	"go.opentelemetry.io/contrib/propagators/b3"
 	"go.opentelemetry.io/contrib/propagators/jaeger"
@@ -20,9 +22,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
+	prometheusexp "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -151,14 +152,14 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 
 	resources := resource.NewWithAttributes(semconv.SchemaURL, attributes...)
 
-	consoleExporter, err := stdoutmetric.New()
+	promExporter, err := prometheusexp.New()
 	if err != nil {
 		e.shell.Errorf("Error creating prom metric exporter %s. Disabling tracing.", err)
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 	}
 
 	meterProvider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(metric.NewPeriodicReader(consoleExporter)),
+		sdkmetric.WithReader(promExporter),
 		sdkmetric.WithResource(resources),
 	)
 	otel.SetMeterProvider(meterProvider)
@@ -203,13 +204,14 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	)
 
 	stop := func() {
+		writeGlobalMetricsToStdout()
 		ctx := context.Background()
+		_ = spanMetricsProcessor.ForceFlush(ctx)
+		_ = spanMetricsProcessor.Shutdown(ctx)
 		_ = meterProvider.ForceFlush(ctx)
 		_ = meterProvider.Shutdown(ctx)
 		_ = tracerProvider.ForceFlush(ctx)
 		_ = tracerProvider.Shutdown(ctx)
-		_ = spanMetricsProcessor.ForceFlush(ctx)
-		_ = spanMetricsProcessor.Shutdown(ctx)
 	}
 
 	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
@@ -326,5 +328,22 @@ func (e *Executor) implementationSpecificSpanName(otelName, ddName string) strin
 		fallthrough
 	default:
 		return otelName
+	}
+}
+
+func writeGlobalMetricsToStdout() {
+	// Gather all metrics from the global registry
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		fmt.Printf("Error gathering metrics: %v\n", err)
+		return
+	}
+
+	// Create an encoder for the text format
+	encoder := expfmt.NewEncoder(os.Stdout, expfmt.FmtText)
+
+	// Encode each metric family
+	for _, mf := range metricFamilies {
+		encoder.Encode(mf)
 	}
 }
