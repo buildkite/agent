@@ -20,7 +20,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -147,8 +150,33 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	attributes = append(attributes, extras...)
 
 	resources := resource.NewWithAttributes(semconv.SchemaURL, attributes...)
+
+	consoleExporter, err := stdoutmetric.New()
+	if err != nil {
+		e.shell.Errorf("Error creating prom metric exporter %s. Disabling tracing.", err)
+		return &tracetools.NoopSpan{}, ctx, noopStopper
+	}
+
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(metric.NewPeriodicReader(consoleExporter)),
+		sdkmetric.WithResource(resources),
+	)
+	otel.SetMeterProvider(meterProvider)
+
+	batchProcessor := sdktrace.NewBatchSpanProcessor(
+		// You would configure an actual exporter here if needed
+		exporter,
+	)
+
+	spanMetricsProcessor, err := tracetools.NewSpanMetricsProcessor(meterProvider, batchProcessor)
+	if err != nil {
+		e.shell.Errorf("Error creating OTLP metric exporter %s. Disabling tracing.", err)
+		return &tracetools.NoopSpan{}, ctx, noopStopper
+	}
+
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
+		sdktrace.WithSpanProcessor(spanMetricsProcessor),
 		sdktrace.WithResource(resources),
 	)
 
@@ -176,8 +204,12 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 
 	stop := func() {
 		ctx := context.Background()
+		_ = meterProvider.ForceFlush(ctx)
+		_ = meterProvider.Shutdown(ctx)
 		_ = tracerProvider.ForceFlush(ctx)
 		_ = tracerProvider.Shutdown(ctx)
+		_ = spanMetricsProcessor.ForceFlush(ctx)
+		_ = spanMetricsProcessor.Shutdown(ctx)
 	}
 
 	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
