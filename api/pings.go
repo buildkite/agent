@@ -4,10 +4,11 @@ import "context"
 
 // Ping represents a Buildkite Agent API Ping
 type Ping struct {
-	Action   string `json:"action,omitempty"`
-	Message  string `json:"message,omitempty"`
-	Job      *Job   `json:"job,omitempty"`
-	Endpoint string `json:"endpoint,omitempty"`
+	Action         string            `json:"action,omitempty"`
+	Message        string            `json:"message,omitempty"`
+	Job            *Job              `json:"job,omitempty"`
+	Endpoint       string            `json:"endpoint,omitempty"`
+	RequestHeaders map[string]string `json:"request_headers,omitzero"` // omit nil, keep empty map
 }
 
 // Pings the API and returns any work the client needs to perform

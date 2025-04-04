@@ -584,20 +584,28 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 	a.stats.lastPing = time.Now()
 	a.stats.Unlock()
 
-	// Should we switch endpoints?
-	if ping.Endpoint != "" && ping.Endpoint != a.agent.Endpoint {
-		newAPIClient := a.apiClient.FromPing(ping)
-
-		// Before switching to the new one, do a ping test to make sure it's
-		// valid. If it is, switch and carry on, otherwise ignore the switch
-		newPing, _, err := newAPIClient.Ping(ctx)
-		if err != nil {
-			a.logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
+	// check if the ping wants a new API client configuration
+	if newAPIClient := a.apiClient.FromPing(ping); newAPIClient != a.apiClient {
+		if newAPIClient.Config().Endpoint != a.apiClient.Config().Endpoint {
+			// The endpoint has changed; proceed with caution in case customer only had the
+			// original endpoint allow-listed.
+			// Before switching to a new endpoint, do a ping test to make sure it's
+			// valid. If it is, switch and carry on, otherwise ignore the switch
+			newPing, _, err := newAPIClient.Ping(ctx)
+			if err != nil {
+				a.logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
+				// note this means also ignoring other config change e.g. RequestHeaders
+			} else {
+				// Replace the APIClient and process the new ping instead of the old one.
+				a.apiClient = newAPIClient
+				a.agent.Endpoint = ping.Endpoint
+				ping = newPing
+				action = newPing.Action
+			}
 		} else {
-			// Replace the APIClient and process the new ping
+			// Something other than the endpoint has changed, e.g. RequestHeaders.
+			// This lower-risk, and doesn't need to be re-pinged.
 			a.apiClient = newAPIClient
-			a.agent.Endpoint = ping.Endpoint
-			ping = newPing
 		}
 	}
 

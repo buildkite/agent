@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -53,6 +54,9 @@ type Config struct {
 
 	// optional TLS configuration primarily used for testing
 	TLSConfig *tls.Config
+
+	// HTTP client timeout; zero to use default
+	Timeout time.Duration
 }
 
 // A Client manages communication with the Buildkite Agent API.
@@ -65,10 +69,17 @@ type Client struct {
 
 	// The logger used
 	logger logger.Logger
+
+	// server-specified HTTP request headers to include in all requests
+	requestHeaders map[string]string
 }
 
 // NewClient returns a new Buildkite Agent API Client.
 func NewClient(l logger.Logger, conf Config) *Client {
+	return NewClientWithRequestHeaders(l, conf, nil)
+}
+
+func NewClientWithRequestHeaders(l logger.Logger, conf Config, headers map[string]string) *Client {
 	if conf.Endpoint == "" {
 		conf.Endpoint = defaultEndpoint
 	}
@@ -85,18 +96,25 @@ func NewClient(l logger.Logger, conf Config) *Client {
 		}
 	}
 
+	clientOptions := []agenthttp.ClientOption{
+		agenthttp.WithAuthToken(conf.Token),
+		agenthttp.WithAllowHTTP2(!conf.DisableHTTP2),
+		agenthttp.WithTLSConfig(conf.TLSConfig),
+	}
+
+	if conf.Timeout != 0 {
+		clientOptions = append(clientOptions, agenthttp.WithTimeout(conf.Timeout))
+	}
+
 	return &Client{
-		logger: l,
-		client: agenthttp.NewClient(
-			agenthttp.WithAuthToken(conf.Token),
-			agenthttp.WithAllowHTTP2(!conf.DisableHTTP2),
-			agenthttp.WithTLSConfig(conf.TLSConfig),
-		),
-		conf: conf,
+		logger:         l,
+		client:         agenthttp.NewClient(clientOptions...),
+		conf:           conf,
+		requestHeaders: headers,
 	}
 }
 
-// Config returns the internal configuration for the Client
+// Config returns a copy of the internal configuration for the Client
 func (c *Client) Config() Config {
 	return c.conf
 }
@@ -109,24 +127,59 @@ func (c *Client) FromAgentRegisterResponse(reg *AgentRegisterResponse) *Client {
 	// Override the registration token with the access token
 	conf.Token = reg.AccessToken
 
-	// If Buildkite told us to use a new Endpoint, respect that
-	if reg.Endpoint != "" {
-		conf.Endpoint = reg.Endpoint
-	}
+	acceptEndpoint(&conf, reg.Endpoint, c.logger)
+	headers, _ := resolveRequestHeaders(c, reg.RequestHeaders)
 
-	return NewClient(c.logger, conf)
+	return NewClientWithRequestHeaders(c.logger, conf, headers)
 }
 
-// FromPing returns a new instance using a new endpoint from a ping response
+// FromPing returns the existing client, or a new client if configuration has been changed by the ping response.
 func (c *Client) FromPing(resp *Ping) *Client {
 	conf := c.conf
 
+	changedEndpoint := acceptEndpoint(&conf, resp.Endpoint, c.logger)
+	headers, changedHeaders := resolveRequestHeaders(c, resp.RequestHeaders)
+
+	if changedEndpoint || changedHeaders {
+		return NewClientWithRequestHeaders(c.logger, conf, headers)
+	} else {
+		return c
+	}
+}
+
+// acceptEndpoint maps Endpoint from an API ersponse into a Config, returning true if the config was changed
+func acceptEndpoint(conf *Config, endpoint string, logger logger.Logger) bool {
 	// If Buildkite told us to use a new Endpoint, respect that
-	if resp.Endpoint != "" {
-		conf.Endpoint = resp.Endpoint
+	if endpoint == "" || endpoint == conf.Endpoint {
+		return false
 	}
 
-	return NewClient(c.logger, conf)
+	logger.Debug("endpoint: switching from %s to %s", conf.Endpoint, endpoint)
+	conf.Endpoint = endpoint
+	return true
+}
+
+// resolveRequestHeaders returns (headers, true) if changed, or (nil, false) if unchanged.
+func resolveRequestHeaders(c *Client, headers map[string]string) (map[string]string, bool) {
+	if headers == nil {
+		// headers not specified; this is different to headers specified as empty
+		return nil, false
+	}
+
+	filtered := make(map[string]string)
+	for k, v := range headers {
+		if !strings.HasPrefix(k, "Buildkite-") {
+			c.logger.Warn("request_headers: ignoring non-Buildkite header: %s", k)
+			continue
+		}
+		filtered[k] = v
+	}
+
+	if maps.Equal(filtered, c.requestHeaders) {
+		return nil, false
+	}
+
+	return filtered, true
 }
 
 type Header struct {
@@ -175,6 +228,11 @@ func (c *Client) newRequest(
 		req.Header.Add(header.Name, header.Value)
 	}
 
+	// add server-specifed request headers
+	for k, v := range c.requestHeaders {
+		req.Header.Add(k, v)
+	}
+
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
 	}
@@ -196,6 +254,11 @@ func (c *Client) newFormRequest(ctx context.Context, method, urlStr string, body
 
 	if c.conf.UserAgent != "" {
 		req.Header.Add("User-Agent", c.conf.UserAgent)
+	}
+
+	// add server-specifed request headers
+	for k, v := range c.requestHeaders {
+		req.Header.Add(k, v)
 	}
 
 	return req, nil
