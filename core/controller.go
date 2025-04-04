@@ -54,7 +54,7 @@ func NewController(ctx context.Context, regToken, agentName string, tags []strin
 		},
 	}
 
-	regResp, err := controller.client.Register(ctx, api.AgentRegisterRequest{
+	reg, err := controller.client.Register(ctx, api.AgentRegisterRequest{
 		Name:               agentName,
 		IgnoreInDispatches: true, // TODO: implement a regular agent mode? (ping loop, accept job, etc)
 		ScriptEvalEnabled:  cfg.scriptEvalEnabled,
@@ -65,7 +65,7 @@ func NewController(ctx context.Context, regToken, agentName string, tags []strin
 	if err != nil {
 		return nil, err
 	}
-	controller.client.APIClient = apiClient.FromAgentRegisterResponse(regResp)
+	controller.client.APIClient = apiClient.FromAgentRegisterResponse(reg)
 
 	if err := controller.client.Connect(ctx); err != nil {
 		return nil, err

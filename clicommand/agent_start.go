@@ -1245,15 +1245,15 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Register the agent with the buildkite API
-			ag, err := client.Register(ctx, registerReq)
+			reg, err := client.Register(ctx, registerReq)
 			if err != nil {
 				return err
 			}
 
 			// Create an agent worker to run the agent
 			workers = append(workers, agent.NewAgentWorker(
-				l.WithFields(logger.StringField("agent", ag.Name)),
-				ag,
+				l.WithFields(logger.StringField("agent", reg.Name)),
+				reg,
 				mc,
 				apiClient,
 				agent.AgentWorkerConfig{
