@@ -78,6 +78,39 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	}
 }
 
+func TestFromPing_WithNoChange(t *testing.T) {
+	client := api.NewClient(logger.Discard, api.Config{
+		Endpoint: "http://localhost:12314",
+		Token:    "llamas",
+	})
+
+	if client.FromPing(&api.Ping{}) != client {
+		t.Errorf("expected unchanged client after ping with no Endpoint or RequestHeaders")
+	}
+}
+
+func TestFromPing_WithHeaderChange(t *testing.T) {
+	client := api.NewClient(logger.Discard, api.Config{
+		Endpoint: "http://localhost:12314",
+		Token:    "llamas",
+	})
+
+	if client.FromPing(&api.Ping{RequestHeaders: map[string]string{"Buildkite-A": "b"}}) == client {
+		t.Errorf("expected new client after ping with RequestHeaders")
+	}
+}
+
+func TestFromPing_WithEndpointChange(t *testing.T) {
+	client := api.NewClient(logger.Discard, api.Config{
+		Endpoint: "https://agent.buildkite.com/v3",
+		Token:    "llamas",
+	})
+
+	if client.FromPing(&api.Ping{Endpoint: "https://shard-0.agent.buildkite.com/v3"}) == client {
+		t.Errorf("expected new client after ping with RequestHeaders")
+	}
+}
+
 func authToken(req *http.Request) string {
 	return strings.TrimPrefix(req.Header.Get("Authorization"), "Token ")
 }
