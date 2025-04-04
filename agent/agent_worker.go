@@ -104,6 +104,9 @@ type AgentWorker struct {
 	stateMtx     sync.Mutex
 	state        agentWorkerState
 	currentJobID string
+
+	// force a sub-second ping interval for testing
+	pingIntervalForTesting time.Duration
 }
 
 type agentWorkerState string
@@ -291,6 +294,9 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 
 	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
+	if a.pingIntervalForTesting != 0 {
+		pingInterval = a.pingIntervalForTesting
+	}
 	pingTicker := time.NewTicker(pingInterval)
 	defer pingTicker.Stop()
 
