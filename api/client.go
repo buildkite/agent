@@ -103,15 +103,15 @@ func (c *Client) Config() Config {
 
 // FromAgentRegisterResponse returns a new instance using the access token and endpoint
 // from the registration response
-func (c *Client) FromAgentRegisterResponse(resp *AgentRegisterResponse) *Client {
+func (c *Client) FromAgentRegisterResponse(reg *AgentRegisterResponse) *Client {
 	conf := c.conf
 
 	// Override the registration token with the access token
-	conf.Token = resp.AccessToken
+	conf.Token = reg.AccessToken
 
 	// If Buildkite told us to use a new Endpoint, respect that
-	if resp.Endpoint != "" {
-		conf.Endpoint = resp.Endpoint
+	if reg.Endpoint != "" {
+		conf.Endpoint = reg.Endpoint
 	}
 
 	return NewClient(c.logger, conf)

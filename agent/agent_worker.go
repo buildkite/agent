@@ -164,11 +164,11 @@ func (e *errUnrecoverable) Unwrap() error {
 }
 
 // Creates the agent worker and initializes its API Client
-func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, apiClient APIClient, c AgentWorkerConfig) *AgentWorker {
-	apiClient = apiClient.FromAgentRegisterResponse(a)
+func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.Collector, apiClient APIClient, c AgentWorkerConfig) *AgentWorker {
+	apiClient = apiClient.FromAgentRegisterResponse(reg)
 	return &AgentWorker{
 		logger:           l,
-		agent:            a,
+		agent:            reg,
 		metricsCollector: m,
 		apiClient:        apiClient,
 		client: &core.Client{

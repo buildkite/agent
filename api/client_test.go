@@ -52,16 +52,16 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	})
 
 	// Check a register works
-	regResp, httpResp, err := c.Register(ctx, &api.AgentRegisterRequest{})
+	reg, httpResp, err := c.Register(ctx, &api.AgentRegisterRequest{})
 	if err != nil {
 		t.Fatalf("c.Register(&AgentRegisterRequest{}) error = %v", err)
 	}
 
-	if got, want := regResp.Name, "agent-1"; got != want {
+	if got, want := reg.Name, "agent-1"; got != want {
 		t.Errorf("regResp.Name = %q, want %q", got, want)
 	}
 
-	if got, want := regResp.AccessToken, "alpacas"; got != want {
+	if got, want := reg.AccessToken, "alpacas"; got != want {
 		t.Errorf("regResp.AccessToken = %q, want %q", got, want)
 	}
 
@@ -70,7 +70,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	}
 
 	// New client with the access token
-	c2 := c.FromAgentRegisterResponse(regResp)
+	c2 := c.FromAgentRegisterResponse(reg)
 
 	// Check a connect works
 	if _, err := c2.Connect(ctx); err != nil {
