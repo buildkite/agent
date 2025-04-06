@@ -204,7 +204,7 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	)
 
 	stop := func() {
-		writeGlobalMetricsToStdout()
+		e.writeGlobalMetricsToStdout()
 		ctx := context.Background()
 		_ = spanMetricsProcessor.ForceFlush(ctx)
 		_ = spanMetricsProcessor.Shutdown(ctx)
@@ -331,7 +331,10 @@ func (e *Executor) implementationSpecificSpanName(otelName, ddName string) strin
 	}
 }
 
-func writeGlobalMetricsToStdout() {
+func (e *Executor) writeGlobalMetricsToStdout() {
+
+	fmt.Printf("Writing global metrics to %s %s %s\n", e.BuildPath, e.AgentName, e.JobID)
+
 	// Gather all metrics from the global registry
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
