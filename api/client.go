@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -71,7 +72,7 @@ type Client struct {
 	logger logger.Logger
 
 	// server-specified HTTP request headers to include in all requests
-	requestHeaders map[string]string
+	requestHeaders http.Header
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -79,7 +80,7 @@ func NewClient(l logger.Logger, conf Config) *Client {
 	return NewClientWithRequestHeaders(l, conf, nil)
 }
 
-func NewClientWithRequestHeaders(l logger.Logger, conf Config, headers map[string]string) *Client {
+func NewClientWithRequestHeaders(l logger.Logger, conf Config, headers http.Header) *Client {
 	if conf.Endpoint == "" {
 		conf.Endpoint = defaultEndpoint
 	}
@@ -160,26 +161,35 @@ func acceptEndpoint(conf *Config, endpoint string, logger logger.Logger) bool {
 }
 
 // resolveRequestHeaders returns (headers, true) if changed, or (nil, false) if unchanged.
-func resolveRequestHeaders(c *Client, headers map[string]string) (map[string]string, bool) {
+func resolveRequestHeaders(c *Client, headers map[string]string) (http.Header, bool) {
 	if headers == nil {
 		// headers not specified; this is different to headers specified as empty
 		return nil, false
 	}
 
-	filtered := make(map[string]string)
+	filtered := make(http.Header)
 	for k, v := range headers {
 		if !strings.HasPrefix(k, "Buildkite-") {
 			c.logger.Warn("request_headers: ignoring non-Buildkite header: %s", k)
 			continue
 		}
-		filtered[k] = v
+		filtered.Set(k, v) // Set not Add, we only support one value per key
 	}
 
-	if maps.Equal(filtered, c.requestHeaders) {
+	if headersAreStrictlyEqual(filtered, c.requestHeaders) {
 		return nil, false
 	}
 
 	return filtered, true
+}
+
+// Whether two http.Header maps are strictly equal; this is sensitive to case and ordering of
+// value slices within the maps, as it does not use the Get/Values etc methods. Generally
+// canonicalization will happen on the way in, though.
+func headersAreStrictlyEqual(a, b http.Header) bool {
+	return maps.EqualFunc(a, b, func(va, vb []string) bool {
+		return slices.Equal(va, vb)
+	})
 }
 
 type Header struct {
@@ -229,8 +239,10 @@ func (c *Client) newRequest(
 	}
 
 	// add server-specifed request headers
-	for k, v := range c.requestHeaders {
-		req.Header.Add(k, v)
+	for k, values := range c.requestHeaders {
+		for _, v := range values {
+			req.Header.Add(k, v)
+		}
 	}
 
 	if body != nil {
@@ -257,8 +269,10 @@ func (c *Client) newFormRequest(ctx context.Context, method, urlStr string, body
 	}
 
 	// add server-specifed request headers
-	for k, v := range c.requestHeaders {
-		req.Header.Add(k, v)
+	for k, values := range c.requestHeaders {
+		for _, v := range values {
+			req.Header.Add(k, v)
+		}
 	}
 
 	return req, nil
