@@ -377,7 +377,7 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 			},
 		},
 	)
-	worker.pingIntervalForTesting = 1 * time.Millisecond
+	worker.noWaitBetweenPingsForTesting = true
 
 	idleMonitor := NewIdleMonitor(1)
 
@@ -545,7 +545,7 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 			},
 		},
 	)
-	worker.pingIntervalForTesting = 1 * time.Millisecond
+	worker.noWaitBetweenPingsForTesting = true
 
 	idleMonitor := NewIdleMonitor(1)
 
