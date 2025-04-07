@@ -104,6 +104,9 @@ type AgentWorker struct {
 	stateMtx     sync.Mutex
 	state        agentWorkerState
 	currentJobID string
+
+	// disable the delay between pings, to speed up certain testing scenarios
+	noWaitBetweenPingsForTesting bool
 }
 
 type agentWorkerState string
@@ -294,6 +297,14 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	pingTicker := time.NewTicker(pingInterval)
 	defer pingTicker.Stop()
 
+	// testTriggerCh will normally block forever, and so will not affect the for/select loop.
+	var testTriggerCh chan struct{}
+	if a.noWaitBetweenPingsForTesting {
+		// a closed channel will unblock the for/select instantly, for zero-delay ping loop testing.
+		testTriggerCh = make(chan struct{})
+		close(testTriggerCh)
+	}
+
 	first := make(chan struct{}, 1)
 	first <- struct{}{}
 
@@ -314,6 +325,8 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	for {
 		setStat("😴 Waiting until next ping interval tick")
 		select {
+		case <-testTriggerCh:
+			// instant receive from closed chan when noWaitBetweenPingsForTesting is true
 		case <-first:
 			// continue below
 		case <-pingTicker.C:
@@ -329,6 +342,8 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 		jitter := rand.N(pingInterval)
 		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
 		select {
+		case <-testTriggerCh:
+			// instant receive from closed chan when noWaitBetweenPingsForTesting is true
 		case <-time.After(jitter):
 			// continue below
 		case <-a.stop:
