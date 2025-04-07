@@ -1015,7 +1015,8 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	}
 }
 
-var heartbeatHandler = func(t *testing.T, rw http.ResponseWriter, req *http.Request) {
+// A generic fake heartbeat handler used by various httptest servers.
+func heartbeatHandler(t *testing.T, rw http.ResponseWriter, req *http.Request) {
 	var hb api.Heartbeat
 	if err := json.NewDecoder(req.Body).Decode(&hb); err != nil {
 		http.Error(rw, fmt.Sprintf(`{"message":%q}`, err), http.StatusBadRequest)
