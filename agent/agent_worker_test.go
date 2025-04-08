@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -397,5 +399,242 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	}
 	if got, want := job.State, JobStateFinished; got != want {
 		t.Errorf("job.State = %q, want %q", got, want)
+	}
+}
+
+func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
+	// The registration request is made in clicommand.AgentStartCommand, and the response
+	// is passed into agent.NewAgentWorker(...), so we'll just test the response handling.
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	server := NewFakeAPIServer()
+	defer server.Close()
+	targetEndpoint := server.URL
+
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func() (api.Ping, error) {
+		switch agent.Pings {
+		case 0:
+			t.Log("server ping: disconnect")
+			return api.Ping{Action: "disconnect"}, nil
+		default:
+			return api.Ping{}, errors.New("too many pings")
+		}
+	}
+
+	// Create a listener without an HTTP server; hitting this would cause a network error/timeout.
+	// This is a bit neater than using a random host/port and hoping nothing is listening on it.
+	registrationServer, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("creating broken endpoint listener: %v", err)
+	}
+	defer registrationServer.Close()
+	registrationEndpoint := fmt.Sprintf("http://%s/", registrationServer.Addr().String())
+
+	// Create API client with the _old_ endpoint that it would have used for registration,
+	// but that it should not connect to again.
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: registrationEndpoint, // should not be connected to again
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          targetEndpoint, // should be used from now on
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient, // at this stage, apiClient still has the old register endpoint
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(ctx, NewIdleMonitor(1)); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	if got, want := agent.Pings, 1; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}
+
+func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	const agentSessionToken = "alpacas"
+
+	// the first endpoint, to be redirected from
+	endpointA := NewFakeAPIServer()
+	defer endpointA.Close()
+	agentA := endpointA.AddAgent(agentSessionToken)
+
+	// the second endpoint, to be redirected to
+	endpointB := NewFakeAPIServer()
+	defer endpointB.Close()
+	agentB := endpointB.AddAgent(agentSessionToken)
+
+	pingSequence := []string{}
+
+	agentA.PingHandler = func() (api.Ping, error) {
+		switch agentA.Pings {
+		case 0:
+			pingSequence = append(pingSequence, "A")
+			t.Log("endpointA ping: idle")
+			return api.Ping{Action: "idle"}, nil
+
+		case 1:
+			pingSequence = append(pingSequence, "A")
+			endpoint := endpointB.URL
+			t.Logf("endpointA ping: idle, Endpoint: %s (endpointB)", endpoint)
+			return api.Ping{Action: "idle", Endpoint: endpoint}, nil
+
+		default:
+			return api.Ping{}, fmt.Errorf("endpointA unexpected ping #%d", agentA.Pings)
+		}
+	}
+
+	agentB.PingHandler = func() (api.Ping, error) {
+		switch agentB.Pings {
+		case 0:
+			pingSequence = append(pingSequence, "B")
+			t.Log("endpointB ping: idle")
+			return api.Ping{Action: "idle"}, nil
+
+		case 1:
+			pingSequence = append(pingSequence, "B")
+			t.Log("endpointB ping: disconnect")
+			return api.Ping{Action: "disconnect"}, nil
+
+		default:
+			return api.Ping{}, fmt.Errorf("endpointB unexpected ping #%d", agentB.Pings)
+		}
+	}
+
+	// start on endpointA, expect to be redirected to endpointB
+	endpoint := endpointA.URL
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       "alpacas",
+			Endpoint:          endpoint,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(l, api.Config{
+			Endpoint: endpoint,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(ctx, NewIdleMonitor(1)); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	want, got := []string{"A", "A", "B", "B"}, pingSequence
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("unexpected ping sequence (-want +got):\n%s", diff)
+	}
+}
+
+func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	const agentSessionToken = "alpacas"
+
+	// A working endpoint for the original ping
+	endpointA := NewFakeAPIServer()
+	defer endpointA.Close()
+
+	// A broken endpoint, to redirect the ping to
+	endpointB, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("creating broken endpoint listener: %v", err)
+	}
+	defer endpointB.Close()
+
+	agent := endpointA.AddAgent(agentSessionToken)
+	agent.PingHandler = func() (api.Ping, error) {
+		switch agent.Pings {
+		case 0:
+			t.Log("endpointA ping: idle")
+			return api.Ping{Action: "idle"}, nil
+
+		case 1:
+			endpoint := fmt.Sprintf("http://%s/v3", endpointB.Addr().String())
+			t.Logf("endpointA ping: idle, Endpoint: %s (endpointB; broken)", endpoint)
+			return api.Ping{Action: "idle", Endpoint: endpoint}, nil
+
+		case 2:
+			t.Log("endpointA ping: idle")
+			return api.Ping{Action: "idle"}, nil
+
+		case 3:
+			t.Log("endpointA ping: disconnect")
+			return api.Ping{Action: "disconnect"}, nil
+
+		default:
+			return api.Ping{}, fmt.Errorf("endpointA unexpected ping #%d", agent.Pings)
+		}
+	}
+
+	// start on endpointA, expect to be redirected to endpointB
+	endpoint := endpointA.URL
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       "alpacas",
+			Endpoint:          endpoint,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(l, api.Config{
+			Endpoint: endpoint,
+			Token:    "llamas",
+			Timeout:  10 * time.Millisecond,
+		}),
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(ctx, NewIdleMonitor(1)); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	if got, want := agent.Pings, 4; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
 	}
 }
