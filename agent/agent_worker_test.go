@@ -433,7 +433,7 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 		t.Fatalf("creating broken endpoint listener: %v", err)
 	}
 	defer registrationServer.Close()
-	registrationEndpoint := fmt.Sprintf("http://%s/", registrationServer.Addr().String())
+	registrationEndpoint := fmt.Sprintf("http://%s/", registrationServer.Addr())
 
 	// Create API client with the _old_ endpoint that it would have used for registration,
 	// but that it should not connect to again.
