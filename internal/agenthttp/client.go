@@ -11,6 +11,14 @@ import (
 	"golang.org/x/net/http2"
 )
 
+var (
+	ClientProfileDefault = "default"
+	ClientProfileStdlib  = "stdlib"
+
+	// ValidHTTPClientProfiles lists accepted values for Config.HTTPClientProfile.
+	ValidClientProfiles = []string{ClientProfileDefault, ClientProfileStdlib}
+)
+
 // NewClient creates a HTTP client. Note that the default timeout is 60 seconds;
 // for some use cases (e.g. artifact operations) use [WithNoTimeout].
 func NewClient(opts ...ClientOption) *http.Client {
@@ -25,6 +33,29 @@ func NewClient(opts ...ClientOption) *http.Client {
 	for _, opt := range opts {
 		opt(&conf)
 	}
+
+	// http client profile is used to switch between different http client implementations
+	// - stdlib: uses the standard library http client
+	switch conf.HTTPClientProfile {
+	case ClientProfileStdlib:
+		// Base any modifications on the default transport.
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+
+		if conf.TLSConfig != nil {
+			transport.TLSClientConfig = conf.TLSConfig
+		}
+
+		return &http.Client{
+			Timeout: conf.Timeout,
+			Transport: &authenticatedTransport{
+				Bearer:   conf.Bearer,
+				Token:    conf.Token,
+				Delegate: transport,
+			},
+		}
+	}
+
+	// fall back to the default http client profile
 
 	cacheKey := transportCacheKey{
 		AllowHTTP2: conf.AllowHTTP2,
@@ -65,6 +96,9 @@ func WithAllowHTTP2(a bool) ClientOption       { return func(c *clientConfig) { 
 func WithTimeout(d time.Duration) ClientOption { return func(c *clientConfig) { c.Timeout = d } }
 func WithNoTimeout(c *clientConfig)            { c.Timeout = 0 }
 func WithTLSConfig(t *tls.Config) ClientOption { return func(c *clientConfig) { c.TLSConfig = t } }
+func WithHTTPClientProfile(p string) ClientOption {
+	return func(c *clientConfig) { c.HTTPClientProfile = p }
+}
 
 type ClientOption = func(*clientConfig)
 
@@ -122,6 +156,9 @@ type clientConfig struct {
 
 	// optional TLS configuration primarily used for testing
 	TLSConfig *tls.Config
+
+	// HTTPClientProfile profile to use for the http client
+	HTTPClientProfile string
 }
 
 // The underlying http.Transport is cached, mainly so that multiple clients with

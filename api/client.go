@@ -42,6 +42,9 @@ type Config struct {
 	// If true, only HTTP2 is disabled
 	DisableHTTP2 bool
 
+	// http client profile to use for the client
+	HTTPClientProfile string
+
 	// If true, requests and responses will be dumped and set to the logger
 	DebugHTTP bool
 
@@ -91,6 +94,7 @@ func NewClient(l logger.Logger, conf Config) *Client {
 			agenthttp.WithAuthToken(conf.Token),
 			agenthttp.WithAllowHTTP2(!conf.DisableHTTP2),
 			agenthttp.WithTLSConfig(conf.TLSConfig),
+			agenthttp.WithHTTPClientProfile(conf.HTTPClientProfile),
 		),
 		conf: conf,
 	}
