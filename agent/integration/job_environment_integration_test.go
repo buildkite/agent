@@ -67,7 +67,7 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 		Token:     "llamasrock",
 		DebugHTTP: true,
 	})
-	headers := client.GetServerSpecifiedRequestHeaders()
+	headers := client.ServerSpecifiedRequestHeaders()
 	// That getter isn't designed to modify the headers, but all's fair in test setup code and war.
 	headers.Set("Buildkite-Hello", "world")
 

@@ -149,9 +149,9 @@ func (c *Client) Config() Config {
 	return c.conf
 }
 
-// GetServerSpecifiedRequestHeaders returns the HTTP headers that the Buildkite register/ping
+// ServerSpecifiedRequestHeaders returns the HTTP headers that the Buildkite register/ping
 // APIs have advised the client to send in all requests.
-func (c *Client) GetServerSpecifiedRequestHeaders() http.Header {
+func (c *Client) ServerSpecifiedRequestHeaders() http.Header {
 	return c.requestHeaders
 }
 

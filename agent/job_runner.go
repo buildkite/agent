@@ -491,7 +491,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 
 	// ... including any server-specified request headers, so that sub-processes such as
 	// buildkite-agent annotate etc can respect them.
-	for header, values := range r.apiClient.GetServerSpecifiedRequestHeaders() {
+	for header, values := range r.apiClient.ServerSpecifiedRequestHeaders() {
 		k := fmt.Sprintf(
 			"BUILDKITE_REQUEST_HEADER_%s",
 			strings.ToUpper(strings.ReplaceAll(header, "-", "_")),

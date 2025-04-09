@@ -27,7 +27,6 @@ type APIClient interface {
 	GetJobState(context.Context, string) (*api.JobState, *api.Response, error)
 	GetMetaData(context.Context, string, string, string) (*api.MetaData, *api.Response, error)
 	GetSecret(context.Context, *api.GetSecretRequest) (*api.Secret, *api.Response, error)
-	GetServerSpecifiedRequestHeaders() http.Header
 	Heartbeat(context.Context) (*api.Heartbeat, *api.Response, error)
 	MetaDataKeys(context.Context, string, string) ([]string, *api.Response, error)
 	New(api.Config) *api.Client
@@ -37,6 +36,7 @@ type APIClient interface {
 	Register(context.Context, *api.AgentRegisterRequest) (*api.AgentRegisterResponse, *api.Response, error)
 	SaveHeaderTimes(context.Context, string, *api.HeaderTimes) (*api.Response, error)
 	SearchArtifacts(context.Context, string, *api.ArtifactSearchOptions) ([]*api.Artifact, *api.Response, error)
+	ServerSpecifiedRequestHeaders() http.Header
 	SetMetaData(context.Context, string, *api.MetaData) (*api.Response, error)
 	StartJob(context.Context, *api.Job) (*api.Response, error)
 	StepCancel(context.Context, string, *api.StepCancel) (*api.StepCancelResponse, *api.Response, error)
