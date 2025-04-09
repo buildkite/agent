@@ -111,15 +111,22 @@ func NewClient(l logger.Logger, conf Config) *Client {
 }
 
 func requestHeadersFromEnv(environ []string) http.Header {
-	prefix := "BUILDKITE_REQUEST_HEADER_"
+	const prefix = "BUILDKITE_REQUEST_HEADER_"
 	headers := make(http.Header)
 	for _, line := range environ {
 		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 || !strings.HasPrefix(parts[0], prefix) {
+		if len(parts) != 2 {
+			// not a valid environment variable (should be impossible?)
+			continue
+		}
+		suffix, found := strings.CutPrefix(parts[0], prefix)
+		if !found {
 			// not a BUILDKITE_REQUEST_HEADER_... environment variable
 			continue
 		}
-		key := http.CanonicalHeaderKey(strings.ReplaceAll(parts[0][len(prefix):], "_", "-"))
+		// We could leave headers.Add(…) to canonicalize the key, but then we'd have to test for a
+		// prefix of "BUILDKITE_" rather than "Buildkite-", which feels a bit dangerously indirect.
+		key := http.CanonicalHeaderKey(strings.ReplaceAll(suffix, "_", "-"))
 		if !strings.HasPrefix(key, "Buildkite-") {
 			// not a permitted Buildkite-* header
 			continue
