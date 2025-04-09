@@ -44,7 +44,7 @@ type FakeAgent struct {
 	Pings      int
 	Heartbeats int
 
-	PingHandler func() (api.Ping, error)
+	PingHandler func(*http.Request) (api.Ping, error)
 }
 
 // agentJob is just an agent/job tuple.
@@ -314,7 +314,7 @@ func (fs *FakeAPIServer) handlePing(rw http.ResponseWriter, req *http.Request) {
 
 	switch {
 	case agent.PingHandler != nil:
-		resp, err := agent.PingHandler()
+		resp, err := agent.PingHandler(req)
 		if err != nil {
 			http.Error(rw, encodeMsg(err), http.StatusUnprocessableEntity)
 			return
