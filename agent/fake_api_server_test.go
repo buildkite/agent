@@ -109,6 +109,12 @@ func (fs *FakeAPIServer) AddJob(env map[string]string) *FakeJob {
 }
 
 func (fs *FakeAPIServer) Assign(agent *FakeAgent, job *FakeJob) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.assignNoMutex(agent, job)
+}
+
+func (fs *FakeAPIServer) assignNoMutex(agent *FakeAgent, job *FakeJob) {
 	agent.Assigned = job
 	job.State = JobStateAssigned
 	fs.agentJobs[job.Auth] = agentJob{
@@ -149,12 +155,12 @@ func (fs *FakeAPIServer) handleJobAcquire(rw http.ResponseWriter, req *http.Requ
 
 	// job is assigned to this agent, accepted, and is now accessible using a
 	// job token.
-	fs.Assign(agent, job)
+	fs.assignNoMutex(agent, job) // we're within the mutex, see above
 	job.State = JobStateAccepted
 
 	out, err := json.Marshal(job.Job)
 	if err != nil {
-		http.Error(rw, encodeMsgf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", job.Job, err), http.StatusInternalServerError)
+		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", job.Job, err), http.StatusInternalServerError)
 		return
 	}
 	rw.Write(out)
@@ -188,7 +194,7 @@ func (fs *FakeAPIServer) handleJobAccept(rw http.ResponseWriter, req *http.Reque
 
 	out, err := json.Marshal(job.Job)
 	if err != nil {
-		http.Error(rw, encodeMsgf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", job.Job, err), http.StatusInternalServerError)
+		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", job.Job, err), http.StatusInternalServerError)
 		return
 	}
 	rw.Write(out)
@@ -325,7 +331,7 @@ func (fs *FakeAPIServer) handlePing(rw http.ResponseWriter, req *http.Request) {
 
 	out, err := json.Marshal(ping)
 	if err != nil {
-		http.Error(rw, encodeMsgf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", ping, err), http.StatusInternalServerError)
+		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", ping, err), http.StatusInternalServerError)
 		return
 	}
 	rw.Write(out)
@@ -352,7 +358,7 @@ func (fs *FakeAPIServer) handleHeartbeat(rw http.ResponseWriter, req *http.Reque
 
 	out, err := json.Marshal(hb)
 	if err != nil {
-		http.Error(rw, encodeMsgf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", hb, err), http.StatusInternalServerError)
+		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", hb, err), http.StatusInternalServerError)
 		return
 	}
 	rw.Write(out)
