@@ -53,6 +53,9 @@ type Config struct {
 
 	// optional TLS configuration primarily used for testing
 	TLSConfig *tls.Config
+
+	// HTTP client timeout; zero to use default
+	Timeout time.Duration
 }
 
 // A Client manages communication with the Buildkite Agent API.
@@ -85,14 +88,20 @@ func NewClient(l logger.Logger, conf Config) *Client {
 		}
 	}
 
+	clientOptions := []agenthttp.ClientOption{
+		agenthttp.WithAuthToken(conf.Token),
+		agenthttp.WithAllowHTTP2(!conf.DisableHTTP2),
+		agenthttp.WithTLSConfig(conf.TLSConfig),
+	}
+
+	if conf.Timeout != 0 {
+		clientOptions = append(clientOptions, agenthttp.WithTimeout(conf.Timeout))
+	}
+
 	return &Client{
 		logger: l,
-		client: agenthttp.NewClient(
-			agenthttp.WithAuthToken(conf.Token),
-			agenthttp.WithAllowHTTP2(!conf.DisableHTTP2),
-			agenthttp.WithTLSConfig(conf.TLSConfig),
-		),
-		conf: conf,
+		client: agenthttp.NewClient(clientOptions...),
+		conf:   conf,
 	}
 }
 
