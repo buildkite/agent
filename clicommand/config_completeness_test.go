@@ -17,6 +17,8 @@ var commandConfigPairs = []configCommandPair{
 	{Config: AcknowledgementsConfig{}, Command: AcknowledgementsCommand},
 	{Config: AgentStartConfig{}, Command: AgentStartCommand},
 	{Config: AgentStopConfig{}, Command: AgentStopCommand},
+	{Config: AgentPauseConfig{}, Command: AgentPauseCommand},
+	{Config: AgentResumeConfig{}, Command: AgentResumeCommand},
 	{Config: AnnotateConfig{}, Command: AnnotateCommand},
 	{Config: AnnotationRemoveConfig{}, Command: AnnotationRemoveCommand},
 	{Config: ArtifactDownloadConfig{}, Command: ArtifactDownloadCommand},
