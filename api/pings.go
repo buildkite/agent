@@ -25,7 +25,7 @@ func (c *Client) Ping(ctx context.Context) (*Ping, *Response, error) {
 	}
 
 	// If Buildkite told us to use Buildkite-* request headers, store those
-	c.setRequestHeadersFromMap(ping.RequestHeaders)
+	c.setRequestHeaders(ping.RequestHeaders)
 
 	return ping, resp, err
 }

@@ -47,7 +47,7 @@ func (c *Client) Register(ctx context.Context, regReq *AgentRegisterRequest) (*A
 	}
 
 	// If Buildkite told us to use Buildkite-* request headers, store those
-	c.setRequestHeadersFromMap(a.RequestHeaders)
+	c.setRequestHeaders(a.RequestHeaders)
 
 	return a, resp, err
 }

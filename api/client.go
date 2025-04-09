@@ -171,7 +171,7 @@ func (c *Client) FromAgentRegisterResponse(reg *AgentRegisterResponse) *Client {
 	return c.New(conf)
 }
 
-func (c *Client) setRequestHeadersFromMap(headers map[string]string) {
+func (c *Client) setRequestHeaders(headers map[string]string) {
 	if headers == nil {
 		return
 	}
