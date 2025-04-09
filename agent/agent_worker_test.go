@@ -255,7 +255,7 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	// Pre-register the agent.
 	const agentSessionToken = "alpacas"
 	agent := server.AddAgent(agentSessionToken)
-	agent.PingHandler = func() (api.Ping, error) {
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
 		switch agent.Pings {
 		case 0:
 			return api.Ping{
@@ -333,7 +333,7 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	// Pre-register the agent.
 	const agentSessionToken = "alpacas"
 	agent := server.AddAgent(agentSessionToken)
-	agent.PingHandler = func() (api.Ping, error) {
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
 		switch agent.Pings {
 		case 0:
 			return api.Ping{
@@ -416,7 +416,7 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 
 	const agentSessionToken = "alpacas"
 	agent := server.AddAgent(agentSessionToken)
-	agent.PingHandler = func() (api.Ping, error) {
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
 		switch agent.Pings {
 		case 0:
 			t.Log("server ping: disconnect")
@@ -490,7 +490,7 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 
 	pingSequence := []string{}
 
-	agentA.PingHandler = func() (api.Ping, error) {
+	agentA.PingHandler = func(*http.Request) (api.Ping, error) {
 		switch agentA.Pings {
 		case 0:
 			pingSequence = append(pingSequence, "A")
@@ -508,7 +508,7 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 		}
 	}
 
-	agentB.PingHandler = func() (api.Ping, error) {
+	agentB.PingHandler = func(*http.Request) (api.Ping, error) {
 		switch agentB.Pings {
 		case 0:
 			pingSequence = append(pingSequence, "B")
@@ -580,7 +580,7 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	defer endpointB.Close()
 
 	agent := endpointA.AddAgent(agentSessionToken)
-	agent.PingHandler = func() (api.Ping, error) {
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
 		switch agent.Pings {
 		case 0:
 			t.Log("endpointA ping: idle")
