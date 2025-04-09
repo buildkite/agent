@@ -57,18 +57,20 @@ type agentJob struct {
 type FakeAPIServer struct {
 	*httptest.Server
 
-	mu        sync.Mutex
-	agents    map[string]*FakeAgent // session token Auth header -> agent
-	jobs      map[string]*FakeJob   // uuid -> job
-	agentJobs map[string]agentJob   // job token Auth header -> (agent, job)
+	mu            sync.Mutex
+	agents        map[string]*FakeAgent                 // session token Auth header -> agent
+	jobs          map[string]*FakeJob                   // uuid -> job
+	agentJobs     map[string]agentJob                   // job token Auth header -> (agent, job)
+	registrations map[string]*api.AgentRegisterResponse // reg token Auth header -> response
 }
 
 // NewFakeAPIServer constructs a new FakeAPIServer for testing.
 func NewFakeAPIServer() *FakeAPIServer {
 	fs := &FakeAPIServer{
-		agents:    make(map[string]*FakeAgent),
-		jobs:      make(map[string]*FakeJob),
-		agentJobs: make(map[string]agentJob),
+		agents:        make(map[string]*FakeAgent),
+		jobs:          make(map[string]*FakeJob),
+		agentJobs:     make(map[string]agentJob),
+		registrations: make(map[string]*api.AgentRegisterResponse),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /jobs/{job_uuid}/acquire", fs.handleJobAcquire)
@@ -78,6 +80,7 @@ func NewFakeAPIServer() *FakeAPIServer {
 	mux.HandleFunc("POST /jobs/{job_uuid}/chunks", fs.handleJobChunks)
 	mux.HandleFunc("GET /ping", fs.handlePing)
 	mux.HandleFunc("POST /heartbeat", fs.handleHeartbeat)
+	mux.HandleFunc("POST /register", fs.handleRegister)
 	fs.Server = httptest.NewServer(mux)
 	return fs
 }
@@ -115,6 +118,12 @@ func (fs *FakeAPIServer) Assign(agent *FakeAgent, job *FakeJob) {
 		agent: agent,
 		job:   job,
 	}
+}
+
+func (fs *FakeAPIServer) AddRegistration(token string, reg *api.AgentRegisterResponse) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.registrations["Token "+token] = reg
 }
 
 func (fs *FakeAPIServer) handleJobAcquire(rw http.ResponseWriter, req *http.Request) {
@@ -353,6 +362,23 @@ func (fs *FakeAPIServer) handleHeartbeat(rw http.ResponseWriter, req *http.Reque
 	out, err := json.Marshal(hb)
 	if err != nil {
 		http.Error(rw, encodeMsgf("json.NewEncoder(http.ResponseWriter).Encode(%v) = %v", hb, err), http.StatusInternalServerError)
+		return
+	}
+	rw.Write(out)
+}
+
+func (fs *FakeAPIServer) handleRegister(rw http.ResponseWriter, req *http.Request) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	reg := fs.registrations[req.Header.Get("Authorization")]
+	if reg == nil {
+		http.Error(rw, encodeMsg("unauthorized"), http.StatusUnauthorized)
+	}
+
+	out, err := json.Marshal(reg)
+	if err != nil {
+		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", reg, err), http.StatusInternalServerError)
 		return
 	}
 	rw.Write(out)
