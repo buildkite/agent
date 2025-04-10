@@ -80,6 +80,7 @@ var BuildkiteAgentCommands = []cli.Command{
 			OIDCRequestTokenCommand,
 		},
 	},
+	AgentPauseCommand,
 	{
 		Name:  "pipeline",
 		Usage: "Make changes to the pipeline of the currently running build",
@@ -87,6 +88,7 @@ var BuildkiteAgentCommands = []cli.Command{
 			PipelineUploadCommand,
 		},
 	},
+	AgentResumeCommand,
 	{
 		Name:  "secret",
 		Usage: "Interact with Pipelines Secrets",
