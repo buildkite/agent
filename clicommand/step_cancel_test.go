@@ -25,8 +25,10 @@ func TestStepCancel(t *testing.T) {
 			Force:                   true,
 			Build:                   "1",
 			StepOrKey:               "some-random-key",
-			AgentAccessToken:        "agentaccesstoken",
-			Endpoint:                server.URL,
+			APIConfig: APIConfig{
+				AgentAccessToken: "agentaccesstoken",
+				Endpoint:         server.URL,
+			},
 		}
 
 		l := logger.NewBuffer()
@@ -44,8 +46,10 @@ func TestStepCancel(t *testing.T) {
 			ForceGracePeriodSeconds: 10,
 			Force:                   true,
 			StepOrKey:               "some-random-key",
-			AgentAccessToken:        "agentaccesstoken",
-			Endpoint:                server.URL,
+			APIConfig: APIConfig{
+				AgentAccessToken: "agentaccesstoken",
+				Endpoint:         server.URL,
+			},
 		}
 
 		l := logger.NewBuffer()

@@ -77,7 +77,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 	// Now it's onto actually setting the fields. We start by getting all
 	// the fields from the configuration interface
 	var fields []string
-	fields, _ = reflections.Fields(l.Config)
+	fields, _ = reflections.FieldsDeep(l.Config)
 
 	// Loop through each of the fields, and look for tags and handle them
 	// appropriately

@@ -39,32 +39,22 @@ Example:
     $ ./script/label-generator | buildkite-agent step update "label"`
 
 type StepUpdateConfig struct {
-	Attribute string `cli:"arg:0" label:"attribute" validate:"required"`
-	Value     string `cli:"arg:1" label:"value"`
-	Append    bool   `cli:"append"`
-	StepOrKey string `cli:"step" validate:"required"`
-	Build     string `cli:"build"`
+	GlobalConfig
+	APIConfig
 
-	// Global flags
-	Debug        bool     `cli:"debug"`
-	LogLevel     string   `cli:"log-level"`
-	NoColor      bool     `cli:"no-color"`
-	Experiments  []string `cli:"experiment" normalize:"list"`
-	Profile      string   `cli:"profile"`
+	Attribute    string   `cli:"arg:0" label:"attribute" validate:"required"`
+	Value        string   `cli:"arg:1" label:"value"`
+	Append       bool     `cli:"append"`
+	StepOrKey    string   `cli:"step" validate:"required"`
+	Build        string   `cli:"build"`
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var StepUpdateCommand = cli.Command{
 	Name:        "update",
 	Usage:       "Change the value of an attribute",
 	Description: stepUpdateHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalAndAPIFlags(),
 		cli.StringFlag{
 			Name:   "step",
 			Value:  "",
@@ -82,21 +72,8 @@ var StepUpdateCommand = cli.Command{
 			Usage:  "Append to current attribute instead of replacing it",
 			EnvVar: "BUILDKITE_STEP_UPDATE_APPEND",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
 		RedactedVars,
-	},
+	),
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](context.Background(), c)
 		defer done()

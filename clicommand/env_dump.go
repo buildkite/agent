@@ -25,35 +25,23 @@ Example:
     $ buildkite-agent env dump --format json-pretty`
 
 type EnvDumpConfig struct {
-	Format string `cli:"format"`
+	GlobalConfig
 
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	Format string `cli:"format"`
 }
 
 var EnvDumpCommand = cli.Command{
 	Name:        "dump",
 	Usage:       "Print the environment of the current process as a JSON object",
 	Description: envDumpHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "format",
 			Usage:  "Output format; json or json-pretty",
 			EnvVar: "BUILDKITE_AGENT_ENV_DUMP_FORMAT",
 			Value:  "json",
 		},
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 	Action: func(c *cli.Context) error {
 		_, cfg, _, _, done := setupLoggerAndConfig[EnvDumpConfig](context.Background(), c)
 		defer done()

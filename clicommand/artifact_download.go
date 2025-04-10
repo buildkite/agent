@@ -47,32 +47,21 @@ jobs, you can target the particular job you want to download the artifact from:
 You can also use the step's jobs id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 type ArtifactDownloadConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
 	Destination        string `cli:"arg:1" label:"artifact download path" validate:"required"`
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	TraceHTTP        bool   `cli:"trace-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var ArtifactDownloadCommand = cli.Command{
 	Name:        "download",
 	Usage:       "Downloads artifacts from Buildkite to the local machine",
 	Description: downloadHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalAndAPIFlags(),
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
@@ -89,21 +78,7 @@ var ArtifactDownloadCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
 			Usage:  "Include artifacts from retried jobs in the search",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-		TraceHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactDownloadConfig](ctx, c)

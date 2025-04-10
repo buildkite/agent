@@ -30,23 +30,15 @@ Examples:
     fi`
 
 type LockDoneConfig struct {
-	// Common config options
-	LockScope   string `cli:"lock-scope"`
-	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	GlobalConfig
+	LockCommonConfig
 }
 
 var LockDoneCommand = cli.Command{
 	Name:        "done",
 	Usage:       "Completes a do-once lock",
 	Description: lockDoneHelpDescription,
-	Flags:       append(globalFlags(), lockCommonFlags...),
+	Flags:       lockCommonFlags(),
 	Action:      lockDoneAction,
 }
 

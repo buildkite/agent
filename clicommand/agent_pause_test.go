@@ -27,8 +27,10 @@ func TestAgentPause(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := AgentPauseConfig{
-		AgentAccessToken: "agentaccesstoken",
-		Endpoint:         server.URL,
+		APIConfig: APIConfig{
+			AgentAccessToken: "agentaccesstoken",
+			Endpoint:         server.URL,
+		},
 	}
 	l := logger.NewBuffer()
 
