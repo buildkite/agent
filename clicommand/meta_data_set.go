@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,51 +37,28 @@ Example:
     $ ./script/meta-data-generator | buildkite-agent meta-data set "foo"`
 
 type MetaDataSetConfig struct {
-	Key   string `cli:"arg:0" label:"meta-data key" validate:"required"`
-	Value string `cli:"arg:1" label:"meta-data value"`
-	Job   string `cli:"job" validate:"required"`
+	GlobalConfig
+	APIConfig
 
-	// Global flags
-	Debug        bool     `cli:"debug"`
-	LogLevel     string   `cli:"log-level"`
-	NoColor      bool     `cli:"no-color"`
-	Experiments  []string `cli:"experiment" normalize:"list"`
-	Profile      string   `cli:"profile"`
+	Key          string   `cli:"arg:0" label:"meta-data key" validate:"required"`
+	Value        string   `cli:"arg:1" label:"meta-data value"`
+	Job          string   `cli:"job" validate:"required"`
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var MetaDataSetCommand = cli.Command{
 	Name:        "set",
 	Usage:       "Set data on a build",
 	Description: metaDataSetHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
 			Usage:  "Which job's build should the meta-data be set on",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
 		RedactedVars,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](ctx, c)

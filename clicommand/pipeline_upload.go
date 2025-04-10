@@ -69,6 +69,9 @@ Example:
     $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
+	GlobalConfig
+	APIConfig
+
 	FilePath        string   `cli:"arg:0" label:"upload paths"`
 	Replace         bool     `cli:"replace"`
 	Job             string   `cli:"job"` // required, but not in dry-run mode
@@ -83,26 +86,13 @@ type PipelineUploadConfig struct {
 	JWKSKeyID        string `cli:"jwks-key-id"`
 	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token"` // required, but not in dry-run mode
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var PipelineUploadCommand = cli.Command{
 	Name:        "upload",
 	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job",
 	Description: pipelineUploadHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.BoolFlag{
 			Name:   "replace",
 			Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed.",
@@ -158,21 +148,8 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
 			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
 		RedactedVars,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](ctx, c)

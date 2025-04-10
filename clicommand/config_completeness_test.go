@@ -61,7 +61,7 @@ func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
 			flagNames[flag.GetName()] = struct{}{}
 		}
 
-		fields, err := reflections.Fields(pair.Config)
+		fields, err := reflections.FieldsDeep(pair.Config)
 		if err != nil {
 			t.Fatalf("getting fields for type %T: %v", pair.Config, err)
 		}

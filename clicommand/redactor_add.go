@@ -34,21 +34,11 @@ var (
 )
 
 type RedactorAddConfig struct {
+	GlobalConfig
+	APIConfig
+
 	File   string `cli:"arg:0"`
 	Format string `cli:"format"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var RedactorAddCommand = cli.Command{
@@ -86,27 +76,14 @@ one for each secret:
 Or
 
     $ buildkite-agent redactor add --format json my-secrets.json`,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "format",
 			Usage:  "The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
 			EnvVar: "BUILDKITE_AGENT_REDACT_ADD_FORMAT",
 			Value:  FormatStringNone,
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[RedactorAddConfig](ctx, c)

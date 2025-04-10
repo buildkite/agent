@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/jobapi"
@@ -10,22 +11,12 @@ import (
 )
 
 type SecretGetConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Key           string `cli:"arg:0"`
 	Job           string `cli:"job" validate:"required"`
 	SkipRedaction bool   `cli:"skip-redaction"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var SecretGetCommand = cli.Command{
@@ -48,7 +39,7 @@ The following examples reference the same Buildkite secret ′key′:
 
     $ buildkite-agent secret get deploy_key
     $ buildkite-agent secret get DEPLOY_KEY`,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
 			Usage:  "Which job should should the secret be for",
@@ -59,20 +50,7 @@ The following examples reference the same Buildkite secret ′key′:
 			Usage:  "Skip redacting the retrieved secret from the logs. Then, the command will print the secret to the Job's logs if called directly.",
 			EnvVar: "BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[SecretGetConfig](ctx, c)

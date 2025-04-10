@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"time"
 
@@ -29,28 +30,18 @@ Example:
     $ buildkite-agent pause --note 'too many llamas' --timeout-in-minutes 60`
 
 type AgentPauseConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Note             string `cli:"note"`
 	TimeoutInMinutes int    `cli:"timeout-in-minutes"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var AgentPauseCommand = cli.Command{
 	Name:        "pause",
 	Usage:       "Pause the agent",
 	Description: pauseDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "note",
 			Usage:  "A descriptive note to record why the agent is paused",
@@ -61,20 +52,7 @@ var AgentPauseCommand = cli.Command{
 			Usage:  "Timeout after which the agent is automatically resumed, in minutes",
 			EnvVar: "BUILDKITE_AGENT_PAUSE_TIMEOUT_MINUTES",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AgentPauseConfig](ctx, c)

@@ -62,35 +62,23 @@ Getting variables as a JSON object:
     }`
 
 type EnvGetConfig struct {
-	Format string `cli:"format"`
+	GlobalConfig
 
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	Format string `cli:"format"`
 }
 
 var EnvGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Gets variables from the job execution environment",
 	Description: envGetHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "format",
 			Usage:  "Output format: plain, json, or json-pretty",
 			EnvVar: "BUILDKITE_AGENT_ENV_GET_FORMAT",
 			Value:  "plain",
 		},
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 	Action: envGetAction,
 }
 

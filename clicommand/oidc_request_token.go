@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -12,25 +13,15 @@ import (
 )
 
 type OIDCTokenConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Audience string `cli:"audience"`
 	Lifetime int    `cli:"lifetime"`
 	Job      string `cli:"job"      validate:"required"`
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
 	Claims         []string `cli:"claim"           normalize:"list"`
 	AWSSessionTags []string `cli:"aws-session-tag" normalize:"list"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint"           validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 const (
@@ -58,7 +49,7 @@ var OIDCRequestTokenCommand = cli.Command{
 	Name:        "request-token",
 	Usage:       "Requests and prints an OIDC token from Buildkite with the specified audience,",
 	Description: oidcTokenDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:  "audience",
 			Usage: "The audience that will consume the OIDC token. The API will choose a default audience if it is omitted.",
@@ -86,20 +77,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			Usage:  "Add claims as AWS Session Tags",
 			EnvVar: "BUILDKITE_OIDC_TOKEN_AWS_SESSION_TAGS",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](ctx, c)

@@ -31,23 +31,15 @@ Examples:
     Kuzco`
 
 type LockGetConfig struct {
-	// Common config options
-	LockScope   string `cli:"lock-scope"`
-	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	GlobalConfig
+	LockCommonConfig
 }
 
 var LockGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Gets a lock value from the agent leader",
 	Description: lockGetHelpDescription,
-	Flags:       append(globalFlags(), lockCommonFlags...),
+	Flags:       lockCommonFlags(),
 	Action:      lockGetAction,
 }
 

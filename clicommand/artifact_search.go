@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -69,25 +70,15 @@ Format specifiers:
   %u    Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead`
 
 type ArtifactSearchConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
 	AllowEmptyResults  bool   `cli:"allow-empty-results"`
 	PrintFormat        string `cli:"format"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var ArtifactSearchCommand = cli.Command{
@@ -95,7 +86,7 @@ var ArtifactSearchCommand = cli.Command{
 	Usage:              "Searches artifacts in Buildkite",
 	Description:        searchHelpDescription,
 	CustomHelpTemplate: artifactSearchHelpTemplate,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
@@ -121,20 +112,7 @@ var ArtifactSearchCommand = cli.Command{
 			Value: "%j %p %c\n",
 			Usage: "Output formatting of results. See below for listing of available format specifiers.",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](ctx, c)

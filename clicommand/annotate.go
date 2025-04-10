@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -55,33 +56,23 @@ Example:
     $ ./script/dynamic_annotation_generator | buildkite-agent annotate --style "success"`
 
 type AnnotateConfig struct {
-	Body     string `cli:"arg:0" label:"annotation body"`
-	Style    string `cli:"style"`
-	Context  string `cli:"context"`
-	Append   bool   `cli:"append"`
-	Priority int    `cli:"priority"`
-	Job      string `cli:"job" validate:"required"`
+	GlobalConfig
+	APIConfig
 
-	// Global flags
-	Debug        bool     `cli:"debug"`
-	LogLevel     string   `cli:"log-level"`
-	NoColor      bool     `cli:"no-color"`
-	Experiments  []string `cli:"experiment" normalize:"list"`
-	Profile      string   `cli:"profile"`
+	Body         string   `cli:"arg:0" label:"annotation body"`
+	Style        string   `cli:"style"`
+	Context      string   `cli:"context"`
+	Append       bool     `cli:"append"`
+	Priority     int      `cli:"priority"`
+	Job          string   `cli:"job" validate:"required"`
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var AnnotateCommand = cli.Command{
 	Name:        "annotate",
 	Usage:       "Annotate the build page within the Buildkite UI with text from within a Buildkite job",
 	Description: annotateHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "context",
 			Usage:  "The context of the annotation used to differentiate this annotation from others",
@@ -110,20 +101,8 @@ var AnnotateCommand = cli.Command{
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
 		RedactedVars,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotateConfig](ctx, c)
