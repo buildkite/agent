@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.96.0](https://github.com/buildkite/agent/tree/v3.96.0) (2025-04-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.95.1...v3.96.0)
+
+### Added
+- Add pause and resume subcommands [#3273](https://github.com/buildkite/agent/pull/3273) (@DrJosh9000)
+
+### Internal
+- chore: Use golangci-lint for code checks [#3274](https://github.com/buildkite/agent/pull/3274) (@DrJosh9000)
+- `FakeAPIServer`'s `PingHandler` is passed the `*http.Request` [#3271](https://github.com/buildkite/agent/pull/3271) (@pda)
+- `FakeAPIServer` handles agent registration: `AddRegistration(tok, resp)` [#3272](https://github.com/buildkite/agent/pull/3272) (@pda)
+- fix: ISE message when json.Marshal fails [#3270](https://github.com/buildkite/agent/pull/3270) (@DrJosh9000)
+- agent_worker_test: tests for endpoint switching during register/ping [#3269](https://github.com/buildkite/agent/pull/3269) (@pda)
+- Refactor fake API server [#3264](https://github.com/buildkite/agent/pull/3264) (@DrJosh9000)
+- `AgentWorker` has `noWaitBetweenPingsForTesting` field [#3262](https://github.com/buildkite/agent/pull/3262) (@pda)
+- refactor: rename `AgentRegisterResponse` local vars to `reg` consistently [#3259](https://github.com/buildkite/agent/pull/3259) (@pda)
+
+### Dependencies
+- Bump the container-images group across 6 directories with 2 updates [#3266](https://github.com/buildkite/agent/pull/3266) (@dependabot[bot])
+- Bump the cloud-providers group across 1 directory with 3 updates [#3267](https://github.com/buildkite/agent/pull/3267) (@dependabot[bot])
+- Bump the golang-x group with 4 updates [#3265](https://github.com/buildkite/agent/pull/3265) (@dependabot[bot])
+- Bump golang.org/x/net from 0.37.0 to 0.38.0 in the golang-x group [#3256](https://github.com/buildkite/agent/pull/3256) (@dependabot[bot])
+- Bump the container-images group across 4 directories with 1 update [#3258](https://github.com/buildkite/agent/pull/3258) (@dependabot[bot])
+- Bump the cloud-providers group across 1 directory with 2 updates [#3252](https://github.com/buildkite/agent/pull/3252) (@dependabot[bot])
+- Bump the container-images group across 5 directories with 2 updates [#3251](https://github.com/buildkite/agent/pull/3251) (@dependabot[bot])
+- Bump gopkg.in/DataDog/dd-trace-go.v1 from 1.72.1 to 1.72.2 [#3250](https://github.com/buildkite/agent/pull/3250) (@dependabot[bot])
+
 ## [v3.95.1](https://github.com/buildkite/agent/tree/v3.95.1) (2025-03-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.95.0...v3.95.1)
 
