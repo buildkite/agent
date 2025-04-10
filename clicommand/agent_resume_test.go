@@ -27,8 +27,10 @@ func TestAgentResume(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := AgentResumeConfig{
-		AgentAccessToken: "agentaccesstoken",
-		Endpoint:         server.URL,
+		APIConfig: APIConfig{
+			AgentAccessToken: "agentaccesstoken",
+			Endpoint:         server.URL,
+		},
 	}
 	l := logger.NewBuffer()
 

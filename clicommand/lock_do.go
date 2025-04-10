@@ -40,40 +40,24 @@ Examples:
     fi`
 
 type LockDoConfig struct {
-	// Common config options
-	LockScope   string `cli:"lock-scope"`
-	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
+	GlobalConfig
+	LockCommonConfig
 
 	LockWaitTimeout time.Duration `cli:"lock-wait-timeout"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-}
-
-func lockDoFlags() []cli.Flag {
-	flags := append(
-		[]cli.Flag{
-			cli.DurationFlag{
-				Name:   "lock-wait-timeout",
-				Usage:  "Sets a maximum duration to wait for a lock before giving up",
-				EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
-			},
-		},
-		lockCommonFlags...,
-	)
-	return append(flags, globalFlags()...)
 }
 
 var LockDoCommand = cli.Command{
 	Name:        "do",
 	Usage:       "Begins a do-once lock",
 	Description: lockDoHelpDescription,
-	Flags:       lockDoFlags(),
-	Action:      lockDoAction,
+	Flags: append(lockCommonFlags(),
+		cli.DurationFlag{
+			Name:   "lock-wait-timeout",
+			Usage:  "Sets a maximum duration to wait for a lock before giving up",
+			EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
+		},
+	),
+	Action: lockDoAction,
 }
 
 func lockDoAction(c *cli.Context) error {

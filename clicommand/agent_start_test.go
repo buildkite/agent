@@ -45,8 +45,8 @@ func TestAgentStartupHook(t *testing.T) {
 
 	cfg := func(hooksPath string) AgentStartConfig {
 		return AgentStartConfig{
-			HooksPath: hooksPath,
-			NoColor:   true,
+			HooksPath:    hooksPath,
+			GlobalConfig: GlobalConfig{NoColor: true},
 		}
 	}
 	prompt := "$"
@@ -116,7 +116,7 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 		return AgentStartConfig{
 			HooksPath:            hooksPath,
 			AdditionalHooksPaths: []string{additionalHooksPath},
-			NoColor:              true,
+			GlobalConfig:         GlobalConfig{NoColor: true},
 		}
 	}
 	prompt := "$"
@@ -154,8 +154,8 @@ func TestAgentShutdownHook(t *testing.T) {
 
 	cfg := func(hooksPath string) AgentStartConfig {
 		return AgentStartConfig{
-			HooksPath: hooksPath,
-			NoColor:   true,
+			HooksPath:    hooksPath,
+			GlobalConfig: GlobalConfig{NoColor: true},
 		}
 	}
 	prompt := "$"

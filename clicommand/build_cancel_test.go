@@ -22,9 +22,11 @@ func TestBuildCancel(t *testing.T) {
 		}))
 
 		cfg := BuildCancelConfig{
-			Build:            "1",
-			AgentAccessToken: "agentaccesstoken",
-			Endpoint:         server.URL,
+			Build: "1",
+			APIConfig: APIConfig{
+				AgentAccessToken: "agentaccesstoken",
+				Endpoint:         server.URL,
+			},
 		}
 
 		l := logger.NewBuffer()
@@ -39,9 +41,11 @@ func TestBuildCancel(t *testing.T) {
 		}))
 
 		cfg := BuildCancelConfig{
-			Build:            "1",
-			AgentAccessToken: "agentaccesstoken",
-			Endpoint:         server.URL,
+			Build: "1",
+			APIConfig: APIConfig{
+				AgentAccessToken: "agentaccesstoken",
+				Endpoint:         server.URL,
+			},
 		}
 
 		l := logger.NewBuffer()

@@ -14,16 +14,12 @@ import (
 )
 
 type ToolKeygenConfig struct {
+	GlobalConfig
+
 	Alg             string `cli:"alg"`
 	KeyID           string `cli:"key-id"`
 	PrivateJWKSFile string `cli:"private-jwks-file" normalize:"filepath"`
 	PublicJWKSFile  string `cli:"public-jwks-file" normalize:"filepath"`
-
-	NoColor     bool     `cli:"no-color"`
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	Experiments []string `cli:"experiment"`
-	Profile     string   `cli:"profile"`
 }
 
 // TODO: Add docs link when there is one.
@@ -45,7 +41,7 @@ and the public JWKS for verification.
 
 For more information about JWS, see https://tools.ietf.org/html/rfc7515 and
 for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "alg",
 			EnvVar: "BUILDKITE_AGENT_KEYGEN_ALG",
@@ -66,14 +62,7 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 			EnvVar: "BUILDKITE_AGENT_KEYGEN_PUBLIC_JWKS_FILE",
 			Usage:  "The filename to write the public keyset to. Defaults to a name based on the key id in the current directory",
 		},
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 	Action: func(c *cli.Context) {
 		_, cfg, l, _, done := setupLoggerAndConfig[ToolKeygenConfig](context.Background(), c)
 		defer done()
