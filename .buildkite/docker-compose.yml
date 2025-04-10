@@ -1,6 +1,19 @@
 version: '3.5'
 
 services:
+  lint:
+    build:
+      context: .
+      dockerfile: Dockerfile-lint
+    volumes:
+      - ../:/work:cached
+      - ~/gocache:/gocache
+      - ~/gomodcache:/gomodcache
+    working_dir: /work
+    environment:
+      - GOCACHE=/gocache
+      - GOMODCACHE=/gomodcache
+  
   agent:
     build:
       context: .

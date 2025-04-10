@@ -10,14 +10,14 @@ agents:
   queue: "$AGENT_RUNNERS_LINUX_QUEUE"
 
 steps:
-  - name: ":go::robot_face: Check Code Committed"
+  - name: ":go::robot_face: Lint"
     key: check-code-committed
     command: .buildkite/steps/check-code-committed.sh
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
-          run: agent
+          run: lint
 
   - name: ":linux: Linux AMD64 Tests"
     key: test-linux-amd64

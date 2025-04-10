@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
-set -Eeufo pipefail
+set -euf
 
 echo --- :go: Checking go mod tidyness
 go mod tidy
@@ -33,5 +33,10 @@ if ! git diff --no-ext-diff --exit-code; then
 
   exit 1
 fi
+
+# While we're cleaning up things found by golangci-lint, don't fail if it finds
+# things.
+echo +++ :go: Running golangci-lint...
+golangci-lint run || true
 
 echo +++ Everything is clean and tidy! 🎉
