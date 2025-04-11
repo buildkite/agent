@@ -183,6 +183,14 @@ func (c *Client) setRequestHeaders(headers map[string]string) {
 		}
 		c.requestHeaders.Set(k, v)
 	}
+
+	if c.logger.Level() <= logger.DEBUG {
+		for k, values := range c.requestHeaders {
+			for _, v := range values {
+				c.logger.Debug("Server-specified request header: %s: %s", k, v)
+			}
+		}
+	}
 }
 
 // FromPing returns a new instance using a new endpoint from a ping response
