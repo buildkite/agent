@@ -178,10 +178,19 @@ var _ jobRunner = (*JobRunner)(nil)
 
 // Initializes the job runner
 func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
+	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
+	// our current apiClient is using
+	if conf.Job.Token != "" {
+		clientConf := apiClient.Config()
+		clientConf.Token = conf.Job.Token
+		apiClient = apiClient.New(clientConf)
+	}
+
 	r := &JobRunner{
 		agentLogger: l,
 		conf:        conf,
 		apiClient:   apiClient,
+		client:      &core.Client{APIClient: apiClient, Logger: l},
 	}
 
 	var err error
@@ -193,15 +202,6 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	if conf.JobStatusInterval == 0 {
 		conf.JobStatusInterval = 1 * time.Second
 	}
-
-	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
-	// our current apiClient is using
-	if r.conf.Job.Token != "" {
-		clientConf := r.apiClient.Config()
-		clientConf.Token = r.conf.Job.Token
-		r.apiClient = api.NewClient(r.agentLogger, clientConf)
-	}
-	r.client = &core.Client{APIClient: r.apiClient, Logger: l}
 
 	// Create our header times struct
 	r.headerTimesStreamer = newHeaderTimesStreamer(r.agentLogger, r.onUploadHeaderTime)
@@ -488,6 +488,18 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_AGENT_ENDPOINT"] = apiConfig.Endpoint
 	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = apiConfig.Token
 	env["BUILDKITE_NO_HTTP2"] = fmt.Sprint(apiConfig.DisableHTTP2)
+
+	// ... including any server-specified request headers, so that sub-processes such as
+	// buildkite-agent annotate etc can respect them.
+	for header, values := range r.apiClient.ServerSpecifiedRequestHeaders() {
+		k := fmt.Sprintf(
+			"BUILDKITE_REQUEST_HEADER_%s",
+			strings.ToUpper(strings.ReplaceAll(header, "-", "_")),
+		)
+		for _, v := range values {
+			env[k] = v
+		}
+	}
 
 	// Add agent environment variables
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprint(r.conf.Debug)

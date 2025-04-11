@@ -46,6 +46,7 @@ type testRunJobConfig struct {
 	agentCfg         agent.AgentConfiguration
 	mockBootstrap    *bintest.Mock
 	verificationJWKS jwk.Set
+	client           *api.Client
 }
 
 func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
@@ -60,12 +61,14 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 	// set the bootstrap into the config
 	cfg.agentCfg.BootstrapScript = cfg.mockBootstrap.Path
 
-	client := api.NewClient(l, api.Config{
-		Endpoint: cfg.server.URL,
-		Token:    "llamasrock",
-	})
+	if cfg.client == nil {
+		cfg.client = api.NewClient(l, api.Config{
+			Endpoint: cfg.server.URL,
+			Token:    "llamasrock",
+		})
+	}
 
-	jr, err := agent.NewJobRunner(ctx, l, client, agent.JobRunnerConfig{
+	jr, err := agent.NewJobRunner(ctx, l, cfg.client, agent.JobRunnerConfig{
 		Job:                cfg.job,
 		JWKS:               cfg.verificationJWKS,
 		AgentConfiguration: cfg.agentCfg,

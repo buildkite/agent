@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -68,6 +69,9 @@ type Client struct {
 
 	// The logger used
 	logger logger.Logger
+
+	// server-specified HTTP request headers to include in all requests
+	requestHeaders http.Header
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -99,15 +103,56 @@ func NewClient(l logger.Logger, conf Config) *Client {
 	}
 
 	return &Client{
-		logger: l,
-		client: agenthttp.NewClient(clientOptions...),
-		conf:   conf,
+		logger:         l,
+		client:         agenthttp.NewClient(clientOptions...),
+		conf:           conf,
+		requestHeaders: requestHeadersFromEnv(os.Environ()),
 	}
+}
+
+func requestHeadersFromEnv(environ []string) http.Header {
+	const prefix = "BUILDKITE_REQUEST_HEADER_"
+	headers := make(http.Header)
+	for _, line := range environ {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			// not a valid environment variable (should be impossible?)
+			continue
+		}
+		suffix, found := strings.CutPrefix(parts[0], prefix)
+		if !found {
+			// not a BUILDKITE_REQUEST_HEADER_... environment variable
+			continue
+		}
+		// We could leave headers.Add(…) to canonicalize the key, but then we'd have to test for a
+		// prefix of "BUILDKITE_" rather than "Buildkite-", which feels a bit dangerously indirect.
+		key := http.CanonicalHeaderKey(strings.ReplaceAll(suffix, "_", "-"))
+		if !strings.HasPrefix(key, "Buildkite-") {
+			// not a permitted Buildkite-* header
+			continue
+		}
+		headers.Add(key, parts[1])
+	}
+	return headers
+}
+
+// New creates a new Client for the given config, while preserving other internal state such as
+// request headers and the logger.
+func (c *Client) New(conf Config) *Client {
+	client := NewClient(c.logger, conf)
+	client.requestHeaders = c.requestHeaders
+	return client
 }
 
 // Config returns the internal configuration for the Client
 func (c *Client) Config() Config {
 	return c.conf
+}
+
+// ServerSpecifiedRequestHeaders returns the HTTP headers that the Buildkite register/ping
+// APIs have advised the client to send in all requests.
+func (c *Client) ServerSpecifiedRequestHeaders() http.Header {
+	return c.requestHeaders
 }
 
 // FromAgentRegisterResponse returns a new instance using the access token and endpoint
@@ -123,7 +168,29 @@ func (c *Client) FromAgentRegisterResponse(reg *AgentRegisterResponse) *Client {
 		conf.Endpoint = reg.Endpoint
 	}
 
-	return NewClient(c.logger, conf)
+	return c.New(conf)
+}
+
+func (c *Client) setRequestHeaders(headers map[string]string) {
+	if headers == nil {
+		return
+	}
+
+	c.requestHeaders = make(http.Header)
+	for k, v := range headers {
+		if !strings.HasPrefix(k, "Buildkite-") {
+			continue
+		}
+		c.requestHeaders.Set(k, v)
+	}
+
+	if c.logger.Level() <= logger.DEBUG {
+		for k, values := range c.requestHeaders {
+			for _, v := range values {
+				c.logger.Debug("Server-specified request header: %s: %s", k, v)
+			}
+		}
+	}
 }
 
 // FromPing returns a new instance using a new endpoint from a ping response
@@ -135,7 +202,7 @@ func (c *Client) FromPing(resp *Ping) *Client {
 		conf.Endpoint = resp.Endpoint
 	}
 
-	return NewClient(c.logger, conf)
+	return c.New(conf)
 }
 
 type Header struct {
@@ -180,6 +247,13 @@ func (c *Client) newRequest(
 		}
 	}
 
+	// add any request headers specified by the server during register/ping
+	for k, values := range c.requestHeaders {
+		for _, v := range values {
+			req.Header.Add(k, v)
+		}
+	}
+
 	for _, header := range headers {
 		req.Header.Add(header.Name, header.Value)
 	}
@@ -205,6 +279,13 @@ func (c *Client) newFormRequest(ctx context.Context, method, urlStr string, body
 
 	if c.conf.UserAgent != "" {
 		req.Header.Add("User-Agent", c.conf.UserAgent)
+	}
+
+	// add any request headers specified by the server during register/ping
+	for k, values := range c.requestHeaders {
+		for _, v := range values {
+			req.Header.Add(k, v)
+		}
 	}
 
 	return req, nil
