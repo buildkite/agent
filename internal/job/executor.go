@@ -1298,25 +1298,18 @@ func (e *Executor) kubernetesSetup(ctx context.Context, environ *env.Environment
 		}
 	}
 
-	// Proceed when ready
-	if err := k8sAgentSocket.Await(ctx, kubernetes.RunStateStart); err != nil {
-		return fmt.Errorf("error waiting for client to become ready: %w", err)
-	}
-
-	go func() {
-		// If the k8s client is interrupted because the "server" agent is
-		// stopped or unreachable, we should stop running the job.
-		err := k8sAgentSocket.Await(ctx, kubernetes.RunStateInterrupt)
-		// If the k8s client is interrupted because our own ctx was cancelled,
-		// then the job is already stopping, so there's no point logging an
-		// error.
-		if errors.Is(err, context.Canceled) {
-			return
-		}
+	// So that the agent doesn't exit early thinking the client is lost, we want
+	// to continue talking to the agent container for as long as possible (after
+	// Interrupt). Hence detach the StatusLoop context from cancellation using
+	// [context.WithoutCancel]. The goroutine will exit with the process.
+	// (Why even have a context arg? Testing and possible future value-passing)
+	return k8sAgentSocket.StatusLoop(context.WithoutCancel(ctx), func(err error) {
+		// If the k8s client is interrupted for any reason (either the server
+		// is in state interrupted or the connection died or ...), we should
+		// cancel the job.
 		if err != nil {
 			e.shell.Errorf("Error waiting for client interrupt: %v", err)
 		}
 		e.Cancel()
-	}()
-	return nil
+	})
 }
