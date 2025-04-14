@@ -138,6 +138,27 @@ var (
 	}
 )
 
+// GlobalConfig includes very common shared config options for easy inclusion across
+// config structs (via embedding).
+type GlobalConfig struct {
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
+}
+
+// APIConfig includes API-related shared options for easy inclusion across
+// config structs (via embedding). Subcommands that don't need APIConfig usually
+// do something "trivial" (e.g. acknowledgements) or "special" (e.g. start).
+type APIConfig struct {
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	DebugHTTP        bool   `cli:"debug-http"`
+	TraceHTTP        bool   `cli:"trace-http"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoHTTP2          bool   `cli:"no-http2"`
+}
+
 func globalFlags() []cli.Flag {
 	return []cli.Flag{
 		NoColorFlag,
@@ -145,6 +166,16 @@ func globalFlags() []cli.Flag {
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+	}
+}
+
+func apiFlags() []cli.Flag {
+	return []cli.Flag{
+		AgentAccessTokenFlag,
+		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+		TraceHTTPFlag,
 	}
 }
 

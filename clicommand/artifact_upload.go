@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/artifact"
@@ -67,24 +68,13 @@ If you need to preserve them in a directory, we recommend creating a tar archive
     $ buildkite-agent upload log.tar`
 
 type ArtifactUploadConfig struct {
+	GlobalConfig
+	APIConfig
+
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
 	Destination string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
 	Job         string `cli:"job" validate:"required"`
 	ContentType string `cli:"content-type"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	TraceHTTP        bool   `cli:"trace-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 
 	// Uploader flags
 	GlobResolveFollowSymlinks bool `cli:"glob-resolve-follow-symlinks"`
@@ -99,7 +89,7 @@ var ArtifactUploadCommand = cli.Command{
 	Name:        "upload",
 	Usage:       "Uploads files to a job as artifacts",
 	Description: uploadHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
@@ -127,22 +117,8 @@ var ArtifactUploadCommand = cli.Command{
 			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead",
 			EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-		TraceHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
 		NoMultipartArtifactUploadFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](ctx, c)

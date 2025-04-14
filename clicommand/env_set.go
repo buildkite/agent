@@ -42,22 +42,17 @@ Setting the variables ′LLAMA′ and ′ALPACA′ using a JSON object supplied 
         buildkite-agent env set --input-format=json --output-format=quiet -`
 
 type EnvSetConfig struct {
+	GlobalConfig
+
 	InputFormat  string `cli:"input-format"`
 	OutputFormat string `cli:"output-format"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
 }
 
 var EnvSetCommand = cli.Command{
 	Name:        "set",
 	Usage:       "Sets variables in the job execution environment",
 	Description: envSetHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "input-format",
 			Usage:  "Input format: plain or json",
@@ -70,14 +65,7 @@ var EnvSetCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_ENV_SET_OUTPUT_FORMAT",
 			Value:  "plain",
 		},
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 	Action: envSetAction,
 }
 

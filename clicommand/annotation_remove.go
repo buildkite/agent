@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -27,28 +28,18 @@ Example:
     $ buildkite-agent annotation remove --context "remove-me"`
 
 type AnnotationRemoveConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Context string `cli:"context" validate:"required"`
 	Job     string `cli:"job" validate:"required"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var AnnotationRemoveCommand = cli.Command{
 	Name:        "remove",
 	Usage:       "Remove an existing annotation from a Buildkite build",
 	Description: annotationRemoveHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "context",
 			Value:  "default",
@@ -61,20 +52,7 @@ var AnnotationRemoveCommand = cli.Command{
 			Usage:  "Which job is removing the annotation",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotationRemoveConfig](ctx, c)

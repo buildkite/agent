@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -30,30 +31,20 @@ Example:
     $ buildkite-agent step get "state" --step "my-other-step"`
 
 type StepGetConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Attribute string `cli:"arg:0" label:"step attribute"`
 	StepOrKey string `cli:"step" validate:"required"`
 	Build     string `cli:"build"`
 	Format    string `cli:"format"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var StepGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Get the value of an attribute",
 	Description: stepGetHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "step",
 			Value:  "",
@@ -72,20 +63,7 @@ var StepGetCommand = cli.Command{
 			Usage:  "The format to output the attribute value in (currently only JSON is supported)",
 			EnvVar: "BUILDKITE_STEP_GET_FORMAT",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](context.Background(), c)
 		defer done()

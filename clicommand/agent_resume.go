@@ -3,7 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
-
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -26,38 +26,15 @@ Example:
     $ buildkite-agent resume`
 
 type AgentResumeConfig struct {
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
+	GlobalConfig
+	APIConfig
 }
 
 var AgentResumeCommand = cli.Command{
 	Name:        "resume",
 	Usage:       "Resume the agent",
 	Description: resumeDescription,
-	Flags: []cli.Flag{
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	Flags:       slices.Concat(globalFlags(), apiFlags()),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AgentResumeConfig](ctx, c)

@@ -81,6 +81,8 @@ var (
 // - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
 
 type AgentStartConfig struct {
+	GlobalConfig
+
 	Config string `cli:"config"`
 
 	Name              string   `cli:"name"`
@@ -174,16 +176,11 @@ type AgentStartConfig struct {
 	TracingBackend     string `cli:"tracing-backend"`
 	TracingServiceName string `cli:"tracing-service-name"`
 
-	// Global flags
-	Debug                     bool     `cli:"debug"`
-	LogLevel                  string   `cli:"log-level"`
-	NoColor                   bool     `cli:"no-color"`
-	Experiments               []string `cli:"experiment" normalize:"list"`
-	Profile                   string   `cli:"profile"`
-	StrictSingleHooks         bool     `cli:"strict-single-hooks"`
-	KubernetesExec            bool     `cli:"kubernetes-exec"`
-	TraceContextEncoding      string   `cli:"trace-context-encoding"`
-	NoMultipartArtifactUpload bool     `cli:"no-multipart-artifact-upload"`
+	// Other shared flags
+	StrictSingleHooks         bool   `cli:"strict-single-hooks"`
+	KubernetesExec            bool   `cli:"kubernetes-exec"`
+	TraceContextEncoding      string `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -326,7 +323,7 @@ var AgentStartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Starts a Buildkite agent",
 	Description: startDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "config",
 			Value:  "",
@@ -719,18 +716,13 @@ var AgentStartCommand = cli.Command{
 		},
 
 		// API Flags
-		AgentRegisterTokenFlag,
+		AgentRegisterTokenFlag, // != AgentAccessToken
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
 		TraceHTTPFlag,
 
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
+		// Other shared flags
 		RedactedVars,
 		StrictSingleHooksFlag,
 		KubernetesExecFlag,
@@ -780,7 +772,7 @@ var AgentStartCommand = cli.Command{
 			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
 		},
-	},
+	),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](ctx, c, withConfigFilePaths(

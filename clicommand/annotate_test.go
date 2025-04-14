@@ -29,11 +29,13 @@ func TestAnnotate(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := AnnotateConfig{
-		Body:             "abc",
-		Job:              "jobid",
-		AgentAccessToken: "agentaccesstoken",
-		Endpoint:         server.URL,
-		Priority:         1,
+		Body: "abc",
+		Job:  "jobid",
+		APIConfig: APIConfig{
+			AgentAccessToken: "agentaccesstoken",
+			Endpoint:         server.URL,
+		},
+		Priority: 1,
 	}
 	l := logger.NewBuffer()
 
