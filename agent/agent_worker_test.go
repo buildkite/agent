@@ -638,3 +638,160 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 		t.Errorf("agent.Pings = %d, want %d", got, want)
 	}
 }
+
+func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	const headerKey = "Buildkite-Hello"
+	const headerValue = "world"
+
+	const agentSessionToken = "alpacas"
+	server := NewFakeAPIServer()
+	defer server.Close()
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(req *http.Request) (api.Ping, error) {
+		switch agent.Pings {
+		case 0:
+			if want, got := headerValue, req.Header.Get(headerKey); want != got {
+				t.Errorf("req.Header.Get(%q) = %q, wanted %q", headerKey, got, want)
+			}
+			t.Log("server ping: disconnect")
+			return api.Ping{Action: "disconnect"}, nil
+		default:
+			return api.Ping{}, fmt.Errorf("unexpected ping #%d", agent.Pings)
+		}
+	}
+	server.AddRegistration("llamas", &api.AgentRegisterResponse{
+		UUID:              uuid.New().String(),
+		Name:              "agent-1",
+		AccessToken:       agentSessionToken,
+		PingInterval:      1,
+		JobStatusInterval: 5,
+		HeartbeatInterval: 60,
+		RequestHeaders:    map[string]string{headerKey: headerValue},
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	// The registration request is made in clicommand.AgentStartCommand, and we're not testing that
+	// here, so we'll emulate what it does...
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+	client := &core.Client{APIClient: apiClient, Logger: l}
+	// the underlying api.Client will capture & store the server-specified request headers here...
+	reg, err := client.Register(ctx, api.AgentRegisterRequest{})
+	if err != nil {
+		t.Fatalf("failed to register: %v", err)
+	}
+
+	// here we pass in the register response
+	worker := NewAgentWorker(
+		l,
+		reg, // the AgentRegisterResponse
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient, // the api.Client which stored requestHeaders during Register
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(ctx, NewIdleMonitor(1)); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	if got, want := agent.Pings, 1; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}
+
+func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	const agentSessionToken = "alpacas"
+
+	server := NewFakeAPIServer()
+	defer server.Close()
+
+	const headerKey = "Buildkite-Hello"
+	const headerValue = "world"
+
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(req *http.Request) (api.Ping, error) {
+		switch agent.Pings {
+		case 0: // no action
+			if len(req.Header.Values(headerKey)) != 0 {
+				t.Errorf("unexpected header: %s: %q", headerKey, req.Header.Get(headerKey))
+			}
+			t.Log("server ping: idle")
+			return api.Ping{Action: "idle"}, nil
+		case 1:
+			if len(req.Header.Values(headerKey)) != 0 {
+				t.Errorf("unexpected header: %s: %q", headerKey, req.Header.Get(headerKey))
+			}
+			t.Log("server ping: idle, set RequestHeaders")
+			return api.Ping{
+				Action:         "idle",
+				RequestHeaders: map[string]string{headerKey: headerValue},
+			}, nil
+		case 2:
+			if want, got := headerValue, req.Header.Get(headerKey); want != got {
+				t.Errorf("req.Header.Get(%q) = %q, wanted %q", headerKey, got, want)
+			}
+			t.Log("server ping: idle")
+			return api.Ping{Action: "idle"}, nil
+		case 3:
+			if want, got := headerValue, req.Header.Get(headerKey); want != got {
+				t.Errorf("req.Header.Get(%q) = %q, wanted %q", headerKey, got, want)
+			}
+			t.Log("server ping: idle, set empty RequestHeaders")
+			return api.Ping{Action: "idle", RequestHeaders: map[string]string{}}, nil
+		case 4:
+			if len(req.Header.Values(headerKey)) != 0 {
+				t.Errorf("unexpected header: %s: %q", headerKey, req.Header.Get(headerKey))
+			}
+			t.Log("server ping: disconnect")
+			return api.Ping{Action: "disconnect"}, nil
+		default:
+			return api.Ping{}, fmt.Errorf("unexpected ping #%d", agent.Pings)
+		}
+	}
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(ctx, NewIdleMonitor(1)); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	if got, want := agent.Pings, 5; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}

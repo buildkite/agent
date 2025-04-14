@@ -5,6 +5,7 @@ package agent
 import (
 	"context"
 	"github.com/buildkite/agent/v3/api"
+	"net/http"
 )
 
 // APIClient is an interface generated for "github.com/buildkite/agent/v3/api.Client".
@@ -28,6 +29,7 @@ type APIClient interface {
 	GetSecret(context.Context, *api.GetSecretRequest) (*api.Secret, *api.Response, error)
 	Heartbeat(context.Context) (*api.Heartbeat, *api.Response, error)
 	MetaDataKeys(context.Context, string, string) ([]string, *api.Response, error)
+	New(api.Config) *api.Client
 	OIDCToken(context.Context, *api.OIDCTokenRequest) (*api.OIDCToken, *api.Response, error)
 	Pause(context.Context, *api.AgentPauseRequest) (*api.Response, error)
 	Ping(context.Context) (*api.Ping, *api.Response, error)
@@ -36,6 +38,7 @@ type APIClient interface {
 	Resume(context.Context) (*api.Response, error)
 	SaveHeaderTimes(context.Context, string, *api.HeaderTimes) (*api.Response, error)
 	SearchArtifacts(context.Context, string, *api.ArtifactSearchOptions) ([]*api.Artifact, *api.Response, error)
+	ServerSpecifiedRequestHeaders() http.Header
 	SetMetaData(context.Context, string, *api.MetaData) (*api.Response, error)
 	StartJob(context.Context, *api.Job) (*api.Response, error)
 	StepCancel(context.Context, string, *api.StepCancel) (*api.StepCancelResponse, *api.Response, error)
