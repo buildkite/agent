@@ -9,7 +9,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	// semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
 // SpanMetricsProcessor implements a trace processor that generates metrics from spans
@@ -79,7 +78,6 @@ func (smp *SpanMetricsProcessor) OnEnd(s sdktrace.ReadOnlySpan) {
 
 	// Extract relevant attributes from the span
 	attrs := []attribute.KeyValue{
-		// semconv.ServiceNameKey.String(s.Resource().Attributes()[semconv.ServiceNameKey].AsString()),
 		attribute.String("span.name", s.Name()),
 		attribute.String("span.kind", s.SpanKind().String()),
 	}
@@ -117,67 +115,3 @@ func (smp *SpanMetricsProcessor) ForceFlush(ctx context.Context) error {
 	}
 	return nil
 }
-
-// func main() {
-// 	// Initialize resource describing the service
-// 	res, err := resource.New(context.Background(),
-// 		resource.WithAttributes(
-// 			semconv.ServiceNameKey.String("my-service"),
-// 			semconv.ServiceVersionKey.String("1.0.0"),
-// 		),
-// 	)
-// 	if err != nil {
-// 		log.Fatalf("Failed to create resource: %v", err)
-// 	}
-
-// 	// Set up the prometheus exporter
-// 	promExporter, err := prometheus.New()
-// 	if err != nil {
-// 		log.Fatalf("Failed to create Prometheus exporter: %v", err)
-// 	}
-
-// 	// Create a metrics provider
-// 	meterProvider := sdkmetric.NewMeterProvider(
-// 		sdkmetric.WithReader(promExporter),
-// 		sdkmetric.WithResource(res),
-// 	)
-// 	otel.SetMeterProvider(meterProvider)
-
-// 	// Create a batch span processor for normal span processing
-// 	batchProcessor := sdktrace.NewBatchSpanProcessor(
-// 		// You would configure an actual exporter here if needed
-// 		sdktrace.NewNoopSpanExporter(),
-// 	)
-
-// 	// Create our custom SpanMetrics processor
-// 	spanMetricsProcessor, err := NewSpanMetricsProcessor(meterProvider, batchProcessor)
-// 	if err != nil {
-// 		log.Fatalf("Failed to create SpanMetrics processor: %v", err)
-// 	}
-
-// 	// Create a tracer provider with our custom processor
-// 	tracerProvider := sdktrace.NewTracerProvider(
-// 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-// 		sdktrace.WithSpanProcessor(spanMetricsProcessor),
-// 		sdktrace.WithResource(res),
-// 	)
-// 	otel.SetTracerProvider(tracerProvider)
-
-// 	// Expose Prometheus metrics endpoint
-// 	http.Handle("/metrics", promhttp.Handler())
-// 	go func() {
-// 		log.Println("Starting metrics server at :8889")
-// 		if err := http.ListenAndServe(":8889", nil); err != nil {
-// 			log.Fatalf("Failed to start metrics server: %v", err)
-// 		}
-// 	}()
-
-// 	// Create a tracer
-// 	tracer := tracerProvider.Tracer("my-service-tracer")
-
-// 	// Your application logic here
-// 	for {
-// 		runSample(tracer)
-// 		time.Sleep(1 * time.Second)
-// 	}
-// }
