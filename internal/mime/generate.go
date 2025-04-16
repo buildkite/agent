@@ -86,12 +86,12 @@ func addApacheTypes(types map[string]string) error {
 }
 
 func addNginxTypes(types map[string]string) error {
-	client, err := http.Get(urls["nginx"])
+	file, err := os.Open("internal/mime/mime.types")
 	if err != nil {
 		return err
 	}
 	var unfinishedLine string
-	scanner := bufio.NewScanner(client.Body)
+	scanner := bufio.NewScanner(file)
 	// File format:
 	// # comment
 	// types {
@@ -120,7 +120,7 @@ func addNginxTypes(types map[string]string) error {
 			types[ext] = parts[0]
 		}
 	}
-	client.Body.Close()
+	file.Close()
 	return nil
 }
 
