@@ -436,6 +436,8 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 		ranJob = true
 		if a.agentConfiguration.DisconnectAfterJob {
 			// Unless paused, this agent disconnects after the next ping.
+			// Do the ping immediately so we reduce the chances our agent is assigned a job
+			pingTicker.Reset(pingInterval)
 			continue
 		}
 		lastActionTime = time.Now()
