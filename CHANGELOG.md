@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.97.0](https://github.com/buildkite/agent/tree/v3.97.0) (2025-04-16)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.96.0...v3.97.0)
+
+### Added
+- `api.Client` sends request headers specified by server in register & ping [#3268](https://github.com/buildkite/agent/pull/3268) (@pda)
+
+### Fixed
+- Ignore the ping interval if agent will disconnect after job [#3282](https://github.com/buildkite/agent/pull/3282) (@patrobinson)
+- fix: keep fetching status after interrupt [#3277](https://github.com/buildkite/agent/pull/3277) (@DrJosh9000)
+
+### Internal
+- chore: flag uniformity through embedding [#3276](https://github.com/buildkite/agent/pull/3276) (@DrJosh9000)
+- locally cache nginx mime types [#3284](https://github.com/buildkite/agent/pull/3284) (@patrobinson)
+
+### Dependency updates
+- build(deps): bump the container-images group across 5 directories with 3 updates [#3280](https://github.com/buildkite/agent/pull/3280) (@dependabot[bot])
+- build(deps): bump the cloud-providers group across 1 directory with 4 updates [#3281](https://github.com/buildkite/agent/pull/3281) (@dependabot[bot])
+- build(deps): bump golang.org/x/net from 0.38.0 to 0.39.0 in the golang-x group [#3278](https://github.com/buildkite/agent/pull/3278) (@dependabot[bot])
+
 ## [v3.96.0](https://github.com/buildkite/agent/tree/v3.96.0) (2025-04-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.95.1...v3.96.0)
 
