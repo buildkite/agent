@@ -744,7 +744,7 @@ var AgentStartCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "meta-data-ec2-tags",
 			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
+			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2_TAGS",
 		},
 		cli.BoolFlag{
 			Name:   "meta-data-gcp",
