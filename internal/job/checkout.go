@@ -549,9 +549,18 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	// Git clean prior to checkout, we do this even if submodules have been
 	// disabled to ensure previous submodules are cleaned up
+	gitSubmodules := false
 	if hasGitSubmodules(e.shell) {
-		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
-			return fmt.Errorf("cleaning git submodules: %w", err)
+		// Only clean if submodules have not been explicitly deactivated
+		if e.GitSubmodules {
+			e.shell.Commentf("Git submodules detected")
+			gitSubmodules = true
+
+			if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
+				return fmt.Errorf("cleaning git submodules: %w", err)
+			}
+		} else {
+			e.shell.OptionalWarningf("submodules-disabled", "This repository has submodules, but submodules are disabled at an agent level")
 		}
 	}
 
@@ -616,16 +625,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	} else {
 		if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
 			return fmt.Errorf("checking out commit %q: %w", e.Commit, err)
-		}
-	}
-
-	gitSubmodules := false
-	if hasGitSubmodules(e.shell) {
-		if e.GitSubmodules {
-			e.shell.Commentf("Git submodules detected")
-			gitSubmodules = true
-		} else {
-			e.shell.OptionalWarningf("submodules-disabled", "This repository has submodules, but submodules are disabled at an agent level")
 		}
 	}
 
