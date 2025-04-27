@@ -547,8 +547,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 	}
 
-	// Git clean prior to checkout, we do this even if submodules have been
-	// disabled to ensure previous submodules are cleaned up
 	gitSubmodules := false
 	if hasGitSubmodules(e.shell) {
 		// Skip cleaning up if submodules have been deactivated
