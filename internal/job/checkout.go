@@ -551,7 +551,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	// disabled to ensure previous submodules are cleaned up
 	gitSubmodules := false
 	if hasGitSubmodules(e.shell) {
-		// Only clean if submodules have not been explicitly deactivated
+		// Skip cleaning up if submodules have been deactivated
 		if e.GitSubmodules {
 			e.shell.Commentf("Git submodules detected")
 			gitSubmodules = true
