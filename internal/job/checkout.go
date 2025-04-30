@@ -370,7 +370,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 			// Fetch the PR head from the upstream repository into the mirror.
 			if err := e.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
-				return "", err
+				e.shell.Warningf("Unable to fetch %q for mirror — continuing, will fetch commit %s directly", refspec, e.Commit)
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
