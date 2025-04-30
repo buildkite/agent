@@ -572,6 +572,23 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
 
+	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
+		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
+		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+
+		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", refspec); err != nil {
+			e.shell.Warningf("Unable to fetch %q — continuing because we'll fetch the commit directly", refspec)
+		}
+
+		gitFetchHead, _ := e.shell.RunAndCapture(ctx, "git", "rev-parse", "FETCH_HEAD")
+		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
+
+		if e.Commit != "HEAD" {
+			if err := gitFetchCommitWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
+				return err
+			}
+		}
+
 	default:
 		// Otherwise fetch and checkout the commit directly.
 		if err := gitFetchCommitWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
@@ -774,7 +791,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 		"--no-pager",
 		"log",
 		"-1",
-		"HEAD",
+		e.Commit,
 		"-s", // --no-patch was introduced in v1.8.4 in 2013, but e.g. CentOS 7 isn't there yet
 		"--no-color",
 		"--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B",
