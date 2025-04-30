@@ -20,6 +20,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/ptr"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/bintest/v3"
@@ -80,7 +81,12 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 		t.Fatalf("agent.NewJobRunner() error = %v", err)
 	}
 
-	if err := jr.Run(context.Background()); err != nil {
+	var ignoreAgentInDispatches *bool
+	if cfg.agentCfg.DisconnectAfterJob {
+		ignoreAgentInDispatches = ptr.To(true)
+	}
+
+	if err := jr.Run(context.Background(), ignoreAgentInDispatches); err != nil {
 		return err
 	}
 

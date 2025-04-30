@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/ptr"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -304,11 +305,9 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 }
 
 var (
-	one = 1
-
 	waitStatusSuccess  = waitStatus{Code: 0}
 	waitStatusFailure  = waitStatus{Code: 1}
-	waitStatusSignaled = waitStatus{Code: 0, SignalCode: &one}
+	waitStatusSignaled = waitStatus{Code: 0, SignalCode: ptr.To(1)}
 )
 
 func init() {
