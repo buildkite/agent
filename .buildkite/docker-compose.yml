@@ -13,7 +13,7 @@ services:
     environment:
       - GOCACHE=/gocache
       - GOMODCACHE=/gomodcache
-  
+
   agent:
     build:
       context: .
@@ -30,6 +30,7 @@ services:
       - "BUILDKITE_BUILD_PATH=/buildkite"
       - GOCACHE=/gocache
       - GOMODCACHE=/gomodcache
+      - BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN
 
   ruby:
     image: ruby:2.7.6

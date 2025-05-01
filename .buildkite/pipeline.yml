@@ -22,11 +22,13 @@ steps:
   - name: ":linux: Linux AMD64 Tests"
     key: test-linux-amd64
     command: ".buildkite/steps/tests.sh"
+    parallelism: 2
     artifact_paths: junit-*.xml
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
+          propagate-environment: true
           run: agent
       - test-collector#v1.2.0:
           files: "junit-*.xml"
@@ -37,6 +39,7 @@ steps:
   - name: ":linux: Linux ARM64 Tests"
     key: test-linux-arm64
     command: ".buildkite/steps/tests.sh"
+    parallelism: 2
     artifact_paths: junit-*.xml
     agents:
       queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
@@ -44,6 +47,7 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
+          propagate-environment: true
           run: agent
       - test-collector#v1.2.0:
           files: "junit-*.xml"
@@ -54,6 +58,8 @@ steps:
   - name: ":satellite: Detect Data Races"
     key: test-race-linux-arm64
     command: ".buildkite/steps/tests.sh -race"
+    # Extra parallelism because this data race test is slow
+    parallelism: 3
     artifact_paths: junit-*.xml
     agents:
       queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
@@ -61,6 +67,7 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
+          propagate-environment: true
           run: agent
       - test-collector#v1.2.0:
           files: "junit-*.xml"
@@ -71,6 +78,7 @@ steps:
   - name: ":windows: Windows AMD64 Tests"
     key: test-windows
     command: "bash .buildkite\\steps\\tests.sh"
+    parallelism: 2
     artifact_paths: junit-*.xml
     agents:
       queue: $AGENT_RUNNERS_WINDOWS_QUEUE
