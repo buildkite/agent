@@ -23,7 +23,9 @@ steps:
     key: test-linux-amd64
     command: ".buildkite/steps/tests.sh"
     parallelism: 2
-    artifact_paths: junit-*.xml
+    artifact_paths:
+      - junit-*.xml
+      - "coverage/**/*"
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -33,14 +35,14 @@ steps:
       - test-collector#v1.2.0:
           files: "junit-*.xml"
           format: "junit"
-      - artifacts#v1.9.0:
-          upload: "cover.{html,out}"
 
   - name: ":linux: Linux ARM64 Tests"
     key: test-linux-arm64
     command: ".buildkite/steps/tests.sh"
     parallelism: 2
-    artifact_paths: junit-*.xml
+    artifact_paths:
+      - junit-*.xml
+      - "coverage/**/*"
     agents:
       queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
     plugins:
@@ -52,15 +54,15 @@ steps:
       - test-collector#v1.2.0:
           files: "junit-*.xml"
           format: "junit"
-      - artifacts#v1.9.0:
-          upload: "cover.{html,out}"
 
   - name: ":satellite: Detect Data Races"
     key: test-race-linux-arm64
     command: ".buildkite/steps/tests.sh -race"
     # Extra parallelism because this data race test is slow
     parallelism: 3
-    artifact_paths: junit-*.xml
+    artifact_paths:
+      - junit-*.xml
+      - "coverage/**/*"
     agents:
       queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
     plugins:
@@ -72,22 +74,71 @@ steps:
       - test-collector#v1.2.0:
           files: "junit-*.xml"
           format: "junit"
-      - artifacts#v1.9.0:
-          upload: "cover.{html,out}"
 
   - name: ":windows: Windows AMD64 Tests"
     key: test-windows
     command: "bash .buildkite\\steps\\tests.sh"
     parallelism: 2
-    artifact_paths: junit-*.xml
+    artifact_paths:
+      - junit-*.xml
+      - "coverage/**/*"
     agents:
       queue: $AGENT_RUNNERS_WINDOWS_QUEUE
     plugins:
       - test-collector#v1.2.0:
           files: "junit-*.xml"
           format: "junit"
-      - artifacts#v1.9.0:
-          upload: "cover.{html,out}"
+
+  - name: ":coverage: Test coverage report Linux ARM64"
+    key: test-coverage-linux-arm64
+    command: ".buildkite/steps/test-coverage-report.sh"
+    artifact_paths:
+      - "cover.html"
+      - "cover.out"
+    depends_on:
+      - test-linux-arm64
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+      - artifacts#v1.9.4:
+          download: "coverage/**"
+          step: test-linux-arm64
+
+  - name: ":coverage: Test coverage report Linux AMD64"
+    key: test-coverage-linux-amd64
+    command: ".buildkite/steps/test-coverage-report.sh"
+    artifact_paths:
+      - "cover.html"
+      - "cover.out"
+    depends_on:
+      - test-linux-amd64
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+      - artifacts#v1.9.4:
+          download: "coverage/**"
+          step: test-linux-amd64
+
+  - name: ":coverage: Test coverage report Linux ARM64 Race"
+    key: test-coverage-linux-arm64-race
+    command: ".buildkite/steps/test-coverage-report.sh"
+    artifact_paths:
+      - "cover.html"
+      - "cover.out"
+    depends_on:
+      - test-race-linux-arm64
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+      - artifacts#v1.9.4:
+          download: "coverage/**"
+          step: test-race-linux-arm64
 
   - label: ":writing_hand: Annotate with Test Failures"
     depends_on:
