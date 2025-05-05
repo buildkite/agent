@@ -23,7 +23,6 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 		projectName string
 		checkoutDir string
 		refSpec     string
-		expectErr   bool
 	}{
 		{
 			name: "Default checkout phase with HEAD commit",
