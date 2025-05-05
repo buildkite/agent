@@ -84,7 +84,6 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
 
 			s := githttptest.NewServer()
-			s.Start()
 			defer s.Close()
 
 			err = s.CreateRepository(tt.projectName)

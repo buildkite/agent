@@ -1,30 +1,23 @@
 package githttptest
 
 import (
+	"bytes"
 	"fmt"
-	"net"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 type Server struct {
-	URL          string
-	Listener     net.Listener
-	Config       *http.Server
+	*httptest.Server
 	repositories string
-	port         int
-	wg           sync.WaitGroup
 }
 
 func NewServer() *Server {
-
-	// create a http server mux
-	mux := http.NewServeMux()
-
 	repositories, err := os.MkdirTemp("", "githttptest")
 	if err != nil {
 		panic(fmt.Sprintf("githttptest: failed to create temp dir: %v", err))
@@ -32,44 +25,24 @@ func NewServer() *Server {
 
 	s := &Server{
 		repositories: repositories,
-		port:         0,
-		Listener:     newLocalListener(),
-		Config: &http.Server{
-			Handler: mux,
-		},
 	}
 
+	mux := http.NewServeMux()
 	mux.HandleFunc("/{repository}/git-upload-pack", s.handleGitUploadPack)
 	mux.HandleFunc("/{repository}/git-receive-pack", s.handleGitReceivePack)
 	mux.HandleFunc("/{repository}/info/refs", s.handleGitInfoRefs)
 
+	s.Server = httptest.NewServer(mux)
 	return s
 }
 
-func (s *Server) Start() {
-	if s.URL != "" {
-		panic("Server already started")
-	}
-	s.URL = fmt.Sprintf("http://%s", s.Listener.Addr().String())
-	s.goServe()
+func (s *Server) Close() {
+	s.Server.Close()
+	os.RemoveAll(s.repositories)
 }
 
-func newLocalListener() net.Listener {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		if l, err = net.Listen("tcp6", "[::1]:0"); err != nil {
-			panic(fmt.Sprintf("httptest: failed to listen on a port: %v", err))
-		}
-	}
-	return l
-}
-
-func (s *Server) goServe() {
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.Config.Serve(s.Listener)
-	}()
+func (s *Server) RepoURL(repoName string) string {
+	return fmt.Sprintf("%s/%s.git", s.URL, repoName)
 }
 
 func (s *Server) CreateRepository(repoName string) error {
@@ -156,14 +129,14 @@ func (s *Server) PushBranch(repoName, branchName string) (string, []byte, error)
 	defer os.RemoveAll(tempDir)
 
 	cloneCmd := exec.Command("git", "clone", s.RepoURL(repoName), tempDir)
-	if err := cloneCmd.Run(); err != nil {
-		return "", nil, fmt.Errorf("failed to clone repository: %w", err)
+	if out, err := cloneCmd.CombinedOutput(); err != nil {
+		return "", out, fmt.Errorf("failed to clone repository: %w", err)
 	}
 
 	branchCmd := exec.Command("git", "checkout", "-b", branchName)
 	branchCmd.Dir = tempDir
-	if err := branchCmd.Run(); err != nil {
-		return "", nil, fmt.Errorf("failed to create branch %s: %w", branchName, err)
+	if out, err := branchCmd.CombinedOutput(); err != nil {
+		return "", out, fmt.Errorf("failed to create branch %s: %w", branchName, err)
 	}
 
 	filePath := filepath.Join(tempDir, "newfile.txt")
@@ -225,31 +198,6 @@ func (s *Server) CreateRef(repoName, refName, commitHash string) (out []byte, er
 	return out, nil
 }
 
-func (s *Server) RepoURL(repoName string) string {
-	if s.URL == "" {
-		panic("Server not started")
-	}
-	return fmt.Sprintf("%s/%s.git", s.URL, repoName)
-}
-
-func (s *Server) Close() {
-	if s.Listener != nil {
-		s.Listener.Close()
-		s.wg.Wait()
-		s.Listener = nil
-	}
-	if s.repositories != "" {
-		os.RemoveAll(s.repositories)
-		s.repositories = ""
-	}
-	if s.Config != nil {
-		s.Config = nil
-	}
-	if s.URL != "" {
-		s.URL = ""
-	}
-}
-
 // isValidRepoName checks if the repository name is valid
 func isValidRepoName(name string) bool {
 	// Basic validation: non-empty, no slashes or special characters
@@ -269,8 +217,7 @@ func (s *Server) handleGitUploadPack(w http.ResponseWriter, r *http.Request) {
 	repoName = strings.TrimSuffix(repoName, ".git")
 
 	if !isValidRepoName(repoName) {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Invalid repository name")
+		http.Error(w, "Invalid repository name", http.StatusBadRequest)
 		return
 	}
 
@@ -278,21 +225,25 @@ func (s *Server) handleGitUploadPack(w http.ResponseWriter, r *http.Request) {
 
 	// Check if repository exists
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(w, "Repository not found")
+		http.Error(w, "Repository not found", http.StatusNotFound)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/x-git-upload-pack-result")
-	w.WriteHeader(http.StatusOK)
+	buf := bytes.NewBuffer(nil)
 
 	cmd := exec.Command("git", "upload-pack", "--stateless-rpc", repoPath)
 	cmd.Stdin = r.Body
-	cmd.Stdout = w
+	cmd.Stdout = buf
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "application/x-git-upload-pack-result")
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, buf)
+
 }
 
 // handleGitReceivePack handles the git-receive-pack endpoint (used for git push)
@@ -319,16 +270,22 @@ func (s *Server) handleGitReceivePack(w http.ResponseWriter, r *http.Request) {
 
 	// Check if we're allowing pushes
 	// For a production server, you might want to add authentication here
-	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
-	w.WriteHeader(http.StatusOK)
+
+	buf := bytes.NewBuffer(nil)
 
 	cmd := exec.Command("git", "receive-pack", "--stateless-rpc", repoPath)
 	cmd.Stdin = r.Body
-	cmd.Stdout = w
+	cmd.Stdout = buf
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+
+	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, buf)
 }
 
 // handleGitInfoRefs handles the info/refs endpoint
@@ -353,6 +310,18 @@ func (s *Server) handleGitInfoRefs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	buf := bytes.NewBuffer(nil)
+
+	// Execute the corresponding Git command
+	cmd := exec.Command("git", strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", repoPath)
+	cmd.Stdout = buf
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", fmt.Sprintf("application/x-%s-advertisement", service))
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
@@ -360,12 +329,5 @@ func (s *Server) handleGitInfoRefs(w http.ResponseWriter, r *http.Request) {
 	// Smart HTTP protocol requires a specific preamble
 	pktLine := fmt.Sprintf("# service=%s\n", service)
 	fmt.Fprintf(w, "%04x%s0000", len(pktLine)+4, pktLine)
-
-	// Execute the corresponding Git command
-	cmd := exec.Command("git", strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", repoPath)
-	cmd.Stdout = w
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-	}
+	io.Copy(w, buf)
 }
