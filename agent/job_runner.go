@@ -112,11 +112,6 @@ type JobRunnerConfig struct {
 	AgentStdout io.Writer
 }
 
-type jobRunner interface {
-	Run(ctx context.Context) error
-	CancelAndStop() error
-}
-
 type JobRunner struct {
 	// The configuration for the job runner
 	conf JobRunnerConfig
@@ -134,7 +129,7 @@ type JobRunner struct {
 	client *core.Client
 
 	// The internal process of the job
-	process jobAPI
+	process jobProcess
 
 	// The internal buffer of the process output
 	output *process.Buffer
@@ -165,7 +160,8 @@ type JobRunner struct {
 	envJSONFile  *os.File
 }
 
-type jobAPI interface {
+// jobProcess is either a *process.Process, or a *kubernetes.Runner.
+type jobProcess interface {
 	Done() <-chan struct{}
 	Started() <-chan struct{}
 	Interrupt() error
@@ -174,10 +170,8 @@ type jobAPI interface {
 	WaitStatus() process.WaitStatus
 }
 
-var _ jobRunner = (*JobRunner)(nil)
-
 // Initializes the job runner
-func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
+func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
 	if conf.Job.Token != "" {

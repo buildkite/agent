@@ -38,11 +38,12 @@ type FakeJob struct {
 }
 
 type FakeAgent struct {
-	Assigned   *FakeJob
-	Paused     bool
-	Stop       bool
-	Pings      int
-	Heartbeats int
+	Assigned           *FakeJob
+	Paused             bool
+	Stop               bool
+	Pings              int
+	Heartbeats         int
+	IgnoreInDispatches bool
 
 	PingHandler func(*http.Request) (api.Ping, error)
 }
@@ -261,8 +262,18 @@ func (fs *FakeAPIServer) handleJobFinish(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	var finishReq api.JobFinishRequest
+	if err := json.NewDecoder(req.Body).Decode(&finishReq); err != nil {
+		http.Error(rw, encodeMsgf("couldn't decde request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
 	job.State = JobStateFinished
 	agent.Assigned = nil
+
+	if ignore := finishReq.IgnoreAgentInDispatches; ignore != nil {
+		agent.IgnoreInDispatches = *ignore
+	}
 
 	rw.Write([]byte("{}"))
 }

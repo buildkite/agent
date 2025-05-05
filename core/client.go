@@ -136,21 +136,23 @@ func handleRetriableJobAcquisitionError(warning string, resp *api.Response, r *r
 	// `r.SetNextInterval`, the `Retrying in ...` message wouldn't include the server-set Retry-After, if it was set
 	defer func(r *roko.Retrier) { logger.Warn("%s (%s)", warning, r) }(r)
 
-	if resp != nil {
-		retryAfter := resp.Header.Get("Retry-After")
-
-		// Only customize the retry interval if the Retry-After header is present. Otherwise, keep using the default retrier settings
-		if retryAfter == "" {
-			return
-		}
-
-		duration, errParseDuration := time.ParseDuration(retryAfter + "s")
-		if errParseDuration != nil {
-			return // use the default retrier settings
-		}
-
-		r.SetNextInterval(duration)
+	if resp == nil {
+		return
 	}
+
+	retryAfter := resp.Header.Get("Retry-After")
+
+	// Only customize the retry interval if the Retry-After header is present. Otherwise, keep using the default retrier settings
+	if retryAfter == "" {
+		return
+	}
+
+	duration, errParseDuration := time.ParseDuration(retryAfter + "s")
+	if errParseDuration != nil {
+		return // use the default retrier settings
+	}
+
+	r.SetNextInterval(duration)
 }
 
 // Connects the agent to the Buildkite Agent API, retrying up to 10 times with 5
@@ -203,7 +205,7 @@ func (c *Client) Disconnect(ctx context.Context) error {
 
 // FinishJob finishes the job in the Buildkite Agent API. If the FinishJob call
 // cannot return successfully, this will retry for a long time.
-func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Time, exit ProcessExit, failedChunkCount int) error {
+func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Time, exit ProcessExit, failedChunkCount int, ignoreAgentInDispatches *bool) error {
 	job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	job.ExitStatus = strconv.Itoa(exit.Status)
 	job.Signal = exit.Signal
@@ -223,7 +225,7 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 		roko.WithJitter(),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := c.APIClient.FinishJob(ctx, job)
+		response, err := c.APIClient.FinishJob(ctx, job, ignoreAgentInDispatches)
 		if err != nil {
 			// If the API returns with a 422, that means that we
 			// successfully tried to finish the job, but Buildkite

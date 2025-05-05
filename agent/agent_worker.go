@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/internal/ptr"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -95,7 +96,7 @@ type AgentWorker struct {
 
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
-	jobRunner jobRunner
+	jobRunner *JobRunner
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	agentStdout io.Writer
@@ -629,7 +630,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 	}
 
 	// Now that we've acquired the job, let's run it
-	return a.RunJob(ctx, job)
+	return a.RunJob(ctx, job, nil)
 }
 
 // Accepts a job and runs it, only returns an error if something goes wrong
@@ -662,11 +663,18 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 		return fmt.Errorf("Failed to accept job: %w", err)
 	}
 
+	// If we're disconnecting-after-job, signal back to Buildkite that we're not
+	// interested in jobs after this one.
+	var ignoreAgentInDispatches *bool
+	if a.agentConfiguration.DisconnectAfterJob {
+		ignoreAgentInDispatches = ptr.To(true)
+	}
+
 	// Now that we've accepted the job, let's run it
-	return a.RunJob(ctx, accepted)
+	return a.RunJob(ctx, accepted, ignoreAgentInDispatches)
 }
 
-func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error {
+func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignoreAgentInDispatches *bool) error {
 	a.setBusy(acceptResponse.ID)
 	defer a.setIdle()
 
@@ -701,7 +709,7 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 	}()
 
 	// Start running the job
-	if err := jr.Run(ctx); err != nil {
+	if err := jr.Run(ctx, ignoreAgentInDispatches); err != nil {
 		return fmt.Errorf("Failed to run job: %w", err)
 	}
 

@@ -397,6 +397,9 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	if got, want := agent.Pings, 3; got != want {
 		t.Errorf("agent.Pings = %d, want %d", got, want)
 	}
+	if got, want := agent.IgnoreInDispatches, true; got != want {
+		t.Errorf("agent.IgnoreInDispatches = %t, want %t", got, want)
+	}
 	if got, want := job.State, JobStateFinished; got != want {
 		t.Errorf("job.State = %q, want %q", got, want)
 	}

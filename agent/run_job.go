@@ -53,7 +53,7 @@ func (e *missingKeyError) Error() string {
 }
 
 // Runs the job
-func (r *JobRunner) Run(ctx context.Context) error {
+func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) error {
 	r.agentLogger.Info("Starting job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
@@ -97,7 +97,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	cctx, cancel := context.WithCancel(ctx)
 	defer func(ctx context.Context, wg *sync.WaitGroup) {
 		cancel()
-		r.cleanup(ctx, wg, exit)
+		r.cleanup(ctx, wg, exit, ignoreAgentInDispatches)
 	}(ctx, &wg) // Note the non-cancellable context (ctx rather than cctx) here - we don't want to be interrupted during cleanup
 
 	job := r.conf.Job
@@ -346,7 +346,7 @@ One or more containers connected to the agent, but then stopped communicating wi
 	return exit
 }
 
-func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit) {
+func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit, ignoreAgentInDispatches *bool) {
 	finishedAt := time.Now()
 
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
@@ -394,7 +394,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 	// Finish the build in the Buildkite Agent API
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
-	r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks())
+	r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks(), ignoreAgentInDispatches)
 
 	r.agentLogger.Info("Finished job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 }

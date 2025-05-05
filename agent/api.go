@@ -20,7 +20,7 @@ type APIClient interface {
 	CreateArtifacts(context.Context, string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error)
 	Disconnect(context.Context) (*api.Response, error)
 	ExistsMetaData(context.Context, string, string, string) (*api.MetaDataExists, *api.Response, error)
-	FinishJob(context.Context, *api.Job) (*api.Response, error)
+	FinishJob(context.Context, *api.Job, *bool) (*api.Response, error)
 	FromAgentRegisterResponse(*api.AgentRegisterResponse) *api.Client
 	FromPing(*api.Ping) *api.Client
 	GenerateGithubCodeAccessToken(context.Context, string, string) (string, *api.Response, error)
