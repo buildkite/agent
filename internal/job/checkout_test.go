@@ -22,6 +22,8 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 		executor    *Executor
 		projectName string
 		checkoutDir string
+		refSpec     string
+		expectErr   bool
 	}{
 		{
 			name: "Default checkout phase with HEAD commit",
@@ -45,10 +47,27 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 					Branch:        "main",
 					CleanCheckout: false,
 					GitCleanFlags: "-f -d -x",
-					RefSpec:       "refs/pull/124/head",
+					RefSpec:       "refs/custom",
 				},
 			},
 			projectName: "project-name-refspec",
+			refSpec:     "refs/custom",
+		},
+		{
+			name: "Default checkout phase with pull request",
+			executor: &Executor{
+				shell: shell,
+				ExecutorConfig: ExecutorConfig{
+					PullRequest:      "124",
+					Commit:           "HEAD",
+					Branch:           "main",
+					CleanCheckout:    false,
+					GitCleanFlags:    "-f -d -x",
+					PipelineProvider: "github",
+				},
+			},
+			projectName: "project-name-pull-request",
+			refSpec:     "refs/pull/124/head",
 		},
 	}
 
@@ -56,7 +75,13 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assert := require.New(t)
 
-			t.Setenv("GIT_CONFIG_GLOBAL", "~/.gitconfig.empty")
+			// configure a global user name and email
+			// this is to avoid the git config file being created in the home directory
+			// which is not needed for the test
+			t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
+			t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
+			t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
+			t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
 
 			s := githttptest.NewServer()
 			s.Start()
@@ -65,15 +90,22 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			err = s.CreateRepository(tt.projectName)
 			assert.NoError(err)
 
-			err = s.InitRepository(tt.projectName)
-			assert.NoError(err)
+			out, err := s.InitRepository(tt.projectName)
+			if err != nil {
+				t.Fatalf("failed to init repository: %v output: %s", err, string(out))
+			}
 
-			commit, err := s.PushBranch(tt.projectName, "feature-branch")
-			assert.NoError(err)
+			commit, out, err := s.PushBranch(tt.projectName, "feature-branch")
+			if err != nil {
+				t.Fatalf("failed to init repository: %v output: %s", err, string(out))
+			}
 
-			// create a custom ref to test
-			err = s.CreateRef(tt.projectName, "refs/pull/124/head", commit)
-			assert.NoError(err)
+			if tt.refSpec != "" {
+				out, err = s.CreateRef(tt.projectName, tt.refSpec, commit)
+				if err != nil {
+					t.Fatalf("failed to create ref: %v output: %s", err, string(out))
+				}
+			}
 
 			buildDir, err := os.MkdirTemp("", "build-path-")
 			assert.NoError(err)

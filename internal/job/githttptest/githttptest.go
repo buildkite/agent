@@ -2,7 +2,6 @@ package githttptest
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -30,8 +29,6 @@ func NewServer() *Server {
 	if err != nil {
 		panic(fmt.Sprintf("githttptest: failed to create temp dir: %v", err))
 	}
-
-	log.Printf("githttptest: using %s as repositories root", repositories)
 
 	s := &Server{
 		repositories: repositories,
@@ -83,226 +80,149 @@ func (s *Server) CreateRepository(repoName string) error {
 		if err := initBareRepo(repoPath); err != nil {
 			return fmt.Errorf("failed to create repository: %w", err)
 		}
-		log.Printf("Created new repository: %s", repoPath)
 	}
 
 	return nil
 }
 
-func (s *Server) InitRepository(repoName string) error {
+func (s *Server) InitRepository(repoName string) ([]byte, error) {
 	tempDir, err := os.MkdirTemp("", "git-init-")
 	if err != nil {
-		return fmt.Errorf("failed to create temp dir: %w", err)
+		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Initialize a normal repository in the temp directory
 	normalInitCmd := exec.Command("git", "init", tempDir)
-	if err := normalInitCmd.Run(); err != nil {
-		return fmt.Errorf("failed to initialize normal repository: %w", err)
+	if out, err := normalInitCmd.CombinedOutput(); err != nil {
+		return out, fmt.Errorf("failed to initialize normal repository: %w", err)
 	}
 
-	log.Printf("Initialized normal repository in %s", tempDir)
-
-	// Configure Git user for the commit
-	configNameCmd := exec.Command("git", "config", "user.name", "Git Server")
-	configNameCmd.Dir = tempDir
-	if err := configNameCmd.Run(); err != nil {
-		return fmt.Errorf("failed to configure user.name: %w", err)
-	}
-
-	configEmailCmd := exec.Command("git", "config", "user.email", "git@localhost")
-	configEmailCmd.Dir = tempDir
-	if err := configEmailCmd.Run(); err != nil {
-		return fmt.Errorf("failed to configure user.email: %w", err)
-	}
-
-	log.Printf("Configured Git user in %s", tempDir)
-
-	// Create a README file
 	readmePath := filepath.Join(tempDir, "README.md")
 	readmeContent := "# Git Repository\n\nThis repository was created by the Git HTTP server.\n"
 	if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {
-		return err
+		return nil, fmt.Errorf("failed to create README file: %w", err)
 	}
 
-	log.Printf("Created README file in %s", readmePath)
-
-	// Add and commit the README
 	addCmd := exec.Command("git", "add", "README.md")
 	addCmd.Dir = tempDir
-	if err := addCmd.Run(); err != nil {
-		return fmt.Errorf("failed to add README file: %w", err)
+	if out, err := addCmd.CombinedOutput(); err != nil {
+		return out, fmt.Errorf("failed to add README file: %w", err)
 	}
-
-	log.Printf("Added README file to staging area in %s", tempDir)
 
 	commitCmd := exec.Command("git", "commit", "-m", "Initial commit")
 	commitCmd.Dir = tempDir
-	if err := commitCmd.Run(); err != nil {
-		return fmt.Errorf("failed to commit README file: %w", err)
+	if out, err := commitCmd.CombinedOutput(); err != nil {
+		return out, fmt.Errorf("failed to commit README file: %w", err)
 	}
-
-	log.Printf("Committed README file in %s", tempDir)
 
 	url := fmt.Sprintf("%s/%s.git", s.URL, repoName)
 
-	// rename the master branch to main
 	renameCmd := exec.Command("git", "branch", "-m", "main")
 	renameCmd.Dir = tempDir
-	if err := renameCmd.Run(); err != nil {
-		return fmt.Errorf("failed to rename branch to main: %w", err)
+	if out, err := renameCmd.CombinedOutput(); err != nil {
+		return out, fmt.Errorf("failed to rename branch to main: %w", err)
 	}
 
-	// Push to the bare repository
 	remoteAddCmd := exec.Command("git", "remote", "add", "origin", url)
 	remoteAddCmd.Dir = tempDir
-	if err := remoteAddCmd.Run(); err != nil {
-		return fmt.Errorf("failed to add remote origin: %w", err)
+	if out, err := remoteAddCmd.CombinedOutput(); err != nil {
+		return out, fmt.Errorf("failed to add remote origin: %w", err)
 	}
-
-	log.Printf("Adding remote origin: %s", url)
 
 	pushCmd := exec.Command("git", "push", "-u", "origin", "main")
 	pushCmd.Dir = tempDir
-	err = pushCmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to push to repository: %w", err)
+	if out, err := pushCmd.CombinedOutput(); err != nil {
+		return out, fmt.Errorf("failed to push to repository: %w", err)
 	}
 
-	log.Printf("Pushed to repository at %s", url)
-
-	return nil
+	return nil, nil
 }
 
-func (s *Server) PushBranch(repoName, branchName string) (string, error) {
+func (s *Server) PushBranch(repoName, branchName string) (string, []byte, error) {
 	if branchName == "" || strings.ContainsAny(branchName, "\\/:*?\"<>|") {
-		return "", fmt.Errorf("invalid branch name: %s", branchName)
+		return "", nil, fmt.Errorf("invalid branch name: %s", branchName)
 	}
 
 	repoPath := filepath.Join(s.repositories, repoName)
 
-	// Check if repository exists
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		return "", fmt.Errorf("repository '%s' not found at path: %s", repoName, repoPath)
+		return "", nil, fmt.Errorf("repository '%s' not found at path: %s", repoName, repoPath)
 	}
 
-	// clone the repository to a temporary directory
 	tempDir, err := os.MkdirTemp("", "git-push-")
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp dir: %w", err)
+		return "", nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 
 	cloneCmd := exec.Command("git", "clone", s.RepoURL(repoName), tempDir)
 	if err := cloneCmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to clone repository: %w", err)
+		return "", nil, fmt.Errorf("failed to clone repository: %w", err)
 	}
 
-	log.Printf("Cloned repository to %s", tempDir)
-
-	// Configure Git user for the commit
-	configNameCmd := exec.Command("git", "config", "user.name", "Git Server")
-	configNameCmd.Dir = tempDir
-	if err := configNameCmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to configure user.name: %w", err)
-	}
-
-	configEmailCmd := exec.Command("git", "config", "user.email", "git@localhost")
-	configEmailCmd.Dir = tempDir
-	if err := configEmailCmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to configure user.email: %w", err)
-	}
-
-	log.Printf("Configured Git user in %s", tempDir)
-
-	// create a new branch
 	branchCmd := exec.Command("git", "checkout", "-b", branchName)
 	branchCmd.Dir = tempDir
 	if err := branchCmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to create branch %s: %w", branchName, err)
+		return "", nil, fmt.Errorf("failed to create branch %s: %w", branchName, err)
 	}
 
-	log.Printf("Created new branch: %s", branchName)
-
-	// create a new file in the repository
 	filePath := filepath.Join(tempDir, "newfile.txt")
 	if err := os.WriteFile(filePath, []byte("This is a new file."), 0644); err != nil {
-		return "", fmt.Errorf("failed to create new file: %w", err)
+		return "", nil, fmt.Errorf("failed to create new file: %w", err)
 	}
-	log.Printf("Created new file in repository: %s", filePath)
 
-	// commit the file
 	commitCmd := exec.Command("git", "add", "newfile.txt")
 	commitCmd.Dir = tempDir
-	if err := commitCmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to add new file to staging area: %w", err)
+	if out, err := commitCmd.CombinedOutput(); err != nil {
+		return "", out, fmt.Errorf("failed to add new file to staging area: %w", err)
 	}
-	log.Printf("Added new file to staging area")
 
 	commitCmd = exec.Command("git", "commit", "-m", "Add new file")
 	commitCmd.Dir = tempDir
-	commitCmd.Stdout = os.Stdout
-	commitCmd.Stderr = os.Stderr
-	if err := commitCmd.Run(); err != nil {
+	if out, err := commitCmd.CombinedOutput(); err != nil {
 
-		return "", fmt.Errorf("failed to commit new file: %w", err)
+		return "", out, fmt.Errorf("failed to commit new file: %w", err)
 	}
 
-	log.Printf("Committed new file")
-
-	// set the remote URL
 	remoteCmd := exec.Command("git", "remote", "set-url", "origin", s.RepoURL(repoName))
 	remoteCmd.Dir = tempDir
-	if err := remoteCmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to set remote URL: %w", err)
+	if out, err := remoteCmd.CombinedOutput(); err != nil {
+		return "", out, fmt.Errorf("failed to set remote URL: %w", err)
 	}
 
-	log.Printf("Set remote URL to %s", s.RepoURL(repoName))
-
-	// Push the specified branch to the remote
 	pushCmd := exec.Command("git", "push", "origin", branchName)
 	pushCmd.Dir = tempDir
-	if err := pushCmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to push branch %s: %w", branchName, err)
+	if out, err := pushCmd.CombinedOutput(); err != nil {
+		return "", out, fmt.Errorf("failed to push branch %s: %w", branchName, err)
 	}
 
-	log.Printf("Pushed branch %s to repository at %s", branchName, repoPath)
-
-	// get the commit hash of the pushed branch
 	commitHashCmd := exec.Command("git", "rev-parse", branchName)
 	commitHashCmd.Dir = tempDir
 	commitHash, err := commitHashCmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to get commit hash: %w", err)
+		return "", nil, fmt.Errorf("failed to get commit hash: %w", err)
 	}
 
 	commitHashStr := strings.TrimSpace(string(commitHash))
-	log.Printf("Commit hash of pushed branch %s: %s", branchName, commitHashStr)
 
-	return commitHashStr, nil
+	return commitHashStr, nil, nil
 }
 
-func (s *Server) CreateRef(repoName, refName, commitHash string) error {
-	// if refName == "" || strings.ContainsAny(refName, "\\/:*?\"<>|") {
-	// 	return fmt.Errorf("invalid ref name: %s", refName)
-	// }
-
+func (s *Server) CreateRef(repoName, refName, commitHash string) (out []byte, err error) {
 	repoPath := filepath.Join(s.repositories, repoName)
 	// Check if repository exists
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		return fmt.Errorf("repository '%s' not found at path: %s", repoName, repoPath)
+	if _, err = os.Stat(repoPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("repository '%s' not found at path: %s", repoName, repoPath)
 	}
 
 	// git update-ref refs/heads/branch-name commit-sha
 	updateRefCmd := exec.Command("git", "update-ref", refName, commitHash)
 	updateRefCmd.Dir = repoPath
-	if err := updateRefCmd.Run(); err != nil {
-		return fmt.Errorf("failed to create ref %s: %w", refName, err)
+	if out, err = updateRefCmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("failed to create ref %s: %w", refName, err)
 	}
-	log.Printf("Created ref %s in repository %s", refName, repoName)
 
-	return nil
+	return out, nil
 }
 
 func (s *Server) RepoURL(repoName string) string {
@@ -372,7 +292,6 @@ func (s *Server) handleGitUploadPack(w http.ResponseWriter, r *http.Request) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		log.Printf("Error executing git-upload-pack: %v", err)
 	}
 }
 
@@ -409,7 +328,6 @@ func (s *Server) handleGitReceivePack(w http.ResponseWriter, r *http.Request) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		log.Printf("Error executing git-receive-pack: %v", err)
 	}
 }
 
@@ -449,6 +367,5 @@ func (s *Server) handleGitInfoRefs(w http.ResponseWriter, r *http.Request) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		log.Printf("Error executing %s: %v", service, err)
 	}
 }
