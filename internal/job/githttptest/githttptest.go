@@ -268,9 +268,6 @@ func (s *Server) handleGitReceivePack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if we're allowing pushes
-	// For a production server, you might want to add authentication here
-
 	buf := bytes.NewBuffer(nil)
 
 	cmd := exec.Command("git", "receive-pack", "--stateless-rpc", repoPath)
