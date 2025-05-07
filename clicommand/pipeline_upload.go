@@ -126,11 +126,11 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
-        cli.BoolFlag{
-            Name:   "fail-on-pipeline-parse-warning",
-            Usage:  "Fail pipeline upload if pipeline parsing returns warnings, as well as errors",
-            EnvVar: "BUILDKITE_AGENT_FAIL_ON_PIPELINE_PARSE_WARNING",
-        },
+		cli.BoolFlag{
+			Name:   "fail-on-pipeline-parse-warning",
+			Usage:  "Fail pipeline upload if pipeline parsing returns warnings, as well as errors",
+			EnvVar: "BUILDKITE_AGENT_FAIL_ON_PIPELINE_PARSE_WARNING",
+		},
 
 		// Note: changes to these environment variables need to be reflected in the environment created
 		// in the job runner. At the moment, that's at agent/job_runner.go:500-507
