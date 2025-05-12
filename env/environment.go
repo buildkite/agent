@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/puzpuzpuz/xsync/v2"
@@ -112,6 +113,30 @@ func (e *Environment) GetBool(key string, defaultValue bool) bool {
 	default:
 		return defaultValue
 	}
+}
+
+// GetInt gets an int value from environment, with a default for unset, empty,
+// or invalid values.
+func (e *Environment) GetInt(key string, defaultValue int) int {
+	v, has := e.Get(key)
+	if !has || v == "" {
+		return defaultValue
+	}
+	x, err := strconv.Atoi(v)
+	if err != nil {
+		return defaultValue
+	}
+	return x
+}
+
+// GetString gets a string value from environment, with a default for unset or
+// empty values.
+func (e *Environment) GetString(key, defaultValue string) string {
+	v, has := e.Get(key)
+	if !has || v == "" {
+		return defaultValue
+	}
+	return v
 }
 
 // Exists returns true/false depending on whether or not the key exists in the env

@@ -535,12 +535,7 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Additional directories to look for agent hooks",
 			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
 		},
-		cli.StringFlag{
-			Name:   "sockets-path",
-			Value:  defaultSocketsPath(),
-			Usage:  "Directory where the agent will place sockets",
-			EnvVar: "BUILDKITE_SOCKETS_PATH",
-		},
+		SocketsPathFlag,
 		cli.StringFlag{
 			Name:   "plugins-path",
 			Value:  "",

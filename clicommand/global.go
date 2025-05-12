@@ -92,12 +92,27 @@ var (
 		EnvVar: "BUILDKITE_STRICT_SINGLE_HOOKS",
 	}
 
+	SocketsPathFlag = cli.StringFlag{
+		Name:   "sockets-path",
+		Value:  defaultSocketsPath(),
+		Usage:  "Directory where the agent will place sockets",
+		EnvVar: "BUILDKITE_SOCKETS_PATH",
+	}
+
 	KubernetesExecFlag = cli.BoolFlag{
 		Name: "kubernetes-exec",
 		Usage: "This is intended to be used only by the Buildkite k8s stack " +
 			"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
 			"logs and exit statuses between containers in a pod",
 		EnvVar: "BUILDKITE_KUBERNETES_EXEC",
+	}
+
+	KubernetesContainerIDFlag = cli.IntFlag{
+		Name: "kubernetes-container-id",
+		Usage: "This is intended to be used only by the Buildkite k8s stack " +
+			"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
+			"used to identify this container within the pod",
+		EnvVar: "BUILDKITE_CONTAINER_ID",
 	}
 
 	NoMultipartArtifactUploadFlag = cli.BoolFlag{
