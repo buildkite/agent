@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.97.2](https://github.com/buildkite/agent/tree/v3.97.2) (2025-05-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.97.1...v3.97.2)
+
+### Fixed
+- fix: Don't disconnect-after-idle when just given a job [#3312](https://github.com/buildkite/agent/pull/3312) (@DrJosh9000)
+
+### Dependency updates
+- [#3307](https://github.com/buildkite/agent/pull/3307), [#3311](https://github.com/buildkite/agent/pull/3311), [#3308](https://github.com/buildkite/agent/pull/3308), [#3309](https://github.com/buildkite/agent/pull/3309), [#3310](https://github.com/buildkite/agent/pull/3310) (@dependabot[bot])
+
+
 ## [v3.97.1](https://github.com/buildkite/agent/tree/v3.97.1) (2025-05-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.97.0...v3.97.1)
 
