@@ -10,7 +10,7 @@ import (
 const (
 	defaultCancelGracePeriodSecs = 10
 	defaultSignalGracePeriodSecs = -1
-	defaultSignalGracePeriod     = (defaultCancelGracePeriodSecs + defaultCancelGracePeriodSecs) * time.Second
+	defaultSignalGracePeriod     = (defaultCancelGracePeriodSecs + defaultSignalGracePeriodSecs) * time.Second
 )
 
 var (
