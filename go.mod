@@ -55,7 +55,7 @@ require (
 	golang.org/x/sys v0.33.0
 	golang.org/x/term v0.32.0
 	google.golang.org/api v0.231.0
-	gopkg.in/DataDog/dd-trace-go.v1 v1.73.0
+	gopkg.in/DataDog/dd-trace-go.v1 v1.73.1
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.2
 )
