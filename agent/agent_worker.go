@@ -293,6 +293,8 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	defer setStat("🛑 Ping loop stopped!")
 	setStat("🏃 Starting...")
 
+	disconnectAfterIdleTimeout := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout)
+
 	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
 	pingTicker := time.NewTicker(pingInterval)
@@ -384,21 +386,36 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 		}
 
 		// Exit after acquire-job.
+		// For acquire-job agents, registration sets ignore-in-dispatches=true,
+		// so job should be nil. If not nil, complain.
 		if a.agentConfiguration.AcquireJob != "" {
+			if job != nil {
+				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in acquire-job mode!", job.ID)
+			}
 			return nil
 		}
 
-		// Exit after disconnect-after-job.
+		// Exit after disconnect-after-job. Finishing the job sets
+		// ignore-in-dispatches=true, so job should be nil. If not, complain.
 		if ranJob && a.agentConfiguration.DisconnectAfterJob {
+			if job != nil {
+				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)!", job.ID)
+			}
 			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
 			return nil
 		}
 
-		// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout)
-		if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
-			idleDeadline := lastActionTime.Add(time.Second *
-				time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
+		// Note that Ping only returns a job if err == nil.
+		if job == nil {
+			if disconnectAfterIdleTimeout == 0 {
+				// No job and no idle timeout.
+				continue
+			}
 
+			// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout).
+			// Only do this check if we weren't just dispatched a job.
+			// (If we were dispatched a job, we're not idle.)
+			idleDeadline := lastActionTime.Add(disconnectAfterIdleTimeout)
 			if time.Now().After(idleDeadline) {
 				// Let other agents know this agent is now idle and termination
 				// is possible
@@ -406,18 +423,13 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 
 				// But only terminate if everyone else is also idle
 				if idleMonitor.Idle() {
-					a.logger.Info("All agents have been idle for %d seconds. Disconnecting...",
-						a.agentConfiguration.DisconnectAfterIdleTimeout)
+					a.logger.Info("All agents have been idle for %v. Disconnecting...", disconnectAfterIdleTimeout)
 					return nil
-				} else {
-					a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
-						time.Since(lastActionTime).Seconds())
 				}
+				a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
+					time.Since(lastActionTime).Seconds())
 			}
-		}
-
-		// Note that Ping only returns a job if err == nil.
-		if job == nil {
+			// Not idle enough yet. Wait and ping again.
 			continue
 		}
 

@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.97.2](https://github.com/buildkite/agent/tree/v3.97.2) (2025-05-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.97.1...v3.97.2)
+
+### Fixed
+- fix: Don't disconnect-after-idle when just given a job [#3312](https://github.com/buildkite/agent/pull/3312) (@DrJosh9000)
+
+### Dependency updates
+- [#3307](https://github.com/buildkite/agent/pull/3307), [#3311](https://github.com/buildkite/agent/pull/3311), [#3308](https://github.com/buildkite/agent/pull/3308), [#3309](https://github.com/buildkite/agent/pull/3309), [#3310](https://github.com/buildkite/agent/pull/3310) (@dependabot[bot])
+
+
+## [v3.97.1](https://github.com/buildkite/agent/tree/v3.97.1) (2025-05-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.97.0...v3.97.1)
+
+### Fixed
+- Fix unusable `BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS` env var [#3285](https://github.com/buildkite/agent/pull/3285) (@shanesmith)
+- Set ignore_agent_in_dispatches when finishing with disconnect-after-job [#3297](https://github.com/buildkite/agent/pull/3297) (@DrJosh9000)
+
+### Internal
+- Introduce a structure where coverage can increase on githttp checkout code [#3296](https://github.com/buildkite/agent/pull/3296) (@wolfeidau)
+- TE-3708-follow-up: Use go test -cover to generate coverage report [#3295](https://github.com/buildkite/agent/pull/3295) (@zhming0)
+- TE-3708: use bktec on agent [#3292](https://github.com/buildkite/agent/pull/3292) (@zhming0)
+
+### Dependency updates
+- [#3298](https://github.com/buildkite/agent/pull/3298), [#3300](https://github.com/buildkite/agent/pull/3300), [#3301](https://github.com/buildkite/agent/pull/3301), [#3299](https://github.com/buildkite/agent/pull/3299), [#3287](https://github.com/buildkite/agent/pull/3287), [#3290](https://github.com/buildkite/agent/pull/3290), [#3291](https://github.com/buildkite/agent/pull/3291) (@dependabot[bot])
+
 ## [v3.97.0](https://github.com/buildkite/agent/tree/v3.97.0) (2025-04-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.96.0...v3.97.0)
 
