@@ -382,10 +382,13 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
 			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+
 			// Fetch the PR head from the upstream repository into the mirror.
 			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", refspec)
 			if err := cmd.Run(ctx); err != nil {
-				return "", err
+				e.shell.Warningf("Unable to fetch %q during mirror update - continuing because we'll fetch the commit directly", refspec)
+			} else {
+				e.shell.Commentf("Fetched pull request refspec `%s` into mirror", refspec)
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
@@ -577,12 +580,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 
+		// Try fetching the PR refspec. If it fails, warn but continue
 		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", refspec); err != nil {
-			return fmt.Errorf("fetching PR refspec %q: %w", refspec, err)
+			e.shell.Warningf("Unable to fetch %q — continuing because we'll fetch the commit directly", refspec)
+		} else {
+			gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
+			e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 		}
-
-		gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
-		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
 		if e.Commit != "HEAD" {
 			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
