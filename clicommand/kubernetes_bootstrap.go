@@ -92,7 +92,11 @@ var KubernetesBootstrapCommand = cli.Command{
 			return fmt.Errorf("error connecting to kubernetes runner: %w", err)
 		}
 
-		regEnv := env.FromSlice(regResp.Env).Dump()
+		// Set the environment vars based on the registration response.
+		for n, v := range env.FromSlice(regResp.Env).Dump() {
+			// Copy it to environ
+			environ.Set(n, v)
+		}
 
 		// Capture parameters from the agent that affect how the subprocess
 		// should be run: build path, PTY, cancel signal, and signal grace period.
@@ -111,12 +115,6 @@ var KubernetesBootstrapCommand = cli.Command{
 		signalGracePeriod, err := signalGracePeriod(cgp, sgp)
 		if err != nil {
 			return err
-		}
-
-		// Set the environment vars based on the registration response.
-		for n, v := range regEnv {
-			// Copy it to environ
-			environ.Set(n, v)
 		}
 
 		// Set vars that should always be preserved from our env, and not be
