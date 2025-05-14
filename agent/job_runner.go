@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -426,6 +427,22 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
 
+	// When in KubernetesExec mode, filter out the Kubernetes plugin,
+	// since it's not a real plugin. agent-stack-k8s reads it but we have no
+	// need for it. Supplying it when not using agent-stack-k8s is a mistake
+	// but not one worth preventing.
+	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
+		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
+		if err != nil {
+			r.agentLogger.Error("Invalid BUILDKITE_PLUGINS: %w", err)
+		}
+		if string(filtered) == "" {
+			delete(env, "BUILDKITE_PLUGINS")
+		} else {
+			env["BUILDKITE_PLUGINS"] = string(filtered)
+		}
+	}
+
 	// Write out the job environment to file:
 	// - envShellFile: in k="v" format, with newlines escaped
 	// - envJSONFile: as a single JSON object {"k":"v",...}, escaped appropriately for JSON.
@@ -633,6 +650,18 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 	env[key] = env[key][0:keeplen] + apology
 	l.Warn("%s %s", key, description)
 	return nil
+}
+
+func removeKubernetesPlugin(pluginsJSON []byte) ([]byte, error) {
+	var plugins []map[string]json.RawMessage
+	if err := json.Unmarshal(pluginsJSON, &plugins); err != nil {
+		return pluginsJSON, err
+	}
+	plugins = slices.DeleteFunc(plugins, func(plugin map[string]json.RawMessage) bool {
+		_, isK8sPlugin := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]
+		return isK8sPlugin
+	})
+	return json.Marshal(plugins)
 }
 
 type LogWriter struct {

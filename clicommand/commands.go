@@ -45,6 +45,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		},
 	},
 	GitCredentialsHelperCommand,
+	KubernetesBootstrapCommand,
 	{
 		Name:  "lock",
 		Usage: "Process lock subcommands",
