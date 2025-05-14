@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -424,6 +425,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 				// But only terminate if everyone else is also idle
 				if idleMonitor.Idle() {
 					a.logger.Info("All agents have been idle for %v. Disconnecting...", disconnectAfterIdleTimeout)
+					os.Setenv("BUILDKITE_AGENT_SHUTDOWN_REASON", "IDLE")
 					return nil
 				}
 				a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
