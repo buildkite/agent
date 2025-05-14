@@ -16,12 +16,7 @@ func lockCommonFlags() []cli.Flag {
 			Usage:  "The scope for locks used in this operation. Currently only 'machine' scope is supported",
 			EnvVar: "BUILDKITE_LOCK_SCOPE",
 		},
-		cli.StringFlag{
-			Name:   "sockets-path",
-			Value:  defaultSocketsPath(),
-			Usage:  "Directory where the agent will place sockets",
-			EnvVar: "BUILDKITE_SOCKETS_PATH",
-		},
+		SocketsPathFlag,
 	)
 }
 

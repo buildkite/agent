@@ -287,12 +287,7 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Any additional directories to look for agent hooks",
 			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
 		},
-		cli.StringFlag{
-			Name:   "sockets-path",
-			Value:  defaultSocketsPath(),
-			Usage:  "Directory where the agent will place sockets",
-			EnvVar: "BUILDKITE_SOCKETS_PATH",
-		},
+		SocketsPathFlag,
 		cli.StringFlag{
 			Name:   "plugins-path",
 			Value:  "",
@@ -372,13 +367,7 @@ var BootstrapCommand = cli.Command{
 			Usage:  "A list of warning IDs to disable",
 			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
 		},
-		cli.IntFlag{
-			Name: "kubernetes-container-id",
-			Usage: "This is intended to be used only by the Buildkite k8s stack " +
-				"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
-				"used to identify this container within the pod",
-			EnvVar: "BUILDKITE_CONTAINER_ID",
-		},
+		KubernetesContainerIDFlag,
 		cancelSignalFlag,
 		cancelGracePeriodFlag,
 		signalGracePeriodSecondsFlag,

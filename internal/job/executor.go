@@ -798,7 +798,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	if e.BinPath != "" {
 		path, _ := e.shell.Env.Get("PATH")
 		// BinPath goes last so we don't disturb other tools
-		e.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", path, string(os.PathListSeparator), e.BinPath))
+		e.shell.Env.Set("PATH", fmt.Sprintf("%s%c%s", path, os.PathListSeparator, e.BinPath))
 	}
 
 	// Set a BUILDKITE_BUILD_CHECKOUT_PATH unless one exists already. We do this here
