@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	cloud.google.com/go/compute/metadata v0.6.0
 	drjosh.dev/zzglob v0.4.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.9.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.10.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.1
 	github.com/DataDog/datadog-go/v5 v5.6.0
 	github.com/Khan/genqlient v0.8.0
@@ -54,7 +54,7 @@ require (
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sys v0.33.0
 	golang.org/x/term v0.32.0
-	google.golang.org/api v0.232.0
+	google.golang.org/api v0.233.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.73.1
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.2
@@ -170,7 +170,7 @@ require (
 	golang.org/x/tools v0.31.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250428153025-10db94c68c34 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250505200425-f936aa4a68b2 // indirect
 	google.golang.org/grpc v1.72.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
