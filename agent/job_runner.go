@@ -520,15 +520,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)
+	// Note that [os.Executable] returns an absolute path.
 	exePath, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
-	dir, err := filepath.Abs(filepath.Dir(exePath))
-	if err != nil {
-		return nil, err
-	}
-	env["BUILDKITE_BIN_PATH"] = dir
+	env["BUILDKITE_BIN_PATH"] = filepath.Dir(exePath)
 
 	// Add options from the agent configuration
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
