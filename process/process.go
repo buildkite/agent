@@ -75,7 +75,6 @@ func ParseSignal(sig string) (Signal, error) {
 // Configuration for a Process
 type Config struct {
 	PTY               bool
-	Timestamp         bool
 	Path              string
 	Args              []string
 	Env               []string
