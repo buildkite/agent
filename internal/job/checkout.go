@@ -383,7 +383,6 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
 			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
-
 			// Fetch the PR head from the upstream repository into the mirror.
 			if err := gitFetch(ctx, e.shell, "--git-dir "+shellwords.Quote(mirrorDir), "origin", refspec); err != nil {
 				return "", err
@@ -577,7 +576,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 
-		// Try fetching the PR refspec. If it fails, warn but continue
 		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", refspec); err != nil {
 			return fmt.Errorf("fetching PR refspec %q: %w", refspec, err)
 		}
