@@ -382,18 +382,13 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
 			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
-
 			// Fetch the PR head from the upstream repository into the mirror.
-			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", refspec)
-			if err := cmd.Run(ctx); err != nil {
-				e.shell.Warningf("Unable to fetch %q during mirror update - continuing because we'll fetch the commit directly", refspec)
-			} else {
-				e.shell.Commentf("Fetched pull request refspec `%s` into mirror", refspec)
+			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", refspec); err != nil {
+				return "", err
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
-			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", e.Branch)
-			if err := cmd.Run(ctx); err != nil {
+			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", e.Branch); err != nil {
 				return "", err
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/internal/job/githttptest"
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -122,4 +123,85 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			assert.NoError(err)
 		})
 	}
+}
+
+func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
+	assert := require.New(t)
+	ctx := context.Background()
+
+	shell, err := shell.New()
+	assert.NoError(err)
+
+	tt := struct {
+		executor    *Executor
+		projectName string
+		checkoutDir string
+		refSpec     string
+	}{
+		executor: &Executor{
+			shell: shell,
+			ExecutorConfig: ExecutorConfig{
+				PullRequest:      "124",
+				Commit:           "HEAD",
+				Branch:           "main",
+				CleanCheckout:    false,
+				GitCleanFlags:    "-f -d -x",
+				PipelineProvider: "github",
+			},
+		},
+		projectName: "project-name-pull-request",
+		refSpec:     "refs/pull/124/head",
+	}
+
+	// configure a global user name and email
+	// this is to avoid the git config file being created in the home directory
+	// which is not needed for the test
+	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
+	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
+	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
+
+	s := githttptest.NewServer()
+	defer s.Close()
+
+	err = s.CreateRepository(tt.projectName)
+	assert.NoError(err)
+
+	out, err := s.InitRepository(tt.projectName)
+	if err != nil {
+		t.Fatalf("failed to init repository: %v output: %s", err, string(out))
+	}
+
+	commit, out, err := s.PushBranch(tt.projectName, "feature-branch")
+	if err != nil {
+		t.Fatalf("failed to init repository: %v output: %s", err, string(out))
+	}
+
+	buildDir, err := os.MkdirTemp("", "build-path-")
+	assert.NoError(err)
+	defer os.RemoveAll(buildDir)
+
+	tt.executor.BuildPath = buildDir
+	tt.executor.Repository = s.RepoURL(tt.projectName)
+
+	checkoutDir, err := os.MkdirTemp("", "checkout-path-")
+
+	// Concurrently sleep for 5 seconds to delay ref being created
+	go func() {
+		time.Sleep(5 * time.Second)
+
+		out, err = s.CreateRef(tt.projectName, tt.refSpec, commit)
+		if err != nil {
+			t.Fatalf("failed to create ref: %v output: %s", err, string(out))
+		}
+
+	}()
+
+	assert.NoError(err)
+	defer os.RemoveAll(checkoutDir)
+
+	shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
+
+	err = tt.executor.defaultCheckoutPhase(ctx)
+	assert.NoError(err)
 }
