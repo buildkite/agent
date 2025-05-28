@@ -11,8 +11,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
 
@@ -158,32 +160,39 @@ func gitFetch(
 		badReferencePreGit221: false,
 	}
 
-	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
-		// "fatal: bad object" can happen when the local repo in the checkout
-		// directory is corrupted, not just the remote or the mirror.
-		// When using git mirrors, the existing checkout directory might have a
-		// reference to an object that it expects in the mirror, but the mirror
-		// no longer contains it (for whatever reason).
-		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-		if smelt[badObject] {
-			return &gitError{error: err, Type: gitErrorFetchBadObject}
+	return roko.NewRetrier(
+		roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
+		roko.WithMaxAttempts(10), // 10 attempts will take  minutes
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+			// "fatal: bad object" can happen when the local repo in the checkout
+			// directory is corrupted, not just the remote or the mirror.
+			// When using git mirrors, the existing checkout directory might have a
+			// reference to an object that it expects in the mirror, but the mirror
+			// no longer contains it (for whatever reason).
+			// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
+			if smelt[badObject] {
+				retrier.Break()
+				return &gitError{error: err, Type: gitErrorFetchBadObject}
+			}
+
+			// "fatal: [Cc]ouldn't find remote ref" can happen when just the short commit hash is given.
+			if smelt[badReference] || smelt[badReferencePreGit221] {
+				return &gitError{error: err, Type: gitErrorFetchBadReference}
+			}
+
+			// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
+			// don't result in it
+			if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
+				retrier.Break()
+				return &gitError{error: err, Type: gitErrorFetchRetryClean}
+			}
+
+			return &gitError{error: err, Type: gitErrorFetch}
 		}
-
-		// "fatal: [Cc]ouldn't find remote ref" can happen when just the short commit hash is given.
-		if smelt[badReference] || smelt[badReferencePreGit221] {
-			return &gitError{error: err, Type: gitErrorFetchBadReference}
-		}
-
-		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
-		// don't result in it
-		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
-			return &gitError{error: err, Type: gitErrorFetchRetryClean}
-		}
-
-		return &gitError{error: err, Type: gitErrorFetch}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, error) {

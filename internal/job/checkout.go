@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
+	"github.com/buildkite/shellwords"
 )
 
 // configureGitCredentialHelper sets up the agent to use a git credential helper that calls the Buildkite Agent API
@@ -384,16 +385,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 
 			// Fetch the PR head from the upstream repository into the mirror.
-			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", refspec)
-			if err := cmd.Run(ctx); err != nil {
-				e.shell.Warningf("Unable to fetch %q during mirror update - continuing because we'll fetch the commit directly", refspec)
-			} else {
-				e.shell.Commentf("Fetched pull request refspec `%s` into mirror", refspec)
+			if err := gitFetch(ctx, e.shell, "--git-dir "+shellwords.Quote(mirrorDir), "origin", refspec); err != nil {
+				return "", err
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
-			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", e.Branch)
-			if err := cmd.Run(ctx); err != nil {
+			if err := gitFetch(ctx, e.shell, "--git-dir "+shellwords.Quote(mirrorDir), "origin", e.Branch); err != nil {
 				return "", err
 			}
 		}
@@ -582,11 +579,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 		// Try fetching the PR refspec. If it fails, warn but continue
 		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", refspec); err != nil {
-			e.shell.Warningf("Unable to fetch %q — continuing because we'll fetch the commit directly", refspec)
-		} else {
-			gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
-			e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
+			return fmt.Errorf("fetching PR refspec %q: %w", refspec, err)
 		}
+
+		gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
+		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
 		if e.Commit != "HEAD" {
 			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
