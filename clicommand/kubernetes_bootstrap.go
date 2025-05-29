@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
+	"path/filepath"
+	"slices"
 	"syscall"
 	"time"
 
@@ -28,10 +28,7 @@ This command is used internally by Buildkite Kubernetes jobs. It is not
 intended to be used directly.`
 
 type KubernetesBootstrapConfig struct {
-	// Supplied specifically by agent-stack-k8s
-	Command               string   `cli:"command"`
-	Phases                []string `cli:"phases" normalize:"list"`
-	KubernetesContainerID int      `cli:"kubernetes-container-id"`
+	KubernetesContainerID int `cli:"kubernetes-container-id"`
 
 	// Global flags for debugging, etc
 	LogLevel    string   `cli:"log-level"`
@@ -45,17 +42,6 @@ var KubernetesBootstrapCommand = cli.Command{
 	Usage:       "Rebootstraps the command after connecting to the Kubernetes socket",
 	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
-		// Supplied specifically by agent-stack-k8s
-		cli.StringFlag{
-			Name:   "command",
-			Usage:  "The command to run",
-			EnvVar: "BUILDKITE_COMMAND",
-		},
-		cli.StringSliceFlag{
-			Name:   "phases",
-			Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
-			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
-		},
 		KubernetesContainerIDFlag,
 
 		// Global flags for debugging, etc
@@ -71,9 +57,6 @@ var KubernetesBootstrapCommand = cli.Command{
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-
-		// Start with our env, then override bits of it.
-		environ := env.FromSlice(os.Environ())
 
 		// Connect the socket.
 		socket := &kubernetes.Client{ID: cfg.KubernetesContainerID}
@@ -92,11 +75,21 @@ var KubernetesBootstrapCommand = cli.Command{
 			return fmt.Errorf("error connecting to kubernetes runner: %w", err)
 		}
 
-		// Set the environment vars based on the registration response.
-		for n, v := range env.FromSlice(regResp.Env).Dump() {
-			// Copy it to environ
-			environ.Set(n, v)
-		}
+		// Start with the registration response env, then override with our
+		// existing env.
+		// This is important because we're given higher-priority info from
+		// agent-stack-k8s or the container's default setup. Examples:
+		// - agent-stack-k8s interprets the job definition itself, and sets
+		//   BUILDKITE_COMMAND to one that could be radically different to the
+		//   one the agent normally sets.
+		// - Similarly, bootstrap phases varies depending on whether this is a
+		//   checkout or command container. The agent would have us run all
+		//   phases.
+		// - Container ID should be preserved in case of Hyrum's Law.
+		// - Sockets path is set by agent-stack-k8s as it varies by container
+		//   name.
+		// - We don't want to use the agent container's HOME, KUBERNETES_*, etc.
+		environ := env.FromSlice(slices.Concat(regResp.Env, os.Environ()))
 
 		// Capture parameters from the agent that affect how the subprocess
 		// should be run: build path, PTY, cancel signal, and signal grace period.
@@ -117,21 +110,20 @@ var KubernetesBootstrapCommand = cli.Command{
 			return err
 		}
 
-		// Set vars that should always be preserved from our env, and not be
-		// possible to fiddle with via job env.
-		// agent-stack-k8s interprets the job definition itself, and sets
-		// BUILDKITE_COMMAND to one that could be radically different to the
-		// one the agent normally sets.
-		// Similarly bootstrap phases varies depending on whether this is a
-		// checkout or command container.
-		// Container ID should be preserved in case of Hyrum's Law.
-		environ.Set("BUILDKITE_COMMAND", cfg.Command)
-		environ.Set("BUILDKITE_BOOTSTRAP_PHASES", strings.Join(cfg.Phases, ","))
-		environ.Set("BUILDKITE_CONTAINER_ID", strconv.Itoa(cfg.KubernetesContainerID))
-
 		// Ensure the Kubernetes socket setup is disabled in the subprocess
 		// (we're doing all that here).
 		environ.Set("BUILDKITE_KUBERNETES_EXEC", "false")
+
+		// BUILDKITE_BIN_PATH is a funny one. The bootstrap adds it to PATH,
+		// and the agent deduces it from its own path (as we do below), but in
+		// the k8s stack the agent could run from two different locations:
+		// - /usr/local/bin (agent, checkout container)
+		// - /workspace (command containers with arbitrary images)
+		self, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("finding absolute path to executable: %w", err)
+		}
+		environ.Set("BUILDKITE_BIN_PATH", filepath.Dir(self))
 
 		// So that the agent doesn't exit early thinking the client is lost, we want
 		// to continue talking to the agent container for as long as possible (after
@@ -155,11 +147,8 @@ var KubernetesBootstrapCommand = cli.Command{
 			_ = socket.Exit(exitCode)
 		}()
 
-		// TODO: support custom bootstrap scripts?
-		self, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("finding absolute path to executable: %w", err)
-		}
+		phases := environ.GetString("BUILDKITE_BOOTSTRAP_PHASES", "(unknown)")
+		fmt.Fprintf(socket, "~~~ Bootstrapping phases %s\n", phases)
 
 		// Now we can run the real `buildkite-agent bootstrap`.
 		// Compare with the setup in [agent.NewJobRunner].
@@ -167,7 +156,7 @@ var KubernetesBootstrapCommand = cli.Command{
 		// logs are shipped to the agent container and then to Buildkite, but
 		// are also visible as container logs.
 		proc := process.New(l, process.Config{
-			Path:              self,
+			Path:              self, // TODO: support custom bootstrap scripts?
 			Args:              []string{"bootstrap"},
 			Env:               environ.ToSlice(),
 			Stdout:            io.MultiWriter(os.Stdout, socket),

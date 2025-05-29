@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.98.0](https://github.com/buildkite/agent/tree/v3.98.0) (2025-05-27)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.97.2...v3.98.0)
+
+### Added
+- Add build URL to log fields [#3317](https://github.com/buildkite/agent/pull/3317) (@ChrisBr)
+- Add kubernetes-bootstrap subcommand [#3306](https://github.com/buildkite/agent/pull/3306), [#3314](https://github.com/buildkite/agent/pull/3314), [#3316](https://github.com/buildkite/agent/pull/3316) (@DrJosh9000)
+
+### Fixed
+- Fix `redactor add --format json` help string [#3322](https://github.com/buildkite/agent/pull/3322) (@francoiscampbell)
+
+## Dependency updates
+- [#3320](https://github.com/buildkite/agent/pull/3320), [#3318](https://github.com/buildkite/agent/pull/3318), [#3319](https://github.com/buildkite/agent/pull/3319), [#3323](https://github.com/buildkite/agent/pull/3323), [#3321](https://github.com/buildkite/agent/pull/3321) (@dependabot[bot])
+
+
 ## [v3.97.2](https://github.com/buildkite/agent/tree/v3.97.2) (2025-05-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.97.1...v3.97.2)
 

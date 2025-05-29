@@ -68,10 +68,10 @@ To redact the string 'llamasecret' from future logs:
 		$ echo llamasecret | buildkite-agent redactor add
 
 To redact multiple secrets from future logs in one command, create a flat
-JSON object file (for example, 'my-secrets.json'), with multiple "key" values,
-one for each secret:
+JSON object file (for example, 'my-secrets.json'), with one entry per secret
+(the names of the keys have no effect on redaction):
 
-		$ echo '{"key":"secret1","key":"secret2"}' | buildkite-agent redactor add --format json
+		$ echo '{"key1":"secret1","key2":"secret2"}' | buildkite-agent redactor add --format json
 
 Or
 
