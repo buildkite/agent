@@ -15,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
-	"github.com/buildkite/shellwords"
 )
 
 // configureGitCredentialHelper sets up the agent to use a git credential helper that calls the Buildkite Agent API
@@ -384,12 +383,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 			// Fetch the PR head from the upstream repository into the mirror.
-			if err := gitFetch(ctx, e.shell, "--git-dir "+shellwords.Quote(mirrorDir), "origin", refspec); err != nil {
+			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", refspec); err != nil {
 				return "", err
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
-			if err := gitFetch(ctx, e.shell, "--git-dir "+shellwords.Quote(mirrorDir), "origin", e.Branch); err != nil {
+			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", e.Branch); err != nil {
 				return "", err
 			}
 		}

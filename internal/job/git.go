@@ -133,16 +133,20 @@ func gitFetch(
 	gitFetchFlags, repository string,
 	refSpec ...string,
 ) error {
-	individualFetchFlags, err := shellwords.Split(gitFetchFlags)
-	if err != nil {
-		return err
+	// Build the initial part of the command: git [flags]
+	commandArgs := []string{"git"} // Start with "git" here
+	if gitFetchFlags != "" {
+		parts, err := shellwords.Split(gitFetchFlags)
+		if err != nil {
+			return fmt.Errorf("failed to parse gitFetchFlags: %w", err)
+		}
+		commandArgs = append(commandArgs, parts...)
 	}
 
-	commandArgs := []string{"fetch"}
-	commandArgs = append(commandArgs, individualFetchFlags...)
-	commandArgs = append(commandArgs, "--") // terminate arg parsing; only repository & refspecs may follow.
-	commandArgs = append(commandArgs, repository)
+	// Append the fetch command and terminate options with --
+	commandArgs = append(commandArgs, "fetch", "--", repository)
 
+	// Parse and append all refspecs
 	for _, r := range refSpec {
 		individualRefSpecs, err := shellwords.Split(r)
 		if err != nil {
@@ -166,6 +170,7 @@ func gitFetch(
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+
 			// "fatal: bad object" can happen when the local repo in the checkout
 			// directory is corrupted, not just the remote or the mirror.
 			// When using git mirrors, the existing checkout directory might have a
