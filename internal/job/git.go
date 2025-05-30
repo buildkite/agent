@@ -134,7 +134,7 @@ func gitFetch(
 	refSpec ...string,
 ) error {
 	// Build the initial part of the command: git [flags]
-	commandArgs := []string{} // Start with "git" here
+	commandArgs := []string{"fetch"}
 	if gitFetchFlags != "" {
 		parts, err := shellwords.Split(gitFetchFlags)
 		if err != nil {
@@ -144,7 +144,7 @@ func gitFetch(
 	}
 
 	// Append the fetch command and terminate options with --
-	commandArgs = append(commandArgs, "fetch", "--", repository)
+	commandArgs = append(commandArgs, "--", repository)
 
 	// Parse and append all refspecs
 	for _, r := range refSpec {
