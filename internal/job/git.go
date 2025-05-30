@@ -134,7 +134,7 @@ func gitFetch(
 	refSpec ...string,
 ) error {
 	// Build the initial part of the command: git [flags]
-	commandArgs := []string{"git"} // Start with "git" here
+	commandArgs := []string{} // Start with "git" here
 	if gitFetchFlags != "" {
 		parts, err := shellwords.Split(gitFetchFlags)
 		if err != nil {
@@ -166,7 +166,7 @@ func gitFetch(
 
 	return roko.NewRetrier(
 		roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
-		roko.WithMaxAttempts(10), // 10 attempts will take  minutes
+		roko.WithMaxAttempts(3), // 10 attempts will take <> minutes
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
