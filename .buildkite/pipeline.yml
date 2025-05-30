@@ -32,9 +32,13 @@ steps:
           cli-version: 2
           propagate-environment: true
           run: agent
-      - test-collector#v1.2.0:
+      - test-collector#v1.11.0:
           files: "junit-*.xml"
           format: "junit"
+          tags:
+            - "os=linux"
+            - "arch=amd64"
+            - "race=false"
 
   - name: ":linux: Linux ARM64 Tests"
     key: test-linux-arm64
@@ -51,9 +55,13 @@ steps:
           cli-version: 2
           propagate-environment: true
           run: agent
-      - test-collector#v1.2.0:
+      - test-collector#v1.11.0:
           files: "junit-*.xml"
           format: "junit"
+          tags:
+            - "os=linux"
+            - "arch=arm64"
+            - "race=false"
 
   - name: ":satellite: Detect Data Races"
     key: test-race-linux-arm64
@@ -71,9 +79,13 @@ steps:
           cli-version: 2
           propagate-environment: true
           run: agent
-      - test-collector#v1.2.0:
+      - test-collector#v1.11.0:
           files: "junit-*.xml"
           format: "junit"
+          tags:
+            - "os=linux"
+            - "arch=arm64"
+            - "race=true"
 
   - name: ":windows: Windows AMD64 Tests"
     key: test-windows
@@ -85,9 +97,13 @@ steps:
     agents:
       queue: $AGENT_RUNNERS_WINDOWS_QUEUE
     plugins:
-      - test-collector#v1.2.0:
+      - test-collector#v1.11.0:
           files: "junit-*.xml"
           format: "junit"
+          tags:
+            - "os=windows"
+            - "arch=arm64"
+            - "race=false"
 
   - name: ":coverage: Test coverage report Linux ARM64"
     key: test-coverage-linux-arm64
