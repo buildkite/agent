@@ -265,6 +265,12 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		if err != nil {
 			return nil, err
 		}
+
+		err := os.Chmod(tmpFile.Name(), 0o644) // Make it world-readable - useful for log collection etc
+		if err != nil {
+			return nil, fmt.Errorf("failed to set permissions on job log tmpfile %s: %w", tmpFile.Name(), err)
+		}
+
 		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
 		outputWriter = io.MultiWriter(outputWriter, tmpFile)
 	}
