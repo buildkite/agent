@@ -84,7 +84,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	r.server.Register(r)
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
 
-	oldUmask, err := Umask(0) // set umask of socket file to 0777 (world read-write-executable)
+	oldUmask, err := Umask(0) // set umask of socket file to 0o777 (world read-write-executable)
 	if err != nil {
 		return fmt.Errorf("failed to set socket umask: %w", err)
 	}

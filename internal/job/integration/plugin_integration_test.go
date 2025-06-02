@@ -510,14 +510,14 @@ func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 		t.Fatalf("newGitRepository() error = %v", err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(repo.Path, "hooks"), 0700); err != nil {
-		t.Fatalf("os.MkdirAll(hooks, 0700) = %v", err)
+	if err := os.MkdirAll(filepath.Join(repo.Path, "hooks"), 0o700); err != nil {
+		t.Fatalf("os.MkdirAll(hooks, 0o700) = %v", err)
 	}
 
 	for hook, lines := range hooks {
 		data := []byte(strings.Join(lines, "\n"))
-		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
-			t.Fatalf("os.WriteFile(hooks/%s, data, 0600) = %v", hook, err)
+		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0o600); err != nil {
+			t.Fatalf("os.WriteFile(hooks/%s, data, 0o600) = %v", hook, err)
 		}
 	}
 
@@ -545,8 +545,8 @@ func modifyTestPlugin(t *testing.T, hooks map[string][]string, testPlugin *testP
 
 	for hook, lines := range hooks {
 		data := []byte(strings.Join(lines, "\n"))
-		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
-			t.Fatalf("os.WriteFile(hooks/%s, data, 0600) = %v", hook, err)
+		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0o600); err != nil {
+			t.Fatalf("os.WriteFile(hooks/%s, data, 0o600) = %v", hook, err)
 		}
 	}
 

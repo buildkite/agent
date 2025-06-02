@@ -72,7 +72,7 @@ func (s *Server) InitRepository(repoName string) ([]byte, error) {
 
 	readmePath := filepath.Join(tempDir, "README.md")
 	readmeContent := "# Git Repository\n\nThis repository was created by the Git HTTP server.\n"
-	if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {
+	if err := os.WriteFile(readmePath, []byte(readmeContent), 0o644); err != nil {
 		return nil, fmt.Errorf("failed to create README file: %w", err)
 	}
 
@@ -140,7 +140,7 @@ func (s *Server) PushBranch(repoName, branchName string) (string, []byte, error)
 	}
 
 	filePath := filepath.Join(tempDir, "newfile.txt")
-	if err := os.WriteFile(filePath, []byte("This is a new file."), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("This is a new file."), 0o644); err != nil {
 		return "", nil, fmt.Errorf("failed to create new file: %w", err)
 	}
 

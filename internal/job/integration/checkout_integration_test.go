@@ -546,7 +546,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 	}
 
 	// Simulate state from a previous checkout
-	if err := os.MkdirAll(tester.CheckoutDir(), 0755); err != nil {
+	if err := os.MkdirAll(tester.CheckoutDir(), 0o755); err != nil {
 		t.Fatalf("error creating dir to clone from: %s", err)
 	}
 	cmd := exec.Command("git", "clone", "-v", "--", tester.Repo.Path, ".")
@@ -609,7 +609,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 	}
 
 	// Simulate state from a previous checkout
-	if err := os.MkdirAll(tester.CheckoutDir(), 0755); err != nil {
+	if err := os.MkdirAll(tester.CheckoutDir(), 0o755); err != nil {
 		t.Fatalf("error creating dir to clone from: %s", err)
 	}
 	cmd := exec.Command("git", "clone", "-v", "--", tester.Repo.Path, ".")
@@ -764,8 +764,8 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 		t.Fatalf(`tester.Repo.Execute(clone, -v, --, %q, %q) error = %v\nout = %s`, tester.Repo.Path, tester.CheckoutDir(), err, out)
 	}
 	testpath := filepath.Join(tester.CheckoutDir(), "test.txt")
-	if err := os.WriteFile(testpath, []byte("llamas"), 0700); err != nil {
-		t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
+	if err := os.WriteFile(testpath, []byte("llamas"), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(test.txt, llamas, 0o700) = %v", err)
 	}
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -935,8 +935,8 @@ func TestRepositorylessCheckout(t *testing.T) {
 		"export BUILDKITE_REPO=",
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(environment, script, 0700) = %v", err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(environment, script, 0o700) = %v", err)
 	}
 
 	tester.MustMock(t, "git").Expect().NotCalled()

@@ -30,13 +30,13 @@ func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 	knownHostPath := filepath.Join(sshDirectory, "known_hosts")
 
 	// Ensure ssh directory exists
-	if err := os.MkdirAll(sshDirectory, 0700); err != nil {
+	if err := os.MkdirAll(sshDirectory, 0o700); err != nil {
 		return nil, err
 	}
 
 	// Ensure file exists
 	if _, err := os.Stat(knownHostPath); err != nil {
-		f, err := os.OpenFile(knownHostPath, os.O_CREATE|os.O_WRONLY, 0600)
+		f, err := os.OpenFile(knownHostPath, os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("create %q: %w", knownHostPath, err)
 		}
@@ -118,7 +118,7 @@ func (kh *knownHosts) Add(ctx context.Context, host string) error {
 	kh.Shell.Commentf("Added host %q to known hosts at \"%s\"", host, kh.Path)
 
 	// Try and open the existing hostfile in (append_only) mode
-	f, err := os.OpenFile(kh.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0700)
+	f, err := os.OpenFile(kh.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o700)
 	if err != nil {
 		return fmt.Errorf("Could not open %q for appending: %w", kh.Path, err)
 	}

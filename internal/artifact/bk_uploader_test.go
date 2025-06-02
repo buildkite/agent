@@ -86,7 +86,7 @@ func TestFormUploading(t *testing.T) {
 	for _, wd := range []string{temp, cwd} {
 		t.Run(wd, func(t *testing.T) {
 			abspath := filepath.Join(wd, "llamas.txt")
-			err = os.WriteFile(abspath, []byte("llamas"), 0700)
+			err = os.WriteFile(abspath, []byte("llamas"), 0o700)
 			defer os.Remove(abspath)
 
 			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
@@ -171,7 +171,7 @@ func TestMultipartUploading(t *testing.T) {
 	for _, wd := range []string{temp, cwd} {
 		t.Run(wd, func(t *testing.T) {
 			abspath := filepath.Join(wd, "llamas3.txt")
-			err = os.WriteFile(abspath, []byte("llamasllamasllamas"), 0700)
+			err = os.WriteFile(abspath, []byte("llamasllamasllamas"), 0o700)
 			defer os.Remove(abspath)
 
 			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})

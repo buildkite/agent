@@ -1172,7 +1172,7 @@ var AgentStartCommand = cli.Command{
 		// so we may as well check that'll work now and fail early if it's a problem
 		if !osutil.FileExists(agentConf.BuildPath) {
 			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
-			// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
+			// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
 			if err := os.MkdirAll(agentConf.BuildPath, 0o777); err != nil {
 				return fmt.Errorf("failed to create builds path: %w", err)
 			}

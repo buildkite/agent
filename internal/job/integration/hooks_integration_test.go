@@ -38,8 +38,8 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(%q, script, 0700) = %v", filename, err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
 	}
 
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
@@ -91,12 +91,12 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, preCmdFile), []byte(strings.Join(preCommand, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(%q, preCommand, 0700) = %v", preCmdFile, err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, preCmdFile), []byte(strings.Join(preCommand, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, preCommand, 0o700) = %v", preCmdFile, err)
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, postCmdFile), []byte(strings.Join(postCommand, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(%q, postCommand, 0700) = %v", postCmdFile, err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, postCmdFile), []byte(strings.Join(postCommand, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, postCommand, 0o700) = %v", postCmdFile, err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -140,8 +140,8 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 		"cd ./mysubdir",
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(pre-command, script, 0700) = %v", err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(pre-command, script, 0o700) = %v", err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -175,8 +175,8 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 		"exit 0",
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(pre-command, script, 0700) = %v", err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(pre-command, script, 0o700) = %v", err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -591,8 +591,8 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 		`puts "ohai, it's ruby!"`,
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0755); err != nil {
-		t.Fatalf("os.WriteFile(%q, script, 0755) = %v", filename, err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o755); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o755) = %v", filename, err)
 	}
 
 	tester.RunAndCheck(t)
