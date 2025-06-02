@@ -22,8 +22,11 @@ const (
 	gitErrorCheckoutRetryClean
 	gitErrorClone
 	gitErrorFetch
+	// exit code 128: broad error, most likely not recoverable.
 	gitErrorFetchRetryClean
+	// local repo corruption, unrecoverable.
 	gitErrorFetchBadObject
+	// can happen when just the short commit hash is given.
 	gitErrorFetchBadReference
 	gitErrorClean
 	gitErrorCleanSubmodules
