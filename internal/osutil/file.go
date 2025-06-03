@@ -11,8 +11,8 @@ func ChmodExecutable(filename string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
 	}
-	if s.Mode()&0100 == 0 {
-		err = os.Chmod(filename, s.Mode()|0100)
+	if s.Mode()&0o100 == 0 {
+		err = os.Chmod(filename, s.Mode()|0o100)
 		if err != nil {
 			return fmt.Errorf("Failed to mark \"%s\" as executable (%s)", filename, err)
 		}

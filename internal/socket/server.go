@@ -24,7 +24,7 @@ func NewServer(socketPath string, handler http.Handler) (*Server, error) {
 		return nil, fmt.Errorf("socket path %s is too long (path length: %d, max %d characters). This is a limitation of your host OS", socketPath, len(socketPath), socketPathLength())
 	}
 
-	if err := os.MkdirAll(filepath.Dir(socketPath), os.FileMode(0700)); err != nil {
+	if err := os.MkdirAll(filepath.Dir(socketPath), os.FileMode(0o700)); err != nil {
 		return nil, fmt.Errorf("creating socket directory: %w", err)
 	}
 

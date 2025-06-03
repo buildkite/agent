@@ -160,8 +160,8 @@ func (d Download) try(ctx context.Context) error {
 	}
 
 	// Now make the folder for our file
-	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-	if err := os.MkdirAll(targetDirectory, 0777); err != nil {
+	// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+	if err := os.MkdirAll(targetDirectory, 0o777); err != nil {
 		return fmt.Errorf("creating directory for %s (%T: %w)", targetPath, err, err)
 	}
 

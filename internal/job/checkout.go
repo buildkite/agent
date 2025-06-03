@@ -83,8 +83,8 @@ func (e *Executor) createCheckoutDir() error {
 
 	if !osutil.FileExists(checkoutPath) {
 		e.shell.Commentf("Creating \"%s\"", checkoutPath)
-		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err := os.MkdirAll(checkoutPath, 0o777); err != nil {
 			return err
 		}
 	}
@@ -293,8 +293,8 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	// Create the mirrors path if it doesn't exist
 	if baseDir := filepath.Dir(mirrorDir); !osutil.FileExists(baseDir) {
 		e.shell.Commentf("Creating \"%s\"", baseDir)
-		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-		if err := os.MkdirAll(baseDir, 0777); err != nil {
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err := os.MkdirAll(baseDir, 0o777); err != nil {
 			return "", err
 		}
 	}

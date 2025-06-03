@@ -218,8 +218,8 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	// TempDir is not guaranteed to exist
 	tempDir := os.TempDir()
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-		if err = os.MkdirAll(tempDir, 0777); err != nil {
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err = os.MkdirAll(tempDir, 0o777); err != nil {
 			return nil, err
 		}
 	}
@@ -265,6 +265,12 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		if err != nil {
 			return nil, err
 		}
+
+		err := os.Chmod(tmpFile.Name(), 0o644) // Make it world-readable - useful for log collection etc
+		if err != nil {
+			return nil, fmt.Errorf("failed to set permissions on job log tmpfile %s: %w", tmpFile.Name(), err)
+		}
+
 		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
 		outputWriter = io.MultiWriter(outputWriter, tmpFile)
 	}

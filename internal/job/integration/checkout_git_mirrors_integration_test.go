@@ -454,8 +454,8 @@ func TestCleaningAnExistingCheckout_WithGitMirrors(t *testing.T) {
 		t.Fatalf(`tester.Repo.Execute(clone, -v, --, %q, %q) error = %v\nout = %s`, tester.Repo.Path, tester.CheckoutDir(), err, out)
 	}
 	testpath := filepath.Join(tester.CheckoutDir(), "test.txt")
-	if err := os.WriteFile(testpath, []byte("llamas"), 0700); err != nil {
-		t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
+	if err := os.WriteFile(testpath, []byte("llamas"), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(test.txt, llamas, 0o700) = %v", err)
 	}
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -649,8 +649,8 @@ func TestRepositorylessCheckout_WithGitMirrors(t *testing.T) {
 		"export BUILDKITE_REPO=",
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(environment, script, 0700) = %v", err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(environment, script, 0o700) = %v", err)
 	}
 
 	tester.MustMock(t, "git").Expect().NotCalled()

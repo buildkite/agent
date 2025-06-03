@@ -250,8 +250,8 @@ func TestWorkingDir(t *testing.T) {
 
 	dirs := []string{tempDir, "my", "test", "dirs"}
 
-	if err := os.MkdirAll(filepath.Join(dirs...), 0700); err != nil {
-		t.Fatalf("os.MkdirAll(dirs, 0700) = %v", err)
+	if err := os.MkdirAll(filepath.Join(dirs...), 0o700); err != nil {
+		t.Fatalf("os.MkdirAll(dirs, 0o700) = %v", err)
 	}
 
 	currentWd, err := os.Getwd()
