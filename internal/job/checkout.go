@@ -382,13 +382,14 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
 			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+
 			// Fetch the PR head from the upstream repository into the mirror.
-			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", true, refspec); err != nil {
+			if err := e.maybeRetryingGitFetch(ctx, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", refspec); err != nil {
 				return "", err
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
-			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", true, e.Branch); err != nil {
+			if err := e.maybeRetryingGitFetch(ctx, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", e.Branch); err != nil {
 				return "", err
 			}
 		}
@@ -868,4 +869,17 @@ func (e *Executor) resolveCommit(ctx context.Context) {
 		e.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
 		e.shell.Env.Set("BUILDKITE_COMMIT", trimmedCmdOut)
 	}
+}
+
+// maybeRetryingGitFetch wraps gitFetch with logic to optionally retry.
+//
+// Retry is enabled by default, but can be disabled via ExecutorConfig.DisableGitFetchRetry.
+// This allows integration tests and other scenarios to bypass retry logic,
+// especially where deterministic behavior or exact call counts are expected.
+//
+// The retry behavior is meant to improve robustness in cases where the commit
+// is not yet available (e.g. async ref creation)
+func (e *Executor) maybeRetryingGitFetch(ctx context.Context, flags, repo string, refSpecs ...string) error {
+	retry := !e.ExecutorConfig.DisableGitFetchRetry
+	return gitFetch(ctx, e.shell, flags, repo, retry, refSpecs...)
 }

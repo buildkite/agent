@@ -175,7 +175,7 @@ func gitFetch(
 	if withRetry {
 		return roko.NewRetrier(
 			roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
-			roko.WithMaxAttempts(4), // 10 attempts will take ~8.5 minutes total (first attempt has no wait, backoff adds up to ~511s)
+			roko.WithMaxAttempts(10), // 10 attempts will take ~8.5 minutes total (first attempt has no wait, backoff adds up to ~511s)
 
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(retrier *roko.Retrier) error {
