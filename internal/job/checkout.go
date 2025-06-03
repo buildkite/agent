@@ -383,12 +383,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 			// Fetch the PR head from the upstream repository into the mirror.
-			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", refspec); err != nil {
+			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", true, refspec); err != nil {
 				return "", err
 			}
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
-			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", e.Branch); err != nil {
+			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "origin", true, e.Branch); err != nil {
 				return "", err
 			}
 		}
@@ -564,7 +564,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		// If a refspec is provided then use it instead.
 		// For example, `refs/not/a/head`
 		e.shell.Commentf("Fetch and checkout custom refspec")
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.RefSpec); err != nil {
+		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", false, e.RefSpec); err != nil {
 			return fmt.Errorf("fetching refspec %q: %w", e.RefSpec, err)
 		}
 
@@ -595,7 +595,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Branch); err != nil {
+		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", false, e.Branch); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
 
@@ -741,11 +741,18 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
+<<<<<<< HEAD
 // gitFetchWithFallback run git fetch for refspecs, when it fails on recoverable reason, it will retry fetching
 // all heads and refs.
 func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags string, refspecs ...string) error {
 	if len(refspecs) == 0 {
 		return fmt.Errorf("no refspecs provided for git fetch")
+=======
+func gitFetchCommitWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags, commit string) error {
+	err := gitFetch(ctx, shell, gitFetchFlags, "origin", false, commit)
+	if err == nil {
+		return nil // it worked
+>>>>>>> 434bf7d0 (Updating gitFetch method to take a retry flag)
 	}
 
 	// Try to fetch all refspecs in a single call first
@@ -779,7 +786,7 @@ func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags
 	}
 
 	if err := gitFetch(ctx, shell,
-		gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*",
+		gitFetchFlags, "origin", false, gitFetchRefspec, "+refs/tags/*:refs/tags/*",
 	); err != nil {
 		return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
 	}
