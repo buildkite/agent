@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.98.1](https://github.com/buildkite/agent/tree/v3.98.1) (2025-06-04)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.98.0...v3.98.1)
+
+### Fixed
+- Gracefully Handle Missing GitHub PR refs/pull/%s/head in Checkout [#3294](https://github.com/buildkite/agent/pull/3294) (@123sarahj123)
+- Fix bootstrap subprocess handling [#3331](https://github.com/buildkite/agent/pull/3331) (@DrJosh9000)
+- Reduce git fetch from twice to once for typical Github PR build [#3327](https://github.com/buildkite/agent/pull/3327) (@zhming0)
+- Set job log tempfile permissions to 644 (was 600) [#3330](https://github.com/buildkite/agent/pull/3330) (@moskyb)
+
+### Internal
+- Tag tests with os / arch [#3326](https://github.com/buildkite/agent/pull/3326) (@catkins)
+
 ## [v3.98.0](https://github.com/buildkite/agent/tree/v3.98.0) (2025-05-27)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.97.2...v3.98.0)
 
