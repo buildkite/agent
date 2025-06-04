@@ -297,7 +297,7 @@ func TestGitFetch(t *testing.T) {
 		t.Fatalf("sh.AbsolutePath(git) = %v", err)
 	}
 
-	if err := gitFetch(ctx, sh, "--foo --bar", "repo", "ref1", "ref2"); err != nil {
+	if err := gitFetch(ctx, sh, "", "--foo --bar", "repo", false, "ref1", "ref2"); err != nil {
 		t.Fatalf(`gitFetch(ctx, sh, "--foo --bar", "repo", "ref1", "ref2") = %v`, err)
 	}
 

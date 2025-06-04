@@ -382,15 +382,15 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
 			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+
 			// Fetch the PR head from the upstream repository into the mirror.
-			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", refspec)
-			if err := cmd.Run(ctx); err != nil {
+			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "", "origin", true, refspec); err != nil {
 				return "", err
 			}
+
 		} else {
 			// Fetch the build branch from the upstream repository into the mirror.
-			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", e.Branch)
-			if err := cmd.Run(ctx); err != nil {
+			if err := gitFetch(ctx, e.shell, fmt.Sprintf("--git-dir=%s", mirrorDir), "", "origin", true, e.Branch); err != nil {
 				return "", err
 			}
 		}
@@ -566,7 +566,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		// If a refspec is provided then use it instead.
 		// For example, `refs/not/a/head`
 		e.shell.Commentf("Fetch and checkout custom refspec")
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.RefSpec); err != nil {
+		if err := gitFetch(ctx, e.shell, "", gitFetchFlags, "origin", false, e.RefSpec); err != nil {
 			return fmt.Errorf("fetching refspec %q: %w", e.RefSpec, err)
 		}
 
@@ -597,7 +597,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Branch); err != nil {
+		if err := gitFetch(ctx, e.shell, "", gitFetchFlags, "origin", false, e.Branch); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
 
@@ -751,7 +751,7 @@ func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags
 	}
 
 	// Try to fetch all refspecs in a single call first
-	err := gitFetch(ctx, shell, gitFetchFlags, "origin", refspecs...)
+	err := gitFetch(ctx, shell, "", gitFetchFlags, "origin", false, refspecs...)
 	if err == nil {
 		return nil // all refspecs worked in single fetch
 	}
@@ -781,7 +781,7 @@ func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags
 	}
 
 	if err := gitFetch(ctx, shell,
-		gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*",
+		"", gitFetchFlags, "origin", true, gitFetchRefspec, "+refs/tags/*:refs/tags/*",
 	); err != nil {
 		return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
 	}

@@ -11,8 +11,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
 
@@ -131,19 +133,35 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 func gitFetch(
 	ctx context.Context,
 	sh *shell.Shell,
-	gitFetchFlags, repository string,
+	gitFlags, gitFetchFlags, repository string,
+	withRetry bool,
 	refSpec ...string,
 ) error {
-	individualFetchFlags, err := shellwords.Split(gitFetchFlags)
-	if err != nil {
-		return err
+	// Build the command: git [global gitFlags] fetch [fetchFlags] -- [repository] [refspecs...]
+	commandArgs := []string{}
+
+	if gitFlags != "" {
+		parts, err := shellwords.Split(gitFlags)
+		if err != nil {
+			return fmt.Errorf("failed to parse gitFlags: %w", err)
+		}
+		commandArgs = append(commandArgs, parts...)
 	}
 
-	commandArgs := []string{"fetch"}
-	commandArgs = append(commandArgs, individualFetchFlags...)
-	commandArgs = append(commandArgs, "--") // terminate arg parsing; only repository & refspecs may follow.
-	commandArgs = append(commandArgs, repository)
+	commandArgs = append(commandArgs, "fetch")
 
+	// Then fetch flags
+	if gitFetchFlags != "" {
+		parts, err := shellwords.Split(gitFetchFlags)
+		if err != nil {
+			return fmt.Errorf("failed to parse gitFetchFlags: %w", err)
+		}
+		commandArgs = append(commandArgs, parts...)
+	}
+
+	commandArgs = append(commandArgs, "--", repository)
+
+	// Parse and append all refspecs
 	for _, r := range refSpec {
 		individualRefSpecs, err := shellwords.Split(r)
 		if err != nil {
@@ -161,32 +179,53 @@ func gitFetch(
 		badReferencePreGit221: false,
 	}
 
-	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
-		// "fatal: bad object" can happen when the local repo in the checkout
-		// directory is corrupted, not just the remote or the mirror.
-		// When using git mirrors, the existing checkout directory might have a
-		// reference to an object that it expects in the mirror, but the mirror
-		// no longer contains it (for whatever reason).
-		// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-		if smelt[badObject] {
-			return &gitError{error: err, Type: gitErrorFetchBadObject}
-		}
-
-		// "fatal: [Cc]ouldn't find remote ref" can happen when just the short commit hash is given.
-		if smelt[badReference] || smelt[badReferencePreGit221] {
-			return &gitError{error: err, Type: gitErrorFetchBadReference}
-		}
-
-		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
-		// don't result in it
-		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
-			return &gitError{error: err, Type: gitErrorFetchRetryClean}
-		}
-
-		return &gitError{error: err, Type: gitErrorFetch}
+	// The retry logic is used to handle rare cases where a commit ref is not yet available
+	// remotely (e.g. async ref creation), and retrying `git fetch` can resolve it.
+	// This is *not* always desirable—some call sites have their own retry mechanisms,
+	// so the retry must be opt-in to avoid nested retries and increased test flakiness.
+	var retrier *roko.Retrier
+	if withRetry {
+		retrier = roko.NewRetrier(
+			roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
+			roko.WithMaxAttempts(10), // 10 attempts will take ~8.5 minutes total (first attempt has no wait, backoff adds up to ~511s)
+			roko.WithJitter(),
+		)
+	} else {
+		retrier = roko.NewRetrier(
+			roko.WithStrategy(roko.Constant(0)),
+			roko.WithMaxAttempts(1),
+		)
 	}
+	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
 
-	return nil
+			// "fatal: bad object" can happen when the local repo in the checkout
+			// directory is corrupted, not just the remote or the mirror.
+			// When using git mirrors, the existing checkout directory might have a
+			// reference to an object that it expects in the mirror, but the mirror
+			// no longer contains it (for whatever reason).
+			// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
+			if smelt[badObject] {
+				retrier.Break()
+				return &gitError{error: err, Type: gitErrorFetchBadObject}
+			}
+
+			// "fatal: [Cc]ouldn't find remote ref" can happen when just the short commit hash is given.
+			if smelt[badReference] || smelt[badReferencePreGit221] {
+				return &gitError{error: err, Type: gitErrorFetchBadReference}
+			}
+
+			// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
+			// don't result in it
+			if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
+				retrier.Break()
+				return &gitError{error: err, Type: gitErrorFetchRetryClean}
+			}
+
+			return &gitError{error: err, Type: gitErrorFetch}
+		}
+		return nil
+	})
 }
 
 func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, error) {
