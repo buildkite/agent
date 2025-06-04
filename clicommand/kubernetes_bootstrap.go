@@ -142,11 +142,6 @@ var KubernetesBootstrapCommand = cli.Command{
 			return fmt.Errorf("connecting to k8s socket: %w", err)
 		}
 
-		var exitCode int
-		defer func() {
-			_ = socket.Exit(exitCode)
-		}()
-
 		phases := environ.GetString("BUILDKITE_BOOTSTRAP_PHASES", "(unknown)")
 		fmt.Fprintf(socket, "~~~ Bootstrapping phases %s\n", phases)
 
@@ -167,34 +162,43 @@ var KubernetesBootstrapCommand = cli.Command{
 			SignalGracePeriod: signalGracePeriod,
 		})
 
-		if err := proc.Run(ctx); err != nil {
-			return fmt.Errorf("couldn't run subprocess: %w", err)
-		}
-
 		// We aren't expecting the user to Ctrl-C the process (we're in a k8s
 		// pod), but Kubernetes might send signals.
 		// Forward them to the subprocess.
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, os.Interrupt,
+		signal.Notify(signals,
+			os.Interrupt,
 			syscall.SIGHUP,
 			syscall.SIGTERM,
 			syscall.SIGINT,
-			syscall.SIGQUIT)
-		defer signal.Stop(signals)
+			syscall.SIGQUIT,
+		)
 
-		// Block until done, but also pass along signals.
-	signalLoop:
-		for {
-			select {
-			case <-proc.Done():
-				break signalLoop
-			case <-signals:
-				proc.Interrupt()
+		go func() {
+			defer signal.Stop(signals)
+			// Forward signals to the subprocess.
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-proc.Done():
+					return
+				case <-signals:
+					proc.Interrupt()
+				}
 			}
+		}()
+
+		exitCode := -1
+		defer func() { socket.Exit(exitCode) }()
+
+		// NB: Run blocks until the subprocess exits.
+		if err := proc.Run(ctx); err != nil {
+			fmt.Fprintf(socket, "Couldn't execute bootstrap: %v\n", err)
+			return &ExitError{1, err}
 		}
 
 		exitCode = proc.WaitStatus().ExitStatus()
-
 		return &SilentExitError{code: exitCode}
 	},
 }
