@@ -25,13 +25,7 @@ import (
 )
 
 const (
-	// Signal reasons
-	SignalReasonAgentRefused      = "agent_refused"
-	SignalReasonAgentStop         = "agent_stop"
-	SignalReasonCancel            = "cancel"
-	SignalReasonSignatureRejected = "signature_rejected"
-	SignalReasonProcessRunError   = "process_run_error"
-	// Don't add more signal reasons. If you must add a new signal reason, it must also be added to
+	// Think very carefully about adding new signal reasons. If you must add a new signal reason, it must also be added to
 	// the Job::Event::SignalReason enum in the rails app.
 	//
 	// They are meant to represent the reason a job was stopped, but they've also been used to
@@ -42,6 +36,29 @@ const (
 	//
 	// We should consider adding new fields 'not_run_reason' and 'not_run_details' instead of adding
 	// more signal reasons.
+
+	// SignalReasonAgentRefused is used when the agent refused to run the job, e.g. due to a failed `pre-bootstrap` hook,
+	// or a failed allowlist validation.
+	SignalReasonAgentRefused = "agent_refused"
+
+	// SignalReasonAgentStop is used when the agent is stopping, e.g. due to a pending host shutdown or EC2 spot instance termination.
+	SignalReasonAgentStop = "agent_stop"
+
+	// SignalReasonCancel is used when the job was cancelled via the Buildkite web UI.
+	SignalReasonCancel = "cancel"
+
+	// SignalReasonSignatureRejected is used when the job was signed with a signature that could not be verified, either
+	// because the signature is invalid, or because the agent does not have the verification key.
+	SignalReasonSignatureRejected = "signature_rejected"
+
+	// SignalReasonProcessRunError is used when the process to run the bootstrap script failed to run, e.g. due to a
+	// missing executable, or a permission error
+	SignalReasonProcessRunError = "process_run_error"
+
+	// SignalReasonStackError is used when the job was stopped due to a stack error, eg because in Kubernetes the pod running
+	// could not be launched. This signal reason is not used directly by the agent, but is used by the agent-stack-kubernetes
+	// to signal that the job was not run due to a stack error.
+	SignalReasonStackError = "stack_error"
 )
 
 type missingKeyError struct {
