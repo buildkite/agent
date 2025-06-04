@@ -181,8 +181,6 @@ type ExecutorConfig struct {
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string
-
-	DisableGitFetchRetry bool
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
