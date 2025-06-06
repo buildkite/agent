@@ -20,8 +20,6 @@ const gitCredentialsHelperHelpDescription = `Usage:
 
 Description:
 
-[EXPERIMENTAL]
-
 Ask buildkite for credentials to use to authenticate with Github when cloning via HTTPS.
 The credentials are returned in the git-credential format.
 
