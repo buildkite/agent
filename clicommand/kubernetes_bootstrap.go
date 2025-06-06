@@ -40,6 +40,7 @@ type KubernetesBootstrapConfig struct {
 var KubernetesBootstrapCommand = cli.Command{
 	Name:        "kubernetes-bootstrap",
 	Usage:       "Rebootstraps the command after connecting to the Kubernetes socket",
+	Hidden:      true, // This command is not intended to be used directly by users, and is instead run by the agent-stack-k8s container
 	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
 		KubernetesContainerIDFlag,

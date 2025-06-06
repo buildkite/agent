@@ -107,6 +107,7 @@ type BootstrapConfig struct {
 var BootstrapCommand = cli.Command{
 	Name:        "bootstrap",
 	Usage:       "Run a Buildkite job locally",
+	Hidden:      true, // This command is not intended to be run directly by users, but rather as a sub-process of the agent.
 	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{

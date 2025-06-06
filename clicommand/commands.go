@@ -10,6 +10,7 @@ var BuildkiteAgentCommands = []cli.Command{
 	// These commands are special. The have a different lifecycle to the others
 	AgentStartCommand,
 	BootstrapCommand,
+	KubernetesBootstrapCommand,
 
 	// These are in alphabetical order
 	AcknowledgementsCommand,
@@ -53,7 +54,6 @@ var BuildkiteAgentCommands = []cli.Command{
 		},
 	},
 	GitCredentialsHelperCommand,
-	KubernetesBootstrapCommand,
 	{
 		Name:     "lock",
 		Category: categoryJobCommands,
