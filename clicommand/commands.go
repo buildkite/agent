@@ -19,7 +19,7 @@ var BuildkiteAgentCommands = []cli.Command{
 	{
 		Name:     "annotation",
 		Category: categoryJobCommands,
-		Usage:    "Make changes to an annotation on the currently running build",
+		Usage:    "Make changes to annotations on the currently running build",
 		Subcommands: []cli.Command{
 			AnnotationRemoveCommand,
 		},
@@ -46,7 +46,7 @@ var BuildkiteAgentCommands = []cli.Command{
 	{
 		Name:     "env",
 		Category: categoryJobCommands,
-		Usage:    "Process environment subcommands",
+		Usage:    "Interact with the environment of the currently running build",
 		Subcommands: []cli.Command{
 			EnvDumpCommand,
 			EnvGetCommand,
@@ -58,7 +58,7 @@ var BuildkiteAgentCommands = []cli.Command{
 	{
 		Name:     "lock",
 		Category: categoryJobCommands,
-		Usage:    "Process lock subcommands",
+		Usage:    "Lock or unlock resources for the currently running build",
 		Subcommands: []cli.Command{
 			LockAcquireCommand,
 			LockDoCommand,
@@ -78,7 +78,7 @@ var BuildkiteAgentCommands = []cli.Command{
 	{
 		Name:     "meta-data",
 		Category: categoryJobCommands,
-		Usage:    "Get/set data from Buildkite jobs",
+		Usage:    "Get/set metadata from Buildkite jobs",
 		Subcommands: []cli.Command{
 			MetaDataSetCommand,
 			MetaDataGetCommand,
@@ -125,7 +125,7 @@ var BuildkiteAgentCommands = []cli.Command{
 	AgentStopCommand,
 	{
 		Name:  "tool",
-		Usage: "Utility commands, intended for users and operators of the agent to run directly on their machines, and not as part of a Buildkite job",
+		Usage: "Utilities for working with the Buildkite Agent",
 		Subcommands: []cli.Command{
 			ToolKeygenCommand,
 			ToolSignCommand,

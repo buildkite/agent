@@ -16,7 +16,6 @@ import (
 )
 
 const appHelpTemplate = `Usage:
-
   {{.Name}} <command> [options...]
 
 Available commands are: {{range .VisibleCategories}}{{if .Name}}
