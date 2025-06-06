@@ -106,7 +106,8 @@ type BootstrapConfig struct {
 
 var BootstrapCommand = cli.Command{
 	Name:        "bootstrap",
-	Usage:       "Run a Buildkite job locally",
+	Usage:       "Harness used internally by the agent to run jobs as subprocesses",
+	Category:    categoryInternal,
 	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
