@@ -65,15 +65,10 @@ func main() {
 	app.Commands = clicommand.BuildkiteAgentCommands
 	app.ErrWriter = os.Stderr
 
-	// When no sub command is used
-	app.Action = func(c *cli.Context) {
-		_ = cli.ShowAppHelp(c)
-		os.Exit(1)
-	}
-
 	// When a sub command can't be found
 	app.CommandNotFound = func(c *cli.Context, command string) {
-		_ = cli.ShowAppHelp(c)
+		fmt.Fprintf(app.ErrWriter, "buildkite-agent: unknown subcommand %q\n", command)
+		fmt.Fprintf(app.ErrWriter, "Run '%s --help' for usage.\n", c.App.Name)
 		os.Exit(1)
 	}
 
