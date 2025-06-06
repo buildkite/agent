@@ -43,8 +43,8 @@ type GitCredentialsHelperConfig struct {
 
 var GitCredentialsHelperCommand = cli.Command{
 	Name:        "git-credentials-helper",
-	Usage:       "Ask buildkite for credentials to use to authenticate with Github when cloning",
-	Hidden:      true, // This command is not intended to be used directly by users, and is configured to be run by hosted compute jobs
+	Usage:       "Internal process used by hosted compute jobs to authenticate with Github",
+	Category:    categoryInternal,
 	Description: gitCredentialsHelperHelpDescription,
 	Flags: append(globalFlags(),
 		cli.StringFlag{

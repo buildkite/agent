@@ -4,6 +4,7 @@ import "github.com/urfave/cli"
 
 const (
 	categoryJobCommands = "Commands that can be run within a Buildkite job"
+	categoryInternal    = "Internal commands, not intended to be run by users"
 )
 
 var BuildkiteAgentCommands = []cli.Command{
