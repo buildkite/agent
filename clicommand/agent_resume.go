@@ -32,6 +32,7 @@ type AgentResumeConfig struct {
 
 var AgentResumeCommand = cli.Command{
 	Name:        "resume",
+	Category:    categoryJobCommands,
 	Usage:       "Resume the agent",
 	Description: resumeDescription,
 	Flags:       slices.Concat(globalFlags(), apiFlags()),

@@ -70,6 +70,7 @@ type AnnotateConfig struct {
 
 var AnnotateCommand = cli.Command{
 	Name:        "annotate",
+	Category:    categoryJobCommands,
 	Usage:       "Annotate the build page within the Buildkite UI with text from within a Buildkite job",
 	Description: annotateHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{

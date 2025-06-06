@@ -19,10 +19,10 @@ const appHelpTemplate = `Usage:
 
   {{.Name}} <command> [options...]
 
-Available commands are:
-
-  {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-  {{end}}
+Available commands are: {{range .VisibleCategories}}{{if .Name}}
+{{.Name}}:{{range .VisibleCommands}}
+  {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{"\n"}}{{else}}{{range .VisibleCommands}}
+  {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{"\n"}}{{end}}{{end}}
 Use "{{.Name}} <command> --help" for more information about a command.
 `
 
