@@ -19,6 +19,7 @@ import (
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
@@ -527,11 +528,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)
 	// Note that [os.Executable] returns an absolute path.
-	exePath, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-	env["BUILDKITE_BIN_PATH"] = filepath.Dir(exePath)
+	env["BUILDKITE_BIN_PATH"] = filepath.Dir(self.Path(ctx))
 
 	// Add options from the agent configuration
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath

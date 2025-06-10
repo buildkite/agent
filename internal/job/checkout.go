@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
@@ -32,12 +33,7 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 		return fmt.Errorf("enabling git credential.useHttpPath: %w", err)
 	}
 
-	buildkiteAgent, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("getting executable path: %w", err)
-	}
-
-	helper := fmt.Sprintf(`%s git-credentials-helper`, buildkiteAgent)
+	helper := fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
 	err = e.shell.Command("git", "config", "--global", "credential.helper", helper).Run(ctx, shell.ShowPrompt(false))
 	if err != nil {
 		return fmt.Errorf("configuring git credential.helper: %w", err)
@@ -806,7 +802,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 		return nil
 	}
 
-	cmd := e.shell.Command("buildkite-agent", "meta-data", "exists", CommitMetadataKey)
+	cmd := e.shell.Command(self.Path(ctx), "meta-data", "exists", CommitMetadataKey)
 	if err := cmd.Run(ctx); err == nil {
 		// Command exited 0, ie the key exists, so we don't need to send it again
 		e.shell.Commentf("Git commit information has already been sent to Buildkite")
@@ -839,7 +835,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	}
 
 	stdin := strings.NewReader(out)
-	cmd = e.shell.CloneWithStdin(stdin).Command("buildkite-agent", "meta-data", "set", CommitMetadataKey)
+	cmd = e.shell.CloneWithStdin(stdin).Command(self.Path(ctx), "meta-data", "set", CommitMetadataKey)
 	if err := cmd.Run(ctx); err != nil {
 		return fmt.Errorf("sending git commit information to Buildkite: %w", err)
 	}

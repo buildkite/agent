@@ -13,6 +13,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/bintest/v3"
 	"gotest.tools/v3/assert"
 )
@@ -83,11 +84,9 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 			t.Cleanup(func() { _ = os.RemoveAll(hooksDir) })
 
 			hookPath := filepath.Join(hooksDir, "pre-bootstrap"+tc.ext)
-			testMainPath, err := os.Executable()
-			assert.NilError(t, err)
 
 			// Write pre-bootstrap hook in a subprocess to avoid intermittent ETXTBSY errors on Linux
-			cmd := exec.Command(testMainPath, "write-exec", hookPath)
+			cmd := exec.Command(self.Path(ctx), "write-exec", hookPath)
 			cmd.Stdin = strings.NewReader(tc.contents)
 			err = cmd.Run()
 			assert.NilError(t, err)

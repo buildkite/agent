@@ -32,6 +32,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
@@ -306,13 +307,10 @@ func defaultConfigFilePaths() (paths []string) {
 
 	// Also check to see if there's a buildkite-agent.cfg in the folder
 	// that the binary is running in.
-	exePath, err := os.Executable()
+	pathToBinary, err := filepath.Abs(filepath.Dir(self.Path(context.Background())))
 	if err == nil {
-		pathToBinary, err := filepath.Abs(filepath.Dir(exePath))
-		if err == nil {
-			pathToRelativeConfig := filepath.Join(pathToBinary, "buildkite-agent.cfg")
-			paths = append([]string{pathToRelativeConfig}, paths...)
-		}
+		pathToRelativeConfig := filepath.Join(pathToBinary, "buildkite-agent.cfg")
+		paths = append([]string{pathToRelativeConfig}, paths...)
 	}
 
 	return paths
@@ -799,11 +797,7 @@ var AgentStartCommand = cli.Command{
 
 		// Set a useful default for the bootstrap script
 		if cfg.BootstrapScript == "" {
-			exePath, err := os.Executable()
-			if err != nil {
-				return errors.New("unable to find executable path for bootstrap")
-			}
-			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
+			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(self.Path(ctx)))
 		}
 
 		isSetNoPlugins := c.IsSet("no-plugins")

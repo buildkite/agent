@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/roko"
@@ -120,11 +121,7 @@ var KubernetesBootstrapCommand = cli.Command{
 		// the k8s stack the agent could run from two different locations:
 		// - /usr/local/bin (agent, checkout container)
 		// - /workspace (command containers with arbitrary images)
-		self, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("finding absolute path to executable: %w", err)
-		}
-		environ.Set("BUILDKITE_BIN_PATH", filepath.Dir(self))
+		environ.Set("BUILDKITE_BIN_PATH", filepath.Dir(self.Path(ctx)))
 
 		// So that the agent doesn't exit early thinking the client is lost, we want
 		// to continue talking to the agent container for as long as possible (after
@@ -152,7 +149,7 @@ var KubernetesBootstrapCommand = cli.Command{
 		// logs are shipped to the agent container and then to Buildkite, but
 		// are also visible as container logs.
 		proc := process.New(l, process.Config{
-			Path:              self, // TODO: support custom bootstrap scripts?
+			Path:              self.Path(ctx), // TODO: support custom bootstrap scripts?
 			Args:              []string{"bootstrap"},
 			Env:               environ.ToSlice(),
 			Stdout:            io.MultiWriter(os.Stdout, socket),

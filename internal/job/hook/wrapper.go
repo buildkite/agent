@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
 )
@@ -236,13 +238,8 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
-	buildkiteAgent, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-
 	templateInput := WrapperTemplateInput{
-		AgentBinary:       buildkiteAgent,
+		AgentBinary:       self.Path(context.TODO()),
 		ShebangLine:       shebang,
 		BeforeEnvFileName: wrap.beforeEnvPath,
 		AfterEnvFileName:  wrap.afterEnvPath,
