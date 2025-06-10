@@ -39,7 +39,8 @@ type KubernetesBootstrapConfig struct {
 
 var KubernetesBootstrapCommand = cli.Command{
 	Name:        "kubernetes-bootstrap",
-	Usage:       "Rebootstraps the command after connecting to the Kubernetes socket",
+	Usage:       "Harness used internally by the agent to run jobs on Kubernetes",
+	Category:    categoryInternal,
 	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
 		KubernetesContainerIDFlag,

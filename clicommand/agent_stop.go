@@ -38,6 +38,7 @@ type AgentStopConfig struct {
 
 var AgentStopCommand = cli.Command{
 	Name:        "stop",
+	Category:    categoryJobCommands,
 	Usage:       "Stop the agent",
 	Description: stopDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{

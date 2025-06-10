@@ -39,6 +39,7 @@ type AgentPauseConfig struct {
 
 var AgentPauseCommand = cli.Command{
 	Name:        "pause",
+	Category:    categoryJobCommands,
 	Usage:       "Pause the agent",
 	Description: pauseDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{

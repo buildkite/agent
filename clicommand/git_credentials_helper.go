@@ -20,8 +20,6 @@ const gitCredentialsHelperHelpDescription = `Usage:
 
 Description:
 
-[EXPERIMENTAL]
-
 Ask buildkite for credentials to use to authenticate with Github when cloning via HTTPS.
 The credentials are returned in the git-credential format.
 
@@ -45,7 +43,8 @@ type GitCredentialsHelperConfig struct {
 
 var GitCredentialsHelperCommand = cli.Command{
 	Name:        "git-credentials-helper",
-	Usage:       "Ask buildkite for credentials to use to authenticate with Github when cloning",
+	Usage:       "Internal process used by hosted compute jobs to authenticate with Github",
+	Category:    categoryInternal,
 	Description: gitCredentialsHelperHelpDescription,
 	Flags: append(globalFlags(),
 		cli.StringFlag{
