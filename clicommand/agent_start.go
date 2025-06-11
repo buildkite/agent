@@ -1377,9 +1377,17 @@ func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPo
 			switch sig {
 			case syscall.SIGQUIT:
 				l.Debug("Received signal `%s`", sig.String())
+				os.Setenv("BUILDKITE_AGENT_SHUTDOWN_REASON", "SIGNAL")
+				os.Setenv("BUILDKITE_AGENT_SHUTDOWN_SIGNAL", "SIGQUIT")
 				pool.Stop(false)
 			case syscall.SIGTERM, syscall.SIGINT:
 				l.Debug("Received signal `%s`", sig.String())
+				os.Setenv("BUILDKITE_AGENT_SHUTDOWN_REASON", "SIGNAL")
+				if sig == syscall.SIGTERM {
+					os.Setenv("BUILDKITE_AGENT_SHUTDOWN_SIGNAL", "SIGTERM")
+				} else {
+					os.Setenv("BUILDKITE_AGENT_SHUTDOWN_SIGNAL", "SIGINT")
+				}
 				if interruptCount == 0 {
 					interruptCount++
 					l.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
