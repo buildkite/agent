@@ -34,6 +34,12 @@ const (
 	gitErrorCleanSubmodules
 )
 
+const (
+	gitErrStrbadObject             = "fatal: bad object"
+	gitErrStrbadReference          = "fatal: couldn't find remote ref"
+	gitErrStrbadReferencePreGit221 = "fatal: Couldn't find remote ref"
+)
+
 var (
 	errNoHostname = errors.New("no hostname found")
 	errInvalidRef = errors.New("is not a valid git ref format")
@@ -153,7 +159,6 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 
 	commandArgs = append(commandArgs, "fetch")
 
-	// Then fetch flags
 	if args.GitFetchFlags != "" {
 		parts, err := shellwords.Split(args.GitFetchFlags)
 		if err != nil {
@@ -173,48 +178,46 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		commandArgs = append(commandArgs, individualRefSpecs...)
 	}
 
-	const badObject = "fatal: bad object"
-	const badReference = "fatal: couldn't find remote ref"
-	const badReferencePreGit221 = "fatal: Couldn't find remote ref"
 	smelt := map[string]bool{
-		badObject:             false,
-		badReference:          false,
-		badReferencePreGit221: false,
+		gitErrStrbadObject:             false,
+		gitErrStrbadReference:          false,
+		gitErrStrbadReferencePreGit221: false,
 	}
 
 	// The retry logic is used to handle rare cases where a commit ref is not yet available
 	// remotely (e.g. async ref creation), and retrying `git fetch` can resolve it.
 	// This is *not* always desirable—some call sites have their own retry mechanisms,
 	// so the retry must be opt-in to avoid nested retries and increased test flakiness.
-	var retrier *roko.Retrier
+	retrier := roko.NewRetrier(
+		roko.WithStrategy(roko.Constant(0)),
+		roko.WithMaxAttempts(1),
+	)
+
 	if args.Retry {
 		retrier = roko.NewRetrier(
 			roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
-			roko.WithMaxAttempts(10), // 10 attempts will take ~8.5 minutes total (first attempt has no wait, backoff adds up to ~511s)
+			roko.WithMaxAttempts(10), // 10 attempts will take ~2 minutes 17s
 			roko.WithJitter(),
 		)
-	} else {
-		retrier = roko.NewRetrier(
-			roko.WithStrategy(roko.Constant(0)),
-			roko.WithMaxAttempts(1),
-		)
 	}
+
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		if err := args.Shell.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
+			// Sometimes we want to wait for the remote ref to be created, so this case gets retried (so we don't call r.Break())
+			if smelt[gitErrStrbadReference] || smelt[gitErrStrbadReferencePreGit221] {
+				return &gitError{error: err, Type: gitErrorFetchBadReference}
+			}
+
 			// "fatal: bad object" can happen when the local repo in the checkout
 			// directory is corrupted, not just the remote or the mirror.
 			// When using git mirrors, the existing checkout directory might have a
 			// reference to an object that it expects in the mirror, but the mirror
 			// no longer contains it (for whatever reason).
 			// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-			if smelt[badObject] {
+			if smelt[gitErrStrbadObject] {
 				retrier.Break()
 				return &gitError{error: err, Type: gitErrorFetchBadObject}
-			}
-
-			// "fatal: [Cc]ouldn't find remote ref" can happen when just the short commit hash is given.
-			if smelt[badReference] || smelt[badReferencePreGit221] {
-				return &gitError{error: err, Type: gitErrorFetchBadReference}
 			}
 
 			// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
