@@ -400,7 +400,6 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 				Shell:      e.shell,
 				GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
 				Repository: "origin",
-				Retry:      true,
 				RefSpecs:   []string{e.Branch},
 			}); err != nil {
 				return "", err
@@ -811,7 +810,6 @@ func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags
 		Shell:         shell,
 		GitFetchFlags: gitFetchFlags,
 		Repository:    "origin",
-		Retry:         true,
 		RefSpecs:      []string{gitFetchRefspec, "+refs/tags/*:refs/tags/*"},
 	}); err != nil {
 		return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
