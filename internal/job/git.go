@@ -130,18 +130,21 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 	return nil
 }
 
-func gitFetch(
-	ctx context.Context,
-	sh *shell.Shell,
-	gitFlags, gitFetchFlags, repository string,
-	withRetry bool,
-	refSpec ...string,
-) error {
+type gitFetchArgs struct {
+	Shell         *shell.Shell // The shell to run the command in
+	GitFlags      string       // Global git flags to pass to the command
+	GitFetchFlags string       // Flags to pass to the fetch command
+	Repository    string       // The remote to fetch from
+	Retry         bool         // Whether to retry the fetch on certain errors
+	RefSpecs      []string     // Refspecs to fetch
+}
+
+func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	// Build the command: git [global gitFlags] fetch [fetchFlags] -- [repository] [refspecs...]
 	commandArgs := []string{}
 
-	if gitFlags != "" {
-		parts, err := shellwords.Split(gitFlags)
+	if args.GitFlags != "" {
+		parts, err := shellwords.Split(args.GitFlags)
 		if err != nil {
 			return fmt.Errorf("failed to parse gitFlags: %w", err)
 		}
@@ -151,18 +154,18 @@ func gitFetch(
 	commandArgs = append(commandArgs, "fetch")
 
 	// Then fetch flags
-	if gitFetchFlags != "" {
-		parts, err := shellwords.Split(gitFetchFlags)
+	if args.GitFetchFlags != "" {
+		parts, err := shellwords.Split(args.GitFetchFlags)
 		if err != nil {
 			return fmt.Errorf("failed to parse gitFetchFlags: %w", err)
 		}
 		commandArgs = append(commandArgs, parts...)
 	}
 
-	commandArgs = append(commandArgs, "--", repository)
+	commandArgs = append(commandArgs, "--", args.Repository)
 
 	// Parse and append all refspecs
-	for _, r := range refSpec {
+	for _, r := range args.RefSpecs {
 		individualRefSpecs, err := shellwords.Split(r)
 		if err != nil {
 			return err
@@ -184,7 +187,7 @@ func gitFetch(
 	// This is *not* always desirable—some call sites have their own retry mechanisms,
 	// so the retry must be opt-in to avoid nested retries and increased test flakiness.
 	var retrier *roko.Retrier
-	if withRetry {
+	if args.Retry {
 		retrier = roko.NewRetrier(
 			roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
 			roko.WithMaxAttempts(10), // 10 attempts will take ~8.5 minutes total (first attempt has no wait, backoff adds up to ~511s)
@@ -197,8 +200,7 @@ func gitFetch(
 		)
 	}
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
-
+		if err := args.Shell.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
 			// "fatal: bad object" can happen when the local repo in the checkout
 			// directory is corrupted, not just the remote or the mirror.
 			// When using git mirrors, the existing checkout directory might have a
