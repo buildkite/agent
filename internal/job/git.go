@@ -47,7 +47,8 @@ var (
 
 type gitError struct {
 	error
-	Type int
+	Type       int
+	WasRetried bool
 }
 
 func (e *gitError) Unwrap() error {
@@ -204,9 +205,11 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		if err := args.Shell.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
 			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
-			// Sometimes we want to wait for the remote ref to be created, so this case gets retried (so we don't call r.Break())
+			// Sometimes we want to wait for the remote ref to be created (eg in the case of the PR HEAD ref `refs/pulls/123/head
+			// that github creates asynchronously), so this case gets retried -- we don't call r.Break()
 			if smelt[gitErrStrbadReference] || smelt[gitErrStrbadReferencePreGit221] {
-				return &gitError{error: err, Type: gitErrorFetchBadReference}
+				args.Shell.Commentf("%s", retrier)
+				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry}
 			}
 
 			// "fatal: bad object" can happen when the local repo in the checkout
@@ -227,7 +230,7 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 				return &gitError{error: err, Type: gitErrorFetchRetryClean}
 			}
 
-			return &gitError{error: err, Type: gitErrorFetch}
+			return &gitError{error: err, Type: gitErrorFetch, WasRetried: args.Retry}
 		}
 		return nil
 	})
