@@ -20,7 +20,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -81,7 +81,7 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -128,7 +128,7 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -152,7 +152,7 @@ func TestOverlappingPluginHooks(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -216,7 +216,7 @@ func TestPluginCloneRetried(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -285,11 +285,11 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	tester, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
-	// Let's set a fixed location for plugins, otherwise NewBootstrapTester() gives us a random new
+	// Let's set a fixed location for plugins, otherwise NewExecutorTester() gives us a random new
 	// tempdir every time, which defeats our test.  Later we'll use this pluginsDir for the second
 	// test run, too.
 	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
@@ -299,7 +299,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	tester.PluginsDir = pluginsDir
 
 	// There's a bit of machinery in replacePluginPathInEnv to modify only the
-	// BUILDKITE_PLUGINS_PATH, leaving the rest of the environment variables NewBootstrapTester()
+	// BUILDKITE_PLUGINS_PATH, leaving the rest of the environment variables NewExecutorTester()
 	// gave us as-is.
 	tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
 
@@ -352,7 +352,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	// Now, we want to "repeat" the test build, having modified the plugin's contents.
 	tester2, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester2.Close()
 
@@ -398,7 +398,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -455,7 +455,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester2, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester2.Close()
 
@@ -588,7 +588,7 @@ func (tp *testPlugin) MarshalJSON() ([]byte, error) {
 }
 
 // replacePluginPathInEnv is useful for modifying the Env blob of a tester created with
-// NewBootstrapTester().  We need to do that because the tester relies on BUILDKITE_PLUGINS_PATH,
+// NewExecutorTester().  We need to do that because the tester relies on BUILDKITE_PLUGINS_PATH,
 // not on the .PluginsDir field as one might expect.
 func replacePluginPathInEnv(originalEnv []string, pluginsDir string) (newEnv []string) {
 	newEnv = []string{}
