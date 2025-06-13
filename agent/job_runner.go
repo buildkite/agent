@@ -617,6 +617,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if r.conf.AgentConfiguration.TracingBackend != "" {
 		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
 		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
+
+		if r.conf.Job.TraceParent != "" {
+			env["BUILDKITE_TRACING_TRACEPARENT"] = r.conf.Job.TraceParent
+		}
 	}
 
 	env["BUILDKITE_AGENT_DISABLE_WARNINGS_FOR"] = strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ",")
