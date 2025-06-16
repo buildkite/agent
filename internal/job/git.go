@@ -35,9 +35,9 @@ const (
 )
 
 const (
-	gitErrStrbadObject             = "fatal: bad object"
-	gitErrStrbadReference          = "fatal: couldn't find remote ref"
-	gitErrStrbadReferencePreGit221 = "fatal: Couldn't find remote ref"
+	gitErrStrBadObject             = "fatal: bad object"
+	gitErrStrBadReference          = "fatal: couldn't find remote ref"
+	gitErrStrBadReferencePreGit221 = "fatal: Couldn't find remote ref"
 )
 
 var (
@@ -180,9 +180,9 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	}
 
 	smelt := map[string]bool{
-		gitErrStrbadObject:             false,
-		gitErrStrbadReference:          false,
-		gitErrStrbadReferencePreGit221: false,
+		gitErrStrBadObject:             false,
+		gitErrStrBadReference:          false,
+		gitErrStrBadReferencePreGit221: false,
 	}
 
 	// The retry logic is used to handle rare cases where a commit ref is not yet available
@@ -207,7 +207,7 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
 			// Sometimes we want to wait for the remote ref to be created (eg in the case of the PR HEAD ref `refs/pulls/123/head
 			// that github creates asynchronously), so this case gets retried -- we don't call r.Break()
-			if smelt[gitErrStrbadReference] || smelt[gitErrStrbadReferencePreGit221] {
+			if smelt[gitErrStrBadReference] || smelt[gitErrStrBadReferencePreGit221] {
 				args.Shell.Commentf("%s", retrier)
 				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry}
 			}
@@ -218,7 +218,7 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 			// reference to an object that it expects in the mirror, but the mirror
 			// no longer contains it (for whatever reason).
 			// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-			if smelt[gitErrStrbadObject] {
+			if smelt[gitErrStrBadObject] {
 				retrier.Break()
 				return &gitError{error: err, Type: gitErrorFetchBadObject}
 			}

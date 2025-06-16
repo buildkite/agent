@@ -75,7 +75,7 @@ func (e *Executor) removeCheckoutDir() error {
 		<-time.After(time.Second * 10)
 	}
 
-	return fmt.Errorf("Failed to remove %s", checkoutPath)
+	return fmt.Errorf("failed to remove %s", checkoutPath)
 }
 
 func (e *Executor) createCheckoutDir() error {
@@ -207,7 +207,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 					// keeps failing. This removes the checkout dir, which means the next checkout will be a lot slower (clone vs
 					// fetch), but hopefully will allow the agent to self-heal
 					if err := e.removeCheckoutDir(); err != nil {
-						e.shell.Printf("Failed to remove checkout dir while cleaning up after a checkout error.")
+						e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
 					}
 
 					// Now make sure the build directory exists again before we try to checkout again, or proceed and run hooks
@@ -226,7 +226,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 
 				// If it's some kind of error that we don't know about, clean the checkout dir just to be safe
 				if err := e.removeCheckoutDir(); err != nil {
-					e.shell.Printf("Failed to remove checkout dir while cleaning up after a checkout error.")
+					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
 				}
 
 				// Now make sure the build directory exists again before we try to checkout again, or proceed and run hooks
@@ -397,7 +397,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 
 	if isMainRepository {
 		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
-			e.shell.Commentf("Fetch and mirror pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
+			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 
 			// Fetch the PR head from the upstream repository into the mirror.
