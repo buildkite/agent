@@ -34,6 +34,12 @@ const (
 	gitErrorCleanSubmodules
 )
 
+const (
+	gitErrStrBadObject             = "fatal: bad object"
+	gitErrStrBadReference          = "fatal: couldn't find remote ref"
+	gitErrStrBadReferencePreGit221 = "fatal: Couldn't find remote ref"
+)
+
 var (
 	errNoHostname = errors.New("no hostname found")
 	errInvalidRef = errors.New("is not a valid git ref format")
@@ -41,7 +47,8 @@ var (
 
 type gitError struct {
 	error
-	Type int
+	Type       int
+	WasRetried bool
 }
 
 func (e *gitError) Unwrap() error {
@@ -130,18 +137,21 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 	return nil
 }
 
-func gitFetch(
-	ctx context.Context,
-	sh *shell.Shell,
-	gitFlags, gitFetchFlags, repository string,
-	withRetry bool,
-	refSpec ...string,
-) error {
+type gitFetchArgs struct {
+	Shell         *shell.Shell // The shell to run the command in
+	GitFlags      string       // Global git flags to pass to the command
+	GitFetchFlags string       // Flags to pass to the fetch command
+	Repository    string       // The remote to fetch from
+	Retry         bool         // Whether to retry the fetch on certain errors
+	RefSpecs      []string     // Refspecs to fetch
+}
+
+func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	// Build the command: git [global gitFlags] fetch [fetchFlags] -- [repository] [refspecs...]
 	commandArgs := []string{}
 
-	if gitFlags != "" {
-		parts, err := shellwords.Split(gitFlags)
+	if args.GitFlags != "" {
+		parts, err := shellwords.Split(args.GitFlags)
 		if err != nil {
 			return fmt.Errorf("failed to parse gitFlags: %w", err)
 		}
@@ -150,19 +160,18 @@ func gitFetch(
 
 	commandArgs = append(commandArgs, "fetch")
 
-	// Then fetch flags
-	if gitFetchFlags != "" {
-		parts, err := shellwords.Split(gitFetchFlags)
+	if args.GitFetchFlags != "" {
+		parts, err := shellwords.Split(args.GitFetchFlags)
 		if err != nil {
 			return fmt.Errorf("failed to parse gitFetchFlags: %w", err)
 		}
 		commandArgs = append(commandArgs, parts...)
 	}
 
-	commandArgs = append(commandArgs, "--", repository)
+	commandArgs = append(commandArgs, "--", args.Repository)
 
 	// Parse and append all refspecs
-	for _, r := range refSpec {
+	for _, r := range args.RefSpecs {
 		individualRefSpecs, err := shellwords.Split(r)
 		if err != nil {
 			return err
@@ -170,34 +179,38 @@ func gitFetch(
 		commandArgs = append(commandArgs, individualRefSpecs...)
 	}
 
-	const badObject = "fatal: bad object"
-	const badReference = "fatal: couldn't find remote ref"
-	const badReferencePreGit221 = "fatal: Couldn't find remote ref"
 	smelt := map[string]bool{
-		badObject:             false,
-		badReference:          false,
-		badReferencePreGit221: false,
+		gitErrStrBadObject:             false,
+		gitErrStrBadReference:          false,
+		gitErrStrBadReferencePreGit221: false,
 	}
 
 	// The retry logic is used to handle rare cases where a commit ref is not yet available
 	// remotely (e.g. async ref creation), and retrying `git fetch` can resolve it.
 	// This is *not* always desirable—some call sites have their own retry mechanisms,
 	// so the retry must be opt-in to avoid nested retries and increased test flakiness.
-	var retrier *roko.Retrier
-	if withRetry {
+	retrier := roko.NewRetrier(
+		roko.WithStrategy(roko.Constant(0)),
+		roko.WithMaxAttempts(1),
+	)
+
+	if args.Retry {
 		retrier = roko.NewRetrier(
 			roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
-			roko.WithMaxAttempts(10), // 10 attempts will take ~8.5 minutes total (first attempt has no wait, backoff adds up to ~511s)
+			roko.WithMaxAttempts(10), // 10 attempts will take ~2 minutes 17s
 			roko.WithJitter(),
 		)
-	} else {
-		retrier = roko.NewRetrier(
-			roko.WithStrategy(roko.Constant(0)),
-			roko.WithMaxAttempts(1),
-		)
 	}
+
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+		if err := args.Shell.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
+			// Sometimes we want to wait for the remote ref to be created (eg in the case of the PR HEAD ref `refs/pulls/123/head
+			// that github creates asynchronously), so this case gets retried -- we don't call r.Break()
+			if smelt[gitErrStrBadReference] || smelt[gitErrStrBadReferencePreGit221] {
+				args.Shell.Commentf("%s", retrier)
+				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry}
+			}
 
 			// "fatal: bad object" can happen when the local repo in the checkout
 			// directory is corrupted, not just the remote or the mirror.
@@ -205,14 +218,9 @@ func gitFetch(
 			// reference to an object that it expects in the mirror, but the mirror
 			// no longer contains it (for whatever reason).
 			// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
-			if smelt[badObject] {
+			if smelt[gitErrStrBadObject] {
 				retrier.Break()
 				return &gitError{error: err, Type: gitErrorFetchBadObject}
-			}
-
-			// "fatal: [Cc]ouldn't find remote ref" can happen when just the short commit hash is given.
-			if smelt[badReference] || smelt[badReferencePreGit221] {
-				return &gitError{error: err, Type: gitErrorFetchBadReference}
 			}
 
 			// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
@@ -222,7 +230,7 @@ func gitFetch(
 				return &gitError{error: err, Type: gitErrorFetchRetryClean}
 			}
 
-			return &gitError{error: err, Type: gitErrorFetch}
+			return &gitError{error: err, Type: gitErrorFetch, WasRetried: args.Retry}
 		}
 		return nil
 	})

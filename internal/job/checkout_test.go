@@ -185,20 +185,17 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	tt.executor.Repository = s.RepoURL(tt.projectName)
 
 	checkoutDir, err := os.MkdirTemp("", "checkout-path-")
+	assert.NoError(err)
+	defer os.RemoveAll(checkoutDir)
 
 	// Concurrently sleep for 5 seconds to delay ref being created
 	go func() {
 		time.Sleep(5 * time.Second)
-
 		out, err = s.CreateRef(tt.projectName, tt.refSpec, commit)
 		if err != nil {
-			t.Fatalf("failed to create ref: %v output: %s", err, string(out))
+			t.Errorf("failed to create ref: %v output: %s", err, string(out))
 		}
-
 	}()
-
-	assert.NoError(err)
-	defer os.RemoveAll(checkoutDir)
 
 	shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
 
