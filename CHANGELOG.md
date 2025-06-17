@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.98.2](https://github.com/buildkite/agent/tree/v3.98.2) (2025-06-17)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.98.1...v3.98.2)
+
+### Fixed
+- Fix PR ref retry logic [#3339](https://github.com/buildkite/agent/pull/3339) (@moskyb)
+- Add stack_error signal reason [#3332](https://github.com/buildkite/agent/pull/3332) (@moskyb)
+- Better helptext [#3334](https://github.com/buildkite/agent/pull/3334) (@moskyb)
+- Update CLI cancel_signal arg description [#3325](https://github.com/buildkite/agent/pull/3325) (@petetomasik)
+
+### Internal
+- Dependency updates [#3342](https://github.com/buildkite/agent/pull/3342) [#3341](https://github.com/buildkite/agent/pull/3341) [#3340](https://github.com/buildkite/agent/pull/3340) [#3336](https://github.com/buildkite/agent/pull/3336) [#3337](https://github.com/buildkite/agent/pull/3337) [#3335](https://github.com/buildkite/agent/pull/3335) (@dependabot[bot])
+
 ## [v3.98.1](https://github.com/buildkite/agent/tree/v3.98.1) (2025-06-04)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.98.0...v3.98.1)
 
