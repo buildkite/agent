@@ -59,11 +59,11 @@ be redacted automatically.
 
 Examples:
 
-To redact a secret stored in a file:
+To redact the verbatim contents of the file 'id_ed25519' from future logs:
 
         $ buildkite-agent redactor add id_ed25519
 
-To redact a single literal string:
+To redact the string 'llamasecret' from future logs:
 
 		$ echo llamasecret | buildkite-agent redactor add
 
@@ -72,7 +72,7 @@ Pass a flat JSON object whose keys are unique and whose values are your secrets:
 
 Or
 
-    $ buildkite-agent redactor add --format json my-secrets.json
+        $ buildkite-agent redactor add --format json my-secrets.json
 
 JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON parser keeps only the final entry, so only that single value is added to the redactor.
 
