@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"drjosh.dev/zzglob"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -81,6 +82,10 @@ type PipelineUploadConfig struct {
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 	RejectSecrets   bool     `cli:"reject-secrets"`
 
+	// Used for if_changed processing
+	ApplyIfChanged bool   `cli:"apply-if-changed"`
+	GitDiffBase    string `cli:"git-diff-base"`
+
 	// Used for signing
 	JWKSFile         string `cli:"jwks-file"`
 	JWKSKeyID        string `cli:"jwks-key-id"`
@@ -124,6 +129,17 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "reject-secrets",
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+		},
+		cli.StringFlag{
+			Name:   "apply-if-changed",
+			Usage:  "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the key is replaced with ′skip′",
+			EnvVar: "BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED",
+		},
+		cli.StringFlag{
+			Name:   "git-diff-base",
+			Usage:  "Provides the base from which to find the git diff when processing ′if_changed′",
+			Value:  "origin/main",
+			EnvVar: "BUILDKITE_GIT_DIFF_BASE,BUILDKITE_PULL_REQUEST_BASE_BRANCH",
 		},
 
 		// Note: changes to these environment variables need to be reflected in the environment created
@@ -286,8 +302,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if key != nil {
-
-			err = signature.SignSteps(
+			err := signature.SignSteps(
 				ctx,
 				result.Steps,
 				key,
@@ -299,6 +314,10 @@ var PipelineUploadCommand = cli.Command{
 			if err != nil {
 				return fmt.Errorf("couldn't sign pipeline: %w", err)
 			}
+		}
+
+		if cfg.ApplyIfChanged {
+			applyIfChanged(l, result.Steps, cfg.GitDiffBase)
 		}
 
 		// In dry-run mode we just output the generated pipeline to stdout.
@@ -542,4 +561,92 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 		return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 	}
 	return result, err
+}
+
+// applyIfChanged determines the changed files, then converts "if_changed" into
+// "skip" using applyIfChangedRecursive. If the changed files can't be
+// determined using `git diff`, the "if_changed" attributes are instead
+// stripped with stripIfChanged.
+func applyIfChanged(logger logger.Logger, steps pipeline.Steps, diffBase string) {
+	gitDiff, err := exec.Command("git", "diff", "--name-only", "--merge-base", diffBase).Output()
+	if err != nil {
+		logger.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
+		stripIfChanged(steps)
+		return
+	}
+	changedPaths := strings.Split(string(gitDiff), "\n")
+	changedPaths = slices.DeleteFunc(changedPaths, func(s string) bool {
+		return strings.TrimSpace(s) == ""
+	})
+	applyIfChangedRecursive(logger, steps, changedPaths)
+}
+
+// applyIfChangedRecursive converts "if_changed" into "skip" where the glob
+// pattern matches no paths in changedPaths.
+func applyIfChangedRecursive(logger logger.Logger, steps pipeline.Steps, changedPaths []string) {
+stepsLoop:
+	for _, step := range steps {
+		// All supported step types store "if_changed" in a map.
+		var content map[string]any
+
+		// These step types support "skip".
+		switch st := step.(type) {
+		case *pipeline.GroupStep:
+			// Recurse into group steps
+			applyIfChangedRecursive(logger, st.Steps, changedPaths)
+			content = st.RemainingFields
+
+		case *pipeline.CommandStep:
+			content = st.RemainingFields
+
+		case *pipeline.TriggerStep:
+			content = st.Contents
+		}
+
+		// Retrieve the value then delete it.
+		ic := content["if_changed"]
+		if ic == nil {
+			continue
+		}
+		delete(content, "if_changed")
+
+		// Parse and test the glob pattern against the paths.
+		pattern, ok := ic.(string)
+		if !ok {
+			logger.Warn("if_changed value must be a string containing a glob pattern (was a %T)", ic)
+			continue
+		}
+
+		glob, err := zzglob.Parse(pattern)
+		if err != nil {
+			logger.Warn("if_changed couldn't be parsed as a glob pattern: %v", err)
+			continue
+		}
+		for _, cp := range changedPaths {
+			if glob.Match(cp) {
+				continue stepsLoop // one of the paths changed
+			}
+		}
+
+		// Glob matched no changed file paths - this step is now skipped.
+		content["skip"] = fmt.Sprintf("pattern %q did not match any paths changed in this build", pattern)
+	}
+}
+
+// stripIfChanged recursively removes "if_changed" from all steps.
+func stripIfChanged(steps pipeline.Steps) {
+	for _, step := range steps {
+		switch st := step.(type) {
+		case *pipeline.GroupStep:
+			// Recurse into group steps
+			stripIfChanged(st.Steps)
+			delete(st.RemainingFields, "if_changed")
+
+		case *pipeline.CommandStep:
+			delete(st.RemainingFields, "if_changed")
+
+		case *pipeline.TriggerStep:
+			delete(st.Contents, "if_changed")
+		}
+	}
 }
