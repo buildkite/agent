@@ -72,14 +72,15 @@ type PipelineUploadConfig struct {
 	GlobalConfig
 	APIConfig
 
-	FilePath        string   `cli:"arg:0" label:"upload paths"`
-	Replace         bool     `cli:"replace"`
-	Job             string   `cli:"job"` // required, but not in dry-run mode
-	DryRun          bool     `cli:"dry-run"`
-	DryRunFormat    string   `cli:"format"`
-	NoInterpolation bool     `cli:"no-interpolation"`
-	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
-	RejectSecrets   bool     `cli:"reject-secrets"`
+	FilePath                   string   `cli:"arg:0" label:"upload paths"`
+	Replace                    bool     `cli:"replace"`
+	Job                        string   `cli:"job"` // required, but not in dry-run mode
+	DryRun                     bool     `cli:"dry-run"`
+	DryRunFormat               string   `cli:"format"`
+	NoInterpolation            bool     `cli:"no-interpolation"`
+	RedactedVars               []string `cli:"redacted-vars" normalize:"list"`
+	RejectSecrets              bool     `cli:"reject-secrets"`
+	FailOnPipelineParseWarning bool     `cli:"fail-on-pipeline-parse-warning"`
 
 	// Used for signing
 	JWKSFile         string `cli:"jwks-file"`
@@ -125,9 +126,14 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
+		cli.BoolFlag{
+			Name:   "fail-on-pipeline-parse-warning",
+			Usage:  "Fail pipeline upload if pipeline parsing returns warnings, as well as errors",
+			EnvVar: "BUILDKITE_AGENT_FAIL_ON_PIPELINE_PARSE_WARNING",
+		},
 
 		// Note: changes to these environment variables need to be reflected in the environment created
-		// in the job runner. At the momenet, that's at agent/job_runner.go:500-507
+		// in the job runner. At the moment, that's at agent/job_runner.go:500-507
 		cli.StringFlag{
 			Name:   "jwks-file",
 			Usage:  "Path to a file containing a JWKS. Passing this flag enables pipeline signing",
@@ -249,7 +255,7 @@ var PipelineUploadCommand = cli.Command{
 		result, err := cfg.parseAndInterpolate(ctx, src, input, environ)
 		if err != nil {
 			w := warning.As(err)
-			if w == nil {
+			if w == nil || cfg.FailOnPipelineParseWarning {
 				return err
 			}
 			l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
