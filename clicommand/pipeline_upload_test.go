@@ -187,9 +187,10 @@ steps:
 	}
 	ctx := context.Background()
 
-	p, err := cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ)
-	assert.NilError(t, err, `cfg.parseAndInterpolate(ctx, "test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
-	assert.DeepEqual(t, p, expectedPipeline, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS))
+	for p, err := range cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ) {
+		assert.NilError(t, err, `cfg.parseAndInterpolate(ctx, "test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
+		assert.DeepEqual(t, p, expectedPipeline, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS))
+	}
 }
 
 func TestPipelineInterpolationRuntimeEnvPrecedence(t *testing.T) {
@@ -235,14 +236,15 @@ steps:
 				ctx, _ = experiments.Enable(ctx, experiments.InterpolationPrefersRuntimeEnv)
 			}
 
-			p, err := cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ)
-			assert.NilError(t, err, `cfg.parseAndInterpolate(ctx, "test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
-			s := p.Steps[len(p.Steps)-1]
-			commandStep, ok := s.(*pipeline.CommandStep)
-			if !ok {
-				t.Errorf("Invalid pipeline step %v", s)
+			for p, err := range cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ) {
+				assert.NilError(t, err, `cfg.parseAndInterpolate(ctx, "test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
+				s := p.Steps[len(p.Steps)-1]
+				commandStep, ok := s.(*pipeline.CommandStep)
+				if !ok {
+					t.Errorf("Invalid pipeline step %v", s)
+				}
+				assert.Equal(t, commandStep.Command, test.expectedCommand)
 			}
-			assert.Equal(t, commandStep.Command, test.expectedCommand)
 		})
 	}
 }
