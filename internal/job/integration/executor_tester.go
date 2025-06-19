@@ -112,6 +112,11 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 			"BUILDKITE_JOB_ID=1111-1111-1111-1111",
 			"BUILDKITE_AGENT_ACCESS_TOKEN=test-token-please-ignore",
 			fmt.Sprintf("BUILDKITE_REDACTED_VARS=%s", strings.Join(*clicommand.RedactedVars.Value, ",")),
+			// Normally the executor will use the self-path to self-execute
+			// other subcommands such as 'artifact upload'.
+			// Because we've mocked buildkite-agent using bintest, we want it to
+			// use the mock instead.
+			"BUILDKITE_OVERRIDE_SELF=buildkite-agent",
 		},
 		PathDir:    pathDir,
 		BuildDir:   buildDir,

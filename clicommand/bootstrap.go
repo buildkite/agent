@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/buildkite/agent/v3/internal/job"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/urfave/cli"
@@ -401,6 +402,17 @@ var BootstrapCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
+
+		// Secret env var that overrides the self-execution path, but only if
+		// the job ID is a magical, nonsensical value (set by the
+		// ExecutorTester).
+		// This does not alter what 'buildkite-agent' means within a command;
+		// for that, we would have to mess with $PATH.
+		if cfg.JobID == "1111-1111-1111-1111" {
+			if overrideSelf := os.Getenv("BUILDKITE_OVERRIDE_SELF"); overrideSelf != "" {
+				ctx = self.OverridePath(ctx, overrideSelf)
+			}
+		}
 
 		// Turn of PTY support if we're on Windows
 		runInPty := cfg.PTY
