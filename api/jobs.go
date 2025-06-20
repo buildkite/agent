@@ -25,6 +25,7 @@ type Job struct {
 	FinishedAt         string                     `json:"finished_at,omitempty"`
 	RunnableAt         string                     `json:"runnable_at,omitempty"`
 	ChunksFailedCount  int                        `json:"chunks_failed_count,omitempty"`
+	TraceParent        string                     `json:"traceparent"`
 }
 
 type JobState struct {
