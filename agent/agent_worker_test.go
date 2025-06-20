@@ -239,6 +239,88 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	assert.Equal(t, expectedSleeps, retrySleeps)
 }
 
+func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/jobs/waitinguuid/acquire":
+			if req.Header.Get("X-Buildkite-Lock-Acquire-Job") != "1" {
+				http.Error(rw, "Expected X-Buildkite-Lock-Acquire-Job to be set to 1", http.StatusUnprocessableEntity)
+				return
+			}
+
+			rw.WriteHeader(http.StatusUnprocessableEntity)
+		default:
+			http.Error(rw, "Not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	// Pre-register the agent.
+	const agentSessionToken = "alpacas"
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	jobToken := uuid.New().String()
+	jobID := "waitinguuid"
+	job := &FakeJob{
+		State: JobStateScheduled,
+		Job: &api.Job{
+			ID:                 jobID,
+			Token:              jobToken,
+			ChunksMaxSizeBytes: 1024,
+			Env: map[string]string{
+				"BUILDKITE_COMMAND": "echo echo",
+			},
+		},
+		Auth: "Token " + jobToken,
+	}
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 1,
+			HeartbeatInterval: 10,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{
+			SpawnIndex: 1,
+			AgentConfiguration: AgentConfiguration{
+				BootstrapScript: "./dummy_bootstrap.sh",
+				BuildPath:       filepath.Join(os.TempDir(), t.Name(), "build"),
+				HooksPath:       filepath.Join(os.TempDir(), t.Name(), "hooks"),
+				AcquireJob:      job.Job.ID,
+			},
+		},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	idleMonitor := NewIdleMonitor(1)
+
+	// we expect the worker to try to acquire the job, but fail with ErrJobAcquisitionRejected
+	// because the server returns a 422 Unprocessable Entity.
+	err := worker.Start(ctx, idleMonitor)
+	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
+		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
+	}
+
+}
+
 func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	t.Parallel()
 
