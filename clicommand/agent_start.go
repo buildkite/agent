@@ -173,9 +173,9 @@ type AgentStartConfig struct {
 	MetricsDatadogDistributions bool   `cli:"metrics-datadog-distributions"`
 
 	// Tracing config
-	TracingBackend           string `cli:"tracing-backend"`
-	TracingServiceName       string `cli:"tracing-service-name"`
-	TracingAcceptTraceparent bool   `cli:"tracing-accept-traceparent"`
+	TracingBackend              string `cli:"tracing-backend"`
+	TracingServiceName          string `cli:"tracing-service-name"`
+	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
 	// Other shared flags
 	StrictSingleHooks         bool   `cli:"strict-single-hooks"`
@@ -224,8 +224,8 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "opentelemetry-tracing")
 	}
 
-	if asc.TracingAcceptTraceparent {
-		features = append(features, "accept-traceparent")
+	if asc.TracingPropagateTraceparent {
+		features = append(features, "propagate-traceparent")
 	}
 
 	if asc.DisconnectAfterJob {
@@ -673,9 +673,9 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 		},
 		cli.BoolFlag{
-			Name:   "tracing-accept-traceparent",
+			Name:   "tracing-propagate-traceparent",
 			Usage:  `Enable accepting traceparent context from Buildkite control plane (only supported for OpenTelemetry backend)`,
-			EnvVar: "BUILDKITE_TRACING_ACCEPT_TRACEPARENT",
+			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
 		},
 		cli.StringFlag{
 			Name:   "tracing-service-name",
@@ -1038,7 +1038,7 @@ var AgentStartCommand = cli.Command{
 			AcquireJob:                   cfg.AcquireJob,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
-			TracingAcceptTraceparent:     cfg.TracingAcceptTraceparent,
+			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			TraceContextEncoding:         cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
 			KubernetesExec:               cfg.KubernetesExec,

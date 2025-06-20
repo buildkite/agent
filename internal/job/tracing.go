@@ -188,12 +188,12 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 // technically a breaking change to the behaviour, and if the server-side tracing
 // isn't set up correctly, agent traces may end up without root spans to link to
 func (e *Executor) contextWithTraceparentIfEnabled(ctx context.Context) context.Context {
-	if !e.ExecutorConfig.TracingAcceptTraceparent {
+	if !e.ExecutorConfig.TracingPropagateTraceparent {
 		return ctx
 	}
 
 	if e.ExecutorConfig.TracingTraceParent == "" {
-		e.shell.Warningf("tracing-accept-traceparent enabled, but no traceparent provided by server")
+		e.shell.Warningf("tracing-propagate-traceparent enabled, but no traceparent provided by server")
 		return ctx
 	}
 
