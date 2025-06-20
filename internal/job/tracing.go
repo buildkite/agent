@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"maps"
 	"os"
@@ -169,21 +170,7 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
-	// if we have server side tracing enabled, we provide the parent tracing context
-	if e.ExecutorConfig.TracingTraceParent != "" {
-		traceID, spanID, err := extractTraceParent(e.ExecutorConfig.TracingTraceParent)
-		if err != nil {
-			e.shell.Warningf("error extracting tracing context: %v", err)
-		} else {
-			spanContext := trace.NewSpanContext(trace.SpanContextConfig{
-				TraceID:    traceID,
-				SpanID:     spanID,
-				TraceFlags: trace.FlagsSampled,
-			})
-			ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
-		}
-	}
-
+	ctx = e.contextWithTraceparentIfEnabled(ctx)
 	ctx, span := tracer.Start(ctx, e.otRootSpanName(),
 		trace.WithAttributes(
 			attribute.String("analytics.event", "true"),
@@ -199,30 +186,67 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
 }
 
+// accepting traceparent from Buildkite control plane is an opt-in feature as its technically
+// a breaking change to the behaviour, and if the server-side tracing isn't set up
+// correctly, agent traces may end up without root spans to link to
+func (e *Executor) contextWithTraceparentIfEnabled(ctx context.Context) context.Context {
+	if !e.ExecutorConfig.TracingAcceptTraceparent {
+		return ctx
+	}
+
+	if e.ExecutorConfig.TracingTraceParent == "" {
+		e.shell.Warningf("tracing-accept-traceparent enabled, but no traceparent provided by server")
+		return ctx
+	}
+
+	traceID, spanID, traceFlags, err := extractTraceParent(e.ExecutorConfig.TracingTraceParent)
+	if err != nil {
+		e.shell.Warningf("error extracting tracing context: %v", err)
+		return ctx
+	}
+
+	return trace.ContextWithRemoteSpanContext(ctx, trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: traceFlags,
+	}))
+}
+
 // parse W3C trace context traceparent header format
 // https://www.w3.org/TR/trace-context/#traceparent-header
-func extractTraceParent(traceParent string) (trace.TraceID, trace.SpanID, error) {
+func extractTraceParent(traceParent string) (trace.TraceID, trace.SpanID, trace.TraceFlags, error) {
 	parts := strings.SplitN(traceParent, "-", 4)
 	if len(parts) != 4 {
-		return trace.TraceID{}, trace.SpanID{}, fmt.Errorf("invalid traceparent value: %q, must contain 4 parts", traceParent)
+		return trace.TraceID{}, trace.SpanID{}, trace.TraceFlags(0), fmt.Errorf("invalid traceparent value: %q, must contain 4 parts", traceParent)
 	}
 
 	if parts[0] != "00" {
-		return trace.TraceID{}, trace.SpanID{}, fmt.Errorf("invalid traceparent value: %q, only version 0 supported", traceParent)
+		return trace.TraceID{}, trace.SpanID{}, trace.TraceFlags(0), fmt.Errorf("invalid traceparent value: %q, only version 0 supported", traceParent)
 	}
 
 	traceID, err := trace.TraceIDFromHex(strings.ToLower(parts[1]))
 	valid := traceID.IsValid()
 	if err != nil {
-		return trace.TraceID{}, trace.SpanID{}, fmt.Errorf("invalid traceparent value: %q, trace ID is not valid: %w", traceParent, err)
+		return trace.TraceID{}, trace.SpanID{}, trace.TraceFlags(0), fmt.Errorf("invalid traceparent value: %q, trace ID is not valid: %w", traceParent, err)
 	}
 	spanID, err := trace.SpanIDFromHex(strings.ToLower(parts[2]))
 	valid = valid && spanID.IsValid()
 	if err != nil {
-		return trace.TraceID{}, trace.SpanID{}, fmt.Errorf("invalid traceparent value: %q, span ID is not valid: %w", traceParent, err)
+		return trace.TraceID{}, trace.SpanID{}, trace.TraceFlags(0), fmt.Errorf("invalid traceparent value: %q, span ID is not valid: %w", traceParent, err)
 	}
 
-	return traceID, spanID, nil
+	traceFlagsBytes, err := hex.DecodeString(strings.ToLower(parts[3]))
+	valid = valid && err == nil
+	if err != nil {
+		return trace.TraceID{}, trace.SpanID{}, trace.TraceFlags(0), fmt.Errorf("invalid traceparent value: %q, trace flags are not valid: %w", traceParent, err)
+	}
+
+	if len(traceFlagsBytes) != 1 {
+		return trace.TraceID{}, trace.SpanID{}, trace.TraceFlags(0), fmt.Errorf("invalid traceparent value: %q, trace flags are not valid, expected one byte but got %q", traceParent, parts[3])
+	}
+	traceFlags := trace.TraceFlags(traceFlagsBytes[0])
+
+	return traceID, spanID, traceFlags, nil
 }
 
 func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
