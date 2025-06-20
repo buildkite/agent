@@ -618,6 +618,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
 		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
 
+		// Buildkite backend can provide a traceparent property on the job
+		// which can be propagated to the job tracing if OpenTelemetry is used
+		//
+		// https://www.w3.org/TR/trace-context/#traceparent-header
 		if r.conf.Job.TraceParent != "" {
 			env["BUILDKITE_TRACING_TRACEPARENT"] = r.conf.Job.TraceParent
 		}
