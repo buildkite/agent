@@ -172,6 +172,9 @@ type ExecutorConfig struct {
 	// Traceing context information
 	TracingTraceParent string
 
+	// Accept traceparent context from Buildkite control plane
+	TracingAcceptTraceparent bool
+
 	// Encoding (within base64) for the trace context environment variable.
 	TraceContextCodec tracetools.Codec
 

@@ -61,6 +61,7 @@ type AgentConfiguration struct {
 	AcquireJob                   string
 	TracingBackend               string
 	TracingServiceName           string
+	TracingAcceptTraceparent     bool
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
