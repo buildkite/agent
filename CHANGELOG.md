@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.99.0](https://github.com/buildkite/agent/tree/v3.99.0) (2025-06-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.98.2...v3.99.0)
+
+### Fixed
+- Fix AquireJob to return early and trigger a sentinal error for rejection [#3349](https://github.com/buildkite/agent/pull/3349) (@wolfeidau)
+- Upload all pipelines present in the input [#3347](https://github.com/buildkite/agent/pull/3347) (@DrJosh9000)
+- Add if_changed processing to pipeline upload [#3226](https://github.com/buildkite/agent/pull/3226) (@DrJosh9000)
+
+> [!IMPORTANT]
+> This includes a fix for a regression agent behavior, AcquireJob which no longer reports "non eligible" jobs with a exit code 27.
+
 ## [v3.98.2](https://github.com/buildkite/agent/tree/v3.98.2) (2025-06-17)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.98.1...v3.98.2)
 
