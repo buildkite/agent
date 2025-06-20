@@ -189,6 +189,14 @@ func TestPluginNameParsedFromLocation(t *testing.T) {
 			wantName: "vendored-with-a-space",
 		},
 		{
+			location: "vendor/src/vendored-with-a-slash/",
+			wantName: "vendored-with-a-slash",
+		},
+		{
+			location: "vendor/src/vendored-with-two-slash//",
+			wantName: "vendored-with-two-slash",
+		},
+		{
 			location: "./.buildkite/plugins/docker-compose",
 			wantName: "docker-compose",
 		},
