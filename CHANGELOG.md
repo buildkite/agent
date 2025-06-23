@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.100.0](https://github.com/buildkite/agent/tree/v3.100.0) (2025-06-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.99.0...v3.100.0)
+
+### Fixed
+- PS-794: fix vendored plugin path ending with slash breaking envvar names [#3346](https://github.com/buildkite/agent/pull/3346) (@zhming0)
+
+### Added
+- [PIPE-1021] Propagate parent OTel trace/span from backend if provided [#3348](https://github.com/buildkite/agent/pull/3348) (@catkins)
+
 ## [v3.99.0](https://github.com/buildkite/agent/tree/v3.99.0) (2025-06-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.98.2...v3.99.0)
 
