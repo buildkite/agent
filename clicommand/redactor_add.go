@@ -68,17 +68,16 @@ To redact the string 'llamasecret' from future logs:
 		$ echo llamasecret | buildkite-agent redactor add
 
 Pass a flat JSON object whose keys are unique and whose values are your secrets:
+
         $ echo '{"db_password":"secret1","api_token":"secret2","ssh_key":"secret3"}' | buildkite-agent redactor add --format json
 
 Or
 
         $ buildkite-agent redactor add --format json my-secrets.json
 
-JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON parser keeps only the final entry, so only that single value is added to the redactor.
+JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON parser keeps only the final entry, so only that single value is added to the redactor:
 
-Size limits:
-
-The redactor accepts secret values up to 10 000 characters in length; longer values are ignored.`,
+        $ echo '{"key":"value1","key":"value2","key":"value3"}' | buildkite-agent redactor add --format json`,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "format",
