@@ -127,7 +127,8 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 
 func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	assert := require.New(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	shell, err := shell.New()
 	assert.NoError(err)
@@ -190,7 +191,12 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 
 	// Concurrently sleep for 5 seconds to delay ref being created
 	go func() {
-		time.Sleep(5 * time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+			// continue below
+		}
 		out, err = s.CreateRef(tt.projectName, tt.refSpec, commit)
 		if err != nil {
 			t.Errorf("failed to create ref: %v output: %s", err, string(out))
