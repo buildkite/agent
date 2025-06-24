@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,6 +17,66 @@ import (
 	"github.com/buildkite/go-pipeline"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestPipelineUploadParameters(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	l := logger.NewBuffer()
+
+	jobID := api.NewUUID()
+	stepUploadUUID := api.NewUUID()
+	pipelineStr := `---
+steps:
+  - command: "echo Hello"`
+
+	pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr))
+	assert.NoError(t, err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case fmt.Sprintf("/jobs/%s/pipelines", jobID):
+			var pipelineUpload map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&pipelineUpload); err != nil {
+				http.Error(rw, "Error decoding pipeline", http.StatusInternalServerError)
+				return
+			}
+			assert.Equal(t, pipelineUpload["validate_dependencies"], true)
+			assert.Equal(t, pipelineUpload["replace"], true)
+
+			if req.Method == "POST" {
+				rw.Header().Add("Location", fmt.Sprintf("/jobs/%s/pipelines/%s", jobID, stepUploadUUID))
+				rw.WriteHeader(http.StatusAccepted)
+				return
+			}
+		case fmt.Sprintf("/jobs/%s/pipelines/%s", jobID, stepUploadUUID):
+			if req.Method == "GET" {
+				_, _ = fmt.Fprintf(rw, `{"state": "%s"}`, "applied")
+				return
+			}
+		}
+		t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
+		http.Error(rw, "Not found", http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	uploader := &agent.PipelineUploader{
+		Client: api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		JobID: jobID,
+		Change: &api.PipelineChange{
+			UUID:                 stepUploadUUID,
+			Pipeline:             pipeline,
+			Replace:              true,
+			ValidateDependencies: true,
+		},
+	}
+
+	err = uploader.Upload(ctx, l)
+	assert.NoError(t, err)
+}
 
 func TestAsyncPipelineUpload(t *testing.T) {
 	t.Parallel()

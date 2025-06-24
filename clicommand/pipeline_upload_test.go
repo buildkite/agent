@@ -18,8 +18,9 @@ func TestSearchForSecrets(t *testing.T) {
 	t.Parallel()
 
 	cfg := &PipelineUploadConfig{
-		RedactedVars:  []string{"SEKRET", "SSH_KEY"},
-		RejectSecrets: true,
+		RedactedVars:         []string{"SEKRET", "SSH_KEY"},
+		RejectSecrets:        true,
+		ValidateDependencies: false,
 	}
 
 	plainPipeline := &pipeline.Pipeline{
