@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.100.0](https://github.com/buildkite/agent/tree/v3.100.0) (2025-06-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.99.0...v3.100.0)
+
+### Fixed
+- PS-794: fix vendored plugin path ending with slash breaking envvar names [#3346](https://github.com/buildkite/agent/pull/3346) (@zhming0)
+
+### Added
+- [PIPE-1021] Propagate parent OTel trace/span from backend if provided [#3348](https://github.com/buildkite/agent/pull/3348) (@catkins)
+
+## [v3.99.0](https://github.com/buildkite/agent/tree/v3.99.0) (2025-06-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.98.2...v3.99.0)
+
+### Fixed
+- Fix AquireJob to return early and trigger a sentinal error for rejection [#3349](https://github.com/buildkite/agent/pull/3349) (@wolfeidau)
+- Upload all pipelines present in the input [#3347](https://github.com/buildkite/agent/pull/3347) (@DrJosh9000)
+- Add if_changed processing to pipeline upload [#3226](https://github.com/buildkite/agent/pull/3226) (@DrJosh9000)
+
+> [!IMPORTANT]
+> This includes a fix for a regression agent behavior, AcquireJob which no longer reports "non eligible" jobs with a exit code 27.
+
+## [v3.98.2](https://github.com/buildkite/agent/tree/v3.98.2) (2025-06-17)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.98.1...v3.98.2)
+
+### Fixed
+- Fix PR ref retry logic [#3339](https://github.com/buildkite/agent/pull/3339) (@moskyb)
+- Add stack_error signal reason [#3332](https://github.com/buildkite/agent/pull/3332) (@moskyb)
+- Better helptext [#3334](https://github.com/buildkite/agent/pull/3334) (@moskyb)
+- Update CLI cancel_signal arg description [#3325](https://github.com/buildkite/agent/pull/3325) (@petetomasik)
+
+### Internal
+- Dependency updates [#3342](https://github.com/buildkite/agent/pull/3342) [#3341](https://github.com/buildkite/agent/pull/3341) [#3340](https://github.com/buildkite/agent/pull/3340) [#3336](https://github.com/buildkite/agent/pull/3336) [#3337](https://github.com/buildkite/agent/pull/3337) [#3335](https://github.com/buildkite/agent/pull/3335) (@dependabot[bot])
+
 ## [v3.98.1](https://github.com/buildkite/agent/tree/v3.98.1) (2025-06-04)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.98.0...v3.98.1)
 

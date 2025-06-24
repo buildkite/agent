@@ -617,6 +617,17 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if r.conf.AgentConfiguration.TracingBackend != "" {
 		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
 		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
+
+		// Buildkite backend can provide a traceparent property on the job
+		// which can be propagated to the job tracing if OpenTelemetry is used
+		//
+		// https://www.w3.org/TR/trace-context/#traceparent-header
+		if r.conf.Job.TraceParent != "" {
+			env["BUILDKITE_TRACING_TRACEPARENT"] = r.conf.Job.TraceParent
+		}
+		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
+			env["BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"] = "true"
+		}
 	}
 
 	env["BUILDKITE_AGENT_DISABLE_WARNINGS_FOR"] = strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ",")

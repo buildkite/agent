@@ -243,6 +243,12 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 		idleMonitor.MarkBusy(a.agent.UUID)
 
 		if err := a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob); err != nil {
+			// If the job acquisition was rejected, we can exit with an error
+			// so that supervisor knows that the job was not acquired due to the job being rejected.
+			if errors.Is(err, core.ErrJobAcquisitionRejected) {
+				return fmt.Errorf("Failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
+			}
+
 			a.logger.Error("Failed to acquire and run job: %v", err)
 		}
 	}

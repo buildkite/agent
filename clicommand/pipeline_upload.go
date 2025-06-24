@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"maps"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"drjosh.dev/zzglob"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -81,6 +83,10 @@ type PipelineUploadConfig struct {
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 	RejectSecrets   bool     `cli:"reject-secrets"`
 
+	// Used for if_changed processing
+	ApplyIfChanged bool   `cli:"apply-if-changed"`
+	GitDiffBase    string `cli:"git-diff-base"`
+
 	// Used for signing
 	JWKSFile         string `cli:"jwks-file"`
 	JWKSKeyID        string `cli:"jwks-key-id"`
@@ -124,6 +130,17 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "reject-secrets",
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+		},
+		cli.StringFlag{
+			Name:   "apply-if-changed",
+			Usage:  "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the key is replaced with ′skip′",
+			EnvVar: "BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED",
+		},
+		cli.StringFlag{
+			Name:   "git-diff-base",
+			Usage:  "Provides the base from which to find the git diff when processing ′if_changed′",
+			Value:  "origin/main",
+			EnvVar: "BUILDKITE_GIT_DIFF_BASE,BUILDKITE_PULL_REQUEST_BASE_BRANCH",
 		},
 
 		// Note: changes to these environment variables need to be reflected in the environment created
@@ -246,113 +263,121 @@ var PipelineUploadCommand = cli.Command{
 			src = "(stdin)"
 		}
 
-		result, err := cfg.parseAndInterpolate(ctx, src, input, environ)
-		if err != nil {
-			w := warning.As(err)
-			if w == nil {
-				return err
-			}
-			l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
-		}
-
-		if len(cfg.RedactedVars) > 0 {
-			// Secret detection uses the original environment, since
-			// Interpolate merges the pipeline's env block into `environ`.
-			searchForSecrets(l, &cfg, environ, result, src)
-		}
-
-		var (
-			key signature.Key
-		)
-
-		switch {
-		case cfg.SigningAWSKMSKey != "":
-			awscfg, err := awslib.GetConfigV2(ctx)
-			if err != nil {
-				return err
-			}
-
-			// assign a crypto signer which uses the KMS key to sign the pipeline
-			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
-			if err != nil {
-				return fmt.Errorf("couldn't create KMS signer: %w", err)
-			}
-
-		case cfg.JWKSFile != "":
-			key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
-			if err != nil {
-				return fmt.Errorf("couldn't read the signing key file: %w", err)
-			}
-		}
-
-		if key != nil {
-
-			err = signature.SignSteps(
-				ctx,
-				result.Steps,
-				key,
-				os.Getenv("BUILDKITE_REPO"),
-				signature.WithEnv(result.Env.ToMap()),
-				signature.WithLogger(l),
-				signature.WithDebugSigning(cfg.DebugSigning),
-			)
-			if err != nil {
-				return fmt.Errorf("couldn't sign pipeline: %w", err)
-			}
-		}
-
-		// In dry-run mode we just output the generated pipeline to stdout.
+		// Used to encode output in dry-run mode.
+		dryRunEnc := func(any) error { return nil }
 		if cfg.DryRun {
-			var encode func(any) error
-
 			switch cfg.DryRunFormat {
 			case "json":
 				enc := json.NewEncoder(c.App.Writer)
 				enc.SetIndent("", "  ")
-				encode = enc.Encode
+				dryRunEnc = enc.Encode
 
 			case "yaml":
-				encode = yaml.NewEncoder(c.App.Writer).Encode
+				dryRunEnc = yaml.NewEncoder(c.App.Writer).Encode
 
 			default:
 				return fmt.Errorf("unknown output format %q", cfg.DryRunFormat)
+			}
+		}
+
+		// For each pipeline in the input (could be multiple)...
+		for result, err := range cfg.parseAndInterpolate(ctx, src, input, environ) {
+			if err != nil {
+				w := warning.As(err)
+				if w == nil {
+					return err
+				}
+				l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
+			}
+
+			if len(cfg.RedactedVars) > 0 {
+				// Secret detection uses the original environment, since
+				// Interpolate merges the pipeline's env block into `environ`.
+				searchForSecrets(l, &cfg, environ, result, src)
+			}
+
+			var (
+				key signature.Key
+			)
+
+			switch {
+			case cfg.SigningAWSKMSKey != "":
+				awscfg, err := awslib.GetConfigV2(ctx)
+				if err != nil {
+					return err
+				}
+
+				// assign a crypto signer which uses the KMS key to sign the pipeline
+				key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
+				if err != nil {
+					return fmt.Errorf("couldn't create KMS signer: %w", err)
+				}
+
+			case cfg.JWKSFile != "":
+				key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
+				if err != nil {
+					return fmt.Errorf("couldn't read the signing key file: %w", err)
+				}
+			}
+
+			if key != nil {
+				err := signature.SignSteps(
+					ctx,
+					result.Steps,
+					key,
+					os.Getenv("BUILDKITE_REPO"),
+					signature.WithEnv(result.Env.ToMap()),
+					signature.WithLogger(l),
+					signature.WithDebugSigning(cfg.DebugSigning),
+				)
+				if err != nil {
+					return fmt.Errorf("couldn't sign pipeline: %w", err)
+				}
+			}
+
+			if cfg.ApplyIfChanged {
+				applyIfChanged(l, result.Steps, cfg.GitDiffBase)
 			}
 
 			// All logging happens to stderr.
 			// So this can be used with other tools to get interpolated, signed
 			// JSON or YAML.
-			if err := encode(result); err != nil {
+			if err := dryRunEnc(result); err != nil {
 				return err
 			}
 
-			return nil
-		}
+			// In dry-run mode we just output the generated pipeline to stdout,
+			// and don't want to upload it.
+			if cfg.DryRun {
+				continue
+			}
 
-		// Check we have a job id set if not in dry run
-		if cfg.Job == "" {
-			return errors.New("missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
-		}
+			// Check we have a job id set if not in dry run
+			if cfg.Job == "" {
+				return errors.New("missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
+			}
 
-		// Check we have an agent access token if not in dry run
-		if cfg.AgentAccessToken == "" {
-			return errors.New("missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
-		}
+			// Check we have an agent access token if not in dry run
+			if cfg.AgentAccessToken == "" {
+				return errors.New("missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
+			}
 
-		uploader := &agent.PipelineUploader{
-			Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
-			JobID:  cfg.Job,
-			Change: &api.PipelineChange{
-				UUID:     api.NewUUID(),
-				Replace:  cfg.Replace,
-				Pipeline: result,
-			},
-			RetrySleepFunc: time.Sleep,
-		}
-		if err := uploader.Upload(ctx, l); err != nil {
-			return err
-		}
+			uploader := &agent.PipelineUploader{
+				Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
+				JobID:  cfg.Job,
+				Change: &api.PipelineChange{
+					UUID:     api.NewUUID(),
+					Replace:  cfg.Replace,
+					Pipeline: result,
+				},
+				RetrySleepFunc: time.Sleep,
+			}
+			if err := uploader.Upload(ctx, l); err != nil {
+				return err
+			}
 
-		l.Info("Successfully uploaded and parsed pipeline config")
+			l.Info("Successfully uploaded and parsed pipeline config")
+		}
 
 		return nil
 	},
@@ -520,26 +545,125 @@ func searchForSecrets(
 	return nil
 }
 
-func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src string, input io.Reader, environ *env.Environment) (*pipeline.Pipeline, error) {
-	result, err := pipeline.Parse(input)
-	if err != nil && !warning.Is(err) {
-		return nil, fmt.Errorf("pipeline parsing of %q failed: %w", src, err)
-	}
-	if cfg.NoInterpolation {
-		// Note that err may be nil or a non-nil warning from pipeline.Parse
-		return result, err
-	}
-	// Pass the trace context from our environment to the pipeline.
-	if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
-		if result.Env == nil {
-			result.Env = ordered.NewMap[string, string](1)
+func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src string, input io.Reader, environ *env.Environment) iter.Seq2[*pipeline.Pipeline, error] {
+	return func(yield func(*pipeline.Pipeline, error) bool) {
+		for result, err := range pipeline.ParseAll(input) {
+			if err != nil && !warning.Is(err) {
+				if !yield(nil, fmt.Errorf("pipeline parsing of %q failed: %w", src, err)) {
+					return
+				}
+			}
+			if cfg.NoInterpolation {
+				// Note that err may be nil or a non-nil warning from pipeline.Parse
+				if !yield(result, err) {
+					return
+				}
+			}
+			// Pass the trace context from our environment to the pipeline.
+			if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
+				if result.Env == nil {
+					result.Env = ordered.NewMap[string, string](1)
+				}
+				result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
+			}
+			// Do the interpolation.
+			preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
+			if err := result.Interpolate(environ, preferRuntimeEnv); err != nil {
+				if !yield(nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)) {
+					return
+				}
+			}
+			if !yield(result, nil) {
+				return
+			}
 		}
-		result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
 	}
-	// Do the interpolation.
-	preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
-	if err := result.Interpolate(environ, preferRuntimeEnv); err != nil {
-		return nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
+}
+
+// applyIfChanged determines the changed files, then converts "if_changed" into
+// "skip" using applyIfChangedRecursive. If the changed files can't be
+// determined using `git diff`, the "if_changed" attributes are instead
+// stripped with stripIfChanged.
+func applyIfChanged(logger logger.Logger, steps pipeline.Steps, diffBase string) {
+	gitDiff, err := exec.Command("git", "diff", "--name-only", "--merge-base", diffBase).Output()
+	if err != nil {
+		logger.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
+		stripIfChanged(steps)
+		return
 	}
-	return result, err
+	changedPaths := strings.Split(string(gitDiff), "\n")
+	changedPaths = slices.DeleteFunc(changedPaths, func(s string) bool {
+		return strings.TrimSpace(s) == ""
+	})
+	applyIfChangedRecursive(logger, steps, changedPaths)
+}
+
+// applyIfChangedRecursive converts "if_changed" into "skip" where the glob
+// pattern matches no paths in changedPaths.
+func applyIfChangedRecursive(logger logger.Logger, steps pipeline.Steps, changedPaths []string) {
+stepsLoop:
+	for _, step := range steps {
+		// All supported step types store "if_changed" in a map.
+		var content map[string]any
+
+		// These step types support "skip".
+		switch st := step.(type) {
+		case *pipeline.GroupStep:
+			// Recurse into group steps
+			applyIfChangedRecursive(logger, st.Steps, changedPaths)
+			content = st.RemainingFields
+
+		case *pipeline.CommandStep:
+			content = st.RemainingFields
+
+		case *pipeline.TriggerStep:
+			content = st.Contents
+		}
+
+		// Retrieve the value then delete it.
+		ic := content["if_changed"]
+		if ic == nil {
+			continue
+		}
+		delete(content, "if_changed")
+
+		// Parse and test the glob pattern against the paths.
+		pattern, ok := ic.(string)
+		if !ok {
+			logger.Warn("if_changed value must be a string containing a glob pattern (was a %T)", ic)
+			continue
+		}
+
+		glob, err := zzglob.Parse(pattern)
+		if err != nil {
+			logger.Warn("if_changed couldn't be parsed as a glob pattern: %v", err)
+			continue
+		}
+		for _, cp := range changedPaths {
+			if glob.Match(cp) {
+				continue stepsLoop // one of the paths changed
+			}
+		}
+
+		// Glob matched no changed file paths - this step is now skipped.
+		content["skip"] = fmt.Sprintf("pattern %q did not match any paths changed in this build", pattern)
+	}
+}
+
+// stripIfChanged recursively removes "if_changed" from all steps.
+func stripIfChanged(steps pipeline.Steps) {
+	for _, step := range steps {
+		switch st := step.(type) {
+		case *pipeline.GroupStep:
+			// Recurse into group steps
+			stripIfChanged(st.Steps)
+			delete(st.RemainingFields, "if_changed")
+
+		case *pipeline.CommandStep:
+			delete(st.RemainingFields, "if_changed")
+
+		case *pipeline.TriggerStep:
+			delete(st.Contents, "if_changed")
+		}
+	}
 }
