@@ -12,7 +12,6 @@ import (
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/google/go-cmp/cmp"
-	"gotest.tools/v3/assert"
 )
 
 func TestSearchForSecrets(t *testing.T) {
@@ -138,10 +137,15 @@ func TestSearchForSecrets(t *testing.T) {
 			l := logger.NewBuffer()
 			err := searchForSecrets(l, cfg, env.FromMap(test.environ), test.pipeline, "cat-o-matic.yaml")
 			if len(test.wantLog) == 0 {
-				assert.NilError(t, err)
+				if err != nil {
+					t.Errorf("searchForSecrets(l, %v, %v, %v, %q) = %v", cfg, test.environ, test.pipeline, "cat-o-matic.yaml", err)
+				}
 				return
 			}
-			assert.ErrorContains(t, err, test.wantLog)
+			if !strings.Contains(err.Error(), test.wantLog) {
+				t.Errorf("searchForSecrets(l, %v, %v, %v, %q) = %v, want error string containing %q",
+					cfg, test.environ, test.pipeline, "cat-o-matic.yaml", err, test.wantLog)
+			}
 		})
 	}
 }
@@ -167,29 +171,36 @@ steps:
 - command: echo $foo
 `
 
-	var expectedPipeline *pipeline.Pipeline
+	var wantPipelines []*pipeline.Pipeline
 	if runtime.GOOS == "windows" {
-		expectedPipeline = &pipeline.Pipeline{
+		wantPipelines = []*pipeline.Pipeline{{
 			Steps: pipeline.Steps{
 				&pipeline.CommandStep{
 					Command: "echo bar",
 				},
 			},
-		}
+		}}
 	} else {
-		expectedPipeline = &pipeline.Pipeline{
+		wantPipelines = []*pipeline.Pipeline{{
 			Steps: pipeline.Steps{
 				&pipeline.CommandStep{
 					Command: "echo ",
 				},
 			},
-		}
+		}}
 	}
 	ctx := context.Background()
 
+	var gotPipelines []*pipeline.Pipeline
+
 	for p, err := range cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ) {
-		assert.NilError(t, err, `cfg.parseAndInterpolate(ctx, "test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
-		assert.DeepEqual(t, p, expectedPipeline, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS))
+		if err != nil {
+			t.Errorf(`cfg.parseAndInterpolate(ctx, "test", %q, %v) = %v; want nil`, pipelineYAML, environ, err)
+		}
+		gotPipelines = append(gotPipelines, p)
+	}
+	if diff := cmp.Diff(gotPipelines, wantPipelines, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS)); diff != "" {
+		t.Errorf("pipelines diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -199,17 +210,17 @@ func TestPipelineInterpolationRuntimeEnvPrecedence(t *testing.T) {
 	tests := []struct {
 		desc             string
 		preferRuntimeEnv bool
-		expectedCommand  string
+		wantCommands     []string
 	}{
 		{
 			desc:             "With experiment disabled",
 			preferRuntimeEnv: false,
-			expectedCommand:  "echo Hi bob",
+			wantCommands:     []string{"echo Hi bob"},
 		},
 		{
 			desc:             "With experiment enabled",
 			preferRuntimeEnv: true,
-			expectedCommand:  "echo Hi alice",
+			wantCommands:     []string{"echo Hi alice"},
 		},
 	}
 
@@ -236,14 +247,83 @@ steps:
 				ctx, _ = experiments.Enable(ctx, experiments.InterpolationPrefersRuntimeEnv)
 			}
 
+			var gotCommands []string
+
 			for p, err := range cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ) {
-				assert.NilError(t, err, `cfg.parseAndInterpolate(ctx, "test", %q, %q) = %v; want nil`, pipelineYAML, environ, err)
+				if err != nil {
+					t.Errorf(`cfg.parseAndInterpolate(ctx, "test", %q, %v) = %v; want nil`, pipelineYAML, environ, err)
+				}
 				s := p.Steps[len(p.Steps)-1]
 				commandStep, ok := s.(*pipeline.CommandStep)
 				if !ok {
 					t.Errorf("Invalid pipeline step %v", s)
 				}
-				assert.Equal(t, commandStep.Command, test.expectedCommand)
+				gotCommands = append(gotCommands, commandStep.Command)
+			}
+
+			if diff := cmp.Diff(gotCommands, test.wantCommands); diff != "" {
+				t.Errorf("commands diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestPipelineInterpolation_Regression3358(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		interpolation bool
+		wantCommands  []string
+	}{
+		{
+			name:          "with interpolation",
+			interpolation: true,
+			wantCommands:  []string{"echo Hi bob"},
+		},
+		{
+			name:          "without interpolation",
+			interpolation: false,
+			wantCommands:  []string{"echo $GREETING"},
+		},
+	}
+
+	environ := env.FromMap(map[string]string{
+		"NAME": "alice",
+	})
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			const pipelineYAML = `---
+env:
+  NAME: bob
+  GREETING: "Hi ${NAME:-}"
+steps:
+- command: echo $GREETING
+`
+			cfg := &PipelineUploadConfig{
+				NoInterpolation: !test.interpolation,
+				RedactedVars:    []string{},
+				RejectSecrets:   true,
+			}
+			ctx := context.Background()
+
+			var gotCommands []string
+
+			for p, err := range cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ) {
+				if err != nil {
+					t.Errorf(`cfg.parseAndInterpolate(ctx, "test", %q, %v) = %v; want nil`, pipelineYAML, environ, err)
+				}
+				s := p.Steps[len(p.Steps)-1]
+				commandStep, ok := s.(*pipeline.CommandStep)
+				if !ok {
+					t.Errorf("Invalid pipeline step %v", s)
+				}
+				gotCommands = append(gotCommands, commandStep.Command)
+			}
+
+			if diff := cmp.Diff(gotCommands, test.wantCommands); diff != "" {
+				t.Errorf("commands diff (-got +want):\n%s", diff)
 			}
 		})
 	}

@@ -548,32 +548,36 @@ func searchForSecrets(
 func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src string, input io.Reader, environ *env.Environment) iter.Seq2[*pipeline.Pipeline, error] {
 	return func(yield func(*pipeline.Pipeline, error) bool) {
 		for result, err := range pipeline.ParseAll(input) {
-			if err != nil && !warning.Is(err) {
-				if !yield(nil, fmt.Errorf("pipeline parsing of %q failed: %w", src, err)) {
-					return
-				}
-			}
-			if cfg.NoInterpolation {
+			// Check the error, apply interpolation if needed.
+			switch {
+			case err != nil && !warning.Is(err):
+				err = fmt.Errorf("pipeline parsing of %q failed: %w", src, err)
+				// yield below
+
+			case cfg.NoInterpolation:
 				// Note that err may be nil or a non-nil warning from pipeline.Parse
-				if !yield(result, err) {
-					return
+				// yield below
+
+			default: // yes, interpolation
+				// Pass the trace context from our environment to the pipeline.
+				if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
+					if result.Env == nil {
+						result.Env = ordered.NewMap[string, string](1)
+					}
+					result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
 				}
-			}
-			// Pass the trace context from our environment to the pipeline.
-			if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
-				if result.Env == nil {
-					result.Env = ordered.NewMap[string, string](1)
+
+				// Do the interpolation.
+				preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
+				err = result.Interpolate(environ, preferRuntimeEnv)
+				if err != nil {
+					err = fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
 				}
-				result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
+				// yield below
 			}
-			// Do the interpolation.
-			preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
-			if err := result.Interpolate(environ, preferRuntimeEnv); err != nil {
-				if !yield(nil, fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)) {
-					return
-				}
-			}
-			if !yield(result, nil) {
+
+			// Yield the result and error.
+			if !yield(result, err) {
 				return
 			}
 		}
