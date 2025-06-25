@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.100.1](https://github.com/buildkite/agent/tree/v3.100.1) (2025-06-25)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.100.0...v3.100.1)
+
+### Fixed
+- Fix regression in pipeline upload with no-interpolation [#3359](https://github.com/buildkite/agent/pull/3359) (@DrJosh9000)
+
+### Internal
+- Avoid goroutine failing after test [#3356](https://github.com/buildkite/agent/pull/3356) (@DrJosh9000)
+
+### Dependencies
+- build(deps): bump github.com/buildkite/shellwords from 0.0.0-20180315084142-c3f497d1e000 to 1.0.0 [#3352](https://github.com/buildkite/agent/pull/3352) (@dependabot[bot])
+- build(deps): bump github.com/go-chi/chi/v5 from 5.2.1 to 5.2.2 [#3353](https://github.com/buildkite/agent/pull/3353) (@dependabot[bot])
+- build(deps): bump the container-images group across 6 directories with 2 updates [#3354](https://github.com/buildkite/agent/pull/3354) (@dependabot[bot])
+- build(deps): bump the cloud-providers group with 5 updates [#3355](https://github.com/buildkite/agent/pull/3355) (@dependabot[bot])
+
 ## [v3.100.0](https://github.com/buildkite/agent/tree/v3.100.0) (2025-06-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.99.0...v3.100.0)
 
