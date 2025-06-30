@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/tracetools"
 )
 
@@ -69,7 +70,7 @@ func (e *Executor) uploadArtifacts(ctx context.Context) error {
 		args = append(args, e.ArtifactUploadDestination)
 	}
 
-	if err = e.shell.Command("buildkite-agent", args...).Run(ctx); err != nil {
+	if err = e.shell.Command(self.Path(ctx), args...).Run(ctx); err != nil {
 		return err
 	}
 
