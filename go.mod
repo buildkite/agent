@@ -55,7 +55,7 @@ require (
 	golang.org/x/sys v0.33.0
 	golang.org/x/term v0.32.0
 	google.golang.org/api v0.238.0
-	gopkg.in/DataDog/dd-trace-go.v1 v1.74.0
+	gopkg.in/DataDog/dd-trace-go.v1 v1.74.2
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.2
 )
@@ -75,7 +75,7 @@ require (
 	github.com/DataDog/datadog-agent/pkg/util/log v0.64.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/util/scrubber v0.64.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/version v0.64.2 // indirect
-	github.com/DataDog/dd-trace-go/v2 v2.0.0 // indirect
+	github.com/DataDog/dd-trace-go/v2 v2.0.1 // indirect
 	github.com/DataDog/go-libddwaf/v3 v3.5.4 // indirect
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20250319104955-81009b9bad14 // indirect
 	github.com/DataDog/go-sqllexer v0.1.3 // indirect
