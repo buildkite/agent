@@ -126,14 +126,14 @@ func (e *Executor) otRootSpanName() string {
 
 func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	// Set up trace exporter based on protocol
-	var exporter sdktrace.SpanExporter
-	var err error
 	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
 	// default to grpc to avoid breaking change
 	if protocol == "" {
 		protocol = "grpc"
 	}
 
+	var exporter sdktrace.SpanExporter
+	var err error
 	switch protocol {
 	case "grpc":
 		exporter, err = otlptracegrpc.New(ctx)
