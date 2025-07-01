@@ -18,8 +18,8 @@ import (
 	"go.opentelemetry.io/contrib/propagators/ot"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -125,8 +125,24 @@ func (e *Executor) otRootSpanName() string {
 }
 
 func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	client := otlptracegrpc.NewClient()
-	exporter, err := otlptrace.New(ctx, client)
+	// Set up trace exporter based on protocol
+	var exporter sdktrace.SpanExporter
+	var err error
+	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+	// default to grpc to avoid breaking change
+	if protocol == "" {
+		protocol = "grpc"
+	}
+
+	switch protocol {
+	case "grpc":
+		exporter, err = otlptracegrpc.New(ctx)
+	case "http/protobuf", "http":
+		exporter, err = otlptracehttp.New(ctx)
+	default:
+		e.shell.Errorf("Unsupported OTLP protocol: %s. Disabling tracing.", protocol)
+		return &tracetools.NoopSpan{}, ctx, noopStopper
+	}
 	if err != nil {
 		e.shell.Errorf("Error creating OTLP trace exporter %s. Disabling tracing.", err)
 		return &tracetools.NoopSpan{}, ctx, noopStopper
