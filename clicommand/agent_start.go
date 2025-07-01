@@ -104,6 +104,7 @@ type AgentStartConfig struct {
 	AcquireJob                 string `cli:"acquire-job"`
 	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
 	DisconnectAfterIdleTimeout int    `cli:"disconnect-after-idle-timeout"`
+	DisconnectAfterUptime      int    `cli:"disconnect-after-uptime"`
 	CancelGracePeriod          int    `cli:"cancel-grace-period"`
 	SignalGracePeriodSeconds   int    `cli:"signal-grace-period-seconds"`
 
@@ -235,6 +236,10 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "disconnect-after-idle")
 	}
 
+	if asc.DisconnectAfterUptime != 0 {
+		features = append(features, "disconnect-after-uptime")
+	}
+
 	if asc.NoPlugins {
 		features = append(features, "no-plugins")
 	}
@@ -362,6 +367,12 @@ var AgentStartCommand = cli.Command{
 			Value:  0,
 			Usage:  "The maximum idle time in seconds to wait for a job before disconnecting. The default of 0 means no timeout",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_IDLE_TIMEOUT",
+		},
+		cli.IntFlag{
+			Name:   "disconnect-after-uptime",
+			Value:  0,
+			Usage:  "The maximum uptime in seconds before the agent stops accepting new jobs and shuts down after any running jobs complete. The default of 0 means no timeout",
+			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_UPTIME",
 		},
 		cancelGracePeriodFlag,
 		cli.BoolFlag{
@@ -1014,6 +1025,7 @@ var AgentStartCommand = cli.Command{
 			TimestampLines:               cfg.TimestampLines,
 			DisconnectAfterJob:           cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout:   cfg.DisconnectAfterIdleTimeout,
+			DisconnectAfterUptime:        cfg.DisconnectAfterUptime,
 			CancelGracePeriod:            cfg.CancelGracePeriod,
 			SignalGracePeriod:            signalGracePeriod,
 			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
@@ -1107,6 +1119,10 @@ var AgentStartCommand = cli.Command{
 
 		if agentConf.DisconnectAfterIdleTimeout > 0 {
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
+		}
+
+		if agentConf.DisconnectAfterUptime > 0 {
+			l.Info("Agents will disconnect after %d seconds of uptime and shut down after any running jobs complete", agentConf.DisconnectAfterUptime)
 		}
 
 		if len(cfg.AllowedRepositories) > 0 {

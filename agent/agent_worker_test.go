@@ -487,6 +487,92 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	}
 }
 
+func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	server := NewFakeAPIServer()
+	defer server.Close()
+
+	// Create a job that the agent could potentially accept
+	job := server.AddJob(map[string]string{
+		"BUILDKITE_COMMAND": "echo hello",
+	})
+
+	// Pre-register the agent.
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+
+	pingCount := 0
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		pingCount++
+		// Always offer the job to test that the agent stops accepting jobs after max lifetime
+		return api.Ping{
+			Job: job.Job,
+		}, nil
+	}
+
+	server.Assign(agent, job)
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 1,
+			HeartbeatInterval: 10,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{
+			SpawnIndex: 1,
+			AgentConfiguration: AgentConfiguration{
+				BootstrapScript:       "./dummy_bootstrap.sh",
+				BuildPath:             filepath.Join(os.TempDir(), t.Name(), "build"),
+				HooksPath:             filepath.Join(os.TempDir(), t.Name(), "hooks"),
+				DisconnectAfterUptime: 1, // 1 second max uptime
+			},
+		},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	idleMonitor := NewIdleMonitor(1)
+
+	// Record start time
+	startTime := time.Now()
+
+	if err := worker.Start(ctx, idleMonitor); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	// Check that the agent disconnected after approximately 1 second
+	elapsed := time.Since(startTime)
+	if elapsed < 900*time.Millisecond || elapsed > 2*time.Second {
+		t.Errorf("Agent should have disconnected after ~1 second, but took %v", elapsed)
+	}
+
+	// The agent should have made at least one ping before disconnecting
+	if pingCount == 0 {
+		t.Error("Agent should have made at least one ping before disconnecting")
+	}
+
+	// The agent should have made at least one ping and should have disconnected
+	// due to max uptime being exceeded. The important thing is that the agent
+	// disconnected properly with the uptime check, which we verified above.
+}
+
 func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 	// The registration request is made in clicommand.AgentStartCommand, and the response
 	// is passed into agent.NewAgentWorker(...), so we'll just test the response handling.
