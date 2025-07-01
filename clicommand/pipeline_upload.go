@@ -280,6 +280,21 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
+		// By default, when in ApplyIfChanged mode, `if_changed` attributes are
+		// stripped.
+		var stepsMutation func(pipeline.Steps)
+		if cfg.ApplyIfChanged {
+			// If we can figure out which files have changed, we can apply
+			// `if_changed` filtering.
+			changedPaths, err := gatherChangedFiles(cfg.GitDiffBase)
+			if err != nil {
+				l.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
+				stepsMutation = stripIfChanged
+			} else {
+				stepsMutation = func(steps pipeline.Steps) { applyIfChanged(l, steps, changedPaths) }
+			}
+		}
+
 		// For each pipeline in the input (could be multiple)...
 		for result, err := range cfg.parseAndInterpolate(ctx, src, input, environ) {
 			if err != nil {
@@ -335,8 +350,8 @@ var PipelineUploadCommand = cli.Command{
 				}
 			}
 
-			if cfg.ApplyIfChanged {
-				applyIfChanged(l, result.Steps, cfg.GitDiffBase)
+			if stepsMutation != nil {
+				stepsMutation(result.Steps)
 			}
 
 			// All logging happens to stderr.
@@ -584,27 +599,22 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 	}
 }
 
-// applyIfChanged determines the changed files, then converts "if_changed" into
-// "skip" using applyIfChangedRecursive. If the changed files can't be
-// determined using `git diff`, the "if_changed" attributes are instead
-// stripped with stripIfChanged.
-func applyIfChanged(logger logger.Logger, steps pipeline.Steps, diffBase string) {
+// gatherChangedFiles determines changed files in this build.
+func gatherChangedFiles(diffBase string) ([]string, error) {
 	gitDiff, err := exec.Command("git", "diff", "--name-only", "--merge-base", diffBase).Output()
 	if err != nil {
-		logger.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
-		stripIfChanged(steps)
-		return
+		return nil, err
 	}
 	changedPaths := strings.Split(string(gitDiff), "\n")
 	changedPaths = slices.DeleteFunc(changedPaths, func(s string) bool {
 		return strings.TrimSpace(s) == ""
 	})
-	applyIfChangedRecursive(logger, steps, changedPaths)
+	return changedPaths, nil
 }
 
-// applyIfChangedRecursive converts "if_changed" into "skip" where the glob
+// applyIfChanged converts "if_changed" into "skip" where the glob
 // pattern matches no paths in changedPaths.
-func applyIfChangedRecursive(logger logger.Logger, steps pipeline.Steps, changedPaths []string) {
+func applyIfChanged(logger logger.Logger, steps pipeline.Steps, changedPaths []string) {
 stepsLoop:
 	for _, step := range steps {
 		// All supported step types store "if_changed" in a map.
@@ -614,7 +624,7 @@ stepsLoop:
 		switch st := step.(type) {
 		case *pipeline.GroupStep:
 			// Recurse into group steps
-			applyIfChangedRecursive(logger, st.Steps, changedPaths)
+			applyIfChanged(logger, st.Steps, changedPaths)
 			content = st.RemainingFields
 
 		case *pipeline.CommandStep:
