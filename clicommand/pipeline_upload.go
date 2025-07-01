@@ -131,9 +131,9 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
-		cli.StringFlag{
+		cli.BoolFlag{
 			Name:   "apply-if-changed",
-			Usage:  "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the key is replaced with ′skip′",
+			Usage:  "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the step is skipped.",
 			EnvVar: "BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED",
 		},
 		cli.StringFlag{
