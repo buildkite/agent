@@ -49,6 +49,7 @@ type AgentConfiguration struct {
 	HealthCheckAddr              string
 	DisconnectAfterJob           bool
 	DisconnectAfterIdleTimeout   int
+	DisconnectAfterUptime        int
 	CancelGracePeriod            int
 	SignalGracePeriod            time.Duration
 	EnableJobLogTmpfile          bool

@@ -106,6 +106,9 @@ type AgentWorker struct {
 	state        agentWorkerState
 	currentJobID string
 
+	// The time when this agent worker started
+	startTime time.Time
+
 	// disable the delay between pings, to speed up certain testing scenarios
 	noWaitBetweenPingsForTesting bool
 }
@@ -213,6 +216,9 @@ func (a *AgentWorker) statusCallback(context.Context) (any, error) {
 
 // Starts the agent worker
 func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error {
+	// Record the start time for max agent lifetime tracking
+	a.startTime = time.Now()
+
 	a.metrics = a.metricsCollector.Scope(metrics.Tags{
 		"agent_name": a.agent.Name,
 	})
@@ -331,6 +337,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	//   ping action isn't "pause",
 	// * the agent is in disconnect-after-idle-timeout mode, has been idle for
 	//   longer than the idle timeout, and the ping action isn't "pause".
+	// * the agent has exceeded its disconnect-after-uptime and the ping action isn't "pause".
 	for {
 		setStat("😴 Waiting until next ping interval tick")
 		select {
@@ -409,6 +416,18 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 			}
 			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
 			return nil
+		}
+
+		// Exit after disconnect-after-uptime is exceeded.
+		if a.agentConfiguration.DisconnectAfterUptime > 0 {
+			maxUptime := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterUptime)
+			if time.Since(a.startTime) >= maxUptime {
+				if job != nil {
+					a.logger.Error("Agent ping dispatched a job (id %q) but agent has exceeded max uptime of %v!", job.ID, maxUptime)
+				}
+				a.logger.Info("Agent has exceeded max uptime of %v. Disconnecting...", maxUptime)
+				return nil
+			}
 		}
 
 		// Note that Ping only returns a job if err == nil.
