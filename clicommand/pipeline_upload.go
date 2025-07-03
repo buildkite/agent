@@ -601,9 +601,16 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 
 // gatherChangedFiles determines changed files in this build.
 func gatherChangedFiles(diffBase string) ([]string, error) {
-	gitDiff, err := exec.Command("git", "diff", "--name-only", "--merge-base", diffBase).Output()
+	// The --merge-base flag was only added to git-diff recently.
+	mergeBaseOut, err := exec.Command("git", "merge-base", diffBase, "HEAD").Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("git merge-base %q HEAD: %w", diffBase, err)
+	}
+	mergeBase := strings.TrimSpace(string(mergeBaseOut))
+
+	gitDiff, err := exec.Command("git", "diff", "--name-only", mergeBase).Output()
+	if err != nil {
+		return nil, fmt.Errorf("git diff --name-only %q: %v", mergeBase, err)
 	}
 	changedPaths := strings.Split(string(gitDiff), "\n")
 	changedPaths = slices.DeleteFunc(changedPaths, func(s string) bool {
@@ -660,7 +667,8 @@ stepsLoop:
 		}
 
 		// Glob matched no changed file paths - this step is now skipped.
-		content["skip"] = fmt.Sprintf("pattern %q did not match any paths changed in this build", pattern)
+		// Note that the "skip" string is limited to 70 characters.
+		content["skip"] = "if_changed pattern did not match any paths changed in this build"
 	}
 }
 
