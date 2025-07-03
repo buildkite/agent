@@ -6,6 +6,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -250,7 +251,13 @@ func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 
 	b.WriteString(fmt.Sprintf(`"ts":%q,`, time.Now().Format(time.RFC3339)))
 	b.WriteString(fmt.Sprintf(`"level":%q,`, level.String()))
-	b.WriteString(fmt.Sprintf(`"msg":%q,`, msg))
+
+	// Serialize msg to JSON so we're not producing invalid JSON
+	jsonMsg, err := json.Marshal(msg)
+	if err != nil {
+		jsonMsg = []byte(`"error marshaling message"`)
+	}
+	b.WriteString(fmt.Sprintf(`"msg":%s,`, jsonMsg))
 
 	for _, field := range fields {
 		b.WriteString(fmt.Sprintf("%q:%q,", field.Key(), field.String()))
