@@ -57,25 +57,27 @@ redacted from subsequent logs. Secrets fetched with the builtin
 ′secret get′ command do not require the use of this command, they will
 be redacted automatically.
 
-Example:
+Examples:
 
 To redact the verbatim contents of the file 'id_ed25519' from future logs:
 
-    $ buildkite-agent redactor add id_ed25519
+	$ buildkite-agent redactor add id_ed25519
 
 To redact the string 'llamasecret' from future logs:
 
-		$ echo llamasecret | buildkite-agent redactor add
+	$ echo llamasecret | buildkite-agent redactor add
 
-To redact multiple secrets from future logs in one command, create a flat
-JSON object file (for example, 'my-secrets.json'), with one entry per secret
-(the names of the keys have no effect on redaction):
+Pass a flat JSON object whose keys are unique and whose values are your secrets:
 
-		$ echo '{"key1":"secret1","key2":"secret2"}' | buildkite-agent redactor add --format json
+	$ echo '{"db_password":"secret1","api_token":"secret2","ssh_key":"secret3"}' | buildkite-agent redactor add --format json
 
 Or
 
-    $ buildkite-agent redactor add --format json my-secrets.json`,
+	$ buildkite-agent redactor add --format json my-secrets.json
+
+JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON parser keeps only the final entry, so only that single value is added to the redactor:
+
+        $ echo '{"key":"value1","key":"value2","key":"value3"}' | buildkite-agent redactor add --format json`,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "format",
