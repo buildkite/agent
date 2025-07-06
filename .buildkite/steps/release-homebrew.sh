@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Must be executed after github-release.sh as it depends on release meta-data
+# Must be executed after github-release.sh as it depends on release meta-data
 
 set -euo pipefail
 
