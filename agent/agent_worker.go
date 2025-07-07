@@ -215,7 +215,7 @@ func (a *AgentWorker) statusCallback(context.Context) (any, error) {
 }
 
 // Starts the agent worker
-func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error {
+func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) (startErr error) {
 	// Record the start time for max agent lifetime tracking
 	a.startTime = time.Now()
 
@@ -253,6 +253,15 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 			// so that supervisor knows that the job was not acquired due to the job being rejected.
 			if errors.Is(err, core.ErrJobAcquisitionRejected) {
 				return fmt.Errorf("Failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
+			}
+
+			// If the job itself exited with nonzero code, then we want to exit
+			// with that code ourselves later on, but need to check if we were
+			// paused in the meantime first.
+			if exit := new(core.ProcessExit); errors.As(err, exit) && exit.Status != 0 {
+				defer func() {
+					startErr = errors.Join(err, startErr)
+				}()
 			}
 
 			a.logger.Error("Failed to acquire and run job: %v", err)
