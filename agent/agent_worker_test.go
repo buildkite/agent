@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -24,6 +25,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var dummyBootstrap = "/bin/sh -c true"
+
+func init() {
+	if runtime.GOOS == "windows" {
+		dummyBootstrap = "cmd.exe /c VER>NUL"
+	}
+}
 
 func TestDisconnect(t *testing.T) {
 	t.Parallel()
@@ -327,6 +336,15 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
+	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
+	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
+	if err := errors.Join(os.MkdirAll(buildPath, 0o777), os.MkdirAll(hooksPath, 0o777)); err != nil {
+		t.Fatalf("Couldn't create directories: %v", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name()))
+	})
+
 	server := NewFakeAPIServer()
 	defer server.Close()
 
@@ -376,9 +394,9 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 		AgentWorkerConfig{
 			SpawnIndex: 1,
 			AgentConfiguration: AgentConfiguration{
-				BootstrapScript: "./dummy_bootstrap.sh",
-				BuildPath:       filepath.Join(os.TempDir(), t.Name(), "build"),
-				HooksPath:       filepath.Join(os.TempDir(), t.Name(), "hooks"),
+				BootstrapScript: dummyBootstrap,
+				BuildPath:       buildPath,
+				HooksPath:       hooksPath,
 				AcquireJob:      job.Job.ID,
 			},
 		},
@@ -404,6 +422,15 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+
+	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
+	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
+	if err := errors.Join(os.MkdirAll(buildPath, 0o777), os.MkdirAll(hooksPath, 0o777)); err != nil {
+		t.Fatalf("Couldn't create directories: %v", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name()))
+	})
 
 	server := NewFakeAPIServer()
 	defer server.Close()
@@ -461,9 +488,9 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 		AgentWorkerConfig{
 			SpawnIndex: 1,
 			AgentConfiguration: AgentConfiguration{
-				BootstrapScript:    "./dummy_bootstrap.sh",
-				BuildPath:          filepath.Join(os.TempDir(), t.Name(), "build"),
-				HooksPath:          filepath.Join(os.TempDir(), t.Name(), "hooks"),
+				BootstrapScript:    dummyBootstrap,
+				BuildPath:          buildPath,
+				HooksPath:          hooksPath,
 				DisconnectAfterJob: true,
 			},
 		},
@@ -492,6 +519,15 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+
+	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
+	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
+	if err := errors.Join(os.MkdirAll(buildPath, 0o777), os.MkdirAll(hooksPath, 0o777)); err != nil {
+		t.Fatalf("Couldn't create directories: %v", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name()))
+	})
 
 	server := NewFakeAPIServer()
 	defer server.Close()
@@ -539,9 +575,9 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 		AgentWorkerConfig{
 			SpawnIndex: 1,
 			AgentConfiguration: AgentConfiguration{
-				BootstrapScript:       "./dummy_bootstrap.sh",
-				BuildPath:             filepath.Join(os.TempDir(), t.Name(), "build"),
-				HooksPath:             filepath.Join(os.TempDir(), t.Name(), "hooks"),
+				BootstrapScript:       dummyBootstrap,
+				BuildPath:             buildPath,
+				HooksPath:             hooksPath,
 				DisconnectAfterUptime: 1, // 1 second max uptime
 			},
 		},

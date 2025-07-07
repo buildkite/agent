@@ -69,8 +69,8 @@ func (e *missingKeyError) Error() string {
 	return fmt.Sprintf("job was signed with signature %q, but no verification key was provided", e.signature)
 }
 
-// Runs the job
-func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) error {
+// Run runs the job.
+func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err error) {
 	r.agentLogger.Info("Starting job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
@@ -115,6 +115,14 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) erro
 	defer func(ctx context.Context, wg *sync.WaitGroup) {
 		cancel()
 		r.cleanup(ctx, wg, exit, ignoreAgentInDispatches)
+
+		// In acquire-job mode, we want to return any failed exit code so that
+		// the program can exit with the same code.
+		if r.conf.AgentConfiguration.AcquireJob != "" && exit.Status != 0 {
+			// Use errors.Join to return both this exit, and whatever err may
+			// be being returned already.
+			err = errors.Join(exit, err)
+		}
 	}(ctx, &wg) // Note the non-cancellable context (ctx rather than cctx) here - we don't want to be interrupted during cleanup
 
 	job := r.conf.Job
@@ -191,7 +199,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) erro
 	go r.jobCancellationChecker(cctx, &wg)
 
 	exit = r.runJob(cctx)
-
+	// The defer mutates the error return in some cases.
 	return nil
 }
 
