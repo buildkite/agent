@@ -393,6 +393,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 
 	if isMainRepository {
 		var refspecs []string
+		var retry bool
 
 		switch {
 		case e.RefSpec != "":
@@ -403,6 +404,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 			refspecs = []string{refspec}
+			retry = true
 		default:
 			// Fetch the build branch from the upstream repository into the mirror.
 			refspecs = []string{e.Branch}
@@ -414,7 +416,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
 			Repository: "origin",
 			RefSpecs:   refspecs,
-			Retry:      e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"),
+			Retry:      retry,
 		}); err != nil {
 			return "", err
 		}
