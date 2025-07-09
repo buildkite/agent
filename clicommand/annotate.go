@@ -76,7 +76,7 @@ var AnnotateCommand = cli.Command{
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "context",
-			Usage:  "The context of the annotation used to differentiate this annotation from others",
+			Usage:  "The context of the annotation used to differentiate this annotation from others. This value has a limit of 100 characters.",
 			EnvVar: "BUILDKITE_ANNOTATION_CONTEXT",
 		},
 		cli.StringFlag{
