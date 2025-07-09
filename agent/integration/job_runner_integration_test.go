@@ -136,7 +136,9 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 		t.Fatalf("making bootstrap-hooks directory: %v", err)
 	}
 
-	defer os.RemoveAll(hooksDir)
+	t.Cleanup(func() {
+		os.RemoveAll(hooksDir) //nolint:errcheck // Hooks dir removal is best-effort cleanup.
+	})
 
 	mockPB := mockPreBootstrap(t, hooksDir)
 	mockPB.Expect().Once().AndCallFunc(func(c *bintest.Call) {

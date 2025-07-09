@@ -116,7 +116,7 @@ func runDockerComposeCommand(ctx context.Context, sh *shell.Shell, cmd []string)
 
 	// Compose strips dashes and underscores, so we'll remove them
 	// to match the docker container names
-	projectName := strings.Replace(fmt.Sprintf("buildkite%s", jobId), "-", "", -1)
+	projectName := strings.ReplaceAll("buildkite"+jobId, "-", "")
 
 	sh.Env.Set("COMPOSE_PROJ_NAME", projectName)
 	sh.Headerf(":docker: Building Docker images")

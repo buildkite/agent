@@ -22,10 +22,13 @@ var WriteExecutableCommand = cli.Command{
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer f.Close() //nolint:errcheck // Best-effort cleanup - primary Close error is returned.
 
 		_, err = io.Copy(f, bufio.NewReader(os.Stdin))
-		return err
+		if err != nil {
+			return err
+		}
+		return f.Close()
 	},
 }
 

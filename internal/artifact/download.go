@@ -152,7 +152,7 @@ func (d Download) try(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Error while downloading %s (%T: %w)", d.conf.URL, err, err)
 	}
-	defer response.Body.Close()
+	defer response.Body.Close() //nolint:errcheck // Idiomatic response body handling.
 
 	// Double check the status
 	if response.StatusCode/100 != 2 && response.StatusCode/100 != 3 {
@@ -171,7 +171,7 @@ func (d Download) try(ctx context.Context) error {
 		return fmt.Errorf("creating temp file (%T: %w)", err, err)
 	}
 	defer os.Remove(temp.Name())
-	defer temp.Close()
+	defer temp.Close() //nolint:errcheck // Best-effort cleanup - primary Close checked below.
 
 	// Create a SHA256 to hash the download as we go.
 	hash := sha256.New()

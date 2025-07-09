@@ -140,7 +140,7 @@ func (p *Plugin) Name() string {
 		return ""
 	}
 	// for filepaths, we can get windows backslashes, so we normalize them
-	location := strings.Replace(p.Location, "\\", "/", -1)
+	location := strings.ReplaceAll(p.Location, "\\", "/")
 	location = strings.TrimRight(location, "/") // Trailing slash is useless and will confuse the subsequent parsing
 
 	// Grab the last part of the location
@@ -151,8 +151,8 @@ func (p *Plugin) Name() string {
 	name = strings.ToLower(name)
 	name = whitespaceRE.ReplaceAllString(name, " ")
 	name = nonIDCharacterRE.ReplaceAllString(name, "-")
-	name = strings.Replace(name, "-buildkite-plugin-git", "", -1)
-	name = strings.Replace(name, "-buildkite-plugin", "", -1)
+	name = strings.ReplaceAll(name, "-buildkite-plugin-git", "")
+	name = strings.ReplaceAll(name, "-buildkite-plugin", "")
 
 	return name
 }

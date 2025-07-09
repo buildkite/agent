@@ -24,9 +24,9 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 				"absolute_path": "llamas.txt",
 				"path": "llamas.txt",
 				"url": "http://%s/download"
-			}]`, req.Host)
+			}]`, req.Host) //nolint:errcheck // Test should fail with incomplete response.
 		case "/download":
-			fmt.Fprintln(rw, "OK")
+			fmt.Fprintln(rw, "OK") //nolint:errcheck // YOLO?
 		default:
 			http.Error(rw, "Not found", http.StatusNotFound)
 		}

@@ -322,7 +322,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	// You may be surprised that we're creating a branch here.  This is so we can test the behaviour
 	// when a branch has had new commits added to it.
-	err = p.gitRepository.CreateBranch("something-fixed")
+	err = p.CreateBranch("something-fixed")
 	assert.NilError(t, err)
 
 	// To test this, we also set our testPlugin to version "something-fixed", so that the agent will
@@ -430,7 +430,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	p := createTestPlugin(t, hooks)
 
 	// Same branch-name jiggery pokery as in the previous integration test
-	p.gitRepository.CreateBranch("something-fixed")
+	p.CreateBranch("something-fixed")
 	p.versionTag = "something-fixed"
 
 	json, err := p.ToJSON()
@@ -573,7 +573,7 @@ func (tp *testPlugin) ToJSON() (string, error) {
 // BUILDKITE_PLUGINS expects an array of these, so it would
 // generally be used on a []testPlugin slice.
 func (tp *testPlugin) MarshalJSON() ([]byte, error) {
-	normalizedPath := strings.TrimPrefix(strings.Replace(tp.Path, "\\", "/", -1), "/")
+	normalizedPath := strings.TrimPrefix(strings.ReplaceAll(tp.Path, "\\", "/"), "/")
 
 	p := map[string]any{
 		fmt.Sprintf("file:///%s#%s", normalizedPath, strings.TrimSpace(tp.versionTag)): map[string]string{

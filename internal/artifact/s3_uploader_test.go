@@ -47,12 +47,17 @@ func TestResolveServerSideEncryptionConfig(t *testing.T) {
 		{"lol", false},
 	} {
 		uploader := &S3Uploader{}
-		os.Setenv("BUILDKITE_S3_SSE_ENABLED", tc.ServerSideEncryptionConfig)
+		if err := os.Setenv("BUILDKITE_S3_SSE_ENABLED", tc.ServerSideEncryptionConfig); err != nil {
+			t.Fatalf("os.Setenv(BUILDKITE_S3_SSE_ENABLED, tc.ServerSideEncryptionConfig) = %v", err)
+		}
+		t.Cleanup(func() {
+			os.Unsetenv("BUILDKITE_S3_SSE_ENABLED") //nolint:errcheck // Best-effort cleanup.
+		})
+
 		config := uploader.serverSideEncryptionEnabled()
 
 		assert.Equal(tc.ExpectedResult, config)
 
-		os.Unsetenv("BUILDKITE_S3_SSE_ENABLED")
 	}
 }
 
@@ -74,7 +79,12 @@ func TestResolvePermission(t *testing.T) {
 		{"foo", "", true},
 	} {
 		uploader := &S3Uploader{}
-		os.Setenv("BUILDKITE_S3_ACL", tc.Permission)
+		if err := os.Setenv("BUILDKITE_S3_ACL", tc.Permission); err != nil {
+			t.Fatalf("os.Setenv(BUILDKITE_S3_ACL, tc.Permission) = %v", err)
+		}
+		t.Cleanup(func() {
+			os.Unsetenv("BUILDKITE_S3_ACL") //nolint:errcheck // Best-effort cleanup.
+		})
 		config, err := uploader.resolvePermission()
 
 		// if it should error we just look at the error
@@ -84,7 +94,5 @@ func TestResolvePermission(t *testing.T) {
 			assert.Nil(err)
 			assert.Equal(tc.ExpectedResult, config)
 		}
-
-		os.Unsetenv("BUILDKITE_S3_ACL")
 	}
 }

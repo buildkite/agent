@@ -318,16 +318,17 @@ func (l Loader) fieldValueIsEmpty(fieldName string) bool {
 	value, _ := reflections.GetField(l.Config, fieldName)
 	fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
 
-	if fieldKind == reflect.String {
+	switch fieldKind {
+	case reflect.String:
 		return value == ""
-	} else if fieldKind == reflect.Slice {
+	case reflect.Slice:
 		v := reflect.ValueOf(value)
 		return v.Len() == 0
-	} else if fieldKind == reflect.Bool {
+	case reflect.Bool:
 		return value == false
-	} else if fieldKind == reflect.Int {
+	case reflect.Int:
 		return value == 0
-	} else {
+	default:
 		panic(fmt.Sprintf("Can't determine empty-ness for field type %s", fieldKind))
 	}
 }
@@ -338,11 +339,13 @@ func (l Loader) validateField(fieldName string, label string, validationRules st
 
 	// Loop through each rule, and perform it
 	for _, rule := range rules {
-		if rule == "required" {
+		switch rule {
+		case "required":
 			if l.fieldValueIsEmpty(fieldName) {
 				return l.Errorf("Missing %s.", label)
 			}
-		} else if rule == "file-exists" {
+
+		case "file-exists":
 			value, _ := reflections.GetField(l.Config, fieldName)
 
 			// Make sure the value is converted to a string
@@ -352,7 +355,8 @@ func (l Loader) validateField(fieldName string, label string, validationRules st
 					return fmt.Errorf("couldn't find %s located at %s: %w", label, value, err)
 				}
 			}
-		} else {
+
+		default:
 			return fmt.Errorf("unknown config validation rule %q", rule)
 		}
 	}

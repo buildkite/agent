@@ -229,7 +229,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) (star
 	if err := a.metricsCollector.Start(); err != nil {
 		return err
 	}
-	defer a.metricsCollector.Stop()
+	defer a.metricsCollector.Stop() //nolint:errcheck // Best-effort cleanup
 
 	// Use a context to run heartbeats for as long as the ping loop or job runs
 	heartbeatCtx, cancel := context.WithCancel(ctx)

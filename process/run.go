@@ -1,7 +1,6 @@
 package process
 
 import (
-	"fmt"
 	"os/exec"
 	"strings"
 
@@ -16,5 +15,5 @@ func Run(l logger.Logger, command string, arg ...string) (string, error) {
 		return "", err
 	}
 
-	return strings.Trim(fmt.Sprintf("%s", output), "\n"), nil
+	return strings.Trim(string(output), "\n"), nil
 }

@@ -41,7 +41,7 @@ var KubernetesBootstrapCommand = cli.Command{
 	Name:        "kubernetes-bootstrap",
 	Usage:       "Harness used internally by the agent to run jobs on Kubernetes",
 	Category:    categoryInternal,
-	Description: bootstrapHelpDescription,
+	Description: kubernetesBootstrapHelpDescription,
 	Flags: []cli.Flag{
 		KubernetesContainerIDFlag,
 

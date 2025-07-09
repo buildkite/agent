@@ -18,7 +18,6 @@ type TestOpenTracingSpan struct {
 	ctx      opentracing.SpanContext
 	finished bool
 	fields   []log.Field
-	err      error
 	tags     map[string]any
 }
 

@@ -53,7 +53,7 @@ func isBinaryExecutable(path string) (bool, error) {
 		return false, fmt.Errorf("open file %q: %w", path, err)
 	}
 
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // File is only open for read.
 
 	fileInfo, err := f.Stat()
 	if err != nil {
