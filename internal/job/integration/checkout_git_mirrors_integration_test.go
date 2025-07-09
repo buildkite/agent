@@ -718,3 +718,79 @@ func TestGitMirrorEnv(t *testing.T) {
 		t.Errorf("gitMirrorPath = %q, want prefix %q", gitMirrorPath, tester.GitMirrorsDir)
 	}
 }
+
+func TestCheckingOutWithCustomRefspec_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
+
+	// Create a custom ref in the repository that's different from main
+	customRef := "refs/custom/test-ref"
+	out, err := tester.Repo.Execute("update-ref", customRef, "HEAD")
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(update-ref, %q, HEAD) error = %v\nout = %s", customRef, err, out)
+	}
+
+	// Create a new commit on a branch that's not in the custom ref
+	out, err = tester.Repo.Execute("checkout", "-b", "different-branch")
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(checkout, -b, different-branch) error = %v\nout = %s", err, out)
+	}
+
+	differentFile := "different.txt"
+	if err := os.WriteFile(filepath.Join(tester.Repo.Path, differentFile), []byte("different content"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile(%s, different content, 0o600) = %v", differentFile, err)
+	}
+
+	out, err = tester.Repo.Execute("add", differentFile)
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(add, %s) error = %v\nout = %s", differentFile, err, out)
+	}
+
+	out, err = tester.Repo.Execute("commit", "-m", "Different commit")
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(commit, -m, Different commit) error = %v\nout = %s", err, out)
+	}
+
+	// Go back to main
+	out, err = tester.Repo.Execute("checkout", "main")
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(checkout, main) error = %v\nout = %s", err, out)
+	}
+
+	env := []string{
+		"BUILDKITE_REFSPEC=" + customRef,
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// With the fix: the mirror should fetch the custom refspec instead of the branch
+	git.ExpectAll([][]any{
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}

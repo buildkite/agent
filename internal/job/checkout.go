@@ -392,31 +392,31 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	}
 
 	if isMainRepository {
-		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
+		var refspecs []string
+
+		switch {
+		case e.RefSpec != "":
+			// If a custom refspec is provided, use it instead of the branch
+			e.shell.Commentf("Fetching and mirroring custom refspec %s", e.RefSpec)
+			refspecs = []string{e.RefSpec}
+		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
 			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
-
-			// Fetch the PR head from the upstream repository into the mirror.
-			if err := gitFetch(ctx, gitFetchArgs{
-				Shell:      e.shell,
-				GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
-				Repository: "origin",
-				RefSpecs:   []string{refspec},
-				Retry:      true,
-			}); err != nil {
-				return "", err
-			}
-
-		} else {
+			refspecs = []string{refspec}
+		default:
 			// Fetch the build branch from the upstream repository into the mirror.
-			if err := gitFetch(ctx, gitFetchArgs{
-				Shell:      e.shell,
-				GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
-				Repository: "origin",
-				RefSpecs:   []string{e.Branch},
-			}); err != nil {
-				return "", err
-			}
+			refspecs = []string{e.Branch}
+		}
+
+		// Fetch the refspecs from the upstream repository into the mirror.
+		if err := gitFetch(ctx, gitFetchArgs{
+			Shell:      e.shell,
+			GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
+			Repository: "origin",
+			RefSpecs:   refspecs,
+			Retry:      e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"),
+		}); err != nil {
+			return "", err
 		}
 	} else { // not the main repo.
 
