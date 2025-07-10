@@ -113,7 +113,7 @@ func (u *azureBlobUploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartET
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // File open for read only.
 
 	blobName := path.Join(u.loc.BlobPath, u.artifact.Path)
 

@@ -173,7 +173,7 @@ func (fs *FakeAPIServer) handleJobAcquire(rw http.ResponseWriter, req *http.Requ
 		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", job.Job, err), http.StatusInternalServerError)
 		return
 	}
-	rw.Write(out)
+	rw.Write(out) //nolint:errcheck // Test should fail on incomplete response.
 }
 
 func (fs *FakeAPIServer) handleJobAccept(rw http.ResponseWriter, req *http.Request) {
@@ -207,7 +207,7 @@ func (fs *FakeAPIServer) handleJobAccept(rw http.ResponseWriter, req *http.Reque
 		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", job.Job, err), http.StatusInternalServerError)
 		return
 	}
-	rw.Write(out)
+	rw.Write(out) //nolint:errcheck // Test should fail on incomplete response.
 }
 
 func (fs *FakeAPIServer) handleJobStart(rw http.ResponseWriter, req *http.Request) {
@@ -235,7 +235,7 @@ func (fs *FakeAPIServer) handleJobStart(rw http.ResponseWriter, req *http.Reques
 
 	job.State = JobStateRunning
 
-	rw.Write([]byte("{}"))
+	rw.Write([]byte("{}")) //nolint:errcheck // Test should fail on incomplete response.
 }
 
 func (fs *FakeAPIServer) handleJobFinish(rw http.ResponseWriter, req *http.Request) {
@@ -275,7 +275,7 @@ func (fs *FakeAPIServer) handleJobFinish(rw http.ResponseWriter, req *http.Reque
 		agent.IgnoreInDispatches = *ignore
 	}
 
-	rw.Write([]byte("{}"))
+	rw.Write([]byte("{}")) //nolint:errcheck // Test should fail on incomplete response.
 }
 
 func (fs *FakeAPIServer) handleJobChunks(rw http.ResponseWriter, req *http.Request) {
@@ -354,7 +354,7 @@ func (fs *FakeAPIServer) handlePing(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", ping, err), http.StatusInternalServerError)
 		return
 	}
-	rw.Write(out)
+	rw.Write(out) //nolint:errcheck // Test should fail on incomplete response.
 }
 
 func (fs *FakeAPIServer) handleHeartbeat(rw http.ResponseWriter, req *http.Request) {
@@ -381,7 +381,7 @@ func (fs *FakeAPIServer) handleHeartbeat(rw http.ResponseWriter, req *http.Reque
 		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", hb, err), http.StatusInternalServerError)
 		return
 	}
-	rw.Write(out)
+	rw.Write(out) //nolint:errcheck // Test should fail on incomplete response.
 }
 
 func (fs *FakeAPIServer) handleRegister(rw http.ResponseWriter, req *http.Request) {
@@ -398,7 +398,7 @@ func (fs *FakeAPIServer) handleRegister(rw http.ResponseWriter, req *http.Reques
 		http.Error(rw, encodeMsgf("json.Marshal(%v) = %v", reg, err), http.StatusInternalServerError)
 		return
 	}
-	rw.Write(out)
+	rw.Write(out) //nolint:errcheck // Test should fail on incomplete response.
 }
 
 func encodeMsg(msg any) string {

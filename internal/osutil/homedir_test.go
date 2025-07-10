@@ -11,8 +11,8 @@ func TestUserHomeDir(t *testing.T) {
 	origHome := os.Getenv("HOME")
 	origUserProfile := os.Getenv("USERPROFILE")
 	t.Cleanup(func() {
-		os.Setenv("HOME", origHome)
-		os.Setenv("USERPROFILE", origUserProfile)
+		os.Setenv("HOME", origHome)               //nolint:errcheck // Restoring $HOME is best effort.
+		os.Setenv("USERPROFILE", origUserProfile) //nolint:errcheck // Restoring $USERPROFILE is best effort.
 	})
 
 	type testCase struct {
@@ -37,8 +37,12 @@ func TestUserHomeDir(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		os.Setenv("HOME", test.home)
-		os.Setenv("USERPROFILE", test.userProfile)
+		if err := os.Setenv("HOME", test.home); err != nil {
+			t.Fatalf("os.Setenv(HOME, %q) = %v", test.home, err)
+		}
+		if err := os.Setenv("USERPROFILE", test.userProfile); err != nil {
+			t.Fatalf("os.Setenv(USERPROFILE, %q) = %v", test.home, err)
+		}
 		got, err := UserHomeDir()
 		if err != nil {
 			t.Errorf("HOME=%q USERPROFILE=%q UserHomeDir() error = %v", test.home, test.userProfile, err)

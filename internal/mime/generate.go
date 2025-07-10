@@ -57,8 +57,11 @@ func writeMimeFile(file string, data any) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return mimeFileTemplate.Execute(f, data)
+	defer f.Close() //nolint:errcheck // Best-effort cleanup - primary Close error is returned.
+	if err := mimeFileTemplate.Execute(f, data); err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 func addApacheTypes(types map[string]string) error {

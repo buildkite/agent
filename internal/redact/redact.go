@@ -31,10 +31,15 @@ func Redacted([]byte) []byte { return []byte("[REDACTED]") }
 func String(input string, needles []string) string {
 	var sb strings.Builder
 	// strings.Builder.Write doesn't return an error, so neither should a
-	// Replacer that writes to it.
+	// Replacer that writes to it. If there is a surprise error, that's panic
+	// territory.
 	repl := New(&sb, needles)
-	repl.Write([]byte(input))
-	repl.Flush()
+	if _, err := repl.Write([]byte(input)); err != nil {
+		panic("Replacer failed to write to strings.Builder?")
+	}
+	if err := repl.Flush(); err != nil {
+		panic("Replacer failed to flush to strings.Builder?")
+	}
 	return sb.String()
 }
 

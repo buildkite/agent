@@ -38,7 +38,9 @@ func TestShebangLine(t *testing.T) {
 			if err != nil {
 				t.Fatalf("os.CreateTemp(TestShebangLine-*) error = %v", err)
 			}
-			defer os.Remove(f.Name())
+			t.Cleanup(func() {
+				os.Remove(f.Name()) //nolint:errcheck // File removal is best-effort cleanup.
+			})
 
 			if _, err := f.WriteString(test.contents); err != nil {
 				t.Fatalf("f.WriteString(%q) error = %v", test.contents, err)

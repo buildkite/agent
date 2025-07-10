@@ -38,7 +38,7 @@ type stopper func()
 func noopStopper() {}
 
 func (e *Executor) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	switch e.ExecutorConfig.TracingBackend {
+	switch e.TracingBackend {
 	case tracetools.BackendDatadog:
 		// Newer versions of the tracing libs print out diagnostic info which spams the
 		// Buildkite agent logs. Disable it by default unless it's been explicitly set.
@@ -55,8 +55,8 @@ func (e *Executor) startTracing(ctx context.Context) (tracetools.Span, context.C
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 
 	default:
-		e.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", e.ExecutorConfig.TracingBackend)
-		e.ExecutorConfig.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the job's tracking backend
+		e.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", e.TracingBackend)
+		e.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the job's tracking backend
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 	}
 }
@@ -74,7 +74,7 @@ func (e *Executor) ddResourceName() string {
 // abstraction so the agent can support multiple libraries if needbe.
 func (e *Executor) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	opts := []tracer.StartOption{
-		tracer.WithService(e.ExecutorConfig.TracingServiceName),
+		tracer.WithService(e.TracingServiceName),
 		tracer.WithSampler(tracer.NewAllSampler()),
 		tracer.WithAnalytics(true),
 	}
@@ -101,7 +101,7 @@ func (e *Executor) startTracingDatadog(ctx context.Context) (tracetools.Span, co
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
 func (e *Executor) extractDDTraceCtx() opentracing.SpanContext {
-	sctx, err := tracetools.DecodeTraceContext(e.shell.Env.Dump(), e.ExecutorConfig.TraceContextCodec)
+	sctx, err := tracetools.DecodeTraceContext(e.shell.Env.Dump(), e.TraceContextCodec)
 	if err != nil {
 		// Return nil so a new span will be created
 		return nil
@@ -149,7 +149,7 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	}
 
 	attributes := []attribute.KeyValue{
-		semconv.ServiceNameKey.String(e.ExecutorConfig.TracingServiceName),
+		semconv.ServiceNameKey.String(e.TracingServiceName),
 		semconv.ServiceVersionKey.String(version.Version()),
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
@@ -204,17 +204,17 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 // technically a breaking change to the behaviour, and if the server-side tracing
 // isn't set up correctly, agent traces may end up without root spans to link to
 func (e *Executor) contextWithTraceparentIfEnabled(ctx context.Context) context.Context {
-	if !e.ExecutorConfig.TracingPropagateTraceparent {
+	if !e.TracingPropagateTraceparent {
 		return ctx
 	}
 
-	if e.ExecutorConfig.TracingTraceParent == "" {
+	if e.TracingTraceParent == "" {
 		e.shell.Warningf("tracing-propagate-traceparent enabled, but no traceparent provided by server")
 		return ctx
 	}
 
 	return otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier{
-		"traceparent": e.ExecutorConfig.TracingTraceParent,
+		"traceparent": e.TracingTraceParent,
 	})
 }
 

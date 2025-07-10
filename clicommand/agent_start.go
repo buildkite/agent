@@ -797,6 +797,7 @@ var AgentStartCommand = cli.Command{
 
 		// used later to force the shutdown of the agent
 		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {

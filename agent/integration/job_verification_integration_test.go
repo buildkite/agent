@@ -705,6 +705,6 @@ func signStep(
 	if err != nil {
 		t.Fatalf("signing step: %v", err)
 	}
-	stepWithInvariants.CommandStep.Signature = signature
+	stepWithInvariants.Signature = signature
 	return stepWithInvariants.CommandStep
 }

@@ -15,11 +15,6 @@ import (
 	"github.com/opentracing/opentracing-go/mocktracer"
 )
 
-// nullLogger is meant to make Datadog tracing logs go nowhere during tests.
-type nullLogger struct{}
-
-func (n nullLogger) Log(_ string) {}
-
 func stubGlobalTracer() func() {
 	oriTracer := opentracing.GlobalTracer()
 	opentracing.SetGlobalTracer(mocktracer.New())
@@ -121,7 +116,7 @@ func TestEncodeTraceContext(t *testing.T) {
 			parent := opentracing.StartSpan("job.parent")
 			ctx = opentracing.ContextWithSpan(ctx, parent)
 
-			span, ctx := opentracing.StartSpanFromContext(ctx, "job.run")
+			span, _ := opentracing.StartSpanFromContext(ctx, "job.run")
 			env := map[string]string{}
 			if err := EncodeTraceContext(span, env, codec); err != nil {
 				t.Fatalf("EncodeTraceContext(span, %v, %v) error = %v", env, codec, err)

@@ -53,7 +53,7 @@ func TestPing(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() { svr.Close() }) //nolint:errcheck // Server shutdown is best-effort
 
 	if err := cli.Ping(ctx); err != nil {
 		t.Errorf("cli.Ping(ctx) = %v", err)
@@ -66,7 +66,7 @@ func TestLockOperations(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() { svr.Close() }) //nolint:errcheck // Server shutdown is best-effort
 
 	const key = "llama"
 

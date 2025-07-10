@@ -317,8 +317,8 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	defer io.Copy(io.Discard, resp.Body)
+	defer resp.Body.Close()              //nolint:errcheck // This is idiomatic for response bodies.
+	defer io.Copy(io.Discard, resp.Body) //nolint:errcheck // Body is a reader, io.Discard never errors.
 
 	response := newResponse(resp)
 
@@ -330,7 +330,9 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 
 	if v != nil {
 		if w, ok := v.(io.Writer); ok {
-			io.Copy(w, resp.Body)
+			if _, err := io.Copy(w, resp.Body); err != nil {
+				return response, fmt.Errorf("failed to copy response into destination %T: %v", w, err)
+			}
 		} else {
 			if strings.Contains(req.Header.Get("Content-Type"), "application/msgpack") {
 				return response, errors.New("Msgpack not supported")
@@ -375,8 +377,13 @@ func checkResponse(r *http.Response) error {
 
 	errorResponse := &ErrorResponse{Response: r}
 	data, err := io.ReadAll(r.Body)
-	if err == nil && data != nil {
-		json.Unmarshal(data, errorResponse)
+	if err != nil {
+		return errorResponse
+	}
+	if data != nil {
+		// Unmarshaling the error JSON is best-effort, but we could consider
+		// reporting unmarshaling problems.
+		json.Unmarshal(data, errorResponse) //nolint:errcheck // ^^
 	}
 
 	return errorResponse

@@ -122,13 +122,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell.
 	if e.shell == nil {
 		sh, err := shell.New(
-			shell.WithDebug(e.ExecutorConfig.Debug),
+			shell.WithDebug(e.Debug),
 			shell.WithEnv(environ),
 			shell.WithLogger(preRedactedLogger), // shell -> logger -> redactor -> real stderr
-			shell.WithInterruptSignal(e.ExecutorConfig.CancelSignal),
-			shell.WithPTY(e.ExecutorConfig.RunInPty),
+			shell.WithInterruptSignal(e.CancelSignal),
+			shell.WithPTY(e.RunInPty),
 			shell.WithStdout(preRedactedStdout), // shell -> redactor -> real stdout
-			shell.WithSignalGracePeriod(e.ExecutorConfig.SignalGracePeriod),
+			shell.WithSignalGracePeriod(e.SignalGracePeriod),
 			shell.WithTraceContextCodec(e.TraceContextCodec),
 		)
 		if err != nil {
@@ -345,7 +345,7 @@ func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
 func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	scopeName := e.tracingImplementationSpecificHookScope(hookCfg.Scope)
 	spanName := e.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -420,7 +420,7 @@ Hooks of this kind are unfortunately not supported on Windows, as we have no way
 	}
 }
 
-func (e *Executor) runUnwrappedHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
+func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookConfig) error {
 	environ := hookCfg.Env.Copy()
 
 	environ.Set("BUILDKITE_HOOK_PHASE", hookCfg.Name)
@@ -605,7 +605,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	e.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
-	toRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())
+	toRedact, short, err := redact.Vars(e.RedactedVars, e.shell.Env.DumpPairs())
 	if err != nil {
 		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
 	}
@@ -620,7 +620,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
-	executorConfigEnvChanges := e.ExecutorConfig.ReadFromEnvironment(e.shell.Env)
+	executorConfigEnvChanges := e.ReadFromEnvironment(e.shell.Env)
 
 	// Print out the env vars that changed. As we go through each
 	// one, we'll determine if it was a special environment variable
@@ -727,8 +727,8 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// If the hook doesn't exist, that's fine, we'll just skip it
-			if e.ExecutorConfig.Debug {
-				e.shell.Logger.Commentf("Local hook %s doesn't exist: %s, skipping", name, err)
+			if e.Debug {
+				e.shell.Commentf("Local hook %s doesn't exist: %s, skipping", name, err)
 			}
 			return nil
 		}
@@ -740,7 +740,7 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	// For high-security configs, we allow the disabling of local hooks.
-	localHooksEnabled := e.ExecutorConfig.LocalHooksEnabled
+	localHooksEnabled := e.LocalHooksEnabled
 
 	// Allow hooks to disable local hooks by setting BUILDKITE_NO_LOCAL_HOOKS=true
 	noLocalHooks, _ := e.shell.Env.Get("BUILDKITE_NO_LOCAL_HOOKS")
@@ -790,7 +790,7 @@ func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repo
 // setUp is run before all the phases run. It's responsible for initializing the
 // job environment
 func (e *Executor) setUp(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -832,7 +832,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 			if strings.HasPrefix(envar, "BUILDKITE_AGENT_ACCESS_TOKEN=") {
 				e.shell.Printf("BUILDKITE_AGENT_ACCESS_TOKEN=******************")
 			} else if strings.HasPrefix(envar, "BUILDKITE") || strings.HasPrefix(envar, "CI") || strings.HasPrefix(envar, "PATH") {
-				e.shell.Printf("%s", strings.Replace(envar, "\n", "\\n", -1))
+				e.shell.Printf("%s", strings.ReplaceAll(envar, "\n", "\\n"))
 			}
 		}
 	}
@@ -849,7 +849,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 
 // tearDown is called before the executor exits, even on error
 func (e *Executor) tearDown(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -890,7 +890,7 @@ func (e *Executor) tearDown(ctx context.Context) error {
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
 func (e *Executor) runPreCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(err) }()
 
 	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
@@ -920,7 +920,7 @@ func (e *Executor) runCommand(ctx context.Context) error {
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
 func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(err) }()
 
 	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
@@ -936,7 +936,7 @@ func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr error) {
 	var preCommandErr error
 
-	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.TracingBackend)
 	defer func() {
 		span.FinishWithError(hookErr)
 	}()
@@ -1002,7 +1002,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	defer e.redactors.Flush()
 
 	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -1015,7 +1015,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		return fmt.Errorf("The command phase has no `command` to execute. Provide a `command` field in your step configuration, or define a `command` hook in a step plug-in, your repository `.buildkite/hooks`, or agent `hooks-path`.")
 	}
 
-	scriptFileName := strings.Replace(e.Command, "\n", "", -1)
+	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
 	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && osutil.FileExists(pathToCommand)
 	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
@@ -1089,7 +1089,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		// command-eval agents, such risks are everpresent since the master
 		// can tell the agent to do anything anyway, but no-command-eval agents
 		// shouldn't be vulnerable to this!
-		if e.ExecutorConfig.CommandEval {
+		if e.CommandEval {
 			// Make script executable
 			if err = osutil.ChmodExecutable(pathToCommand); err != nil {
 				e.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
@@ -1204,7 +1204,7 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 //
 //	(returned shell.Logger) -> redactor 2 -> stderr
 func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
-	varsToRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, environ.DumpPairs())
+	varsToRedact, short, err := redact.Vars(e.RedactedVars, environ.DumpPairs())
 	if err != nil {
 		log.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
 	}
@@ -1214,7 +1214,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	}
 
 	if e.Debug {
-		log.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
+		log.Commentf("Enabling output redaction for values from environment variables matching: %v", e.RedactedVars)
 	}
 
 	needles := make([]string, 0, len(varsToRedact))

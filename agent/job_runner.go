@@ -271,7 +271,9 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 			return nil, fmt.Errorf("failed to set permissions on job log tmpfile %s: %w", tmpFile.Name(), err)
 		}
 
-		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
+		if err := os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name()); err != nil {
+			return nil, fmt.Errorf("failed to set BUILDKITE_JOB_LOG_TMPFILE: %v", err)
+		}
 		outputWriter = io.MultiWriter(outputWriter, tmpFile)
 	}
 
@@ -457,7 +459,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envShellFile != nil {
 		for key, value := range env {
-			if _, err := r.envShellFile.WriteString(fmt.Sprintf("%s=%q\n", key, value)); err != nil {
+			if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
 				return nil, err
 			}
 		}
@@ -803,7 +805,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 }
 
 func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, times map[string]string) {
-	roko.NewRetrier(
+	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
@@ -819,6 +821,10 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 
 		return err
 	})
+
+	if err != nil {
+		r.agentLogger.Error("Ultimately unable to upload header times: %v", err)
+	}
 }
 
 // jobLogger is just a simple wrapper around a JSON Logger that satisfies the

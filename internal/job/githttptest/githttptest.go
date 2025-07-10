@@ -38,7 +38,7 @@ func NewServer() *Server {
 
 func (s *Server) Close() {
 	s.Server.Close()
-	os.RemoveAll(s.repositories)
+	os.RemoveAll(s.repositories) //nolint:errcheck // Repos removal is best-effort
 }
 
 func (s *Server) RepoURL(repoName string) string {
@@ -63,7 +63,7 @@ func (s *Server) InitRepository(repoName string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer os.RemoveAll(tempDir) //nolint:errcheck // Best-effort cleanup
 
 	normalInitCmd := exec.Command("git", "init", tempDir)
 	if out, err := normalInitCmd.CombinedOutput(); err != nil {
@@ -126,7 +126,7 @@ func (s *Server) PushBranch(repoName, branchName string) (string, []byte, error)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer os.RemoveAll(tempDir) //nolint:errcheck // Best-effort cleanup
 
 	cloneCmd := exec.Command("git", "clone", s.RepoURL(repoName), tempDir)
 	if out, err := cloneCmd.CombinedOutput(); err != nil {
@@ -242,8 +242,7 @@ func (s *Server) handleGitUploadPack(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/x-git-upload-pack-result")
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, buf)
-
+	io.Copy(w, buf) //nolint:errcheck // The test should fail (incomplete response)
 }
 
 // handleGitReceivePack handles the git-receive-pack endpoint (used for git push)
@@ -254,8 +253,7 @@ func (s *Server) handleGitReceivePack(w http.ResponseWriter, r *http.Request) {
 	repoName = strings.TrimSuffix(repoName, ".git")
 
 	if !isValidRepoName(repoName) {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Invalid repository name")
+		http.Error(w, "Invalid repository name", http.StatusBadRequest)
 		return
 	}
 
@@ -263,8 +261,7 @@ func (s *Server) handleGitReceivePack(w http.ResponseWriter, r *http.Request) {
 
 	// Check if repository exists
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(w, "Repository not found")
+		http.Error(w, "Repository not found", http.StatusNotFound)
 		return
 	}
 
@@ -282,7 +279,7 @@ func (s *Server) handleGitReceivePack(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, buf)
+	io.Copy(w, buf) //nolint:errcheck // The test should fail (incomplete response)
 }
 
 // handleGitInfoRefs handles the info/refs endpoint
@@ -293,8 +290,7 @@ func (s *Server) handleGitInfoRefs(w http.ResponseWriter, r *http.Request) {
 	repoName = strings.TrimSuffix(repoName, ".git")
 
 	if !isValidRepoName(repoName) {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Invalid repository name")
+		http.Error(w, "Invalid repository name", http.StatusBadRequest)
 		return
 	}
 
@@ -302,8 +298,7 @@ func (s *Server) handleGitInfoRefs(w http.ResponseWriter, r *http.Request) {
 
 	service := r.URL.Query().Get("service")
 	if service != "git-upload-pack" && service != "git-receive-pack" {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Invalid service")
+		http.Error(w, "Invalid service", http.StatusBadRequest)
 		return
 	}
 
@@ -325,6 +320,6 @@ func (s *Server) handleGitInfoRefs(w http.ResponseWriter, r *http.Request) {
 
 	// Smart HTTP protocol requires a specific preamble
 	pktLine := fmt.Sprintf("# service=%s\n", service)
-	fmt.Fprintf(w, "%04x%s0000", len(pktLine)+4, pktLine)
-	io.Copy(w, buf)
+	fmt.Fprintf(w, "%04x%s0000", len(pktLine)+4, pktLine) //nolint:errcheck // The test should fail (incomplete response)
+	io.Copy(w, buf)                                       //nolint:errcheck // The test should fail (incomplete response)
 }

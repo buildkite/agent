@@ -34,8 +34,8 @@ func (f *File) Load() error {
 		return fmt.Errorf("opening file %s: %w", f.Path, err)
 	}
 
-	// Make sure the config file is closed when this function finishes
-	defer file.Close()
+	// Make sure the config file is closed when this function finishes.
+	defer file.Close() //nolint:errcheck // it's only open for reading
 
 	// Get all the lines in the file
 	var lines []string
@@ -139,9 +139,9 @@ func parseLine(line string) (key, value string, err error) {
 		value = strings.Trim(value, "\"'")
 
 		// expand quotes
-		value = strings.Replace(value, "\\\"", "\"", -1)
+		value = strings.ReplaceAll(value, "\\\"", "\"")
 		// expand newlines
-		value = strings.Replace(value, "\\n", "\n", -1)
+		value = strings.ReplaceAll(value, "\\n", "\n")
 	}
 
 	return key, value, nil

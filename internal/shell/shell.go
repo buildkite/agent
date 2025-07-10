@@ -210,10 +210,10 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 }
 
 // Interrupt interrupts the running process, if there is one.
-func (s *Shell) Interrupt() { s.proc.Load().Interrupt() }
+func (s *Shell) Interrupt() error { return s.proc.Load().Interrupt() }
 
 // Terminate terminates the running process, if there is one.
-func (s *Shell) Terminate() { s.proc.Load().Terminate() }
+func (s *Shell) Terminate() error { return s.proc.Load().Terminate() }
 
 // Returns the WaitStatus of the shell's process.
 //
@@ -505,7 +505,7 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 	}
 	if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
 		if s.debug {
-			s.Logger.Warningf("Failed to encode trace context: %v", err)
+			s.Warningf("Failed to encode trace context: %v", err)
 		}
 		return
 	}
@@ -572,13 +572,13 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		// Display normally-hidden output streams using log streamer.
 		if cmdCfg.Stdout == io.Discard {
 			stdOutStreamer := NewLoggerStreamer(s.Logger)
-			defer stdOutStreamer.Close()
+			defer stdOutStreamer.Close() //nolint:errcheck // If this fails, YOLO?
 			cmdCfg.Stdout = stdOutStreamer
 		}
 
 		if cmdCfg.Stderr == io.Discard {
 			stdErrStreamer := NewLoggerStreamer(s.Logger)
-			defer stdErrStreamer.Close()
+			defer stdErrStreamer.Close() //nolint:errcheck // If this fails, YOLO?
 			cmdCfg.Stderr = stdErrStreamer
 		}
 

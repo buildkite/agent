@@ -159,6 +159,7 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 	// workers will avoid slamming the runtime (as could happen with a
 	// goroutine per file).
 	wctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
 	var wg sync.WaitGroup
 	for range runtime.GOMAXPROCS(0) {
 		wg.Add(1)
@@ -652,12 +653,6 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 
 func (a *artifactUploadWorker) stateUpdater(ctx context.Context, resultsCh <-chan workUnitResult, stateUpdaterErrCh chan<- error) {
 	var errs []error
-	defer func() {
-		if len(errs) > 0 {
-			stateUpdaterErrCh <- errors.Join(errs...)
-		}
-		close(stateUpdaterErrCh)
-	}()
 
 	// When this ticks, upload any pending artifact states as a batch.
 	updateTicker := time.NewTicker(1 * time.Second)
@@ -666,7 +661,7 @@ selectLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			break selectLoop
 
 		case <-updateTicker.C:
 			// Note: updateStates removes trackers for completed states.
@@ -711,7 +706,11 @@ selectLoop:
 	if err := a.updateStates(ctx); err != nil {
 		errs = append(errs, err)
 	}
-	return
+
+	if len(errs) > 0 {
+		stateUpdaterErrCh <- errors.Join(errs...)
+	}
+	close(stateUpdaterErrCh)
 }
 
 // updateStates uploads terminal artifact states to Buildkite in a batch.

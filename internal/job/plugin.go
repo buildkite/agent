@@ -26,7 +26,7 @@ type pluginCheckout struct {
 }
 
 func (e *Executor) hasPlugins() bool {
-	return e.ExecutorConfig.Plugins != ""
+	return e.Plugins != ""
 }
 
 func (e *Executor) preparePlugins() error {
@@ -41,10 +41,10 @@ func (e *Executor) preparePlugins() error {
 	}
 
 	// Check if we can run plugins (disabled via --no-plugins)
-	if !e.ExecutorConfig.PluginsEnabled {
-		if !e.ExecutorConfig.LocalHooksEnabled {
+	if !e.PluginsEnabled {
+		if !e.LocalHooksEnabled {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
-		} else if !e.ExecutorConfig.CommandEval {
+		} else if !e.CommandEval {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
 		} else {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
@@ -52,7 +52,7 @@ func (e *Executor) preparePlugins() error {
 	}
 
 	var err error
-	e.plugins, err = plugin.CreateFromJSON(e.ExecutorConfig.Plugins)
+	e.plugins, err = plugin.CreateFromJSON(e.Plugins)
 	if err != nil {
 		return fmt.Errorf("Failed to parse a plugin definition: %w", err)
 	}
@@ -65,7 +65,7 @@ func (e *Executor) preparePlugins() error {
 }
 
 func (e *Executor) validatePluginCheckout(ctx context.Context, checkout *pluginCheckout) error {
-	if !e.ExecutorConfig.PluginValidation {
+	if !e.PluginValidation {
 		return nil
 	}
 
@@ -218,12 +218,12 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 		}
 
 		if strictSingleHookTypes[name] && hookTypeSeen[name] {
-			if e.ExecutorConfig.StrictSingleHooks {
-				e.shell.Logger.Warningf("Ignoring additional %s hook (%s plugin, position %d)",
+			if e.StrictSingleHooks {
+				e.shell.Warningf("Ignoring additional %s hook (%s plugin, position %d)",
 					name, p.Plugin.Name(), i+1)
 				continue
 			} else {
-				e.shell.Logger.Warningf("The additional %s hook (%s plugin, position %d) "+
+				e.shell.Warningf("The additional %s hook (%s plugin, position %d) "+
 					"will be ignored in a future version of the agent. To enforce "+
 					"single %s hooks now, pass the --strict-single-hooks flag, set "+
 					"the environment variable BUILDKITE_STRICT_SINGLE_HOOKS=true, "+
@@ -235,18 +235,18 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 
 		envMap, err := p.ConfigurationToEnvironment()
 		if dnerr := (&plugin.DeprecatedNameErrors{}); errors.As(err, &dnerr) {
-			e.shell.Logger.Headerf("Deprecated environment variables for plugin %s", p.Plugin.Name())
-			e.shell.Logger.Printf("%s", strings.Join([]string{
+			e.shell.Headerf("Deprecated environment variables for plugin %s", p.Plugin.Name())
+			e.shell.Printf("%s", strings.Join([]string{
 				"The way that environment variables are derived from the plugin configuration is changing.",
 				"We'll export both the deprecated and the replacement names for now,",
 				"You may be able to avoid this by removing consecutive underscore, hyphen, or whitespace",
 				"characters in your plugin configuration.",
 			}, " "))
 			for _, err := range dnerr.Unwrap() {
-				e.shell.Logger.Printf("%s", err.Error())
+				e.shell.Printf("%s", err.Error())
 			}
 		} else if err != nil {
-			e.shell.Logger.Warningf("Error configuring plugin environment: %s", err)
+			e.shell.Warningf("Error configuring plugin environment: %s", err)
 		}
 
 		if err := e.executeHook(ctx, HookConfig{
@@ -257,8 +257,8 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 			PluginName: p.Plugin.Name(),
 			SpanAttributes: map[string]string{
 				"plugin.name":        p.Plugin.Name(),
-				"plugin.version":     p.Plugin.Version,
-				"plugin.location":    p.Plugin.Location,
+				"plugin.version":     p.Version,
+				"plugin.location":    p.Location,
 				"plugin.is_vendored": strconv.FormatBool(p.Vendored),
 			},
 		}); err != nil {
@@ -325,7 +325,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
 	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
 	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
-	if e.ExecutorConfig.PluginsAlwaysCloneFresh && osutil.FileExists(pluginDirectory) {
+	if e.PluginsAlwaysCloneFresh && osutil.FileExists(pluginDirectory) {
 		e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
 		err = os.RemoveAll(pluginDirectory)
 		if err != nil {

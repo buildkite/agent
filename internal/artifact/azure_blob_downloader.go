@@ -51,7 +51,8 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	// Best-effort close for cleanup - Close error returned for checking below.
+	defer f.Close() //nolint:errcheck
 
 	fullPath := path.Join(loc.BlobPath, d.conf.Path)
 

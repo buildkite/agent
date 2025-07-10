@@ -11,9 +11,13 @@ func BenchmarkBMRedactor(b *testing.B) {
 	b.ResetTimer()
 	r := NewBMRedactor(io.Discard, "[REDACTED]", bigLipsumSecrets)
 	for range b.N {
-		fmt.Fprintln(r, bigLipsum)
+		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
+			b.Errorf("fmt.Fprintln(r, bigLipsum) error = %v", err)
+		}
 	}
-	r.Flush()
+	if err := r.Flush(); err != nil {
+		b.Errorf("r.Flush() = %v", err)
+	}
 }
 
 // BoyerMooreRedactor is a redactor based on Boyer-Moore, and is kept around for

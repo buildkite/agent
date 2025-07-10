@@ -288,7 +288,7 @@ func parseGittableURL(ref string) (*url.URL, error) {
 			path := matched[3]
 			ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
 		} else {
-			normalizedRef := strings.Replace(ref, "\\", "/", -1)
+			normalizedRef := strings.ReplaceAll(ref, "\\", "/")
 			ref = fmt.Sprintf("file:///%s", strings.TrimPrefix(normalizedRef, "/"))
 		}
 	}

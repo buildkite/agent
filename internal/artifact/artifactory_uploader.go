@@ -173,27 +173,12 @@ func checksumFile(hasher hash.Hash, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // File only open for read.
 	if _, err := io.Copy(hasher, f); err != nil {
 		return "", err
 	}
 
 	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
-}
-
-func sha1File(path string) ([]byte, error) {
-	hasher := sha1.New()
-
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	if _, err := io.Copy(hasher, f); err != nil {
-		return nil, err
-	}
-
-	return hasher.Sum(nil), nil
 }
 
 func (u *ArtifactoryUploader) artifactPath(artifact *api.Artifact) string {

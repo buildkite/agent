@@ -37,7 +37,9 @@ func TestAddingToKnownHosts(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`os.CreateTemp("", "known-hosts") error = %v`, err)
 	}
-	defer os.RemoveAll(f.Name())
+	t.Cleanup(func() {
+		os.RemoveAll(f.Name()) //nolint:errcheck // Best-effort cleanup.
+	})
 	if err := f.Close(); err != nil {
 		t.Fatalf("f.Close() = %v", err)
 	}

@@ -31,7 +31,7 @@ func (t authenticatedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	if req.Body != nil {
 		defer func() {
 			if !reqBodyClosed {
-				req.Body.Close()
+				req.Body.Close() //nolint:errcheck // req.Body is only used in a read-only manner.
 			}
 		}()
 	}

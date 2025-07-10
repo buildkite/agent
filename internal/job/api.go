@@ -21,13 +21,13 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 		return cleanup, nil
 	}
 
-	socketPath, err := jobapi.NewSocketPath(e.ExecutorConfig.SocketsPath)
+	socketPath, err := jobapi.NewSocketPath(e.SocketsPath)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API socket path: %w", err)
 	}
 
 	jobAPIOpts := []jobapi.ServerOpts{}
-	if e.ExecutorConfig.Debug {
+	if e.Debug {
 		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
 	}
 	srv, token, err := jobapi.NewServer(e.shell.Logger, socketPath, e.shell.Env, e.redactors, jobAPIOpts...)
