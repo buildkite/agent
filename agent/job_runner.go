@@ -18,6 +18,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/container"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
@@ -375,7 +376,31 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 			ClientStartTimeout: 5 * time.Minute,
 			ClientLostTimeout:  30 * time.Second,
 		})
-	} else { // not Kubernetes
+	} else if dockerImage := os.Getenv("BUILDKITE_IMAGE"); dockerImage != "" {
+		// Check if Docker is available
+		if !container.IsDockerAvailable() {
+			return nil, fmt.Errorf("BUILDKITE_IMAGE specified but Docker is not available")
+		}
+		
+		// Parse the bootstrap script command
+		cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
+		if err != nil {
+			return nil, fmt.Errorf("splitting bootstrap-script (%q) into tokens: %w", conf.AgentConfiguration.BootstrapScript, err)
+		}
+		
+		r.agentLogger.Info("Using container bootstrap with image: %s", dockerImage)
+		r.process = container.NewRunner(r.agentLogger, container.RunnerConfig{
+			Image:             dockerImage,
+			WorkingDir:        conf.AgentConfiguration.BuildPath,
+			Env:               processEnv,
+			Command:           cmd[0],
+			Args:              cmd[1:],
+			Stdout:            r.jobLogs,
+			Stderr:            r.jobLogs,
+			InterruptSignal:   conf.CancelSignal,
+			SignalGracePeriod: conf.AgentConfiguration.SignalGracePeriod,
+		})
+	} else { // not Kubernetes or Container
 		// The bootstrap-script gets parsed based on the operating system
 		cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
 		if err != nil {

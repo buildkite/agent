@@ -22,6 +22,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/container"
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
@@ -31,6 +32,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
 	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
@@ -1119,6 +1121,15 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		return err
 	}
 
+	// Support new container bootstrap via BUILDKITE_IMAGE
+	if dockerImage, ok := e.shell.Env.Get("BUILDKITE_IMAGE"); ok && dockerImage != "" {
+		if e.Debug {
+			e.shell.Commentf("Detected BUILDKITE_IMAGE environment variable: %s", dockerImage)
+		}
+		err = e.runCommandInContainer(ctx, dockerImage, cmdToExec, interpreter)
+		return err
+	}
+
 	var cmd []string
 	cmd = append(cmd, interpreter...)
 	cmd = append(cmd, cmdToExec)
@@ -1308,4 +1319,112 @@ func (e *Executor) kubernetesSetup(ctx context.Context, environ *env.Environment
 		}
 		e.Cancel()
 	})
+}
+
+// simpleLoggerAdapter adapts shell.Logger to logger.Logger interface
+type simpleLoggerAdapter struct {
+	shell *shell.Shell
+	level logger.Level
+}
+
+func (l *simpleLoggerAdapter) Debug(format string, v ...any) {
+	l.shell.Commentf(format, v...)
+}
+
+func (l *simpleLoggerAdapter) Error(format string, v ...any) {
+	l.shell.Errorf(format, v...)
+}
+
+func (l *simpleLoggerAdapter) Fatal(format string, v ...any) {
+	l.shell.Errorf(format, v...)
+}
+
+func (l *simpleLoggerAdapter) Notice(format string, v ...any) {
+	l.shell.Printf(format, v...)
+}
+
+func (l *simpleLoggerAdapter) Warn(format string, v ...any) {
+	l.shell.Warningf(format, v...)
+}
+
+func (l *simpleLoggerAdapter) Info(format string, v ...any) {
+	l.shell.Printf(format, v...)
+}
+
+func (l *simpleLoggerAdapter) WithFields(fields ...logger.Field) logger.Logger {
+	// Simple implementation - just return self for now
+	return l
+}
+
+func (l *simpleLoggerAdapter) SetLevel(level logger.Level) {
+	l.level = level
+}
+
+func (l *simpleLoggerAdapter) Level() logger.Level {
+	return l.level
+}
+
+// runCommandInContainer executes a command inside a Docker container
+func (e *Executor) runCommandInContainer(ctx context.Context, dockerImage, cmdToExec string, interpreter []string) error {
+	// Check if Docker is available
+	if !container.IsDockerAvailable() {
+		return fmt.Errorf("BUILDKITE_IMAGE specified but Docker is not available")
+	}
+
+	e.shell.Commentf("Running command in container: %s", dockerImage)
+
+	// Get the build checkout path
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if checkoutPath == "" {
+		checkoutPath = e.shell.Getwd()
+	}
+
+	// Prepare the command - if we have an interpreter, we need to combine them
+	var command string
+	var args []string
+	
+	if len(interpreter) > 0 {
+		command = interpreter[0]
+		args = append(interpreter[1:], cmdToExec)
+	} else {
+		// Parse the command into command and args
+		cmdParts, err := shellwords.Split(cmdToExec)
+		if err != nil {
+			return fmt.Errorf("failed to parse command: %w", err)
+		}
+		if len(cmdParts) == 0 {
+			return fmt.Errorf("empty command")
+		}
+		command = cmdParts[0]
+		args = cmdParts[1:]
+	}
+
+	// Convert env pairs to string slice
+	envPairs := e.shell.Env.DumpPairs()
+	envStrings := make([]string, len(envPairs))
+	for i, pair := range envPairs {
+		envStrings[i] = fmt.Sprintf("%s=%s", pair.Name, pair.Value)
+	}
+
+	// Create a simple logger adapter
+	containerLogger := &simpleLoggerAdapter{
+		shell: e.shell,
+		level: logger.INFO,
+	}
+	
+	// Create the container runner
+	runner := container.NewRunner(containerLogger, container.RunnerConfig{
+		Image:             dockerImage,
+		WorkingDir:        checkoutPath,
+		Env:               envStrings,
+		Command:           command,
+		Args:              args,
+		Stdout:            os.Stdout,  // For now, use os.Stdout directly
+		Stderr:            os.Stderr,  // For now, use os.Stderr directly
+		InterruptSignal:   process.Signal(e.CancelSignal),
+		SignalGracePeriod: time.Duration(e.SignalGracePeriod) * time.Second,
+	})
+
+	// Run the container
+	return runner.Run(ctx)
 }
