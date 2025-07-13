@@ -281,7 +281,7 @@ func WriteHookWrapper(
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // Close is checked below.
 
 	var tmpl *template.Template
 	switch templateType {

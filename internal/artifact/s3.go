@@ -113,11 +113,11 @@ func sharedCredentialsProvider() credentials.Provider {
 }
 
 func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRoleProvider {
-	return stscreds.NewWebIdentityRoleProvider(
+	return stscreds.NewWebIdentityRoleProviderWithOptions(
 		sts.New(sess),
 		os.Getenv("AWS_ROLE_ARN"),
 		os.Getenv("AWS_ROLE_SESSION_NAME"),
-		os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE"),
+		stscreds.FetchTokenPath(os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")),
 	)
 }
 

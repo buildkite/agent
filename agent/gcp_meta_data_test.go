@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,8 @@ import (
 )
 
 func TestGCPMetaDataGetPaths(t *testing.T) {
+	ctx := context.Background()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
@@ -26,7 +29,7 @@ func TestGCPMetaDataGetPaths(t *testing.T) {
 			http.Error(w, "not found: "+path, http.StatusNotFound)
 		}
 	}))
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	url, err := url.Parse(ts.URL)
 	if err != nil {
@@ -34,8 +37,12 @@ func TestGCPMetaDataGetPaths(t *testing.T) {
 	}
 
 	old := os.Getenv("GCE_METADATA_HOST")
-	defer os.Setenv("GCE_METADATA_HOST", old)
-	os.Setenv("GCE_METADATA_HOST", url.Host)
+	t.Cleanup(func() {
+		os.Setenv("GCE_METADATA_HOST", old) //nolint:errcheck // Best-effort cleanup.
+	})
+	if err := os.Setenv("GCE_METADATA_HOST", url.Host); err != nil {
+		t.Fatalf("os.Setenv(GCE_METADATA_HOST, %q) = %v", url.Host, err)
+	}
 
 	paths := map[string]string{
 		"truth":     "value",
@@ -43,7 +50,7 @@ func TestGCPMetaDataGetPaths(t *testing.T) {
 		"weird key": "value",
 	}
 
-	values, err := GCPMetaData{}.GetPaths(paths)
+	values, err := GCPMetaData{}.GetPaths(ctx, paths)
 	if err != nil {
 		t.Fatalf("GCPMetadata{}.GetPaths(%v) error = %v", paths, err)
 	}

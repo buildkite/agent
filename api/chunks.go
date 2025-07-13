@@ -21,7 +21,9 @@ func (c *Client) UploadChunk(ctx context.Context, jobId string, chunk *Chunk) (*
 	// Create a compressed buffer of the log content
 	body := &bytes.Buffer{}
 	gzipper := gzip.NewWriter(body)
-	gzipper.Write(chunk.Data)
+	if _, err := gzipper.Write(chunk.Data); err != nil {
+		return nil, err
+	}
 	if err := gzipper.Close(); err != nil {
 		return nil, err
 	}

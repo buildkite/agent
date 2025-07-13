@@ -96,7 +96,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 			// download of "dir/dir/file" vs sub-directories on non-windows agents
 			path := artifact.Path
 			if runtime.GOOS != "windows" {
-				path = strings.Replace(path, `\`, `/`, -1)
+				path = strings.ReplaceAll(path, `\`, `/`)
 			}
 
 			dler := a.createDownloader(artifact, path, destination, s3Clients)

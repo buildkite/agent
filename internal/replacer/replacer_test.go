@@ -101,8 +101,12 @@ func TestReplacerLoremIpsum(t *testing.T) {
 
 			var buf strings.Builder
 			replacer := replacer.New(&buf, test.needles, redact.Redacted)
-			fmt.Fprint(replacer, lipsum)
-			replacer.Flush()
+			if _, err := fmt.Fprint(replacer, lipsum); err != nil {
+				t.Errorf("fmt.Fprint(replacer, lipsum) error = %v", err)
+			}
+			if err := replacer.Flush(); err != nil {
+				t.Errorf("replacer.Flush() = %v", err)
+			}
 
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
@@ -116,10 +120,13 @@ func TestReplacerLoremIpsum(t *testing.T) {
 			var buf strings.Builder
 			replacer := replacer.New(&buf, test.needles, redact.Redacted)
 			for _, c := range []byte(lipsum) {
-				replacer.Write([]byte{c})
+				if _, err := replacer.Write([]byte{c}); err != nil {
+					t.Errorf("replacer.Write([]byte{%d}) error = %v", c, err)
+				}
 			}
-			replacer.Flush()
-
+			if err := replacer.Flush(); err != nil {
+				t.Errorf("replacer.Flush() = %v", err)
+			}
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
 			}
@@ -167,10 +174,13 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 			replacer := replacer.New(&buf, test.needles, redact.Redacted)
 
 			for _, input := range test.inputs {
-				fmt.Fprint(replacer, input)
+				if _, err := fmt.Fprint(replacer, input); err != nil {
+					t.Errorf("fmt.Fprint(replacer, %q) error = %v", input, err)
+				}
 			}
-			replacer.Flush()
-
+			if err := replacer.Flush(); err != nil {
+				t.Errorf("replacer.Flush() = %v", err)
+			}
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
 			}
@@ -185,16 +195,23 @@ func TestReplacerResetMidStream(t *testing.T) {
 	replacer := replacer.New(&buf, []string{"secret1111"}, redact.Redacted)
 
 	// start writing to the stream (no trailing newline, to be extra tricky)
-	replacer.Write([]byte("redact secret1111 but don't redact secret2222 until"))
+	input := "redact secret1111 but don't redact secret2222 until"
+	if _, err := replacer.Write([]byte(input)); err != nil {
+		t.Errorf("replacer.Write(%q) error = %v", input, err)
+	}
 
 	// update the replacer with a new secret
 	//replacer.Flush() // manual flush is NOT necessary before Reset
 	replacer.Reset([]string{"secret1111", "secret2222"})
 
 	// finish writing
-	replacer.Write([]byte(" after secret2222 is added\n"))
-	replacer.Flush()
-
+	input = " after secret2222 is added\n"
+	if _, err := replacer.Write([]byte(input)); err != nil {
+		t.Errorf("replacer.Write(%q) error = %v", input, err)
+	}
+	if err := replacer.Flush(); err != nil {
+		t.Errorf("replacer.Flush() = %v", err)
+	}
 	if got, want := buf.String(), "redact [REDACTED] but don't redact secret2222 until after [REDACTED] is added\n"; got != want {
 		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
@@ -206,9 +223,13 @@ func TestReplacerMultibyte(t *testing.T) {
 	var buf bytes.Buffer
 	replacer := replacer.New(&buf, []string{"ÿ"}, redact.Redacted)
 
-	replacer.Write([]byte("fooÿbar"))
-	replacer.Flush()
-
+	input := "fooÿbar"
+	if _, err := replacer.Write([]byte(input)); err != nil {
+		t.Errorf("replacer.Write(%q) error = %v", input, err)
+	}
+	if err := replacer.Flush(); err != nil {
+		t.Errorf("replacer.Flush() = %v", err)
+	}
 	if got, want := buf.String(), "foo[REDACTED]bar"; got != want {
 		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
@@ -286,11 +307,14 @@ func TestReplacerMultiLine(t *testing.T) {
 
 			var buf strings.Builder
 			r := replacer.New(&buf, []string{secret}, redact.Redacted)
-
 			for _, line := range test.input {
-				fmt.Fprint(r, line)
+				if _, err := fmt.Fprint(r, line); err != nil {
+					t.Errorf("fmt.Fprint(r, %q) error = %v", line, err)
+				}
 			}
-			r.Flush()
+			if err := r.Flush(); err != nil {
+				t.Errorf("r.Flush() = %v", err)
+			}
 
 			if diff := cmp.Diff(buf.String(), test.want); diff != "" {
 				t.Errorf("post-redaction diff (-got +want):\n%s", diff)
@@ -333,9 +357,13 @@ func BenchmarkReplacer(b *testing.B) {
 	b.ResetTimer()
 	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redacted)
 	for range b.N {
-		fmt.Fprintln(r, bigLipsum)
+		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
+			b.Errorf("fmt.Fprintln(r, bigLipsum) error = %v", err)
+		}
 	}
-	r.Flush()
+	if err := r.Flush(); err != nil {
+		b.Errorf("replacer.Flush() = %v", err)
+	}
 }
 
 func FuzzReplacer(f *testing.F) {
@@ -364,13 +392,22 @@ func FuzzReplacer(f *testing.F) {
 
 		var sb strings.Builder
 		replacer := replacer.New(&sb, secrets, redact.Redacted)
+
 		if split < 0 || split >= len(plaintext) {
-			fmt.Fprint(replacer, plaintext)
+			if _, err := fmt.Fprint(replacer, plaintext); err != nil {
+				t.Errorf("fmt.Fprint(replacer, %q) error = %v", plaintext, err)
+			}
 		} else {
-			fmt.Fprint(replacer, plaintext[:split])
-			fmt.Fprint(replacer, plaintext[split:])
+			if _, err := fmt.Fprint(replacer, plaintext[:split]); err != nil {
+				t.Errorf("fmt.Fprint(replacer, %q) error = %v", plaintext[:split], err)
+			}
+			if _, err := fmt.Fprint(replacer, plaintext[split:]); err != nil {
+				t.Errorf("fmt.Fprint(replacer, %q) error = %v", plaintext[split:], err)
+			}
 		}
-		replacer.Flush()
+		if err := replacer.Flush(); err != nil {
+			t.Errorf("replacer.Flush() = %v", err)
+		}
 		got := sb.String()
 
 		for _, s := range secrets {

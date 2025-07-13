@@ -117,7 +117,7 @@ func (c *Client) Do(ctx context.Context, method, url string, req, resp any) erro
 		return nil
 	}
 	if err := dec.Decode(resp); err != nil {
-		return fmt.Errorf("decoding response: %w:", err)
+		return fmt.Errorf("decoding response: %w", err)
 	}
 	return nil
 }

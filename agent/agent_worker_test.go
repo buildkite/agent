@@ -91,7 +91,7 @@ func TestDisconnectRetry(t *testing.T) {
 				tries++
 			} else {
 				rw.WriteHeader(http.StatusOK)
-				fmt.Fprintf(rw, `{"id": "fakeuuid", "connection_state": "disconnected"}`)
+				fmt.Fprintf(rw, `{"id": "fakeuuid", "connection_state": "disconnected"}`) //nolint:errcheck // The test should still fail
 			}
 		default:
 			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
@@ -280,7 +280,6 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 	jobToken := uuid.New().String()
 	jobID := "waitinguuid"
 	job := &FakeJob{
-		State: JobStateScheduled,
 		Job: &api.Job{
 			ID:                 jobID,
 			Token:              jobToken,
@@ -289,7 +288,6 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 				"BUILDKITE_COMMAND": "echo echo",
 			},
 		},
-		Auth: "Token " + jobToken,
 	}
 
 	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
@@ -342,7 +340,7 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 		t.Fatalf("Couldn't create directories: %v", err)
 	}
 	t.Cleanup(func() {
-		os.RemoveAll(filepath.Join(os.TempDir(), t.Name()))
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name())) //nolint:errcheck // Best-effort cleanup
 	})
 
 	server := NewFakeAPIServer()
@@ -429,7 +427,7 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 		t.Fatalf("Couldn't create directories: %v", err)
 	}
 	t.Cleanup(func() {
-		os.RemoveAll(filepath.Join(os.TempDir(), t.Name()))
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name())) //nolint:errcheck // Best-effort cleanup
 	})
 
 	server := NewFakeAPIServer()
@@ -526,7 +524,7 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 		t.Fatalf("Couldn't create directories: %v", err)
 	}
 	t.Cleanup(func() {
-		os.RemoveAll(filepath.Join(os.TempDir(), t.Name()))
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name())) //nolint:errcheck // Best-effort cleanup
 	})
 
 	server := NewFakeAPIServer()
@@ -639,7 +637,7 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating broken endpoint listener: %v", err)
 	}
-	defer registrationServer.Close()
+	defer registrationServer.Close() //nolint:errcheck // Best-effort cleanup
 	registrationEndpoint := fmt.Sprintf("http://%s/", registrationServer.Addr())
 
 	// Create API client with the _old_ endpoint that it would have used for registration,
@@ -784,7 +782,7 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating broken endpoint listener: %v", err)
 	}
-	defer endpointB.Close()
+	defer endpointB.Close() //nolint:errcheck // Best-effort cleanup
 
 	agent := endpointA.AddAgent(agentSessionToken)
 	agent.PingHandler = func(*http.Request) (api.Ping, error) {

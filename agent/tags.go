@@ -52,10 +52,10 @@ func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []str
 			return ECSMetadata{}.Get(ctx)
 		},
 		gcpMetaDataDefault: func() (map[string]string, error) {
-			return GCPMetaData{}.Get()
+			return GCPMetaData{}.Get(ctx)
 		},
 		gcpMetaDataPaths: func(paths map[string]string) (map[string]string, error) {
-			return GCPMetaData{}.GetPaths(paths)
+			return GCPMetaData{}.GetPaths(ctx, paths)
 		},
 		gcpLabels: func() (map[string]string, error) {
 			return GCPLabels{}.Get(ctx)
@@ -303,7 +303,7 @@ func parseTagValuePathPairs(paths []string) (map[string]string, error) {
 		// Sanity check the format of each pair to ensure that it’s parseable
 		index := strings.LastIndex(pair, "=")
 		if index == -1 || index == 0 || index == len(pair)-1 {
-			return result, errors.New(fmt.Sprintf("`%s` cannot be parsed, format should be `tag=metadata/path`", pair))
+			return result, fmt.Errorf("%q cannot be parsed, format should be `tag=metadata/path`", pair)
 		}
 
 		x := strings.Split(pair, "=")

@@ -22,7 +22,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 				return
 			}
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprint(rw, `{"id":"12-34-56-78-91", "name":"agent-1", "access_token":"alpacas"}`)
+			fmt.Fprint(rw, `{"id":"12-34-56-78-91", "name":"agent-1", "access_token":"alpacas"}`) //nolint:errcheck // The test would still fail
 
 		case "/connect":
 			if got, want := authToken(req), "alpacas"; got != want {
@@ -30,7 +30,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 				return
 			}
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprint(rw, `{}`)
+			fmt.Fprint(rw, `{}`) //nolint:errcheck // The test would still fail
 
 		default:
 			http.Error(rw, fmt.Sprintf("not found; method = %q, path = %q", req.Method, req.URL.Path), http.StatusNotFound)

@@ -97,7 +97,7 @@ func (e *Executor) createCheckoutDir() error {
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (e *Executor) CheckoutPhase(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -120,9 +120,9 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	e.shell.Headerf("Preparing working directory")
 
 	// If we have a blank repository then use a temp dir for builds
-	if e.ExecutorConfig.Repository == "" {
+	if e.Repository == "" {
 		var buildDir string
-		buildDir, err = os.MkdirTemp("", "buildkite-job-"+e.ExecutorConfig.JobID)
+		buildDir, err = os.MkdirTemp("", "buildkite-job-"+e.JobID)
 		if err != nil {
 			return err
 		}
@@ -148,7 +148,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 			return err
 		}
 	default:
-		if e.ExecutorConfig.Repository == "" {
+		if e.Repository == "" {
 			e.shell.Commentf("Skipping checkout, BUILDKITE_REPO is empty")
 			break
 		}
@@ -300,7 +300,7 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit st
 
 func (e *Executor) updateGitMirror(ctx context.Context, repository string) (string, error) {
 	// Create a unique directory for the repository mirror
-	mirrorDir := filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+	mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 	isMainRepository := repository == e.Repository
 
 	// Create the mirrors path if it doesn't exist
@@ -312,7 +312,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 	}
 
-	e.shell.Chdir(e.ExecutorConfig.GitMirrorsPath)
+	if err := e.shell.Chdir(e.GitMirrorsPath); err != nil {
+		return "", fmt.Errorf("failed to change directory to %q: %w", e.GitMirrorsPath, err)
+	}
 
 	lockTimeout := time.Second * time.Duration(e.GitMirrorsLockTimeout)
 
@@ -330,7 +332,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 		return "", fmt.Errorf("unable to acquire clone lock: %w", err)
 	}
-	defer mirrorCloneLock.Unlock()
+	defer mirrorCloneLock.Unlock() //nolint:errcheck // Best-effort cleanup - primary unlock checked below.
 
 	// If we don't have a mirror, we need to clone it
 	if !osutil.FileExists(mirrorDir) {
@@ -347,8 +349,10 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		return mirrorDir, nil
 	}
 
-	// If it exists, immediately release the clone lock
-	mirrorCloneLock.Unlock()
+	// If it exists, immediately release the clone lock.
+	if err := mirrorCloneLock.Unlock(); err != nil {
+		return "", fmt.Errorf("unable to release clone lock: %w", err)
+	}
 
 	// Check if the mirror has a commit, this is atomic so should be safe to do
 	if isMainRepository {
@@ -372,7 +376,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 		return "", fmt.Errorf("unable to acquire update lock: %w", err)
 	}
-	defer mirrorUpdateLock.Unlock()
+	defer mirrorUpdateLock.Unlock() //nolint:errcheck // Best-effort cleanup - primary unlock checked below.
 
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
@@ -440,11 +444,15 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		// 1. In case of remote URL confusion (bug introduced in #1959), and
 		// 2. There's possibly some object churn when remotes are renamed.
 		if err := e.shell.Command("git", "--git-dir", mirrorDir, "fsck").Run(ctx); err != nil {
-			e.shell.Logger.Warningf("Couldn't run git fsck: %v", err)
+			e.shell.Warningf("Couldn't run git fsck: %v", err)
 		}
 		if err := e.shell.Command("git", "--git-dir", mirrorDir, "gc").Run(ctx); err != nil {
-			e.shell.Logger.Warningf("Couldn't run git gc: %v", err)
+			e.shell.Warningf("Couldn't run git gc: %v", err)
 		}
+	}
+
+	if err := mirrorUpdateLock.Unlock(); err != nil {
+		return "", fmt.Errorf("unable to release update lock: %w", err)
 	}
 
 	return mirrorDir, nil
@@ -504,8 +512,8 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
 	var mirrorDir string
 	// Skip updating the Git mirror before using it?
-	if e.ExecutorConfig.GitMirrorsSkipUpdate {
-		mirrorDir = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+	if e.GitMirrorsSkipUpdate {
+		mirrorDir = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
 
 		// Check if specified mirrorDir exists, otherwise the clone will fail.
@@ -523,7 +531,7 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.ExecutorConfig.TracingBackend)
+	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
 	span.AddAttributes(map[string]string{
 		"checkout.repo_name": e.Repository,
 		"checkout.refspec":   e.RefSpec,
@@ -539,7 +547,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
-	if e.ExecutorConfig.GitMirrorsPath != "" && e.ExecutorConfig.Repository != "" {
+	if e.GitMirrorsPath != "" && e.Repository != "" {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
 		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
 		if err != nil {
@@ -693,7 +701,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		if err != nil {
 			e.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
-			mirrorSubmodules := e.ExecutorConfig.GitMirrorsPath != ""
+			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
 				submoduleArgs := slices.Clone(args)
 				// submodules might need their fingerprints verified too
@@ -719,7 +727,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 				// Tests use a local temp path for the repository, real repositories don't. Handle both.
 				var repositoryPath string
 				if !osutil.FileExists(repository) {
-					repositoryPath = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+					repositoryPath = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 				} else {
 					repositoryPath = repository
 				}

@@ -108,14 +108,18 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 
 			buildDir, err := os.MkdirTemp("", "build-path-")
 			assert.NoError(err)
-			defer os.RemoveAll(buildDir)
+			t.Cleanup(func() {
+				os.RemoveAll(buildDir) //nolint:errcheck // Best-effort cleanup.
+			})
 
 			tt.executor.BuildPath = buildDir
 			tt.executor.Repository = s.RepoURL(tt.projectName)
 
 			checkoutDir, err := os.MkdirTemp("", "checkout-path-")
 			assert.NoError(err)
-			defer os.RemoveAll(checkoutDir)
+			t.Cleanup(func() {
+				os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
+			})
 
 			shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
 
@@ -180,14 +184,18 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 
 	buildDir, err := os.MkdirTemp("", "build-path-")
 	assert.NoError(err)
-	defer os.RemoveAll(buildDir)
+	t.Cleanup(func() {
+		os.RemoveAll(buildDir) //nolint:errcheck // Best-effort cleanup.
+	})
 
 	tt.executor.BuildPath = buildDir
 	tt.executor.Repository = s.RepoURL(tt.projectName)
 
 	checkoutDir, err := os.MkdirTemp("", "checkout-path-")
 	assert.NoError(err)
-	defer os.RemoveAll(checkoutDir)
+	t.Cleanup(func() {
+		os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
+	})
 
 	// Concurrently sleep for 5 seconds to delay ref being created
 	go func() {

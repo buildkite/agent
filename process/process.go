@@ -98,7 +98,7 @@ type Process struct {
 	pid           int
 	started, done chan struct{}
 
-	winJobHandle uintptr
+	winJobHandle uintptr //nolint:unused // Used in signal_windows.go
 }
 
 // New returns a new instance of Process

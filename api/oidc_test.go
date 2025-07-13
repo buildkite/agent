@@ -59,7 +59,7 @@ func (s *testOIDCTokenServer) New(t *testing.T) *httptest.Server {
 				return
 			}
 
-			io.WriteString(rw, fmt.Sprintf(`{"token":"%s"}`, s.oidcToken))
+			fmt.Fprintf(rw, `{"token":"%s"}`, s.oidcToken) //nolint:errcheck // The test would still fail
 
 		case forbiddenPath:
 			http.Error(

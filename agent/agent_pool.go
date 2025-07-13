@@ -81,7 +81,7 @@ func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker) error {
 		return err
 	}
 	// Ensure the worker is disconnected at the end of this function.
-	defer worker.Disconnect(ctx)
+	defer worker.Disconnect(ctx) //nolint:errcheck // Error is logged within core/client
 
 	// Starts the agent worker and wait for it to finish.
 	return worker.Start(ctx, r.idleMonitor)
@@ -140,7 +140,7 @@ func healthHandler(l logger.Logger) http.HandlerFunc {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 		} else {
-			fmt.Fprintf(w, "OK: Buildkite agent is running")
+			fmt.Fprintf(w, "OK: Buildkite agent is running") //nolint:errcheck // YOLO?
 		}
 	}
 }

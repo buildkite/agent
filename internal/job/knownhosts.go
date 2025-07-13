@@ -122,7 +122,7 @@ func (kh *knownHosts) Add(ctx context.Context, host string) error {
 	if err != nil {
 		return fmt.Errorf("Could not open %q for appending: %w", kh.Path, err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // Best-effort cleanup - primary Close error is checked below.
 
 	if _, err := fmt.Fprintf(f, "%s\n", keyscanOutput); err != nil {
 		return fmt.Errorf("Could not write to %q: %w", kh.Path, err)
