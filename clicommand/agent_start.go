@@ -107,6 +107,7 @@ type AgentStartConfig struct {
 	DisconnectAfterUptime      int    `cli:"disconnect-after-uptime"`
 	CancelGracePeriod          int    `cli:"cancel-grace-period"`
 	SignalGracePeriodSeconds   int    `cli:"signal-grace-period-seconds"`
+	ReflectExitStatus          bool   `cli:"reflect-exit-status"`
 
 	EnableJobLogTmpfile bool   `cli:"enable-job-log-tmpfile"`
 	JobLogPath          string `cli:"job-log-path" normalize:"filepath"`
@@ -356,6 +357,11 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Start this agent and only run the specified job, disconnecting after it's finished",
 			EnvVar: "BUILDKITE_AGENT_ACQUIRE_JOB",
+		},
+		cli.BoolFlag{
+			Name:   "reflect-exit-status",
+			Usage:  "When used with --acquire-job, causes the agent to exit with the same exit status as the job",
+			EnvVar: "BUILDKITE_AGENT_REFLECT_EXIT_STATUS",
 		},
 		cli.BoolFlag{
 			Name:   "disconnect-after-job",
@@ -1300,7 +1306,7 @@ var AgentStartCommand = cli.Command{
 			const acquisitionFailedExitCode = 27 // chosen by fair dice roll
 			return cli.NewExitError(err, acquisitionFailedExitCode)
 		}
-		if exit := new(core.ProcessExit); errors.As(err, exit) {
+		if exit := new(core.ProcessExit); errors.As(err, exit) && cfg.ReflectExitStatus {
 			// If the agent acquired a job and it failed or was cancelled,
 			// then report its exit code as our own.
 			return cli.NewExitError(err, exit.Status)
