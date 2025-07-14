@@ -328,3 +328,282 @@ steps:
 		})
 	}
 }
+
+func TestIfChangedApplicator(t *testing.T) {
+	t.Parallel()
+
+	makeInput := func() pipeline.Steps {
+		return pipeline.Steps{
+			&pipeline.CommandStep{
+				Command: "always runs",
+			},
+			&pipeline.CommandStep{
+				Command: "only runs when files in foo changed",
+				RemainingFields: map[string]any{
+					"if_changed": "foo/**",
+				},
+			},
+			&pipeline.CommandStep{
+				Command: "only runs when files in bar changed",
+				RemainingFields: map[string]any{
+					"if_changed": "bar/**",
+				},
+			},
+			&pipeline.CommandStep{
+				Command: "only runs when any files changed",
+				RemainingFields: map[string]any{
+					"if_changed": "**",
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name string
+		ica  *ifChangedApplicator
+		want pipeline.Steps
+	}{
+		{
+			name: "disabled",
+			ica: &ifChangedApplicator{
+				enabled: false,
+			},
+			want: pipeline.Steps{
+				&pipeline.CommandStep{Command: "always runs"},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in bar changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when any files changed",
+					RemainingFields: map[string]any{},
+				},
+			},
+		},
+		{
+			name: "no changes",
+			ica: &ifChangedApplicator{
+				enabled:      true,
+				gathered:     true, // pretend we ran git diff
+				changedPaths: nil,
+			},
+			want: pipeline.Steps{
+				&pipeline.CommandStep{Command: "always runs"},
+				&pipeline.CommandStep{
+					Command: "only runs when files in foo changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command: "only runs when files in bar changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command: "only runs when any files changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+			},
+		},
+		{
+			name: "root file change",
+			ica: &ifChangedApplicator{
+				enabled:      true,
+				gathered:     true, // pretend we ran git diff
+				changedPaths: []string{"qux"},
+			},
+			want: pipeline.Steps{
+				&pipeline.CommandStep{Command: "always runs"},
+				&pipeline.CommandStep{
+					Command: "only runs when files in foo changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command: "only runs when files in bar changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when any files changed",
+					RemainingFields: map[string]any{},
+				},
+			},
+		},
+		{
+			name: "change in foo",
+			ica: &ifChangedApplicator{
+				enabled:      true,
+				gathered:     true, // pretend we ran git diff
+				changedPaths: []string{"foo/README.md"},
+			},
+			want: pipeline.Steps{
+				&pipeline.CommandStep{Command: "always runs"},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command: "only runs when files in bar changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when any files changed",
+					RemainingFields: map[string]any{},
+				},
+			},
+		},
+		{
+			name: "change in bar",
+			ica: &ifChangedApplicator{
+				enabled:      true,
+				gathered:     true, // pretend we ran git diff
+				changedPaths: []string{"bar/README.md"},
+			},
+			want: pipeline.Steps{
+				&pipeline.CommandStep{Command: "always runs"},
+				&pipeline.CommandStep{
+					Command: "only runs when files in foo changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in bar changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when any files changed",
+					RemainingFields: map[string]any{},
+				},
+			},
+		},
+		{
+			name: "change in foo and bar",
+			ica: &ifChangedApplicator{
+				enabled:      true,
+				gathered:     true, // pretend we ran git diff
+				changedPaths: []string{"foo/hello.go", "bar/README.md"},
+			},
+			want: pipeline.Steps{
+				&pipeline.CommandStep{Command: "always runs"},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in bar changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when any files changed",
+					RemainingFields: map[string]any{},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(i int) { t.Errorf("exitFn(%d) invoked", i) })
+
+			steps := makeInput()
+			test.ica.apply(l, steps)
+			if diff := cmp.Diff(steps, test.want); diff != "" {
+				t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
+	t.Parallel()
+
+	steps := pipeline.Steps{
+		&pipeline.CommandStep{
+			Command: "wrong type for if_changed",
+			RemainingFields: map[string]any{
+				"if_changed": 42,
+			},
+		},
+		&pipeline.CommandStep{
+			Command: "invalid glob pattern",
+			RemainingFields: map[string]any{
+				"if_changed": "bar/**/[asdf[[[[asdf",
+			},
+		},
+		&pipeline.TriggerStep{
+			Contents: map[string]any{
+				"if_changed": "version/VERSION",
+			},
+		},
+		&pipeline.GroupStep{
+			Steps: pipeline.Steps{
+				&pipeline.CommandStep{
+					Command: "doesn't matter, it's in a group",
+					RemainingFields: map[string]any{
+						"if_changed": "**",
+					},
+				},
+			},
+			RemainingFields: map[string]any{
+				"if_changed": "CHANGELOG.md",
+			},
+		},
+	}
+
+	want := pipeline.Steps{
+		&pipeline.CommandStep{
+			Command:         "wrong type for if_changed",
+			RemainingFields: map[string]any{},
+		},
+		&pipeline.CommandStep{
+			Command:         "invalid glob pattern",
+			RemainingFields: map[string]any{},
+		},
+		&pipeline.TriggerStep{
+			Contents: map[string]any{
+				"skip": ifChangedSkippedMsg,
+			},
+		},
+		&pipeline.GroupStep{
+			Steps: pipeline.Steps{
+				&pipeline.CommandStep{
+					Command:         "doesn't matter, it's in a group",
+					RemainingFields: map[string]any{},
+				},
+			},
+			RemainingFields: map[string]any{
+				"skip": ifChangedSkippedMsg,
+			},
+		},
+	}
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(i int) { t.Errorf("exitFn(%d) invoked", i) })
+
+	ica := &ifChangedApplicator{
+		enabled:      true,
+		gathered:     true,
+		changedPaths: []string{"foo/happy.jpg"},
+	}
+
+	ica.apply(l, steps)
+	if diff := cmp.Diff(steps, want); diff != "" {
+		t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
+	}
+
+}
