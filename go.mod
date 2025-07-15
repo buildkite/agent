@@ -54,7 +54,7 @@ require (
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sys v0.33.0
 	golang.org/x/term v0.32.0
-	google.golang.org/api v0.240.0
+	google.golang.org/api v0.241.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.74.3
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.2
