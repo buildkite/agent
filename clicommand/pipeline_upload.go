@@ -73,6 +73,8 @@ Example:
 
 const ifChangedSkippedMsg = "if_changed pattern did not match any paths changed in this build"
 
+const defaultGitDiffBase = "origin/main"
+
 type PipelineUploadConfig struct {
 	GlobalConfig
 	APIConfig
@@ -141,9 +143,8 @@ var PipelineUploadCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "git-diff-base",
-			Usage:  "Provides the base from which to find the git diff when processing ′if_changed′, e.g. origin/main",
-			Value:  "origin/main",
-			EnvVar: "BUILDKITE_GIT_DIFF_BASE,BUILDKITE_PULL_REQUEST_BASE_BRANCH",
+			Usage:  "Provides the base from which to find the git diff when processing ′if_changed′, e.g. origin/main. If not provided, it uses the first valid value of {origin/$BUILDKITE_PULL_REQUEST_BASE_BRANCH, origin/$BUILDKITE_PIPELINE_DEFAULT_BRANCH, origin/main}.",
+			EnvVar: "BUILDKITE_GIT_DIFF_BASE",
 		},
 
 		// Note: changes to these environment variables need to be reflected in the environment created
@@ -283,12 +284,22 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
+		prependOriginIfNonempty := func(key string) string {
+			s := os.Getenv(key)
+			if s == "" {
+				return ""
+			}
+			return "origin/" + s
+		}
+
 		ifChanged := &ifChangedApplicator{
 			enabled: cfg.ApplyIfChanged,
-			// An empty string for the flag can happen if the default env var
-			// ends up with an empty string (e.g. this build is not a PR build
-			// ...yet.)
-			diffBase: cmp.Or(cfg.GitDiffBase, "origin/main"),
+			diffBase: cmp.Or(
+				cfg.GitDiffBase,
+				prependOriginIfNonempty("BUILDKITE_PULL_REQUEST_BASE_BRANCH"),
+				prependOriginIfNonempty("BUILDKITE_PIPELINE_DEFAULT_BRANCH"),
+				defaultGitDiffBase,
+			),
 		}
 
 		// For each pipeline in the input (could be multiple)...
@@ -706,7 +717,7 @@ stepsLoop:
 			}
 
 			// The changed files are now known.
-			l.Info("Applying if_changed conditions relative to %q (merge-base of %q and HEAD) - %d changed files", ica.diffBase, mergeBase, len(cps))
+			l.Info("Applying if_changed conditions relative to %q (the merge-base of %q and HEAD) - %d changed files", mergeBase, ica.diffBase, len(cps))
 			ica.gathered = true
 			ica.changedPaths = cps
 		}
