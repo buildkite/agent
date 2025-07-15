@@ -1307,10 +1307,14 @@ var AgentStartCommand = cli.Command{
 			const acquisitionFailedExitCode = 27 // chosen by fair dice roll
 			return cli.NewExitError(err, acquisitionFailedExitCode)
 		}
-		if exit := new(core.ProcessExit); errors.As(err, exit) && cfg.ReflectExitStatus {
-			// If the agent acquired a job and it failed or was cancelled,
-			// then report its exit code as our own.
-			return cli.NewExitError(err, exit.Status)
+		if exit := new(core.ProcessExit); errors.As(err, exit) {
+			if cfg.ReflectExitStatus {
+				// If the agent acquired a job and it failed or was cancelled,
+				// then report its exit code as our own.
+				return cli.NewExitError(err, exit.Status)
+			}
+			// The job ran. Even though it failed, the agent did its job.
+			return nil
 		}
 
 		return err
