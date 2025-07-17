@@ -377,7 +377,9 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
 	// start the process will still be buffered. Also, there may still be logs in the buffer that
 	// were left behind because the uploader goroutine exited before it could flush them.
-	r.logStreamer.Process(ctx, r.output.ReadAndTruncate())
+	if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
+		r.agentLogger.Warn("Log streamer couldn't process final logs: %v", err)
+	}
 
 	// Stop the log streamer. This will block until all the chunks have been uploaded
 	r.logStreamer.Stop()
@@ -419,7 +421,9 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 	// Finish the build in the Buildkite Agent API
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
-	r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks(), ignoreAgentInDispatches)
+	if err := r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks(), ignoreAgentInDispatches); err != nil {
+		r.agentLogger.Error("Couldn't mark job as finished: %v", err)
+	}
 
 	r.agentLogger.Info("Finished job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 }
@@ -484,7 +488,9 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 			// Since we can no longer send logs, Close the buffer, which causes
 			// future Writes to return io.ErrClosedPipe, typically SIGPIPE-ing
 			// the running process (if it is still running).
-			r.output.Close()
+			if err := r.output.Close(); err != nil && err != process.ErrAlreadyClosed {
+				r.agentLogger.Error("Process output buffer could not be closed: %v", err)
+			}
 			return
 		}
 	}

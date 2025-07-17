@@ -27,7 +27,7 @@ func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 	}
 
 	mb := mockBootstrap(t)
-	defer mb.CheckAndClose(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_AGENT_CACHE_PATHS"), "foo,bar"; got != want {
@@ -72,7 +72,7 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 	headers.Set("Buildkite-Hello", "world")
 
 	mb := mockBootstrap(t)
-	defer mb.CheckAndClose(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	// The main assertion: that the `Buildkite-Hello: world` server-specified request header is
 	// passed to the job environment as BUILDKITE_REQUEST_HEADER_BUILDKITE_HELLO=world. From there,

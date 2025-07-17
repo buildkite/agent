@@ -351,7 +351,7 @@ func (a *Uploader) build(path string, absolutePath string) (*api.Artifact, error
 	if err != nil {
 		return nil, fmt.Errorf("opening file %s: %w", absolutePath, err)
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck // File is only open for read.
 
 	// Generate a SHA-1 and SHA-256 checksums for the file.
 	// Writing to hashes never errors, but reading from the file might.
