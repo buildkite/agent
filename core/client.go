@@ -89,8 +89,9 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 			switch {
 			case resp.StatusCode == http.StatusLocked:
 				// If the API returns with a 423, the job is in the waiting state. Let's try again later.
-				warning := fmt.Sprintf("The job is waiting for a dependency: (%s)", err)
-				handleRetriableJobAcquisitionError(warning, resp, r, c.Logger)
+				c.Logger.Error("The job is waiting for a dependency, not retrying as a new event will be sent later once the job is ready: (%s)", err)
+				r.Break()
+
 				return nil, err
 
 			case resp.StatusCode == http.StatusTooManyRequests:
@@ -189,7 +190,6 @@ func (c *Client) Disconnect(ctx context.Context) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		// none of the retries worked
 		c.Logger.Warn(
@@ -320,7 +320,6 @@ func (c *Client) StartJob(ctx context.Context, job *api.Job, startedAt time.Time
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(rtr *roko.Retrier) error {
 		response, err := c.APIClient.StartJob(ctx, job)
-
 		if err != nil {
 			if response != nil && api.IsRetryableStatus(response) {
 				c.Logger.Warn("%s (%s)", err, rtr)

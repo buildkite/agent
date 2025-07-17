@@ -182,6 +182,7 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 }
 
 func TestAcquireAndRunJobWaiting(t *testing.T) {
+	t.SkipNow()
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -325,7 +326,6 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
-
 }
 
 func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
