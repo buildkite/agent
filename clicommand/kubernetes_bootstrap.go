@@ -28,7 +28,8 @@ This command is used internally by Buildkite Kubernetes jobs. It is not
 intended to be used directly.`
 
 type KubernetesBootstrapConfig struct {
-	KubernetesContainerID int `cli:"kubernetes-container-id"`
+	KubernetesContainerID                int           `cli:"kubernetes-container-id"`
+	KubernetesBootstrapConnectionTimeout time.Duration `cli:"kubernetes-bootstrap-connection-timeout"`
 
 	// Global flags for debugging, etc
 	LogLevel    string   `cli:"log-level"`
@@ -44,6 +45,13 @@ var KubernetesBootstrapCommand = cli.Command{
 	Description: kubernetesBootstrapHelpDescription,
 	Flags: []cli.Flag{
 		KubernetesContainerIDFlag,
+		cli.DurationFlag{
+			Name: "kubernetes-bootstrap-connection-timeout",
+			Usage: "This is intended to be used only by the Buildkite k8s stack " +
+				"(github.com/buildkite/agent-stack-k8s); it set the max time a container will wait " +
+				"to connect Agent.",
+			EnvVar: "BUILDKITE_KUBERNETES_BOOTSTRAP_CONNECTION_TIMEOUT",
+		},
 
 		// Global flags for debugging, etc
 		DebugFlag,
@@ -52,6 +60,9 @@ var KubernetesBootstrapCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
+		// kubernetes-bootstrap first register with the agent server container (the container that runs `buildkite-agent start`)
+		// As part the process, it will gain a bunch of env vars.
+		// After registration, it will run `buildkite-agent bootstrap`
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[KubernetesBootstrapConfig](ctx, c)
 		defer done()
@@ -65,9 +76,15 @@ var KubernetesBootstrapCommand = cli.Command{
 		// Registration passes down the env vars the agent normally sets on the
 		// subprocess, but in this case the bootstrap is in a separate
 		// container.
+		timeoutDuration := 120 * time.Second
+		if cfg.KubernetesBootstrapConnectionTimeout > 0 {
+			timeoutDuration = cfg.KubernetesBootstrapConnectionTimeout
+		}
+		interval := 3 * time.Second
+		maxAttempt := max(int(timeoutDuration.Seconds())/int(interval.Seconds()), 1)
 		rtr := roko.NewRetrier(
-			roko.WithMaxAttempts(7),
-			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+			roko.WithMaxAttempts(maxAttempt),
+			roko.WithStrategy(roko.Constant(interval)),
 		)
 		regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
 			return socket.Connect(ctx)
