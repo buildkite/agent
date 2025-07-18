@@ -31,6 +31,10 @@ var (
 // the job is already acquired/started/finished/cancelled.
 var ErrJobAcquisitionRejected = errors.New("job acquisition rejected")
 
+// ErrJobLocked is a sentinel error used when acquisition fails because
+// the job is locked (waiting for dependencies).
+var ErrJobLocked = errors.New("job is locked")
+
 // Client is a driver for APIClient that adds retry loops and some error
 // handling logic.
 type Client struct {
@@ -91,7 +95,7 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 				// If the API returns with a 423, the job is in the waiting state. Let's try again later.
 				warning := fmt.Sprintf("The job is waiting for a dependency: (%s)", err)
 				handleRetriableJobAcquisitionError(warning, resp, r, c.Logger)
-				return nil, err
+				return nil, fmt.Errorf("%w: %w", ErrJobLocked, err)
 
 			case resp.StatusCode == http.StatusTooManyRequests:
 				// We're being rate limited by the backend. Let's try again later.
@@ -155,7 +159,7 @@ func handleRetriableJobAcquisitionError(warning string, resp *api.Response, r *r
 	r.SetNextInterval(duration)
 }
 
-// Connects the agent to the Buildkite Agent API, retrying up to 10 times with 5
+// Connect the agent to the Buildkite Agent API, retrying up to 10 times with 5
 // seconds delay if it fails.
 func (c *Client) Connect(ctx context.Context) error {
 	c.Logger.Info("Connecting to Buildkite...")
@@ -189,7 +193,6 @@ func (c *Client) Disconnect(ctx context.Context) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		// none of the retries worked
 		c.Logger.Warn(
@@ -320,7 +323,6 @@ func (c *Client) StartJob(ctx context.Context, job *api.Job, startedAt time.Time
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(rtr *roko.Retrier) error {
 		response, err := c.APIClient.StartJob(ctx, job)
-
 		if err != nil {
 			if response != nil && api.IsRetryableStatus(response) {
 				c.Logger.Warn("%s (%s)", err, rtr)
