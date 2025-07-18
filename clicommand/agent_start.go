@@ -94,12 +94,14 @@ type AgentStartConfig struct {
 
 	SigningJWKSKeyID string `cli:"signing-jwks-key-id"`
 
-	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
-	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
-	DebugSigning     bool   `cli:"debug-signing"`
+	SigningJWKSFile       string   `cli:"signing-jwks-file" normalize:"filepath"`
+	SigningAWSKMSKey      string   `cli:"signing-aws-kms-key"`
+	DebugSigning          bool     `cli:"debug-signing"`
+	SigningIgnoredEnvVars []string `cli:"signing-ignored-env-vars" normalize:"list"`
 
-	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
-	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
+	VerificationIgnoredEnvVars  []string `cli:"verification-ignored-env-vars" normalize:"list"`
+	VerificationJWKSFile        string   `cli:"verification-jwks-file" normalize:"filepath"`
+	VerificationFailureBehavior string   `cli:"verification-failure-behavior"`
 
 	AcquireJob                 string `cli:"acquire-job"`
 	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
@@ -724,6 +726,16 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
 			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
 		},
+		cli.StringSliceFlag{
+			Name:   "signing-ignored-env-vars",
+			Usage:  "A list of environment variable names to ignore when signing the pipeline. These variables (and their values) will not be included in the signature. For signatures to match, the corresponding flag must be set on the agent that verifies the signature and runs the job",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_IGNORED_ENV_VARS",
+		},
+		cli.StringSliceFlag{
+			Name:   "verification-ignored-env-vars",
+			Usage:  "A list of environment variable names to ignore when signing the pipeline. These variables (and their values) will not be included in the signature. For signatures to match, the corresponding flag must be set on the agent that verifies the signature and runs the job",
+			EnvVar: "BUILDKITE_AGENT_VERIFICATION_IGNORED_ENV_VARS",
+		},
 		cli.StringFlag{
 			Name:   "verification-failure-behavior",
 			Value:  agent.VerificationBehaviourBlock,
@@ -1049,13 +1061,15 @@ var AgentStartCommand = cli.Command{
 			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
 			KubernetesExec:               cfg.KubernetesExec,
 
-			SigningJWKSFile:  cfg.SigningJWKSFile,
-			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
-			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
-			DebugSigning:     cfg.DebugSigning,
+			SigningJWKSFile:       cfg.SigningJWKSFile,
+			SigningJWKSKeyID:      cfg.SigningJWKSKeyID,
+			SigningAWSKMSKey:      cfg.SigningAWSKMSKey,
+			DebugSigning:          cfg.DebugSigning,
+			SigningIgnoredEnvVars: cfg.SigningIgnoredEnvVars,
 
 			VerificationJWKS:             verificationJWKS,
 			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
+			VerificationIgnoredEnvVars:   cfg.VerificationIgnoredEnvVars,
 
 			DisableWarningsFor: cfg.DisableWarningsFor,
 		}

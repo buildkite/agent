@@ -56,6 +56,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 		signature.WithEnv(r.conf.Job.Env),
 		signature.WithLogger(r.agentLogger),
 		signature.WithDebugSigning(r.conf.AgentConfiguration.DebugSigning),
+		signature.IgnoringEnvVars(r.conf.AgentConfiguration.VerificationIgnoredEnvVars...),
 	)
 	if err != nil {
 		r.agentLogger.Debug("failed to verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)

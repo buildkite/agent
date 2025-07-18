@@ -93,10 +93,11 @@ type PipelineUploadConfig struct {
 	GitDiffBase    string `cli:"git-diff-base"`
 
 	// Used for signing
-	JWKSFile         string `cli:"jwks-file"`
-	JWKSKeyID        string `cli:"jwks-key-id"`
-	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
-	DebugSigning     bool   `cli:"debug-signing"`
+	JWKSFile              string   `cli:"jwks-file"`
+	JWKSKeyID             string   `cli:"jwks-key-id"`
+	SigningAWSKMSKey      string   `cli:"signing-aws-kms-key"`
+	SigningIgnoredEnvVars []string `cli:"signing-ignored-env-vars" normalize:"list"`
+	DebugSigning          bool     `cli:"debug-signing"`
 }
 
 var PipelineUploadCommand = cli.Command{
@@ -168,6 +169,11 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
 			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
+		},
+		cli.StringSliceFlag{
+			Name:   "signing-ignored-env-vars",
+			Usage:  "A list of environment variable names to ignore when signing the pipeline. These variables (and their values) will not be included in the signature. For signatures to match, the corresponding flag must be set on the agent that verifies the signature and runs the job",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_IGNORED_ENV_VARS",
 		},
 		RedactedVars,
 	}),
@@ -342,6 +348,9 @@ var PipelineUploadCommand = cli.Command{
 				}
 			}
 
+			if len(cfg.SigningIgnoredEnvVars) > 0 {
+				l.Warn("The environment variables %s are being excluded from the job signature. This decreases the security of the signature, as the values of these will not be verified by the agent running the job. This should be done only with great care.", cfg.SigningIgnoredEnvVars)
+			}
 			if key != nil {
 				err := signature.SignSteps(
 					ctx,
@@ -351,6 +360,7 @@ var PipelineUploadCommand = cli.Command{
 					signature.WithEnv(result.Env.ToMap()),
 					signature.WithLogger(l),
 					signature.WithDebugSigning(cfg.DebugSigning),
+					signature.IgnoringEnvVars(cfg.SigningIgnoredEnvVars...),
 				)
 				if err != nil {
 					return fmt.Errorf("couldn't sign pipeline: %w", err)
