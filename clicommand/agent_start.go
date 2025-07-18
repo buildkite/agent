@@ -1307,6 +1307,13 @@ var AgentStartCommand = cli.Command{
 			const acquisitionFailedExitCode = 27 // chosen by fair dice roll
 			return cli.NewExitError(err, acquisitionFailedExitCode)
 		}
+		if errors.Is(err, core.ErrJobLocked) {
+			// If the agent tried to acquire a job, but it couldn't because the job is locked (waiting for dependencies),
+			// we should exit with a specific exit code so that the caller can know that this job is locked.
+
+			const jobLockedExitCode = 28
+			return cli.NewExitError(err, jobLockedExitCode)
+		}
 		if exit := new(core.ProcessExit); errors.As(err, exit) {
 			if cfg.ReflectExitStatus {
 				// If the agent acquired a job and it failed or was cancelled,

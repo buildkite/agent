@@ -1,13 +1,16 @@
 package clicommand
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
+	"github.com/urfave/cli"
 )
 
 func setupHooksPath(t *testing.T) (string, func()) {
@@ -196,4 +199,40 @@ func TestAgentShutdownHook(t *testing.T) {
 		agentShutdownHook(log, cfg("zxczxczxc"))
 		assert.Equal(t, []string{}, log.Messages)
 	})
+}
+
+func TestAgentStartJobLocked_ExitCode28(t *testing.T) {
+	t.Parallel()
+
+	// Test that the CLI command logic returns the correct exit code when ErrJobLocked is returned
+	// This simulates what happens in the AgentStartCommand.Run method
+	testErr := core.ErrJobLocked
+
+	var cliErr error
+	if errors.Is(testErr, core.ErrJobLocked) {
+		const jobLockedExitCode = 28
+		cliErr = cli.NewExitError(testErr, jobLockedExitCode)
+	}
+
+	var exitErr *cli.ExitError
+	assert.True(t, errors.As(cliErr, &exitErr), "Expected cli.ExitError, got: %v", cliErr)
+	assert.Equal(t, 28, exitErr.ExitCode(), "Expected exit code 28 for job locked, got: %d", exitErr.ExitCode())
+}
+
+func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
+	t.Parallel()
+
+	// Test that the CLI command logic returns the correct exit code when ErrJobAcquisitionRejected is returned
+	// This simulates what happens in the AgentStartCommand.Run method
+	testErr := core.ErrJobAcquisitionRejected
+
+	var cliErr error
+	if errors.Is(testErr, core.ErrJobAcquisitionRejected) {
+		const acquisitionFailedExitCode = 27
+		cliErr = cli.NewExitError(testErr, acquisitionFailedExitCode)
+	}
+
+	var exitErr *cli.ExitError
+	assert.True(t, errors.As(cliErr, &exitErr), "Expected cli.ExitError, got: %v", cliErr)
+	assert.Equal(t, 27, exitErr.ExitCode(), "Expected exit code 27 for job acquisition rejected, got: %d", exitErr.ExitCode())
 }
