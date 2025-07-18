@@ -250,7 +250,7 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 		}
 
 		if err := e.executeHook(ctx, HookConfig{
-			Scope:      "plugin",
+			Scope:      HookScopePlugin,
 			Name:       name,
 			Path:       hookPath,
 			Env:        envMap,

@@ -314,6 +314,12 @@ func (e *Executor) Cancel() error {
 	return nil
 }
 
+const (
+	HookScopeAgent      = "agent"
+	HookScopeRepository = "repository"
+	HookScopePlugin     = "plugin"
+)
+
 type HookConfig struct {
 	Name           string
 	Scope          string
@@ -324,18 +330,17 @@ type HookConfig struct {
 }
 
 func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
-	if e.TracingBackend != tracetools.BackendOpenTelemetry {
+	if e.TracingBackend != tracetools.BackendDatadog {
 		return scope
 	}
 
-	// The scope names local and global are confusing, and different to what we document, so we should use the
-	// documented names (repository and agent, respectively) in OpenTelemetry.
-	// However, we need to keep the OpenTracing/Datadog implementation the same, hence this horrible function
+	// In olden times, when the datadog tracing backend was written, these hook scopes were named "local" and "global"
+	// We need to maintain backwards compatibility with the old names for span attribute reasons, so we map them here
 	switch scope {
-	case "local":
-		return "repository"
-	case "global":
-		return "agent"
+	case HookScopeRepository:
+		return "local"
+	case HookScopeAgent:
+		return "global"
 	default:
 		return scope
 	}
@@ -699,7 +704,7 @@ func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
 	}
 	for _, h := range allHooks {
 		err = e.executeHook(ctx, HookConfig{
-			Scope: "global",
+			Scope: HookScopeAgent,
 			Name:  name,
 			Path:  h,
 		})
@@ -753,7 +758,7 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	return e.executeHook(ctx, HookConfig{
-		Scope: "local",
+		Scope: HookScopeRepository,
 		Name:  name,
 		Path:  localHookPath,
 	})
