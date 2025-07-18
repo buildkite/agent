@@ -122,7 +122,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 				t.Fatalf("runJob() error = %v", err)
 			}
 
-			mb.CheckAndClose(t)
+			mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 		})
 	}
 }
@@ -144,7 +144,7 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	mockPB.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 		c.Exit(1) // Fail the pre-bootstrap hook
 	})
-	defer mockPB.CheckAndClose(t)
+	defer mockPB.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	jobID := "my-job-id"
 	j := &api.Job{
@@ -162,8 +162,8 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	defer server.Close()
 
 	mb := mockBootstrap(t)
-	mb.Expect().NotCalled() // The bootstrap won't be called, as the pre-bootstrap hook failed
-	defer mb.CheckAndClose(t)
+	mb.Expect().NotCalled()   // The bootstrap won't be called, as the pre-bootstrap hook failed
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	err = runJob(t, ctx, testRunJobConfig{
 		job:           j,
@@ -205,7 +205,7 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 			}
 
 			mb := mockBootstrap(t)
-			defer mb.CheckAndClose(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 			mb.Expect().Once().AndExitWith(exit)
 
@@ -248,7 +248,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	}
 
 	mb := mockBootstrap(t)
-	defer mb.CheckAndClose(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), jobToken; got != want {
@@ -289,7 +289,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	}
 
 	mb := mockBootstrap(t)
-	defer mb.CheckAndClose(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), "bkaj_job-token"; got != want {
@@ -329,7 +329,7 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	}
 
 	mb := mockBootstrap(t)
-	defer mb.CheckAndClose(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_COMMAND_EVAL"), "true"; got != want {
@@ -343,10 +343,14 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	server := e.server()
 	defer server.Close()
 
-	runJob(t, ctx, testRunJobConfig{
+	testCfg := testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{CommandEval: true},
 		mockBootstrap: mb,
-	})
+	}
+
+	if err := runJob(t, ctx, testCfg); err != nil {
+		t.Errorf("runJob(t, ctx, %v) = %v", testCfg, err)
+	}
 }

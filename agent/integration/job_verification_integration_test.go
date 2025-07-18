@@ -591,7 +591,7 @@ func TestJobVerification(t *testing.T) {
 
 			mb := mockBootstrap(t)
 			tc.mockBootstrapExpectation(mb)
-			defer mb.CheckAndClose(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 			stepWithInvariants := signature.CommandStepWithInvariants{
 				CommandStep:   tc.job.Step,

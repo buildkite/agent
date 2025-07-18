@@ -48,7 +48,7 @@ func TestBufferClose(t *testing.T) {
 		t.Errorf("after b.Close(): b.Write() = (%d, %v), want (%d, %v)", gotN, gotErr, wantN, wantErr)
 	}
 
-	if err := b.Close(); err != errAlreadyClosed {
-		t.Errorf("double b.Close() = %v, want %v", err, errAlreadyClosed)
+	if err := b.Close(); err != ErrAlreadyClosed {
+		t.Errorf("double b.Close() = %v, want %v", err, ErrAlreadyClosed)
 	}
 }

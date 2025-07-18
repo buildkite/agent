@@ -170,8 +170,8 @@ func (d Download) try(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating temp file (%T: %w)", err, err)
 	}
-	defer os.Remove(temp.Name())
-	defer temp.Close() //nolint:errcheck // Best-effort cleanup - primary Close checked below.
+	defer os.Remove(temp.Name()) //nolint:errcheck // Best-effort cleanup
+	defer temp.Close()           //nolint:errcheck // Best-effort cleanup - primary Close checked below.
 
 	// Create a SHA256 to hash the download as we go.
 	hash := sha256.New()

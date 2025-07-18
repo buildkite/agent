@@ -16,7 +16,7 @@ import (
 const defaultLogMaxSize = 1024 * 1024 * 1024 // 1 GiB
 
 // Returned from Process after Stop has been called.
-var errStreamerStopped = errors.New("streamer stopped")
+var errStreamerStopped = errors.New("streamer was already stopped")
 
 // LogStreamerConfig contains configuration options for the log streamer.
 type LogStreamerConfig struct {
