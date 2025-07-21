@@ -1299,22 +1299,23 @@ var AgentStartCommand = cli.Command{
 			pool.StartStatusServer(ctx, l, cfg.HealthCheckAddr)
 		}
 
-		err = pool.Start(ctx)
-		if errors.Is(err, core.ErrJobAcquisitionRejected) {
+		var exit core.ProcessExit
+		switch err := pool.Start(ctx); {
+		case errors.Is(err, core.ErrJobAcquisitionRejected):
 			// If the agent tried to acquire a job, but it couldn't because the job was already taken, we should exit with a
 			// specific exit code so that the caller can know that this job can't be acquired.
 
 			const acquisitionFailedExitCode = 27 // chosen by fair dice roll
 			return cli.NewExitError(err, acquisitionFailedExitCode)
-		}
-		if errors.Is(err, core.ErrJobLocked) {
+
+		case errors.Is(err, core.ErrJobLocked):
 			// If the agent tried to acquire a job, but it couldn't because the job is locked (waiting for dependencies),
 			// we should exit with a specific exit code so that the caller can know that this job is locked.
 
 			const jobLockedExitCode = 28
 			return cli.NewExitError(err, jobLockedExitCode)
-		}
-		if exit := new(core.ProcessExit); errors.As(err, exit) {
+
+		case errors.As(err, &exit):
 			if cfg.ReflectExitStatus {
 				// If the agent acquired a job and it failed or was cancelled,
 				// then report its exit code as our own.
@@ -1322,9 +1323,11 @@ var AgentStartCommand = cli.Command{
 			}
 			// The job ran. Even though it failed, the agent did its job.
 			return nil
-		}
 
-		return err
+		default:
+			return err
+
+		}
 	},
 }
 
@@ -1583,5 +1586,4 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 func envHasKey(key string) bool {
 	_, ok := os.LookupEnv(key)
 	return ok
-
 }

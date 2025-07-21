@@ -159,7 +159,7 @@ func handleRetriableJobAcquisitionError(warning string, resp *api.Response, r *r
 	r.SetNextInterval(duration)
 }
 
-// Connect the agent to the Buildkite Agent API, retrying up to 10 times with 5
+// Connect connects the agent to the Buildkite Agent API, retrying up to 10 times with 5
 // seconds delay if it fails.
 func (c *Client) Connect(ctx context.Context) error {
 	c.Logger.Info("Connecting to Buildkite...")
