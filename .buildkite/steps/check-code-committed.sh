@@ -34,9 +34,22 @@ if ! git diff --no-ext-diff --exit-code; then
   exit 1
 fi
 
-# While we're cleaning up things found by golangci-lint, don't fail if it finds
-# things.
 echo +++ :go: Running golangci-lint...
-golangci-lint run || true
+if ! lint_out="$(golangci-lint run --color=always)" ; then 
+  echo ^^^ +++
+  echo "golangci-lint found the following issues:"
+  echo ""
+  echo "${lint_out}"
+  buildkite-agent annotate --style=warning <<EOF
+golangci-lint found the following issues:
+
+\`\`\`term
+${lint_out}
+\`\`\`
+EOF
+  # While we're cleaning up things found by golangci-lint, don't fail if it
+  # finds things.
+  exit 0
+fi
 
 echo +++ Everything is clean and tidy! 🎉
