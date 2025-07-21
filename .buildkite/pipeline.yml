@@ -17,6 +17,7 @@ steps:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
+          mount-buildkite-agent: true
           run: lint
 
   - name: ":linux: Linux AMD64 Tests"
