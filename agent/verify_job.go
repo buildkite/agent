@@ -35,28 +35,22 @@ func (e *invalidSignatureError) Unwrap() error {
 }
 
 func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
-	step := r.conf.Job.Step
+	step := &r.conf.Job.Step
 
-	if step.Signature == nil {
-		r.agentLogger.Debug("verifyJob: Job.Step.Signature == nil")
-		return ErrNoSignature
-	}
-
-	stepWithInvariants := &signature.CommandStepWithInvariants{
-		CommandStep:   step,
-		RepositoryURL: r.conf.Job.Env["BUILDKITE_REPO"],
-	}
-
-	// Verify the signature
-	err := signature.Verify(
+	// First, verify the signature.
+	err := signature.VerifyStep(
 		ctx,
-		step.Signature,
+		step,
 		keySet,
-		stepWithInvariants,
+		r.conf.Job.Env["BUILDKITE_REPO"],
 		signature.WithEnv(r.conf.Job.Env),
 		signature.WithLogger(r.agentLogger),
 		signature.WithDebugSigning(r.conf.AgentConfiguration.DebugSigning),
 	)
+	if err == signature.ErrNoSignature {
+		r.agentLogger.Debug("verifyJob: Job.Step.Signature == nil")
+		return ErrNoSignature
+	}
 	if err != nil {
 		r.agentLogger.Debug("failed to verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
 		return newInvalidSignatureError(ErrVerificationFailed)

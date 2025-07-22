@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -286,7 +285,7 @@ var (
 
 func TestJobVerification(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cases := []struct {
 		name                     string
@@ -593,12 +592,20 @@ func TestJobVerification(t *testing.T) {
 			tc.mockBootstrapExpectation(mb)
 			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
-			stepWithInvariants := signature.CommandStepWithInvariants{
-				CommandStep:   tc.job.Step,
-				RepositoryURL: tc.repositoryURL,
+			t.Logf("%s: signing step with key: %v", t.Name(), tc.signingKey)
+			if tc.signingKey != nil {
+				err := signature.SignSteps(
+					ctx,
+					pipeline.Steps{&tc.job.Step},
+					tc.signingKey,
+					tc.repositoryURL,
+					signature.WithEnv(pipelineUploadEnv),
+				)
+				if err != nil {
+					t.Fatalf("signing step: %v", err)
+				}
 			}
 
-			tc.job.Step = signStep(t, ctx, tc.signingKey, pipelineUploadEnv, stepWithInvariants)
 			err := runJob(t, ctx, testRunJobConfig{
 				job:              &tc.job,
 				server:           server,
@@ -685,26 +692,4 @@ func jwksFromKeys(t *testing.T, jwkes ...jwk.Key) jwk.Set {
 	}
 
 	return set
-}
-
-func signStep(
-	t *testing.T,
-	ctx context.Context,
-	key jwk.Key,
-	env map[string]string,
-	stepWithInvariants signature.CommandStepWithInvariants,
-) pipeline.CommandStep {
-	t.Helper()
-
-	t.Logf("%s: signing step with key: %v", t.Name(), key)
-	if key == nil {
-		return stepWithInvariants.CommandStep
-	}
-
-	signature, err := signature.Sign(ctx, key, &stepWithInvariants, signature.WithEnv(env))
-	if err != nil {
-		t.Fatalf("signing step: %v", err)
-	}
-	stepWithInvariants.Signature = signature
-	return stepWithInvariants.CommandStep
 }
