@@ -605,6 +605,14 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		env["BUILDKITE_AGENT_DEBUG_SIGNING"] = "true"
 	}
 
+	if r.conf.AgentConfiguration.SigningIgnoredEnvVars != nil {
+		env["BUILDKITE_AGENT_SIGNING_IGNORED_ENV_VARS"] = strings.Join(r.conf.AgentConfiguration.SigningIgnoredEnvVars, ",")
+	}
+
+	if r.conf.AgentConfiguration.VerificationIgnoredEnvVars != nil {
+		env["BUILDKITE_AGENT_VERIFICATION_IGNORED_ENV_VARS"] = strings.Join(r.conf.AgentConfiguration.VerificationIgnoredEnvVars, ",")
+	}
+
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing

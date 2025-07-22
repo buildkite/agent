@@ -36,13 +36,15 @@ type AgentConfiguration struct {
 	RunInPty                    bool
 	KubernetesExec              bool
 
-	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
-	SigningJWKSKeyID string // The key ID to sign pipeline uploads with
-	SigningAWSKMSKey string // The KMS key ID to sign pipeline uploads with
-	DebugSigning     bool   // Whether to print step payloads when signing them
+	SigningJWKSFile       string   // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
+	SigningJWKSKeyID      string   // The key ID to sign pipeline uploads with
+	SigningAWSKMSKey      string   // The KMS key ID to sign pipeline uploads with
+	DebugSigning          bool     // Whether to print step payloads when signing them
+	SigningIgnoredEnvVars []string // A list of environment variable names to ignore when signing the pipeline. These variables (and their values) will not be included in the signature. For signatures to match, the corresponding flag must be set on the agent that signed the pipeline
 
-	VerificationJWKS             any    // The set of keys to verify jobs with
-	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
+	VerificationJWKS             any      // The set of keys to verify jobs with
+	VerificationFailureBehaviour string   // What to do if job verification fails (one of `block` or `warn`)
+	VerificationIgnoredEnvVars   []string // A list of environment variable names to ignore when verifying the pipeline. These variables (and their values) will not be included in the signature verification. For signatures to match, the corresponding flag must be set on the agent that signed the pipeline
 
 	ANSITimestamps               bool
 	TimestampLines               bool
