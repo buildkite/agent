@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.103.0](https://github.com/buildkite/agent/tree/v3.103.0) (2025-07-22)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.102.2...v3.103.0)
+
+### Added
+- Configurable kubernetes-bootstrap connection timeout [#3398](https://github.com/buildkite/agent/pull/3398) (@zhming0)
+
+### Changed
+- Exit with a specific code when the Job being Acquired is Locked [#3403](https://github.com/buildkite/agent/pull/3403) (@CerealBoy)
+- Rename local -> repository hooks, global -> agent hooks [#3401](https://github.com/buildkite/agent/pull/3401) (@moskyb)
+- Use `BUILDKITE_PIPELINE_DEFAULT_BRANCH` as a default git diff base [#3396](https://github.com/buildkite/agent/pull/3396) (@DrJosh9000)
+- `apply-if-changed` now enabled by default - `if_changed` improvements [#3387](https://github.com/buildkite/agent/pull/3387) (@DrJosh9000)
+
+### Internal
+- Update to use OIDC session tokens on AWS role assumption [#3395](https://github.com/buildkite/agent/pull/3395) (@duckalini)
+- Annotate with lint findings [#3404](https://github.com/buildkite/agent/pull/3404) (@DrJosh9000)
+- Lint fixes [#3383](https://github.com/buildkite/agent/pull/3383), [#3399](https://github.com/buildkite/agent/pull/3399) (@DrJosh9000)
+
+### Dependencies
+- build(deps): bump the cloud-providers group with 5 updates [#3406](https://github.com/buildkite/agent/pull/3406) (@dependabot[bot])
+- build(deps): bump the container-images group across 6 directories with 2 updates [#3405](https://github.com/buildkite/agent/pull/3405) (@dependabot[bot])
+- build(deps): bump the golang-x group with 4 updates [#3391](https://github.com/buildkite/agent/pull/3391) (@dependabot[bot])
+- build(deps): bump google.golang.org/api from 0.240.0 to 0.241.0 in the cloud-providers group [#3389](https://github.com/buildkite/agent/pull/3389) (@dependabot[bot])
+- build(deps): bump the container-images group across 6 directories with 3 updates [#3390](https://github.com/buildkite/agent/pull/3390) (@dependabot[bot])
+- build(deps): bump gopkg.in/DataDog/dd-trace-go.v1 from 1.74.2 to 1.74.3 [#3388](https://github.com/buildkite/agent/pull/3388) (@dependabot[bot])
+
+## [v3.102.2](https://github.com/buildkite/agent/tree/v3.102.2) (2025-07-15)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.102.1...v3.102.2)
+
+### Changed
+- Fix to reflect-exit-status flag [#3393](https://github.com/buildkite/agent/pull/3393) (@DrJosh9000)
+
 ## [v3.102.1](https://github.com/buildkite/agent/tree/v3.102.1) (2025-07-14)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.102.0...v3.102.1)
 
