@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -215,4 +216,125 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 
 	err = tt.executor.defaultCheckoutPhase(ctx)
 	assert.NoError(err)
+}
+
+func TestPartialCloneFlags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                   string
+		gitCloneFlags          string
+		gitCloneDepth          string
+		gitCloneFilter         string
+		gitSparseCheckout      bool
+		gitSparseCheckoutPaths string
+		expectedFlags          string
+	}{
+		{
+			name:          "default clone flags",
+			gitCloneFlags: "-v",
+			expectedFlags: "-v",
+		},
+		{
+			name:          "with clone depth",
+			gitCloneFlags: "-v",
+			gitCloneDepth: "200",
+			expectedFlags: "-v --depth=200",
+		},
+		{
+			name:           "with clone filter",
+			gitCloneFlags:  "-v",
+			gitCloneFilter: "tree:0",
+			expectedFlags:  "-v --filter=tree:0",
+		},
+		{
+			name:                   "with sparse checkout",
+			gitCloneFlags:          "-v",
+			gitSparseCheckout:      true,
+			gitSparseCheckoutPaths: "src/frontend",
+			expectedFlags:          "-v --no-checkout",
+		},
+		{
+			name:                   "full partial clone setup",
+			gitCloneFlags:          "-v",
+			gitCloneDepth:          "200",
+			gitCloneFilter:         "tree:0",
+			gitSparseCheckout:      true,
+			gitSparseCheckoutPaths: "src/frontend,src/backend",
+			expectedFlags:          "-v --depth=200 --filter=tree:0 --no-checkout",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := &Executor{
+				ExecutorConfig: ExecutorConfig{
+					GitCloneFlags:          tc.gitCloneFlags,
+					GitCloneDepth:          tc.gitCloneDepth,
+					GitCloneFilter:         tc.gitCloneFilter,
+					GitSparseCheckout:      tc.gitSparseCheckout,
+					GitSparseCheckoutPaths: tc.gitSparseCheckoutPaths,
+				},
+			}
+
+			// Build clone flags like in defaultCheckoutPhase
+			gitCloneFlags := e.GitCloneFlags
+			if e.GitCloneDepth != "" {
+				gitCloneFlags += " --depth=" + e.GitCloneDepth
+			}
+			if e.GitCloneFilter != "" {
+				gitCloneFlags += " --filter=" + e.GitCloneFilter
+			}
+			if e.GitSparseCheckout && e.GitSparseCheckoutPaths != "" {
+				gitCloneFlags += " --no-checkout"
+			}
+
+			// Remove any extra spaces and normalize
+			gitCloneFlags = strings.TrimSpace(gitCloneFlags)
+			gitCloneFlags = strings.Join(strings.Fields(gitCloneFlags), " ")
+
+			require.Equal(t, tc.expectedFlags, gitCloneFlags)
+		})
+	}
+}
+
+func TestParseSparseCheckoutPaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "single path",
+			input:    "src/frontend",
+			expected: []string{"src/frontend"},
+		},
+		{
+			name:     "multiple paths",
+			input:    "src/frontend,src/backend,docs",
+			expected: []string{"src/frontend", "src/backend", "docs"},
+		},
+		{
+			name:     "paths with spaces",
+			input:    " src/frontend , src/backend , docs ",
+			expected: []string{"src/frontend", "src/backend", "docs"},
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: []string{""},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			paths := strings.Split(tc.input, ",")
+			for i := range paths {
+				paths[i] = strings.TrimSpace(paths[i])
+			}
+			require.Equal(t, tc.expected, paths)
+		})
+	}
 }

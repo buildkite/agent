@@ -23,6 +23,10 @@ type AgentConfiguration struct {
 	GitCloneMirrorFlags         string
 	GitCleanFlags               string
 	GitFetchFlags               string
+	GitSparseCheckout           bool
+	GitSparseCheckoutPaths      string
+	GitCloneDepth               string
+	GitCloneFilter              string
 	GitSubmodules               bool
 	AllowedRepositories         []*regexp.Regexp
 	AllowedPlugins              []*regexp.Regexp
