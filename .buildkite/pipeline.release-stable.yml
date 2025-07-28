@@ -11,8 +11,13 @@ steps:
     env:
       CODENAME: "stable"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -30,8 +35,13 @@ steps:
     env:
       CODENAME: "stable"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -50,8 +60,13 @@ steps:
       CODENAME: "stable"
       RPM_S3_BUCKET: "yum.buildkite.com"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
       - docker#v5.8.0:
           environment:
             - "AWS_ACCESS_KEY_ID"
@@ -107,8 +122,13 @@ steps:
       CODENAME: "stable"
       DEB_S3_BUCKET: "apt.buildkite.com/buildkite-agent"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -168,8 +188,13 @@ steps:
           CODENAME: "stable"
           REGISTRY: "{{matrix.registry}}"
         plugins:
-          - aws-assume-role-with-web-identity:
+          - aws-assume-role-with-web-identity#v1.4.0:
               role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+              session-tags:
+                - organization_slug
+                - organization_id
+                - pipeline_slug
+                - build_branch
           - ecr#v2.7.0:
               login: true
               account-ids: "445615400570"
@@ -191,8 +216,13 @@ steps:
     env:
       CODENAME: "stable"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
