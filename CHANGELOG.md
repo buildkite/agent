@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.103.1](https://github.com/buildkite/agent/tree/v3.103.1) (2025-08-07)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.103.0...v3.103.1)
+
+### Fixed
+- PS-980: fix custom TMPDIR break hook wrapper [#3416](https://github.com/buildkite/agent/pull/3416) (@zhming0)
+
+### Changed
+- PS-1000: ensure a static & short checkout path for k8s stack agent [#3420](https://github.com/buildkite/agent/pull/3420) (@zhming0)
+- Make the 'Pipeline upload not yet applied: processing' message info, not warning [#3419](https://github.com/buildkite/agent/pull/3419) (@moskyb)
+
+### Internal
+- build(deps): bump thor from 0.19.4 to 1.4.0 [#3417](https://github.com/buildkite/agent/pull/3417) (@dependabot[bot])
+- build(deps): bump the cloud-providers group across 1 directory with 7 updates [#3414](https://github.com/buildkite/agent/pull/3414) (@dependabot[bot])
+- build(deps): bump the container-images group across 7 directories with 4 updates [#3415](https://github.com/buildkite/agent/pull/3415) (@dependabot[bot])
+- Update to use OIDC session tags on AWS role assumption [#3412](https://github.com/buildkite/agent/pull/3412) (@duckalini)
+- chore: move the tool.go to new tool dependency [#3409](https://github.com/buildkite/agent/pull/3409) (@wolfeidau)
+- Upgrade to go-pipeline v0.15.0 [#3408](https://github.com/buildkite/agent/pull/3408) (@DrJosh9000)
+- Only run tests if code has changed [#3407](https://github.com/buildkite/agent/pull/3407) (@DrJosh9000)
+
+
 ## [v3.103.0](https://github.com/buildkite/agent/tree/v3.103.0) (2025-07-22)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.102.2...v3.103.0)
 
