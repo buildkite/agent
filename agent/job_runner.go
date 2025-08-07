@@ -554,6 +554,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
 	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
+	env["BUILDKITE_GIT_SPARSE_CHECKOUT"] = fmt.Sprint(r.conf.AgentConfiguration.GitSparseCheckout)
+	env["BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"] = r.conf.AgentConfiguration.GitSparseCheckoutPaths
+	env["BUILDKITE_GIT_CLONE_DEPTH"] = r.conf.AgentConfiguration.GitCloneDepth
+	env["BUILDKITE_GIT_CLONE_FILTER"] = r.conf.AgentConfiguration.GitCloneFilter
 	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout)
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(ctx), ",")
