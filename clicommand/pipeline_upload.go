@@ -79,14 +79,15 @@ type PipelineUploadConfig struct {
 	GlobalConfig
 	APIConfig
 
-	FilePath        string   `cli:"arg:0" label:"upload paths"`
-	Replace         bool     `cli:"replace"`
-	Job             string   `cli:"job"` // required, but not in dry-run mode
-	DryRun          bool     `cli:"dry-run"`
-	DryRunFormat    string   `cli:"format"`
-	NoInterpolation bool     `cli:"no-interpolation"`
-	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
-	RejectSecrets   bool     `cli:"reject-secrets"`
+	FilePath             string   `cli:"arg:0" label:"upload paths"`
+	Replace              bool     `cli:"replace"`
+	Job                  string   `cli:"job"` // required, but not in dry-run mode
+	DryRun               bool     `cli:"dry-run"`
+	DryRunFormat         string   `cli:"format"`
+	NoInterpolation      bool     `cli:"no-interpolation"`
+	RedactedVars         []string `cli:"redacted-vars" normalize:"list"`
+	RejectSecrets        bool     `cli:"reject-secrets"`
+	ValidateDependencies bool     `cli:"validate-dependencies"`
 
 	// Used for if_changed processing
 	ApplyIfChanged bool   `cli:"apply-if-changed"`
@@ -146,7 +147,11 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "Provides the base from which to find the git diff when processing ′if_changed′, e.g. origin/main. If not provided, it uses the first valid value of {origin/$BUILDKITE_PULL_REQUEST_BASE_BRANCH, origin/$BUILDKITE_PIPELINE_DEFAULT_BRANCH, origin/main}.",
 			EnvVar: "BUILDKITE_GIT_DIFF_BASE",
 		},
-
+		cli.BoolFlag{
+			Name:   "validate-dependencies",
+			Usage:  "When true, validates the dependencies of each step when uploading.",
+			EnvVar: "BUILDKITE_PIPELINE_VALIDATE_DEPENDENCIES",
+		},
 		// Note: changes to these environment variables need to be reflected in the environment created
 		// in the job runner. At the momenet, that's at agent/job_runner.go:500-507
 		cli.StringFlag{
@@ -387,9 +392,10 @@ var PipelineUploadCommand = cli.Command{
 				Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
 				JobID:  cfg.Job,
 				Change: &api.PipelineChange{
-					UUID:     api.NewUUID(),
-					Replace:  cfg.Replace,
-					Pipeline: result,
+					UUID:                 api.NewUUID(),
+					Replace:              cfg.Replace,
+					Pipeline:             result,
+					ValidateDependencies: cfg.ValidateDependencies,
 				},
 				RetrySleepFunc: time.Sleep,
 			}
