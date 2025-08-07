@@ -132,6 +132,15 @@ var KubernetesBootstrapCommand = cli.Command{
 		// (we're doing all that here).
 		environ.Set("BUILDKITE_KUBERNETES_EXEC", "false")
 
+		if _, exists := environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH"); !exists {
+			// The OG agent runs as a long-live worker, therefore it set a checkout path dynamically to cater
+			// for different workloads.
+			// The path can gets really long because Agent name contain auto generated uuid, it might break some customers'
+			// use case.
+			// The k8s agent runs emphemerally, there is no need to carefully craft a checkout path.
+			environ.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(buildPath, "buildkite"))
+		}
+
 		// BUILDKITE_BIN_PATH is a funny one. The bootstrap adds it to PATH,
 		// and the agent deduces it from its own path (as we do below), but in
 		// the k8s stack the agent could run from two different locations:
