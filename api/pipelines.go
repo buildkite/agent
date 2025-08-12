@@ -9,9 +9,10 @@ import (
 type PipelineChange struct {
 	// UUID identifies this pipeline change. We keep this constant during
 	// retry loops so that work is not repeated on the API server
-	UUID     string `json:"uuid"`
-	Pipeline any    `json:"pipeline"`
-	Replace  bool   `json:"replace,omitempty"`
+	UUID                 string `json:"uuid"`
+	Pipeline             any    `json:"pipeline"`
+	Replace              bool   `json:"replace,omitempty"`
+	ValidateDependencies bool   `json:"validate_dependencies,omitempty"`
 }
 
 type PipelineUploadStatus struct {
