@@ -24,7 +24,6 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
-	"github.com/mattn/go-zglob"
 )
 
 const (
@@ -201,65 +200,37 @@ func (a *Uploader) glob(ctx context.Context, filesCh chan<- string) error {
 	// glob is solely responsible for writing to the channel.
 	defer close(filesCh)
 
-	if experiments.IsEnabled(ctx, experiments.UseZZGlob) {
-		// New zzglob library. Do all globs at once with MultiGlob, which takes
-		// care of any necessary parallelism under the hood.
-		a.logger.Debug("Searching for %s", a.conf.Paths)
-		var patterns []*zzglob.Pattern
-		for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
-			globPath := strings.TrimSpace(globPath)
-			if globPath == "" {
-				continue
-			}
-			pattern, err := zzglob.Parse(globPath)
-			if err != nil {
-				return fmt.Errorf("invalid glob pattern %q: %w", globPath, err)
-			}
-			patterns = append(patterns, pattern)
-		}
-
-		walkDirFunc := func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				a.logger.Warn("Couldn't walk path %s", path)
-				return nil
-			}
-			if d != nil && d.IsDir() {
-				a.logger.Warn("One of the glob patterns matched a directory: %s", path)
-				return nil
-			}
-			filesCh <- path
-			return nil
-		}
-		err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
-		if err != nil {
-			return fmt.Errorf("globbing patterns: %w", err)
-		}
-		return nil
-	}
-
-	// Old go-zglob library. Do each glob one at a time.
-	// go-zglob uses fastwalk under the hood to parallelise directory walking.
-	globfunc := zglob.Glob
-	if a.conf.GlobResolveFollowSymlinks {
-		// Follow symbolic links for files & directories while expanding globs
-		globfunc = zglob.GlobFollowSymlinks
-	}
+	// New zzglob library. Do all globs at once with MultiGlob, which takes
+	// care of any necessary parallelism under the hood.
+	a.logger.Debug("Searching for %s", a.conf.Paths)
+	var patterns []*zzglob.Pattern
 	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
 		globPath := strings.TrimSpace(globPath)
 		if globPath == "" {
 			continue
 		}
-		files, err := globfunc(globPath)
-		if errors.Is(err, os.ErrNotExist) {
-			a.logger.Info("File not found: %s", globPath)
-			continue
-		}
+		pattern, err := zzglob.Parse(globPath)
 		if err != nil {
-			return fmt.Errorf("resolving glob %s: %w", globPath, err)
+			return fmt.Errorf("invalid glob pattern %q: %w", globPath, err)
 		}
-		for _, path := range files {
-			filesCh <- path
+		patterns = append(patterns, pattern)
+	}
+
+	walkDirFunc := func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			a.logger.Warn("Couldn't walk path %s", path)
+			return nil
 		}
+		if d != nil && d.IsDir() {
+			a.logger.Warn("One of the glob patterns matched a directory: %s", path)
+			return nil
+		}
+		filesCh <- path
+		return nil
+	}
+	err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
+	if err != nil {
+		return fmt.Errorf("globbing patterns: %w", err)
 	}
 	return nil
 }
