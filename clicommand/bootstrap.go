@@ -69,6 +69,10 @@ type BootstrapConfig struct {
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
+	GitSparseCheckout            bool     `cli:"git-sparse-checkout"`
+	GitSparseCheckoutPaths       string   `cli:"git-sparse-checkout-paths"`
+	GitCloneDepth                string   `cli:"git-clone-depth"`
+	GitCloneFilter               string   `cli:"git-clone-filter"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
@@ -243,6 +247,29 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "Flags to pass to \"git fetch\" command",
 			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
+		},
+		cli.BoolFlag{
+			Name:   "git-sparse-checkout",
+			Usage:  "Enable sparse checkout for partial clones",
+			EnvVar: "BUILDKITE_GIT_SPARSE_CHECKOUT",
+		},
+		cli.StringFlag{
+			Name:   "git-sparse-checkout-paths",
+			Value:  "",
+			Usage:  "Paths to include in sparse checkout (comma-separated)",
+			EnvVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+		},
+		cli.StringFlag{
+			Name:   "git-clone-depth",
+			Value:  "",
+			Usage:  "Clone depth for shallow clones (e.g., \"200\")",
+			EnvVar: "BUILDKITE_GIT_CLONE_DEPTH",
+		},
+		cli.StringFlag{
+			Name:   "git-clone-filter",
+			Value:  "",
+			Usage:  "Filter specification for partial clones (e.g., \"tree:0\")",
+			EnvVar: "BUILDKITE_GIT_CLONE_FILTER",
 		},
 		cli.StringSliceFlag{
 			Name:   "git-submodule-clone-config",
@@ -466,6 +493,10 @@ var BootstrapCommand = cli.Command{
 			GitCloneFlags:                cfg.GitCloneFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
+			GitSparseCheckout:            cfg.GitSparseCheckout,
+			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
+			GitCloneDepth:                cfg.GitCloneDepth,
+			GitCloneFilter:               cfg.GitCloneFilter,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
