@@ -452,17 +452,114 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 	}
 
+	// Agent configuration variables - set in agent environment for Docker to pull
+	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
+	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
+	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
+	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
+	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
+	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout)
+	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
+	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
+	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules)
+	env["BUILDKITE_CANCEL_GRACE_PERIOD"] = strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod)
+	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprint(r.conf.AgentConfiguration.CommandEval)
+	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled)
+	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled)
+	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
+	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
+	env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod / time.Second))
+	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan)
+	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks)
+
+	// Tracing variables
+	env["BUILDKITE_TRACE_CONTEXT_ENCODING"] = r.conf.AgentConfiguration.TraceContextEncoding
+
+	if r.conf.AgentConfiguration.TracingBackend != "" {
+		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
+		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
+
+		// Buildkite backend can provide a traceparent property on the job
+		if r.conf.Job.TraceParent != "" {
+			env["BUILDKITE_TRACING_TRACEPARENT"] = r.conf.Job.TraceParent
+		}
+		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
+			env["BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"] = "true"
+		}
+	}
+
+	// Pipeline signing variables
+	if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
+		env["BUILDKITE_AGENT_AWS_KMS_KEY"] = r.conf.AgentConfiguration.SigningAWSKMSKey
+	}
+	if r.conf.AgentConfiguration.SigningJWKSFile != "" {
+		env["BUILDKITE_AGENT_JWKS_FILE"] = r.conf.AgentConfiguration.SigningJWKSFile
+	}
+	if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
+		env["BUILDKITE_AGENT_JWKS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKeyID
+	}
+
+	// Variables to write as names-only to env file (Docker will pull values from agent environment)
+	envFileNameOnlyVars := []string{
+		// Git configuration
+		"BUILDKITE_GIT_CHECKOUT_FLAGS",
+		"BUILDKITE_GIT_CLEAN_FLAGS",
+		"BUILDKITE_GIT_CLONE_FLAGS",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+		"BUILDKITE_GIT_FETCH_FLAGS",
+		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		"BUILDKITE_GIT_MIRRORS_PATH",
+		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+		"BUILDKITE_GIT_SUBMODULES",
+		// Build configuration
+		"BUILDKITE_CANCEL_GRACE_PERIOD",
+		"BUILDKITE_COMMAND_EVAL",
+		"BUILDKITE_LOCAL_HOOKS_ENABLED",
+		"BUILDKITE_PLUGINS_ENABLED",
+		"BUILDKITE_REDACTED_VARS",
+		"BUILDKITE_SHELL",
+		"BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
+		"BUILDKITE_SSH_KEYSCAN",
+		"BUILDKITE_STRICT_SINGLE_HOOKS",
+		// Tracing variables
+		"BUILDKITE_TRACE_CONTEXT_ENCODING",
+		"BUILDKITE_TRACING_BACKEND",
+		"BUILDKITE_TRACING_SERVICE_NAME",
+		"BUILDKITE_TRACING_TRACEPARENT",
+		"BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
+		// Pipeline signing
+		"BUILDKITE_AGENT_AWS_KMS_KEY",
+		"BUILDKITE_AGENT_JWKS_FILE",
+		"BUILDKITE_AGENT_JWKS_KEY_ID",
+	}
+
 	// Write out the job environment to file:
-	// - envShellFile: in k="v" format, with newlines escaped
+	// - envShellFile: mixed format - names-only for agent config, k="v" for job variables
 	// - envJSONFile: as a single JSON object {"k":"v",...}, escaped appropriately for JSON.
-	// We present only the clean environment - i.e only variables configured
-	// on the job upstream - and expose the path in another environment variable.
 	if r.envShellFile != nil {
-		for key, value := range env {
-			if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
-				return nil, err
+		// First write agent config variables as names-only (Docker pulls from environment)
+		for _, varName := range envFileNameOnlyVars {
+			if _, exists := env[varName]; exists {
+				if _, err := fmt.Fprintf(r.envShellFile, "%s\n", varName); err != nil {
+					return nil, err
+				}
 			}
 		}
+
+		// Then write remaining variables with values
+		nameOnlySet := make(map[string]bool)
+		for _, name := range envFileNameOnlyVars {
+			nameOnlySet[name] = true
+		}
+
+		for key, value := range env {
+			if !nameOnlySet[key] {
+				if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
+					return nil, err
+				}
+			}
+		}
+
 		if err := r.envShellFile.Close(); err != nil {
 			return nil, err
 		}
@@ -539,29 +636,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
 	env["BUILDKITE_SOCKETS_PATH"] = r.conf.AgentConfiguration.SocketsPath
-	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
-	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
 	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
 	env["BUILDKITE_ADDITIONAL_HOOKS_PATHS"] = strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ",")
 	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
-	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan)
-	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules)
-	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprint(r.conf.AgentConfiguration.CommandEval)
-	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled)
-	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled)
-	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
-	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
-	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
-	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
-	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
-	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout)
-	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(ctx), ",")
-	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
-	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks)
-	env["BUILDKITE_CANCEL_GRACE_PERIOD"] = strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod)
-	env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod / time.Second))
-	env["BUILDKITE_TRACE_CONTEXT_ENCODING"] = r.conf.AgentConfiguration.TraceContextEncoding
 
 	if r.conf.KubernetesExec {
 		env["BUILDKITE_KUBERNETES_EXEC"] = "true"
@@ -587,27 +665,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		env["BUILDKITE_PTY"] = "false"
 	}
 
-	// pass through the KMS key ID for signing
-	if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
-		env["BUILDKITE_AGENT_AWS_KMS_KEY"] = r.conf.AgentConfiguration.SigningAWSKMSKey
-	}
-
-	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
-	if r.conf.AgentConfiguration.SigningJWKSFile != "" {
-		env["BUILDKITE_AGENT_JWKS_FILE"] = r.conf.AgentConfiguration.SigningJWKSFile
-	}
-
-	if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
-		env["BUILDKITE_AGENT_JWKS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKeyID
-	}
-
 	if r.conf.AgentConfiguration.DebugSigning {
 		env["BUILDKITE_AGENT_DEBUG_SIGNING"] = "true"
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
-	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
-	// per-pipeline testing
+	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier per-pipeline testing
 	if pluginValidation, ok := env["BUILDKITE_PLUGIN_VALIDATION"]; ok {
 		switch pluginValidation {
 		case "true", "1", "on":
@@ -615,22 +678,6 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 	}
 	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprint(enablePluginValidation)
-
-	if r.conf.AgentConfiguration.TracingBackend != "" {
-		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
-		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
-
-		// Buildkite backend can provide a traceparent property on the job
-		// which can be propagated to the job tracing if OpenTelemetry is used
-		//
-		// https://www.w3.org/TR/trace-context/#traceparent-header
-		if r.conf.Job.TraceParent != "" {
-			env["BUILDKITE_TRACING_TRACEPARENT"] = r.conf.Job.TraceParent
-		}
-		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
-			env["BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"] = "true"
-		}
-	}
 
 	env["BUILDKITE_AGENT_DISABLE_WARNINGS_FOR"] = strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ",")
 
