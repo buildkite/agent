@@ -67,7 +67,7 @@ var (
 		JobAPI:                 standardPromotionMsg(JobAPI, "v3.64.0"),
 		KubernetesExec:         "The kubernetes-exec experiment has been replaced with the --kubernetes-exec flag as of agent v3.74.0",
 		PolyglotHooks:          standardPromotionMsg(PolyglotHooks, "v3.85.0"),
-		UseZZGlob:              standardPromotionMsg(PolyglotHooks, "v3.104.0"),
+		UseZZGlob:              standardPromotionMsg(UseZZGlob, "v3.104.0"),
 	}
 
 	// Used to track experiments possibly in use.

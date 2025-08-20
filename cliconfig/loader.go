@@ -35,7 +35,8 @@ type Loader struct {
 	File *File
 }
 
-var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
+// Matches "arg:index" (specific non-flag arg) or "arg:*" (all non-flag args).
+var argCLINameRE = regexp.MustCompile(`arg:(\d+|\*)`)
 
 // Loads the config from the CLI and config files that are present and returns
 // any warnings or errors
@@ -186,20 +187,26 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	var value any
 
 	// See the if the cli option is using the arg format (arg:1)
-	argMatch := argCliNameRegexp.FindStringSubmatch(cliName)
+	argMatch := argCLINameRE.FindStringSubmatch(cliName)
 	if len(argMatch) > 0 {
 		argNum := argMatch[1]
 
-		// Convert the arg position to an integer
-		argIndex, err := strconv.Atoi(argNum)
-		if err != nil {
-			return fmt.Errorf("converting string to int: %w", err)
-		}
+		if argNum == "*" {
+			// All args.
+			value = l.CLI.Args()
+		} else {
+			// It's an index.
+			// Convert the arg position to an integer
+			argIndex, err := strconv.Atoi(argNum)
+			if err != nil {
+				return fmt.Errorf("converting string to int: %w", err)
+			}
 
-		// Only set the value if the args are long enough for
-		// the position to exist.
-		if len(l.CLI.Args()) > argIndex {
-			value = l.CLI.Args()[argIndex]
+			// Only set the value if the args are long enough for
+			// the position to exist.
+			if len(l.CLI.Args()) > argIndex {
+				value = l.CLI.Args()[argIndex]
+			}
 		}
 
 		// Otherwise see if we can pull it from an environment variable
@@ -212,6 +219,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 				}
 			}
 		}
+
 	} else {
 		// If the cli name didn't have the special format, then we need to
 		// either load from the context's flags, or from a config file.
