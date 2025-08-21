@@ -7,7 +7,7 @@
 1. Commit your changes (`git commit -am 'Add some feature'`)
     - In an ideal world we have [atomic commits](https://www.pauline-vos.nl/atomic-commits/) and use [Tim Pope-style commit messages](https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html), but so long as it's clear what's happening in your PR, that's fine. We try to not be super persnickety about these things.
 1. Push to your branch (`git push origin my-new-feature`)
-1. Create a pull request for your branch. Make sure that your PR has a nice description, and that it's linked to any relevant issues.
+1. Create a pull request for your branch. Make sure that your PR has a nice description (fill in the template), and that it's linked to any relevant issues.
 
 The agent wranglers at Buildkite will review your PR, and start a CI build for it. For security reasons, we don't automatically run CI against forked repos, and a human will review your PR prior to its CI running.
 
