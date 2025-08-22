@@ -11,7 +11,6 @@ import (
 	"maps"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -79,7 +78,7 @@ type PipelineUploadConfig struct {
 	GlobalConfig
 	APIConfig
 
-	FilePath        string   `cli:"arg:0" label:"upload paths"`
+	FilePaths       []string `cli:"arg:*" label:"upload paths"`
 	Replace         bool     `cli:"replace"`
 	Job             string   `cli:"job"` // required, but not in dry-run mode
 	DryRun          bool     `cli:"dry-run"`
@@ -176,27 +175,31 @@ var PipelineUploadCommand = cli.Command{
 		ctx, cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](ctx, c)
 		defer done()
 
-		// Find the pipeline either from STDIN or the first argument
-		var input *os.File
-		var filename string
+		// Find the pipeline either from STDIN or the non-flag arguments
+		type input struct {
+			file *os.File
+			name string
+		}
+		var inputs []input
 
 		switch {
-		case cfg.FilePath != "":
-			l.Info("Reading pipeline config from %q", cfg.FilePath)
+		case len(cfg.FilePaths) > 0:
+			l.Info("Reading pipeline configs from %q", cfg.FilePaths)
 
-			filename = filepath.Base(cfg.FilePath)
-			file, err := os.Open(cfg.FilePath)
-			if err != nil {
-				return fmt.Errorf("failed to read file: %w", err)
+			for _, fn := range cfg.FilePaths {
+				file, err := os.Open(fn)
+				if err != nil {
+					return fmt.Errorf("failed to read file: %w", err)
+				}
+				defer file.Close()
+				inputs = append(inputs, input{file, filepath.Base(fn)})
 			}
-			defer file.Close()
-			input = file
 
 		case stdin.IsReadable():
 			l.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
-			input = os.Stdin
+			inputs = []input{{os.Stdin, "(stdin)"}}
 
 		default:
 			l.Info("Searching for pipeline config...")
@@ -235,23 +238,25 @@ var PipelineUploadCommand = cli.Command{
 			l.Info("Found config file %q", found)
 
 			// Read the default file
-			filename = path.Base(found)
 			file, err := os.Open(found)
 			if err != nil {
 				return fmt.Errorf("failed to read file %q: %w", found, err)
 			}
 			defer file.Close()
-			input = file
+			inputs = []input{{file, filepath.Base(found)}}
 		}
 
-		// Make sure the file actually has something in it
-		if input != os.Stdin {
-			fi, err := input.Stat()
+		// Make sure each file (other than stdin) actually has something in it
+		for _, input := range inputs {
+			if input.file == os.Stdin {
+				continue
+			}
+			fi, err := input.file.Stat()
 			if err != nil {
-				return fmt.Errorf("couldn't stat pipeline configuration file %q: %w", input.Name(), err)
+				return fmt.Errorf("couldn't stat pipeline configuration file %q: %w", input.file.Name(), err)
 			}
 			if fi.Size() == 0 {
-				return fmt.Errorf("pipeline file %q is empty", input.Name())
+				return fmt.Errorf("pipeline file %q is empty", input.file.Name())
 			}
 		}
 
@@ -260,11 +265,6 @@ var PipelineUploadCommand = cli.Command{
 		if !cfg.NoInterpolation { // yes, interpolation
 			// resolve BUILDKITE_COMMIT based on the local git repo
 			resolveCommit(l, environ)
-		}
-
-		src := filename
-		if src == "" {
-			src = "(stdin)"
 		}
 
 		// Used to encode output in dry-run mode.
@@ -302,102 +302,108 @@ var PipelineUploadCommand = cli.Command{
 			),
 		}
 
-		// For each pipeline in the input (could be multiple)...
-		for result, err := range cfg.parseAndInterpolate(ctx, src, input, environ) {
-			if err != nil {
-				w := warning.As(err)
-				if w == nil {
-					return err
-				}
-				l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
-			}
+		// Process all inputs.
+		for _, input := range inputs {
 
-			if len(cfg.RedactedVars) > 0 {
-				// Secret detection uses the original environment, since
-				// Interpolate merges the pipeline's env block into `environ`.
-				searchForSecrets(l, &cfg, environ, result, src)
-			}
-
-			var (
-				key signature.Key
-			)
-
-			switch {
-			case cfg.SigningAWSKMSKey != "":
-				awscfg, err := awslib.GetConfigV2(ctx)
+			// For each pipeline in the input (could be multiple)...
+			count := 1
+			for result, err := range cfg.parseAndInterpolate(ctx, input.name, input.file, environ) {
 				if err != nil {
-					return err
+					w := warning.As(err)
+					if w == nil {
+						return err
+					}
+					l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
 				}
 
-				// assign a crypto signer which uses the KMS key to sign the pipeline
-				key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
-				if err != nil {
-					return fmt.Errorf("couldn't create KMS signer: %w", err)
+				if len(cfg.RedactedVars) > 0 {
+					// Secret detection uses the original environment, since
+					// Interpolate merges the pipeline's env block into `environ`.
+					searchForSecrets(l, &cfg, environ, result, input.name)
 				}
 
-			case cfg.JWKSFile != "":
-				key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
-				if err != nil {
-					return fmt.Errorf("couldn't read the signing key file: %w", err)
-				}
-			}
-
-			if key != nil {
-				err := signature.SignSteps(
-					ctx,
-					result.Steps,
-					key,
-					os.Getenv("BUILDKITE_REPO"),
-					signature.WithEnv(result.Env.ToMap()),
-					signature.WithLogger(l),
-					signature.WithDebugSigning(cfg.DebugSigning),
+				var (
+					key signature.Key
 				)
-				if err != nil {
-					return fmt.Errorf("couldn't sign pipeline: %w", err)
+
+				switch {
+				case cfg.SigningAWSKMSKey != "":
+					awscfg, err := awslib.GetConfigV2(ctx)
+					if err != nil {
+						return err
+					}
+
+					// assign a crypto signer which uses the KMS key to sign the pipeline
+					key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
+					if err != nil {
+						return fmt.Errorf("couldn't create KMS signer: %w", err)
+					}
+
+				case cfg.JWKSFile != "":
+					key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
+					if err != nil {
+						return fmt.Errorf("couldn't read the signing key file: %w", err)
+					}
 				}
-			}
 
-			// Apply or strip out `if_changed`, based on settings.
-			ifChanged.apply(l, result.Steps)
+				if key != nil {
+					err := signature.SignSteps(
+						ctx,
+						result.Steps,
+						key,
+						os.Getenv("BUILDKITE_REPO"),
+						signature.WithEnv(result.Env.ToMap()),
+						signature.WithLogger(l),
+						signature.WithDebugSigning(cfg.DebugSigning),
+					)
+					if err != nil {
+						return fmt.Errorf("couldn't sign pipeline: %w", err)
+					}
+				}
 
-			// All logging happens to stderr.
-			// So this can be used with other tools to get interpolated, signed
-			// JSON or YAML.
-			if err := dryRunEnc(result); err != nil {
-				return err
-			}
+				// Apply or strip out `if_changed`, based on settings.
+				ifChanged.apply(l, result.Steps)
 
-			// In dry-run mode we just output the generated pipeline to stdout,
-			// and don't want to upload it.
-			if cfg.DryRun {
-				continue
-			}
+				// All logging happens to stderr.
+				// So this can be used with other tools to get interpolated, signed
+				// JSON or YAML.
+				if err := dryRunEnc(result); err != nil {
+					return err
+				}
 
-			// Check we have a job id set if not in dry run
-			if cfg.Job == "" {
-				return errors.New("missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
-			}
+				// In dry-run mode we just output the generated pipeline to stdout,
+				// and don't want to upload it.
+				if cfg.DryRun {
+					continue
+				}
 
-			// Check we have an agent access token if not in dry run
-			if cfg.AgentAccessToken == "" {
-				return errors.New("missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
-			}
+				// Check we have a job id set if not in dry run
+				if cfg.Job == "" {
+					return errors.New("missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
+				}
 
-			uploader := &agent.PipelineUploader{
-				Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
-				JobID:  cfg.Job,
-				Change: &api.PipelineChange{
-					UUID:     api.NewUUID(),
-					Replace:  cfg.Replace,
-					Pipeline: result,
-				},
-				RetrySleepFunc: time.Sleep,
-			}
-			if err := uploader.Upload(ctx, l); err != nil {
-				return err
-			}
+				// Check we have an agent access token if not in dry run
+				if cfg.AgentAccessToken == "" {
+					return errors.New("missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
+				}
 
-			l.Info("Successfully uploaded and parsed pipeline config")
+				uploader := &agent.PipelineUploader{
+					Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
+					JobID:  cfg.Job,
+					Change: &api.PipelineChange{
+						UUID:     api.NewUUID(),
+						Replace:  cfg.Replace,
+						Pipeline: result,
+					},
+					RetrySleepFunc: time.Sleep,
+				}
+				if err := uploader.Upload(ctx, l); err != nil {
+					return err
+				}
+
+				l.Info("Successfully parsed and uploaded pipeline #%d from %q", count, input.name)
+				count++
+			}
 		}
 
 		return nil

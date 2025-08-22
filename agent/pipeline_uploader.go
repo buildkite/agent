@@ -209,7 +209,7 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 		case "pending", "processing":
 			setNextIntervalFromResponse(r, resp)
 			err := fmt.Errorf("Pipeline upload not yet applied: %s", uploadStatus.State)
-			l.Warn("%s (%s)", err, r)
+			l.Info("%s (%s)", err, r)
 			return err
 		case "rejected", "failed":
 			l.Error("Unrecoverable error, skipping retries")
