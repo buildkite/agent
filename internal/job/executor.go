@@ -432,7 +432,16 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	return e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
+	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ)); err != nil {
+		return err
+	}
+
+	if e.Debug {
+		e.shell.Commentf("Refreshing executor config to reflect changes made through the job API")
+	}
+	e.ReadFromEnvironment(e.shell.Env)
+
+	return nil
 }
 
 func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
