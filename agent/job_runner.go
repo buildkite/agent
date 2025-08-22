@@ -452,85 +452,92 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 	}
 
-	// Agent configuration variables - set in agent environment for Docker to pull
-	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
-	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
-	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
-	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
-	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
-	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout)
-	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
-	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
-	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules)
-	env["BUILDKITE_CANCEL_GRACE_PERIOD"] = strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod)
-	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprint(r.conf.AgentConfiguration.CommandEval)
-	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled)
-	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled)
-	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
-	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
-	env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod / time.Second))
-	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan)
-	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks)
+	// Agent configuration variables - conditionally set based on experiment flag
+	if experiments.IsEnabled(ctx, experiments.PropagateAgentVars) {
+		env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
+		env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
+		env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
+		env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
+		env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
+		env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout)
+		env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
+		env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
+		env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules)
+		env["BUILDKITE_CANCEL_GRACE_PERIOD"] = strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod)
+		env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprint(r.conf.AgentConfiguration.CommandEval)
+		env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled)
+		env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled)
+		env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
+		env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
+		env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod / time.Second))
+		env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan)
+		env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks)
 
-	// Tracing variables
-	env["BUILDKITE_TRACE_CONTEXT_ENCODING"] = r.conf.AgentConfiguration.TraceContextEncoding
+		// Tracing variables
+		env["BUILDKITE_TRACE_CONTEXT_ENCODING"] = r.conf.AgentConfiguration.TraceContextEncoding
 
-	if r.conf.AgentConfiguration.TracingBackend != "" {
-		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
-		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
+		if r.conf.AgentConfiguration.TracingBackend != "" {
+			env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
+			env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
 
-		// Buildkite backend can provide a traceparent property on the job
-		if r.conf.Job.TraceParent != "" {
-			env["BUILDKITE_TRACING_TRACEPARENT"] = r.conf.Job.TraceParent
+			// Buildkite backend can provide a traceparent property on the job
+			if r.conf.Job.TraceParent != "" {
+				env["BUILDKITE_TRACING_TRACEPARENT"] = r.conf.Job.TraceParent
+			}
+			if r.conf.AgentConfiguration.TracingPropagateTraceparent {
+				env["BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"] = "true"
+			}
 		}
-		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
-			env["BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"] = "true"
-		}
 	}
 
-	// Pipeline signing variables
-	if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
-		env["BUILDKITE_AGENT_AWS_KMS_KEY"] = r.conf.AgentConfiguration.SigningAWSKMSKey
-	}
-	if r.conf.AgentConfiguration.SigningJWKSFile != "" {
-		env["BUILDKITE_AGENT_JWKS_FILE"] = r.conf.AgentConfiguration.SigningJWKSFile
-	}
-	if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
-		env["BUILDKITE_AGENT_JWKS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKeyID
+	// Pipeline signing variables - conditionally set based on experiment flag
+	if experiments.IsEnabled(ctx, experiments.PropagateAgentVars) {
+		if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
+			env["BUILDKITE_AGENT_AWS_KMS_KEY"] = r.conf.AgentConfiguration.SigningAWSKMSKey
+		}
+		if r.conf.AgentConfiguration.SigningJWKSFile != "" {
+			env["BUILDKITE_AGENT_JWKS_FILE"] = r.conf.AgentConfiguration.SigningJWKSFile
+		}
+		if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
+			env["BUILDKITE_AGENT_JWKS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKeyID
+		}
 	}
 
 	// Variables to write as names-only to env file (Docker will pull values from agent environment)
-	envFileNameOnlyVars := []string{
-		// Git configuration
-		"BUILDKITE_GIT_CHECKOUT_FLAGS",
-		"BUILDKITE_GIT_CLEAN_FLAGS",
-		"BUILDKITE_GIT_CLONE_FLAGS",
-		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		"BUILDKITE_GIT_FETCH_FLAGS",
-		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
-		"BUILDKITE_GIT_MIRRORS_PATH",
-		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-		"BUILDKITE_GIT_SUBMODULES",
-		// Build configuration
-		"BUILDKITE_CANCEL_GRACE_PERIOD",
-		"BUILDKITE_COMMAND_EVAL",
-		"BUILDKITE_LOCAL_HOOKS_ENABLED",
-		"BUILDKITE_PLUGINS_ENABLED",
-		"BUILDKITE_REDACTED_VARS",
-		"BUILDKITE_SHELL",
-		"BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
-		"BUILDKITE_SSH_KEYSCAN",
-		"BUILDKITE_STRICT_SINGLE_HOOKS",
-		// Tracing variables
-		"BUILDKITE_TRACE_CONTEXT_ENCODING",
-		"BUILDKITE_TRACING_BACKEND",
-		"BUILDKITE_TRACING_SERVICE_NAME",
-		"BUILDKITE_TRACING_TRACEPARENT",
-		"BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
-		// Pipeline signing
-		"BUILDKITE_AGENT_AWS_KMS_KEY",
-		"BUILDKITE_AGENT_JWKS_FILE",
-		"BUILDKITE_AGENT_JWKS_KEY_ID",
+	var envFileNameOnlyVars []string
+	if experiments.IsEnabled(ctx, experiments.PropagateAgentVars) {
+		envFileNameOnlyVars = []string{
+			// Git configuration
+			"BUILDKITE_GIT_CHECKOUT_FLAGS",
+			"BUILDKITE_GIT_CLEAN_FLAGS",
+			"BUILDKITE_GIT_CLONE_FLAGS",
+			"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+			"BUILDKITE_GIT_FETCH_FLAGS",
+			"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+			"BUILDKITE_GIT_MIRRORS_PATH",
+			"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+			"BUILDKITE_GIT_SUBMODULES",
+			// Build configuration
+			"BUILDKITE_CANCEL_GRACE_PERIOD",
+			"BUILDKITE_COMMAND_EVAL",
+			"BUILDKITE_LOCAL_HOOKS_ENABLED",
+			"BUILDKITE_PLUGINS_ENABLED",
+			"BUILDKITE_REDACTED_VARS",
+			"BUILDKITE_SHELL",
+			"BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
+			"BUILDKITE_SSH_KEYSCAN",
+			"BUILDKITE_STRICT_SINGLE_HOOKS",
+			// Tracing variables
+			"BUILDKITE_TRACE_CONTEXT_ENCODING",
+			"BUILDKITE_TRACING_BACKEND",
+			"BUILDKITE_TRACING_SERVICE_NAME",
+			"BUILDKITE_TRACING_TRACEPARENT",
+			"BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
+			// Pipeline signing
+			"BUILDKITE_AGENT_AWS_KMS_KEY",
+			"BUILDKITE_AGENT_JWKS_FILE",
+			"BUILDKITE_AGENT_JWKS_KEY_ID",
+		}
 	}
 
 	// Write out the job environment to file:

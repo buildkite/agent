@@ -31,6 +31,7 @@ const (
 	OverrideZeroExitOnCancel       = "override-zero-exit-on-cancel"
 	PTYRaw                         = "pty-raw"
 	ResolveCommitAfterCheckout     = "resolve-commit-after-checkout"
+	PropagateAgentVars             = "propagate-agent-vars"
 
 	// Promoted experiments
 	ANSITimestamps         = "ansi-timestamps"
@@ -55,6 +56,7 @@ var (
 		OverrideZeroExitOnCancel:       {},
 		PTYRaw:                         {},
 		ResolveCommitAfterCheckout:     {},
+		PropagateAgentVars:             {},
 	}
 
 	Promoted = map[string]string{
