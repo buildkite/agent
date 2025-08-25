@@ -31,6 +31,7 @@ type AgentConfiguration struct {
 	CommandEval                 bool
 	PluginsEnabled              bool
 	PluginValidation            bool
+	PluginsAlwaysCloneFresh     bool
 	LocalHooksEnabled           bool
 	StrictSingleHooks           bool
 	RunInPty                    bool
