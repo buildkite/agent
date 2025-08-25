@@ -40,13 +40,13 @@ func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []str
 			return K8sTagsFromEnv(os.Environ())
 		},
 		ec2MetaDataDefault: func() (map[string]string, error) {
-			return EC2MetaData{}.Get()
+			return EC2MetaData{}.Get(ctx)
 		},
 		ec2MetaDataPaths: func(paths map[string]string) (map[string]string, error) {
-			return EC2MetaData{}.GetPaths(paths)
+			return EC2MetaData{}.GetPaths(ctx, paths)
 		},
 		ec2Tags: func() (map[string]string, error) {
-			return EC2Tags{}.Get()
+			return EC2Tags{}.Get(ctx)
 		},
 		ecsMetaDataDefault: func() (map[string]string, error) {
 			return ECSMetadata{}.Get(ctx)
