@@ -567,6 +567,18 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		gitCloneFlags += fmt.Sprintf(" --reference %q", mirrorDir)
 	}
 
+	// Add partial clone flags if specified
+	if e.GitCloneDepth != "" {
+		gitCloneFlags += fmt.Sprintf(" --depth=%s", e.GitCloneDepth)
+	}
+	if e.GitCloneFilter != "" {
+		gitCloneFlags += fmt.Sprintf(" --filter=%s", e.GitCloneFilter)
+	}
+	// For sparse checkout, we need to add --no-checkout
+	if e.GitSparseCheckout && e.GitSparseCheckoutPaths != "" {
+		gitCloneFlags += " --no-checkout"
+	}
+
 	// Does the git directory exist?
 	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
 	if osutil.FileExists(existingGitDir) {
@@ -575,9 +587,59 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
 			return fmt.Errorf("setting origin: %w", err)
 		}
+
+		// Handle sparse checkout for existing repos
+		if e.GitSparseCheckout && e.GitSparseCheckoutPaths != "" {
+			e.shell.Commentf("Configuring sparse checkout for existing repository")
+			
+			// Check if sparse checkout is already initialized
+			sparseCheckoutFile := filepath.Join(existingGitDir, "info", "sparse-checkout")
+			if !osutil.FileExists(sparseCheckoutFile) {
+				// Initialize sparse checkout
+				if err := gitSparseCheckoutInit(ctx, e.shell, true); err != nil {
+					return fmt.Errorf("initializing sparse checkout: %w", err)
+				}
+			}
+
+			// Parse comma-separated paths
+			paths := strings.Split(e.GitSparseCheckoutPaths, ",")
+			for i := range paths {
+				paths[i] = strings.TrimSpace(paths[i])
+			}
+
+			e.shell.Commentf("Setting sparse checkout paths: %v", paths)
+			if err := gitSparseCheckoutSet(ctx, e.shell, paths); err != nil {
+				return fmt.Errorf("setting sparse checkout paths: %w", err)
+			}
+		} else if isSparseCheckoutEnabled(e.shell) {
+			// If sparse checkout is not wanted but is currently enabled, disable it
+			e.shell.Commentf("Disabling sparse checkout as it's not configured for this job")
+			if err := gitSparseCheckoutDisable(ctx, e.shell); err != nil {
+				return fmt.Errorf("disabling sparse checkout: %w", err)
+			}
+		}
 	} else {
 		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
 			return fmt.Errorf("cloning git repository: %w", err)
+		}
+
+		// If sparse checkout is enabled, initialize it right after cloning
+		if e.GitSparseCheckout && e.GitSparseCheckoutPaths != "" {
+			e.shell.Commentf("Initializing sparse checkout")
+			if err := gitSparseCheckoutInit(ctx, e.shell, true); err != nil {
+				return fmt.Errorf("initializing sparse checkout: %w", err)
+			}
+
+			// Parse comma-separated paths
+			paths := strings.Split(e.GitSparseCheckoutPaths, ",")
+			for i := range paths {
+				paths[i] = strings.TrimSpace(paths[i])
+			}
+
+			e.shell.Commentf("Setting sparse checkout paths: %v", paths)
+			if err := gitSparseCheckoutSet(ctx, e.shell, paths); err != nil {
+				return fmt.Errorf("setting sparse checkout paths: %w", err)
+			}
 		}
 	}
 
@@ -594,6 +656,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	}
 
 	gitFetchFlags := e.GitFetchFlags
+	
+	// Add filter flag for partial clones during fetch
+	if e.GitCloneFilter != "" {
+		gitFetchFlags += fmt.Sprintf(" --filter=%s", e.GitCloneFilter)
+	}
 
 	switch {
 	case e.RefSpec != "":
