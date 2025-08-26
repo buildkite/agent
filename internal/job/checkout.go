@@ -406,7 +406,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			refspecs = []string{e.RefSpec}
 		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
-			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+			var refspec string
+			if e.PullRequestUseMergeRefspec == "true" {
+				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+			} else {
+				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+			}
 			refspecs = []string{refspec}
 			retry = true
 		default:
@@ -609,12 +614,17 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			return fmt.Errorf("fetching refspec %q: %w", e.RefSpec, err)
 		}
 
-	case e.PullRequest != "false" && !e.MergeRequest && strings.Contains(e.PipelineProvider, "github"):
+	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 		// GitHub has a special ref which lets us fetch a pull request head, whether
 		// or not it's a current head in this repository or a fork. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
-		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		var refspec string
+		if e.PullRequestUseMergeRefspec == "true" {
+			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+		} else {
+			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		}
 		refspecs := []string{refspec}
 
 		// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there

@@ -56,6 +56,7 @@ type BootstrapConfig struct {
 	RefSpec                      string   `cli:"refspec"`
 	Plugins                      string   `cli:"plugins"`
 	PullRequest                  string   `cli:"pullrequest"`
+	PullRequestUseMergeRefspec   string   `cli:"pull-request-use-merge-refspec"`
 	GitSubmodules                bool     `cli:"git-submodules"`
 	SSHKeyscan                   bool     `cli:"ssh-keyscan"`
 	AgentName                    string   `cli:"agent" validate:"required"`
@@ -168,6 +169,11 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "The number/id of the pull request this commit belonged to",
 			EnvVar: "BUILDKITE_PULL_REQUEST",
+		},
+		cli.StringFlag{
+			Name:   "pull-request-merge-commit",
+			Usage:  "Returns true if commit is a proposed pull request merge commit",
+			EnvVar: "BUILDKITE_PULL_REQUEST_MERGE_COMMIT",
 		},
 		cli.StringFlag{
 			Name:   "agent",
@@ -487,6 +493,7 @@ var BootstrapCommand = cli.Command{
 			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
 			PluginsPath:                  cfg.PluginsPath,
 			PullRequest:                  cfg.PullRequest,
+			PullRequestUseMergeRefspec:   cfg.PullRequestUseMergeRefspec,
 			Queue:                        cfg.Queue,
 			RedactedVars:                 cfg.RedactedVars,
 			RefSpec:                      cfg.RefSpec,
