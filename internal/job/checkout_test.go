@@ -131,8 +131,7 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 
 func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	assert := require.New(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	shell, err := shell.New()
 	assert.NoError(err)

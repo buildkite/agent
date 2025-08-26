@@ -133,7 +133,7 @@ func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 		},
 		{
 			`["github.com/buildkite-plugins/ping#main#lololo"]`,
-			"Too many #'s in \"github.com/buildkite-plugins/ping#main#lololo\"",
+			"Too many '#'s in \"github.com/buildkite-plugins/ping#main#lololo\"",
 		},
 	}
 
