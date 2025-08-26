@@ -18,7 +18,7 @@ require (
 	github.com/buildkite/bintest/v3 v3.3.0
 	github.com/buildkite/go-pipeline v0.15.0
 	github.com/buildkite/interpolate v0.1.5
-	github.com/buildkite/roko v1.3.1
+	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.0
 	github.com/creack/pty v1.1.19
 	github.com/denisbrodbeck/machineid v1.0.1
