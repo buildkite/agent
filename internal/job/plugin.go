@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -21,8 +23,20 @@ import (
 type pluginCheckout struct {
 	*plugin.Plugin
 	*plugin.Definition
-	CheckoutDir string
-	HooksDir    string
+
+	// Root is the *os.Root for the checkout directory containing
+	// the plugin. This is the plugin repo itself for normal plugins, and
+	// the build checkout (Executor.checkoutRoot) for vendored plugins.
+	Root *os.Root
+
+	// PluginDir is the path within Root that contains the plugin.
+	// This is usually "." for normal plugins, and usually some subpath for
+	// vendored plugins.
+	PluginDir string
+
+	// HooksDir is the path within Root that contains the plugins hooks.
+	// This should be equivalent to filepath.Join(PluginDir, "hooks").
+	HooksDir string
 }
 
 func (e *Executor) hasPlugins() bool {
@@ -71,19 +85,19 @@ func (e *Executor) validatePluginCheckout(ctx context.Context, checkout *pluginC
 
 	if checkout.Definition == nil {
 		if e.Debug {
-			e.shell.Commentf("Parsing plugin definition for %s from %s", checkout.Plugin.Name(), checkout.CheckoutDir)
+			e.shell.Commentf("Parsing plugin definition for %s from %s", checkout.Plugin.Name(), checkout.PluginDir)
 		}
 
 		// parse the plugin definition from the plugin checkout dir
-		var err error
-		checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
-
+		def, err := plugin.LoadDefinitionFromDir(checkout.Root, checkout.PluginDir)
 		if errors.Is(err, plugin.ErrDefinitionNotFound) {
 			e.shell.Warningf("Failed to find plugin definition for plugin %s", checkout.Plugin.Name())
 			return nil
-		} else if err != nil {
+		}
+		if err != nil {
 			return err
 		}
+		checkout.Definition = def
 	}
 
 	val := &plugin.Validator{}
@@ -156,31 +170,25 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 			continue
 		}
 
-		checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-
-		pluginLocation, err := filepath.Abs(filepath.Join(checkoutPath, p.Location))
-		if err != nil {
-			return fmt.Errorf("Failed to resolve vendored plugin path for plugin %s: %w", p.Name(), err)
+		// Check that the plugin exists in the checkout.
+		if fi, err := e.checkoutRoot.Stat(p.Location); err != nil || !fi.IsDir() {
+			return fmt.Errorf("Vendored plugin path %q must be a directory within the checked-out repository: %w", p.Location, err)
 		}
 
-		if !osutil.FileExists(pluginLocation) {
-			return fmt.Errorf("Vendored plugin path %s doesn't exist", p.Location)
+		// Similarly, check that the plugin's hooks exists in the checkout.
+		hooksPath := filepath.Join(p.Location, "hooks")
+		if fi, err := e.checkoutRoot.Stat(hooksPath); err != nil || !fi.IsDir() {
+			return fmt.Errorf("Vendored plugin hooks path %q must be a directory within the checked-out repository: %w", hooksPath, err)
 		}
 
 		checkout := &pluginCheckout{
-			Plugin:      p,
-			CheckoutDir: pluginLocation,
-			HooksDir:    filepath.Join(pluginLocation, "hooks"),
+			Plugin:    p,
+			Root:      e.checkoutRoot,
+			PluginDir: p.Location,
+			HooksDir:  hooksPath,
 		}
 
-		// Also make sure that plugin is within this repository
-		// checkout and isn't elsewhere on the system.
-		if !strings.HasPrefix(pluginLocation, checkoutPath+string(os.PathSeparator)) {
-			return fmt.Errorf("Vendored plugin paths must be within the checked-out repository")
-		}
-
-		err = e.validatePluginCheckout(ctx, checkout)
-		if err != nil {
+		if err := e.validatePluginCheckout(ctx, checkout); err != nil {
 			return err
 		}
 
@@ -209,7 +217,8 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 	hookTypeSeen := make(map[string]bool)
 
 	for i, p := range checkouts {
-		hookPath, err := hook.Find(p.HooksDir, name)
+		// The plugin's hooks must exist within the plugin checkout root.
+		hookPath, err := hook.Find(p.Root, p.HooksDir, name)
 		if errors.Is(err, os.ErrNotExist) {
 			continue // this plugin does not implement this hook
 		}
@@ -269,14 +278,12 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 	return nil
 }
 
-// If any plugin has a hook by this name
+// hasPluginHook reports if any plugin has a hook by this name.
 func (e *Executor) hasPluginHook(name string) bool {
-	for _, p := range e.pluginCheckouts {
-		if _, err := hook.Find(p.HooksDir, name); err == nil {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(e.pluginCheckouts, func(p *pluginCheckout) bool {
+		_, err := hook.Find(p.Root, p.HooksDir, name)
+		return err == nil
+	})
 }
 
 // Checkout a given plugin to the plugins directory and return that directory. Each agent worker
@@ -307,9 +314,9 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	pluginDirectory := filepath.Join(pluginParentDir, id)
 	pluginGitDirectory := filepath.Join(pluginDirectory, ".git")
 	checkout := &pluginCheckout{
-		Plugin:      p,
-		CheckoutDir: pluginDirectory,
-		HooksDir:    filepath.Join(pluginDirectory, "hooks"),
+		Plugin:    p,
+		PluginDir: ".",
+		HooksDir:  "hooks",
 	}
 
 	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
@@ -327,13 +334,13 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
 	if e.PluginsAlwaysCloneFresh && osutil.FileExists(pluginDirectory) {
 		e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
-		err = os.RemoveAll(pluginDirectory)
-		if err != nil {
+		if err := os.RemoveAll(pluginDirectory); err != nil {
 			e.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
 			return nil, err
 		}
 	}
 
+	// Does the .git directory exist? (i.e. it's already checkout out?)
 	if osutil.FileExists(pluginGitDirectory) {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
@@ -344,6 +351,18 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 			e.shell.Commentf("Plugin %q already checked out (%s)", p.Label(), strings.TrimSpace(headCommit))
 		}
 
+		// Open the plugin directory as the checkout root.
+		pluginRoot, err := os.OpenRoot(pluginDirectory)
+		if err != nil {
+			return nil, fmt.Errorf("opening plugin directory as a root: %w", err)
+		}
+		runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
+		checkout.Root = pluginRoot
+
+		// Ensure hooks is a directory that exists within the checkout.
+		if fi, err := pluginRoot.Stat(checkout.HooksDir); err != nil || !fi.IsDir() {
+			return nil, fmt.Errorf("%q was not a directory within the %q plugin: %w", checkout.HooksDir, checkout.Plugin.Name(), err)
+		}
 		return checkout, nil
 	}
 
@@ -411,6 +430,20 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	err = os.Rename(tempDir, pluginDirectory)
 	if err != nil {
 		return nil, err
+	}
+
+	// Open the plugin directory (that we just moved into position) as the
+	// checkout root.
+	pluginRoot, err := os.OpenRoot(pluginDirectory)
+	if err != nil {
+		return nil, fmt.Errorf("opening plugin directory as a root: %w", err)
+	}
+	runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
+	checkout.Root = pluginRoot
+
+	// Ensure hooks is a directory that exists within the checkout.
+	if fi, err := pluginRoot.Stat(checkout.HooksDir); err != nil || !fi.IsDir() {
+		return nil, fmt.Errorf("%q was not a directory within the %q plugin: %w", checkout.HooksDir, checkout.Plugin.Name(), err)
 	}
 
 	return checkout, nil

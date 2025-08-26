@@ -49,6 +49,9 @@ type Executor struct {
 	// Shell is the shell environment for the executor
 	shell *shell.Shell
 
+	// The checkout directory root
+	checkoutRoot *os.Root
+
 	// Plugins to use
 	plugins []*plugin.Plugin
 
@@ -686,12 +689,12 @@ func (e *Executor) addOutputRedactors() {
 }
 
 func (e *Executor) hasGlobalHook(name string) bool {
-	_, err := hook.Find(e.HooksPath, name)
+	_, err := hook.Find(nil, e.HooksPath, name)
 	if err == nil {
 		return true
 	}
 	for _, additional := range e.AdditionalHooksPaths {
-		_, err := hook.Find(additional, name)
+		_, err := hook.Find(nil, additional, name)
 		if err == nil {
 			return true
 		}
@@ -702,7 +705,7 @@ func (e *Executor) hasGlobalHook(name string) bool {
 // find all matching paths for the specified hook
 func (e *Executor) getAllGlobalHookPaths(name string) ([]string, error) {
 	hooks := []string{}
-	p, err := hook.Find(e.HooksPath, name)
+	p, err := hook.Find(nil, e.HooksPath, name)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return []string{}, err
@@ -712,7 +715,7 @@ func (e *Executor) getAllGlobalHookPaths(name string) ([]string, error) {
 	}
 
 	for _, additional := range e.AdditionalHooksPaths {
-		p, err = hook.Find(additional, name)
+		p, err = hook.Find(nil, additional, name)
 		// as this is an additional hook, don't fail if there's a problem here
 		if err == nil {
 			hooks = append(hooks, p)
@@ -743,8 +746,9 @@ func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
 func (e *Executor) localHookPath(name string) (string, error) {
-	dir := filepath.Join(e.shell.Getwd(), ".buildkite", "hooks")
-	return hook.Find(dir, name)
+	// The local hooks dir must exist within the checkout root.
+	dir := filepath.Join(".buildkite", "hooks")
+	return hook.Find(e.checkoutRoot, dir, name)
 }
 
 func (e *Executor) hasLocalHook(name string) bool {
