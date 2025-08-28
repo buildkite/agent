@@ -595,6 +595,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	gitFetchFlags := e.GitFetchFlags
 
+	e.shell.Commentf("Printing PullRequestMergeCommit: %v", e.PullRequestMergeCommit)
+
 	switch {
 	case e.RefSpec != "":
 		// If a refspec is provided then use it instead.
@@ -609,7 +611,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			return fmt.Errorf("fetching refspec %q: %w", e.RefSpec, err)
 		}
 
-	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
+	case e.PullRequest != "false" && e.PullRequestMergeCommit == "false" && strings.Contains(e.PipelineProvider, "github"):
 		// GitHub has a special ref which lets us fetch a pull request head, whether
 		// or not it's a current head in this repository or a fork. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
