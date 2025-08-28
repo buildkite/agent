@@ -58,7 +58,7 @@ func CreatePlugin(location string, config map[string]any) (*Plugin, error) {
 	plugin.Vendored = strings.HasPrefix(plugin.Location, ".")
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
-		return nil, fmt.Errorf("Too many #'s in \"%s\"", location)
+		return nil, fmt.Errorf("Too many '#'s in %q", location)
 	}
 
 	if u.User != nil {

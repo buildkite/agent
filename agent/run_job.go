@@ -177,7 +177,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 
 	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for
 	// it to tell us whether it is happy to proceed.
-	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
+	if hook, _ := hook.Find(nil, r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
 		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true positive result from the hook
 		ok, err := r.executePreBootstrapHook(ctx, hook)
 		if !ok {
