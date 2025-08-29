@@ -27,6 +27,7 @@ type APIClient interface {
 	GetJobState(context.Context, string) (*api.JobState, *api.Response, error)
 	GetMetaData(context.Context, string, string, string) (*api.MetaData, *api.Response, error)
 	GetSecret(context.Context, *api.GetSecretRequest) (*api.Secret, *api.Response, error)
+	GetSecrets(context.Context, *api.GetSecretsRequest) (*api.GetSecretsResponse, *api.Response, error)
 	Heartbeat(context.Context) (*api.Heartbeat, *api.Response, error)
 	MetaDataKeys(context.Context, string, string) ([]string, *api.Response, error)
 	New(api.Config) *api.Client
