@@ -18,6 +18,17 @@ type Secret struct {
 	UUID  string `json:"uuid"`
 }
 
+// GetSecretRequest represents a request to read multiple secrets from the Buildkite Agent API.
+type GetSecretsRequest struct {
+	Keys  []string
+	JobID string
+}
+
+// GetSecretsResponse represents the response when reading multiple secrets from the Buildkite Agent API.
+type GetSecretsResponse struct {
+	Secrets []Secret `json:"secrets"`
+}
+
 // GetSecret reads a secret from the Buildkite Agent API.
 func (c *Client) GetSecret(ctx context.Context, req *GetSecretRequest) (*Secret, *Response, error) {
 	// the endpoint is /jobs/:job_id/secrets?key=:key
@@ -37,4 +48,27 @@ func (c *Client) GetSecret(ctx context.Context, req *GetSecretRequest) (*Secret,
 	}
 
 	return secret, resp, nil
+}
+
+// GetSecrets reads multiple secrets from the Buildkite Agent API.
+func (c *Client) GetSecrets(ctx context.Context, req *GetSecretsRequest) (*GetSecretsResponse, *Response, error) {
+	// the endpoint is /jobs/:job_id/secrets?key[]=:key1&key[]=:key2
+	httpReq, err := c.newRequest(ctx, "GET", path.Join("jobs", railsPathEscape(req.JobID), "secrets"), nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	q := httpReq.URL.Query()
+	for _, key := range req.Keys {
+		q.Add("key[]", key)
+	}
+	httpReq.URL.RawQuery = q.Encode()
+
+	secretsResp := &GetSecretsResponse{}
+	resp, err := c.doRequest(httpReq, secretsResp)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return secretsResp, resp, nil
 }
