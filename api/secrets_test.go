@@ -144,17 +144,17 @@ func TestGetSecrets(t *testing.T) {
 	t.Parallel()
 
 	const (
-		jobID               = "job-id"
-		nonJobID            = "non-job-id"
-		secretKey1          = "SECRET_1"
-		secretKey2          = "SECRET_2"
-		nonSecretKey        = "NON_SECRET"
-		secretValue1        = "super-secret-1"
-		secretValue2        = "super-secret-2"
-		secretUUID1         = "secret-id-1"
-		secretUUID2         = "secret-id-2"
-		accessToken         = "llamas"
-		nonAccessToken      = "alpacas"
+		jobID          = "job-id"
+		nonJobID       = "non-job-id"
+		secretKey1     = "SECRET_1"
+		secretKey2     = "SECRET_2"
+		nonSecretKey   = "NON_SECRET"
+		secretValue1   = "super-secret-1"
+		secretValue2   = "super-secret-2"
+		secretUUID1    = "secret-id-1"
+		secretUUID2    = "secret-id-2"
+		accessToken    = "llamas"
+		nonAccessToken = "alpacas"
 	)
 
 	ctx := context.Background()
@@ -251,7 +251,7 @@ func TestGetSecrets(t *testing.T) {
 						// Single key query
 						keys = []string{req.URL.Query().Get("key")}
 					}
-					
+
 					var secrets []api.Secret
 					for _, key := range keys {
 						switch key {
@@ -273,7 +273,7 @@ func TestGetSecrets(t *testing.T) {
 					if len(secrets) > 0 {
 						if len(keys) == 1 && len(secrets) == 1 {
 							// Single secret response format for backwards compatibility
-							_, err := fmt.Fprintf(rw, `{"key":%q,"value":%q,"uuid":%q}`, 
+							_, err := fmt.Fprintf(rw, `{"key":%q,"value":%q,"uuid":%q}`,
 								secrets[0].Key, secrets[0].Value, secrets[0].UUID)
 							assert.NilError(t, err)
 						} else {
@@ -283,7 +283,7 @@ func TestGetSecrets(t *testing.T) {
 								if i > 0 {
 									response += ","
 								}
-								response += fmt.Sprintf(`{"key":%q,"value":%q,"uuid":%q}`, 
+								response += fmt.Sprintf(`{"key":%q,"value":%q,"uuid":%q}`,
 									secret.Key, secret.Value, secret.UUID)
 							}
 							response += `]}`
