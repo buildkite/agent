@@ -16,7 +16,7 @@ type SecretBatchGetConfig struct {
 	GlobalConfig
 	APIConfig
 
-	Keys          []string `cli:"arg"`
+	Keys          []string `cli:"arg:*"`
 	Job           string   `cli:"job" validate:"required"`
 	SkipRedaction bool     `cli:"skip-redaction"`
 	Format        string   `cli:"format"`
