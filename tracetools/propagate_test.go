@@ -148,3 +148,54 @@ func TestEncodeTraceContext(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractTraceparent(t *testing.T) {
+	t.Cleanup(stubGlobalTracer())
+
+	t.Run("nil span", func(t *testing.T) {
+		got := ExtractTraceparent(nil)
+		if got != "" {
+			t.Errorf("ExtractTraceparent(nil) = %q, want empty string", got)
+		}
+	})
+
+	t.Run("span with mock tracer", func(t *testing.T) {
+		// Create a mock tracer
+		mockTracer := mocktracer.New()
+		opentracing.SetGlobalTracer(mockTracer)
+
+		span := opentracing.StartSpan("test")
+
+		// The mock tracer won't return a traceparent, so we expect empty string
+		got := ExtractTraceparent(span)
+
+		if got != "" {
+			t.Errorf("ExtractTraceparent(span) = %q, want empty string for mock tracer", got)
+		}
+	})
+}
+
+func TestInjectTraceparent(t *testing.T) {
+	t.Cleanup(stubGlobalTracer())
+
+	t.Run("nil span", func(t *testing.T) {
+		env := make(map[string]string)
+		InjectTraceparent(nil, env)
+
+		if _, exists := env["TRACEPARENT"]; exists {
+			t.Errorf("InjectTraceparent(nil, env) set TRACEPARENT, want no change")
+		}
+	})
+
+	t.Run("span without traceparent", func(t *testing.T) {
+		span := opentracing.StartSpan("test")
+		env := make(map[string]string)
+
+		InjectTraceparent(span, env)
+
+		// Mock tracer won't have traceparent, so env should remain unchanged
+		if _, exists := env["TRACEPARENT"]; exists {
+			t.Errorf("InjectTraceparent(span, env) set TRACEPARENT for mock tracer, want no change")
+		}
+	})
+}

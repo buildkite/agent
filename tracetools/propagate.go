@@ -81,6 +81,33 @@ func (CodecJSON) NewEncoder(w io.Writer) Encoder { return json.NewEncoder(w) }
 func (CodecJSON) NewDecoder(r io.Reader) Decoder { return json.NewDecoder(r) }
 func (CodecJSON) String() string                 { return "json" }
 
+// ExtractTraceparent extracts the TRACEPARENT value from the current OpenTracing span context.
+// It returns the W3C Trace Context format traceparent value or an empty string if unavailable.
+func ExtractTraceparent(span opentracing.Span) string {
+	if span == nil {
+		return ""
+	}
+
+	textmap := tracer.TextMapCarrier{}
+	if err := span.Tracer().Inject(span.Context(), opentracing.TextMap, &textmap); err != nil {
+		return ""
+	}
+
+	// Check for W3C traceparent directly (OpenTelemetry format)
+	if traceparent := textmap["traceparent"]; traceparent != "" {
+		return traceparent
+	}
+
+	return ""
+}
+
+// InjectTraceparent sets the TRACEPARENT environment variable if a span context is available.
+func InjectTraceparent(span opentracing.Span, env map[string]string) {
+	if traceparent := ExtractTraceparent(span); traceparent != "" {
+		env["TRACEPARENT"] = traceparent
+	}
+}
+
 // ParseEncoding converts an encoding to the associated codec.
 // An empty string is parsed as "gob".
 func ParseEncoding(encoding string) (Codec, error) {
