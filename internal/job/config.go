@@ -55,7 +55,7 @@ type ExecutorConfig struct {
 	PullRequest string
 
 	// If the commit is a proposed merge commit this and the customer has enabled the "Build PR merge commits" repository setting this will be "true"
-	PullRequestMergeCommit string
+	PullRequestUseMergeRefspec string
 
 	// The provider of the pipeline
 	PipelineProvider string
