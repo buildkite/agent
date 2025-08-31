@@ -171,9 +171,9 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_PULL_REQUEST",
 		},
 		cli.StringFlag{
-			Name:   "pull-request-merge-commit",
-			Usage:  "Returns true if commit is a proposed pull request merge commit",
-			EnvVar: "BUILDKITE_PULL_REQUEST_MERGE_COMMIT",
+			Name:   "pull-request-use-merge-refspec",
+			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec",
+			EnvVar: "BUILDKITE_PULL_REQUEST_USE_MERGE_REFSPEC",
 		},
 		cli.StringFlag{
 			Name:   "agent",

@@ -75,12 +75,12 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			executor: &Executor{
 				shell: shell,
 				ExecutorConfig: ExecutorConfig{
-					PullRequest:      "124",
-					Commit:           "HEAD",
-					Branch:           "main",
-					CleanCheckout:    false,
-					GitCleanFlags:    "-f -d -x",
-					PipelineProvider: "github",
+					PullRequest:                "124",
+					Commit:                     "HEAD",
+					Branch:                     "main",
+					CleanCheckout:              false,
+					GitCleanFlags:              "-f -d -x",
+					PipelineProvider:           "github",
 					PullRequestUseMergeRefspec: "true",
 				},
 			},
