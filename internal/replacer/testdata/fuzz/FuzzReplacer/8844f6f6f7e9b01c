@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(-74)
+string("0")
+string("0")
+string("\xb3 ")
+string("\x9f ")
