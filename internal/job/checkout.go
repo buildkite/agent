@@ -407,7 +407,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
 			var refspec string
-			if e.PullRequestUseMergeRefspec {
+			if e.PullRequestUseMergeRefspec == true {
 				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
 			} else {
 				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
@@ -620,7 +620,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		var refspec string
-		if e.PullRequestUseMergeRefspec {
+		if e.PullRequestUseMergeRefspec == true {
 			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
 		} else {
 			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
