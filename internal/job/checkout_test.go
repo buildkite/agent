@@ -81,7 +81,7 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 					CleanCheckout:              false,
 					GitCleanFlags:              "-f -d -x",
 					PipelineProvider:           "github",
-					PullRequestUseMergeRefspec: "true",
+					PullRequestUseMergeRefspec: true,
 				},
 			},
 			projectName: "project-name-pull-request",

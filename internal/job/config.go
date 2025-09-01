@@ -55,7 +55,7 @@ type ExecutorConfig struct {
 	PullRequest string
 
 	// Whether the agent should attempt to checkout the pull request commit using the merge refspec
-	PullRequestUseMergeRefspec string
+	PullRequestUseMergeRefspec bool
 
 	// The provider of the pipeline
 	PipelineProvider string
