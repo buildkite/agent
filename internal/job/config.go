@@ -55,7 +55,7 @@ type ExecutorConfig struct {
 	PullRequest string
 
 	// Whether the agent should attempt to checkout the pull request commit using the merge refspec
-	PullRequestUsingMergeRefspec bool `env:"BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC"`
+	PullRequestUsingMergeRefspec bool
 
 	// The provider of the pipeline
 	PipelineProvider string
