@@ -179,6 +179,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/buildkite/go-pipeline => ../go-pipeline
+replace github.com/buildkite/go-pipeline => github.com/buildkite/go-pipeline v0.0.0-20250902043532-44676a094160
 
 tool github.com/Khan/genqlient/generate
