@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/go-pipeline"
 )
 
 // Config provides the configuration for the job executor. Some of the keys are
@@ -190,6 +191,9 @@ type ExecutorConfig struct {
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string
+
+	// Secrets configured for this job step
+	Secrets []pipeline.Secret
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
