@@ -879,7 +879,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
 	// Fetch and set secrets before environment hook execution
-	if len(e.Secrets) > 0 {
+	if e.Secrets != "" {
 		if err := e.fetchAndSetSecrets(ctx); err != nil {
 			return fmt.Errorf("failed to fetch secrets: %w", err)
 		}
@@ -894,7 +894,17 @@ func (e *Executor) setUp(ctx context.Context) error {
 
 // fetchAndSetSecrets handles secrets fetching and processing using the internal secrets package
 func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
-	if len(e.Secrets) == 0 {
+	if e.Secrets == "" {
+		return nil // No secrets to process
+	}
+
+	// Parse secrets from JSON
+	secretsSlice, err := secrets.CreateFromJSON(e.Secrets)
+	if err != nil {
+		return fmt.Errorf("failed to parse secrets configuration: %w", err)
+	}
+
+	if len(secretsSlice) == 0 {
 		return nil // No secrets to process
 	}
 
@@ -913,7 +923,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	}
 
 	// Fetch and process all secrets
-	return secrets.FetchAndProcess(ctx, apiClient, e.JobID, e.Secrets, processors)
+	return secrets.FetchAndProcess(ctx, apiClient, e.JobID, secretsSlice, processors)
 }
 
 // tearDown is called before the executor exits, even on error

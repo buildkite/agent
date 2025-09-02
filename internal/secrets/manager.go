@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -13,6 +14,20 @@ import (
 // to fetch secrets from the Buildkite API.
 type APIClient interface {
 	GetSecret(ctx context.Context, req *api.GetSecretRequest) (*api.Secret, *api.Response, error)
+}
+
+// CreateFromJSON parses a JSON string and returns a slice of secrets.
+func CreateFromJSON(j string) ([]pipeline.Secret, error) {
+	if j == "" {
+		return nil, nil
+	}
+
+	var secrets []pipeline.Secret
+	if err := json.Unmarshal([]byte(j), &secrets); err != nil {
+		return nil, fmt.Errorf("failed to parse secrets JSON: %w", err)
+	}
+
+	return secrets, nil
 }
 
 // fetchSecrets retrieves all secret values from the API sequentially.

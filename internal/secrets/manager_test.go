@@ -59,6 +59,49 @@ func (m *mockProcessor) ProcessSecret(ctx context.Context, secret *pipeline.Secr
 	return nil
 }
 
+func TestCreateFromJSON_Success(t *testing.T) {
+	t.Parallel()
+
+	jsonString := `[
+		{
+			"secret_key": "DATABASE_URL",
+			"environment_variable": "DATABASE_URL"
+		},
+		{
+			"secret_key": "API_TOKEN", 
+			"environment_variable": "API_TOKEN"
+		}
+	]`
+
+	secrets, err := CreateFromJSON(jsonString)
+
+	require.NoError(t, err)
+	require.Len(t, secrets, 2)
+	assert.Equal(t, "DATABASE_URL", secrets[0].SecretKey)
+	assert.Equal(t, "DATABASE_URL", secrets[0].EnvironmentVariable)
+	assert.Equal(t, "API_TOKEN", secrets[1].SecretKey)
+	assert.Equal(t, "API_TOKEN", secrets[1].EnvironmentVariable)
+}
+
+func TestCreateFromJSON_EmptyString(t *testing.T) {
+	t.Parallel()
+
+	secrets, err := CreateFromJSON("")
+
+	require.NoError(t, err)
+	assert.Nil(t, secrets)
+}
+
+func TestCreateFromJSON_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	secrets, err := CreateFromJSON("invalid json")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse secrets JSON")
+	assert.Nil(t, secrets)
+}
+
 func TestManager_FetchAndProcess_Success(t *testing.T) {
 	t.Parallel()
 
