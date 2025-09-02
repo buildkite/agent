@@ -912,11 +912,8 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 		},
 	}
 
-	// Create secrets manager
-	manager := secrets.NewManager(apiClient)
-
 	// Fetch and process all secrets
-	return manager.FetchAndProcess(ctx, e.JobID, e.Secrets, processors)
+	return secrets.FetchAndProcess(ctx, apiClient, e.JobID, e.Secrets, processors)
 }
 
 // tearDown is called before the executor exits, even on error

@@ -15,22 +15,10 @@ type APIClient interface {
 	GetSecret(ctx context.Context, req *api.GetSecretRequest) (*api.Secret, *api.Response, error)
 }
 
-// Manager orchestrates secret fetching and processing using injected dependencies.
-type Manager struct {
-	client APIClient
-}
-
-// NewManager creates a new Manager with the provided API client.
-func NewManager(client APIClient) *Manager {
-	return &Manager{
-		client: client,
-	}
-}
-
 // fetchSecrets retrieves all secret values from the API sequentially.
 // Uses ALL-OR-NOTHING semantics: if any secret fails, returns error with details of all failed secrets.
 // Returns map of secret key to secret value only if ALL secrets fetch successfully.
-func (m *Manager) fetchSecrets(ctx context.Context, jobID string, secrets []pipeline.Secret) (map[string]string, error) {
+func fetchSecrets(ctx context.Context, client APIClient, jobID string, secrets []pipeline.Secret) (map[string]string, error) {
 	if len(secrets) == 0 {
 		return nil, nil
 	}
@@ -40,7 +28,7 @@ func (m *Manager) fetchSecrets(ctx context.Context, jobID string, secrets []pipe
 
 	// Sequential fetching for initial implementation
 	for _, secret := range secrets {
-		apiSecret, _, err := m.client.GetSecret(ctx, &api.GetSecretRequest{
+		apiSecret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{
 			Key:   secret.SecretKey,
 			JobID: jobID,
 		})
@@ -63,7 +51,7 @@ func (m *Manager) fetchSecrets(ctx context.Context, jobID string, secrets []pipe
 
 // processSecrets processes each secret sequentially to avoid race conditions with environment mutations.
 // Clears secret values from memory immediately after processing each secret using secure zeroing.
-func (m *Manager) processSecrets(ctx context.Context, secrets []pipeline.Secret, secretValues map[string]string, processors []Processor) error {
+func processSecrets(ctx context.Context, secrets []pipeline.Secret, secretValues map[string]string, processors []Processor) error {
 	if len(secrets) == 0 || len(secretValues) == 0 {
 		return nil
 	}
@@ -106,19 +94,19 @@ func (m *Manager) processSecrets(ctx context.Context, secrets []pipeline.Secret,
 
 // FetchAndProcess orchestrates the complete secrets workflow: fetch all secrets then process them.
 // Uses ALL-OR-NOTHING semantics: if any step fails, the entire operation fails.
-func (m *Manager) FetchAndProcess(ctx context.Context, jobID string, secrets []pipeline.Secret, processors []Processor) error {
+func FetchAndProcess(ctx context.Context, client APIClient, jobID string, secrets []pipeline.Secret, processors []Processor) error {
 	if len(secrets) == 0 {
 		return nil // No secrets to process
 	}
 
 	// Step 1: Fetch all secrets from API
-	secretValues, fetchErr := m.fetchSecrets(ctx, jobID, secrets)
+	secretValues, fetchErr := fetchSecrets(ctx, client, jobID, secrets)
 	if fetchErr != nil {
 		return fetchErr // ALL-OR-NOTHING: if fetchSecrets() returns error, immediately fail
 	}
 
 	// Step 2: Process all secrets
-	processErr := m.processSecrets(ctx, secrets, secretValues, processors)
+	processErr := processSecrets(ctx, secrets, secretValues, processors)
 
 	// Clear all remaining secret values from memory
 	for key, value := range secretValues {
