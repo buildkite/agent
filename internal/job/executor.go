@@ -21,16 +21,19 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/internal/secrets"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
 	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
@@ -880,6 +883,33 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// allowed to be used.
 	err = e.executeGlobalHook(ctx, "environment")
 	return err
+}
+
+// fetchAndSetSecrets handles secrets fetching and processing using the internal secrets package
+func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
+	if len(e.Secrets) == 0 {
+		return nil // No secrets to process
+	}
+
+	// Create API client from environment variables (set by JobRunner)
+	apiClient := api.NewClient(logger.NewBuffer(), api.Config{
+		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
+		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
+	})
+
+	// Create list of processors for handling different secret types
+	processors := []secrets.Processor{
+		&secrets.EnvironmentVariableProcessor{
+			Env:       e.shell.Env,
+			Redactors: e.redactors,
+		},
+	}
+
+	// Create secrets manager
+	manager := secrets.NewManager(apiClient)
+
+	// Fetch and process all secrets
+	return manager.FetchAndProcess(ctx, e.JobID, e.Secrets, processors)
 }
 
 // tearDown is called before the executor exits, even on error
