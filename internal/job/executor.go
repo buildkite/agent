@@ -878,6 +878,13 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
+	// Fetch and set secrets before environment hook execution
+	if len(e.Secrets) > 0 {
+		if err := e.fetchAndSetSecrets(ctx); err != nil {
+			return fmt.Errorf("failed to fetch secrets: %w", err)
+		}
+	}
+
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
