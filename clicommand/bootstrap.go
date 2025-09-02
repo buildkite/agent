@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/go-pipeline"
 	"github.com/urfave/cli"
 )
 
@@ -453,6 +455,15 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
 
+		// Read secrets configuration from environment variable
+		var secrets []pipeline.Secret
+		if secretsJSON := os.Getenv("BUILDKITE_JOB_SECRETS"); secretsJSON != "" {
+			if err := json.Unmarshal([]byte(secretsJSON), &secrets); err != nil {
+				l.Warn("Failed to unmarshal BUILDKITE_JOB_SECRETS: %v", err)
+				// Continue with empty secrets for backward compatibility
+			}
+		}
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
 			AgentName:                    cfg.AgentName,
@@ -512,6 +523,7 @@ var BootstrapCommand = cli.Command{
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			KubernetesExec:               cfg.KubernetesExec,
 			KubernetesContainerID:        cfg.KubernetesContainerID,
+			Secrets:                      secrets,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
