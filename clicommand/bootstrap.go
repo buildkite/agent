@@ -56,7 +56,7 @@ type BootstrapConfig struct {
 	RefSpec                      string   `cli:"refspec"`
 	Plugins                      string   `cli:"plugins"`
 	PullRequest                  string   `cli:"pullrequest"`
-	PullRequestUseMergeRefspec   bool     `cli:"pull-request-use-merge-refspec"`
+	PullRequestUsingMergeRefspec bool     `cli:"pull-request-using-merge-refspec"`
 	GitSubmodules                bool     `cli:"git-submodules"`
 	SSHKeyscan                   bool     `cli:"ssh-keyscan"`
 	AgentName                    string   `cli:"agent" validate:"required"`
@@ -170,10 +170,10 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The number/id of the pull request this commit belonged to",
 			EnvVar: "BUILDKITE_PULL_REQUEST",
 		},
-		cli.BoolTFlag{
-			Name:   "pull-request-use-merge-refspec",
+		cli.BoolFlag{
+			Name:   "pull-request-using-merge-refspec",
 			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec",
-			EnvVar: "BUILDKITE_PULL_REQUEST_USE_MERGE_REFSPEC",
+			EnvVar: "BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC",
 		},
 		cli.StringFlag{
 			Name:   "agent",
@@ -493,7 +493,7 @@ var BootstrapCommand = cli.Command{
 			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
 			PluginsPath:                  cfg.PluginsPath,
 			PullRequest:                  cfg.PullRequest,
-			PullRequestUseMergeRefspec:   cfg.PullRequestUseMergeRefspec,
+			PullRequestUsingMergeRefspec: cfg.PullRequestUsingMergeRefspec,
 			Queue:                        cfg.Queue,
 			RedactedVars:                 cfg.RedactedVars,
 			RefSpec:                      cfg.RefSpec,
