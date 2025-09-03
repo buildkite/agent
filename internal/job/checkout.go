@@ -637,7 +637,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 				Shell:         e.shell,
 				GitFetchFlags: gitFetchFlags,
 				Repository:    "origin",
-				RefSpecs:			 refspecs,
+				Retry:         true,
+				RefSpecs:      refspecs,
 			}); err != nil {
 				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
 			}
