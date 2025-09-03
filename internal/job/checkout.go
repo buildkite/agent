@@ -615,28 +615,41 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 
 	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-		// GitHub has a special ref which lets us fetch a pull request head, whether
-		// or not it's a current head in this repository or a fork. See:
-		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		var refspec string
+
 		if e.PullRequestUsingMergeRefspec {
+			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
 			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
 		} else {
+			// GitHub has a special ref which lets us fetch a pull request head, whether
+			// or not it's a current head in this repository or a fork. See:
+			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
+			e.shell.Commentf("Fetch and checkout pull request head from GitHub")
 			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 		}
 		refspecs := []string{refspec}
 
-		// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
-		// have been force pushes to the pull request, so this ensures we have it.
-		// Note: this is the typical case e.Commit != HEAD.
-		if e.Commit != "HEAD" {
+		if e.Commit == "HEAD" {
+			// If we don't know the commit, we don't want to fetch with a fallback (otherwise FETCH_HEAD
+			// will resolve during a fallback to the alphabetically earliest branch/tag - rather than the
+			// correct commit for this build)
+			if err := gitFetch(ctx, gitFetchArgs{
+				Shell:         e.shell,
+				GitFetchFlags: gitFetchFlags,
+				Repository:    "origin",
+				RefSpecs:			 refspecs,
+			}); err != nil {
+				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+			}
+		} else {
+			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
+			// have been force pushes to the pull request, so this ensures we have it.
+			// Note: this is the typical case e.Commit != HEAD.
 			refspecs = append(refspecs, e.Commit)
-		}
-
-		// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
-		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
-			return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
+			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
+			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
+				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+			}
 		}
 
 		gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
