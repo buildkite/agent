@@ -26,15 +26,15 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 	// Define test secrets
 	secrets := []pipeline.Secret{
 		{
-			SecretKey:           "DATABASE_URL",
+			Key:                 "DATABASE_URL",
 			EnvironmentVariable: "DATABASE_URL",
 		},
 		{
-			SecretKey:           "API_TOKEN",
+			Key:                 "API_TOKEN",
 			EnvironmentVariable: "API_TOKEN",
 		},
 		{
-			SecretKey:           "CUSTOM_SECRET",
+			Key:                 "CUSTOM_SECRET",
 			EnvironmentVariable: "MY_CUSTOM_VAR",
 		},
 	}
@@ -115,7 +115,7 @@ func TestSecretsIntegration_Redaction(t *testing.T) {
 	// Define test secret
 	secrets := []pipeline.Secret{
 		{
-			SecretKey:           "SENSITIVE_TOKEN",
+			Key:                 "SENSITIVE_TOKEN",
 			EnvironmentVariable: "SENSITIVE_TOKEN",
 		},
 	}
@@ -232,11 +232,11 @@ func TestSecretsIntegration_SecretFetchFailure(t *testing.T) {
 	// Define secrets where one will fail to fetch
 	secrets := []pipeline.Secret{
 		{
-			SecretKey:           "VALID_SECRET",
+			Key:                 "VALID_SECRET",
 			EnvironmentVariable: "VALID_SECRET",
 		},
 		{
-			SecretKey:           "INVALID_SECRET",
+			Key:                 "INVALID_SECRET",
 			EnvironmentVariable: "INVALID_SECRET",
 		},
 	}
@@ -274,7 +274,7 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 	// Define secret with multiline value
 	secrets := []pipeline.Secret{
 		{
-			SecretKey:           "MULTILINE_SECRET",
+			Key:                 "MULTILINE_SECRET",
 			EnvironmentVariable: "MULTILINE_SECRET",
 		},
 	}
@@ -321,7 +321,7 @@ func TestSecretsIntegration_LocalHookAccess(t *testing.T) {
 	// Define test secret
 	secrets := []pipeline.Secret{
 		{
-			SecretKey:           "LOCAL_HOOK_SECRET",
+			Key:                 "LOCAL_HOOK_SECRET",
 			EnvironmentVariable: "LOCAL_HOOK_SECRET",
 		},
 	}
@@ -367,7 +367,7 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 	// Define test secret
 	secrets := []pipeline.Secret{
 		{
-			SecretKey:           "JOB_API_SECRET",
+			Key:                 "JOB_API_SECRET",
 			EnvironmentVariable: "JOB_API_SECRET",
 		},
 	}

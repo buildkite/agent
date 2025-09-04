@@ -40,7 +40,7 @@ type mockProcessor struct {
 
 func (m *mockProcessor) SupportsSecret(secret *pipeline.Secret) bool {
 	for _, key := range m.supportedKeys {
-		if secret.SecretKey == key {
+		if secret.Key == key {
 			return true
 		}
 	}
@@ -48,14 +48,14 @@ func (m *mockProcessor) SupportsSecret(secret *pipeline.Secret) bool {
 }
 
 func (m *mockProcessor) ProcessSecret(ctx context.Context, secret *pipeline.Secret, value string) error {
-	if err, exists := m.processingErrors[secret.SecretKey]; exists {
+	if err, exists := m.processingErrors[secret.Key]; exists {
 		return err
 	}
 
 	if m.processedSecrets == nil {
 		m.processedSecrets = make(map[string]string)
 	}
-	m.processedSecrets[secret.SecretKey] = value
+	m.processedSecrets[secret.Key] = value
 	return nil
 }
 
@@ -64,11 +64,11 @@ func TestCreateFromJSON_Success(t *testing.T) {
 
 	jsonString := `[
 		{
-			"secret_key": "DATABASE_URL",
+			"key": "DATABASE_URL",
 			"environment_variable": "DATABASE_URL"
 		},
 		{
-			"secret_key": "API_TOKEN", 
+			"key": "API_TOKEN",
 			"environment_variable": "API_TOKEN"
 		}
 	]`
@@ -77,9 +77,9 @@ func TestCreateFromJSON_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, secrets, 2)
-	assert.Equal(t, "DATABASE_URL", secrets[0].SecretKey)
+	assert.Equal(t, "DATABASE_URL", secrets[0].Key)
 	assert.Equal(t, "DATABASE_URL", secrets[0].EnvironmentVariable)
-	assert.Equal(t, "API_TOKEN", secrets[1].SecretKey)
+	assert.Equal(t, "API_TOKEN", secrets[1].Key)
 	assert.Equal(t, "API_TOKEN", secrets[1].EnvironmentVariable)
 }
 
@@ -116,7 +116,7 @@ func TestManager_FetchAndProcess_Success(t *testing.T) {
 	}
 
 	secrets := []pipeline.Secret{
-		{SecretKey: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+		{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
 	}
 
 	err := FetchAndProcess(context.Background(), client, "job123", secrets, []Processor{processor})
@@ -139,7 +139,7 @@ func TestManager_FetchAndProcess_FetchFailure(t *testing.T) {
 	}
 
 	secrets := []pipeline.Secret{
-		{SecretKey: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+		{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
 	}
 
 	err := FetchAndProcess(context.Background(), client, "job123", secrets, []Processor{processor})
@@ -167,7 +167,7 @@ func TestManager_FetchAndProcess_ProcessFailure(t *testing.T) {
 	}
 
 	secrets := []pipeline.Secret{
-		{SecretKey: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+		{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
 	}
 
 	err := FetchAndProcess(context.Background(), client, "job123", secrets, []Processor{processor})
@@ -222,8 +222,8 @@ func TestManager_IntegrationWithEnvironmentProcessor(t *testing.T) {
 	}
 
 	secrets := []pipeline.Secret{
-		{SecretKey: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
-		{SecretKey: "API_TOKEN", EnvironmentVariable: "API_TOKEN"},
+		{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+		{Key: "API_TOKEN", EnvironmentVariable: "API_TOKEN"},
 	}
 
 	err := FetchAndProcess(context.Background(), client, "job123", secrets, []Processor{processor})

@@ -40,7 +40,7 @@ func TestEnvironmentVariableProcessor_SupportsSecret(t *testing.T) {
 		{
 			name: "supports secret with environment variable",
 			secret: &pipeline.Secret{
-				SecretKey:           "DATABASE_URL",
+				Key:                 "DATABASE_URL",
 				EnvironmentVariable: "DATABASE_URL",
 			},
 			expected: true,
@@ -48,7 +48,7 @@ func TestEnvironmentVariableProcessor_SupportsSecret(t *testing.T) {
 		{
 			name: "supports secret with custom environment variable name",
 			secret: &pipeline.Secret{
-				SecretKey:           "DATABASE_URL",
+				Key:                 "DATABASE_URL",
 				EnvironmentVariable: "DB_CONNECTION",
 			},
 			expected: true,
@@ -56,7 +56,7 @@ func TestEnvironmentVariableProcessor_SupportsSecret(t *testing.T) {
 		{
 			name: "does not support secret without environment variable",
 			secret: &pipeline.Secret{
-				SecretKey:           "DATABASE_URL",
+				Key:                 "DATABASE_URL",
 				EnvironmentVariable: "",
 			},
 			expected: false,
@@ -88,7 +88,7 @@ func TestEnvironmentVariableProcessor_ProcessSecret(t *testing.T) {
 	}
 
 	secret := &pipeline.Secret{
-		SecretKey:           "DATABASE_URL",
+		Key:                 "DATABASE_URL",
 		EnvironmentVariable: "DATABASE_URL",
 	}
 	secretValue := "postgres://user:pass@localhost/db"
@@ -125,7 +125,7 @@ func TestEnvironmentVariableProcessor_ProcessSecret_CustomEnvironmentVariable(t 
 	}
 
 	secret := &pipeline.Secret{
-		SecretKey:           "DATABASE_URL",
+		Key:                 "DATABASE_URL",
 		EnvironmentVariable: "DB_CONNECTION", // Custom environment variable name
 	}
 	secretValue := "postgres://test"
@@ -155,7 +155,7 @@ func TestEnvironmentVariableProcessor_ProcessSecret_WithoutRedactors(t *testing.
 	}
 
 	secret := &pipeline.Secret{
-		SecretKey:           "API_TOKEN",
+		Key:                 "API_TOKEN",
 		EnvironmentVariable: "API_TOKEN",
 	}
 	secretValue := "secret123"
@@ -187,21 +187,21 @@ func TestEnvironmentVariableProcessor_ProcessSecret_MultipleSecrets(t *testing.T
 	}{
 		{
 			secret: &pipeline.Secret{
-				SecretKey:           "DATABASE_URL",
+				Key:                 "DATABASE_URL",
 				EnvironmentVariable: "DATABASE_URL",
 			},
 			value: "postgres://test",
 		},
 		{
 			secret: &pipeline.Secret{
-				SecretKey:           "API_TOKEN",
+				Key:                 "API_TOKEN",
 				EnvironmentVariable: "API_TOKEN",
 			},
 			value: "token123",
 		},
 		{
 			secret: &pipeline.Secret{
-				SecretKey:           "DEPLOY_KEY",
+				Key:                 "DEPLOY_KEY",
 				EnvironmentVariable: "DEPLOY_SSH_KEY", // Custom name
 			},
 			value: "ssh-rsa AAAAB3...",
@@ -250,7 +250,7 @@ func TestEnvironmentVariableProcessor_ProcessSecret_OverwritesExisting(t *testin
 	}
 
 	secret := &pipeline.Secret{
-		SecretKey:           "API_TOKEN",
+		Key:                 "API_TOKEN",
 		EnvironmentVariable: "API_TOKEN",
 	}
 	secretValue := "new-token"
@@ -276,7 +276,7 @@ func TestEnvironmentVariableProcessor_ProcessSecret_EmptyValue(t *testing.T) {
 	}
 
 	secret := &pipeline.Secret{
-		SecretKey:           "EMPTY_SECRET",
+		Key:                 "EMPTY_SECRET",
 		EnvironmentVariable: "EMPTY_SECRET",
 	}
 	secretValue := ""
@@ -308,7 +308,7 @@ func TestEnvironmentVariableProcessor_ProcessSecret_SpecialCharacters(t *testing
 	}
 
 	secret := &pipeline.Secret{
-		SecretKey:           "COMPLEX_SECRET",
+		Key:                 "COMPLEX_SECRET",
 		EnvironmentVariable: "COMPLEX_SECRET",
 	}
 	// Test with special characters that might cause issues with redaction or env vars
@@ -341,7 +341,7 @@ func TestEnvironmentVariableProcessor_ProcessSecret_MultilineValue(t *testing.T)
 	}
 
 	secret := &pipeline.Secret{
-		SecretKey:           "MULTILINE_SECRET",
+		Key:                 "MULTILINE_SECRET",
 		EnvironmentVariable: "MULTILINE_SECRET",
 	}
 	// Test with multiline value (like SSH private keys)

@@ -44,16 +44,16 @@ func fetchSecrets(ctx context.Context, client APIClient, jobID string, secrets [
 	// Sequential fetching for initial implementation
 	for _, secret := range secrets {
 		apiSecret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{
-			Key:   secret.SecretKey,
+			Key:   secret.Key,
 			JobID: jobID,
 		})
 		if err != nil {
 			// Include secret key name (never values) in error messages for debugging
-			errs = append(errs, fmt.Errorf("secret %q: %w", secret.SecretKey, err))
+			errs = append(errs, fmt.Errorf("secret %q: %w", secret.Key, err))
 			continue
 		}
 
-		secretValues[secret.SecretKey] = apiSecret.Value
+		secretValues[secret.Key] = apiSecret.Value
 	}
 
 	// ALL-OR-NOTHING: if any secret fails, return error with details of all failed secrets
@@ -75,7 +75,7 @@ func processSecrets(ctx context.Context, secrets []pipeline.Secret, secretValues
 
 	// Process each secret sequentially to avoid race conditions
 	for _, secret := range secrets {
-		secretValue, exists := secretValues[secret.SecretKey]
+		secretValue, exists := secretValues[secret.Key]
 		if !exists {
 			continue // Skip if not in secretValues map (shouldn't happen)
 		}
@@ -90,18 +90,18 @@ func processSecrets(ctx context.Context, secrets []pipeline.Secret, secretValues
 		}
 
 		if supportingProcessor == nil {
-			errs = append(errs, fmt.Errorf("secret %q: no processor supports this secret type", secret.SecretKey))
+			errs = append(errs, fmt.Errorf("secret %q: no processor supports this secret type", secret.Key))
 			continue
 		}
 
 		// Process the secret
 		if err := supportingProcessor.ProcessSecret(ctx, &secret, secretValue); err != nil {
-			errs = append(errs, fmt.Errorf("secret %q: %w", secret.SecretKey, err))
+			errs = append(errs, fmt.Errorf("secret %q: %w", secret.Key, err))
 		}
 
 		// Clear secret value from memory immediately after processing using secure zeroing
 		clearString(&secretValue)
-		secretValues[secret.SecretKey] = "" // Clear from map as well
+		secretValues[secret.Key] = "" // Clear from map as well
 	}
 
 	return errors.Join(errs...)
