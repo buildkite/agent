@@ -37,10 +37,6 @@ func (e *invalidSignatureError) Unwrap() error {
 func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	step := &r.conf.Job.Step
 
-	// Debug: Print the job data being verified
-	r.agentLogger.Debug("verifyJob: Job.Step = %+v", r.conf.Job.Step)
-	r.agentLogger.Debug("verifyJob: Job.Step.Secrets = %+v", r.conf.Job.Step.Secrets)
-
 	// First, verify the signature.
 	err := signature.VerifyStep(
 		ctx,
@@ -184,8 +180,6 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 		case "secrets": // compare secrets directly
 			// Compare step.Secrets (from signed pipeline) with r.conf.Job.Step.Secrets (from backend job)
 			jobSecrets := r.conf.Job.Step.Secrets
-			r.agentLogger.Debug("verifyJob: secrets field - jobSecrets = %+v", jobSecrets)
-			r.agentLogger.Debug("verifyJob: secrets field - step.Secrets = %+v", step.Secrets)
 
 			// Check if both are empty
 			if len(step.Secrets) == 0 && len(jobSecrets) == 0 {
