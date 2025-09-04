@@ -507,6 +507,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if len(r.conf.Job.Step.Secrets) > 0 {
 		if secretsJSON, err := json.Marshal(r.conf.Job.Step.Secrets); err != nil {
 			r.agentLogger.Warn("Failed to marshal secrets configuration: %v", err)
+
 		} else {
 			env["BUILDKITE_JOB_SECRETS"] = string(secretsJSON)
 		}

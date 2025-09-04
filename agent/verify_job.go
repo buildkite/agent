@@ -37,6 +37,10 @@ func (e *invalidSignatureError) Unwrap() error {
 func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	step := &r.conf.Job.Step
 
+	// Debug: Print the job data being verified
+	r.agentLogger.Debug("verifyJob: Job.Step = %+v", r.conf.Job.Step)
+	r.agentLogger.Debug("verifyJob: Job.Step.Secrets = %+v", r.conf.Job.Step.Secrets)
+
 	// First, verify the signature.
 	err := signature.VerifyStep(
 		ctx,
@@ -176,6 +180,47 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			// This was sourced from the job itself, not the step, when the signature was verified.
 			// So, we don't need to confirm that the values in the job are the same as those in the step.
 			continue
+
+		case "secrets": // compare secrets directly
+			// Compare step.Secrets (from signed pipeline) with r.conf.Job.Step.Secrets (from backend job)
+			jobSecrets := r.conf.Job.Step.Secrets
+			r.agentLogger.Debug("verifyJob: secrets field - jobSecrets = %+v", jobSecrets)
+			r.agentLogger.Debug("verifyJob: secrets field - step.Secrets = %+v", step.Secrets)
+
+			// Check if both are empty
+			if len(step.Secrets) == 0 && len(jobSecrets) == 0 {
+				r.agentLogger.Debug("verifyJob: both job.Step.Secrets and step.Secrets are empty")
+				continue // both empty
+			}
+
+			// Check if lengths differ
+			if len(step.Secrets) != len(jobSecrets) {
+				r.agentLogger.Debug("failed to verifyJob: step.Secrets length %d != jobSecrets length %d", len(step.Secrets), len(jobSecrets))
+				return newInvalidSignatureError(ErrInvalidJob)
+			}
+
+			// Compare each secret directly
+			for i, stepSecret := range step.Secrets {
+				jobSecret := jobSecrets[i]
+
+				if stepSecret == nil && jobSecret == nil {
+					continue
+				}
+				if stepSecret == nil || jobSecret == nil {
+					r.agentLogger.Debug("failed to verifyJob: secret at index %d - one is nil, other is not", i)
+					return newInvalidSignatureError(ErrInvalidJob)
+				}
+
+				if stepSecret.Key != jobSecret.Key {
+					r.agentLogger.Debug("failed to verifyJob: secret at index %d - Key %q != %q", i, stepSecret.Key, jobSecret.Key)
+					return newInvalidSignatureError(ErrInvalidJob)
+				}
+
+				if stepSecret.EnvironmentVariable != jobSecret.EnvironmentVariable {
+					r.agentLogger.Debug("failed to verifyJob: secret at index %d - EnvironmentVariable %q != %q", i, stepSecret.EnvironmentVariable, jobSecret.EnvironmentVariable)
+					return newInvalidSignatureError(ErrInvalidJob)
+				}
+			}
 
 		default:
 			// env:: - skip any that were verified with Verify.
