@@ -3,6 +3,9 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +17,44 @@ import (
 	"github.com/buildkite/go-pipeline"
 )
 
+// setupSecretsAPIServer creates a mock HTTP server that handles secrets API requests
+func setupSecretsAPIServer(t *testing.T, secrets map[string]string) *httptest.Server {
+	const jobID = "1111-1111-1111-1111" // Must match tester JobID
+
+	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		// Check auth token - agent uses "Token" instead of "Bearer"
+		authHeader := req.Header.Get("Authorization")
+		expectedAuth := "Token test-token-please-ignore"
+
+		if authHeader != expectedAuth {
+			http.Error(rw, `{"message": "Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+
+		// Parse secret key from query
+		secretKey := req.URL.Query().Get("key")
+		if secretKey == "" {
+			http.Error(rw, `{"message": "Missing key parameter"}`, http.StatusBadRequest)
+			return
+		}
+
+		// Check if we have this secret
+		secretValue, exists := secrets[secretKey]
+		if !exists {
+			http.Error(rw, fmt.Sprintf(`{"message": "Not Found: method = %s, url = %s"}`, req.Method, req.URL.String()), http.StatusNotFound)
+			return
+		}
+
+		// Return the secret
+		response := fmt.Sprintf(`{"key":%q,"value":%q,"uuid":"secret-uuid-%s"}`, secretKey, secretValue, secretKey)
+		rw.Header().Set("Content-Type", "application/json")
+		_, err := io.WriteString(rw, response)
+		if err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
+	}))
+}
+
 func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 	t.Parallel()
 
@@ -22,6 +63,15 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
 	defer tester.Close()
+
+	// Set up mock API server with secret values
+	secretsMap := map[string]string{
+		"DATABASE_URL":  "postgres://user:pass@host:5432/db",
+		"API_TOKEN":     "secret-token-123",
+		"CUSTOM_SECRET": "my-custom-value",
+	}
+	apiServer := setupSecretsAPIServer(t, secretsMap)
+	defer apiServer.Close()
 
 	// Define test secrets
 	secrets := []pipeline.Secret{
@@ -44,11 +94,6 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshaling secrets: %v", err)
 	}
-
-	// Mock the secret API responses
-	tester.MockSecret(t, "DATABASE_URL", "postgres://user:pass@host:5432/db")
-	tester.MockSecret(t, "API_TOKEN", "secret-token-123")
-	tester.MockSecret(t, "CUSTOM_SECRET", "my-custom-value")
 
 	// Expect environment hook to verify secrets are available
 	tester.ExpectGlobalHook("environment").AndCallFunc(func(c *bintest.Call) {
@@ -86,7 +131,7 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)), fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -112,6 +157,14 @@ func TestSecretsIntegration_Redaction(t *testing.T) {
 	}
 	defer tester.Close()
 
+	// Set up mock API server with secret values
+	secretValue := "very-sensitive-secret-value-123"
+	secretsMap := map[string]string{
+		"SENSITIVE_TOKEN": secretValue,
+	}
+	apiServer := setupSecretsAPIServer(t, secretsMap)
+	defer apiServer.Close()
+
 	// Define test secret
 	secrets := []pipeline.Secret{
 		{
@@ -125,16 +178,13 @@ func TestSecretsIntegration_Redaction(t *testing.T) {
 		t.Fatalf("marshaling secrets: %v", err)
 	}
 
-	secretValue := "very-sensitive-secret-value-123"
-	tester.MockSecret(t, "SENSITIVE_TOKEN", secretValue)
-
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
 		// Print the secret value to stderr - should be redacted
 		fmt.Fprintf(c.Stderr, "The sensitive token is: %s\n", c.GetEnv("SENSITIVE_TOKEN"))
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)), fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -229,6 +279,14 @@ func TestSecretsIntegration_SecretFetchFailure(t *testing.T) {
 	}
 	defer tester.Close()
 
+	// Set up mock API server with only one secret - the other will fail
+	secretsMap := map[string]string{
+		"VALID_SECRET": "valid-value",
+		// Don't include INVALID_SECRET to simulate API failure
+	}
+	apiServer := setupSecretsAPIServer(t, secretsMap)
+	defer apiServer.Close()
+
 	// Define secrets where one will fail to fetch
 	secrets := []pipeline.Secret{
 		{
@@ -246,12 +304,8 @@ func TestSecretsIntegration_SecretFetchFailure(t *testing.T) {
 		t.Fatalf("marshaling secrets: %v", err)
 	}
 
-	// Mock only one secret - the other will fail
-	tester.MockSecret(t, "VALID_SECRET", "valid-value")
-	// Don't mock INVALID_SECRET to simulate API failure
-
 	// Job should fail before hooks execute due to secret fetch failure
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)), fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL))
 	if err == nil {
 		t.Fatalf("expected job to fail due to secret fetch failure, but it succeeded. Full output: %s", tester.Output)
 	}
@@ -271,6 +325,14 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 	}
 	defer tester.Close()
 
+	// Set up mock API server with multiline secret
+	multilineSecret := "line1\nline2\nline3"
+	secretsMap := map[string]string{
+		"MULTILINE_SECRET": multilineSecret,
+	}
+	apiServer := setupSecretsAPIServer(t, secretsMap)
+	defer apiServer.Close()
+
 	// Define secret with multiline value
 	secrets := []pipeline.Secret{
 		{
@@ -284,16 +346,13 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 		t.Fatalf("marshaling secrets: %v", err)
 	}
 
-	multilineSecret := "line1\nline2\nline3"
-	tester.MockSecret(t, "MULTILINE_SECRET", multilineSecret)
-
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
 		// Print the multiline secret - should be redacted
 		fmt.Fprintf(c.Stderr, "Multiline secret: %s\n", c.GetEnv("MULTILINE_SECRET"))
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)), fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -318,6 +377,13 @@ func TestSecretsIntegration_LocalHookAccess(t *testing.T) {
 	}
 	defer tester.Close()
 
+	// Set up mock API server with secret
+	secretsMap := map[string]string{
+		"LOCAL_HOOK_SECRET": "local-hook-value",
+	}
+	apiServer := setupSecretsAPIServer(t, secretsMap)
+	defer apiServer.Close()
+
 	// Define test secret
 	secrets := []pipeline.Secret{
 		{
@@ -331,8 +397,6 @@ func TestSecretsIntegration_LocalHookAccess(t *testing.T) {
 		t.Fatalf("marshaling secrets: %v", err)
 	}
 
-	tester.MockSecret(t, "LOCAL_HOOK_SECRET", "local-hook-value")
-
 	// Create a local environment hook that verifies secret access
 	hookContent := "#!/bin/bash\necho \"Local hook sees secret: $LOCAL_HOOK_SECRET\""
 	hookPath := filepath.Join(tester.HooksDir, "environment")
@@ -344,7 +408,7 @@ func TestSecretsIntegration_LocalHookAccess(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)), fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -364,6 +428,14 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 	}
 	defer tester.Close()
 
+	// Set up mock API server with secret
+	secretValue := "job-api-secret-value"
+	secretsMap := map[string]string{
+		"JOB_API_SECRET": secretValue,
+	}
+	apiServer := setupSecretsAPIServer(t, secretsMap)
+	defer apiServer.Close()
+
 	// Define test secret
 	secrets := []pipeline.Secret{
 		{
@@ -376,9 +448,6 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshaling secrets: %v", err)
 	}
-
-	secretValue := "job-api-secret-value"
-	tester.MockSecret(t, "JOB_API_SECRET", secretValue)
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
 		socketPath := c.GetEnv("BUILDKITE_AGENT_JOB_API_SOCKET")
@@ -419,7 +488,7 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)), fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
