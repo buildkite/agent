@@ -941,7 +941,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 			if pipelineSecret.EnvironmentVariable != nil && *pipelineSecret.EnvironmentVariable != "" {
 				e.shell.Env.Set(*pipelineSecret.EnvironmentVariable, secretValue)
 			}
-			
+
 			// Always register the secret value for redaction regardless of env var setting
 			e.redactors.Add(secretValue)
 		}

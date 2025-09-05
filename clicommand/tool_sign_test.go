@@ -30,7 +30,7 @@ steps:
 	// Verify initial state - step should only have its own secrets
 	commandStep := parsedPipeline.Steps[0].(*pipeline.CommandStep)
 	assert.Len(t, commandStep.Secrets, 2, "Step should initially have only step-level secrets")
-	
+
 	// Find DATABASE_URL and STEP_SECRET
 	var hasDatabase, hasStepSecret bool
 	for _, secret := range commandStep.Secrets {
@@ -53,13 +53,13 @@ steps:
 
 	// Verify merged state - step should now have all 4 secrets
 	assert.Len(t, commandStep.Secrets, 4, "Step should have all secrets after merging")
-	
+
 	// Check that all secrets are present
 	secretKeys := make(map[string]bool)
 	for _, secret := range commandStep.Secrets {
 		secretKeys[secret.Key] = true
 	}
-	
+
 	expectedSecrets := []string{"DATABASE_URL", "STEP_SECRET", "API_TOKEN", "GLOBAL_SECRET"}
 	for _, expectedKey := range expectedSecrets {
 		assert.True(t, secretKeys[expectedKey], "Step should have secret %s after merging", expectedKey)
