@@ -616,18 +616,15 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 		var refspec string
-		var retry bool
 
 		if e.PullRequestUsingMergeRefspec {
 			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
-			retry = false
 			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
 		} else {
 			// GitHub has a special ref which lets us fetch a pull request head, whether
 			// or not it's a current head in this repository or a fork. See:
 			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 			e.shell.Commentf("Fetch and checkout pull request head from GitHub")
-			retry = true
 			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 		}
 		refspecs := []string{refspec}
@@ -640,7 +637,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 				Shell:         e.shell,
 				GitFetchFlags: gitFetchFlags,
 				Repository:    "origin",
-				Retry:         retry,
+				Retry:         true,
 				RefSpecs:      refspecs,
 			}); err != nil {
 				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
