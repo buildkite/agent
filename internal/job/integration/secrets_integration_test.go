@@ -27,15 +27,15 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 	secrets := []pipeline.Secret{
 		{
 			Key:                 "DATABASE_URL",
-			EnvironmentVariable: "DATABASE_URL",
+			EnvironmentVariable: &[]string{"DATABASE_URL"}[0],
 		},
 		{
 			Key:                 "API_TOKEN",
-			EnvironmentVariable: "API_TOKEN",
+			EnvironmentVariable: &[]string{"API_TOKEN"}[0],
 		},
 		{
 			Key:                 "CUSTOM_SECRET",
-			EnvironmentVariable: "MY_CUSTOM_VAR",
+			EnvironmentVariable: &[]string{"MY_CUSTOM_VAR"}[0],
 		},
 	}
 
@@ -116,7 +116,7 @@ func TestSecretsIntegration_Redaction(t *testing.T) {
 	secrets := []pipeline.Secret{
 		{
 			Key:                 "SENSITIVE_TOKEN",
-			EnvironmentVariable: "SENSITIVE_TOKEN",
+			EnvironmentVariable: &[]string{"SENSITIVE_TOKEN"}[0],
 		},
 	}
 
@@ -233,11 +233,11 @@ func TestSecretsIntegration_SecretFetchFailure(t *testing.T) {
 	secrets := []pipeline.Secret{
 		{
 			Key:                 "VALID_SECRET",
-			EnvironmentVariable: "VALID_SECRET",
+			EnvironmentVariable: &[]string{"VALID_SECRET"}[0],
 		},
 		{
 			Key:                 "INVALID_SECRET",
-			EnvironmentVariable: "INVALID_SECRET",
+			EnvironmentVariable: &[]string{"INVALID_SECRET"}[0],
 		},
 	}
 
@@ -275,7 +275,7 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 	secrets := []pipeline.Secret{
 		{
 			Key:                 "MULTILINE_SECRET",
-			EnvironmentVariable: "MULTILINE_SECRET",
+			EnvironmentVariable: &[]string{"MULTILINE_SECRET"}[0],
 		},
 	}
 
@@ -322,7 +322,7 @@ func TestSecretsIntegration_LocalHookAccess(t *testing.T) {
 	secrets := []pipeline.Secret{
 		{
 			Key:                 "LOCAL_HOOK_SECRET",
-			EnvironmentVariable: "LOCAL_HOOK_SECRET",
+			EnvironmentVariable: &[]string{"LOCAL_HOOK_SECRET"}[0],
 		},
 	}
 
@@ -368,7 +368,7 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 	secrets := []pipeline.Secret{
 		{
 			Key:                 "JOB_API_SECRET",
-			EnvironmentVariable: "JOB_API_SECRET",
+			EnvironmentVariable: &[]string{"JOB_API_SECRET"}[0],
 		},
 	}
 

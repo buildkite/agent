@@ -23,7 +23,7 @@ func TestVerifyJob_WithSecrets(t *testing.T) {
 		Step: pipeline.CommandStep{
 			Command: "echo 'Testing secrets'",
 			Secrets: pipeline.Secrets{
-				&pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+				&pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: &[]string{"DATABASE_URL"}[0]},
 			},
 		},
 	}
@@ -129,7 +129,7 @@ func TestVerifyJob_SecretsMismatch(t *testing.T) {
 		Step: pipeline.CommandStep{
 			Command: "echo 'Testing secrets mismatch'",
 			Secrets: pipeline.Secrets{
-				&pipeline.Secret{Key: "API_KEY", EnvironmentVariable: "API_KEY"},
+				&pipeline.Secret{Key: "API_KEY", EnvironmentVariable: &[]string{"API_KEY"}[0]},
 			},
 		},
 	}
@@ -144,7 +144,7 @@ func TestVerifyJob_SecretsMismatch(t *testing.T) {
 
 	// Modify step secrets after signing to simulate tampering
 	step.Secrets = pipeline.Secrets{
-		&pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"}, // Different from signed
+		&pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: &[]string{"DATABASE_URL"}[0]}, // Different from signed
 	}
 
 	agentLogger := logger.Discard

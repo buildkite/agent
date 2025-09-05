@@ -177,23 +177,19 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			// So, we don't need to confirm that the values in the job are the same as those in the step.
 			continue
 
-		case "secrets": // compare secrets directly
-			// Compare step.Secrets (from signed pipeline) with r.conf.Job.Step.Secrets (from backend job)
+		case "secrets":
 			jobSecrets := r.conf.Job.Step.Secrets
 
-			// Check if both are empty
 			if len(step.Secrets) == 0 && len(jobSecrets) == 0 {
 				r.agentLogger.Debug("verifyJob: both job.Step.Secrets and step.Secrets are empty")
 				continue // both empty
 			}
 
-			// Check if lengths differ
 			if len(step.Secrets) != len(jobSecrets) {
 				r.agentLogger.Debug("failed to verifyJob: step.Secrets length %d != jobSecrets length %d", len(step.Secrets), len(jobSecrets))
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
-			// Compare each secret directly
 			for i, stepSecret := range step.Secrets {
 				jobSecret := jobSecrets[i]
 
