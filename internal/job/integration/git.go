@@ -65,26 +65,26 @@ func createTestGitRespository() (*gitRepository, error) {
 
 	// Add the merge ref - this simulates what GitHub creates for PR merges
 	if _, err = repo.Execute("merge-base", "main", "HEAD"); err != nil {
-			return nil, fmt.Errorf("finding merge base: %w", err)
+		return nil, fmt.Errorf("finding merge base: %w", err)
 	}
 
 	// Create a temporary merge commit for testing merge refspecs
 	if err = repo.CheckoutBranch("main"); err != nil {
-			return nil, fmt.Errorf("checkout main for merge: %w", err)
+		return nil, fmt.Errorf("checkout main for merge: %w", err)
 	}
 
 	if _, err = repo.Execute("merge", "--no-ff", "-m", "Merge pull request #123", "update-test-txt"); err != nil {
-			return nil, fmt.Errorf("creating merge commit: %w", err)
+		return nil, fmt.Errorf("creating merge commit: %w", err)
 	}
 
 	// Create the merge refspec that points to this merge commit
 	if _, err = repo.Execute("update-ref", "refs/pull/123/merge", "HEAD"); err != nil {
-			return nil, fmt.Errorf("updating merge ref: %w", err)
+		return nil, fmt.Errorf("updating merge ref: %w", err)
 	}
 
 	// Reset main back to its original state so existing tests aren't affected
 	if _, err = repo.Execute("reset", "--hard", "HEAD~1"); err != nil {
-			return nil, fmt.Errorf("resetting main: %w", err)
+		return nil, fmt.Errorf("resetting main: %w", err)
 	}
 
 	if err = repo.CheckoutBranch("main"); err != nil {

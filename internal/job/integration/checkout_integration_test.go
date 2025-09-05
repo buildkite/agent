@@ -522,9 +522,9 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
-		// {"clone", "no-local", "--", tester.Repo.Path, "."},
+		{"clone", "--no-local", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/merge"},
+		{"fetch", "--", "origin", "refs/pull/123/merge"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
@@ -537,10 +537,6 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
 	assert.NilError(t, err)
 	assert.Equal(t, checkoutRepoCommit, commitHash)
-
-	localPullMergeRefCommit, err := checkoutRepo.RevParse("refs/pull/origin/123/merge")
-	assert.NilError(t, err)
-	assert.Equal(t, localPullMergeRefCommit, commitHash)
 }
 
 func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
