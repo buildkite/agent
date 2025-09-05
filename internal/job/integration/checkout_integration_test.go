@@ -527,7 +527,7 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 		{"fetch", "--", "origin", "refs/pull/123/merge"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
-		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+		{"rev-parse", "FETCH_HEAD"},
 	})
 
 	tester.RunAndCheck(t, env...)
