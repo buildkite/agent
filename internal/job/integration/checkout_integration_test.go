@@ -522,7 +522,7 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
-		{"clone", "--depth=1", "--", tester.Repo.Path, "."},
+		// {"clone", "no-local", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/merge"},
 		{"checkout", "-f", "FETCH_HEAD"},
