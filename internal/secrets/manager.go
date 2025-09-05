@@ -2,12 +2,10 @@ package secrets
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/go-pipeline"
 )
 
 // APIClient interface defines only the method needed by the secrets manager
@@ -16,132 +14,43 @@ type APIClient interface {
 	GetSecret(ctx context.Context, req *api.GetSecretRequest) (*api.Secret, *api.Response, error)
 }
 
-// CreateFromJSON parses a JSON string and returns a slice of secrets.
-func CreateFromJSON(j string) ([]pipeline.Secret, error) {
-	if j == "" {
-		return nil, nil
-	}
-
-	var secrets []pipeline.Secret
-	if err := json.Unmarshal([]byte(j), &secrets); err != nil {
-		return nil, fmt.Errorf("failed to parse secrets JSON: %w", err)
-	}
-
-	return secrets, nil
+// Secret represents a fetched secret with its key and value.
+type Secret struct {
+	Key   string
+	Value string
 }
 
-// fetchSecrets retrieves all secret values from the API sequentially.
-// Uses ALL-OR-NOTHING semantics: if any secret fails, returns error with details of all failed secrets.
-// Returns map of secret key to secret value only if ALL secrets fetch successfully.
-func fetchSecrets(ctx context.Context, client APIClient, jobID string, secrets []pipeline.Secret) (map[string]string, error) {
-	if len(secrets) == 0 {
+// FetchSecrets retrieves all secret values from the API sequentially.
+// If any secret fails, returns error with details of all failed secrets.
+func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []string) ([]Secret, error) {
+	if len(keys) == 0 {
 		return nil, nil
 	}
 
-	secretValues := make(map[string]string, len(secrets))
-	errs := make([]error, 0, len(secrets))
+	secrets := make([]Secret, 0, len(keys))
+	errs := make([]error, 0, len(keys))
 
-	// Sequential fetching for initial implementation
-	for _, secret := range secrets {
+	for _, key := range keys {
 		apiSecret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{
-			Key:   secret.Key,
+			Key:   key,
 			JobID: jobID,
 		})
 		if err != nil {
 			// Include secret key name (never values) in error messages for debugging
-			errs = append(errs, fmt.Errorf("secret %q: %w", secret.Key, err))
+			errs = append(errs, fmt.Errorf("secret %q: %w", key, err))
 			continue
 		}
 
-		secretValues[secret.Key] = apiSecret.Value
+		secrets = append(secrets, Secret{
+			Key:   key,
+			Value: apiSecret.Value,
+		})
 	}
 
-	// ALL-OR-NOTHING: if any secret fails, return error with details of all failed secrets
+	// If any secret fails, return error with details of all failed secrets
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
 
-	return secretValues, nil
-}
-
-// processSecrets processes each secret sequentially to avoid race conditions with environment mutations.
-// Clears secret values from memory immediately after processing each secret using secure zeroing.
-func processSecrets(ctx context.Context, secrets []pipeline.Secret, secretValues map[string]string, processors []Processor) error {
-	if len(secrets) == 0 || len(secretValues) == 0 {
-		return nil
-	}
-
-	errs := make([]error, 0, len(secrets))
-
-	// Process each secret sequentially to avoid race conditions
-	for _, secret := range secrets {
-		secretValue, exists := secretValues[secret.Key]
-		if !exists {
-			continue // Skip if not in secretValues map (shouldn't happen)
-		}
-
-		// Find a processor that supports this secret type
-		var supportingProcessor Processor
-		for _, processor := range processors {
-			if processor.SupportsSecret(&secret) {
-				supportingProcessor = processor
-				break
-			}
-		}
-
-		if supportingProcessor == nil {
-			errs = append(errs, fmt.Errorf("secret %q: no processor supports this secret type", secret.Key))
-			continue
-		}
-
-		// Process the secret
-		if err := supportingProcessor.ProcessSecret(ctx, &secret, secretValue); err != nil {
-			errs = append(errs, fmt.Errorf("secret %q: %w", secret.Key, err))
-		}
-
-		// Clear secret value from memory immediately after processing using secure zeroing
-		clearString(&secretValue)
-		secretValues[secret.Key] = "" // Clear from map as well
-	}
-
-	return errors.Join(errs...)
-}
-
-// FetchAndProcess orchestrates the complete secrets workflow: fetch all secrets then process them.
-// Uses ALL-OR-NOTHING semantics: if any step fails, the entire operation fails.
-func FetchAndProcess(ctx context.Context, client APIClient, jobID string, secrets []pipeline.Secret, processors []Processor) error {
-	if len(secrets) == 0 {
-		return nil // No secrets to process
-	}
-
-	// Step 1: Fetch all secrets from API
-	secretValues, fetchErr := fetchSecrets(ctx, client, jobID, secrets)
-	if fetchErr != nil {
-		return fetchErr // ALL-OR-NOTHING: if fetchSecrets() returns error, immediately fail
-	}
-
-	// Step 2: Process all secrets
-	processErr := processSecrets(ctx, secrets, secretValues, processors)
-
-	// Clear all remaining secret values from memory
-	for key, value := range secretValues {
-		clearString(&value)
-		secretValues[key] = ""
-	}
-
-	return processErr
-}
-
-// clearString securely clears the contents of a string by overwriting its backing array
-func clearString(s *string) {
-	if s == nil || *s == "" {
-		return
-	}
-
-	// Get the backing byte array and zero it out
-	b := []byte(*s)
-	for i := range b {
-		b[i] = 0
-	}
-	*s = ""
+	return secrets, nil
 }

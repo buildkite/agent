@@ -6,6 +6,7 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -881,7 +882,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {
 		if err := e.fetchAndSetSecrets(ctx); err != nil {
-			return fmt.Errorf("failed to fetch secrets: %w", err)
+			return fmt.Errorf("failed to fetch secrets for job: %w", err)
 		}
 	}
 
@@ -892,38 +893,60 @@ func (e *Executor) setUp(ctx context.Context) error {
 	return err
 }
 
-// fetchAndSetSecrets handles secrets fetching and processing using the internal secrets package
+// fetchAndSetSecrets handles secrets fetching and processing directly
 func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	if e.Secrets == "" {
 		return nil // No secrets to process
 	}
 
-	// Parse secrets from JSON
-	secretsSlice, err := secrets.CreateFromJSON(e.Secrets)
-	if err != nil {
-		return fmt.Errorf("failed to parse secrets configuration: %w", err)
+	// Parse secrets from JSON directly
+	var pipelineSecrets []struct {
+		Key                 string `json:"key"`
+		EnvironmentVariable string `json:"environment_variable"`
+	}
+	if err := json.Unmarshal([]byte(e.Secrets), &pipelineSecrets); err != nil {
+		return fmt.Errorf("failed to parse secrets JSON: %w", err)
 	}
 
-	if len(secretsSlice) == 0 {
+	if len(pipelineSecrets) == 0 {
 		return nil // No secrets to process
 	}
 
-	// Create API client from environment variables (set by JobRunner)
+	// Extract keys for fetching
+	keys := make([]string, len(pipelineSecrets))
+	for i, ps := range pipelineSecrets {
+		keys[i] = ps.Key
+	}
+
+	// Create API client for fetching secrets.
 	apiClient := api.NewClient(logger.NewBuffer(), api.Config{
 		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
 		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
 	})
 
-	// Create list of processors for handling different secret types
-	processors := []secrets.Processor{
-		&secrets.EnvironmentVariableProcessor{
-			Env:       e.shell.Env,
-			Redactors: e.redactors,
-		},
+	// Fetch all secrets
+	fetchedSecrets, err := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys)
+	if err != nil {
+		return err
 	}
 
-	// Fetch and process all secrets
-	return secrets.FetchAndProcess(ctx, apiClient, e.JobID, secretsSlice, processors)
+	// Create map for O(1) lookups
+	secretValuesByKey := make(map[string]string, len(fetchedSecrets))
+	for _, fetchedSecret := range fetchedSecrets {
+		secretValuesByKey[fetchedSecret.Key] = fetchedSecret.Value
+	}
+
+	// Set environment variables and register for redaction
+	for _, pipelineSecret := range pipelineSecrets {
+		if secretValue, exists := secretValuesByKey[pipelineSecret.Key]; exists {
+			e.shell.Env.Set(pipelineSecret.EnvironmentVariable, secretValue)
+
+			// Register the secret value for redaction
+			e.redactors.Add(secretValue)
+		}
+	}
+
+	return nil
 }
 
 // tearDown is called before the executor exits, even on error

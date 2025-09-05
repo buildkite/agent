@@ -6,9 +6,6 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/replacer"
-	"github.com/buildkite/go-pipeline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,215 +28,111 @@ func (m *mockAPIClient) GetSecret(ctx context.Context, req *api.GetSecretRequest
 	return nil, &api.Response{}, errors.New("secret not found")
 }
 
-// mockProcessor implements the Processor interface for testing
-type mockProcessor struct {
-	supportedKeys    []string
-	processedSecrets map[string]string // map of secret key to processed value
-	processingErrors map[string]error  // map of secret key to processing error
-}
-
-func (m *mockProcessor) SupportsSecret(secret *pipeline.Secret) bool {
-	for _, key := range m.supportedKeys {
-		if secret.Key == key {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *mockProcessor) ProcessSecret(ctx context.Context, secret *pipeline.Secret, value string) error {
-	if err, exists := m.processingErrors[secret.Key]; exists {
-		return err
-	}
-
-	if m.processedSecrets == nil {
-		m.processedSecrets = make(map[string]string)
-	}
-	m.processedSecrets[secret.Key] = value
-	return nil
-}
-
-func TestCreateFromJSON_Success(t *testing.T) {
+func TestFetchSecrets_Success(t *testing.T) {
 	t.Parallel()
 
-	jsonString := `[
-		{
-			"key": "DATABASE_URL",
-			"environment_variable": "DATABASE_URL"
+	mockClient := &mockAPIClient{
+		secrets: map[string]*api.Secret{
+			"DATABASE_URL": {Key: "DATABASE_URL", Value: "postgres://user:pass@host:5432/db"},
+			"API_TOKEN":    {Key: "API_TOKEN", Value: "secret-token-123"},
 		},
-		{
-			"key": "API_TOKEN",
-			"environment_variable": "API_TOKEN"
-		}
-	]`
+	}
 
-	secrets, err := CreateFromJSON(jsonString)
+	keys := []string{"DATABASE_URL", "API_TOKEN"}
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
 
 	require.NoError(t, err)
 	require.Len(t, secrets, 2)
+
+	// Verify secrets are returned in the same order as requested keys
 	assert.Equal(t, "DATABASE_URL", secrets[0].Key)
-	assert.Equal(t, "DATABASE_URL", secrets[0].EnvironmentVariable)
+	assert.Equal(t, "postgres://user:pass@host:5432/db", secrets[0].Value)
 	assert.Equal(t, "API_TOKEN", secrets[1].Key)
-	assert.Equal(t, "API_TOKEN", secrets[1].EnvironmentVariable)
+	assert.Equal(t, "secret-token-123", secrets[1].Value)
 }
 
-func TestCreateFromJSON_EmptyString(t *testing.T) {
+func TestFetchSecrets_EmptyKeys(t *testing.T) {
 	t.Parallel()
 
-	secrets, err := CreateFromJSON("")
+	mockClient := &mockAPIClient{}
+
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", []string{})
 
 	require.NoError(t, err)
 	assert.Nil(t, secrets)
 }
 
-func TestCreateFromJSON_InvalidJSON(t *testing.T) {
+func TestFetchSecrets_NilKeys(t *testing.T) {
 	t.Parallel()
 
-	secrets, err := CreateFromJSON("invalid json")
+	mockClient := &mockAPIClient{}
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to parse secrets JSON")
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", nil)
+
+	require.NoError(t, err)
 	assert.Nil(t, secrets)
 }
 
-func TestManager_FetchAndProcess_Success(t *testing.T) {
+func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 	t.Parallel()
 
-	client := &mockAPIClient{
+	mockClient := &mockAPIClient{
 		secrets: map[string]*api.Secret{
-			"DATABASE_URL": {Key: "DATABASE_URL", Value: "postgres://test"},
+			"DATABASE_URL": {Key: "DATABASE_URL", Value: "postgres://user:pass@host:5432/db"},
 		},
-	}
-
-	processor := &mockProcessor{
-		supportedKeys: []string{"DATABASE_URL"},
-	}
-
-	secrets := []pipeline.Secret{
-		{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
-	}
-
-	err := FetchAndProcess(context.Background(), client, "job123", secrets, []Processor{processor})
-
-	require.NoError(t, err)
-	assert.Equal(t, "postgres://test", processor.processedSecrets["DATABASE_URL"])
-}
-
-func TestManager_FetchAndProcess_FetchFailure(t *testing.T) {
-	t.Parallel()
-
-	client := &mockAPIClient{
 		errors: map[string]error{
-			"DATABASE_URL": errors.New("fetch failed"),
+			"API_TOKEN": errors.New("API token not found"),
+			"MISSING":   errors.New("secret not found"),
 		},
 	}
 
-	processor := &mockProcessor{
-		supportedKeys: []string{"DATABASE_URL"},
+	keys := []string{"DATABASE_URL", "API_TOKEN", "MISSING"}
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
+
+	// Should return error because some secrets failed
+	require.Error(t, err)
+	assert.Nil(t, secrets)
+
+	// Error should contain details of all failed secrets
+	assert.Contains(t, err.Error(), `secret "API_TOKEN": API token not found`)
+	assert.Contains(t, err.Error(), `secret "MISSING": secret not found`)
+}
+
+func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
+	t.Parallel()
+
+	mockClient := &mockAPIClient{
+		errors: map[string]error{
+			"API_TOKEN":    errors.New("API token not found"),
+			"DATABASE_URL": errors.New("database secret not found"),
+		},
 	}
 
-	secrets := []pipeline.Secret{
-		{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+	keys := []string{"API_TOKEN", "DATABASE_URL"}
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
+
+	// Should return error because all secrets failed
+	require.Error(t, err)
+	assert.Nil(t, secrets)
+
+	// Error should contain details of all failed secrets
+	assert.Contains(t, err.Error(), `secret "API_TOKEN": API token not found`)
+	assert.Contains(t, err.Error(), `secret "DATABASE_URL": database secret not found`)
+}
+
+func TestFetchSecrets_APIClientError(t *testing.T) {
+	t.Parallel()
+
+	mockClient := &mockAPIClient{
+		errors: map[string]error{
+			"TEST_SECRET": errors.New("network error"),
+		},
 	}
 
-	err := FetchAndProcess(context.Background(), client, "job123", secrets, []Processor{processor})
+	keys := []string{"TEST_SECRET"}
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), `secret "DATABASE_URL": fetch failed`)
-	// Processing should not have occurred
-	assert.Empty(t, processor.processedSecrets)
-}
-
-func TestManager_FetchAndProcess_ProcessFailure(t *testing.T) {
-	t.Parallel()
-
-	client := &mockAPIClient{
-		secrets: map[string]*api.Secret{
-			"DATABASE_URL": {Key: "DATABASE_URL", Value: "postgres://test"},
-		},
-	}
-
-	processor := &mockProcessor{
-		supportedKeys: []string{"DATABASE_URL"},
-		processingErrors: map[string]error{
-			"DATABASE_URL": errors.New("process failed"),
-		},
-	}
-
-	secrets := []pipeline.Secret{
-		{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
-	}
-
-	err := FetchAndProcess(context.Background(), client, "job123", secrets, []Processor{processor})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `secret "DATABASE_URL": process failed`)
-}
-
-func TestManager_FetchAndProcess_EmptySecrets(t *testing.T) {
-	t.Parallel()
-
-	err := FetchAndProcess(context.Background(), nil, "job123", nil, nil)
-
-	require.NoError(t, err)
-}
-
-func TestClearString(t *testing.T) {
-	t.Parallel()
-
-	// Test clearing a non-empty string
-	s := "sensitive-data"
-	clearString(&s)
-	assert.Equal(t, "", s)
-
-	// Test clearing an empty string
-	empty := ""
-	clearString(&empty)
-	assert.Equal(t, "", empty)
-
-	// Test clearing a nil pointer (should not panic)
-	clearString(nil)
-}
-
-// Integration test with real EnvironmentVariableProcessor
-func TestManager_IntegrationWithEnvironmentProcessor(t *testing.T) {
-	t.Parallel()
-
-	client := &mockAPIClient{
-		secrets: map[string]*api.Secret{
-			"DATABASE_URL": {Key: "DATABASE_URL", Value: "postgres://test"},
-			"API_TOKEN":    {Key: "API_TOKEN", Value: "secret123"},
-		},
-	}
-
-	// Use real environment and redactor for integration test
-	testEnv := env.New()
-	redactors := replacer.NewMux() // Use NewMux() for the Mux type
-
-	processor := &EnvironmentVariableProcessor{
-		Env:       testEnv,
-		Redactors: redactors,
-	}
-
-	secrets := []pipeline.Secret{
-		{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
-		{Key: "API_TOKEN", EnvironmentVariable: "API_TOKEN"},
-	}
-
-	err := FetchAndProcess(context.Background(), client, "job123", secrets, []Processor{processor})
-
-	require.NoError(t, err)
-
-	// Verify environment variables were set
-	dbUrl, ok := testEnv.Get("DATABASE_URL")
-	require.True(t, ok)
-	assert.Equal(t, "postgres://test", dbUrl)
-
-	apiToken, ok := testEnv.Get("API_TOKEN")
-	require.True(t, ok)
-	assert.Equal(t, "secret123", apiToken)
-
-	// Note: In a real integration test, redaction verification would require
-	// setting up actual replacers with writers, which is complex for unit tests.
-	// The redactors.Add() call in the processor is tested separately.
+	assert.Nil(t, secrets)
+	assert.Contains(t, err.Error(), `secret "TEST_SECRET": network error`)
 }
