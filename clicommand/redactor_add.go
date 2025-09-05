@@ -30,6 +30,7 @@ var (
 
 	errSecretParse   = errors.New("failed to parse secrets")
 	errSecretRedact  = errors.New("failed to redact secrets")
+	errOIDCRedact    = errors.New("failed to redact OIDC token")
 	errUnknownFormat = errors.New("unknown format")
 )
 
