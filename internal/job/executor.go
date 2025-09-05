@@ -37,6 +37,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -899,11 +900,8 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 		return nil // No secrets to process
 	}
 
-	// Parse secrets from JSON directly
-	var pipelineSecrets []struct {
-		Key                 string `json:"key"`
-		EnvironmentVariable string `json:"environment_variable"`
-	}
+	// Parse secrets from JSON using the pipeline.Secret type
+	var pipelineSecrets []*pipeline.Secret
 	if err := json.Unmarshal([]byte(e.Secrets), &pipelineSecrets); err != nil {
 		return fmt.Errorf("failed to parse secrets JSON: %w", err)
 	}
@@ -939,9 +937,12 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	// Set environment variables and register for redaction
 	for _, pipelineSecret := range pipelineSecrets {
 		if secretValue, exists := secretValuesByKey[pipelineSecret.Key]; exists {
-			e.shell.Env.Set(pipelineSecret.EnvironmentVariable, secretValue)
-
-			// Register the secret value for redaction
+			// Set the environment variable only if environment_variable is specified and non-nil
+			if pipelineSecret.EnvironmentVariable != nil && *pipelineSecret.EnvironmentVariable != "" {
+				e.shell.Env.Set(*pipelineSecret.EnvironmentVariable, secretValue)
+			}
+			
+			// Always register the secret value for redaction regardless of env var setting
 			e.redactors.Add(secretValue)
 		}
 	}
