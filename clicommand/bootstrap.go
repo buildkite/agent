@@ -168,8 +168,8 @@ var BootstrapCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "secrets",
 			Value:  "",
-			Usage:  "The secrets for the job",
-			EnvVar: "BUILDKITE_JOB_SECRETS",
+			Usage:  "Secrets to be loaded into the job environment",
+			EnvVar: "BUILDKITE_SECRETS_CONFIG",
 		},
 		cli.StringFlag{
 			Name:   "pullrequest",
@@ -459,8 +459,6 @@ var BootstrapCommand = cli.Command{
 		if err != nil {
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
-
-
 
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{

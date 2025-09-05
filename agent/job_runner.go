@@ -503,13 +503,13 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
 
-	// Set BUILDKITE_JOB_SECRETS so bootstrap can access secrets configuration (following plugin pattern)
+	// Set BUILDKITE_SECRETS_CONFIG so bootstrap can access secrets configuration
 	if len(r.conf.Job.Step.Secrets) > 0 {
 		if secretsJSON, err := json.Marshal(r.conf.Job.Step.Secrets); err != nil {
 			r.agentLogger.Warn("Failed to marshal secrets configuration: %v", err)
 
 		} else {
-			env["BUILDKITE_JOB_SECRETS"] = string(secretsJSON)
+			env["BUILDKITE_SECRETS_CONFIG"] = string(secretsJSON)
 		}
 	}
 

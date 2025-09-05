@@ -39,7 +39,7 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 		},
 	}
 
-	// Set up BUILDKITE_JOB_SECRETS environment variable
+	// Set up BUILDKITE_SECRETS_CONFIG environment variable
 	secretsJSON, err := json.Marshal(secrets)
 	if err != nil {
 		t.Fatalf("marshaling secrets: %v", err)
@@ -86,7 +86,7 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_JOB_SECRETS=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestSecretsIntegration_Redaction(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_JOB_SECRETS=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestSecretsIntegration_BackwardCompatibility(t *testing.T) {
 	}
 	defer tester.Close()
 
-	// Don't set BUILDKITE_JOB_SECRETS - should work normally
+	// Don't set BUILDKITE_SECRETS_CONFIG
 	tester.ExpectGlobalHook("environment").AndCallFunc(func(c *bintest.Call) {
 		fmt.Fprintf(c.Stderr, "Environment hook executed successfully\n")
 		c.Exit(0)
@@ -206,7 +206,7 @@ func TestSecretsIntegration_EmptySecretsConfiguration(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_JOB_SECRETS=%s", secretsJSON))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", secretsJSON))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestSecretsIntegration_SecretFetchFailure(t *testing.T) {
 	// Don't mock INVALID_SECRET to simulate API failure
 
 	// Job should fail before hooks execute due to secret fetch failure
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_JOB_SECRETS=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
 	if err == nil {
 		t.Fatalf("expected job to fail due to secret fetch failure, but it succeeded. Full output: %s", tester.Output)
 	}
@@ -293,7 +293,7 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_JOB_SECRETS=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestSecretsIntegration_LocalHookAccess(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_JOB_SECRETS=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -419,7 +419,7 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, fmt.Sprintf("BUILDKITE_JOB_SECRETS=%s", string(secretsJSON)))
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)))
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
