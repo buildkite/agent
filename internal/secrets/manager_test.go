@@ -3,11 +3,10 @@ package secrets
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // mockAPIClient implements the APIClient interface for testing
@@ -41,14 +40,27 @@ func TestFetchSecrets_Success(t *testing.T) {
 	keys := []string{"DATABASE_URL", "API_TOKEN"}
 	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
 
-	require.NoError(t, err)
-	require.Len(t, secrets, 2)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if len(secrets) != 2 {
+		t.Fatalf("expected 2 secrets, got %d", len(secrets))
+	}
 
 	// Verify secrets are returned in the same order as requested keys
-	assert.Equal(t, "DATABASE_URL", secrets[0].Key)
-	assert.Equal(t, "postgres://user:pass@host:5432/db", secrets[0].Value)
-	assert.Equal(t, "API_TOKEN", secrets[1].Key)
-	assert.Equal(t, "secret-token-123", secrets[1].Value)
+	if secrets[0].Key != "DATABASE_URL" {
+		t.Errorf("expected first secret key to be 'DATABASE_URL', got %q", secrets[0].Key)
+	}
+	if secrets[0].Value != "postgres://user:pass@host:5432/db" {
+		t.Errorf("expected first secret value to be 'postgres://user:pass@host:5432/db', got %q", secrets[0].Value)
+	}
+	if secrets[1].Key != "API_TOKEN" {
+		t.Errorf("expected second secret key to be 'API_TOKEN', got %q", secrets[1].Key)
+	}
+	if secrets[1].Value != "secret-token-123" {
+		t.Errorf("expected second secret value to be 'secret-token-123', got %q", secrets[1].Value)
+	}
 }
 
 func TestFetchSecrets_EmptyKeys(t *testing.T) {
@@ -58,8 +70,13 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 
 	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", []string{})
 
-	require.NoError(t, err)
-	assert.Nil(t, secrets)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if secrets != nil {
+		t.Errorf("expected nil secrets, got: %v", secrets)
+	}
 }
 
 func TestFetchSecrets_NilKeys(t *testing.T) {
@@ -69,8 +86,13 @@ func TestFetchSecrets_NilKeys(t *testing.T) {
 
 	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", nil)
 
-	require.NoError(t, err)
-	assert.Nil(t, secrets)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if secrets != nil {
+		t.Errorf("expected nil secrets, got: %v", secrets)
+	}
 }
 
 func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
@@ -90,12 +112,21 @@ func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
 
 	// Should return error because some secrets failed
-	require.Error(t, err)
-	assert.Nil(t, secrets)
+	if err == nil {
+		t.Fatal("expected error, got none")
+	}
+
+	if secrets != nil {
+		t.Errorf("expected nil secrets, got: %v", secrets)
+	}
 
 	// Error should contain details of all failed secrets
-	assert.Contains(t, err.Error(), `secret "API_TOKEN": API token not found`)
-	assert.Contains(t, err.Error(), `secret "MISSING": secret not found`)
+	if !strings.Contains(err.Error(), `secret "API_TOKEN": API token not found`) {
+		t.Errorf("expected error to contain API_TOKEN failure, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `secret "MISSING": secret not found`) {
+		t.Errorf("expected error to contain MISSING failure, got: %v", err)
+	}
 }
 
 func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
@@ -112,12 +143,21 @@ func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
 	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
 
 	// Should return error because all secrets failed
-	require.Error(t, err)
-	assert.Nil(t, secrets)
+	if err == nil {
+		t.Fatal("expected error, got none")
+	}
+
+	if secrets != nil {
+		t.Errorf("expected nil secrets, got: %v", secrets)
+	}
 
 	// Error should contain details of all failed secrets
-	assert.Contains(t, err.Error(), `secret "API_TOKEN": API token not found`)
-	assert.Contains(t, err.Error(), `secret "DATABASE_URL": database secret not found`)
+	if !strings.Contains(err.Error(), `secret "API_TOKEN": API token not found`) {
+		t.Errorf("expected error to contain API_TOKEN failure, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `secret "DATABASE_URL": database secret not found`) {
+		t.Errorf("expected error to contain DATABASE_URL failure, got: %v", err)
+	}
 }
 
 func TestFetchSecrets_APIClientError(t *testing.T) {
@@ -132,7 +172,15 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	keys := []string{"TEST_SECRET"}
 	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
 
-	require.Error(t, err)
-	assert.Nil(t, secrets)
-	assert.Contains(t, err.Error(), `secret "TEST_SECRET": network error`)
+	if err == nil {
+		t.Fatal("expected error, got none")
+	}
+
+	if secrets != nil {
+		t.Errorf("expected nil secrets, got: %v", secrets)
+	}
+
+	if !strings.Contains(err.Error(), `secret "TEST_SECRET": network error`) {
+		t.Errorf("expected error to contain network error, got: %v", err)
+	}
 }
