@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -16,9 +17,10 @@ type OIDCTokenConfig struct {
 	GlobalConfig
 	APIConfig
 
-	Audience string `cli:"audience"`
-	Lifetime int    `cli:"lifetime"`
-	Job      string `cli:"job"      validate:"required"`
+	Audience      string `cli:"audience"`
+	Lifetime      int    `cli:"lifetime"`
+	Job           string `cli:"job"      validate:"required"`
+	SkipRedaction bool   `cli:"skip-redaction"`
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
 	Claims         []string `cli:"claim"           normalize:"list"`
 	AWSSessionTags []string `cli:"aws-session-tag" normalize:"list"`
@@ -77,6 +79,12 @@ var OIDCRequestTokenCommand = cli.Command{
 			Usage:  "Add claims as AWS Session Tags",
 			EnvVar: "BUILDKITE_OIDC_TOKEN_AWS_SESSION_TAGS",
 		},
+
+		cli.BoolFlag{
+			Name:   "skip-redaction",
+			Usage:  "Skip redacting the OIDC token from the logs. Then, the command will print the token to the Job's logs if called directly.",
+			EnvVar: "BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION",
+		},
 	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -127,6 +135,20 @@ var OIDCRequestTokenCommand = cli.Command{
 				l.Error("Could not obtain OIDC token for default audience")
 			}
 			return err
+		}
+
+		if !cfg.SkipRedaction {
+			jobClient, err := jobapi.NewDefaultClient(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to create Job API client: %w", err)
+			}
+
+			if err := AddToRedactor(ctx, l, jobClient, token.Token); err != nil {
+				if cfg.Debug {
+					return err
+				}
+				return errOIDCRedact
+			}
 		}
 
 		_, _ = fmt.Fprintln(c.App.Writer, token.Token)
