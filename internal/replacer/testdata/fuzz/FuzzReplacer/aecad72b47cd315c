@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0a0a0a000a00a0a000000a0a000a00a0")
+int(10)
+string("a")
+string("1")
+string("1")
+string("1")
