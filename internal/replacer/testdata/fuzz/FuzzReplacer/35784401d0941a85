@@ -1,0 +1,7 @@
+go test fuzz v1
+string("ips")
+int(10)
+string("ips000000")
+string("00A")
+string("")
+string("")
