@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/job/githttptest"
+	"github.com/buildkite/agent/v3/internal/race"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/stretchr/testify/require"
 )
@@ -130,6 +131,10 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 }
 
 func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
+	if race.IsRaceTest {
+		t.Skip("this test simulates the agent recovering from a race condition, and needs to create one to test it.")
+	}
+
 	assert := require.New(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
