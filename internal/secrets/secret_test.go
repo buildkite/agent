@@ -38,7 +38,7 @@ func TestFetchSecrets_Success(t *testing.T) {
 	}
 
 	keys := []string{"DATABASE_URL", "API_TOKEN"}
-	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys, false)
 
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
@@ -68,7 +68,7 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 
 	mockClient := &mockAPIClient{}
 
-	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", []string{})
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", []string{}, false)
 
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
@@ -84,7 +84,7 @@ func TestFetchSecrets_NilKeys(t *testing.T) {
 
 	mockClient := &mockAPIClient{}
 
-	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", nil)
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", nil, false)
 
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
@@ -109,7 +109,7 @@ func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 	}
 
 	keys := []string{"DATABASE_URL", "API_TOKEN", "MISSING"}
-	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys, false)
 
 	// Should return error because some secrets failed
 	if err == nil {
@@ -140,7 +140,7 @@ func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
 	}
 
 	keys := []string{"API_TOKEN", "DATABASE_URL"}
-	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys, false)
 
 	// Should return error because all secrets failed
 	if err == nil {
@@ -170,7 +170,7 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	}
 
 	keys := []string{"TEST_SECRET"}
-	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys)
+	secrets, err := FetchSecrets(context.Background(), mockClient, "test-job-id", keys, false)
 
 	if err == nil {
 		t.Fatal("expected error, got none")

@@ -910,6 +910,8 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 		return nil // No secrets to process
 	}
 
+	e.shell.Headerf("Configuring Buildkite secrets")
+
 	// Extract keys for fetching
 	keys := make([]string, len(pipelineSecrets))
 	for i, ps := range pipelineSecrets {
@@ -923,7 +925,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	})
 
 	// Fetch all secrets
-	fetchedSecrets, err := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys)
+	fetchedSecrets, err := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys, e.Debug)
 	if err != nil {
 		return err
 	}
@@ -940,6 +942,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 			// Set the environment variable only if environment_variable is specified and non-nil
 			if pipelineSecret.EnvironmentVariable != nil && *pipelineSecret.EnvironmentVariable != "" {
 				e.shell.Env.Set(*pipelineSecret.EnvironmentVariable, secretValue)
+				e.shell.Printf("%s added", *pipelineSecret.EnvironmentVariable)
 			}
 
 			// Always register the secret value for redaction regardless of env var setting

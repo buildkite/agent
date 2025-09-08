@@ -22,7 +22,7 @@ type Secret struct {
 
 // FetchSecrets retrieves all secret values from the API sequentially.
 // If any secret fails, returns error with details of all failed secrets.
-func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []string) ([]Secret, error) {
+func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []string, debug bool) ([]Secret, error) {
 	if len(keys) == 0 {
 		return nil, nil
 	}
@@ -37,7 +37,13 @@ func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []st
 		})
 		if err != nil {
 			// Include secret key name (never values) in error messages for debugging
-			errs = append(errs, fmt.Errorf("secret %q: %w", key, err))
+			// For API errors, extract just the message for cleaner display, unless debug is enabled
+			var apiErr *api.ErrorResponse
+			if !debug && errors.As(err, &apiErr) && apiErr.Message != "" {
+				errs = append(errs, fmt.Errorf("secret %q: %s", key, apiErr.Message))
+			} else {
+				errs = append(errs, fmt.Errorf("secret %q: %w", key, err))
+			}
 			continue
 		}
 
@@ -49,7 +55,16 @@ func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []st
 
 	// If any secret fails, return error with details of all failed secrets
 	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
+		// Format errors with newlines and indentation for better readability
+		var errorMsg string
+		for i, err := range errs {
+			if i == 0 {
+				errorMsg = fmt.Sprintf("\n   %s", err.Error())
+			} else {
+				errorMsg += fmt.Sprintf("\n   %s", err.Error())
+			}
+		}
+		return nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	return secrets, nil
