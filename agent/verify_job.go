@@ -193,19 +193,6 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			for i, stepSecret := range step.Secrets {
 				jobSecret := jobSecrets[i]
 
-				if stepSecret == nil && jobSecret == nil {
-					continue
-				}
-				if stepSecret == nil || jobSecret == nil {
-					r.agentLogger.Debug("failed to verifyJob: secret at index %d - one is nil, other is not", i)
-					return newInvalidSignatureError(ErrInvalidJob)
-				}
-
-				if stepSecret.Key != jobSecret.Key {
-					r.agentLogger.Debug("failed to verifyJob: secret at index %d - Key %q != %q", i, stepSecret.Key, jobSecret.Key)
-					return newInvalidSignatureError(ErrInvalidJob)
-				}
-
 				if stepSecret.EnvironmentVariable != jobSecret.EnvironmentVariable {
 					r.agentLogger.Debug("failed to verifyJob: secret at index %d - EnvironmentVariable %q != %q", i, stepSecret.EnvironmentVariable, jobSecret.EnvironmentVariable)
 					return newInvalidSignatureError(ErrInvalidJob)
