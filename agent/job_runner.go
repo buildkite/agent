@@ -510,7 +510,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 			r.agentLogger.Error("Failed to marshal secrets configuration: %v", err)
 			return nil, err
 		}
-		
+
 		env["BUILDKITE_SECRETS_CONFIG"] = string(secretsJSON)
 	}
 
