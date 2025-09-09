@@ -81,6 +81,18 @@ Agents page within Buildkite, and a build path. For example:
 buildkite-agent start --token=<your token> --build-path=/tmp/buildkite-builds
 ```
 
+### Performance Optimization
+
+By default, agents poll for jobs every 10-20 seconds (server-specified interval plus random jitter). For performance-sensitive workloads like dynamic pipelines, you can reduce job pickup latency:
+
+```bash
+# Faster job pickup (5-10 seconds instead of 10-20 seconds)
+# Integer values only, minimum value is 2 seconds
+buildkite-agent start --token=<your token> --build-path=/tmp/buildkite-builds --ping-interval=5
+```
+
+See the [agent documentation](docs/agent-start.md#ping-interval) for more details.
+
 ### Telemetry
 
 By default, the agent sends some information back to the Buildkite mothership on

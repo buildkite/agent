@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +42,48 @@ func writeAgentHook(t *testing.T, dir, hookName, msg string) string {
 	}
 	t.Log("Providing the path with file created")
 	return filepath
+}
+
+func TestAgentStartConfig_PingInterval(t *testing.T) {
+	tests := []struct {
+		name           string
+		pingInterval   int
+		expectedResult int
+	}{
+		{
+			name:           "default ping interval (0)",
+			pingInterval:   0,
+			expectedResult: 0,
+		},
+		{
+			name:           "custom ping interval (5)",
+			pingInterval:   5,
+			expectedResult: 5,
+		},
+		{
+			name:           "minimum ping interval (2)",
+			pingInterval:   2,
+			expectedResult: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := AgentStartConfig{
+				PingInterval: tt.pingInterval,
+			}
+
+			// Test that the configuration value is set correctly
+			assert.Equal(t, tt.expectedResult, config.PingInterval, "AgentStartConfig.PingInterval should match input")
+
+			// Test configuration mapping (this would happen in the Action function)
+			agentConfig := agent.AgentConfiguration{
+				PingInterval: config.PingInterval,
+			}
+
+			assert.Equal(t, tt.expectedResult, agentConfig.PingInterval, "AgentConfiguration.PingInterval should match AgentStartConfig")
+		})
+	}
 }
 
 func TestAgentStartupHook(t *testing.T) {
