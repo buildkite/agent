@@ -595,6 +595,9 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	return nil
 }
 
+// 1. Apply env changes -> e.shell.Env
+// 2. Refresh executor config (e.shell.Env might change via Job API)
+// 3. Log all changes.
 func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != e.shell.Getwd() {
@@ -602,29 +605,12 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 		}
 	}
 
-	// Do we even have any environment variables to change?
-	if changes.Diff.Empty() {
-		return
-	}
-
 	e.shell.Env.Apply(changes.Diff)
-
-	// reset output redactors based on new environment variable values
-	toRedact, short, err := redact.Vars(e.RedactedVars, e.shell.Env.DumpPairs())
-	if err != nil {
-		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
-	}
-	if len(short) > 0 {
-		slices.Sort(short)
-		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
-	}
-
-	for _, pair := range toRedact {
-		e.redactors.Add(pair.Value)
-	}
+	e.addOutputRedactors()
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
+	// Note this func mutates/refreshes the ExecutorConfig too.
 	executorConfigEnvChanges := e.ReadFromEnvironment(e.shell.Env)
 
 	// Print out the env vars that changed. As we go through each
@@ -636,8 +622,11 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// environment variable contains sensitive information (such as
 	// THIRD_PARTY_API_KEY) we'll just not show any values for
 	// anything not controlled by us.
+	executorConfigEnvChangesLogged := make(map[string]bool)
+
 	for k, v := range changes.Diff.Added {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s is now %q", k, v)
 		} else {
 			e.shell.Commentf("%s added", k)
@@ -645,6 +634,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 	for k, v := range changes.Diff.Changed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s was %q and is now %q", k, v.Old, v.New)
 		} else {
 			e.shell.Commentf("%s changed", k)
@@ -652,10 +642,39 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 	for k, v := range changes.Diff.Removed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s is now %q", k, v)
 		} else {
 			e.shell.Commentf("%s removed", k)
 		}
+	}
+
+	// When an env var is changed via buildkite-agent env set instead,
+	// it might not appear in the script "changes".
+	for k, v := range executorConfigEnvChanges {
+		if !executorConfigEnvChangesLogged[k] {
+			e.shell.Commentf("%s is now %q", k, v)
+		}
+	}
+}
+
+// Should be called whenever we updated our e.shell.Env.
+func (e *Executor) addOutputRedactors() {
+	// reset output redactors based on new environment variable values
+	toRedact, short, err := redact.Vars(e.RedactedVars, e.shell.Env.DumpPairs())
+	if err != nil {
+		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	if len(short) > 0 {
+		slices.Sort(short)
+		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+	}
+
+	// This should probably be a reset rather than a mutate.
+	// But does a particular string stop being a secret if we learn new secret strings?
+	// For produence, we use Add.
+	for _, pair := range toRedact {
+		e.redactors.Add(pair.Value)
 	}
 }
 
