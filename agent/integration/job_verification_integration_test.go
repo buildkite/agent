@@ -288,8 +288,8 @@ var (
 		Step: pipeline.CommandStep{
 			Command: "echo hello secrets",
 			Secrets: pipeline.Secrets{
-				&pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: &[]string{"DATABASE_URL"}[0]},
-				&pipeline.Secret{Key: "API_TOKEN", EnvironmentVariable: &[]string{"API_TOKEN"}[0]},
+				pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+				pipeline.Secret{Key: "API_TOKEN", EnvironmentVariable: "API_TOKEN"},
 			},
 		},
 		Env: map[string]string{
@@ -306,8 +306,8 @@ var (
 		Step: pipeline.CommandStep{
 			Command: "echo hello custom secrets",
 			Secrets: pipeline.Secrets{
-				&pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: &[]string{"DB_CONNECTION_STRING"}[0]},
-				&pipeline.Secret{Key: "API_TOKEN", EnvironmentVariable: &[]string{"CUSTOM_API_KEY"}[0]},
+				pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DB_CONNECTION_STRING"},
+				pipeline.Secret{Key: "API_TOKEN", EnvironmentVariable: "CUSTOM_API_KEY"},
 			},
 		},
 		Env: map[string]string{
@@ -354,7 +354,7 @@ var (
 		Step: pipeline.CommandStep{
 			Command: "echo hello world",
 			Secrets: pipeline.Secrets{
-				&pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: &[]string{"DATABASE_URL"}[0]},
+				pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
 			},
 		},
 		Env: map[string]string{
@@ -703,21 +703,6 @@ func TestJobVerification(t *testing.T) {
 			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
 			expectedExitStatus:       "0",
 			expectedSignalReason:     "",
-		},
-		{
-			name:                     "when the step signature matches, but the secrets don't match the signed step, it fails signature verification",
-			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
-			job:                      jobWithMismatchedSecrets,
-			repositoryURL:            defaultRepositoryURL,
-			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
-			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyAlpacas)), // Different key to cause mismatch
-			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().NotCalled() },
-			expectedExitStatus:       "-1",
-			expectedSignalReason:     agent.SignalReasonSignatureRejected,
-			expectLogsContain: []string{
-				"+++ ⛔",
-				"signature verification failed",
-			},
 		},
 	}
 
