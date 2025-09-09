@@ -925,9 +925,13 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	})
 
 	// Fetch all secrets
-	fetchedSecrets, err := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys, e.Debug)
-	if err != nil {
-		return err
+	fetchedSecrets, errs := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys, e.Debug)
+	if len(errs) > 0 {
+		var errorMsg strings.Builder
+		for _, err := range errs {
+			fmt.Fprintf(&errorMsg, "\n   %s", err)
+		}
+		return errors.New(errorMsg.String())
 	}
 
 	secretValuesByKey := make(map[string]string, len(fetchedSecrets))

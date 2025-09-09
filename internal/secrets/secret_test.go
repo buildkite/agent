@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -229,15 +230,19 @@ func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
 	})
 
 	keys := []string{"API_TOKEN", "DATABASE_URL"}
-	secrets, err := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, false)
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, false)
 
-	// Should return error because all secrets failed
-	if err == nil {
-		t.Fatal("expected error, got none")
+	// Should return errors because all secrets failed
+	if len(errs) == 0 {
+		t.Fatal("expected errors, got none")
 	}
 
 	if secrets != nil {
 		t.Errorf("expected nil secrets, got: %v", secrets)
+	}
+
+	if diff := cmp.Diff(errs, []error{errors.New("secret not found"), errors.New("secret not found")}); diff != "" {
+		t.Errorf("unexpected errors (-want +got):\n%s", diff)
 	}
 }
 
@@ -262,9 +267,9 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	})
 
 	keys := []string{"TEST_SECRET"}
-	secrets, err := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, false)
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, false)
 
-	if err == nil {
+	if len(errs) == 0 {
 		t.Fatal("expected error, got none")
 	}
 
@@ -272,7 +277,7 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 		t.Errorf("expected nil secrets, got: %v", secrets)
 	}
 
-	if !strings.Contains(err.Error(), `connection refused`) {
-		t.Errorf("expected error to contain network error, got: %v", err)
+	if !strings.Contains(errs[0].Error(), `connection refused`) {
+		t.Errorf("expected error to contain network error, got: %v", errs[0])
 	}
 }
