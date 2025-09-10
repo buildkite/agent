@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -304,7 +305,33 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	}
 
 	var netErr *net.OpError
-	if !errors.As(secretErr.Err, &netErr) || !errors.Is(netErr.Err, syscall.ECONNREFUSED) {
-		t.Errorf("expected underlying connection refused error, got: %v", secretErr.Err)
+	if !errors.As(secretErr.Err, &netErr) {
+		t.Errorf("expected underlying network error, got: %v", secretErr.Err)
+		return
+	}
+
+	// Check for connection refused errors across platforms
+	isConnRefused := false
+	if runtime.GOOS == "windows" {
+		// On Windows, check for WSAECONNREFUSED (10061)
+		// Using numeric constant to avoid importing golang.org/x/sys/windows
+		// which would break cross-platform builds
+		if errno, ok := netErr.Err.(syscall.Errno); ok && errno == 10061 {
+			isConnRefused = true
+		}
+	} else {
+		// On Unix systems, use syscall.ECONNREFUSED
+		isConnRefused = errors.Is(netErr.Err, syscall.ECONNREFUSED)
+	}
+
+	// Fallback to string matching if the syscall check didn't work
+	if !isConnRefused {
+		errStr := netErr.Err.Error()
+		isConnRefused = strings.Contains(errStr, "connection refused") ||
+			strings.Contains(errStr, "actively refused")
+	}
+
+	if !isConnRefused {
+		t.Errorf("expected connection refused error, got: %v (type: %T)", netErr.Err, netErr.Err)
 	}
 }
