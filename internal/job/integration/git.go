@@ -82,7 +82,7 @@ func createTestGitRespository() (*gitRepository, error) {
 		return nil, fmt.Errorf("updating merge ref: %w", err)
 	}
 
-	// Reset main back to its original state so existing tests aren't affected
+	// Reset main back to its original state so unrelated tests aren't affected
 	if _, err := repo.Execute("reset", "--hard", "HEAD~1"); err != nil {
 		return nil, fmt.Errorf("resetting main: %w", err)
 	}
