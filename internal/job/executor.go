@@ -432,7 +432,14 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	return e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
+	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ)); err != nil {
+		return err
+	}
+	// Passing an empty env changes through because in polyglot hook we can't detect
+	// env change.
+	// But we call this method anyway because a hook might use buildkite-agent env set to update environment.
+	e.applyEnvironmentChanges(hook.EnvChanges{})
+	return nil
 }
 
 func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
