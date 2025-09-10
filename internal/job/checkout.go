@@ -406,7 +406,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			refspecs = []string{e.RefSpec}
 		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
-			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+			var refspec string
+			if e.PullRequestUsingMergeRefspec {
+				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+			} else {
+				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+			}
 			refspecs = []string{refspec}
 			retry = true
 		default:
@@ -610,23 +615,50 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 
 	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-		// GitHub has a special ref which lets us fetch a pull request head, whether
-		// or not it's a current head in this repository or a fork. See:
-		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
-		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		var refspec string
+		var retry bool
+
+		if e.PullRequestUsingMergeRefspec {
+			// Merge refspecs represents a speculative merge of the PR branch against the base branch.
+			// Checking out this refspec enables testing the result of the merge before it happens.
+			// If a merge conflict exists, this refspec won't be created and the fetch will fail. In this
+			// case we want the job to fail earlier, rather than retrying the fetch (which adds ~2-3 mins job run time before failing)
+			// Note: An outer retry loop will still retry the failed checkout 3 times before failing.
+			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
+			retry = false
+			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+		} else {
+			// GitHub has a special ref which lets us fetch a pull request head, whether
+			// or not it's a current head in this repository or a fork. See:
+			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
+			e.shell.Commentf("Fetch and checkout pull request head from GitHub")
+			retry = true
+			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		}
 		refspecs := []string{refspec}
 
-		// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
-		// have been force pushes to the pull request, so this ensures we have it.
-		// Note: this is the typical case e.Commit != HEAD.
-		if e.Commit != "HEAD" {
+		if e.Commit == "HEAD" {
+			// If we don't know the commit, we don't want to fetch with a fallback (otherwise FETCH_HEAD
+			// will resolve during a fallback to the alphabetically earliest branch/tag - rather than the
+			// correct commit for this build)
+			if err := gitFetch(ctx, gitFetchArgs{
+				Shell:         e.shell,
+				GitFetchFlags: gitFetchFlags,
+				Repository:    "origin",
+				Retry:         retry,
+				RefSpecs:      refspecs,
+			}); err != nil {
+				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+			}
+		} else {
+			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
+			// have been force pushes to the pull request, so this ensures we have it.
+			// Note: this is the typical case e.Commit != HEAD.
 			refspecs = append(refspecs, e.Commit)
-		}
-
-		// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
-		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
-			return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
+			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
+			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
+				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+			}
 		}
 
 		gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)

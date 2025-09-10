@@ -54,6 +54,9 @@ type ExecutorConfig struct {
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
 
+	// Whether the agent should attempt to checkout the pull request commit using the merge refspec
+	PullRequestUsingMergeRefspec bool
+
 	// The provider of the pipeline
 	PipelineProvider string
 

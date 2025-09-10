@@ -70,6 +70,23 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			projectName: "project-name-pull-request",
 			refSpec:     "refs/pull/124/head",
 		},
+		{
+			name: "Default checkout phase with pull request using merge refspec",
+			executor: &Executor{
+				shell: shell,
+				ExecutorConfig: ExecutorConfig{
+					PullRequest:                  "124",
+					Commit:                       "HEAD",
+					Branch:                       "main",
+					CleanCheckout:                false,
+					GitCleanFlags:                "-f -d -x",
+					PipelineProvider:             "github",
+					PullRequestUsingMergeRefspec: true,
+				},
+			},
+			projectName: "project-name-pull-request",
+			refSpec:     "refs/pull/124/merge",
+		},
 	}
 
 	for _, tt := range tests {
