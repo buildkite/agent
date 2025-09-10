@@ -929,12 +929,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	if len(errs) > 0 {
 		var errorMsg strings.Builder
 		for _, err := range errs {
-			var secretErr *secrets.SecretError
-			if errors.As(err, &secretErr) {
-				fmt.Fprintf(&errorMsg, "\n   secret %s: %s", secretErr.Key, err)
-			} else {
-				fmt.Fprintf(&errorMsg, "\n   %s", err)
-			}
+			fmt.Fprintf(&errorMsg, "\n   %s", err)
 		}
 		return errors.New(errorMsg.String())
 	}
