@@ -453,11 +453,50 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	}
 
 	// Write out the job environment to file:
-	// - envShellFile: in k="v" format, with newlines escaped
+	// - envShellFile: in k="v" format, with newlines escaped. If the
+	//   propagate-agent-vars experiment is enabled, the names of several agent
+	//   config variables are prepended at the top.
 	// - envJSONFile: as a single JSON object {"k":"v",...}, escaped appropriately for JSON.
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envShellFile != nil {
+		if experiments.IsEnabled(ctx, experiments.PropagateAgentConfigVars) {
+			// Note that some variables in this list might not be defined later,
+			// when something comes to read the file. See below where they are
+			// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
+			// Docker in particular tolerates undefined vars in an env file
+			// without complaints.
+			const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
+BUILDKITE_GIT_CLEAN_FLAGS
+BUILDKITE_GIT_CLONE_FLAGS
+BUILDKITE_GIT_CLONE_MIRROR_FLAGS
+BUILDKITE_GIT_FETCH_FLAGS
+BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
+BUILDKITE_GIT_MIRRORS_PATH
+BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
+BUILDKITE_GIT_SUBMODULES
+BUILDKITE_CANCEL_GRACE_PERIOD
+BUILDKITE_COMMAND_EVAL
+BUILDKITE_LOCAL_HOOKS_ENABLED
+BUILDKITE_PLUGINS_ENABLED
+BUILDKITE_REDACTED_VARS
+BUILDKITE_SHELL
+BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS
+BUILDKITE_SSH_KEYSCAN
+BUILDKITE_STRICT_SINGLE_HOOKS
+BUILDKITE_TRACE_CONTEXT_ENCODING
+BUILDKITE_TRACING_BACKEND
+BUILDKITE_TRACING_SERVICE_NAME
+BUILDKITE_TRACING_TRACEPARENT
+BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
+BUILDKITE_AGENT_AWS_KMS_KEY
+BUILDKITE_AGENT_JWKS_FILE
+BUILDKITE_AGENT_JWKS_KEY_ID`
+			if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
+				return nil, err
+			}
+		}
+
 		for key, value := range env {
 			if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
 				return nil, err
