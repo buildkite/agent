@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.105.0](https://github.com/buildkite/agent/tree/v3.105.0) (2025-09-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.104.0...v3.105.0)
+
+
+### Fixed
+- PS-1101: refresh Executor config for Job API env change in polyglot hook [#3467](https://github.com/buildkite/agent/pull/3467) (@zhming0)
+- PB-610: fix hook environment variable unable to propagate via bk-agent env set [#3466](https://github.com/buildkite/agent/pull/3466) (@zhming0)
+
+### Added
+- Support agent checkout on pull request merge refspecs [#3436](https://github.com/buildkite/agent/pull/3436) (@jonathanly)
+
+### Internal
+- Lower Go containers back to 1.24 [#3468](https://github.com/buildkite/agent/pull/3468) (@DrJosh9000)
+- Add replacer fuzz test corpus to repo, with fix [#3448](https://github.com/buildkite/agent/pull/3448) (@DrJosh9000)
+- Re-add test race detection, and skip a known-racy test under the race  regime [#3452](https://github.com/buildkite/agent/pull/3452) (@moskyb)
+- Dependancy updates: [#3463](https://github.com/buildkite/agent/pull/3463), [#3465](https://github.com/buildkite/agent/pull/3465), [#3462](https://github.com/buildkite/agent/pull/3462) ,[#3457](https://github.com/buildkite/agent/pull/3457), [#3460](https://github.com/buildkite/agent/pull/3460), [#3456](https://github.com/buildkite/agent/pull/3456), [#3454](https://github.com/buildkite/agent/pull/3454) (@dependabot[bot])
+
+
 ## [v3.104.0](https://github.com/buildkite/agent/tree/v3.104.0) (2025-09-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.103.1...v3.104.0)
 
