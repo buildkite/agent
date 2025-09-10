@@ -623,6 +623,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			// Checking out this refspec enables testing the result of the merge before it happens.
 			// If a merge conflict exists, this refspec won't be created and the fetch will fail. In this
 			// case we want the job to fail earlier, rather than retrying the fetch (which adds ~2-3 mins job run time before failing)
+			// Note: An outer retry loop will still retry the failed checkout 3 times before failing.
 			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
 			retry = false
 			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
