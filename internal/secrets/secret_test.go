@@ -314,8 +314,6 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	isConnRefused := false
 	if runtime.GOOS == "windows" {
 		// On Windows, check for WSAECONNREFUSED (10061)
-		// Using numeric constant to avoid importing golang.org/x/sys/windows
-		// which would break cross-platform builds
 		if errno, ok := netErr.Err.(syscall.Errno); ok && errno == 10061 {
 			isConnRefused = true
 		}
