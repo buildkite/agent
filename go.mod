@@ -16,7 +16,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.45.2
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.3.0
-	github.com/buildkite/go-pipeline v0.15.1-0.20250909084345-83b4ae1e6cfe
+	github.com/buildkite/go-pipeline v0.15.1-0.20250910063259-d7a0197ad8fb
 	github.com/buildkite/interpolate v0.1.5
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.0
