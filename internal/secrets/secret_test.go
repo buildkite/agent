@@ -2,10 +2,13 @@ package secrets
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -289,7 +292,8 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 		t.Errorf("expected nil secrets, got: %v", secrets)
 	}
 
-	if !strings.Contains(errs[0].Error(), "connection refused") {
-		t.Errorf("expected connection error, got: %v", errs[0])
+	var netErr *net.OpError
+	if !errors.As(errs[0], &netErr) || !errors.Is(netErr.Err, syscall.ECONNREFUSED) {
+		t.Errorf("expected connection refused error, got: %v", errs[0])
 	}
 }
