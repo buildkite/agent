@@ -19,6 +19,19 @@ type Secret struct {
 	Value string
 }
 
+type SecretError struct {
+	Key string
+	Err error
+}
+
+func (e *SecretError) Error() string {
+	return fmt.Sprintf("secret %q: %s", e.Key, e.Err.Error())
+}
+
+func (e *SecretError) Unwrap() error {
+	return e.Err
+}
+
 // FetchSecrets retrieves all secret values from the API sequentially.
 // If any secret fails, returns error with details of all failed secrets.
 func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []string, debug bool) ([]Secret, []error) {
@@ -35,7 +48,10 @@ func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []st
 			JobID: jobID,
 		})
 		if err != nil {
-			errs = append(errs, fmt.Errorf("secret %q: %w", key, err))
+			errs = append(errs, &SecretError{
+				Key: key,
+				Err: err,
+			})
 			continue
 		}
 

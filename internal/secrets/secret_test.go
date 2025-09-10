@@ -193,6 +193,14 @@ func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 		t.Errorf("expected nil secrets, got: %v", secrets)
 	}
 
+	// Check that all errors are SecretError instances
+	for _, err := range errs {
+		var secretErr *SecretError
+		if !errors.As(err, &secretErr) {
+			t.Errorf("expected SecretError, got: %T", err)
+		}
+	}
+
 	var errorStrings []string
 	for _, err := range errs {
 		errorStrings = append(errorStrings, err.Error())
@@ -245,6 +253,14 @@ func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
 	if secrets != nil {
 		t.Errorf("expected nil secrets, got: %v", secrets)
 	}
+
+	// Check that all errors are SecretError instances
+	for _, err := range errs {
+		var secretErr *SecretError
+		if !errors.As(err, &secretErr) {
+			t.Errorf("expected SecretError, got: %T", err)
+		}
+	}
 }
 
 func TestFetchSecrets_APIClientError(t *testing.T) {
@@ -278,8 +294,17 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 		t.Errorf("expected nil secrets, got: %v", secrets)
 	}
 
+	var secretErr *SecretError
+	if !errors.As(errs[0], &secretErr) {
+		t.Errorf("expected SecretError, got: %T", errs[0])
+	}
+
+	if secretErr.Key != "TEST_SECRET" {
+		t.Errorf("expected SecretError key to be 'TEST_SECRET', got: %q", secretErr.Key)
+	}
+
 	var netErr *net.OpError
-	if !errors.As(errs[0], &netErr) || !errors.Is(netErr.Err, syscall.ECONNREFUSED) {
-		t.Errorf("expected connection refused error, got: %v", errs[0])
+	if !errors.As(secretErr.Err, &netErr) || !errors.Is(netErr.Err, syscall.ECONNREFUSED) {
+		t.Errorf("expected underlying connection refused error, got: %v", secretErr.Err)
 	}
 }
