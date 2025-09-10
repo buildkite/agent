@@ -185,11 +185,6 @@ func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 	keys := []string{"DATABASE_URL", "API_TOKEN", "MISSING"}
 	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, false)
 
-	// Should return errors because some secrets failed
-	if len(errs) == 0 {
-		t.Fatal("expected errors, got none")
-	}
-
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
 	}
@@ -243,11 +238,6 @@ func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
 	keys := []string{"API_TOKEN", "DATABASE_URL"}
 	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, false)
 
-	// Should return errors because all secrets failed
-	if len(errs) == 0 {
-		t.Fatal("expected errors, got none")
-	}
-
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
 	}
@@ -279,10 +269,6 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 
 	keys := []string{"TEST_SECRET"}
 	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, false)
-
-	if len(errs) == 0 {
-		t.Fatal("expected errors, got none")
-	}
 
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
