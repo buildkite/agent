@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -53,6 +54,11 @@ func (e *Executor) configureHTTPSInsteadOfSSH(ctx context.Context) error {
 func (e *Executor) removeCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
+	if e.checkoutRoot != nil {
+		e.checkoutRoot.Close()
+		e.checkoutRoot = nil
+	}
+
 	// on windows, sometimes removing large dirs can fail for various reasons
 	// for instance having files open
 	// see https://github.com/golang/go/issues/20841
@@ -74,16 +80,29 @@ func (e *Executor) removeCheckoutDir() error {
 	return fmt.Errorf("failed to remove %s", checkoutPath)
 }
 
+// createCheckoutDir checks for the existence of a directory at
+// $BUILDKITE_BUILD_CHECKOUT_PATH, and creates it if it does not exist.
+// It opens the checkout directory as an [os.Root], saved to e.checkoutRoot.
+// It then changes e.shell's working directory to the checkout directory.
 func (e *Executor) createCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	if !osutil.FileExists(checkoutPath) {
-		e.shell.Commentf("Creating \"%s\"", checkoutPath)
+		e.shell.Commentf("Creating %q", checkoutPath)
 		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(checkoutPath, 0o777); err != nil {
 			return err
 		}
 	}
+
+	root, err := os.OpenRoot(checkoutPath)
+	if err != nil {
+		return fmt.Errorf("opening checkout path as root: %w", err)
+	}
+	// This cleanup is largely ornamental, since the executor pointer only
+	// becomes unreachable when the bootstrap exits.
+	runtime.AddCleanup(e, func(r *os.Root) { r.Close() }, root)
+	e.checkoutRoot = root
 
 	if e.shell.Getwd() != checkoutPath {
 		if err := e.shell.Chdir(checkoutPath); err != nil {
