@@ -942,14 +942,14 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	// Set environment variables and register for redaction
 	for _, pipelineSecret := range pipelineSecrets {
 		if secretValue, exists := secretValuesByKey[pipelineSecret.Key]; exists {
+			// Always register the secret value for redaction regardless of env var setting
+			e.redactors.Add(secretValue)
+
 			// Set the environment variable only if environment_variable is specified and non-nil
 			if pipelineSecret.EnvironmentVariable != "" {
 				e.shell.Env.Set(pipelineSecret.EnvironmentVariable, secretValue)
-				e.shell.Commentf("%s added", pipelineSecret.EnvironmentVariable)
+				e.shell.Commentf("Secret %s added as environment variable %s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
 			}
-
-			// Always register the secret value for redaction regardless of env var setting
-			e.redactors.Add(secretValue)
 		}
 	}
 
