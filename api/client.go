@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -224,10 +225,16 @@ func (c *Client) newRequest(
 	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	buf := new(bytes.Buffer)
+
 	if body != nil {
-		err := json.NewEncoder(buf).Encode(body)
+		gzipWriter := gzip.NewWriter(buf)
+		err := json.NewEncoder(gzipWriter).Encode(body)
 		if err != nil {
 			return nil, err
+		}
+
+		if err := gzipWriter.Close(); err != nil {
+			return nil, fmt.Errorf("closing gzip writer: %w", err)
 		}
 	}
 
@@ -260,6 +267,7 @@ func (c *Client) newRequest(
 
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Content-Encoding", "gzip")
 	}
 
 	return req, nil
@@ -309,7 +317,6 @@ func newResponse(r *http.Response) *Response {
 // interface, the raw response body will be written to v, without attempting to
 // first decode it.
 func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
-
 	resp, err := agenthttp.Do(c.logger, c.client, req,
 		agenthttp.WithDebugHTTP(c.conf.DebugHTTP),
 		agenthttp.WithTraceHTTP(c.conf.TraceHTTP),
