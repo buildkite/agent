@@ -1,6 +1,8 @@
 module github.com/buildkite/agent/v3
 
-go 1.24.3
+go 1.24.0
+
+toolchain go1.24.5
 
 require (
 	cloud.google.com/go/compute/metadata v0.8.0
@@ -19,7 +21,7 @@ require (
 	github.com/buildkite/go-pipeline v0.15.0
 	github.com/buildkite/interpolate v0.1.5
 	github.com/buildkite/roko v1.4.0
-	github.com/buildkite/shellwords v1.0.0
+	github.com/buildkite/shellwords v1.0.1
 	github.com/creack/pty v1.1.19
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
