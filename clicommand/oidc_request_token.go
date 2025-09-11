@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"slices"
@@ -21,9 +22,18 @@ type OIDCTokenConfig struct {
 	Lifetime      int    `cli:"lifetime"`
 	Job           string `cli:"job"      validate:"required"`
 	SkipRedaction bool   `cli:"skip-redaction"`
+	GCPFormat     bool   `cli:"gcp-format"`
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
 	Claims         []string `cli:"claim"           normalize:"list"`
 	AWSSessionTags []string `cli:"aws-session-tag" normalize:"list"`
+}
+
+// GCPOIDCTokenResponse represents the GCP-formatted JSON response
+type GCPOIDCTokenResponse struct {
+	IDToken   string `json:"id_token"`
+	TokenType string `json:"token_type"`
+	Version   int    `json:"version"`
+	Success   bool   `json:"success"`
 }
 
 const (
@@ -84,6 +94,11 @@ var OIDCRequestTokenCommand = cli.Command{
 			Name:   "skip-redaction",
 			Usage:  "Skip redacting the OIDC token from the logs. Then, the command will print the token to the Job's logs if called directly.",
 			EnvVar: "BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION",
+		},
+
+		cli.BoolFlag{
+			Name:  "gcp-format",
+			Usage: "Format the output as GCP-compatible JSON with id_token, token_type, version, and success fields",
 		},
 	}),
 	Action: func(c *cli.Context) error {
@@ -151,7 +166,21 @@ var OIDCRequestTokenCommand = cli.Command{
 			}
 		}
 
-		_, _ = fmt.Fprintln(c.App.Writer, token.Token)
+		if cfg.GCPFormat {
+			gcpResponse := GCPOIDCTokenResponse{
+				IDToken:   token.Token,
+				TokenType: "urn:ietf:params:oauth:token-type:jwt",
+				Version:   1,
+				Success:   true,
+			}
+			jsonOutput, err := json.Marshal(gcpResponse)
+			if err != nil {
+				return fmt.Errorf("failed to marshal GCP response: %w", err)
+			}
+			_, _ = fmt.Fprintln(c.App.Writer, string(jsonOutput))
+		} else {
+			_, _ = fmt.Fprintln(c.App.Writer, token.Token)
+		}
 		return nil
 	},
 }
