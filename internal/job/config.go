@@ -190,6 +190,9 @@ type ExecutorConfig struct {
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string
+
+	// Secrets definition for the job step
+	Secrets string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map

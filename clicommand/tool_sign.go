@@ -293,6 +293,13 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
 	}
 
+	// Merge pipeline-level secrets with step-level secrets before signing
+	for _, step := range parsedPipeline.Steps {
+		if commandStep, ok := step.(*pipeline.CommandStep); ok {
+			commandStep.MergeSecretsFromPipeline(parsedPipeline.Secrets)
+		}
+	}
+
 	err = signature.SignSteps(
 		ctx,
 		parsedPipeline.Steps,

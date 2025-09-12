@@ -177,6 +177,33 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			// So, we don't need to confirm that the values in the job are the same as those in the step.
 			continue
 
+		case "secrets":
+			jobSecrets := r.conf.Job.Step.Secrets
+
+			if len(step.Secrets) == 0 && len(jobSecrets) == 0 {
+				r.agentLogger.Debug("verifyJob: both job.Step.Secrets and step.Secrets are empty")
+				continue // both empty
+			}
+
+			if len(step.Secrets) != len(jobSecrets) {
+				r.agentLogger.Debug("failed to verifyJob: step.Secrets length %d != jobSecrets length %d", len(step.Secrets), len(jobSecrets))
+				return newInvalidSignatureError(ErrInvalidJob)
+			}
+
+			for i, stepSecret := range step.Secrets {
+				jobSecret := jobSecrets[i]
+
+				if stepSecret.Key != jobSecret.Key {
+					r.agentLogger.Debug("failed to verifyJob: secret at index %d - Step key %q did not match job key %q", i, stepSecret.Key, jobSecret.Key)
+					return newInvalidSignatureError(ErrInvalidJob)
+				}
+
+				if stepSecret.EnvironmentVariable != jobSecret.EnvironmentVariable {
+					r.agentLogger.Debug("failed to verifyJob: secret at index %d - Step environment variable %q did not match job environment variable %q", i, stepSecret.EnvironmentVariable, jobSecret.EnvironmentVariable)
+					return newInvalidSignatureError(ErrInvalidJob)
+				}
+			}
+
 		default:
 			// env:: - skip any that were verified with Verify.
 			if name, isEnv := strings.CutPrefix(field, signature.EnvNamespacePrefix); isEnv {
