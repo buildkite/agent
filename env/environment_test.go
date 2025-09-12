@@ -320,9 +320,9 @@ func TestProtectedEnv(t *testing.T) {
 		"SECRET_KEY",
 		"DATABASE_URL",
 		"API_TOKEN",
-		"BUILDKITE_BRANCH",       // This is a standard build env var, not protected
-		"BUILDKITE_COMMIT",       // This is a standard build env var, not protected
-		"BUILDKITE_MESSAGE",      // This is a standard build env var, not protected
+		"BUILDKITE_BRANCH",  // This is a standard build env var, not protected
+		"BUILDKITE_COMMIT",  // This is a standard build env var, not protected
+		"BUILDKITE_MESSAGE", // This is a standard build env var, not protected
 	}
 
 	for _, envVar := range nonProtected {

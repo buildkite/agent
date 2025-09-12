@@ -947,8 +947,21 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 
 			// Set the environment variable only if environment_variable is specified and non-nil
 			if pipelineSecret.EnvironmentVariable != "" {
+				// Check if the environment variable is protected
+				if env.IsProtected(pipelineSecret.EnvironmentVariable) {
+					return fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+
+				var alreadySet bool
+				_, alreadySet = e.shell.Env.Get(pipelineSecret.EnvironmentVariable)
+
 				e.shell.Env.Set(pipelineSecret.EnvironmentVariable, secretValue)
-				e.shell.Commentf("Secret %s added as environment variable %s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+
+				if alreadySet {
+					e.shell.Commentf("Secret %s added as environment variable %s (overwritten)", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				} else {
+					e.shell.Commentf("Secret %s added as environment variable %s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
 			}
 		}
 	}

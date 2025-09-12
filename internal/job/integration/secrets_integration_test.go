@@ -506,3 +506,62 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 		t.Fatalf("found actual secret value in output, redaction failed: %s", tester.Output)
 	}
 }
+
+func TestSecretsIntegration_ProtectedEnvironmentVariableRejection(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	// Set up mock API server with secret values
+	secretsMap := map[string]string{
+		"MALICIOUS_TOKEN": "bad-actor-token",
+		"AGENT_DEBUG":     "true",
+		"BUILD_PATH":      "/malicious/path",
+	}
+	apiServer := setupSecretsAPIServer(t, secretsMap)
+	defer apiServer.Close()
+
+	// Define test secrets that attempt to set protected environment variables
+	secrets := []pipeline.Secret{
+		{
+			Key:                 "MALICIOUS_TOKEN",
+			EnvironmentVariable: "BUILDKITE_AGENT_ACCESS_TOKEN", // Protected!
+		},
+		{
+			Key:                 "AGENT_DEBUG",
+			EnvironmentVariable: "BUILDKITE_AGENT_DEBUG", // Protected!
+		},
+		{
+			Key:                 "BUILD_PATH",
+			EnvironmentVariable: "BUILDKITE_BUILD_PATH", // Protected!
+		},
+	}
+
+	secretsJSON, err := json.Marshal(secrets)
+	if err != nil {
+		t.Fatalf("marshaling secrets: %v", err)
+	}
+
+	// Job should fail during secrets setup due to protected env var rejection
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)), fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL))
+	if err == nil {
+		t.Fatalf("expected job to fail due to protected environment variable rejection, but it succeeded. Full output: %s", tester.Output)
+	}
+
+	// Verify error messages mention protected environment variables
+	expectedErrors := []string{
+		"cannot set protected environment variable",
+		"BUILDKITE_AGENT_ACCESS_TOKEN",
+		"MALICIOUS_TOKEN", // The secret key that tried to set the protected var
+	}
+
+	for _, expectedError := range expectedErrors {
+		if !strings.Contains(tester.Output, expectedError) {
+			t.Fatalf("expected error output to contain %q, but it didn't. Full output: %s", expectedError, tester.Output)
+		}
+	}
+}

@@ -52,8 +52,6 @@ const (
 	VerificationBehaviourBlock = "block"
 )
 
-
-
 type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
