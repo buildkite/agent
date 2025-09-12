@@ -17,7 +17,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/env"
+	envutil "github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
@@ -52,34 +52,7 @@ const (
 	VerificationBehaviourBlock = "block"
 )
 
-// Certain env can only be set by agent configuration.
-// We show the user a warning in the bootstrap if they use any of these at a job level.
-var ProtectedEnv = map[string]struct{}{
-	"BUILDKITE_AGENT_ACCESS_TOKEN":       {},
-	"BUILDKITE_AGENT_DEBUG":              {},
-	"BUILDKITE_AGENT_ENDPOINT":           {},
-	"BUILDKITE_AGENT_PID":                {},
-	"BUILDKITE_BIN_PATH":                 {},
-	"BUILDKITE_BUILD_PATH":               {},
-	"BUILDKITE_COMMAND_EVAL":             {},
-	"BUILDKITE_CONFIG_PATH":              {},
-	"BUILDKITE_CONTAINER_COUNT":          {},
-	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
-	"BUILDKITE_GIT_CLONE_FLAGS":          {},
-	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
-	"BUILDKITE_GIT_FETCH_FLAGS":          {},
-	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
-	"BUILDKITE_GIT_MIRRORS_PATH":         {},
-	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":  {},
-	"BUILDKITE_GIT_SUBMODULES":           {},
-	"BUILDKITE_HOOKS_PATH":               {},
-	"BUILDKITE_KUBERNETES_EXEC":          {},
-	"BUILDKITE_LOCAL_HOOKS_ENABLED":      {},
-	"BUILDKITE_PLUGINS_ENABLED":          {},
-	"BUILDKITE_PLUGINS_PATH":             {},
-	"BUILDKITE_SHELL":                    {},
-	"BUILDKITE_SSH_KEYSCAN":              {},
-}
+
 
 type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
@@ -487,7 +460,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	var ignoredEnv []string
 
 	// Check if the user has defined any protected env
-	for k := range ProtectedEnv {
+	for k := range envutil.ProtectedEnv {
 		if _, exists := r.conf.Job.Env[k]; exists {
 			ignoredEnv = append(ignoredEnv, k)
 		}
@@ -716,7 +689,7 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	// - Env files are designed to be validated by the pre-bootstrap hook
 	// - The pre-bootstrap hook may want to create annotations, so it can also
 	//   have a few necessary and global args as env vars.
-	environ := env.New()
+	environ := envutil.New()
 	environ.Set("BUILDKITE_ENV_FILE", r.envShellFile.Name())
 	environ.Set("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
 	environ.Set("BUILDKITE_JOB_ID", r.conf.Job.ID)
