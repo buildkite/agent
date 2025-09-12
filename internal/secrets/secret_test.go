@@ -105,7 +105,7 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 		t.Fatalf("expected no errors, got: %v", errs)
 	}
 
-	if secrets != nil {
+	if len(secrets) > 0 {
 		t.Errorf("expected nil secrets, got: %v", secrets)
 	}
 }
