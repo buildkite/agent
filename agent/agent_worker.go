@@ -146,6 +146,24 @@ func (a *AgentWorker) getCurrentJobID() string {
 	return a.currentJobID
 }
 
+// determinePingInterval determines the ping interval to use, applying validation and logging
+func (a *AgentWorker) determinePingInterval() time.Duration {
+	if a.agentConfiguration.PingInterval != 0 {
+		// Use the override ping interval if specified, with a minimum of 2 seconds
+		if a.agentConfiguration.PingInterval < 2 {
+			a.logger.Warn("Ping interval override %ds is below minimum of 2s, using 2s instead", a.agentConfiguration.PingInterval)
+			return 2 * time.Second
+		} else {
+			pingInterval := time.Duration(a.agentConfiguration.PingInterval) * time.Second
+			a.logger.Info("Using ping interval override: %ds", int(pingInterval.Seconds()))
+			return pingInterval
+		}
+	} else {
+		// Use the server-specified ping interval
+		return time.Duration(a.agent.PingInterval) * time.Second
+	}
+}
+
 type errUnrecoverable struct {
 	action   string
 	response *api.Response
@@ -317,7 +335,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	disconnectAfterIdleTimeout := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout)
 
 	// Create the ticker
-	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
+	pingInterval := a.determinePingInterval()
 	pingTicker := time.NewTicker(pingInterval)
 	defer pingTicker.Stop()
 

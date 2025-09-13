@@ -50,6 +50,7 @@ type AgentConfiguration struct {
 	DisconnectAfterJob           bool
 	DisconnectAfterIdleTimeout   int
 	DisconnectAfterUptime        int
+	PingInterval                 int
 	CancelGracePeriod            int
 	SignalGracePeriod            time.Duration
 	EnableJobLogTmpfile          bool

@@ -26,6 +26,30 @@ After connecting, `AgentWorker` runs two main goroutines: one periodically
 calls `Heartbeat`, the other more frequently calls `Ping`. `Ping` is how the 
 worker discovers work from the API.
 
+## Ping Interval
+
+The agent polls for jobs using a ping interval specified by the Buildkite server
+during agent registration (typically 10 seconds). To prevent thundering herd 
+problems, each ping includes random jitter (0 to ping-interval seconds), meaning 
+jobs may take 10-20 seconds to be picked up with default settings.
+
+For performance-sensitive workloads (like dynamic pipelines), you can override 
+the server-specified interval:
+
+```bash
+# Override to ping every 5 seconds (plus 0-5s jitter = 5-10s total)
+# Only integer values are supported (e.g., 2, 5, 10), not decimals
+buildkite-agent start --ping-interval 5
+
+# Or via environment variable
+export BUILDKITE_AGENT_PING_INTERVAL=5
+buildkite-agent start
+```
+
+Setting `--ping-interval 0` or omitting it uses the server-provided interval.
+Values below 2 seconds are automatically clamped to 2 seconds with a warning.
+Float values like `2.5` are not supported and will cause an error.
+
 Once a job has been accepted, the `AgentWorker` fires up a `JobRunner` to run
 it. Each `JobRunner` starts several goroutines that handle various tasks:
 
