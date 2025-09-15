@@ -6,6 +6,7 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,18 +22,22 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/internal/secrets"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
 	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -875,11 +880,93 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
+	// Fetch and set secrets before environment hook execution
+	if e.Secrets != "" {
+		if err := e.fetchAndSetSecrets(ctx); err != nil {
+			return fmt.Errorf("failed to fetch secrets for job: %w", err)
+		}
+	}
+
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
 	err = e.executeGlobalHook(ctx, "environment")
 	return err
+}
+
+// fetchAndSetSecrets handles secrets fetching and processing directly
+func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
+	if e.Secrets == "" {
+		return nil // No secrets to process
+	}
+
+	// Parse secrets from JSON using the pipeline.Secret type
+	var pipelineSecrets []*pipeline.Secret
+	if err := json.Unmarshal([]byte(e.Secrets), &pipelineSecrets); err != nil {
+		return fmt.Errorf("failed to parse secrets JSON: %w", err)
+	}
+
+	if len(pipelineSecrets) == 0 {
+		return nil // No secrets to process
+	}
+
+	e.shell.Headerf("Preparing secrets")
+
+	// Extract keys for fetching
+	keys := make([]string, len(pipelineSecrets))
+	for i, ps := range pipelineSecrets {
+		keys[i] = ps.Key
+	}
+
+	// Create API client for fetching secrets.
+	apiClient := api.NewClient(logger.NewBuffer(), api.Config{
+		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
+		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
+	})
+
+	// Fetch all secrets
+	fetchedSecrets, errs := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys, e.Debug)
+	if len(errs) > 0 {
+		var errorMsg strings.Builder
+		for _, err := range errs {
+			fmt.Fprintf(&errorMsg, "\n   %s", err)
+		}
+		return errors.New(errorMsg.String())
+	}
+
+	secretValuesByKey := make(map[string]string, len(fetchedSecrets))
+	for _, fetchedSecret := range fetchedSecrets {
+		secretValuesByKey[fetchedSecret.Key] = fetchedSecret.Value
+	}
+
+	// Set environment variables and register for redaction
+	for _, pipelineSecret := range pipelineSecrets {
+		if secretValue, exists := secretValuesByKey[pipelineSecret.Key]; exists {
+			// Always register the secret value for redaction regardless of env var setting
+			e.redactors.Add(secretValue)
+
+			// Set the environment variable only if environment_variable is specified and non-nil
+			if pipelineSecret.EnvironmentVariable != "" {
+				// Check if the environment variable is protected
+				if env.IsProtected(pipelineSecret.EnvironmentVariable) {
+					return fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+
+				var alreadySet bool
+				_, alreadySet = e.shell.Env.Get(pipelineSecret.EnvironmentVariable)
+
+				e.shell.Env.Set(pipelineSecret.EnvironmentVariable, secretValue)
+
+				if alreadySet {
+					e.shell.Commentf("Secret %s added as environment variable %s (overwritten)", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				} else {
+					e.shell.Commentf("Secret %s added as environment variable %s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // tearDown is called before the executor exits, even on error

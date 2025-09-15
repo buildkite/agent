@@ -281,6 +281,89 @@ var (
 		},
 		Token: "bkaj_job-token",
 	}
+
+	jobWithSecrets = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello secrets",
+			Secrets: pipeline.Secrets{
+				pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+				pipeline.Secret{Key: "API_TOKEN", EnvironmentVariable: "API_TOKEN"},
+			},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello secrets",
+			"BUILDKITE_REPO":    defaultRepositoryURL,
+			"DEPLOY":            "0",
+		},
+		Token: "bkaj_job-token",
+	}
+
+	jobWithSecretsCustomEnv = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello custom secrets",
+			Secrets: pipeline.Secrets{
+				pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DB_CONNECTION_STRING"},
+				pipeline.Secret{Key: "API_TOKEN", EnvironmentVariable: "CUSTOM_API_KEY"},
+			},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello custom secrets",
+			"BUILDKITE_REPO":    defaultRepositoryURL,
+			"DEPLOY":            "0",
+		},
+		Token: "bkaj_job-token",
+	}
+
+	jobWithEmptySecrets = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello no secrets",
+			Secrets: pipeline.Secrets{},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello no secrets",
+			"BUILDKITE_REPO":    defaultRepositoryURL,
+			"DEPLOY":            "0",
+		},
+		Token: "bkaj_job-token",
+	}
+
+	jobWithNilSecrets = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello no secrets",
+			Secrets: nil,
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello no secrets",
+			"BUILDKITE_REPO":    defaultRepositoryURL,
+			"DEPLOY":            "0",
+		},
+		Token: "bkaj_job-token",
+	}
+
+	jobWithMismatchedSecrets = api.Job{
+		ChunksMaxSizeBytes: 1024,
+		ID:                 defaultJobID,
+		Step: pipeline.CommandStep{
+			Command: "echo hello world",
+			Secrets: pipeline.Secrets{
+				pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
+			},
+		},
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_REPO":    defaultRepositoryURL,
+			"DEPLOY":            "0",
+		},
+		Token: "bkaj_job-token",
+	}
 )
 
 func TestJobVerification(t *testing.T) {
@@ -576,6 +659,50 @@ func TestJobVerification(t *testing.T) {
 				"+++ ⛔",
 				"signature verification failed",
 			},
+		},
+		{
+			name:                     "when job signature is valid and has secrets, it runs the job",
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithSecrets,
+			repositoryURL:            defaultRepositoryURL,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+		},
+		{
+			name:                     "when job signature is valid and has no secrets, it runs the job",
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithNilSecrets,
+			repositoryURL:            defaultRepositoryURL,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+		},
+		{
+			name:                     "when job signature is valid and has secrets with custom environment variables, it runs the job",
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithSecretsCustomEnv,
+			repositoryURL:            defaultRepositoryURL,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
+		},
+		{
+			name:                     "when job signature is valid and has empty secrets, it runs the job",
+			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+			job:                      jobWithEmptySecrets,
+			repositoryURL:            defaultRepositoryURL,
+			signingKey:               symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS:         jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			mockBootstrapExpectation: func(bt *bintest.Mock) { bt.Expect().Once().AndExitWith(0) },
+			expectedExitStatus:       "0",
+			expectedSignalReason:     "",
 		},
 	}
 

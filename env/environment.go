@@ -336,3 +336,38 @@ func (diff *Diff) Remove(key string) {
 func (diff *Diff) Empty() bool {
 	return len(diff.Added) == 0 && len(diff.Changed) == 0 && len(diff.Removed) == 0
 }
+
+// ProtectedEnv contains environment variables that can only be set by agent configuration.
+// These variables cannot be overwritten by job-level environment variables or secrets.
+var ProtectedEnv = map[string]struct{}{
+	"BUILDKITE_AGENT_ACCESS_TOKEN":       {},
+	"BUILDKITE_AGENT_DEBUG":              {},
+	"BUILDKITE_AGENT_ENDPOINT":           {},
+	"BUILDKITE_AGENT_PID":                {},
+	"BUILDKITE_BIN_PATH":                 {},
+	"BUILDKITE_BUILD_PATH":               {},
+	"BUILDKITE_COMMAND_EVAL":             {},
+	"BUILDKITE_CONFIG_PATH":              {},
+	"BUILDKITE_CONTAINER_COUNT":          {},
+	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
+	"BUILDKITE_GIT_CLONE_FLAGS":          {},
+	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
+	"BUILDKITE_GIT_FETCH_FLAGS":          {},
+	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
+	"BUILDKITE_GIT_MIRRORS_PATH":         {},
+	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":  {},
+	"BUILDKITE_GIT_SUBMODULES":           {},
+	"BUILDKITE_HOOKS_PATH":               {},
+	"BUILDKITE_KUBERNETES_EXEC":          {},
+	"BUILDKITE_LOCAL_HOOKS_ENABLED":      {},
+	"BUILDKITE_PLUGINS_ENABLED":          {},
+	"BUILDKITE_PLUGINS_PATH":             {},
+	"BUILDKITE_SHELL":                    {},
+	"BUILDKITE_SSH_KEYSCAN":              {},
+}
+
+// IsProtected returns true if the given environment variable key is protected.
+func IsProtected(key string) bool {
+	_, exists := ProtectedEnv[key]
+	return exists
+}

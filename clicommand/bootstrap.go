@@ -55,6 +55,7 @@ type BootstrapConfig struct {
 	Tag                          string   `cli:"tag"`
 	RefSpec                      string   `cli:"refspec"`
 	Plugins                      string   `cli:"plugins"`
+	Secrets                      string   `cli:"secrets"`
 	PullRequest                  string   `cli:"pullrequest"`
 	PullRequestUsingMergeRefspec bool     `cli:"pull-request-using-merge-refspec"`
 	GitSubmodules                bool     `cli:"git-submodules"`
@@ -163,6 +164,12 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "The plugins for the job",
 			EnvVar: "BUILDKITE_PLUGINS",
+		},
+		cli.StringFlag{
+			Name:   "secrets",
+			Value:  "",
+			Usage:  "Secrets to be loaded into the job environment",
+			EnvVar: "BUILDKITE_SECRETS_CONFIG",
 		},
 		cli.StringFlag{
 			Name:   "pullrequest",
@@ -512,6 +519,7 @@ var BootstrapCommand = cli.Command{
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			KubernetesExec:               cfg.KubernetesExec,
 			KubernetesContainerID:        cfg.KubernetesContainerID,
+			Secrets:                      cfg.Secrets,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
