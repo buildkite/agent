@@ -299,7 +299,7 @@ func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*a
 	c.Logger.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
 		strings.Join(registered.Tags, ", "))
 
-	c.Logger.Debug("Ping interval: %ds", registered.PingInterval)
+	c.Logger.Info("Ping interval: %ds", registered.PingInterval)
 	c.Logger.Debug("Job status interval: %ds", registered.JobStatusInterval)
 	c.Logger.Debug("Heartbeat interval: %ds", registered.HeartbeatInterval)
 

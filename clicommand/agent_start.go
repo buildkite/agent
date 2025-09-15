@@ -105,6 +105,7 @@ type AgentStartConfig struct {
 	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
 	DisconnectAfterIdleTimeout int    `cli:"disconnect-after-idle-timeout"`
 	DisconnectAfterUptime      int    `cli:"disconnect-after-uptime"`
+	PingInterval               int    `cli:"ping-interval"`
 	CancelGracePeriod          int    `cli:"cancel-grace-period"`
 	SignalGracePeriodSeconds   int    `cli:"signal-grace-period-seconds"`
 	ReflectExitStatus          bool   `cli:"reflect-exit-status"`
@@ -379,6 +380,12 @@ var AgentStartCommand = cli.Command{
 			Value:  0,
 			Usage:  "The maximum uptime in seconds before the agent stops accepting new jobs and shuts down after any running jobs complete. The default of 0 means no timeout",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_UPTIME",
+		},
+		cli.IntFlag{
+			Name:   "ping-interval",
+			Value:  0,
+			Usage:  "Override the server-specified ping interval in seconds (integer values only). The default of 0 uses the server-provided interval. Minimum value is 2 seconds",
+			EnvVar: "BUILDKITE_AGENT_PING_INTERVAL",
 		},
 		cancelGracePeriodFlag,
 		cli.BoolFlag{
@@ -1033,6 +1040,7 @@ var AgentStartCommand = cli.Command{
 			DisconnectAfterJob:           cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout:   cfg.DisconnectAfterIdleTimeout,
 			DisconnectAfterUptime:        cfg.DisconnectAfterUptime,
+			PingInterval:                 cfg.PingInterval,
 			CancelGracePeriod:            cfg.CancelGracePeriod,
 			SignalGracePeriod:            signalGracePeriod,
 			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
