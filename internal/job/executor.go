@@ -925,7 +925,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	})
 
 	// Fetch all secrets
-	fetchedSecrets, errs := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys, e.Debug)
+	fetchedSecrets, errs := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys, 1)
 	if len(errs) > 0 {
 		var errorMsg strings.Builder
 		for _, err := range errs {
