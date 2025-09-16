@@ -1,4 +1,4 @@
-FROM public.ecr.aws/docker/library/golang:1.24.7@sha256:6b6b69bb9ee3fda88e831e4582312727d2b3fdaea298e644446c182b1d5c4184
+FROM public.ecr.aws/docker/library/golang:1.25.1@sha256:8305f5fa8ea63c7b5bc85bd223ccc62941f852318ebfbd22f53bbd0b358c07e1
 COPY build/ssh.conf /etc/ssh/ssh_config.d/
 
 RUN go install github.com/google/go-licenses@latest
