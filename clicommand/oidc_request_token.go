@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"slices"
@@ -21,6 +22,7 @@ type OIDCTokenConfig struct {
 	Lifetime      int    `cli:"lifetime"`
 	Job           string `cli:"job"      validate:"required"`
 	SkipRedaction bool   `cli:"skip-redaction"`
+	Format        string `cli:"format"`
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
 	Claims         []string `cli:"claim"           normalize:"list"`
 	AWSSessionTags []string `cli:"aws-session-tag" normalize:"list"`
@@ -85,6 +87,11 @@ var OIDCRequestTokenCommand = cli.Command{
 			Usage:  "Skip redacting the OIDC token from the logs. Then, the command will print the token to the Job's logs if called directly.",
 			EnvVar: "BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION",
 		},
+		cli.StringFlag{
+			Name:  "format",
+			Value: "jwt",
+			Usage: "The format to output the token in. Supported values are 'jwt' (the default) and 'gcp'. When 'gcp' is specified, the token will be output in a JSON structure compatible with GCP's workload identity federation.",
+		},
 	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -94,6 +101,10 @@ var OIDCRequestTokenCommand = cli.Command{
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
 		if cfg.Lifetime < 0 {
 			return fmt.Errorf("lifetime %d must be a non-negative integer.", cfg.Lifetime)
+		}
+
+		if cfg.Format != "jwt" && cfg.Format != "gcp" {
+			return fmt.Errorf("format %q is not valid. Supported values are 'jwt' and 'gcp'", cfg.Format)
 		}
 
 		// Create the API client
@@ -151,7 +162,35 @@ var OIDCRequestTokenCommand = cli.Command{
 			}
 		}
 
-		_, _ = fmt.Fprintln(c.App.Writer, token.Token)
+		switch cfg.Format {
+		case "jwt":
+			_, _ = fmt.Fprintln(c.App.Writer, token.Token)
+
+		case "gcp":
+			type gcpOIDCTokenResponse struct {
+				IDToken   string `json:"id_token"`
+				TokenType string `json:"token_type"`
+				Version   int    `json:"version"`
+				Success   bool   `json:"success"`
+			}
+
+			jsonOutput, err := json.Marshal(gcpOIDCTokenResponse{
+				IDToken:   token.Token,
+				TokenType: "urn:ietf:params:oauth:token-type:jwt",
+				Version:   1,
+				Success:   true,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to marshal GCP response: %w", err)
+			}
+
+			_, _ = fmt.Fprintln(c.App.Writer, string(jsonOutput))
+
+		default:
+			// This should never happen because we validate the format earlier
+			return fmt.Errorf("unknown format %q", cfg.Format)
+		}
+
 		return nil
 	},
 }
