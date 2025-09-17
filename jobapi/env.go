@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/socket"
 )
 
@@ -141,7 +141,7 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 func checkProtected(candidates []string) []string {
 	protected := make([]string, 0, len(candidates))
 	for _, c := range candidates {
-		if _, ok := agent.ProtectedEnv[c]; ok {
+		if _, ok := env.ProtectedEnv[c]; ok {
 			protected = append(protected, c)
 		}
 	}

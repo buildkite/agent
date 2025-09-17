@@ -1447,7 +1447,7 @@ func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
 func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig) error {
 	// search for hook (including .bat & .ps1 files on Windows)
 	hooks := []string{}
-	p, err := hook.Find(cfg.HooksPath, hookName)
+	p, err := hook.Find(nil, cfg.HooksPath, hookName)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Error("Error finding %q hook: %v", hookName, err)
@@ -1459,7 +1459,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 
 	// also search for hook in any additionally provided locations
 	for _, h := range cfg.AdditionalHooksPaths {
-		p, err = hook.Find(h, hookName)
+		p, err = hook.Find(nil, h, hookName)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				log.Error("Error finding %q hook: %v", hookName, err)

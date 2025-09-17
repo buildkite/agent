@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(10)
+string("\xa0")
+string("\x80")
+string("\x81")
+string("\x9b")

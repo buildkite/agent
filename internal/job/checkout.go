@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -53,6 +54,11 @@ func (e *Executor) configureHTTPSInsteadOfSSH(ctx context.Context) error {
 func (e *Executor) removeCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
+	if e.checkoutRoot != nil {
+		e.checkoutRoot.Close()
+		e.checkoutRoot = nil
+	}
+
 	// on windows, sometimes removing large dirs can fail for various reasons
 	// for instance having files open
 	// see https://github.com/golang/go/issues/20841
@@ -74,16 +80,29 @@ func (e *Executor) removeCheckoutDir() error {
 	return fmt.Errorf("failed to remove %s", checkoutPath)
 }
 
+// createCheckoutDir checks for the existence of a directory at
+// $BUILDKITE_BUILD_CHECKOUT_PATH, and creates it if it does not exist.
+// It opens the checkout directory as an [os.Root], saved to e.checkoutRoot.
+// It then changes e.shell's working directory to the checkout directory.
 func (e *Executor) createCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	if !osutil.FileExists(checkoutPath) {
-		e.shell.Commentf("Creating \"%s\"", checkoutPath)
+		e.shell.Commentf("Creating %q", checkoutPath)
 		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(checkoutPath, 0o777); err != nil {
 			return err
 		}
 	}
+
+	root, err := os.OpenRoot(checkoutPath)
+	if err != nil {
+		return fmt.Errorf("opening checkout path as root: %w", err)
+	}
+	// This cleanup is largely ornamental, since the executor pointer only
+	// becomes unreachable when the bootstrap exits.
+	runtime.AddCleanup(e, func(r *os.Root) { r.Close() }, root)
+	e.checkoutRoot = root
 
 	if e.shell.Getwd() != checkoutPath {
 		if err := e.shell.Chdir(checkoutPath); err != nil {
@@ -406,7 +425,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			refspecs = []string{e.RefSpec}
 		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
-			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+			var refspec string
+			if e.PullRequestUsingMergeRefspec {
+				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+			} else {
+				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+			}
 			refspecs = []string{refspec}
 			retry = true
 		default:
@@ -610,23 +634,50 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 
 	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-		// GitHub has a special ref which lets us fetch a pull request head, whether
-		// or not it's a current head in this repository or a fork. See:
-		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
-		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		var refspec string
+		var retry bool
+
+		if e.PullRequestUsingMergeRefspec {
+			// Merge refspecs represents a speculative merge of the PR branch against the base branch.
+			// Checking out this refspec enables testing the result of the merge before it happens.
+			// If a merge conflict exists, this refspec won't be created and the fetch will fail. In this
+			// case we want the job to fail earlier, rather than retrying the fetch (which adds ~2-3 mins job run time before failing)
+			// Note: An outer retry loop will still retry the failed checkout 3 times before failing.
+			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
+			retry = false
+			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+		} else {
+			// GitHub has a special ref which lets us fetch a pull request head, whether
+			// or not it's a current head in this repository or a fork. See:
+			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
+			e.shell.Commentf("Fetch and checkout pull request head from GitHub")
+			retry = true
+			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		}
 		refspecs := []string{refspec}
 
-		// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
-		// have been force pushes to the pull request, so this ensures we have it.
-		// Note: this is the typical case e.Commit != HEAD.
-		if e.Commit != "HEAD" {
+		if e.Commit == "HEAD" {
+			// If we don't know the commit, we don't want to fetch with a fallback (otherwise FETCH_HEAD
+			// will resolve during a fallback to the alphabetically earliest branch/tag - rather than the
+			// correct commit for this build)
+			if err := gitFetch(ctx, gitFetchArgs{
+				Shell:         e.shell,
+				GitFetchFlags: gitFetchFlags,
+				Repository:    "origin",
+				Retry:         retry,
+				RefSpecs:      refspecs,
+			}); err != nil {
+				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+			}
+		} else {
+			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
+			// have been force pushes to the pull request, so this ensures we have it.
+			// Note: this is the typical case e.Commit != HEAD.
 			refspecs = append(refspecs, e.Commit)
-		}
-
-		// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
-		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
-			return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
+			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
+			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
+				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+			}
 		}
 
 		gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)

@@ -6,6 +6,7 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,18 +22,22 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/internal/secrets"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
 	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -48,6 +53,9 @@ type Executor struct {
 
 	// Shell is the shell environment for the executor
 	shell *shell.Shell
+
+	// The checkout directory root
+	checkoutRoot *os.Root
 
 	// Plugins to use
 	plugins []*plugin.Plugin
@@ -432,7 +440,14 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	return e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
+	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ)); err != nil {
+		return err
+	}
+	// Passing an empty env changes through because in polyglot hook we can't detect
+	// env change.
+	// But we call this method anyway because a hook might use buildkite-agent env set to update environment.
+	e.applyEnvironmentChanges(hook.EnvChanges{})
+	return nil
 }
 
 func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
@@ -595,6 +610,9 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	return nil
 }
 
+// 1. Apply env changes -> e.shell.Env
+// 2. Refresh executor config (e.shell.Env might change via Job API)
+// 3. Log all changes.
 func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != e.shell.Getwd() {
@@ -602,29 +620,12 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 		}
 	}
 
-	// Do we even have any environment variables to change?
-	if changes.Diff.Empty() {
-		return
-	}
-
 	e.shell.Env.Apply(changes.Diff)
-
-	// reset output redactors based on new environment variable values
-	toRedact, short, err := redact.Vars(e.RedactedVars, e.shell.Env.DumpPairs())
-	if err != nil {
-		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
-	}
-	if len(short) > 0 {
-		slices.Sort(short)
-		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
-	}
-
-	for _, pair := range toRedact {
-		e.redactors.Add(pair.Value)
-	}
+	e.addOutputRedactors()
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
+	// Note this func mutates/refreshes the ExecutorConfig too.
 	executorConfigEnvChanges := e.ReadFromEnvironment(e.shell.Env)
 
 	// Print out the env vars that changed. As we go through each
@@ -636,8 +637,11 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// environment variable contains sensitive information (such as
 	// THIRD_PARTY_API_KEY) we'll just not show any values for
 	// anything not controlled by us.
+	executorConfigEnvChangesLogged := make(map[string]bool)
+
 	for k, v := range changes.Diff.Added {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s is now %q", k, v)
 		} else {
 			e.shell.Commentf("%s added", k)
@@ -645,6 +649,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 	for k, v := range changes.Diff.Changed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s was %q and is now %q", k, v.Old, v.New)
 		} else {
 			e.shell.Commentf("%s changed", k)
@@ -652,20 +657,49 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 	for k, v := range changes.Diff.Removed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s is now %q", k, v)
 		} else {
 			e.shell.Commentf("%s removed", k)
 		}
 	}
+
+	// When an env var is changed via buildkite-agent env set instead,
+	// it might not appear in the script "changes".
+	for k, v := range executorConfigEnvChanges {
+		if !executorConfigEnvChangesLogged[k] {
+			e.shell.Commentf("%s is now %q", k, v)
+		}
+	}
+}
+
+// Should be called whenever we updated our e.shell.Env.
+func (e *Executor) addOutputRedactors() {
+	// reset output redactors based on new environment variable values
+	toRedact, short, err := redact.Vars(e.RedactedVars, e.shell.Env.DumpPairs())
+	if err != nil {
+		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	if len(short) > 0 {
+		slices.Sort(short)
+		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+	}
+
+	// This should probably be a reset rather than a mutate.
+	// But does a particular string stop being a secret if we learn new secret strings?
+	// For produence, we use Add.
+	for _, pair := range toRedact {
+		e.redactors.Add(pair.Value)
+	}
 }
 
 func (e *Executor) hasGlobalHook(name string) bool {
-	_, err := hook.Find(e.HooksPath, name)
+	_, err := hook.Find(nil, e.HooksPath, name)
 	if err == nil {
 		return true
 	}
 	for _, additional := range e.AdditionalHooksPaths {
-		_, err := hook.Find(additional, name)
+		_, err := hook.Find(nil, additional, name)
 		if err == nil {
 			return true
 		}
@@ -676,7 +710,7 @@ func (e *Executor) hasGlobalHook(name string) bool {
 // find all matching paths for the specified hook
 func (e *Executor) getAllGlobalHookPaths(name string) ([]string, error) {
 	hooks := []string{}
-	p, err := hook.Find(e.HooksPath, name)
+	p, err := hook.Find(nil, e.HooksPath, name)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return []string{}, err
@@ -686,7 +720,7 @@ func (e *Executor) getAllGlobalHookPaths(name string) ([]string, error) {
 	}
 
 	for _, additional := range e.AdditionalHooksPaths {
-		p, err = hook.Find(additional, name)
+		p, err = hook.Find(nil, additional, name)
 		// as this is an additional hook, don't fail if there's a problem here
 		if err == nil {
 			hooks = append(hooks, p)
@@ -717,8 +751,9 @@ func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
 func (e *Executor) localHookPath(name string) (string, error) {
-	dir := filepath.Join(e.shell.Getwd(), ".buildkite", "hooks")
-	return hook.Find(dir, name)
+	// The local hooks dir must exist within the checkout root.
+	dir := filepath.Join(".buildkite", "hooks")
+	return hook.Find(e.checkoutRoot, dir, name)
 }
 
 func (e *Executor) hasLocalHook(name string) bool {
@@ -845,11 +880,93 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
+	// Fetch and set secrets before environment hook execution
+	if e.Secrets != "" {
+		if err := e.fetchAndSetSecrets(ctx); err != nil {
+			return fmt.Errorf("failed to fetch secrets for job: %w", err)
+		}
+	}
+
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
 	err = e.executeGlobalHook(ctx, "environment")
 	return err
+}
+
+// fetchAndSetSecrets handles secrets fetching and processing directly
+func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
+	if e.Secrets == "" {
+		return nil // No secrets to process
+	}
+
+	// Parse secrets from JSON using the pipeline.Secret type
+	var pipelineSecrets []*pipeline.Secret
+	if err := json.Unmarshal([]byte(e.Secrets), &pipelineSecrets); err != nil {
+		return fmt.Errorf("failed to parse secrets JSON: %w", err)
+	}
+
+	if len(pipelineSecrets) == 0 {
+		return nil // No secrets to process
+	}
+
+	e.shell.Headerf("Preparing secrets")
+
+	// Extract keys for fetching
+	keys := make([]string, len(pipelineSecrets))
+	for i, ps := range pipelineSecrets {
+		keys[i] = ps.Key
+	}
+
+	// Create API client for fetching secrets.
+	apiClient := api.NewClient(logger.NewBuffer(), api.Config{
+		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
+		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
+	})
+
+	// Fetch all secrets
+	fetchedSecrets, errs := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys, e.Debug)
+	if len(errs) > 0 {
+		var errorMsg strings.Builder
+		for _, err := range errs {
+			fmt.Fprintf(&errorMsg, "\n   %s", err)
+		}
+		return errors.New(errorMsg.String())
+	}
+
+	secretValuesByKey := make(map[string]string, len(fetchedSecrets))
+	for _, fetchedSecret := range fetchedSecrets {
+		secretValuesByKey[fetchedSecret.Key] = fetchedSecret.Value
+	}
+
+	// Set environment variables and register for redaction
+	for _, pipelineSecret := range pipelineSecrets {
+		if secretValue, exists := secretValuesByKey[pipelineSecret.Key]; exists {
+			// Always register the secret value for redaction regardless of env var setting
+			e.redactors.Add(secretValue)
+
+			// Set the environment variable only if environment_variable is specified and non-nil
+			if pipelineSecret.EnvironmentVariable != "" {
+				// Check if the environment variable is protected
+				if env.IsProtected(pipelineSecret.EnvironmentVariable) {
+					return fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+
+				var alreadySet bool
+				_, alreadySet = e.shell.Env.Get(pipelineSecret.EnvironmentVariable)
+
+				e.shell.Env.Set(pipelineSecret.EnvironmentVariable, secretValue)
+
+				if alreadySet {
+					e.shell.Commentf("Secret %s added as environment variable %s (overwritten)", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				} else {
+					e.shell.Commentf("Secret %s added as environment variable %s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // tearDown is called before the executor exits, even on error

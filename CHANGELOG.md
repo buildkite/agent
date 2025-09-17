@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.106.0](https://github.com/buildkite/agent/tree/v3.106.0) (2025-09-15)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.105.0...v3.106.0)
+
+### Changed
+- Support upcoming `secrets` pipeline syntax (currently in private preview) [#3453](https://github.com/buildkite/agent/pull/3453) (@matthewborden)
+- Better plugin and hook path checks [#3445](https://github.com/buildkite/agent/pull/3445) (@DrJosh9000)
+
+## [v3.105.0](https://github.com/buildkite/agent/tree/v3.105.0) (2025-09-11)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.104.0...v3.105.0)
+
+
+### Fixed
+- PS-1101: refresh Executor config for Job API env change in polyglot hook [#3467](https://github.com/buildkite/agent/pull/3467) (@zhming0)
+- PB-610: fix hook environment variable unable to propagate via bk-agent env set [#3466](https://github.com/buildkite/agent/pull/3466) (@zhming0)
+
+### Added
+- Support agent checkout on pull request merge refspecs [#3436](https://github.com/buildkite/agent/pull/3436) (@jonathanly)
+
+### Internal
+- Lower Go containers back to 1.24 [#3468](https://github.com/buildkite/agent/pull/3468) (@DrJosh9000)
+- Add replacer fuzz test corpus to repo, with fix [#3448](https://github.com/buildkite/agent/pull/3448) (@DrJosh9000)
+- Re-add test race detection, and skip a known-racy test under the race  regime [#3452](https://github.com/buildkite/agent/pull/3452) (@moskyb)
+- Dependancy updates: [#3463](https://github.com/buildkite/agent/pull/3463), [#3465](https://github.com/buildkite/agent/pull/3465), [#3462](https://github.com/buildkite/agent/pull/3462) ,[#3457](https://github.com/buildkite/agent/pull/3457), [#3460](https://github.com/buildkite/agent/pull/3460), [#3456](https://github.com/buildkite/agent/pull/3456), [#3454](https://github.com/buildkite/agent/pull/3454) (@dependabot[bot])
+
+
+## [v3.104.0](https://github.com/buildkite/agent/tree/v3.104.0) (2025-09-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.103.1...v3.104.0)
+
+### Security
+- Automatically redact OIDC tokens in logs [#3450](https://github.com/buildkite/agent/pull/3450) (@matthewborden)
+
+### Added
+- Allow multiple pipeline files for upload [#3431](https://github.com/buildkite/agent/pull/3431) (@DrJosh9000)
+
+### Changed
+- Promote use-zzglob experiment to default [#3428](https://github.com/buildkite/agent/pull/3428) (@DrJosh9000)
+
+### Fixed
+- Ensure bootstrap waits for signal propagation before exiting [#3443](https://github.com/buildkite/agent/pull/3443) (@moskyb)
+- Fix experiment promotion message [#3432](https://github.com/buildkite/agent/pull/3432) (@DrJosh9000)
+
+### Internal
+- Add disclosures/credits to PR template [#3433](https://github.com/buildkite/agent/pull/3433) (@DrJosh9000)
+- Fix code owners [#3422](https://github.com/buildkite/agent/pull/3422) (@zhming0)
+- Dependency updates [#3437](https://github.com/buildkite/agent/pull/3437), [#3438](https://github.com/buildkite/agent/pull/3438), [#3442](https://github.com/buildkite/agent/pull/3442), [#3441](https://github.com/buildkite/agent/pull/3441), [#3435](https://github.com/buildkite/agent/pull/3435), [#3425](https://github.com/buildkite/agent/pull/3425), [#3423](https://github.com/buildkite/agent/pull/3423), [#3426](https://github.com/buildkite/agent/pull/3426), [#3427](https://github.com/buildkite/agent/pull/3427), [#3424](https://github.com/buildkite/agent/pull/3424) (@dependabot[bot])
+
+
 ## [v3.103.1](https://github.com/buildkite/agent/tree/v3.103.1) (2025-08-07)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.103.0...v3.103.1)
 

@@ -354,9 +354,9 @@ func TestAddingNeedles(t *testing.T) {
 }
 
 func BenchmarkReplacer(b *testing.B) {
-	b.ResetTimer()
+
 	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redacted)
-	for range b.N {
+	for b.Loop() {
 		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
 			b.Errorf("fmt.Fprintln(r, bigLipsum) error = %v", err)
 		}
@@ -376,14 +376,15 @@ func FuzzReplacer(f *testing.F) {
 	f.Add(lipsum, 10, "ipsum", "dolor", "sit", "amet")
 	f.Add(lipsum, 10, "a", "e", "i", "o")
 	f.Fuzz(func(t *testing.T, plaintext string, split int, a, b, c, d string) {
-		// Don't allow empty secrets, or secrets containing a character from
-		// the redaction substitution.
+		// Don't allow empty secrets, whitespace only secrets, or secrets
+		// containing a character from the redaction substitution.
 		//  - Replacing a secret with '[REDACTED]' may create text that happens
 		//    to be another secret.
 		//  - Unless disallowed, the fuzzer tends to rapidly find secrets like
 		//    "A" (one of the characters in REDACTED).
 		secrets := make([]string, 0, 4)
 		for _, s := range []string{a, b, c, d} {
+			s = strings.TrimSpace(s)
 			if s == "" || strings.ContainsAny(s, "[REDACTED]") {
 				continue
 			}

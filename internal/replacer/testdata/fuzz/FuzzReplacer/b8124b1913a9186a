@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(10)
+string("\ue5fa")
+string("紅")
+string("0")
+string("0")

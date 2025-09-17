@@ -8,9 +8,11 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/self"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/urfave/cli"
@@ -53,7 +55,9 @@ type BootstrapConfig struct {
 	Tag                          string   `cli:"tag"`
 	RefSpec                      string   `cli:"refspec"`
 	Plugins                      string   `cli:"plugins"`
+	Secrets                      string   `cli:"secrets"`
 	PullRequest                  string   `cli:"pullrequest"`
+	PullRequestUsingMergeRefspec bool     `cli:"pull-request-using-merge-refspec"`
 	GitSubmodules                bool     `cli:"git-submodules"`
 	SSHKeyscan                   bool     `cli:"ssh-keyscan"`
 	AgentName                    string   `cli:"agent" validate:"required"`
@@ -162,10 +166,21 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_PLUGINS",
 		},
 		cli.StringFlag{
+			Name:   "secrets",
+			Value:  "",
+			Usage:  "Secrets to be loaded into the job environment",
+			EnvVar: "BUILDKITE_SECRETS_CONFIG",
+		},
+		cli.StringFlag{
 			Name:   "pullrequest",
 			Value:  "",
 			Usage:  "The number/id of the pull request this commit belonged to",
 			EnvVar: "BUILDKITE_PULL_REQUEST",
+		},
+		cli.BoolFlag{
+			Name:   "pull-request-using-merge-refspec",
+			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec",
+			EnvVar: "BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC",
 		},
 		cli.StringFlag{
 			Name:   "agent",
@@ -485,6 +500,7 @@ var BootstrapCommand = cli.Command{
 			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
 			PluginsPath:                  cfg.PluginsPath,
 			PullRequest:                  cfg.PullRequest,
+			PullRequestUsingMergeRefspec: cfg.PullRequestUsingMergeRefspec,
 			Queue:                        cfg.Queue,
 			RedactedVars:                 cfg.RedactedVars,
 			RefSpec:                      cfg.RefSpec,
@@ -503,6 +519,7 @@ var BootstrapCommand = cli.Command{
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			KubernetesExec:               cfg.KubernetesExec,
 			KubernetesContainerID:        cfg.KubernetesContainerID,
+			Secrets:                      cfg.Secrets,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
@@ -513,7 +530,8 @@ var BootstrapCommand = cli.Command{
 			syscall.SIGHUP,
 			syscall.SIGTERM,
 			syscall.SIGINT,
-			syscall.SIGQUIT)
+			syscall.SIGQUIT,
+		)
 		defer signal.Stop(signals)
 
 		var (
@@ -550,18 +568,31 @@ var BootstrapCommand = cli.Command{
 		// If cancelled and our child process returns a non-zero, we should terminate
 		// ourselves with the same signal so that our caller can detect and handle appropriately
 		if cancelled && runtime.GOOS != "windows" {
-			p, err := os.FindProcess(os.Getpid())
-			if err != nil {
-				l.Error("Failed to find current process: %v", err)
-			}
-
-			l.Debug("Terminating bootstrap after cancellation with %v", received)
-			err = p.Signal(received)
-			if err != nil {
+			if err := signalSelf(l, received); err != nil {
 				l.Error("Failed to signal self: %v", err)
 			}
 		}
 
 		return &SilentExitError{code: exitCode}
 	},
+}
+
+func signalSelf(l logger.Logger, sig os.Signal) error {
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		return fmt.Errorf("failed to find current process: %w", err)
+	}
+
+	l.Debug("Terminating bootstrap after cancellation with %v", sig)
+	err = p.Signal(sig)
+	if err != nil {
+		return fmt.Errorf("failed to signal self: %v", err)
+	}
+
+	// Wait for a bit to allow the signal to be processed. Without this, the program can exit before the signal actually
+	// get sent and received, and the WaitStatus of this process won't indicate that it was signalled.
+	// Note that in almost all cases, we won't actually wait for 10 seconds, as the signal is generally processed extremely
+	// quickly. Sending ourself a SIGTERM will stop the agent before the time.Sleep is up.
+	time.Sleep(10 * time.Second)
+	return nil
 }

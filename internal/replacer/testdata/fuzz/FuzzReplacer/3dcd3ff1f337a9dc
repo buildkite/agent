@@ -1,0 +1,7 @@
+go test fuzz v1
+string("m0smsitm0")
+int(10)
+string("m1")
+string("sit")
+string("")
+string("")

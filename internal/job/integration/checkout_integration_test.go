@@ -497,6 +497,48 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	assert.Equal(t, checkoutRepoCommit, commitHash)
 }
 
+func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/merge")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		"BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC=true",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "--no-local", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "refs/pull/123/merge"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+		{"rev-parse", "FETCH_HEAD"},
+	})
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
 func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
 	t.Parallel()
 

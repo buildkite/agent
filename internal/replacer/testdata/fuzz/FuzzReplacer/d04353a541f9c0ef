@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(-26)
+string("")
+string("A\xed")
+string("0")
+string("0")

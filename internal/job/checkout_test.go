@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/job/githttptest"
+	"github.com/buildkite/agent/v3/internal/race"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/stretchr/testify/require"
 )
@@ -69,6 +70,23 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			projectName: "project-name-pull-request",
 			refSpec:     "refs/pull/124/head",
 		},
+		{
+			name: "Default checkout phase with pull request using merge refspec",
+			executor: &Executor{
+				shell: shell,
+				ExecutorConfig: ExecutorConfig{
+					PullRequest:                  "124",
+					Commit:                       "HEAD",
+					Branch:                       "main",
+					CleanCheckout:                false,
+					GitCleanFlags:                "-f -d -x",
+					PipelineProvider:             "github",
+					PullRequestUsingMergeRefspec: true,
+				},
+			},
+			projectName: "project-name-pull-request",
+			refSpec:     "refs/pull/124/merge",
+		},
 	}
 
 	for _, tt := range tests {
@@ -130,9 +148,12 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 }
 
 func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
+	if race.IsRaceTest {
+		t.Skip("this test simulates the agent recovering from a race condition, and needs to create one to test it.")
+	}
+
 	assert := require.New(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	shell, err := shell.New()
 	assert.NoError(err)

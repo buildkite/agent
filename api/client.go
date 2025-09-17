@@ -393,7 +393,7 @@ func checkResponse(r *http.Response) error {
 // be a struct whose fields may contain "url" tags.
 func addOptions(s string, opt any) (string, error) {
 	v := reflect.ValueOf(opt)
-	if v.Kind() == reflect.Ptr && v.IsNil() {
+	if v.Kind() == reflect.Pointer && v.IsNil() {
 		return s, nil
 	}
 
