@@ -53,7 +53,7 @@ func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []st
 			break
 		}
 
-		go func(key string) {
+		go func() {
 			defer sem.Release(1)
 			apiSecret, _, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: key, JobID: jobID})
 			if err != nil {
@@ -72,7 +72,7 @@ func FetchSecrets(ctx context.Context, client APIClient, jobID string, keys []st
 				Key:   key,
 				Value: apiSecret.Value,
 			})
-		}(key)
+		}()
 	}
 
 	err := sem.Acquire(ctx, int64(concurrency)) // Wait for all goroutines to finish
