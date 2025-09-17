@@ -110,7 +110,6 @@ var BuildkiteAgentCommands = []cli.Command{
 		Usage:    "Interact with Pipelines Secrets",
 		Subcommands: []cli.Command{
 			SecretGetCommand,
-			SecretBatchReadCommand,
 		},
 	},
 	{
