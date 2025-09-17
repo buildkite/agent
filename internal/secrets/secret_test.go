@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -44,7 +43,7 @@ func TestFetchSecrets_Success(t *testing.T) {
 		Token:    "llamas",
 	})
 
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", []string{"DATABASE_URL", "API_TOKEN"}, 10)
+	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", []string{"DATABASE_URL", "API_TOKEN"}, 10)
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
 	}
@@ -67,7 +66,7 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 	t.Parallel()
 
 	apiClient := api.NewClient(logger.Discard, api.Config{Token: "llamas"})
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", []string{}, 10)
+	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", []string{}, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
@@ -83,7 +82,7 @@ func TestFetchSecrets_NilKeys(t *testing.T) {
 
 	apiClient := api.NewClient(logger.Discard, api.Config{Token: "llamas"})
 
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", nil, 10)
+	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", nil, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
@@ -120,7 +119,7 @@ func TestFetchSecrets_SomeSecretsFail(t *testing.T) {
 	})
 
 	keys := []string{"DATABASE_URL", "MISSING"}
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
+	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 errors, got %d: %v", len(errs), errs)
@@ -163,7 +162,7 @@ func TestFetchSecrets_AllSecretsFail(t *testing.T) {
 	})
 
 	keys := []string{"API_TOKEN", "DATABASE_URL"}
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
+	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
@@ -203,7 +202,7 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	})
 
 	keys := []string{"TEST_SECRET"}
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
+	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
