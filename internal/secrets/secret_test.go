@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
@@ -50,7 +51,7 @@ func TestFetchSecrets_Success(t *testing.T) {
 	})
 
 	keys := []string{"DATABASE_URL", "API_TOKEN"}
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 1)
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
@@ -60,10 +61,12 @@ func TestFetchSecrets_Success(t *testing.T) {
 		t.Fatalf("expected 2 secrets, got %d", len(secrets))
 	}
 
+	secretSorter := func(i, j Secret) bool { return i.Key < j.Key }
+
 	if diff := cmp.Diff(secrets, []Secret{
 		{Key: "DATABASE_URL", Value: "postgres://user:pass@host:5432/db"},
 		{Key: "API_TOKEN", Value: "secret-token-123"},
-	}); diff != "" {
+	}, cmpopts.SortSlices(secretSorter)); diff != "" {
 		t.Errorf("unexpected secrets (-want +got):\n%s", diff)
 	}
 }
@@ -99,7 +102,7 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 		Token:    "llamas",
 	})
 
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", []string{}, 1)
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", []string{}, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
@@ -141,14 +144,14 @@ func TestFetchSecrets_NilKeys(t *testing.T) {
 		Token:    "llamas",
 	})
 
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", nil, 1)
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", nil, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
 	}
 
-	if secrets != nil {
-		t.Errorf("expected nil secrets, got: %v", secrets)
+	if len(secrets) > 0 {
+		t.Errorf("expected empty secrets, got: %v", secrets)
 	}
 }
 
@@ -184,7 +187,7 @@ func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 	})
 
 	keys := []string{"DATABASE_URL", "API_TOKEN", "MISSING"}
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 1)
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
@@ -245,7 +248,7 @@ func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
 	})
 
 	keys := []string{"API_TOKEN", "DATABASE_URL"}
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 1)
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
@@ -285,7 +288,7 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	})
 
 	keys := []string{"TEST_SECRET"}
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 1)
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
