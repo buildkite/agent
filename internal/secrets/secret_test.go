@@ -28,16 +28,10 @@ func TestFetchSecrets_Success(t *testing.T) {
 			switch req.URL.Query()["key"][0] {
 			case "DATABASE_URL":
 				rw.WriteHeader(http.StatusOK)
-				fmt.Fprintf(rw, `{"key": "DATABASE_URL", "value": "postgres://user:pass@host:5432/db"}`)
+				_, _ = fmt.Fprintf(rw, `{"key": "DATABASE_URL", "value": "postgres://user:pass@host:5432/db"}`)
 			case "API_TOKEN":
 				rw.WriteHeader(http.StatusOK)
-				fmt.Fprintf(rw, `{"key": "API_TOKEN", "value": "secret-token-123"}`)
-			case "MISSING":
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			default:
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
+				_, _ = fmt.Fprintf(rw, `{"key": "API_TOKEN", "value": "secret-token-123"}`)
 			}
 		default:
 			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
@@ -50,9 +44,7 @@ func TestFetchSecrets_Success(t *testing.T) {
 		Token:    "llamas",
 	})
 
-	keys := []string{"DATABASE_URL", "API_TOKEN"}
-	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
-
+	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", []string{"DATABASE_URL", "API_TOKEN"}, 10)
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
 	}
@@ -74,34 +66,7 @@ func TestFetchSecrets_Success(t *testing.T) {
 func TestFetchSecrets_EmptyKeys(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		switch req.URL.Path {
-		case "/jobs/test-job-id/secrets":
-			switch req.URL.Query()["key"][0] {
-			case "DATABASE_URL":
-				rw.WriteHeader(http.StatusOK)
-				fmt.Fprintf(rw, `{"key": "DATABASE_URL", "value": "postgres://user:pass@host:5432/db"}`)
-			case "API_TOKEN":
-				rw.WriteHeader(http.StatusOK)
-				fmt.Fprintf(rw, `{"key": "DATABASE_URL", "value": "secret-token-123"}`)
-			case "MISSING":
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			default:
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			}
-		default:
-			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
-			http.Error(rw, "Not found", http.StatusNotFound)
-		}
-	}))
-
-	apiClient := api.NewClient(logger.Discard, api.Config{
-		Endpoint: server.URL,
-		Token:    "llamas",
-	})
-
+	apiClient := api.NewClient(logger.Discard, api.Config{Token: "llamas"})
 	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", []string{}, 10)
 
 	if len(errs) > 0 {
@@ -109,40 +74,14 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 	}
 
 	if len(secrets) > 0 {
-		t.Errorf("expected nil secrets, got: %v", secrets)
+		t.Errorf("expected empty secrets, got: %v", secrets)
 	}
 }
 
 func TestFetchSecrets_NilKeys(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		switch req.URL.Path {
-		case "/jobs/test-job-id/secrets":
-			switch req.URL.Query()["key"][0] {
-			case "DATABASE_URL":
-				rw.WriteHeader(http.StatusOK)
-				fmt.Fprintf(rw, `{"key": "DATABASE_URL", "value": "postgres://user:pass@host:5432/db"}`)
-			case "API_TOKEN":
-				rw.WriteHeader(http.StatusOK)
-				fmt.Fprintf(rw, `{"key": "DATABASE_URL", "value": "secret-token-123"}`)
-			case "MISSING":
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			default:
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			}
-		default:
-			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
-			http.Error(rw, "Not found", http.StatusNotFound)
-		}
-	}))
-
-	apiClient := api.NewClient(logger.Discard, api.Config{
-		Endpoint: server.URL,
-		Token:    "llamas",
-	})
+	apiClient := api.NewClient(logger.Discard, api.Config{Token: "llamas"})
 
 	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", nil, 10)
 
@@ -155,7 +94,7 @@ func TestFetchSecrets_NilKeys(t *testing.T) {
 	}
 }
 
-func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
+func TestFetchSecrets_SomeSecretsFail(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -164,16 +103,10 @@ func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 			switch req.URL.Query()["key"][0] {
 			case "DATABASE_URL":
 				rw.WriteHeader(http.StatusOK)
-				fmt.Fprintf(rw, `{"key": "DATABASE_URL", "value": "very-secret-value"}`)
-			case "API_TOKEN":
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
+				_, _ = fmt.Fprintf(rw, `{"key": "DATABASE_URL", "value": "very-secret-value"}`)
 			case "MISSING":
 				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			default:
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
+				_, _ = fmt.Fprintf(rw, `{"message": "secret not found"}`)
 			}
 		default:
 			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
@@ -186,11 +119,11 @@ func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 		Token:    "llamas",
 	})
 
-	keys := []string{"DATABASE_URL", "API_TOKEN", "MISSING"}
+	keys := []string{"DATABASE_URL", "MISSING"}
 	secrets, errs := FetchSecrets(context.Background(), apiClient, "test-job-id", keys, 10)
 
-	if len(errs) != 2 {
-		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 errors, got %d: %v", len(errs), errs)
 	}
 
 	if secrets != nil {
@@ -211,35 +144,17 @@ func TestFetchSecrets_AllOrNothing_SomeSecretsFail(t *testing.T) {
 	}
 	allErrors := strings.Join(errorStrings, " ")
 
-	if !strings.Contains(allErrors, `secret "API_TOKEN"`) {
-		t.Errorf("expected errors to contain API_TOKEN failure, got: %v", errs)
-	}
 	if !strings.Contains(allErrors, `secret "MISSING"`) {
 		t.Errorf("expected errors to contain MISSING failure, got: %v", errs)
 	}
 }
 
-func TestFetchSecrets_AllOrNothing_AllSecretsFail(t *testing.T) {
+func TestFetchSecrets_AllSecretsFail(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		switch req.URL.Path {
-		case "/jobs/test-job-id/secrets":
-			switch req.URL.Query()["key"][0] {
-			case "DATABASE_URL":
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			case "API_TOKEN":
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			default:
-				rw.WriteHeader(http.StatusNotFound)
-				fmt.Fprintf(rw, `{"message": "secret not found"}`)
-			}
-		default:
-			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
-			http.Error(rw, "Not found", http.StatusNotFound)
-		}
+		rw.WriteHeader(http.StatusNotFound)
+		_, _ = fmt.Fprintf(rw, `{"message": "secret not found"}`)
 	}))
 
 	apiClient := api.NewClient(logger.Discard, api.Config{
@@ -280,7 +195,7 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	defer server.Close()
 
 	// Close the underlying listener to cause connection errors
-	server.Listener.Close()
+	_ = server.Listener.Close()
 
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
