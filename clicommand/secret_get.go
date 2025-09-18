@@ -99,7 +99,7 @@ Examples:
 		}
 
 		agentClient := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-		secrets, errs := secrets.FetchSecrets(ctx, agentClient, cfg.Job, cfg.Keys, 20)
+		secrets, errs := secrets.FetchSecrets(ctx, agentClient, cfg.Job, cfg.Keys, 10)
 		if len(errs) > 0 {
 			sb := &strings.Builder{}
 			sb.WriteString("Failed to fetch some secrets:\n")
