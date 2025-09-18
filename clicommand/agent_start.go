@@ -185,11 +185,12 @@ type AgentStartConfig struct {
 	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
 
 	// API config
-	DebugHTTP bool   `cli:"debug-http"`
-	TraceHTTP bool   `cli:"trace-http"`
-	Token     string `cli:"token" validate:"required"`
-	Endpoint  string `cli:"endpoint" validate:"required"`
-	NoHTTP2   bool   `cli:"no-http2"`
+	DebugHTTP       bool   `cli:"debug-http"`
+	TraceHTTP       bool   `cli:"trace-http"`
+	GzipAPIRequests bool   `cli:"gzip-api-requests"`
+	Token           string `cli:"token" validate:"required"`
+	Endpoint        string `cli:"endpoint" validate:"required"`
+	NoHTTP2         bool   `cli:"no-http2"`
 
 	// Deprecated
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -742,6 +743,7 @@ var AgentStartCommand = cli.Command{
 		NoHTTP2Flag,
 		DebugHTTPFlag,
 		TraceHTTPFlag,
+		GzipAPIRequestsFlag,
 
 		// Other shared flags
 		RedactedVars,
