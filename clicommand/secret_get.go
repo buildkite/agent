@@ -53,20 +53,15 @@ Examples:
     $ buildkite-agent secret get DEPLOY_KEY
     "..."
 
-    $ buildkite-agent secret get --format env deploy_key
-    DEPLOY_KEY="..."
-
-		$ buildkite-agent secret get --format json deploy_key
-		{"deploy_key": "..."}
-
-    # JSON is the default format when multiple keys are provided...
-    $ buildkite-agent secret get deploy_key github_api_token
-    {"deploy_key": "...", "github_api_token": "..."}
-
-    # ... but you can also request env format, which can be piped into ′source′, ′declare -x′, and friends
+    # The return value can also be formatted using env (which can be piped
+    # into e.g. ′source′, ′declare -x′), or json
     $ buildkite-agent secret get --format env deploy_key github_api_token
     DEPLOY_KEY="..."
-    GITHUB_API_TOKEN="..."`,
+    GITHUB_API_TOKEN="..."
+
+    $ buildkite-agent secret get --format json deploy_key github_api_token
+    {"deploy_key": "...", "github_api_token": "..."}
+`,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
