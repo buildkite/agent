@@ -319,9 +319,9 @@ func (p *Plugin) Label() string {
 
 // DisplayName returns a human-friendly name for the plugin suitable for logs.
 // Examples:
-//  - github.com/org/repo           => repo
-//  - github.com/org/repo/.buildkite => repo/.buildkite
-//  - file:///path/to/plugin         => plugin (last path element)
+//   - github.com/org/repo           => repo
+//   - github.com/org/repo/.buildkite => repo/.buildkite
+//   - file:///path/to/plugin         => plugin (last path element)
 func (p *Plugin) DisplayName() string {
 	// Filesystem paths: fall back to Name(), which returns the last segment normalized
 	if strings.HasPrefix(p.Location, "/") || strings.HasPrefix(p.Location, ".") || strings.Contains(p.Location, "\\") {
