@@ -38,11 +38,12 @@ Gets a list of secrets from Buildkite and prints them to stdout. Key names are c
 insensitive in this command, and secret values are automatically redacted in the build logs
 unless the ′skip-redaction′ flag is used.
 
-If any request for a secret fails, the command will return a non-zero exit code and print details of all failed secrets.
+If any request for a secret fails, the command will return a non-zero exit code and print
+details of all failed secrets.
 
-If only a single key is provided, the secret value will be printed without any formatting.
-
-If multiple keys are provided, the output format will be as defined by the ′format′ flag, which defaults to JSON.
+By default, when fetching a single key, the secret value will be printed without any
+formatting. When fetching multiple keys, the output will be in JSON format. Output
+format can be controlled explicitly with the ′format′ flag.
 
 Examples:
 
@@ -52,11 +53,13 @@ Examples:
     $ buildkite-agent secret get DEPLOY_KEY
     "..."
 
-    # Format is ignored when only a single key is provided
     $ buildkite-agent secret get --format env deploy_key
-    "..."
+    DEPLOY_KEY="..."
 
-    # JSON is the default format when multiple keys are provided
+		$ buildkite-agent secret get --format json deploy_key
+		{"deploy_key": "..."}
+
+    # JSON is the default format when multiple keys are provided...
     $ buildkite-agent secret get deploy_key github_api_token
     {"deploy_key": "...", "github_api_token": "..."}
 
@@ -72,8 +75,8 @@ Examples:
 		},
 		cli.StringFlag{
 			Name:   "format",
-			Usage:  "The output format, either 'json' (default) or 'env'. Ignored when only a single key is provided",
-			Value:  "json",
+			Usage:  "The output format, either 'default', 'json', or 'env'. When 'default', a single secret will print just the value, while multiple secrets will print JSON. When 'json' or 'env', secrets will be printed as key-value pairs in the requested format",
+			Value:  "default",
 			EnvVar: "BUILDKITE_AGENT_SECRET_GET_FORMAT",
 		},
 		cli.BoolFlag{
@@ -91,8 +94,8 @@ Examples:
 			return errors.New("at least one secret key must be provided")
 		}
 
-		if cfg.Format != "json" && cfg.Format != "env" {
-			return fmt.Errorf("invalid format %q: must be either 'json' or 'env'", cfg.Format)
+		if !slices.Contains([]string{"default", "json", "env"}, cfg.Format) {
+			return fmt.Errorf("invalid format %q: must be one of 'default', 'json', or 'env'", cfg.Format)
 		}
 
 		agentClient := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
@@ -122,31 +125,26 @@ Examples:
 			}
 		}
 
-		// If only a single key was requested, print the value without any formatting
-		if len(secrets) == 1 {
-			_, _ = fmt.Fprintln(c.App.Writer, secrets[0].Value)
-			return nil
-		}
-
 		// Otherwise, print in the requested format
 		secretsMap := make(map[string]string, len(secrets))
 		for _, secret := range secrets {
 			secretsMap[secret.Key] = secret.Value
 		}
 
-		switch cfg.Format {
-		case "json":
+		switch {
+		case len(cfg.Keys) == 1 && cfg.Format == "default":
+			_, _ = fmt.Fprintln(c.App.Writer, secrets[0].Value)
+			return nil
+
+		case cfg.Format == "json" || (cfg.Format == "default" && len(cfg.Keys) > 1):
 			if err := json.NewEncoder(c.App.Writer).Encode(secretsMap); err != nil {
 				return fmt.Errorf("failed to write JSON response: %w", err)
 			}
 
-		case "env":
-			sb := strings.Builder{}
+		case cfg.Format == "env":
 			for _, key := range slices.Sorted(maps.Keys(secretsMap)) {
-				sb.WriteString(fmt.Sprintf("%s=%q\n", strings.ToUpper(key), secretsMap[key]))
+				fmt.Fprintf(c.App.Writer, "%s=%q\n", strings.ToUpper(key), secretsMap[key])
 			}
-
-			_, _ = fmt.Fprint(c.App.Writer, sb.String())
 
 		default:
 			return fmt.Errorf("unsupported format %q", cfg.Format)
