@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.107.0](https://github.com/buildkite/agent/tree/v3.107.0) (2025-09-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.106.0...v3.107.0)
+
+### Added
+- Added ability to fetch multiple secrets in a single call [#3483](https://github.com/buildkite/agent/pull/3483) (@moskyb)
+- Experiment for propagating agent config env vars [#3471](https://github.com/buildkite/agent/pull/3471) (@DrJosh9000)
+- `oidc request-token` can now output in a GCP Workload Federation-compatible format [#3480](https://github.com/buildkite/agent/pull/3480) (@moskyb)
+
+### Changed
+- Update docs for apply-if-changed information with agent minimum version [#3485](https://github.com/buildkite/agent/pull/3485) (@Damilola-obasa)
+
+### Internal
+- Use the go.mod tool block for more tools [#3481](https://github.com/buildkite/agent/pull/3481) (@DrJosh9000)
+- Update shellwords to v1.0.1, relax Go version directive [#3464](https://github.com/buildkite/agent/pull/3464) (@moskyb)
+- build(deps): bump the container-images group across 5 directories with 1 update [#3478](https://github.com/buildkite/agent/pull/3478) (@dependabot[bot])
+- Split Dependabot container updates [#3477](https://github.com/buildkite/agent/pull/3477) (@DrJosh9000)
+
 ## [v3.106.0](https://github.com/buildkite/agent/tree/v3.106.0) (2025-09-15)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.105.0...v3.106.0)
 
