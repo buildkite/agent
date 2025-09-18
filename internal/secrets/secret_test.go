@@ -37,6 +37,7 @@ func TestFetchSecrets_Success(t *testing.T) {
 			http.Error(rw, "Not found", http.StatusNotFound)
 		}
 	}))
+	t.Cleanup(server.Close)
 
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
@@ -65,7 +66,13 @@ func TestFetchSecrets_Success(t *testing.T) {
 func TestFetchSecrets_EmptyKeys(t *testing.T) {
 	t.Parallel()
 
-	apiClient := api.NewClient(logger.Discard, api.Config{Token: "llamas"})
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		t.Errorf("expected no requests to be made, but got %s %s", req.Method, req.URL.Path)
+		http.Error(rw, "Not found", http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+
+	apiClient := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
 	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", []string{}, 10)
 
 	if len(errs) > 0 {
@@ -80,7 +87,13 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 func TestFetchSecrets_NilKeys(t *testing.T) {
 	t.Parallel()
 
-	apiClient := api.NewClient(logger.Discard, api.Config{Token: "llamas"})
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		t.Errorf("expected no requests to be made, but got %s %s", req.Method, req.URL.Path)
+		http.Error(rw, "Not found", http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+
+	apiClient := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
 
 	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", nil, 10)
 
@@ -112,6 +125,7 @@ func TestFetchSecrets_SomeSecretsFail(t *testing.T) {
 			http.Error(rw, "Not found", http.StatusNotFound)
 		}
 	}))
+	t.Cleanup(server.Close)
 
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
@@ -155,6 +169,7 @@ func TestFetchSecrets_AllSecretsFail(t *testing.T) {
 		rw.WriteHeader(http.StatusNotFound)
 		_, _ = fmt.Fprintf(rw, `{"message": "secret not found"}`)
 	}))
+	t.Cleanup(server.Close)
 
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
@@ -188,6 +203,7 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 		// This won't be reached
 		w.WriteHeader(http.StatusOK)
 	}))
+	t.Cleanup(server.Close)
 
 	// Start the server manually so we can control the listener
 	server.Start()
