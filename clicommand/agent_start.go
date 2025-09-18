@@ -154,14 +154,15 @@ type AgentStartConfig struct {
 	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
 
-	NoSSHKeyscan        bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval       bool     `cli:"no-command-eval"`
-	NoLocalHooks        bool     `cli:"no-local-hooks"`
-	NoPlugins           bool     `cli:"no-plugins"`
-	NoPluginValidation  bool     `cli:"no-plugin-validation"`
-	NoFeatureReporting  bool     `cli:"no-feature-reporting"`
-	AllowedRepositories []string `cli:"allowed-repositories" normalize:"list"`
-	AllowedPlugins      []string `cli:"allowed-plugins" normalize:"list"`
+	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval           bool     `cli:"no-command-eval"`
+	NoLocalHooks            bool     `cli:"no-local-hooks"`
+	NoPlugins               bool     `cli:"no-plugins"`
+	NoPluginValidation      bool     `cli:"no-plugin-validation"`
+	PluginsAlwaysCloneFresh bool     `cli:"plugins-always-clone-fresh"`
+	NoFeatureReporting      bool     `cli:"no-feature-reporting"`
+	AllowedRepositories     []string `cli:"allowed-repositories" normalize:"list"`
+	AllowedPlugins          []string `cli:"allowed-plugins" normalize:"list"`
 
 	EnableEnvironmentVariableAllowList bool     `cli:"enable-environment-variable-allowlist"`
 	AllowedEnvironmentVariables        []string `cli:"allowed-environment-variables" normalize:"list"`
@@ -604,6 +605,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_PLUGIN_VALIDATION",
 		},
 		cli.BoolFlag{
+			Name:   "plugins-always-clone-fresh",
+			Usage:  "Always make a new clone of plugin source, even if already present",
+			EnvVar: "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH",
+		},
+		cli.BoolFlag{
 			Name:   "no-local-hooks",
 			Usage:  "Don't allow local hooks to be run from checked out repositories",
 			EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
@@ -1024,6 +1030,7 @@ var AgentStartCommand = cli.Command{
 			CommandEval:                  !cfg.NoCommandEval,
 			PluginsEnabled:               !cfg.NoPlugins,
 			PluginValidation:             !cfg.NoPluginValidation,
+			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
 			LocalHooksEnabled:            !cfg.NoLocalHooks,
 			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
