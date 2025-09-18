@@ -15,16 +15,14 @@ if [[ ! -f "./go.mod" ]]; then
     exit 1
 fi
 
+mkdir -p "${HOME}/go/bin"
+
 # Ensure modules are downloaded
 go mod download
 
-# Get go-licenses tool
-if ! command -v go-licenses >/dev/null; then
-	go install github.com/google/go-licenses@latest
-	GO_LICENSES="$(go env GOPATH)/bin/go-licenses"
-else
-	GO_LICENSES="$(command -v go-licenses)"
-fi
+# Get go-licenses tool. It must be built for the host arch and OS, but run
+# with the target arch and OS to analyse the correct source.
+cp "$(GOOS= GOARCH= go tool -n go-licenses)" "${HOME}/go/bin"
 
 # Create temporary directory and file
 # TEMPFILE is not in TEMPDIR, because this causes infinite recursion later on.
@@ -32,7 +30,7 @@ export TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)"
 export TEMPFILE="$(mktemp /tmp/acknowledgements.XXXXXX)"
 trap "rm -fr ${TEMPDIR} ${TEMPFILE}" EXIT
 
-"${GO_LICENSES}" save . --save_path="${TEMPDIR}" --force
+"${HOME}/go/bin/go-licenses" save . --save_path="${TEMPDIR}" --force
 
 # Build acknowledgements file
 cat > "${TEMPFILE}" <<EOF
