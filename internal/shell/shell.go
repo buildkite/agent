@@ -503,11 +503,25 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 	if span == nil {
 		return
 	}
-	if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
+
+	envMap := env.Dump()
+
+	// Inject the existing Buildkite trace context
+	if err := tracetools.EncodeTraceContext(span, envMap, s.traceContextCodec); err != nil {
 		if s.debug {
 			s.Warningf("Failed to encode trace context: %v", err)
 		}
 		return
+	}
+
+	// Inject TRACEPARENT for OpenTelemetry compatibility
+	tracetools.InjectTraceparent(span, envMap)
+
+	// Apply any new environment variables that were added
+	for k, v := range envMap {
+		if !env.Exists(k) {
+			env.Set(k, v)
+		}
 	}
 }
 
