@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.107.2](https://github.com/buildkite/agent/tree/v3.107.2) (2025-09-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.107.1...v3.107.2)
+
+### Fixed
+- Remove debugging log line [#3496](https://github.com/buildkite/agent/pull/3496) (@DrJosh9000)
+
 ## [v3.107.1](https://github.com/buildkite/agent/tree/v3.107.1) (2025-09-24)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.107.0...v3.107.1)
 
