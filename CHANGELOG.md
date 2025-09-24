@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.107.1](https://github.com/buildkite/agent/tree/v3.107.1) (2025-09-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.107.0...v3.107.1)
+
+### Added
+- Add plugins-always-clone-fresh to config, CLI start [#3429](https://github.com/buildkite/agent/pull/3429) (@petetomasik)
+
+### Fixed
+- Set e.checkoutRoot even if checkout phase is disabled [#3493](https://github.com/buildkite/agent/pull/3493) (@DrJosh9000)
+
+### Internal
+- Simplify secret tests [#3484](https://github.com/buildkite/agent/pull/3484) (@moskyb)
+
+### Dependency updates
+- build(deps): bump rexml from 3.3.9 to 3.4.2 [#3494](https://github.com/buildkite/agent/pull/3494) (@dependabot[bot])
+- build(deps): bump cloud.google.com/go/compute/metadata from 0.8.0 to 0.8.4 [#3489](https://github.com/buildkite/agent/pull/3489) (@dependabot[bot])
+- build(deps): bump the cloud-providers group across 1 directory with 3 updates [#3490](https://github.com/buildkite/agent/pull/3490) (@dependabot[bot])
+- build(deps): bump the container-images group across 4 directories with 1 update [#3491](https://github.com/buildkite/agent/pull/3491) (@dependabot[bot])
+- build(deps): bump the container-images group across 1 directory with 2 updates [#3492](https://github.com/buildkite/agent/pull/3492) (@dependabot[bot])
+
+
 ## [v3.107.0](https://github.com/buildkite/agent/tree/v3.107.0) (2025-09-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.106.0...v3.107.0)
 
