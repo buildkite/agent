@@ -238,7 +238,6 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		if exists {
 			_ = e.shell.Chdir(checkoutDir)
 		}
-		e.shell.Printf("e.shell.Getwd() = %q", e.shell.Getwd())
 		root, err := os.OpenRoot(e.shell.Getwd())
 		if err != nil {
 			phaseErr = cmp.Or(phaseErr, err)
