@@ -59,7 +59,7 @@ GEM
       stud
     public_suffix (5.0.1)
     rchardet (1.8.0)
-    rexml (3.3.9)
+    rexml (3.4.2)
     stud (0.0.23)
     thor (1.4.0)
 
