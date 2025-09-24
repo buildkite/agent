@@ -5,6 +5,7 @@
 package job
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -229,9 +230,22 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	if phaseErr == nil && e.includePhase("checkout") {
 		phaseErr = e.CheckoutPhase(ctx)
 	} else {
+		// For various reasons we should still pretend there was a checkout
+		// phase. It might have happened in a different container, or may have
+		// been disabled, but there can be important files at the checkout path,
+		// e.g. local hooks, which require a checkout root.
 		checkoutDir, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 		if exists {
 			_ = e.shell.Chdir(checkoutDir)
+		}
+		e.shell.Printf("e.shell.Getwd() = %q", e.shell.Getwd())
+		root, err := os.OpenRoot(e.shell.Getwd())
+		if err != nil {
+			phaseErr = cmp.Or(phaseErr, err)
+		}
+		if root != nil {
+			e.checkoutRoot = root
+			runtime.AddCleanup(e, func(r *os.Root) { r.Close() }, root)
 		}
 	}
 
