@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
@@ -395,4 +397,53 @@ var gitCheckRefFormatDenyRegexp = regexp.MustCompile(strings.Join([]string{
 // https://git-scm.com/docs/git-check-ref-format
 func gitCheckRefFormat(ref string) bool {
 	return !gitCheckRefFormatDenyRegexp.MatchString(ref)
+}
+
+func gitSparseCheckoutInit(ctx context.Context, sh *shell.Shell, cone bool) error {
+	args := []string{"sparse-checkout", "init"}
+	if cone {
+		args = append(args, "--cone")
+	}
+
+	if err := sh.Command("git", args...).Run(ctx); err != nil {
+		return &gitError{error: err, Type: gitErrorCheckout}
+	}
+
+	return nil
+}
+
+func gitSparseCheckoutSet(ctx context.Context, sh *shell.Shell, paths []string) error {
+	if len(paths) == 0 {
+		return fmt.Errorf("no paths provided for sparse checkout")
+	}
+
+	args := []string{"sparse-checkout", "set"}
+	args = append(args, paths...)
+
+	if err := sh.Command("git", args...).Run(ctx); err != nil {
+		return &gitError{error: err, Type: gitErrorCheckout}
+	}
+
+	return nil
+}
+
+func gitSparseCheckoutDisable(ctx context.Context, sh *shell.Shell) error {
+	if err := sh.Command("git", "sparse-checkout", "disable").Run(ctx); err != nil {
+		return &gitError{error: err, Type: gitErrorCheckout}
+	}
+
+	return nil
+}
+
+func isSparseCheckoutEnabled(sh *shell.Shell) bool {
+	gitDir := filepath.Join(sh.Getwd(), ".git")
+	sparseCheckoutFile := filepath.Join(gitDir, "info", "sparse-checkout")
+	// Check if sparse checkout file exists and is not empty
+	if osutil.FileExists(sparseCheckoutFile) {
+		stat, err := os.Stat(sparseCheckoutFile)
+		if err == nil && stat.Size() > 0 {
+			return true
+		}
+	}
+	return false
 }
