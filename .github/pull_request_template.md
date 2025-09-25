@@ -20,8 +20,12 @@ Can skip if changes are simple or clear from the commit messages.
 -->
 
 ### Testing
-- [ ] Tests have run locally (with `go test ./...`). Buildkite employees may check this if the pipeline has run automatically.
+- [ ] Tests have run locally (with `go test ./...`). Buildkite employees may check this if the pipeline has run automatically
 - [ ] Code is formatted (with `go fmt ./...`)
+
+### Docs
+- [ ] The README has been updated if necessary
+- [ ] If necessary (ie if any new subcommands have been added), a PR has been made against the [docs repo](https://github.com/buildkite/docs) to update the public documentation. See [updating-docs.md](/docs/updating-docs.md) for more information.
 
 <!--
 Note: if the tests fail to run locally, please let us know!
