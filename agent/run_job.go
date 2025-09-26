@@ -25,6 +25,12 @@ import (
 )
 
 const (
+	// defaultKubernetesLogCollectionGracePeriod defines how long to wait for Kubernetes
+	// processes to complete before stopping log collection during graceful termination.
+	// This should be less than agent-stack-k8s' defaultTermGracePeriodSeconds (60s) to
+	// allow time for final log upload before the pod is forcefully terminated.
+	defaultKubernetesLogCollectionGracePeriod = 50 * time.Second
+
 	// Think very carefully about adding new signal reasons. If you must add a new signal reason, it must also be added to
 	// the Job::Event::SignalReason enum in the rails app.
 	//
@@ -374,6 +380,11 @@ One or more containers connected to the agent, but then stopped communicating wi
 func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit, ignoreAgentInDispatches *bool) {
 	finishedAt := time.Now()
 
+	// In Kubernetes mode, wait for command containers to finish before stopping log collection
+	if r.conf.KubernetesExec {
+		r.waitForKubernetesProcessesToComplete(ctx)
+	}
+
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
 	// start the process will still be buffered. Also, there may still be logs in the buffer that
 	// were left behind because the uploader goroutine exited before it could flush them.
@@ -426,6 +437,24 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	}
 
 	r.agentLogger.Info("Finished job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
+}
+
+// waitForKubernetesProcessesToComplete waits for Kubernetes command containers to finish
+// before stopping log collection, ensuring post-command hook logs are captured.
+func (r *JobRunner) waitForKubernetesProcessesToComplete(ctx context.Context) {
+	r.agentLogger.Debug("[JobRunner] Waiting for Kubernetes processes to complete before stopping log collection")
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultKubernetesLogCollectionGracePeriod)
+	defer cancel()
+
+	select {
+	case <-r.process.Done():
+		r.agentLogger.Debug("[JobRunner] Kubernetes processes completed, stopping log collection")
+	case <-timeoutCtx.Done():
+		r.agentLogger.Info("[JobRunner] Timeout waiting for Kubernetes processes, stopping log collection")
+	}
+
+	time.Sleep(1 * time.Second)
 }
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
