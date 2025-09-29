@@ -138,7 +138,7 @@ var PipelineUploadCommand = cli.Command{
 		cli.BoolTFlag{
 			Name:   "apply-if-changed",
 			Usage:  "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the step is skipped. Minimum Buildkite Agent version: v3.99 (with --apply-if-changed flag), v3.103.0 (enabled by default)",
-			EnvVar: "BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED",
+			EnvVar: "BUILDKITE_AGENT_APPLY_IF_CHANGED,BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED",
 		},
 		cli.StringFlag{
 			Name:   "git-diff-base",
