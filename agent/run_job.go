@@ -25,10 +25,11 @@ import (
 )
 
 const (
-	// defaultKubernetesLogCollectionGracePeriod defines how long to wait for Kubernetes
-	// processes to complete before stopping log collection during graceful termination.
-	// This should be less than agent-stack-k8s' defaultTermGracePeriodSeconds (60s) to
-	// allow time for final log upload before the pod is forcefully terminated.
+	// defaultKubernetesLogCollectionGracePeriod defines the default duration to wait for
+	// Kubernetes processes to complete before stopping log collection during graceful termination.
+	// This default is used when BUILDKITE_K8S_LOG_COLLECTION_GRACE_PERIOD_SECONDS is not set.
+	// The value should be less than the pod's terminationGracePeriodSeconds to allow time
+	// for final log upload before the pod is forcefully terminated.
 	defaultKubernetesLogCollectionGracePeriod = 50 * time.Second
 
 	// Think very carefully about adding new signal reasons. If you must add a new signal reason, it must also be added to
@@ -444,16 +445,47 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 func (r *JobRunner) waitForKubernetesProcessesToComplete(ctx context.Context) {
 	r.agentLogger.Debug("[JobRunner] Waiting for Kubernetes processes to complete before stopping log collection")
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, defaultKubernetesLogCollectionGracePeriod)
-	defer cancel()
+	// Guard against nil process
+	if r.process == nil {
+		r.agentLogger.Debug("[JobRunner] No process to wait for")
+		return
+	}
 
+	// Wait for the process to actually start before waiting for it to complete
+	select {
+	case <-r.process.Started():
+		// Process has started, we can now safely wait for completion
+	case <-ctx.Done():
+		r.agentLogger.Debug("[JobRunner] Context cancelled before process started, skipping wait")
+		return
+	}
+
+	// Get grace period from environment variable, fallback to default
+	gracePeriod := defaultKubernetesLogCollectionGracePeriod
+	if envVal := os.Getenv("BUILDKITE_K8S_LOG_COLLECTION_GRACE_PERIOD_SECONDS"); envVal != "" {
+		if seconds, err := strconv.Atoi(envVal); err == nil && seconds > 0 {
+			gracePeriod = time.Duration(seconds) * time.Second
+			r.agentLogger.Debug("[JobRunner] Using log collection grace period from environment: %v", gracePeriod)
+		} else {
+			r.agentLogger.Warn("[JobRunner] Invalid BUILDKITE_K8S_LOG_COLLECTION_GRACE_PERIOD_SECONDS value %q, using default %v", envVal, gracePeriod)
+		}
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, gracePeriod)
+	defer cancel()
 	select {
 	case <-r.process.Done():
 		r.agentLogger.Debug("[JobRunner] Kubernetes processes completed, stopping log collection")
 	case <-timeoutCtx.Done():
-		r.agentLogger.Info("[JobRunner] Timeout waiting for Kubernetes processes, stopping log collection")
+		if ctx.Err() != nil {
+			r.agentLogger.Info("[JobRunner] Parent context cancelled while waiting for Kubernetes processes")
+		} else {
+			r.agentLogger.Info("[JobRunner] Timeout waiting for Kubernetes processes, stopping log collection")
+		}
 	}
 
+	// Brief delay to allow any final log output to be flushed to the log streamer
+	// before stopping log collection
 	time.Sleep(1 * time.Second)
 }
 
