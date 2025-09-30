@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM public.ecr.aws/buildkite/agent-base:ubuntu-focal@sha256:27bc628f10033c24c2d4011079cbbbc8760385e43e26f94c7bf53de1f1cd65a3
+FROM public.ecr.aws/buildkite/agent-base:ubuntu-focal@sha256:f6df7ee254687b07c9ff6698837fdc56c86bf7436868b26cdd81c6f88c87877b
 ARG TARGETOS
 ARG TARGETARCH
 
