@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
@@ -113,6 +114,15 @@ var (
 			"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
 			"used to identify this container within the pod",
 		EnvVar: "BUILDKITE_CONTAINER_ID",
+	}
+
+	KubernetesLogCollectionGracePeriodFlag = cli.DurationFlag{
+		Name: "kubernetes-log-collection-grace-period",
+		Usage: "How long to wait for Kubernetes processes to complete before stopping log " +
+			"collection during graceful termination. This should be less than the pod's " +
+			"terminationGracePeriodSeconds to allow time for final log upload",
+		EnvVar: "BUILDKITE_KUBERNETES_LOG_COLLECTION_GRACE_PERIOD",
+		Value:  50 * time.Second,
 	}
 
 	NoMultipartArtifactUploadFlag = cli.BoolFlag{

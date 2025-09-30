@@ -25,13 +25,6 @@ import (
 )
 
 const (
-	// defaultKubernetesLogCollectionGracePeriod defines the default duration to wait for
-	// Kubernetes processes to complete before stopping log collection during graceful termination.
-	// This default is used when BUILDKITE_K8S_LOG_COLLECTION_GRACE_PERIOD_SECONDS is not set.
-	// The value should be less than the pod's terminationGracePeriodSeconds to allow time
-	// for final log upload before the pod is forcefully terminated.
-	defaultKubernetesLogCollectionGracePeriod = 50 * time.Second
-
 	// Think very carefully about adding new signal reasons. If you must add a new signal reason, it must also be added to
 	// the Job::Event::SignalReason enum in the rails app.
 	//
@@ -460,33 +453,28 @@ func (r *JobRunner) waitForKubernetesProcessesToComplete(ctx context.Context) {
 		return
 	}
 
-	// Get grace period from environment variable, fallback to default
-	gracePeriod := defaultKubernetesLogCollectionGracePeriod
-	if envVal := os.Getenv("BUILDKITE_K8S_LOG_COLLECTION_GRACE_PERIOD_SECONDS"); envVal != "" {
-		if seconds, err := strconv.Atoi(envVal); err == nil && seconds > 0 {
-			gracePeriod = time.Duration(seconds) * time.Second
-			r.agentLogger.Debug("[JobRunner] Using log collection grace period from environment: %v", gracePeriod)
-		} else {
-			r.agentLogger.Warn("[JobRunner] Invalid BUILDKITE_K8S_LOG_COLLECTION_GRACE_PERIOD_SECONDS value %q, using default %v", envVal, gracePeriod)
-		}
+	gracePeriod := r.conf.AgentConfiguration.KubernetesLogCollectionGracePeriod
+
+	waitCtx := ctx
+	if gracePeriod > 0 {
+		r.agentLogger.Debug("[JobRunner] Using log collection grace period: %v", gracePeriod)
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, gracePeriod)
+		defer cancel()
+	} else {
+		r.agentLogger.Debug("[JobRunner] No log collection grace period configured, waiting until process completes")
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, gracePeriod)
-	defer cancel()
 	select {
 	case <-r.process.Done():
 		r.agentLogger.Debug("[JobRunner] Kubernetes processes completed, stopping log collection")
-	case <-timeoutCtx.Done():
+	case <-waitCtx.Done():
 		if ctx.Err() != nil {
 			r.agentLogger.Info("[JobRunner] Parent context cancelled while waiting for Kubernetes processes")
 		} else {
 			r.agentLogger.Info("[JobRunner] Timeout waiting for Kubernetes processes, stopping log collection")
 		}
 	}
-
-	// Brief delay to allow any final log output to be flushed to the log streamer
-	// before stopping log collection
-	time.Sleep(1 * time.Second)
 }
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
