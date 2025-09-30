@@ -412,14 +412,6 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 
 	args := []string{"clone", "-v"}
 
-	// If there's a subdirectory, prefer a sparse clone to reduce data transfer and avoid
-	// an initial checkout that would then be reconfigured. We'll checkout after configuring
-	// sparse-checkout below.
-	if subdir != "" {
-		e.shell.Commentf("Using sparse checkout for subdirectory %q", subdir)
-		args = append(args, "--filter=blob:none", "--sparse", "--no-checkout")
-	}
-
 	if e.GitSubmodules {
 		// "--recursive" was added in Git 1.6.5, and is an alias to
 		// "--recurse-submodules" from Git 2.13.
@@ -439,36 +431,10 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		return nil, err
 	}
 
-	// If there's a subdirectory, configure sparse checkout regardless of version
-	if subdir != "" {
-		e.shell.Commentf("Configuring sparse checkout for subdirectory %q", subdir)
-		// Enable sparse checkout via modern porcelain
-		if err = e.shell.Command("git", "sparse-checkout", "set", subdir).Run(ctx); err != nil {
-			// Fallback for older Git versions
-			if err2 := e.shell.Command("git", "config", "core.sparseCheckout", "true").Run(ctx); err2 != nil {
-				return nil, fmt.Errorf("failed to enable sparse checkout: %w", err)
-			}
-			sparseCheckoutFile := filepath.Join(".git", "info", "sparse-checkout")
-			sparseCheckoutContent := fmt.Sprintf("/%s/**\n", subdir)
-			if err2 := os.WriteFile(sparseCheckoutFile, []byte(sparseCheckoutContent), 0o644); err2 != nil {
-				return nil, fmt.Errorf("failed to write sparse checkout file: %w", err2)
-			}
-			if err2 := e.shell.Command("git", "read-tree", "-mu", "HEAD").Run(ctx); err2 != nil {
-				return nil, fmt.Errorf("failed to update index with sparse checkout: %w", err2)
-			}
-		}
-	}
-
-	// Perform checkout after configuring sparse-checkout.
-	// If a version was specified, checkout that ref; otherwise checkout the default HEAD.
+	// Switch to the version if we need to
 	if p.Version != "" {
 		e.shell.Commentf("Checking out `%s`", p.Version)
 		if err = e.shell.Command("git", "checkout", "-f", p.Version).Run(ctx); err != nil {
-			return nil, err
-		}
-	} else if subdir != "" {
-		// If we used --no-checkout due to sparse subdir, we need to materialize the working tree now.
-		if err = e.shell.Command("git", "checkout", "-f").Run(ctx); err != nil {
 			return nil, err
 		}
 	}
