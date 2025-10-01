@@ -182,7 +182,7 @@ type AgentStartConfig struct {
 	// Other shared flags
 	StrictSingleHooks                  bool   `cli:"strict-single-hooks"`
 	KubernetesExec                     bool   `cli:"kubernetes-exec"`
-	KubernetesLogCollectionGracePeriod string `cli:"kubernetes-log-collection-grace-period"`
+	KubernetesLogCollectionGracePeriod time.Duration `cli:"kubernetes-log-collection-grace-period"`
 	TraceContextEncoding               string `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload          bool   `cli:"no-multipart-artifact-upload"`
 
