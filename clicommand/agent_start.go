@@ -921,14 +921,7 @@ var AgentStartCommand = cli.Command{
 			return err
 		}
 
-		var kubernetesLogCollectionGracePeriod time.Duration
-		if t := cfg.KubernetesLogCollectionGracePeriod; t != "" {
-			var err error
-			kubernetesLogCollectionGracePeriod, err = time.ParseDuration(t)
-			if err != nil {
-				return fmt.Errorf("failed to parse kubernetes-log-collection-grace-period: %w", err)
-			}
-		}
+		kubernetesLogCollectionGracePeriod := cfg.KubernetesLogCollectionGracePeriod
 
 		if _, err := tracetools.ParseEncoding(cfg.TraceContextEncoding); err != nil {
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
