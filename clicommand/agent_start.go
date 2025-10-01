@@ -180,11 +180,11 @@ type AgentStartConfig struct {
 	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
 	// Other shared flags
-	StrictSingleHooks                  bool   `cli:"strict-single-hooks"`
-	KubernetesExec                     bool   `cli:"kubernetes-exec"`
+	StrictSingleHooks                  bool          `cli:"strict-single-hooks"`
+	KubernetesExec                     bool          `cli:"kubernetes-exec"`
 	KubernetesLogCollectionGracePeriod time.Duration `cli:"kubernetes-log-collection-grace-period"`
-	TraceContextEncoding               string `cli:"trace-context-encoding"`
-	NoMultipartArtifactUpload          bool   `cli:"no-multipart-artifact-upload"`
+	TraceContextEncoding               string        `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload          bool          `cli:"no-multipart-artifact-upload"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
