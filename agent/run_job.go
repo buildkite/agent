@@ -456,7 +456,7 @@ func (r *JobRunner) waitForKubernetesProcessesToComplete(ctx context.Context) {
 	gracePeriod := r.conf.AgentConfiguration.KubernetesLogCollectionGracePeriod
 
 	waitCtx := ctx
-	if gracePeriod > 0 {
+	if gracePeriod >= 0 {
 		r.agentLogger.Debug("[JobRunner] Using log collection grace period: %v", gracePeriod)
 		var cancel context.CancelFunc
 		waitCtx, cancel = context.WithTimeout(ctx, gracePeriod)
