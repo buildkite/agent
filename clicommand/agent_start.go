@@ -180,10 +180,11 @@ type AgentStartConfig struct {
 	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
 	// Other shared flags
-	StrictSingleHooks         bool   `cli:"strict-single-hooks"`
-	KubernetesExec            bool   `cli:"kubernetes-exec"`
-	TraceContextEncoding      string `cli:"trace-context-encoding"`
-	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
+	StrictSingleHooks                  bool          `cli:"strict-single-hooks"`
+	KubernetesExec                     bool          `cli:"kubernetes-exec"`
+	KubernetesLogCollectionGracePeriod time.Duration `cli:"kubernetes-log-collection-grace-period"`
+	TraceContextEncoding               string        `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload          bool          `cli:"no-multipart-artifact-upload"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -753,6 +754,7 @@ var AgentStartCommand = cli.Command{
 		RedactedVars,
 		StrictSingleHooksFlag,
 		KubernetesExecFlag,
+		KubernetesLogCollectionGracePeriodFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
 
@@ -919,6 +921,8 @@ var AgentStartCommand = cli.Command{
 			return err
 		}
 
+		kubernetesLogCollectionGracePeriod := cfg.KubernetesLogCollectionGracePeriod
+
 		if _, err := tracetools.ParseEncoding(cfg.TraceContextEncoding); err != nil {
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
@@ -1011,50 +1015,51 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:              cfg.BootstrapScript,
-			BuildPath:                    cfg.BuildPath,
-			SocketsPath:                  cfg.SocketsPath,
-			GitMirrorsPath:               cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
-			HooksPath:                    cfg.HooksPath,
-			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
-			PluginsPath:                  cfg.PluginsPath,
-			GitCheckoutFlags:             cfg.GitCheckoutFlags,
-			GitCloneFlags:                cfg.GitCloneFlags,
-			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
-			GitCleanFlags:                cfg.GitCleanFlags,
-			GitFetchFlags:                cfg.GitFetchFlags,
-			GitSubmodules:                !cfg.NoGitSubmodules,
-			SSHKeyscan:                   !cfg.NoSSHKeyscan,
-			CommandEval:                  !cfg.NoCommandEval,
-			PluginsEnabled:               !cfg.NoPlugins,
-			PluginValidation:             !cfg.NoPluginValidation,
-			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
-			LocalHooksEnabled:            !cfg.NoLocalHooks,
-			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
-			StrictSingleHooks:            cfg.StrictSingleHooks,
-			RunInPty:                     !cfg.NoPTY,
-			ANSITimestamps:               !cfg.NoANSITimestamps,
-			TimestampLines:               cfg.TimestampLines,
-			DisconnectAfterJob:           cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:   cfg.DisconnectAfterIdleTimeout,
-			DisconnectAfterUptime:        cfg.DisconnectAfterUptime,
-			CancelGracePeriod:            cfg.CancelGracePeriod,
-			SignalGracePeriod:            signalGracePeriod,
-			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
-			JobLogPath:                   cfg.JobLogPath,
-			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
-			LogFormat:                    cfg.LogFormat,
-			Shell:                        cfg.Shell,
-			RedactedVars:                 cfg.RedactedVars,
-			AcquireJob:                   cfg.AcquireJob,
-			TracingBackend:               cfg.TracingBackend,
-			TracingServiceName:           cfg.TracingServiceName,
-			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
-			TraceContextEncoding:         cfg.TraceContextEncoding,
-			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
-			KubernetesExec:               cfg.KubernetesExec,
+			BootstrapScript:                    cfg.BootstrapScript,
+			BuildPath:                          cfg.BuildPath,
+			SocketsPath:                        cfg.SocketsPath,
+			GitMirrorsPath:                     cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:              cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:               cfg.GitMirrorsSkipUpdate,
+			HooksPath:                          cfg.HooksPath,
+			AdditionalHooksPaths:               cfg.AdditionalHooksPaths,
+			PluginsPath:                        cfg.PluginsPath,
+			GitCheckoutFlags:                   cfg.GitCheckoutFlags,
+			GitCloneFlags:                      cfg.GitCloneFlags,
+			GitCloneMirrorFlags:                cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                      cfg.GitCleanFlags,
+			GitFetchFlags:                      cfg.GitFetchFlags,
+			GitSubmodules:                      !cfg.NoGitSubmodules,
+			SSHKeyscan:                         !cfg.NoSSHKeyscan,
+			CommandEval:                        !cfg.NoCommandEval,
+			PluginsEnabled:                     !cfg.NoPlugins,
+			PluginValidation:                   !cfg.NoPluginValidation,
+			PluginsAlwaysCloneFresh:            cfg.PluginsAlwaysCloneFresh,
+			LocalHooksEnabled:                  !cfg.NoLocalHooks,
+			AllowedEnvironmentVariables:        allowedEnvironmentVariables,
+			StrictSingleHooks:                  cfg.StrictSingleHooks,
+			RunInPty:                           !cfg.NoPTY,
+			ANSITimestamps:                     !cfg.NoANSITimestamps,
+			TimestampLines:                     cfg.TimestampLines,
+			DisconnectAfterJob:                 cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:         cfg.DisconnectAfterIdleTimeout,
+			DisconnectAfterUptime:              cfg.DisconnectAfterUptime,
+			CancelGracePeriod:                  cfg.CancelGracePeriod,
+			SignalGracePeriod:                  signalGracePeriod,
+			EnableJobLogTmpfile:                cfg.EnableJobLogTmpfile,
+			JobLogPath:                         cfg.JobLogPath,
+			WriteJobLogsToStdout:               cfg.WriteJobLogsToStdout,
+			LogFormat:                          cfg.LogFormat,
+			Shell:                              cfg.Shell,
+			RedactedVars:                       cfg.RedactedVars,
+			AcquireJob:                         cfg.AcquireJob,
+			TracingBackend:                     cfg.TracingBackend,
+			TracingServiceName:                 cfg.TracingServiceName,
+			TracingPropagateTraceparent:        cfg.TracingPropagateTraceparent,
+			TraceContextEncoding:               cfg.TraceContextEncoding,
+			AllowMultipartArtifactUpload:       !cfg.NoMultipartArtifactUpload,
+			KubernetesExec:                     cfg.KubernetesExec,
+			KubernetesLogCollectionGracePeriod: kubernetesLogCollectionGracePeriod,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,

@@ -374,6 +374,11 @@ One or more containers connected to the agent, but then stopped communicating wi
 func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit, ignoreAgentInDispatches *bool) {
 	finishedAt := time.Now()
 
+	// In Kubernetes mode, wait for command containers to finish before stopping log collection
+	if r.conf.KubernetesExec {
+		r.waitForKubernetesProcessesToComplete(ctx)
+	}
+
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
 	// start the process will still be buffered. Also, there may still be logs in the buffer that
 	// were left behind because the uploader goroutine exited before it could flush them.
@@ -426,6 +431,50 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	}
 
 	r.agentLogger.Info("Finished job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
+}
+
+// waitForKubernetesProcessesToComplete waits for Kubernetes command containers to finish
+// before stopping log collection, ensuring post-command hook logs are captured.
+func (r *JobRunner) waitForKubernetesProcessesToComplete(ctx context.Context) {
+	r.agentLogger.Debug("[JobRunner] Waiting for Kubernetes processes to complete before stopping log collection")
+
+	// Guard against nil process
+	if r.process == nil {
+		r.agentLogger.Debug("[JobRunner] No process to wait for")
+		return
+	}
+
+	// Wait for the process to actually start before waiting for it to complete
+	select {
+	case <-r.process.Started():
+		// Process has started, we can now safely wait for completion
+	case <-ctx.Done():
+		r.agentLogger.Debug("[JobRunner] Context cancelled before process started, skipping wait")
+		return
+	}
+
+	gracePeriod := r.conf.AgentConfiguration.KubernetesLogCollectionGracePeriod
+
+	waitCtx := ctx
+	if gracePeriod >= 0 {
+		r.agentLogger.Debug("[JobRunner] Using log collection grace period: %v", gracePeriod)
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, gracePeriod)
+		defer cancel()
+	} else {
+		r.agentLogger.Debug("[JobRunner] No log collection grace period configured, waiting until process completes")
+	}
+
+	select {
+	case <-r.process.Done():
+		r.agentLogger.Debug("[JobRunner] Kubernetes processes completed, stopping log collection")
+	case <-waitCtx.Done():
+		if ctx.Err() != nil {
+			r.agentLogger.Info("[JobRunner] Parent context cancelled while waiting for Kubernetes processes")
+		} else {
+			r.agentLogger.Info("[JobRunner] Timeout waiting for Kubernetes processes, stopping log collection")
+		}
+	}
 }
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
