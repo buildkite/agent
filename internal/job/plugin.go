@@ -315,9 +315,6 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository subdirectory: %w", err)
 	}
-	if e.Debug {
-		e.shell.Commentf("Plugin subdirectory: %q", subdir)
-	}
 
 	// Create a path to the plugin
 	pluginDirectory := filepath.Join(pluginParentDir, id)
@@ -332,9 +329,9 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	if subdir != "" {
 		checkout.PluginDir = subdir
 		checkout.HooksDir = filepath.Join(subdir, "hooks")
-		if e.Debug {
-			e.shell.Commentf("Subdirectory plugin paths - PluginDir: %q, HooksDir: %q", checkout.PluginDir, checkout.HooksDir)
-		}
+	}
+	if e.Debug {
+		e.shell.Commentf("Plugin checkout paths - PluginDir: %q, HooksDir: %q", checkout.PluginDir, checkout.HooksDir)
 	}
 
 	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
@@ -379,9 +376,6 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 
 		// Ensure hooks is a directory that exists within the checkout.
 		if fi, err := pluginRoot.Stat(checkout.HooksDir); err != nil || !fi.IsDir() {
-			if e.Debug {
-				e.shell.Commentf("Plugin paths - PluginDir: %q, HooksDir: %q", checkout.PluginDir, checkout.HooksDir)
-			}
 			return nil, fmt.Errorf("%q was not a directory within the %q plugin: %w", checkout.HooksDir, checkout.Plugin.Name(), err)
 		}
 		return checkout, nil
