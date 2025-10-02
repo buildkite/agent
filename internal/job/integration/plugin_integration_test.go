@@ -591,12 +591,13 @@ func (tp *testPlugin) MarshalJSON() ([]byte, error) {
 // NewExecutorTester().  We need to do that because the tester relies on BUILDKITE_PLUGINS_PATH,
 // not on the .PluginsDir field as one might expect.
 func replacePluginPathInEnv(originalEnv []string, pluginsDir string) (newEnv []string) {
-	newEnv = []string{}
-	for _, val := range originalEnv {
-		if !strings.HasPrefix(val, "BUILDKITE_PLUGINS_PATH=") {
-			newEnv = append(newEnv, val)
+	newEnv = make([]string, 0, len(originalEnv))
+	for _, e := range originalEnv {
+		if strings.HasPrefix(e, "BUILDKITE_PLUGINS_PATH=") {
+			newEnv = append(newEnv, "BUILDKITE_PLUGINS_PATH="+pluginsDir)
+		} else {
+			newEnv = append(newEnv, e)
 		}
 	}
-	newEnv = append(newEnv, "BUILDKITE_PLUGINS_PATH="+pluginsDir)
 	return newEnv
 }

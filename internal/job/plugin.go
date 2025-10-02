@@ -263,7 +263,7 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 			Name:       name,
 			Path:       hookPath,
 			Env:        envMap,
-			PluginName: p.Plugin.Name(),
+			PluginName: p.Plugin.DisplayName(),
 			SpanAttributes: map[string]string{
 				"plugin.name":        p.Plugin.Name(),
 				"plugin.version":     p.Version,
@@ -310,6 +310,12 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		return nil, err
 	}
 
+	// Get the subdirectory path if specified in the plugin location
+	subdir, err := p.RepositorySubdirectory()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get repository subdirectory: %w", err)
+	}
+
 	// Create a path to the plugin
 	pluginDirectory := filepath.Join(pluginParentDir, id)
 	pluginGitDirectory := filepath.Join(pluginDirectory, ".git")
@@ -317,6 +323,15 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		Plugin:    p,
 		PluginDir: ".",
 		HooksDir:  "hooks",
+	}
+
+	// If there's a subdirectory, we'll adjust the paths accordingly
+	if subdir != "" {
+		checkout.PluginDir = subdir
+		checkout.HooksDir = filepath.Join(subdir, "hooks")
+	}
+	if e.Debug {
+		e.shell.Commentf("Plugin checkout paths - PluginDir: %q, HooksDir: %q", checkout.PluginDir, checkout.HooksDir)
 	}
 
 	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
@@ -366,7 +381,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		return checkout, nil
 	}
 
-	e.shell.Commentf("Plugin %q will be checked out to %q", p.Location, pluginDirectory)
+	e.shell.Commentf("Plugin %q will be checked out to %q", p.DisplayName(), pluginDirectory)
 
 	repo, err := p.Repository()
 	if err != nil {
@@ -399,11 +414,13 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	}()
 
 	args := []string{"clone", "-v"}
+
 	if e.GitSubmodules {
 		// "--recursive" was added in Git 1.6.5, and is an alias to
 		// "--recurse-submodules" from Git 2.13.
 		args = append(args, "--recursive")
 	}
+
 	args = append(args, "--", repo, ".")
 
 	// Plugin clones shouldn't use custom GitCloneFlags

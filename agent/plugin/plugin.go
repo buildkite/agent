@@ -147,6 +147,12 @@ func (p *Plugin) Name() string {
 	parts := strings.Split(location, "/")
 	name := parts[len(parts)-1]
 
+	// If the last path segment starts with a dot (e.g. ".buildkite"), trim leading dots
+	// so the human-friendly name isn't rendered as "-buildkite" after normalization.
+	if strings.HasPrefix(name, ".") {
+		name = strings.TrimLeft(name, ".")
+	}
+
 	// Clean up the name
 	name = strings.ToLower(name)
 	name = whitespaceRE.ReplaceAllString(name, " ")
@@ -167,7 +173,8 @@ func (p *Plugin) Identifier() (string, error) {
 	return id, nil
 }
 
-// Repository returns the repository host where the code is stored.
+// Repository returns the repository URL where the plugin code is stored, without any subdirectory path.
+// For example, for "github.com/buildkite/plugins/docker-compose/plugin", it returns "github.com/buildkite/plugins".
 func (p *Plugin) Repository() (string, error) {
 	s, err := p.constructRepositoryHost()
 	if err != nil {
@@ -192,6 +199,8 @@ func (p *Plugin) Repository() (string, error) {
 }
 
 // RepositorySubdirectory returns the subdirectory path that the plugin is in.
+// For example, for "github.com/buildkite/plugins/docker-compose/plugin", it returns "docker-compose/plugin".
+// If the plugin is in the root of the repository, it returns an empty string.
 func (p *Plugin) RepositorySubdirectory() (string, error) {
 	repository, err := p.constructRepositoryHost()
 	if err != nil {
@@ -199,8 +208,12 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 	}
 
 	dir := strings.TrimPrefix(p.Location, repository)
+	dir = strings.TrimPrefix(dir, "/")
 
-	return strings.TrimPrefix(dir, "/"), nil
+	// Remove .git suffix if present as it's not part of the subdirectory
+	dir = strings.TrimSuffix(dir, ".git")
+
+	return dir, nil
 }
 
 // formatEnvKey converts strings into an ENV key friendly format
@@ -302,6 +315,35 @@ func (p *Plugin) Label() string {
 		return p.Location
 	}
 	return p.Location + "#" + p.Version
+}
+
+// DisplayName returns a human-friendly name for the plugin suitable for logs.
+// Examples:
+//   - github.com/org/repo           => repo
+//   - github.com/org/repo/.buildkite => repo/.buildkite
+//   - file:///path/to/plugin         => plugin (last path element)
+func (p *Plugin) DisplayName() string {
+	// Filesystem paths: fall back to Name(), which returns the last segment normalized
+	if strings.HasPrefix(p.Location, "/") || strings.HasPrefix(p.Location, ".") || strings.Contains(p.Location, "\\") {
+		return p.Name()
+	}
+
+	host, err := p.constructRepositoryHost()
+	if err != nil || host == "" {
+		return p.Name()
+	}
+
+	// derive repo name from host path
+	parts := strings.Split(host, "/")
+	repo := parts[len(parts)-1]
+	repo = strings.TrimSuffix(repo, ".git")
+
+	// append subdirectory if present
+	subdir, err := p.RepositorySubdirectory()
+	if err != nil || subdir == "" {
+		return repo
+	}
+	return repo + "/" + subdir
 }
 
 func (p *Plugin) constructRepositoryHost() (string, error) {
