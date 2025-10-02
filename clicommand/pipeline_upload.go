@@ -322,9 +322,7 @@ var PipelineUploadCommand = cli.Command{
 					searchForSecrets(l, &cfg, environ, result, input.name)
 				}
 
-				var (
-					key signature.Key
-				)
+				var key signature.Key
 
 				switch {
 				case cfg.SigningAWSKMSKey != "":

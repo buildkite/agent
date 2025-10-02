@@ -605,7 +605,6 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 	if diff := cmp.Diff(steps, want); diff != "" {
 		t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
 	}
-
 }
 
 func TestGatherChangedFiles(t *testing.T) {
