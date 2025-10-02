@@ -613,17 +613,20 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 
 // gatherChangedFiles determines changed files in this build.
 func gatherChangedFiles(diffBase string) (mergeBase string, changedPaths []string, err error) {
-	// The --merge-base flag was only added to git-diff recently.
+	// Use three-dot syntax to find the merge base and diff in one command.
+	// This handles both feature branches and commits directly on main.
+	gitDiff, err := exec.Command("git", "diff", "--name-only", diffBase+"...HEAD").Output()
+	if err != nil {
+		return "", nil, gitDiffError{mergeBase: diffBase, wrapped: err}
+	}
+
+	// Also get the actual merge base for logging purposes
 	mergeBaseOut, err := exec.Command("git", "merge-base", diffBase, "HEAD").Output()
 	if err != nil {
 		return "", nil, gitMergeBaseError{diffBase: diffBase, wrapped: err}
 	}
 	mergeBase = strings.TrimSpace(string(mergeBaseOut))
 
-	gitDiff, err := exec.Command("git", "diff", "--name-only", mergeBase).Output()
-	if err != nil {
-		return mergeBase, nil, gitDiffError{mergeBase: mergeBase, wrapped: err}
-	}
 	changedPaths = strings.Split(string(gitDiff), "\n")
 	changedPaths = slices.DeleteFunc(changedPaths, func(s string) bool {
 		return strings.TrimSpace(s) == ""

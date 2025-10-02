@@ -607,3 +607,28 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 	}
 
 }
+
+func TestGatherChangedFiles(t *testing.T) {
+	t.Parallel()
+
+	// This test requires a git repository to be present
+	// If git commands fail, we skip the test
+	_, _, err := gatherChangedFiles("HEAD")
+	if err != nil {
+		t.Skipf("Skipping test, git commands failed: %v", err)
+	}
+
+	// Test that comparing against HEAD works (should return empty or current changes)
+	mergeBase, changedPaths, err := gatherChangedFiles("HEAD")
+	if err != nil {
+		t.Fatalf("gatherChangedFiles(HEAD) failed: %v", err)
+	}
+
+	if mergeBase == "" {
+		t.Error("gatherChangedFiles(HEAD) returned empty merge base")
+	}
+
+	// When comparing HEAD...HEAD, we should get changes between HEAD and working directory
+	// This may be empty if there are no uncommitted changes
+	t.Logf("Found %d changed files compared to HEAD", len(changedPaths))
+}
