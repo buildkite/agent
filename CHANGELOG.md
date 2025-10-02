@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.108.0](https://github.com/buildkite/agent/tree/v3.108.0) (2025-10-02)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.107.2...v3.108.0)
+
+### Added
+- Ability to checkout subdirectories of Plugins [#3488](https://github.com/buildkite/agent/pull/3488) (@tomowatt)
+- Better env var for disabling if_changed [#3501](https://github.com/buildkite/agent/pull/3501) (@DrJosh9000)
+
+### Fixed
+- Fix log collection stopping too early on SIGTERM in Kubernetes [#3500](https://github.com/buildkite/agent/pull/3500) (@scadu)
+- Update gopsutils to 4.25.8 [#3499](https://github.com/buildkite/agent/pull/3499) (@ladd)
+
+### Dependency updates
+- build(deps): bump the container-images group across 5 directories with 1 update [#3505](https://github.com/buildkite/agent/pull/3505) (@dependabot[bot])
+- build(deps): bump github.com/DataDog/datadog-go/v5 from 5.6.0 to 5.8.0 [#3504](https://github.com/buildkite/agent/pull/3504) (@dependabot[bot])
+- build(deps): bump cloud.google.com/go/compute/metadata from 0.8.4 to 0.9.0 [#3506](https://github.com/buildkite/agent/pull/3506) (@dependabot[bot])
+- build(deps): bump the cloud-providers group with 5 updates [#3503](https://github.com/buildkite/agent/pull/3503) (@dependabot[bot])
+
+
 ## [v3.107.2](https://github.com/buildkite/agent/tree/v3.107.2) (2025-09-24)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.107.1...v3.107.2)
 
