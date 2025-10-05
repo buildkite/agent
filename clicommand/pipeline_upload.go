@@ -613,7 +613,7 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 func gatherChangedFiles(diffBase string) (mergeBase string, changedPaths []string, err error) {
 	// Use three-dot syntax to find the merge base and diff in one command.
 	// This handles both feature branches and commits directly on main.
-	gitDiff, err := exec.Command("git", "diff", "--name-only", diffBase+"...HEAD").Output()
+	gitDiff, err := exec.Command("git", "diff", "--name-only", diffBase+"...HEAD~1").Output()
 	if err != nil {
 		return "", nil, gitDiffError{mergeBase: diffBase, wrapped: err}
 	}
