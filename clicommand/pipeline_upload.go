@@ -612,24 +612,88 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 }
 
 // gatherChangedFiles determines changed files in this build.
-func gatherChangedFiles(diffBase string) (mergeBase string, changedPaths []string, err error) {
-	// The --merge-base flag was only added to git-diff recently.
-	mergeBaseOut, err := exec.Command("git", "merge-base", diffBase, "HEAD").Output()
+func gatherChangedFiles(l logger.Logger, diffBase string) (changedPaths []string, err error) {
+	// Corporate needs you to find the differences between diffBase and HEAD.
+	diffBaseCommit, err := exec.Command("git", "rev-parse", diffBase).Output()
 	if err != nil {
-		return "", nil, gitMergeBaseError{diffBase: diffBase, wrapped: err}
+		return nil, gitRevParseError{arg: diffBase, wrapped: err}
 	}
-	mergeBase = strings.TrimSpace(string(mergeBaseOut))
+	headCommit, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		return nil, gitRevParseError{arg: "HEAD", wrapped: err}
+	}
+	if strings.TrimSpace(string(diffBaseCommit)) == strings.TrimSpace(string(headCommit)) {
+		// They're the same commit, so `git diff` will (correctly) report no
+		// changes between them.
+		// This often happens for builds triggered on main, when:
+		// * a PR is merged. HEAD is hopefully either a merge commit or a
+		//   squash commit.
+		// * the developers commit and push directly to main.
+		// As a heuristic, we look at changed files between the latest commit
+		// and its parent (the first parent, if it is a merge commit).
+		// If _multiple_ commits were pushed at once, then this approach will
+		// miss changes from earlier commits. Thus, log a warning.
+		l.Warn("Applying if_changed conditions relative to the first parent of HEAD (because HEAD = %q)", diffBase)
+		l.Warn("If this build is intended to include more than one commit on this branch, if_changed may calculate an incomplete diff. You may need to adjust the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var to choose a different base commit for calculating diffs.")
 
-	gitDiff, err := exec.Command("git", "diff", "--name-only", mergeBase).Output()
-	if err != nil {
-		return mergeBase, nil, gitDiffError{mergeBase: mergeBase, wrapped: err}
+		// Flag Explainer:
+		// `--first-parent`: when reaching a merge commit, follow the first parent
+		// (the branch that was merged *into*). Implies --diff-merges=first-parent,
+		// which is important for turning merge commits into changes.
+		// `-1`: show only the most recent entry from the log
+		// `--name-only`: ensure the names of each changed file are printed
+		// `--pretty='format:'`: only print the names of the files.
+		gitLog, err := exec.Command("git", "log", "--first-parent", "-1", "--name-only", "--pretty=format:").Output()
+		if err != nil {
+			return nil, gitLogError{wrapped: err}
+		}
+		changedPaths = strings.Split(string(gitLog), "\n")
+	} else {
+		// The --merge-base flag was only added to git-diff recently.
+		mergeBaseOut, err := exec.Command("git", "merge-base", diffBase, "HEAD").Output()
+		if err != nil {
+			return nil, gitMergeBaseError{diffBase: diffBase, wrapped: err}
+		}
+		mergeBase := strings.TrimSpace(string(mergeBaseOut))
+		l.Info("Applying if_changed conditions relative to %q (the merge-base of %q and HEAD)", mergeBase, diffBase)
+
+		gitDiff, err := exec.Command("git", "diff", "--name-only", mergeBase).Output()
+		if err != nil {
+			return nil, gitDiffError{mergeBase: mergeBase, wrapped: err}
+		}
+		changedPaths = strings.Split(string(gitDiff), "\n")
 	}
-	changedPaths = strings.Split(string(gitDiff), "\n")
 	changedPaths = slices.DeleteFunc(changedPaths, func(s string) bool {
 		return strings.TrimSpace(s) == ""
 	})
-	return mergeBase, changedPaths, nil
+	plural := "files"
+	if len(changedPaths) == 1 {
+		plural = "file"
+	}
+	l.Info("if_changed found %d changed %s", len(changedPaths), plural)
+	return changedPaths, nil
 }
+
+type gitRevParseError struct {
+	arg     string
+	wrapped error
+}
+
+func (e gitRevParseError) Error() string {
+	return fmt.Sprintf("git rev-parse %q: %v", e.arg, e.wrapped)
+}
+
+func (e gitRevParseError) Unwrap() error { return e.wrapped }
+
+type gitLogError struct {
+	wrapped error
+}
+
+func (e gitLogError) Error() string {
+	return fmt.Sprintf("git log --first-parent -1 --name-only --pretty=\"format:\": %v", e.wrapped)
+}
+
+func (e gitLogError) Unwrap() error { return e.wrapped }
 
 type gitMergeBaseError struct {
 	diffBase string
@@ -699,10 +763,21 @@ stepsLoop:
 
 		// If we don't know the changed paths yet, call out to Git.
 		if !ica.gathered {
-			mergeBase, cps, err := gatherChangedFiles(ica.diffBase)
+			cps, err := gatherChangedFiles(l, ica.diffBase)
 			if err != nil {
 				l.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+					// stderr came from git, which is typically human readable
+					l.Error("git: %s", exitErr.Stderr)
+				}
 				switch err := err.(type) {
+				case gitRevParseError:
+					l.Error("This could be because %q might not be a commit in the repository.\n"+
+						"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
+						err.arg,
+					)
+
 				case gitMergeBaseError:
 					l.Error("This could be because %q might not be a commit in the repository.\n"+
 						"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
@@ -723,7 +798,6 @@ stepsLoop:
 			}
 
 			// The changed files are now known.
-			l.Info("Applying if_changed conditions relative to %q (the merge-base of %q and HEAD) - %d changed files", mergeBase, ica.diffBase, len(cps))
 			ica.gathered = true
 			ica.changedPaths = cps
 		}
