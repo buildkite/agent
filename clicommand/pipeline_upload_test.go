@@ -344,9 +344,24 @@ func TestIfChangedApplicator(t *testing.T) {
 				},
 			},
 			&pipeline.CommandStep{
+				Command: "only runs when files in foo changed, except for baz",
+				RemainingFields: map[string]any{
+					"if_changed": ordered.MapFromItems(
+						ordered.TupleSA{Key: "include", Value: "foo/**"},
+						ordered.TupleSA{Key: "exclude", Value: "foo/baz"},
+					),
+				},
+			},
+			&pipeline.CommandStep{
 				Command: "only runs when files in bar changed",
 				RemainingFields: map[string]any{
 					"if_changed": "bar/**",
+				},
+			},
+			&pipeline.CommandStep{
+				Command: "only runs when files in foo or bar changed",
+				RemainingFields: map[string]any{
+					"if_changed": []any{"foo/**", "bar/**"},
 				},
 			},
 			&pipeline.CommandStep{
@@ -375,7 +390,15 @@ func TestIfChangedApplicator(t *testing.T) {
 					RemainingFields: map[string]any{},
 				},
 				&pipeline.CommandStep{
+					Command:         "only runs when files in foo changed, except for baz",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
 					Command:         "only runs when files in bar changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo or bar changed",
 					RemainingFields: map[string]any{},
 				},
 				&pipeline.CommandStep{
@@ -400,7 +423,19 @@ func TestIfChangedApplicator(t *testing.T) {
 					},
 				},
 				&pipeline.CommandStep{
+					Command: "only runs when files in foo changed, except for baz",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
 					Command: "only runs when files in bar changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command: "only runs when files in foo or bar changed",
 					RemainingFields: map[string]any{
 						"skip": ifChangedSkippedMsg,
 					},
@@ -414,7 +449,7 @@ func TestIfChangedApplicator(t *testing.T) {
 			},
 		},
 		{
-			name: "root file change",
+			name: "change in qux",
 			ica: &ifChangedApplicator{
 				enabled:      true,
 				gathered:     true, // pretend we ran git diff
@@ -429,7 +464,19 @@ func TestIfChangedApplicator(t *testing.T) {
 					},
 				},
 				&pipeline.CommandStep{
+					Command: "only runs when files in foo changed, except for baz",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
 					Command: "only runs when files in bar changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command: "only runs when files in foo or bar changed",
 					RemainingFields: map[string]any{
 						"skip": ifChangedSkippedMsg,
 					},
@@ -441,7 +488,7 @@ func TestIfChangedApplicator(t *testing.T) {
 			},
 		},
 		{
-			name: "change in foo",
+			name: "change in foo/README.md",
 			ica: &ifChangedApplicator{
 				enabled:      true,
 				gathered:     true, // pretend we ran git diff
@@ -454,10 +501,54 @@ func TestIfChangedApplicator(t *testing.T) {
 					RemainingFields: map[string]any{},
 				},
 				&pipeline.CommandStep{
+					Command:         "only runs when files in foo changed, except for baz",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
 					Command: "only runs when files in bar changed",
 					RemainingFields: map[string]any{
 						"skip": ifChangedSkippedMsg,
 					},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo or bar changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when any files changed",
+					RemainingFields: map[string]any{},
+				},
+			},
+		},
+
+		{
+			name: "change in foo/baz",
+			ica: &ifChangedApplicator{
+				enabled:      true,
+				gathered:     true, // pretend we ran git diff
+				changedPaths: []string{"foo/baz"},
+			},
+			want: pipeline.Steps{
+				&pipeline.CommandStep{Command: "always runs"},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command: "only runs when files in foo changed, except for baz",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command: "only runs when files in bar changed",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo or bar changed",
+					RemainingFields: map[string]any{},
 				},
 				&pipeline.CommandStep{
 					Command:         "only runs when any files changed",
@@ -466,7 +557,7 @@ func TestIfChangedApplicator(t *testing.T) {
 			},
 		},
 		{
-			name: "change in bar",
+			name: "change in bar/README.md",
 			ica: &ifChangedApplicator{
 				enabled:      true,
 				gathered:     true, // pretend we ran git diff
@@ -481,7 +572,17 @@ func TestIfChangedApplicator(t *testing.T) {
 					},
 				},
 				&pipeline.CommandStep{
+					Command: "only runs when files in foo changed, except for baz",
+					RemainingFields: map[string]any{
+						"skip": ifChangedSkippedMsg,
+					},
+				},
+				&pipeline.CommandStep{
 					Command:         "only runs when files in bar changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo or bar changed",
 					RemainingFields: map[string]any{},
 				},
 				&pipeline.CommandStep{
@@ -491,11 +592,11 @@ func TestIfChangedApplicator(t *testing.T) {
 			},
 		},
 		{
-			name: "change in foo and bar",
+			name: "changes in foo/hello.go, foo/baz, and bar/README.md",
 			ica: &ifChangedApplicator{
 				enabled:      true,
 				gathered:     true, // pretend we ran git diff
-				changedPaths: []string{"foo/hello.go", "bar/README.md"},
+				changedPaths: []string{"foo/hello.go", "foo/baz", "bar/README.md"},
 			},
 			want: pipeline.Steps{
 				&pipeline.CommandStep{Command: "always runs"},
@@ -504,7 +605,16 @@ func TestIfChangedApplicator(t *testing.T) {
 					RemainingFields: map[string]any{},
 				},
 				&pipeline.CommandStep{
+					// A file other than baz changed in foo, so this runs.
+					Command:         "only runs when files in foo changed, except for baz",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
 					Command:         "only runs when files in bar changed",
+					RemainingFields: map[string]any{},
+				},
+				&pipeline.CommandStep{
+					Command:         "only runs when files in foo or bar changed",
 					RemainingFields: map[string]any{},
 				},
 				&pipeline.CommandStep{
@@ -535,7 +645,7 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 
 	steps := pipeline.Steps{
 		&pipeline.CommandStep{
-			Command: "wrong type for if_changed",
+			Command: "unsupported type for if_changed",
 			RemainingFields: map[string]any{
 				"if_changed": 42,
 			},
@@ -544,6 +654,23 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 			Command: "invalid glob pattern",
 			RemainingFields: map[string]any{
 				"if_changed": "bar/**/[asdf[[[[asdf",
+			},
+		},
+		&pipeline.CommandStep{
+			Command: "invalid exclude pattern",
+			RemainingFields: map[string]any{
+				"if_changed": ordered.MapFromItems(
+					ordered.TupleSA{Key: "include", Value: "**"},
+					ordered.TupleSA{Key: "exclude", Value: "{a{b{c{d"},
+				),
+			},
+		},
+		&pipeline.CommandStep{
+			Command: "mapping without include",
+			RemainingFields: map[string]any{
+				"if_changed": ordered.MapFromItems(
+					ordered.TupleSA{Key: "exclude", Value: "asdf"},
+				),
 			},
 		},
 		&pipeline.TriggerStep{
@@ -568,11 +695,19 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 
 	want := pipeline.Steps{
 		&pipeline.CommandStep{
-			Command:         "wrong type for if_changed",
+			Command:         "unsupported type for if_changed",
 			RemainingFields: map[string]any{},
 		},
 		&pipeline.CommandStep{
 			Command:         "invalid glob pattern",
+			RemainingFields: map[string]any{},
+		},
+		&pipeline.CommandStep{
+			Command:         "invalid exclude pattern",
+			RemainingFields: map[string]any{},
+		},
+		&pipeline.CommandStep{
+			Command:         "mapping without include",
 			RemainingFields: map[string]any{},
 		},
 		&pipeline.TriggerStep{
