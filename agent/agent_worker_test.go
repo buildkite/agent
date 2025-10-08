@@ -913,6 +913,110 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	}
 }
 
+func TestAgentWorker_PingIntervalValidation(t *testing.T) {
+	tests := []struct {
+		name                    string
+		configuredPingInterval  int
+		serverPingInterval      int
+		expectedInterval        time.Duration
+		expectWarning          bool
+		expectOverrideLog      bool
+	}{
+		{
+			name:                   "uses server interval when override is 0",
+			configuredPingInterval: 0,
+			serverPingInterval:     10,
+			expectedInterval:       10 * time.Second,
+			expectWarning:         false,
+			expectOverrideLog:     false,
+		},
+		{
+			name:                   "uses override when valid (5s)",
+			configuredPingInterval: 5,
+			serverPingInterval:     10,
+			expectedInterval:       5 * time.Second,
+			expectWarning:         false,
+			expectOverrideLog:     true,
+		},
+		{
+			name:                   "uses override when valid (2s minimum)",
+			configuredPingInterval: 2,
+			serverPingInterval:     10,
+			expectedInterval:       2 * time.Second,
+			expectWarning:         false,
+			expectOverrideLog:     true,
+		},
+		{
+			name:                   "clamps 1s to 2s with warning",
+			configuredPingInterval: 1,
+			serverPingInterval:     10,
+			expectedInterval:       2 * time.Second,
+			expectWarning:         true,
+			expectOverrideLog:     false,
+		},
+		{
+			name:                   "clamps negative values to 2s with warning",
+			configuredPingInterval: -5,
+			serverPingInterval:     10,
+			expectedInterval:       2 * time.Second,
+			expectWarning:         true,
+			expectOverrideLog:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a test logger that captures log messages
+			logOutput := &testLogCapture{}
+			logger := logger.NewConsoleLogger(logger.NewTextPrinter(logOutput), func(int) {})
+			
+			worker := &AgentWorker{
+				logger: logger,
+				agent: &api.AgentRegisterResponse{
+					PingInterval: tt.serverPingInterval,
+				},
+				agentConfiguration: AgentConfiguration{
+					PingInterval: tt.configuredPingInterval,
+				},
+			}
+
+			actualInterval := worker.determinePingInterval()
+
+			// Verify the returned interval
+			assert.Equal(t, tt.expectedInterval, actualInterval, "ping interval should match expected")
+
+			// Verify warning log
+			if tt.expectWarning {
+				assert.Contains(t, logOutput.String(), "is below minimum of 2s", "should log warning for values below 2s")
+			} else {
+				assert.NotContains(t, logOutput.String(), "is below minimum of 2s", "should not log warning for valid values")
+			}
+
+			// Verify override log
+			if tt.expectOverrideLog {
+				assert.Contains(t, logOutput.String(), "Using ping interval override", "should log override usage")
+			} else if tt.configuredPingInterval > 0 && !tt.expectWarning {
+				// If we have an override but no warning, we should still get the override log
+				assert.Contains(t, logOutput.String(), "Using ping interval override", "should log override usage for valid overrides")
+			}
+		})
+	}
+}
+
+// testLogCapture captures log output for testing
+type testLogCapture struct {
+	output []byte
+}
+
+func (t *testLogCapture) Write(p []byte) (n int, err error) {
+	t.output = append(t.output, p...)
+	return len(p), nil
+}
+
+func (t *testLogCapture) String() string {
+	return string(t.output)
+}
+
 func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 	t.Parallel()
 
