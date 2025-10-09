@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.109.0](https://github.com/buildkite/agent/tree/v3.109.0) (2025-10-09)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.108.0...v3.109.0)
+
+### Added
+- if_changed: support lists, include/exclude [#3518](https://github.com/buildkite/agent/pull/3518) (@DrJosh9000)
+
+### Fixed
+- Improve if_changed when base=HEAD [#3510](https://github.com/buildkite/agent/pull/3510) (@DrJosh9000)
+
+### Internal
+- Update EC2 tags/metadata to use AWS Go SDK v2 [#3434](https://github.com/buildkite/agent/pull/3434) (@DrJosh9000)
+
+### Dependency updates
+- build(deps): bump golang.org/x/net from 0.44.0 to 0.45.0 in the golang-x group [#3516](https://github.com/buildkite/agent/pull/3516) (@dependabot[bot])
+- build(deps): bump the cloud-providers group with 2 updates [#3517](https://github.com/buildkite/agent/pull/3517) (@dependabot[bot])
+- build(deps): bump docker/library/golang from 1.24.7 to 1.24.8 in /.buildkite in the container-images group across 1 directory [#3515](https://github.com/buildkite/agent/pull/3515) (@dependabot[bot])
+- build(deps): bump the cloud-providers group with 2 updates [#3511](https://github.com/buildkite/agent/pull/3511) (@dependabot[bot])
+- build(deps): bump docker/library/golang from `87916ac` to `2c5f7a0` in /.buildkite in the container-images group across 1 directory [#3513](https://github.com/buildkite/agent/pull/3513) (@dependabot[bot])
+- build(deps): bump drjosh.dev/zzglob from 0.4.0 to 0.4.1 [#3512](https://github.com/buildkite/agent/pull/3512) (@dependabot[bot])
+- build(deps): bump the container-images group across 5 directories with 1 update [#3514](https://github.com/buildkite/agent/pull/3514) (@dependabot[bot])
+
+
 ## [v3.108.0](https://github.com/buildkite/agent/tree/v3.108.0) (2025-10-02)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.107.2...v3.108.0)
 
