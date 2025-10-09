@@ -70,7 +70,7 @@ Example:
     $ buildkite-agent pipeline upload my-custom-pipeline.yml
     $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
-const ifChangedSkippedMsg = "if_changed pattern did not match any paths changed in this build"
+const ifChangedSkippedMsg = "if_changed matched no unexcluded changed files in this build"
 
 const defaultGitDiffBase = "origin/main"
 
@@ -748,13 +748,20 @@ stepsLoop:
 			content = st.Contents
 		}
 
-		// Retrieve the value then delete it.
-		// It's not yet understood by the backend.
-		ic := content["if_changed"]
-		if ic == nil {
+		// If content is nil then there's nothing containing an `if_changed`.
+		if content == nil {
 			continue
 		}
+
+		// Retrieve the if_changed value, then delete it.
+		// It is not yet understood by the backend.
+		ifChangedValue := content["if_changed"]
 		delete(content, "if_changed")
+
+		// If there's no if_changed, then the step is unconditional.
+		if ifChangedValue == nil {
+			continue
+		}
 
 		if !ica.enabled {
 			// Not applying the if_changed; leaving it deleted.
@@ -802,28 +809,105 @@ stepsLoop:
 			ica.changedPaths = cps
 		}
 
-		// Parse and test the glob pattern against the paths.
-		pattern, ok := ic.(string)
-		if !ok {
-			l.Warn("if_changed value must be a string containing a glob pattern (was a %T)\n"+
-				"The step will not be skipped.", ic)
-			continue
+		var include, exclude []*zzglob.Pattern
+		switch x := ifChangedValue.(type) {
+		case *ordered.MapSA:
+			// Object form:
+			// if_changed:
+			//   include: (required; string or list)
+			//   exclude: (optional; string or list)
+			inclVal, has := x.Get("include")
+			if !has {
+				l.Warn("The value for if_changed was a mapping, but it didn't have an `include` key. The step will not be skipped.")
+				continue stepsLoop
+			}
+			var err error
+			include, err = ifChangedPatterns(inclVal)
+			if err != nil {
+				l.Warn("Couldn't parse if_changed.include patterns: %v. The step will not be skipped.", err)
+				continue stepsLoop
+			}
+			exclVal, has := x.Get("exclude")
+			if !has {
+				break // switch
+			}
+			exclude, err = ifChangedPatterns(exclVal)
+			if err != nil {
+				l.Warn("Couldn't parse if_changed.exclude patterns: %v. The step will not be skipped.", err)
+				continue stepsLoop
+			}
+
+		default:
+			// Should be either a simple string or a list of strings.
+			inc, err := ifChangedPatterns(x)
+			if err != nil {
+				l.Warn("Couldn't parse if_changed patterns: %v. The step will not be skipped.", err)
+				continue stepsLoop
+			}
+			include = inc
 		}
 
-		glob, err := zzglob.Parse(pattern)
-		if err != nil {
-			l.Warn("if_changed value %q couldn't be parsed as a glob pattern: %v\n"+
-				"The step will not be skipped.", pattern, err)
-			continue
-		}
+		// For each remaining changed path, test it against each pattern in
+		// `exclude` and `include`.
+		// If it's included, and wasn't excluded, we _don't skip_ this step.
+		// Got it?
+	pathsLoop:
 		for _, cp := range ica.changedPaths {
-			if glob.Match(cp) {
-				continue stepsLoop // one of the paths changed
+			// First, check if the path is excluded.
+			for _, g := range exclude {
+				if g.Match(cp) {
+					continue pathsLoop
+				}
+			}
+			// It's not excluded! now check if it is included.
+			for _, g := range include {
+				if g.Match(cp) {
+					continue stepsLoop
+				}
 			}
 		}
 
-		// Glob matched no changed file paths - this step is now skipped.
+		// The globs matched no changed file paths - this step is now skipped.
 		// Note that the "skip" string is limited to 70 characters.
 		content["skip"] = ifChangedSkippedMsg
 	}
+}
+
+// ifChangedPatterns converts a string or list within `if_changed` into a slice
+// of parsed globs.
+func ifChangedPatterns(value any) ([]*zzglob.Pattern, error) {
+	if value == nil {
+		return nil, nil
+	}
+
+	var patterns []string
+	switch x := value.(type) {
+	case string:
+		// A single string.
+		patterns = []string{x}
+
+	case []any:
+		// A list of strings.
+		for i, item := range x {
+			patt, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("at index %d, the item had unsupported type %T", i, item)
+			}
+			patterns = append(patterns, patt)
+		}
+
+	default:
+		return nil, fmt.Errorf("the value had unsupported type %T", x)
+	}
+
+	globs := make([]*zzglob.Pattern, 0, len(patterns))
+	for _, patt := range patterns {
+		g, err := zzglob.Parse(patt)
+		if err != nil {
+			return nil, fmt.Errorf("while parsing glob pattern %q: %w", patt, err)
+		}
+		globs = append(globs, g)
+	}
+
+	return globs, nil
 }
