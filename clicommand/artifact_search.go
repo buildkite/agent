@@ -39,9 +39,9 @@ jobs, you can target the particular job you want to search the artifacts from us
 
 You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)
 
-Output formatting can be altered with the -format flag as follows:
+Output formatting can be altered with the --format flag as follows:
 
-    $ buildkite-agent artifact search "*" -format "%p\n"
+    $ buildkite-agent artifact search "*" --format "%p\n"
 
 The above will return a list of filenames separated by newline.`
 
