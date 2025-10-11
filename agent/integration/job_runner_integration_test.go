@@ -3,13 +3,16 @@ package integration
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -353,4 +356,97 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	if err := runJob(t, ctx, testCfg); err != nil {
 		t.Errorf("runJob(t, ctx, %v) = %v", testCfg, err)
 	}
+}
+
+func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
+	t.Parallel()
+
+	runTestWithInterval := func(t *testing.T, intervalSeconds int) time.Duration {
+		t.Helper()
+		ctx := context.Background()
+
+		var (
+			uploadTimes []time.Time
+			mu          sync.Mutex
+		)
+
+		e := createTestAgentEndpoint()
+		server := e.server(route{
+			Method: "POST",
+			Path:   "/jobs/{id}/chunks",
+			HandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				mu.Lock()
+				uploadTimes = append(uploadTimes, time.Now())
+				mu.Unlock()
+				e.chunksHandler()(rw, req)
+			},
+		})
+		t.Cleanup(server.Close)
+
+		j := &api.Job{
+			ID:                    defaultJobID,
+			ChunksMaxSizeBytes:    10240,
+			ChunksIntervalSeconds: intervalSeconds,
+			Env:                   map[string]string{},
+			Token:                 "bkaj_job-token",
+		}
+
+		mb := mockBootstrap(t)
+		mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+			start := time.Now()
+			for time.Since(start) < 10*time.Second {
+				fmt.Fprintf(c.Stdout, "Log output at %v\n", time.Now())
+				time.Sleep(100 * time.Millisecond)
+			}
+			c.Exit(0)
+		})
+
+		if err := runJob(t, ctx, testRunJobConfig{
+			job:           j,
+			server:        server,
+			agentCfg:      agent.AgentConfiguration{},
+			mockBootstrap: mb,
+		}); err != nil {
+			t.Fatalf("runJob() error = %v", err)
+		}
+
+		mb.CheckAndClose(t) //nolint:errcheck
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		if len(uploadTimes) < 3 {
+			t.Fatalf("got %d uploads, need at least 3", len(uploadTimes))
+		}
+
+		var intervals []time.Duration
+		for i := 2; i < len(uploadTimes); i++ {
+			intervals = append(intervals, uploadTimes[i].Sub(uploadTimes[i-1]))
+		}
+
+		var total time.Duration
+		for _, interval := range intervals {
+			total += interval
+		}
+		avgInterval := total / time.Duration(len(intervals))
+
+		t.Logf("Interval %ds: average upload interval = %v (from %d intervals)", intervalSeconds, avgInterval, len(intervals))
+		return avgInterval
+	}
+
+	t.Run("2s interval should be longer than 1s interval", func(t *testing.T) {
+		avg1s := runTestWithInterval(t, 1)
+		avg2s := runTestWithInterval(t, 2)
+
+		if avg2s <= avg1s {
+			t.Errorf("2s interval average (%v) should be longer than 1s interval average (%v)", avg2s, avg1s)
+		}
+
+		ratio := float64(avg2s) / float64(avg1s)
+		t.Logf("Ratio of 2s/1s intervals: %.2f", ratio)
+
+		if ratio < 1.4 {
+			t.Errorf("2s interval should be at least 1.4x longer than 1s interval, got %.2fx", ratio)
+		}
+	})
 }
