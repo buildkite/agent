@@ -339,7 +339,6 @@ One or more containers never connected to the agent. Perhaps the container image
 One or more containers connected to the agent, but then stopped communicating without exiting normally. Perhaps the container was OOM-killed?
 `)
 		}
-
 	}
 
 	// Collect the finished process' exit status
@@ -495,7 +494,10 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 		return
 	}
 
-	const processInterval = 1 * time.Second // TODO: make configurable?
+	processInterval := 1 * time.Second
+	if r.conf.Job.ChunksIntervalSeconds > 0 {
+		processInterval = time.Duration(r.conf.Job.ChunksIntervalSeconds) * time.Second
+	}
 	intervalTicker := time.NewTicker(processInterval)
 	defer intervalTicker.Stop()
 	first := make(chan struct{}, 1)
