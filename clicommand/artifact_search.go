@@ -109,7 +109,7 @@ var ArtifactSearchCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:  "format",
-			Value: "%j %p %c\n",
+			Value: "%j %p %c\\n", // Note: users supply \n in the flag value literally
 			Usage: "Output formatting of results. See below for listing of available format specifiers.",
 		},
 	}),
@@ -117,6 +117,18 @@ var ArtifactSearchCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](ctx, c)
 		defer done()
+
+		printFormat := cfg.PrintFormat
+		if strings.Contains(printFormat, `"`) {
+			// Otherwise this would break the strconv.Unquote
+			printFormat = strings.ReplaceAll(printFormat, `"`, `\"`)
+		}
+		// Handling all escape sequences, like \n, \t etc
+		unquoted, err := strconv.Unquote(`"` + printFormat + `"`)
+		if err != nil {
+			return fmt.Errorf("Unable to parse format %q", printFormat)
+		}
+		printFormat = unquoted
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
@@ -146,7 +158,7 @@ var ArtifactSearchCommand = cli.Command{
 				"%u", artifact.URL,
 				"%i", artifact.ID,
 			)
-			if _, err := fmt.Fprint(c.App.Writer, r.Replace(cfg.PrintFormat)); err != nil {
+			if _, err := fmt.Fprint(c.App.Writer, r.Replace(printFormat)); err != nil {
 				return err
 			}
 		}
