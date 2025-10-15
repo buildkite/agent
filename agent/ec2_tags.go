@@ -35,7 +35,7 @@ func (e EC2Tags) Get(ctx context.Context) (map[string]string, error) {
 		return nil, fmt.Errorf("reading instance ID from metadata: %w", err)
 	}
 
-	svc := ec2.New(ec2.Options{})
+	svc := ec2.NewFromConfig(cfg)
 
 	// Describe the tags of the current instance
 	resp, err := svc.DescribeTags(ctx, &ec2.DescribeTagsInput{
