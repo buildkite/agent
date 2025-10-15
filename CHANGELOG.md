@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.109.1](https://github.com/buildkite/agent/tree/v3.109.1) (2025-10-15)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.109.0...v3.109.1)
+
+### Fixed
+- Pass aws config to ec2 client for fetching tags [#3529](https://github.com/buildkite/agent/pull/3529) (@migueleliasweb)
+- PS-1245: Fix artifact search output format escape sequence handling [#3522](https://github.com/buildkite/agent/pull/3522) (@zhming0)
+- Fix inconsistency in artifact search --format flag documentation [#3520](https://github.com/buildkite/agent/pull/3520) (@ivannalisetska)
+
 ## [v3.109.0](https://github.com/buildkite/agent/tree/v3.109.0) (2025-10-09)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.108.0...v3.109.0)
 
