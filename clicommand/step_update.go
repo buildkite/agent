@@ -40,6 +40,7 @@ Example:
     $ ./script/label-generator | buildkite-agent step update "label"
 	$ buildkite-agent step update "priority" 10 --step "my-step-key"
 	$ buildkite-agent step update "notify" '[{"github_commit_status": {"context": "my-context"}}]' --append
+	$ buildkite-agent step update "notify" '[{"slack": "my-slack-workspace#my-channel"}]' --append
 `
 
 type StepUpdateConfig struct {
