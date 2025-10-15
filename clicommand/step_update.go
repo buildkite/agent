@@ -37,7 +37,10 @@ Example:
     $ buildkite-agent step update "label" "New Label"
     $ buildkite-agent step update "label" " (add to end of label)" --append
     $ buildkite-agent step update "label" < ./tmp/some-new-label
-    $ ./script/label-generator | buildkite-agent step update "label"`
+    $ ./script/label-generator | buildkite-agent step update "label"
+	$ buildkite-agent step update "priority" 10 --step "my-step-key"
+	$ buildkite-agent step update "notify" '[{"github_commit_status": {"context": "my-context"}}]' --append
+`
 
 type StepUpdateConfig struct {
 	GlobalConfig
