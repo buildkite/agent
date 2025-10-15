@@ -76,7 +76,6 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
@@ -361,13 +360,13 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 	t.Parallel()
 
-	runTestWithInterval := func(t *testing.T, intervalSeconds int) time.Duration {
+	runTestWithInterval := func(t *testing.T, intervalSeconds int) int {
 		t.Helper()
 		ctx := context.Background()
 
 		var (
-			uploadTimes []time.Time
-			mu          sync.Mutex
+			chunkCount int
+			mu         sync.Mutex
 		)
 
 		e := createTestAgentEndpoint()
@@ -376,7 +375,7 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 			Path:   "/jobs/{id}/chunks",
 			HandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
 				mu.Lock()
-				uploadTimes = append(uploadTimes, time.Now())
+				chunkCount++
 				mu.Unlock()
 				e.chunksHandler()(rw, req)
 			},
@@ -385,7 +384,7 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 
 		j := &api.Job{
 			ID:                    defaultJobID,
-			ChunksMaxSizeBytes:    10240,
+			ChunksMaxSizeBytes:    100_000, // large number that will never get divided into multiple chunks
 			ChunksIntervalSeconds: intervalSeconds,
 			Env:                   map[string]string{},
 			Token:                 "bkaj_job-token",
@@ -394,7 +393,7 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 		mb := mockBootstrap(t)
 		mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 			start := time.Now()
-			for time.Since(start) < 10*time.Second {
+			for time.Since(start) < 4*time.Second {
 				fmt.Fprintf(c.Stdout, "Log output at %v\n", time.Now())
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -415,38 +414,39 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
-		if len(uploadTimes) < 3 {
-			t.Fatalf("got %d uploads, need at least 3", len(uploadTimes))
-		}
-
-		var intervals []time.Duration
-		for i := 2; i < len(uploadTimes); i++ {
-			intervals = append(intervals, uploadTimes[i].Sub(uploadTimes[i-1]))
-		}
-
-		var total time.Duration
-		for _, interval := range intervals {
-			total += interval
-		}
-		avgInterval := total / time.Duration(len(intervals))
-
-		t.Logf("Interval %ds: average upload interval = %v (from %d intervals)", intervalSeconds, avgInterval, len(intervals))
-		return avgInterval
+		t.Logf("Interval %ds: %d chunks uploaded", intervalSeconds, chunkCount)
+		return chunkCount
 	}
 
-	t.Run("2s interval should be longer than 1s interval", func(t *testing.T) {
-		avg1s := runTestWithInterval(t, 1)
-		avg2s := runTestWithInterval(t, 2)
+	t.Run("2s interval should upload fewer chunks than 1s interval", func(t *testing.T) {
+		var count1s, count2s int
 
-		if avg2s <= avg1s {
-			t.Errorf("2s interval average (%v) should be longer than 1s interval average (%v)", avg2s, avg1s)
+		wg := &sync.WaitGroup{}
+		wg.Add(2)
+
+		// these run for 4 seconds, so we run them in parallel to not quite so much wall-clock time
+		go func() {
+			defer wg.Done()
+			count1s = runTestWithInterval(t, 1)
+		}()
+
+		go func() {
+			defer wg.Done()
+			count2s = runTestWithInterval(t, 2)
+		}()
+
+		wg.Wait()
+
+		t.Logf("1s interval: %d chunks, 2s interval: %d chunks", count1s, count2s)
+
+		// With a 4s job:
+		// 1s interval: first chunk + chunks at ~1s, ~2s, ~3s, ~4s = 5 chunks
+		// 2s interval: first chunk + chunks at ~2s, ~4s = 3 chunks
+		if count1s != 5 {
+			t.Errorf("1s interval: got %d chunks, expected 5", count1s)
 		}
-
-		ratio := float64(avg2s) / float64(avg1s)
-		t.Logf("Ratio of 2s/1s intervals: %.2f", ratio)
-
-		if ratio < 1.4 {
-			t.Errorf("2s interval should be at least 1.4x longer than 1s interval, got %.2fx", ratio)
+		if count2s != 3 {
+			t.Errorf("2s interval: got %d chunks, expected 3", count2s)
 		}
 	})
 }
