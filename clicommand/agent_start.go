@@ -29,7 +29,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -62,8 +61,6 @@ Example:
     $ buildkite-agent start --token xxx`
 
 var (
-	minGracePeriod = 10
-
 	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
@@ -180,11 +177,10 @@ type AgentStartConfig struct {
 	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
 	// Other shared flags
-	StrictSingleHooks                  bool          `cli:"strict-single-hooks"`
-	KubernetesExec                     bool          `cli:"kubernetes-exec"`
-	KubernetesLogCollectionGracePeriod time.Duration `cli:"kubernetes-log-collection-grace-period"`
-	TraceContextEncoding               string        `cli:"trace-context-encoding"`
-	NoMultipartArtifactUpload          bool          `cli:"no-multipart-artifact-upload"`
+	StrictSingleHooks         bool   `cli:"strict-single-hooks"`
+	KubernetesExec            bool   `cli:"kubernetes-exec"`
+	TraceContextEncoding      string `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -194,14 +190,15 @@ type AgentStartConfig struct {
 	NoHTTP2   bool   `cli:"no-http2"`
 
 	// Deprecated
-	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
-	MetaData                     []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
-	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
-	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
-	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
-	TagsFromEC2                  bool     `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
-	TagsFromGCP                  bool     `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
-	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
+	KubernetesLogCollectionGracePeriod time.Duration `cli:"kubernetes-log-collection-grace-period"`
+	NoSSHFingerprintVerification       bool          `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
+	MetaData                           []string      `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
+	MetaDataEC2                        bool          `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
+	MetaDataEC2Tags                    bool          `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
+	MetaDataGCP                        bool          `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
+	TagsFromEC2                        bool          `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
+	TagsFromGCP                        bool          `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
+	DisconnectAfterJobTimeout          int           `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
@@ -754,11 +751,11 @@ var AgentStartCommand = cli.Command{
 		RedactedVars,
 		StrictSingleHooksFlag,
 		KubernetesExecFlag,
-		KubernetesLogCollectionGracePeriodFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
 
 		// Deprecated flags which will be removed in v4
+		KubernetesLogCollectionGracePeriodFlag,
 		cli.StringSliceFlag{
 			Name:   "meta-data",
 			Value:  &cli.StringSlice{},
@@ -921,8 +918,6 @@ var AgentStartCommand = cli.Command{
 			return err
 		}
 
-		kubernetesLogCollectionGracePeriod := cfg.KubernetesLogCollectionGracePeriod
-
 		if _, err := tracetools.ParseEncoding(cfg.TraceContextEncoding); err != nil {
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
@@ -1015,51 +1010,50 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:                    cfg.BootstrapScript,
-			BuildPath:                          cfg.BuildPath,
-			SocketsPath:                        cfg.SocketsPath,
-			GitMirrorsPath:                     cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:              cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:               cfg.GitMirrorsSkipUpdate,
-			HooksPath:                          cfg.HooksPath,
-			AdditionalHooksPaths:               cfg.AdditionalHooksPaths,
-			PluginsPath:                        cfg.PluginsPath,
-			GitCheckoutFlags:                   cfg.GitCheckoutFlags,
-			GitCloneFlags:                      cfg.GitCloneFlags,
-			GitCloneMirrorFlags:                cfg.GitCloneMirrorFlags,
-			GitCleanFlags:                      cfg.GitCleanFlags,
-			GitFetchFlags:                      cfg.GitFetchFlags,
-			GitSubmodules:                      !cfg.NoGitSubmodules,
-			SSHKeyscan:                         !cfg.NoSSHKeyscan,
-			CommandEval:                        !cfg.NoCommandEval,
-			PluginsEnabled:                     !cfg.NoPlugins,
-			PluginValidation:                   !cfg.NoPluginValidation,
-			PluginsAlwaysCloneFresh:            cfg.PluginsAlwaysCloneFresh,
-			LocalHooksEnabled:                  !cfg.NoLocalHooks,
-			AllowedEnvironmentVariables:        allowedEnvironmentVariables,
-			StrictSingleHooks:                  cfg.StrictSingleHooks,
-			RunInPty:                           !cfg.NoPTY,
-			ANSITimestamps:                     !cfg.NoANSITimestamps,
-			TimestampLines:                     cfg.TimestampLines,
-			DisconnectAfterJob:                 cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:         cfg.DisconnectAfterIdleTimeout,
-			DisconnectAfterUptime:              cfg.DisconnectAfterUptime,
-			CancelGracePeriod:                  cfg.CancelGracePeriod,
-			SignalGracePeriod:                  signalGracePeriod,
-			EnableJobLogTmpfile:                cfg.EnableJobLogTmpfile,
-			JobLogPath:                         cfg.JobLogPath,
-			WriteJobLogsToStdout:               cfg.WriteJobLogsToStdout,
-			LogFormat:                          cfg.LogFormat,
-			Shell:                              cfg.Shell,
-			RedactedVars:                       cfg.RedactedVars,
-			AcquireJob:                         cfg.AcquireJob,
-			TracingBackend:                     cfg.TracingBackend,
-			TracingServiceName:                 cfg.TracingServiceName,
-			TracingPropagateTraceparent:        cfg.TracingPropagateTraceparent,
-			TraceContextEncoding:               cfg.TraceContextEncoding,
-			AllowMultipartArtifactUpload:       !cfg.NoMultipartArtifactUpload,
-			KubernetesExec:                     cfg.KubernetesExec,
-			KubernetesLogCollectionGracePeriod: kubernetesLogCollectionGracePeriod,
+			BootstrapScript:              cfg.BootstrapScript,
+			BuildPath:                    cfg.BuildPath,
+			SocketsPath:                  cfg.SocketsPath,
+			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
+			HooksPath:                    cfg.HooksPath,
+			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
+			PluginsPath:                  cfg.PluginsPath,
+			GitCheckoutFlags:             cfg.GitCheckoutFlags,
+			GitCloneFlags:                cfg.GitCloneFlags,
+			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                cfg.GitCleanFlags,
+			GitFetchFlags:                cfg.GitFetchFlags,
+			GitSubmodules:                !cfg.NoGitSubmodules,
+			SSHKeyscan:                   !cfg.NoSSHKeyscan,
+			CommandEval:                  !cfg.NoCommandEval,
+			PluginsEnabled:               !cfg.NoPlugins,
+			PluginValidation:             !cfg.NoPluginValidation,
+			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
+			LocalHooksEnabled:            !cfg.NoLocalHooks,
+			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
+			StrictSingleHooks:            cfg.StrictSingleHooks,
+			RunInPty:                     !cfg.NoPTY,
+			ANSITimestamps:               !cfg.NoANSITimestamps,
+			TimestampLines:               cfg.TimestampLines,
+			DisconnectAfterJob:           cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:   cfg.DisconnectAfterIdleTimeout,
+			DisconnectAfterUptime:        cfg.DisconnectAfterUptime,
+			CancelGracePeriod:            cfg.CancelGracePeriod,
+			SignalGracePeriod:            signalGracePeriod,
+			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
+			JobLogPath:                   cfg.JobLogPath,
+			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
+			LogFormat:                    cfg.LogFormat,
+			Shell:                        cfg.Shell,
+			RedactedVars:                 cfg.RedactedVars,
+			AcquireJob:                   cfg.AcquireJob,
+			TracingBackend:               cfg.TracingBackend,
+			TracingServiceName:           cfg.TracingServiceName,
+			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
+			TraceContextEncoding:         cfg.TraceContextEncoding,
+			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
+			KubernetesExec:               cfg.KubernetesExec,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
@@ -1300,7 +1294,15 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Handle process signals
-		signals := handlePoolSignals(ctx, l, pool, cancel, cfg.CancelGracePeriod)
+		poolSigs := &poolSignals{
+			log:               l,
+			pool:              pool,
+			cancelGracePeriod: time.Duration(cfg.CancelGracePeriod) * time.Second,
+			// Under Kubernetes, there is no user interactively signalling us,
+			// so on SIGTERM, stop un-gracefully.
+			skipGraceful: cfg.KubernetesExec,
+		}
+		signals := poolSigs.handle(ctx)
 		defer close(signals)
 
 		l.Info("Starting %d Agent(s)", cfg.Spawn)
@@ -1374,68 +1376,76 @@ func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set
 	return jwks, nil
 }
 
-func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPool, cancel context.CancelFunc, cancelGracePeriod int) chan os.Signal {
+type poolSignals struct {
+	log               logger.Logger
+	pool              *agent.AgentPool
+	cancelGracePeriod time.Duration
+	skipGraceful      bool
+}
+
+func (ps *poolSignals) handle(ctx context.Context) chan os.Signal {
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt,
+	signal.Notify(
+		signals,
+		os.Interrupt,
 		syscall.SIGHUP,
 		syscall.SIGTERM,
 		syscall.SIGINT,
-		syscall.SIGQUIT)
+		syscall.SIGQUIT,
+	)
 
-	go func() {
-		_, setStatus, done := status.AddSimpleItem(ctx, "Handle Pool Signals")
-		defer done()
-		setStatus("⏳ Waiting for a signal")
-
-		var interruptCount int
-
-		for sig := range signals {
-			l.Debug("Received signal `%v`", sig)
-			setStatus(fmt.Sprintf("Received signal `%v`", sig))
-
-			switch sig {
-			case syscall.SIGQUIT:
-				l.Debug("Received signal `%s`", sig.String())
-				pool.Stop(false)
-			case syscall.SIGTERM, syscall.SIGINT:
-				l.Debug("Received signal `%s`", sig.String())
-				if interruptCount == 0 {
-					interruptCount++
-					l.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
-					pool.Stop(true)
-				} else {
-					l.Info("Forcefully stopping running jobs and stopping the agent(s) in %d seconds", cancelGracePeriod)
-
-					gracefulContext, _ := job.WithGracePeriod(ctx, time.Duration(max(cancelGracePeriod, minGracePeriod))*time.Second)
-
-					go func() {
-						l.Info("Forced agent(s) to stop")
-						pool.Stop(false) // one last chance to stop
-
-						// Wait half the grace period before cancelling the context
-						time.Sleep(time.Duration(max(cancelGracePeriod/2, minGracePeriod/2)) * time.Second)
-
-						l.Info("Cancelling all internal tasks and API requests")
-						cancel() // cancel the context to stop all network operations
-					}()
-
-					// Once pending retries and requests are cancelled,
-					// the main goroutine should exit before this grace period expires, ending the program.
-					// If that doesn't happen, exit 1 below.
-					<-gracefulContext.Done()
-					l.Info("exiting with status 1")
-
-					// this should only be called if the context cancellation and forceful stop fails
-					os.Exit(1)
-
-				}
-			default:
-				l.Debug("Ignoring signal `%s`", sig.String())
-			}
-		}
-	}()
-
+	go ps.handleLoop(ctx, signals)
 	return signals
+}
+
+func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
+	_, setStatus, done := status.AddSimpleItem(ctx, "Handle Pool Signals")
+	defer done()
+	setStatus("⏳ Waiting for a signal")
+
+	interruptCount := 0
+	if ps.skipGraceful {
+		interruptCount = 1
+	}
+
+	for sig := range signals {
+		ps.log.Debug("Received signal `%v`", sig)
+		setStatus(fmt.Sprintf("Received signal `%v`", sig))
+
+		switch sig {
+		case syscall.SIGQUIT:
+			ps.pool.Stop(false)
+
+		case syscall.SIGTERM, syscall.SIGINT:
+			interruptCount++
+			switch interruptCount {
+			case 1:
+				ps.log.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
+				ps.pool.Stop(true)
+
+			case 2:
+				ps.log.Info("Forcefully stopping running jobs and stopping the agent(s) in %d seconds", ps.cancelGracePeriod)
+				if !ps.skipGraceful {
+					ps.log.Info("Press Ctrl-C one more time to exit immediately without disconnecting")
+				}
+				ps.pool.Stop(false) // one last chance to stop
+
+				go func() {
+					time.Sleep(ps.cancelGracePeriod)
+					// We get here if the main goroutine hasn't returned yet.
+					ps.log.Info("Timed out waiting for agents to exit; exiting immediately with status 1")
+					os.Exit(1)
+				}()
+
+			case 3:
+				ps.log.Info("Exiting immediately with status 1")
+				os.Exit(1)
+			}
+
+		default:
+			ps.log.Debug("Ignoring signal `%s`", sig.String())
+		}
+	}
 }
 
 func agentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
