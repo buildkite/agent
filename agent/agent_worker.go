@@ -664,18 +664,26 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 // state. If the job is in an unassignable state, it will return an error immediately.
 // Otherwise, it will retry every 3s for 30 s. The whole operation will timeout after 5 min.
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
-	ctx, cancel := context.WithCancel(ctx)
+	// Note: Context.Cancel is a blunt instrument. It will (for example)
+	// prevent the final API calls to upload remaining logs and mark the job
+	// finished.
+	// But we do want to abort the retry loop in AcquireJob early if possible.
+	// So, use context cancellation to abort AcquireJob on agent stop, but not
+	// RunJob.
+	// The agent's signal handler handles cancellation after a job has begun.
+	acquireCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	go func() {
 		<-a.stop
 		cancel()
 	}()
 
-	job, err := a.client.AcquireJob(ctx, jobId)
+	job, err := a.client.AcquireJob(acquireCtx, jobId)
 	if err != nil {
 		return fmt.Errorf("failed to acquire job: %w", err)
 	}
 
-	// Now that we've acquired the job, let's run it
+	// Now that we've acquired the job, let's run it.
 	return a.RunJob(ctx, job, nil)
 }
 
