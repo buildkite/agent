@@ -1424,7 +1424,7 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 				ps.pool.Stop(true)
 
 			case 2:
-				ps.log.Info("Forcefully stopping running jobs and stopping the agent(s) in %d seconds", ps.cancelGracePeriod)
+				ps.log.Info("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod)
 				if !ps.skipGraceful {
 					ps.log.Info("Press Ctrl-C one more time to exit immediately without disconnecting")
 				}
