@@ -568,6 +568,13 @@ var BootstrapCommand = cli.Command{
 		// If cancelled and our child process returns a non-zero, we should terminate
 		// ourselves with the same signal so that our caller can detect and handle appropriately
 		if cancelled && runtime.GOOS != "windows" {
+			// Per https://pkg.go.dev/os/signal:
+			// "A SIGQUIT, SIGILL, SIGTRAP, SIGABRT, SIGSTKFLT, SIGEMT, or
+			// SIGSYS signal causes the program to exit with a stack dump."
+			// Of these, `received` can only be SIGQUIT.
+			if received == syscall.SIGQUIT {
+				return &SilentExitError{code: 131} // 128 + 3 (SIGQUIT).
+			}
 			if err := signalSelf(l, received); err != nil {
 				l.Error("Failed to signal self: %v", err)
 			}
