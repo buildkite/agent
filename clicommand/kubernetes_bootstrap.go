@@ -92,6 +92,7 @@ var KubernetesBootstrapCommand = cli.Command{
 		if err != nil {
 			return fmt.Errorf("error connecting to kubernetes runner: %w", err)
 		}
+		defer socket.Close()
 
 		// Start with the registration response env, then override with our
 		// existing env.
