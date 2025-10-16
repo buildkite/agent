@@ -71,6 +71,10 @@ func (e *missingKeyError) Error() string {
 
 // Run runs the job.
 func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err error) {
+	if r.cancelled.Load() {
+		return errors.New("job already cancelled before running")
+	}
+
 	r.agentLogger.Info("Starting job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
@@ -328,9 +332,9 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
 	// to the user as they may be the caused by errors in the pipeline definition.
 	k8sProcess, isK8s := r.process.(*kubernetes.Runner)
-	if isK8s && !r.stopped {
+	if isK8s && !r.agentStopping.Load() {
 		switch {
-		case r.cancelled && k8sProcess.AnyClientIn(kubernetes.StateNotYetConnected):
+		case r.cancelled.Load() && k8sProcess.AnyClientIn(kubernetes.StateNotYetConnected):
 			fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers never connected to the agent. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)?
 `)
@@ -349,12 +353,12 @@ One or more containers connected to the agent, but then stopped communicating wi
 	}
 
 	switch {
-	case r.stopped:
-		// The agent is being gracefully stopped, and we signaled the job to end. Often due
-		// to pending host shutdown or EC2 spot instance termination
+	case r.agentStopping.Load():
+		// The agent is being ungracefully stopped, and we signaled the job to
+		// end. Often due to pending host shutdown or EC2 spot instance termination
 		exit.SignalReason = SignalReasonAgentStop
 
-	case r.cancelled:
+	case r.cancelled.Load():
 		// The job was signaled because it was cancelled via the buildkite web UI
 		exit.SignalReason = SignalReasonCancel
 
@@ -500,18 +504,26 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 	// The final output after the process has finished is processed in Run().
 }
 
-func (r *JobRunner) CancelAndStop() error {
-	r.cancelLock.Lock()
-	r.stopped = true
-	r.cancelLock.Unlock()
-	return r.Cancel()
-}
-
-func (r *JobRunner) Cancel() error {
+// Cancel cancels the job. It can be summarised as:
+//   - Send the process an Interrupt. When run via a subprocess, this translates
+//     into SIGTERM. When run via the k8s socket, this transitions the connected
+//     client to RunStateInterrupt.
+//   - Wait for the signal grace period.
+//   - If the job hasn't exited, send the process a Terminate. This is either
+//     SIGKILL or closing the k8s socket server.
+//
+// Cancel blocks until this process is complete.
+// The `agentStopping` arg mainly affects logged messages.
+func (r *JobRunner) Cancel(agentStopping bool) error {
 	r.cancelLock.Lock()
 	defer r.cancelLock.Unlock()
 
-	if r.cancelled {
+	// In case the user clicks "Cancel" in the UI while the agent happens to be
+	// stopping, only go from !stopping -> stopping.
+	r.agentStopping.Store(r.agentStopping.Load() || agentStopping)
+
+	// Return early if already cancelled.
+	if !r.cancelled.CompareAndSwap(false, true) {
 		return nil
 	}
 
@@ -521,7 +533,7 @@ func (r *JobRunner) Cancel() error {
 	}
 
 	reason := ""
-	if r.stopped {
+	if r.agentStopping.Load() {
 		reason = "(agent stopping)"
 	}
 
@@ -532,9 +544,10 @@ func (r *JobRunner) Cancel() error {
 		reason,
 	)
 
-	r.cancelled = true
-
-	// First we interrupt the process (ctrl-c or SIGINT)
+	// First we interrupt the process with the configured CancelSignal.
+	// At some point in the past, for subprocesses, the default was intended to
+	// be SIGINT, but you will find that the cancel-signal flag default and
+	// the process package's default are both SIGTERM.
 	if err := r.process.Interrupt(); err != nil {
 		return err
 	}

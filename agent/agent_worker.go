@@ -87,7 +87,8 @@ type AgentWorker struct {
 	// The signal to use for cancellation
 	cancelSig process.Signal
 
-	// Stop controls
+	// Stop controls. Note that Stopping != Cancelling. See the [Stop] method
+	// for an explanation.
 	stopOnce sync.Once // prevents double-closing the channel
 	stop     chan struct{}
 
@@ -502,7 +503,15 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 }
 
 // Stops the agent from accepting new work and cancels any current work it's
-// running
+// running. Whether or not Stop also cancels the current job depends on the
+// `graceful` argument.
+//
+//   - *Graceful* stop: allow the current job to finish without interruption
+//     (but don't accept new jobs) before exiting
+//   - *Ungraceful* stop: cancel the current job (jobRunner.CancelAndStop),
+//     wait a grace period for it to exit, and then exit ourselves
+//
+// In both cases, the ping loop should cease running.
 func (a *AgentWorker) Stop(graceful bool) {
 	if graceful {
 		select {
@@ -526,7 +535,7 @@ func (a *AgentWorker) Stop(graceful bool) {
 			// Kill the current job. Doesn't do anything if the job
 			// is already being killed, so it's safe to call
 			// multiple times.
-			err := a.jobRunner.CancelAndStop()
+			err := a.jobRunner.Cancel(true /* agent is stopping */)
 			if err != nil {
 				a.logger.Error("Unexpected error canceling job (err: %s)", err)
 			}
