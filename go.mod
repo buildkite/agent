@@ -9,7 +9,7 @@ require (
 	drjosh.dev/zzglob v0.4.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.2
-	github.com/DataDog/datadog-go/v5 v5.8.0
+	github.com/DataDog/datadog-go/v5 v5.8.1
 	github.com/Khan/genqlient v0.8.1
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/aws/aws-sdk-go-v2 v1.39.2
