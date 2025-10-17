@@ -28,6 +28,7 @@ import (
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
 	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const lockRetryDuration = time.Second
@@ -498,16 +499,30 @@ func WithStringSearch(m map[string]bool) RunCommandOpt { return func(c *runConfi
 // injectTraceCtx adds tracing information to the given env vars to support
 // distributed tracing across jobs/builds.
 func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
-	span := opentracing.SpanFromContext(ctx)
-	// Not all shell runs will have tracing (nor do they really need to).
-	if span == nil {
-		return
-	}
-	if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
-		if s.debug {
-			s.Warningf("Failed to encode trace context: %v", err)
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
+			if s.debug {
+				s.Warningf("Failed to encode trace context: %v", err)
+			}
 		}
 		return
+	}
+
+	if span := trace.SpanFromContext(ctx); span != nil && span.SpanContext().IsValid() {
+		envMap := env.Dump()
+		if err := tracetools.EncodeOTelTraceContext(span, envMap); err != nil {
+			if s.debug {
+				s.Warningf("Failed to encode trace context: %v", err)
+			}
+			return
+		}
+
+		if traceparent, ok := envMap["traceparent"]; ok {
+			env.Set("TRACEPARENT", traceparent)
+		}
+		if tracestate, ok := envMap["tracestate"]; ok {
+			env.Set("TRACESTATE", tracestate)
+		}
 	}
 }
 

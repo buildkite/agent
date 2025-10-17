@@ -2,6 +2,7 @@ package tracetools
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
@@ -9,6 +10,8 @@ import (
 	"io"
 
 	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
@@ -31,6 +34,19 @@ func EncodeTraceContext(span opentracing.Span, env map[string]string, codec Code
 	}
 
 	env[EnvVarTraceContextKey] = base64.URLEncoding.EncodeToString(buf.Bytes())
+	return nil
+}
+
+func EncodeOTelTraceContext(span trace.Span, env map[string]string) error {
+	if span == nil || !span.SpanContext().IsValid() {
+		return nil
+	}
+
+	propagator := propagation.TraceContext{}
+	carrier := propagation.MapCarrier(env)
+	ctx := trace.ContextWithSpan(context.Background(), span)
+	propagator.Inject(ctx, carrier)
+
 	return nil
 }
 
