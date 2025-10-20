@@ -117,10 +117,8 @@ var (
 	}
 
 	KubernetesLogCollectionGracePeriodFlag = cli.DurationFlag{
-		Name: "kubernetes-log-collection-grace-period",
-		Usage: "How long to wait for Kubernetes processes to complete before stopping log " +
-			"collection during graceful termination. This should be less than the pod's " +
-			"terminationGracePeriodSeconds to allow time for final log upload",
+		Name:   "kubernetes-log-collection-grace-period",
+		Usage:  "Deprecated, do not use",
 		EnvVar: "BUILDKITE_KUBERNETES_LOG_COLLECTION_GRACE_PERIOD",
 		Value:  50 * time.Second,
 	}

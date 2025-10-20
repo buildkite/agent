@@ -121,9 +121,10 @@ var KubernetesBootstrapCommand = cli.Command{
 			}
 			cancelSignal = cs
 		}
-		cgp := environ.GetInt("BUILDKITE_CANCEL_GRACE_PERIOD", defaultCancelGracePeriodSecs)
-		sgp := environ.GetInt("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", defaultSignalGracePeriodSecs)
-		signalGracePeriod, err := signalGracePeriod(cgp, sgp)
+		cancelGracePeriodSecs := environ.GetInt("BUILDKITE_CANCEL_GRACE_PERIOD", defaultCancelGracePeriodSecs)
+		cancelGracePeriod := time.Duration(cancelGracePeriodSecs) * time.Second
+		signalGracePeriodSecs := environ.GetInt("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", defaultSignalGracePeriodSecs)
+		signalGracePeriod, err := signalGracePeriod(cancelGracePeriodSecs, signalGracePeriodSecs)
 		if err != nil {
 			return err
 		}
@@ -162,9 +163,23 @@ var KubernetesBootstrapCommand = cli.Command{
 			// is in state interrupted or the connection died or ...), we should
 			// cancel the job.
 			if err != nil {
-				l.Error("Error waiting for client interrupt: %v", err)
+				l.Error("kubernetes-bootstrap: Error waiting for client interrupt: %v; cancelling work", err)
+			} else {
+				l.Warn("kubernetes-bootstrap: Either the job was cancelled or the pod is being deleted; cancelling work")
 			}
+			// The context cancellation handler in process.Run first calls
+			// Interrupt, waits for its signalGracePeriod, and then calls
+			// Terminate.
 			cancel()
+			// If we're cancelling because the job was cancelled in the UI, we
+			// should self-exit after cancelGracePeriod to be sure.
+			// (If we're cancelling because the pod is being deleted, Kubernetes
+			// enforces it after terminationGracePeriodSeconds, so self-exiting
+			// in that case is superfluous.)
+			time.Sleep(cancelGracePeriod)
+			// We get here if the main goroutine hasn't returned yet.
+			l.Info("kubernetes-bootstrap: Timed out waiting for subprocess to exit; exiting immediately with status 1")
+			os.Exit(1)
 		}); err != nil {
 			return fmt.Errorf("connecting to k8s socket: %w", err)
 		}
@@ -189,29 +204,32 @@ var KubernetesBootstrapCommand = cli.Command{
 			SignalGracePeriod: signalGracePeriod,
 		})
 
-		// We aren't expecting the user to Ctrl-C the process (we're in a k8s
-		// pod), but Kubernetes might send signals.
-		// Forward them to the subprocess.
+		// We aren't expecting the user to Ctrl-C the process (we're in k8s),
+		// but Kubernetes might send signals.
+		// All the containers in the pod get SIGTERM when the pod is deleted,
+		// followed up by SIGKILL after ~TerminationGracePeriodSeconds.
+		// Instead of forwarding Kubernetes's SIGTERM to the subprocess
+		// ourselves, we'll instead swallow the signals, and wait until the
+		// agent container interrupts us via the Unix socket.
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals,
+		signal.Notify(
+			signals,
 			os.Interrupt,
 			syscall.SIGHUP,
 			syscall.SIGTERM,
 			syscall.SIGINT,
 			syscall.SIGQUIT,
 		)
-
 		go func() {
-			defer signal.Stop(signals)
-			// Forward signals to the subprocess.
 			for {
 				select {
 				case <-ctx.Done():
 					return
 				case <-proc.Done():
 					return
-				case <-signals:
-					proc.Interrupt()
+				case sig := <-signals:
+					// Log but otherwise swallow the signal
+					l.Info("kubernetes-bootstrap: Received %v; awaiting interrupt from agent", sig)
 				}
 			}
 		}()
