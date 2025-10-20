@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -79,6 +81,7 @@ func TestCollect(t *testing.T) {
 			filepath.Join("fixtures", "**/*.jpg"),
 			filepath.Join(root, "fixtures", "**/*.gif"),
 		),
+		Delimiter: ";",
 	})
 
 	// For the normalised-upload-paths experiment, uploaded artifact paths are
@@ -162,6 +165,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 			filepath.Join("mkmf.log"),
 			filepath.Join("log", "mkmf.log"),
 		}, ";"),
+		Delimiter: ";",
 	})
 
 	artifacts, err := uploader.collect(ctx)
@@ -182,6 +186,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 			filepath.Join("dontmatchanything.zip"),
 			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
+		Delimiter: ";",
 	})
 
 	artifacts, err := uploader.collect(ctx)
@@ -205,6 +210,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 			filepath.Join("fixtures", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
 			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
+		Delimiter:                 ";",
 		GlobResolveFollowSymlinks: true,
 	})
 
@@ -227,6 +233,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 			filepath.Join("fixtures", "**", "*.jpg"),
 			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
 		}, ";"),
+		Delimiter: ";",
 	})
 
 	artifacts, err := uploader.collect(ctx)
@@ -259,6 +266,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 			filepath.Join("fixtures", "**", "*.jpg"),
 			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
 		}, ";"),
+		Delimiter:                 ";",
 		GlobResolveFollowSymlinks: true,
 	})
 
@@ -292,6 +300,7 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
+		Delimiter:          ";",
 		UploadSkipSymlinks: true,
 	})
 
@@ -313,4 +322,55 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 		},
 		paths,
 	)
+}
+
+func TestCollect_Literal(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+		Paths: strings.Join([]string{
+			filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
+			filepath.Join("fixtures", "gifs", "Smile.gif"),
+		}, ";"),
+		Delimiter: ";",
+		Literal:   true,
+	})
+
+	artifacts, err := uploader.collect(ctx)
+	if err != nil {
+		t.Fatalf("uploader.Collect() error = %v", err)
+	}
+
+	got := []string{}
+	for _, a := range artifacts {
+		got = append(got, a.Path)
+	}
+	want := []string{
+		filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
+		filepath.Join("fixtures", "gifs", "Smile.gif"),
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("uploader.collect artifact paths diff (-got +want)\n%s", diff)
+	}
+}
+
+func TestCollect_LiteralPathNotFound(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+		// When parsed as a glob, it finds multiple files.
+		// When used literally, it finds nothing.
+		Paths:   filepath.Join("fixtures", "**", "*.jpg"),
+		Literal: true,
+	})
+
+	var pathErr *os.PathError
+	if _, err := uploader.collect(ctx); !errors.As(err, &pathErr) {
+		t.Fatalf("uploader.collect() error = %v, want %T", err, pathErr)
+	}
+	if pathErr.Op != "open" {
+		t.Errorf("uploader.collect() error Op = %q, want open", pathErr.Op)
+	}
 }
