@@ -95,6 +95,28 @@ func (e *Executor) createCheckoutDir() error {
 		}
 	}
 
+	if err := e.refreshCheckoutRoot(); err != nil {
+		return err
+	}
+
+	if e.shell.Getwd() != checkoutPath {
+		if err := e.shell.Chdir(checkoutPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// refreshCheckoutRoot refreshes e.checkoutRoot
+func (e *Executor) refreshCheckoutRoot() error {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if e.checkoutRoot != nil {
+		if err := e.checkoutRoot.Close(); err != nil {
+			// While it's unlikely, it's not a blocking error
+			e.shell.Warningf("unable to close existing checkoutRoot during refreshCheckoutRoot: %w", err)
+		}
+	}
 	root, err := os.OpenRoot(checkoutPath)
 	if err != nil {
 		return fmt.Errorf("opening checkout path as root: %w", err)
@@ -103,13 +125,6 @@ func (e *Executor) createCheckoutDir() error {
 	// becomes unreachable when the bootstrap exits.
 	runtime.AddCleanup(e, func(r *os.Root) { r.Close() }, root)
 	e.checkoutRoot = root
-
-	if e.shell.Getwd() != checkoutPath {
-		if err := e.shell.Chdir(checkoutPath); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -156,6 +171,52 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 		return err
 	}
 
+	if err := e.checkout(ctx); err != nil {
+		return err
+	}
+
+	err = e.sendCommitToBuildkite(ctx)
+	if err != nil {
+		e.shell.OptionalWarningf("git-commit-resolution-failed", "Couldn't send commit information to Buildkite: %v", err)
+	}
+
+	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
+	// one of the post-checkout hooks changed it.
+	previousCheckoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if !exists {
+		e.shell.Printf("Could not determine previous checkout path from BUILDKITE_BUILD_CHECKOUT_PATH")
+	}
+
+	// Run post-checkout hooks
+	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
+		return err
+	}
+
+	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
+		return err
+	}
+
+	if err := e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
+		return err
+	}
+
+	// Capture the new checkout path so we can see if it's changed.
+	newCheckoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	// If the working directory has been changed by a hook, log and switch to it
+	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
+		e.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
+
+		if err := e.shell.Chdir(newCheckoutPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// checkout runs checkout hook or default checkout logic
+func (e *Executor) checkout(ctx context.Context) error {
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
 	case e.hasPluginHook("checkout"):
@@ -257,41 +318,10 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 		}
 	}
 
-	err = e.sendCommitToBuildkite(ctx)
-	if err != nil {
-		e.shell.OptionalWarningf("git-commit-resolution-failed", "Couldn't send commit information to Buildkite: %v", err)
-	}
-
-	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
-	// one of the post-checkout hooks changed it.
-	previousCheckoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-	if !exists {
-		e.shell.Printf("Could not determine previous checkout path from BUILDKITE_BUILD_CHECKOUT_PATH")
-	}
-
-	// Run post-checkout hooks
-	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
+	// After everything, we need to refresh checkout root.
+	// This is because checkout hook might re-create the checkout root folder entirely, deprecating e.checkoutRoot.
+	if err := e.refreshCheckoutRoot(); err != nil {
 		return err
-	}
-
-	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
-		return err
-	}
-
-	// Capture the new checkout path so we can see if it's changed.
-	newCheckoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-
-	// If the working directory has been changed by a hook, log and switch to it
-	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
-		e.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
-
-		if err := e.shell.Chdir(newCheckoutPath); err != nil {
-			return err
-		}
 	}
 
 	return nil
