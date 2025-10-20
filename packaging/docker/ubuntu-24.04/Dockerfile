@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM public.ecr.aws/buildkite/agent-base:ubuntu-noble@sha256:9287774d93203409df9a596f4b9e4a13cd5a6b297e31f61fcc708c1ef72e2c4e
+FROM public.ecr.aws/buildkite/agent-base:ubuntu-noble@sha256:de28c3f38091efbcf192cc04dbd4ab07e365b73c0b4d3fb40d661ca4b2a89e04
 ARG TARGETOS
 ARG TARGETARCH
 
