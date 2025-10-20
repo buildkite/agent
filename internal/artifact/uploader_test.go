@@ -81,6 +81,7 @@ func TestCollect(t *testing.T) {
 			filepath.Join("fixtures", "**/*.jpg"),
 			filepath.Join(root, "fixtures", "**/*.gif"),
 		),
+		Delimiter: ";",
 	})
 
 	// For the normalised-upload-paths experiment, uploaded artifact paths are
@@ -164,6 +165,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 			filepath.Join("mkmf.log"),
 			filepath.Join("log", "mkmf.log"),
 		}, ";"),
+		Delimiter: ";",
 	})
 
 	artifacts, err := uploader.collect(ctx)
@@ -184,6 +186,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 			filepath.Join("dontmatchanything.zip"),
 			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
+		Delimiter: ";",
 	})
 
 	artifacts, err := uploader.collect(ctx)
@@ -207,6 +210,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 			filepath.Join("fixtures", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
 			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
+		Delimiter:                 ";",
 		GlobResolveFollowSymlinks: true,
 	})
 
@@ -229,6 +233,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 			filepath.Join("fixtures", "**", "*.jpg"),
 			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
 		}, ";"),
+		Delimiter: ";",
 	})
 
 	artifacts, err := uploader.collect(ctx)
@@ -261,6 +266,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 			filepath.Join("fixtures", "**", "*.jpg"),
 			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
 		}, ";"),
+		Delimiter:                 ";",
 		GlobResolveFollowSymlinks: true,
 	})
 
@@ -294,6 +300,7 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
+		Delimiter:          ";",
 		UploadSkipSymlinks: true,
 	})
 
@@ -326,7 +333,8 @@ func TestCollect_Literal(t *testing.T) {
 			filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
 			filepath.Join("fixtures", "gifs", "Smile.gif"),
 		}, ";"),
-		Literal: true,
+		Delimiter: ";",
+		Literal:   true,
 	})
 
 	artifacts, err := uploader.collect(ctx)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"iter"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,10 +27,7 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-const (
-	ArtifactPathDelimiter    = ";"
-	ArtifactFallbackMimeType = "binary/octet-stream"
-)
+const ArtifactFallbackMimeType = "binary/octet-stream"
 
 type UploaderConfig struct {
 	// The ID of the Job
@@ -49,8 +47,11 @@ type UploaderConfig struct {
 	TraceHTTP    bool
 	DisableHTTP2 bool
 
-	// When true, disables parsing Paths as globs.
+	// When true, disables parsing Paths as globs; treat each path literally.
 	Literal bool
+
+	// The delimiter used to split Paths into multiple paths/globs.
+	Delimiter string
 
 	// Whether to follow symbolic links when resolving globs
 	GlobResolveFollowSymlinks bool
@@ -181,7 +182,7 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 
 	// Start resolving globs (or not) and sending file paths to workers.
 	a.logger.Debug("Searching for %s", a.conf.Paths)
-	if err := fileFinder(wctx, filesCh); err != nil {
+	if err := fileFinder(wctx, a.paths(), filesCh); err != nil {
 		cancel(err)
 	}
 
@@ -204,11 +205,19 @@ type artifactCollector struct {
 	artifacts []*api.Artifact
 }
 
-func (a *Uploader) literal(ctx context.Context, filesCh chan<- string) error {
+func (a *Uploader) paths() iter.Seq[string] {
+	if a.conf.Delimiter == "" {
+		// Don't do any splitting.
+		return slices.Values([]string{a.conf.Paths})
+	}
+	return strings.SplitSeq(a.conf.Paths, a.conf.Delimiter)
+}
+
+func (a *Uploader) literal(ctx context.Context, paths iter.Seq[string], filesCh chan<- string) error {
 	// literal is solely responsible for writing to the channel
 	defer close(filesCh)
 
-	for path := range strings.SplitSeq(a.conf.Paths, ArtifactPathDelimiter) {
+	for path := range paths {
 		path = strings.TrimSpace(path)
 		if path == "" {
 			continue
@@ -219,14 +228,14 @@ func (a *Uploader) literal(ctx context.Context, filesCh chan<- string) error {
 }
 
 // glob resolves the globs (patterns with * and ** in them).
-func (a *Uploader) glob(ctx context.Context, filesCh chan<- string) error {
+func (a *Uploader) glob(ctx context.Context, paths iter.Seq[string], filesCh chan<- string) error {
 	// glob is solely responsible for writing to the channel.
 	defer close(filesCh)
 
 	// Do all globs at once with MultiGlob, which takes care of any necessary
 	// parallelism under the hood.
 	var patterns []*zzglob.Pattern
-	for globPath := range strings.SplitSeq(a.conf.Paths, ArtifactPathDelimiter) {
+	for globPath := range paths {
 		globPath = strings.TrimSpace(globPath)
 		if globPath == "" {
 			continue
