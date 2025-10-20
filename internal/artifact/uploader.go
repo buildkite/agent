@@ -49,6 +49,9 @@ type UploaderConfig struct {
 	TraceHTTP    bool
 	DisableHTTP2 bool
 
+	// When true, disables parsing Paths as globs.
+	Literal bool
+
 	// Whether to follow symbolic links when resolving globs
 	GlobResolveFollowSymlinks bool
 
@@ -171,8 +174,14 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 		}()
 	}
 
-	// Start resolving globs into files.
-	if err := a.glob(wctx, filesCh); err != nil {
+	fileFinder := a.glob
+	if a.conf.Literal {
+		fileFinder = a.literal
+	}
+
+	// Start resolving globs (or not) and sending file paths to workers.
+	a.logger.Debug("Searching for %s", a.conf.Paths)
+	if err := fileFinder(wctx, filesCh); err != nil {
 		cancel(err)
 	}
 
@@ -195,17 +204,30 @@ type artifactCollector struct {
 	artifacts []*api.Artifact
 }
 
+func (a *Uploader) literal(ctx context.Context, filesCh chan<- string) error {
+	// literal is solely responsible for writing to the channel
+	defer close(filesCh)
+
+	for path := range strings.SplitSeq(a.conf.Paths, ArtifactPathDelimiter) {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		filesCh <- path
+	}
+	return nil
+}
+
 // glob resolves the globs (patterns with * and ** in them).
 func (a *Uploader) glob(ctx context.Context, filesCh chan<- string) error {
 	// glob is solely responsible for writing to the channel.
 	defer close(filesCh)
 
-	// New zzglob library. Do all globs at once with MultiGlob, which takes
-	// care of any necessary parallelism under the hood.
-	a.logger.Debug("Searching for %s", a.conf.Paths)
+	// Do all globs at once with MultiGlob, which takes care of any necessary
+	// parallelism under the hood.
 	var patterns []*zzglob.Pattern
-	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
-		globPath := strings.TrimSpace(globPath)
+	for globPath := range strings.SplitSeq(a.conf.Paths, ArtifactPathDelimiter) {
+		globPath = strings.TrimSpace(globPath)
 		if globPath == "" {
 			continue
 		}

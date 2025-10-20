@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -313,4 +315,54 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 		},
 		paths,
 	)
+}
+
+func TestCollect_Literal(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+		Paths: strings.Join([]string{
+			filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
+			filepath.Join("fixtures", "gifs", "Smile.gif"),
+		}, ";"),
+		Literal: true,
+	})
+
+	artifacts, err := uploader.collect(ctx)
+	if err != nil {
+		t.Fatalf("uploader.Collect() error = %v", err)
+	}
+
+	got := []string{}
+	for _, a := range artifacts {
+		got = append(got, a.Path)
+	}
+	want := []string{
+		filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
+		filepath.Join("fixtures", "gifs", "Smile.gif"),
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("uploader.collect artifact paths diff (-got +want)\n%s", diff)
+	}
+}
+
+func TestCollect_LiteralPathNotFound(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+		// When parsed as a glob, it finds multiple files.
+		// When used literally, it finds nothing.
+		Paths:   filepath.Join("fixtures", "**", "*.jpg"),
+		Literal: true,
+	})
+
+	var pathErr *os.PathError
+	if _, err := uploader.collect(ctx); !errors.As(err, &pathErr) {
+		t.Fatalf("uploader.collect() error = %v, want %T", err, pathErr)
+	}
+	if pathErr.Op != "open" {
+		t.Errorf("uploader.collect() error Op = %q, want open", pathErr.Op)
+	}
 }

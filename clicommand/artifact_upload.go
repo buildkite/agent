@@ -77,6 +77,7 @@ type ArtifactUploadConfig struct {
 	ContentType string `cli:"content-type"`
 
 	// Uploader flags
+	Literal                   bool `cli:"literal"`
 	GlobResolveFollowSymlinks bool `cli:"glob-resolve-follow-symlinks"`
 	UploadSkipSymlinks        bool `cli:"upload-skip-symlinks"`
 	NoMultipartUpload         bool `cli:"no-multipart-artifact-upload"`
@@ -101,6 +102,11 @@ var ArtifactUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
 			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
+		},
+		cli.BoolFlag{
+			Name:   "literal",
+			Usage:  "Disables parsing of the upload paths as glob patterns; each path will be treated as a single literal file path",
+			EnvVar: "BUILDKITE_AGENT_ARTIFACT_LITERAL",
 		},
 		cli.BoolFlag{
 			Name:   "glob-resolve-follow-symlinks",
@@ -129,15 +135,15 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
-			JobID:        cfg.Job,
-			Paths:        cfg.UploadPaths,
-			Destination:  cfg.Destination,
-			ContentType:  cfg.ContentType,
-			DebugHTTP:    cfg.DebugHTTP,
-			TraceHTTP:    cfg.TraceHTTP,
-			DisableHTTP2: cfg.NoHTTP2,
-
+			JobID:          cfg.Job,
+			Paths:          cfg.UploadPaths,
+			Destination:    cfg.Destination,
+			ContentType:    cfg.ContentType,
+			DebugHTTP:      cfg.DebugHTTP,
+			TraceHTTP:      cfg.TraceHTTP,
+			DisableHTTP2:   cfg.NoHTTP2,
 			AllowMultipart: !cfg.NoMultipartUpload,
+			Literal:        cfg.Literal,
 
 			// If the deprecated flag was set to true, pretend its replacement was set to true too
 			// this works as long as the user only sets one of the two flags
