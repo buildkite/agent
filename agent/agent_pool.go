@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/status"
@@ -50,7 +51,7 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 	}()
 }
 
-// Start kicks off the parallel AgentWorkers and waits for them to finish
+// Start kicks off the parallel AgentWorkers and waits for them to finish.
 func (r *AgentPool) Start(ctx context.Context) error {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Agent Pool")
 	defer done()
@@ -87,10 +88,23 @@ func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker) error {
 	return worker.Start(ctx, r.idleMonitor)
 }
 
+// Stop stops all workers in the pool simultaneously. It blocks until Stop has
+// returned for every worker - note that passing `false` means each Stop will
+// wait for job cancellation.
 func (r *AgentPool) Stop(graceful bool) {
+	var wg sync.WaitGroup
+	wg.Add(len(r.workers))
 	for _, worker := range r.workers {
-		worker.Stop(graceful)
+		// Because Stop calls the job runner's Cancel, which can block, tell all
+		// the workers to stop simultaneously.
+		// The number of concurrent Stops is bounded by the spawn count, and
+		// there already exists a handful of goroutines per worker.
+		go func() {
+			worker.Stop(graceful)
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 }
 
 func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {

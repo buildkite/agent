@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -97,7 +98,7 @@ type AgentWorker struct {
 
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
-	jobRunner *JobRunner
+	jobRunner atomic.Pointer[JobRunner]
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	agentStdout io.Writer
@@ -507,9 +508,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 // `graceful` argument.
 //
 //   - *Graceful* stop: allow the current job to finish without interruption
-//     (but don't accept new jobs) before exiting
+//     (but don't accept new jobs) before exiting. Does not block.
 //   - *Ungraceful* stop: cancel the current job (jobRunner.CancelAndStop),
-//     wait a grace period for it to exit, and then exit ourselves
+//     wait a grace period for it to exit, and then exit ourselves. This blocks
+//     until the job is cancelled.
 //
 // In both cases, the ping loop should cease running.
 func (a *AgentWorker) Stop(graceful bool) {
@@ -521,21 +523,21 @@ func (a *AgentWorker) Stop(graceful bool) {
 		default:
 			// If we have a job, tell the user that we'll wait for
 			// it to finish before disconnecting
-			if a.jobRunner != nil {
+			if a.jobRunner.Load() != nil {
 				a.logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
 			} else {
 				a.logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 			}
 		}
 	} else { // ungraceful
-		// If there's a job running, kill it, then disconnect
-		if a.jobRunner != nil {
+		// If there's a job running, kill it, then disconnect.
+		if jr := a.jobRunner.Load(); jr != nil {
 			a.logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
 
 			// Kill the current job. Doesn't do anything if the job
 			// is already being killed, so it's safe to call
 			// multiple times.
-			err := a.jobRunner.Cancel(true /* agent is stopping */)
+			err := jr.Cancel(true /* agent is stopping */)
 			if err != nil {
 				a.logger.Error("Unexpected error canceling job (err: %s)", err)
 			}
@@ -765,11 +767,11 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 	if err != nil {
 		return fmt.Errorf("Failed to initialize job: %w", err)
 	}
-	a.jobRunner = jr
-	defer func() {
-		// No more job, no more runner.
-		a.jobRunner = nil
-	}()
+	if !a.jobRunner.CompareAndSwap(nil, jr) {
+		return fmt.Errorf("Agent worker already has a job running")
+	}
+	// No more job, no more runner.
+	defer a.jobRunner.Store(nil)
 
 	// Start running the job
 	if err := jr.Run(ctx, ignoreAgentInDispatches); err != nil {

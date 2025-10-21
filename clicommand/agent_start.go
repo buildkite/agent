@@ -1408,34 +1408,42 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 		interruptCount = 1
 	}
 
+	ungracefulStop := func() {
+		// We shouldn't block the signal handler loop either by waiting
+		// for the jobs to cancel or by waiting for the cancel grace
+		// period to expire.
+		go ps.pool.Stop(false /* ungraceful */) // one last chance to stop
+		go func() {
+			// Assuming cancelling jobs takes the full cancel grace period,
+			// allow 1 second to send agent disconnects.
+			time.Sleep(ps.cancelGracePeriod + 1*time.Second)
+			// We get here if the main goroutine hasn't returned yet.
+			ps.log.Info("Timed out waiting for agents to exit; exiting immediately with status 1")
+			os.Exit(1)
+		}()
+	}
+
 	for sig := range signals {
 		ps.log.Debug("Received signal `%v`", sig)
 		setStatus(fmt.Sprintf("Received signal `%v`", sig))
 
 		switch sig {
 		case syscall.SIGQUIT:
-			ps.pool.Stop(false)
+			ungracefulStop()
 
 		case syscall.SIGTERM, syscall.SIGINT:
 			interruptCount++
 			switch interruptCount {
 			case 1:
 				ps.log.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
-				ps.pool.Stop(true)
+				ps.pool.Stop(true /* graceful */)
 
 			case 2:
 				ps.log.Info("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod)
 				if !ps.skipGraceful {
-					ps.log.Info("Press Ctrl-C one more time to exit immediately without disconnecting")
+					ps.log.Info("Press Ctrl-C one more time to exit immediately without disconnecting - note that agents will be considered lost!")
 				}
-				ps.pool.Stop(false) // one last chance to stop
-
-				go func() {
-					time.Sleep(ps.cancelGracePeriod)
-					// We get here if the main goroutine hasn't returned yet.
-					ps.log.Info("Timed out waiting for agents to exit; exiting immediately with status 1")
-					os.Exit(1)
-				}()
+				ungracefulStop()
 
 			case 3:
 				ps.log.Info("Exiting immediately with status 1")

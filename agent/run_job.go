@@ -555,7 +555,7 @@ func (r *JobRunner) Cancel(agentStopping bool) error {
 	select {
 	// Grace period between Interrupt and Terminate = the signal grace period.
 	// Extra time between the end of the signal grace period and the end of the
-	// cancel grace period is the time we (agent side) needs to upload logs and
+	// cancel grace period is the time we (agent side) need to upload logs and
 	// disconnect (if the agent is exiting).
 	case <-time.After(r.conf.AgentConfiguration.SignalGracePeriod):
 		r.agentLogger.Info(
