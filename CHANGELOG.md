@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.110.0](https://github.com/buildkite/agent/tree/v3.110.0) (2025-10-22)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.109.1...v3.110.0)
+
+### Added
+- Configurable chunks interval [#3521](https://github.com/buildkite/agent/pull/3521) (@catkins)
+- Inject OpenTelemetry context to all child processes [#3548](https://github.com/buildkite/agent/pull/3548) (@zhming0)
+  - This is done using [environment variables](https://opentelemetry.io/docs/specs/otel/context/env-carriers/). This may interfere with existing OTel environment variables if they are manually added some other way.
+- Add --literal and --delimiter flags to artifact upload [#3543](https://github.com/buildkite/agent/pull/3543) (@DrJosh9000)
+
+### Changed
+Various improvements and fixes to do with signal and cancel grace periods, and signal handling, most notably:
+- When cancelling a job, the timeout before sending a SIGKILL to the job has changed from cancel-grace-period to signal-grace-period (`--signal-grace-period-seconds` flag, `BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS` env var) to allow the agent some extra time to upload job logs and mark the job as finished. By default, signal-grace-period is 1 second shorter than cancel-grace-period. You may wish to increase cancel-grace-period accordingly.
+- When SIGQUIT is handled by the bootstrap, the exit code is now 131, and it no longer dumps a stacktrace.
+- The recently-added `--kubernetes-log-collection-grace-period` flag is now deprecated. Instead, use `--cancel-grace-period`.
+- When running the agent interactively, you can now Ctrl-C a third time to exit immediately.
+- In Kubernetes mode, the agent now begins shutting down on the first SIGTERM. The kubernetes-bootstrap now swallows SIGTERM with a logged message, and waits for the agent container to send an interrupt.
+- When the agent is cancelling jobs because it is stopping, all jobs start cancellation simultaneously. This allows the agent to exit sooner when multiple workers (`--spawn` flag) are used.
+See [#3549](https://github.com/buildkite/agent/pull/3549), [#3547](https://github.com/buildkite/agent/pull/3547), [#3534](https://github.com/buildkite/agent/pull/3534) (@DrJosh9000)
+
+### Fixed
+- Refresh checkout root file handle after checkout hook [#3546](https://github.com/buildkite/agent/pull/3546) (@zhming0)
+- Bump zzglob to v0.4.2 to fix uploading artifact paths containing `~` [#3539](https://github.com/buildkite/agent/pull/3539) (@DrJosh9000)
+
+### Internal
+- Docs: Add examples for step update commands for priority and notify attributes [#3532](https://github.com/buildkite/agent/pull/3532) (@tomowatt)
+- Docs: Update URLs in agent cfg comments [#3536](https://github.com/buildkite/agent/pull/3536) (@petetomasik)
+
+### Dependency updates
+- Upgrade Datadog-go to v5.8.1 to work around mod checksum issues [#3538](https://github.com/buildkite/agent/pull/3538) (@dannyfallon)
+- build(deps): bump the container-images group across 3 directories with 2 updates [#3545](https://github.com/buildkite/agent/pull/3545) (@dependabot[bot])
+- build(deps): bump gopkg.in/DataDog/dd-trace-go.v1 from 1.74.6 to 1.74.7 [#3544](https://github.com/buildkite/agent/pull/3544) (@dependabot[bot])
+- build(deps): bump github.com/gofrs/flock from 0.12.1 to 0.13.0 [#3523](https://github.com/buildkite/agent/pull/3523) (@dependabot[bot])
+- build(deps): bump docker/library/golang from 1.24.8 to 1.24.9 in /.buildkite in the container-images group across 1 directory [#3542](https://github.com/buildkite/agent/pull/3542) (@dependabot[bot])
+- build(deps): bump the cloud-providers group across 1 directory with 6 updates [#3541](https://github.com/buildkite/agent/pull/3541) (@dependabot[bot])
+- build(deps): bump the container-images group across 3 directories with 1 update [#3540](https://github.com/buildkite/agent/pull/3540) (@dependabot[bot])
+- build(deps): bump the golang-x group with 5 updates [#3525](https://github.com/buildkite/agent/pull/3525) (@dependabot[bot])
+
+
 ## [v3.109.1](https://github.com/buildkite/agent/tree/v3.109.1) (2025-10-15)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.109.0...v3.109.1)
 
