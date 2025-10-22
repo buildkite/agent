@@ -44,6 +44,15 @@ var BuildkiteAgentCommands = []cli.Command{
 		},
 	},
 	{
+		Name:     "cache",
+		Category: categoryJobCommands,
+		Usage:    "Manage build caches",
+		Subcommands: []cli.Command{
+			CacheSaveCommand,
+			CacheRestoreCommand,
+		},
+	},
+	{
 		Name:     "env",
 		Category: categoryJobCommands,
 		Usage:    "Interact with the environment of the currently running build",
