@@ -67,6 +67,7 @@ type CacheRestoreConfig struct {
 	APIConfig
 
 	Ids             string `cli:"ids"`
+	Registry        string `cli:"registry"`
 	BucketURL       string `cli:"bucket-url"`
 	Branch          string `cli:"branch" validate:"required"`
 	Pipeline        string `cli:"pipeline" validate:"required"`
@@ -84,6 +85,12 @@ var CacheRestoreCommand = cli.Command{
 			Value:  "",
 			Usage:  "Comma-separated list of cache IDs to restore (if empty, restores all caches)",
 			EnvVar: "BUILDKITE_CACHE_IDS",
+		},
+		cli.StringFlag{
+			Name:   "registry",
+			Value:  "~",
+			Usage:  "The slug of the cache registry to use, defaults to the default registry (~)",
+			EnvVar: "BUILDKITE_CACHE_REGISTRY",
 		},
 		cli.StringFlag{
 			Name:   "bucket-url",
