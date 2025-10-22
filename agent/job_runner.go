@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -115,17 +116,15 @@ type JobRunner struct {
 	// jobLogs is an io.Writer that sends data to the job logs
 	jobLogs io.Writer
 
-	// If the job is being cancelled
-	cancelled bool
+	// Job cancellation control
+	cancelLock sync.Mutex // prevent concurrent calls to Cancel
+
+	// State flags
+	cancelled     atomic.Bool // job is cancelled?
+	agentStopping atomic.Bool
 
 	// When the job was started
 	startedAt time.Time
-
-	// If the agent is being stopped
-	stopped bool
-
-	// A lock to protect concurrent calls to cancel
-	cancelLock sync.Mutex
 
 	// Files containing a copy of the job env
 	envShellFile *os.File
@@ -811,15 +810,17 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
 				r.agentLogger.Error("Invalid access token, cancelling job %s", r.conf.Job.ID)
-				if err := r.Cancel(); err != nil {
+				if err := r.Cancel(CancelReasonInvalidToken); err != nil {
 					r.agentLogger.Error("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
 				}
 			} else {
 				// We don't really care if it fails, we'll just try again soon anyway
 				r.agentLogger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
 			}
-		} else if jobState.State == "canceling" || jobState.State == "canceled" {
-			if err := r.Cancel(); err != nil {
+			continue // the loop
+		}
+		if jobState.State == "canceling" || jobState.State == "canceled" {
+			if err := r.Cancel(CancelReasonJobState); err != nil {
 				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}

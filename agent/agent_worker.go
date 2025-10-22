@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -87,7 +88,8 @@ type AgentWorker struct {
 	// The signal to use for cancellation
 	cancelSig process.Signal
 
-	// Stop controls
+	// Stop controls. Note that Stopping != Cancelling. See the [Stop] method
+	// for an explanation.
 	stopOnce sync.Once // prevents double-closing the channel
 	stop     chan struct{}
 
@@ -96,7 +98,7 @@ type AgentWorker struct {
 
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
-	jobRunner *JobRunner
+	jobRunner atomic.Pointer[JobRunner]
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	agentStdout io.Writer
@@ -389,7 +391,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 
 		switch action {
 		case "disconnect":
-			a.Stop(false)
+			a.StopUngracefully()
 			return nil
 
 		case "pause":
@@ -501,45 +503,55 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	}
 }
 
-// Stops the agent from accepting new work and cancels any current work it's
-// running
-func (a *AgentWorker) Stop(graceful bool) {
-	if graceful {
-		select {
-		case <-a.stop:
-			a.logger.Warn("Agent is already gracefully stopping...")
+// StopGracefully stops the agent from accepting new work. It allows the current
+// job to finish without interruption. Does not block.
+func (a *AgentWorker) StopGracefully() {
+	select {
+	case <-a.stop:
+		a.logger.Warn("Agent is already gracefully stopping...")
+		return
 
-		default:
-			// If we have a job, tell the user that we'll wait for
-			// it to finish before disconnecting
-			if a.jobRunner != nil {
-				a.logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
-			} else {
-				a.logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
-			}
-		}
-	} else { // ungraceful
-		// If there's a job running, kill it, then disconnect
-		if a.jobRunner != nil {
-			a.logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
+	default:
+		// continue below
+	}
 
-			// Kill the current job. Doesn't do anything if the job
-			// is already being killed, so it's safe to call
-			// multiple times.
-			err := a.jobRunner.CancelAndStop()
-			if err != nil {
-				a.logger.Error("Unexpected error canceling job (err: %s)", err)
-			}
-		} else {
-			a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
-		}
+	// If we have a job, tell the user that we'll wait for it to finish
+	// before disconnecting
+	if a.jobRunner.Load() != nil {
+		a.logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
+	} else {
+		a.logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 	}
 
 	a.stopOnce.Do(func() {
-		// Use the closure of the stop channel as a signal to the main run loop in Start()
-		// to stop looping and terminate
+		// Use the closure of the stop channel as a signal to the main run
+		// loop in Start() to stop looping and terminate
 		close(a.stop)
 	})
+}
+
+// StopUngracefully stops the agent from accepting new work and cancels any
+// existing job. It blocks until the job is cancelled, if there is one.
+func (a *AgentWorker) StopUngracefully() {
+	a.stopOnce.Do(func() {
+		// Use the closure of the stop channel as a signal to the main run
+		// loop in Start() to stop looping and terminate
+		close(a.stop)
+	})
+
+	// If there's a job running, kill it, then disconnect.
+	if jr := a.jobRunner.Load(); jr != nil {
+		a.logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
+
+		// Kill the current job. Doesn't do anything if the job
+		// is already being killed, so it's safe to call
+		// multiple times.
+		if err := jr.Cancel(CancelReasonAgentStopping); err != nil {
+			a.logger.Error("Unexpected error canceling job (err: %s)", err)
+		}
+	} else {
+		a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+	}
 }
 
 // Connects the agent to the Buildkite Agent API, retrying up to 10 times if it
@@ -561,7 +573,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 		b, resp, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
 			if resp != nil && !api.IsRetryableStatus(resp) {
-				a.Stop(false)
+				a.StopUngracefully()
 				r.Break()
 				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
 			}
@@ -611,7 +623,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
 		// responses with non-retryable statuses
 		if resp != nil && !api.IsRetryableStatus(resp) {
-			a.Stop(false)
+			a.StopUngracefully()
 			return nil, action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
 		}
 
@@ -664,18 +676,26 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 // state. If the job is in an unassignable state, it will return an error immediately.
 // Otherwise, it will retry every 3s for 30 s. The whole operation will timeout after 5 min.
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
-	ctx, cancel := context.WithCancel(ctx)
+	// Note: Context.Cancel is a blunt instrument. It will (for example)
+	// prevent the final API calls to upload remaining logs and mark the job
+	// finished.
+	// But we do want to abort the retry loop in AcquireJob early if possible.
+	// So, use context cancellation to abort AcquireJob on agent stop, but not
+	// RunJob.
+	// The agent's signal handler handles cancellation after a job has begun.
+	acquireCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	go func() {
 		<-a.stop
 		cancel()
 	}()
 
-	job, err := a.client.AcquireJob(ctx, jobId)
+	job, err := a.client.AcquireJob(acquireCtx, jobId)
 	if err != nil {
 		return fmt.Errorf("failed to acquire job: %w", err)
 	}
 
-	// Now that we've acquired the job, let's run it
+	// Now that we've acquired the job, let's run it.
 	return a.RunJob(ctx, job, nil)
 }
 
@@ -748,11 +768,11 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 	if err != nil {
 		return fmt.Errorf("Failed to initialize job: %w", err)
 	}
-	a.jobRunner = jr
-	defer func() {
-		// No more job, no more runner.
-		a.jobRunner = nil
-	}()
+	if !a.jobRunner.CompareAndSwap(nil, jr) {
+		return fmt.Errorf("Agent worker already has a job running")
+	}
+	// No more job, no more runner.
+	defer a.jobRunner.Store(nil)
 
 	// Start running the job
 	if err := jr.Run(ctx, ignoreAgentInDispatches); err != nil {
