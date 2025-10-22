@@ -93,6 +93,18 @@ type ExecutorConfig struct {
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
 	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG" normalize:"list"`
 
+	// Enable sparse checkout for partial clones
+	GitSparseCheckout bool `env:"BUILDKITE_GIT_SPARSE_CHECKOUT"`
+
+	// Paths to include in sparse checkout (comma-separated)
+	GitSparseCheckoutPaths string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"`
+
+	// Clone depth for shallow clones
+	GitCloneDepth string `env:"BUILDKITE_GIT_CLONE_DEPTH"`
+
+	// Filter specification for partial clones (e.g., "tree:0")
+	GitCloneFilter string `env:"BUILDKITE_GIT_CLONE_FILTER"`
+
 	// Whether or not to run the hooks/commands in a PTY
 	RunInPty bool
 

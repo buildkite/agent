@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -309,5 +310,173 @@ func TestGitFetch(t *testing.T) {
 	wantLog := [][]string{{absoluteGit, "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2"}}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestGitSparseCheckoutInit(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// Test cone mode
+	{
+		var gotLog [][]string
+		sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+		absoluteGit, err := sh.AbsolutePath("git")
+		if err != nil {
+			t.Fatalf("sh.AbsolutePath(git) = %v", err)
+		}
+
+		err = gitSparseCheckoutInit(ctx, sh, true)
+		if err != nil {
+			t.Fatalf("gitSparseCheckoutInit(ctx, sh, true) = %v", err)
+		}
+
+		wantLog := [][]string{{absoluteGit, "sparse-checkout", "init", "--cone"}}
+		if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+			t.Errorf("executed commands diff (-got +want):\n%s", diff)
+		}
+	}
+
+	// Test non-cone mode
+	{
+		var gotLog [][]string
+		sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+		absoluteGit, err := sh.AbsolutePath("git")
+		if err != nil {
+			t.Fatalf("sh.AbsolutePath(git) = %v", err)
+		}
+
+		err = gitSparseCheckoutInit(ctx, sh, false)
+		if err != nil {
+			t.Fatalf("gitSparseCheckoutInit(ctx, sh, false) = %v", err)
+		}
+
+		wantLog := [][]string{{absoluteGit, "sparse-checkout", "init"}}
+		if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+			t.Errorf("executed commands diff (-got +want):\n%s", diff)
+		}
+	}
+}
+
+func TestGitSparseCheckoutSet(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// Test with single path
+	{
+		var gotLog [][]string
+		sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+		absoluteGit, err := sh.AbsolutePath("git")
+		if err != nil {
+			t.Fatalf("sh.AbsolutePath(git) = %v", err)
+		}
+
+		paths := []string{"src/frontend"}
+		err = gitSparseCheckoutSet(ctx, sh, paths)
+		if err != nil {
+			t.Fatalf("gitSparseCheckoutSet(ctx, sh, %v) = %v", paths, err)
+		}
+
+		wantLog := [][]string{{absoluteGit, "sparse-checkout", "set", "src/frontend"}}
+		if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+			t.Errorf("executed commands diff (-got +want):\n%s", diff)
+		}
+	}
+
+	// Test with multiple paths
+	{
+		var gotLog [][]string
+		sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+		absoluteGit, err := sh.AbsolutePath("git")
+		if err != nil {
+			t.Fatalf("sh.AbsolutePath(git) = %v", err)
+		}
+
+		paths := []string{"src/frontend", "src/backend", "docs"}
+		err = gitSparseCheckoutSet(ctx, sh, paths)
+		if err != nil {
+			t.Fatalf("gitSparseCheckoutSet(ctx, sh, %v) = %v", paths, err)
+		}
+
+		wantLog := [][]string{{absoluteGit, "sparse-checkout", "set", "src/frontend", "src/backend", "docs"}}
+		if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+			t.Errorf("executed commands diff (-got +want):\n%s", diff)
+		}
+	}
+
+	// Test with empty paths
+	{
+		sh := shell.NewTestShell(t, shell.WithDryRun(true))
+		err := gitSparseCheckoutSet(ctx, sh, []string{})
+		if err == nil {
+			t.Errorf("gitSparseCheckoutSet(ctx, sh, []string{}) = nil, want error")
+		}
+		if got, want := err.Error(), "no paths provided for sparse checkout"; got != want {
+			t.Errorf("gitSparseCheckoutSet(ctx, sh, []string{}) error = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestGitSparseCheckoutDisable(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	err = gitSparseCheckoutDisable(ctx, sh)
+	if err != nil {
+		t.Fatalf("gitSparseCheckoutDisable(ctx, sh) = %v", err)
+	}
+
+	wantLog := [][]string{{absoluteGit, "sparse-checkout", "disable"}}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestIsSparseCheckoutEnabled(t *testing.T) {
+	t.Parallel()
+
+	// Create a temporary directory for testing
+	tmpDir := t.TempDir()
+	gitDir := filepath.Join(tmpDir, ".git")
+	infoDir := filepath.Join(gitDir, "info")
+	sparseCheckoutFile := filepath.Join(infoDir, "sparse-checkout")
+
+	// Create shell with working directory set to tmpDir
+	sh := shell.NewTestShell(t)
+	sh.Chdir(tmpDir)
+
+	// Test 1: No .git directory
+	if isSparseCheckoutEnabled(sh) {
+		t.Error("expected sparse checkout to be disabled when .git doesn't exist")
+	}
+
+	// Test 2: .git exists but no sparse-checkout file
+	os.MkdirAll(infoDir, 0755)
+	if isSparseCheckoutEnabled(sh) {
+		t.Error("expected sparse checkout to be disabled when sparse-checkout file doesn't exist")
+	}
+
+	// Test 3: sparse-checkout file exists but is empty
+	os.WriteFile(sparseCheckoutFile, []byte{}, 0644)
+	if isSparseCheckoutEnabled(sh) {
+		t.Error("expected sparse checkout to be disabled when sparse-checkout file is empty")
+	}
+
+	// Test 4: sparse-checkout file exists with content
+	os.WriteFile(sparseCheckoutFile, []byte("dir1\ndir2\n"), 0644)
+	if !isSparseCheckoutEnabled(sh) {
+		t.Error("expected sparse checkout to be enabled when sparse-checkout file has content")
 	}
 }
