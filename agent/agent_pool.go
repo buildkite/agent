@@ -88,19 +88,26 @@ func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker) error {
 	return worker.Start(ctx, r.idleMonitor)
 }
 
-// Stop stops all workers in the pool simultaneously. It blocks until Stop has
-// returned for every worker - note that passing `false` means each Stop will
-// wait for job cancellation.
-func (r *AgentPool) Stop(graceful bool) {
+// StopGracefully stops all workers in the pool gracefully.
+func (r *AgentPool) StopGracefully() {
+	for _, worker := range r.workers {
+		worker.StopGracefully()
+	}
+}
+
+// StopUngracefully stops all workers in the pool ungracefully. It blocks until
+// all workers have returned from stopping, which means waiting for job
+// cancellation to finish.
+func (r *AgentPool) StopUngracefully() {
 	var wg sync.WaitGroup
 	wg.Add(len(r.workers))
 	for _, worker := range r.workers {
-		// Because Stop calls the job runner's Cancel, which can block, tell all
-		// the workers to stop simultaneously.
+		// Because StopUngracefully calls the job runner's Cancel, which blocks,
+		// concurrently stop all the workers.
 		// The number of concurrent Stops is bounded by the spawn count, and
 		// there already exists a handful of goroutines per worker.
 		go func() {
-			worker.Stop(graceful)
+			worker.StopUngracefully()
 			wg.Done()
 		}()
 	}

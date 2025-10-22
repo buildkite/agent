@@ -514,13 +514,13 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 //
 // Cancel blocks until this process is complete.
 // The `agentStopping` arg mainly affects logged messages.
-func (r *JobRunner) Cancel(agentStopping bool) error {
+func (r *JobRunner) Cancel(reason CancelReason) error {
 	r.cancelLock.Lock()
 	defer r.cancelLock.Unlock()
 
 	// In case the user clicks "Cancel" in the UI while the agent happens to be
 	// stopping, only go from !stopping -> stopping.
-	r.agentStopping.Store(r.agentStopping.Load() || agentStopping)
+	r.agentStopping.Store(r.agentStopping.Load() || reason == CancelReasonAgentStopping)
 
 	// Return early if already cancelled.
 	if !r.cancelled.CompareAndSwap(false, true) {
@@ -532,13 +532,8 @@ func (r *JobRunner) Cancel(agentStopping bool) error {
 		return nil
 	}
 
-	reason := ""
-	if r.agentStopping.Load() {
-		reason = "(agent stopping)"
-	}
-
 	r.agentLogger.Info(
-		"Canceling job %s with a signal grace period of %v %s",
+		"Canceling job %s with a signal grace period of %v (%s)",
 		r.conf.Job.ID,
 		r.conf.AgentConfiguration.SignalGracePeriod,
 		reason,
@@ -571,4 +566,25 @@ func (r *JobRunner) Cancel(agentStopping bool) error {
 	case <-r.process.Done():
 		return nil
 	}
+}
+
+// CancelReason captures the reason why Cancel is called.
+type CancelReason int
+
+const (
+	CancelReasonJobState CancelReason = iota
+	CancelReasonAgentStopping
+	CancelReasonInvalidToken
+)
+
+func (r CancelReason) String() string {
+	switch r {
+	case CancelReasonJobState:
+		return "job cancelled on Buildkite"
+	case CancelReasonAgentStopping:
+		return "agent is stopping"
+	case CancelReasonInvalidToken:
+		return "access token is invalid"
+	}
+	return "unknown"
 }

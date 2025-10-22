@@ -1412,7 +1412,7 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 		// We shouldn't block the signal handler loop either by waiting
 		// for the jobs to cancel or by waiting for the cancel grace
 		// period to expire.
-		go ps.pool.Stop(false /* ungraceful */) // one last chance to stop
+		go ps.pool.StopUngracefully() // one last chance to stop
 		go func() {
 			// Assuming cancelling jobs takes the full cancel grace period,
 			// allow 1 second to send agent disconnects.
@@ -1436,7 +1436,7 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 			switch interruptCount {
 			case 1:
 				ps.log.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
-				ps.pool.Stop(true /* graceful */)
+				ps.pool.StopGracefully()
 
 			case 2:
 				ps.log.Info("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod)

@@ -121,7 +121,7 @@ type JobRunner struct {
 
 	// State flags
 	cancelled     atomic.Bool // job is cancelled?
-	agentStopping atomic.Bool // agent is stopping?
+	agentStopping atomic.Bool
 
 	// When the job was started
 	startedAt time.Time
@@ -810,7 +810,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
 				r.agentLogger.Error("Invalid access token, cancelling job %s", r.conf.Job.ID)
-				if err := r.Cancel(false /* agent is not necessarily stopping */); err != nil {
+				if err := r.Cancel(CancelReasonInvalidToken); err != nil {
 					r.agentLogger.Error("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
 				}
 			} else {
@@ -820,7 +820,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 			continue // the loop
 		}
 		if jobState.State == "canceling" || jobState.State == "canceled" {
-			if err := r.Cancel(false /* agent is not necessarily stopping */); err != nil {
+			if err := r.Cancel(CancelReasonJobState); err != nil {
 				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}

@@ -391,7 +391,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 
 		switch action {
 		case "disconnect":
-			a.Stop(false)
+			a.StopUngracefully()
 			return nil
 
 		case "pause":
@@ -503,54 +503,55 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	}
 }
 
-// Stops the agent from accepting new work and cancels any current work it's
-// running. Whether or not Stop also cancels the current job depends on the
-// `graceful` argument.
-//
-//   - *Graceful* stop: allow the current job to finish without interruption
-//     (but don't accept new jobs) before exiting. Does not block.
-//   - *Ungraceful* stop: cancel the current job (jobRunner.CancelAndStop),
-//     wait a grace period for it to exit, and then exit ourselves. This blocks
-//     until the job is cancelled.
-//
-// In both cases, the ping loop should cease running.
-func (a *AgentWorker) Stop(graceful bool) {
-	if graceful {
-		select {
-		case <-a.stop:
-			a.logger.Warn("Agent is already gracefully stopping...")
+// StopGracefully stops the agent from accepting new work. It allows the current
+// job to finish without interruption. Does not block.
+func (a *AgentWorker) StopGracefully() {
+	select {
+	case <-a.stop:
+		a.logger.Warn("Agent is already gracefully stopping...")
+		return
 
-		default:
-			// If we have a job, tell the user that we'll wait for
-			// it to finish before disconnecting
-			if a.jobRunner.Load() != nil {
-				a.logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
-			} else {
-				a.logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
-			}
-		}
-	} else { // ungraceful
-		// If there's a job running, kill it, then disconnect.
-		if jr := a.jobRunner.Load(); jr != nil {
-			a.logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
+	default:
+		// continue below
+	}
 
-			// Kill the current job. Doesn't do anything if the job
-			// is already being killed, so it's safe to call
-			// multiple times.
-			err := jr.Cancel(true /* agent is stopping */)
-			if err != nil {
-				a.logger.Error("Unexpected error canceling job (err: %s)", err)
-			}
-		} else {
-			a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
-		}
+	// If we have a job, tell the user that we'll wait for it to finish
+	// before disconnecting
+	if a.jobRunner.Load() != nil {
+		a.logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
+	} else {
+		a.logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 	}
 
 	a.stopOnce.Do(func() {
-		// Use the closure of the stop channel as a signal to the main run loop in Start()
-		// to stop looping and terminate
+		// Use the closure of the stop channel as a signal to the main run
+		// loop in Start() to stop looping and terminate
 		close(a.stop)
 	})
+}
+
+// StopUngracefully stops the agent from accepting new work and cancels any
+// existing job. It blocks until the job is cancelled, if there is one.
+func (a *AgentWorker) StopUngracefully() {
+	a.stopOnce.Do(func() {
+		// Use the closure of the stop channel as a signal to the main run
+		// loop in Start() to stop looping and terminate
+		close(a.stop)
+	})
+
+	// If there's a job running, kill it, then disconnect.
+	if jr := a.jobRunner.Load(); jr != nil {
+		a.logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
+
+		// Kill the current job. Doesn't do anything if the job
+		// is already being killed, so it's safe to call
+		// multiple times.
+		if err := jr.Cancel(CancelReasonAgentStopping); err != nil {
+			a.logger.Error("Unexpected error canceling job (err: %s)", err)
+		}
+	} else {
+		a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+	}
 }
 
 // Connects the agent to the Buildkite Agent API, retrying up to 10 times if it
@@ -572,7 +573,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 		b, resp, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
 			if resp != nil && !api.IsRetryableStatus(resp) {
-				a.Stop(false)
+				a.StopUngracefully()
 				r.Break()
 				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
 			}
@@ -622,7 +623,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
 		// responses with non-retryable statuses
 		if resp != nil && !api.IsRetryableStatus(resp) {
-			a.Stop(false)
+			a.StopUngracefully()
 			return nil, action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
 		}
 
