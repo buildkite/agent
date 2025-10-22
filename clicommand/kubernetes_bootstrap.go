@@ -172,15 +172,19 @@ var KubernetesBootstrapCommand = cli.Command{
 			// Interrupt, waits for its signalGracePeriod, and then calls
 			// Terminate.
 			cancel()
-			// If we're cancelling because the job was cancelled in the UI, we
-			// should self-exit after cancelGracePeriod to be sure.
-			// (If we're cancelling because the pod is being deleted, Kubernetes
-			// enforces it after terminationGracePeriodSeconds, so self-exiting
-			// in that case is superfluous.)
-			time.Sleep(cancelGracePeriod)
-			// We get here if the main goroutine hasn't returned yet.
-			l.Info("kubernetes-bootstrap: Timed out waiting for subprocess to exit; exiting immediately with status 1")
-			os.Exit(1)
+			// If we block the StatusLoop goroutine, the client will be
+			// considered missing after a short while.
+			go func() {
+				// If we're cancelling because the job was cancelled in the UI, we
+				// should self-exit after cancelGracePeriod to be sure.
+				// (If we're cancelling because the pod is being deleted, Kubernetes
+				// enforces it after terminationGracePeriodSeconds, so self-exiting
+				// in that case is superfluous.)
+				time.Sleep(cancelGracePeriod)
+				// We get here if the main goroutine hasn't returned yet.
+				l.Info("kubernetes-bootstrap: Timed out waiting for subprocess to exit; exiting immediately with status 1")
+				os.Exit(1)
+			}()
 		}); err != nil {
 			return fmt.Errorf("connecting to k8s socket: %w", err)
 		}
