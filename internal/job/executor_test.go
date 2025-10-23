@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -84,4 +85,112 @@ func TestStartTracing_Datadog(t *testing.T) {
 
 	assert.Equal(t, spanImpl.Span, opentracing.SpanFromContext(ctx))
 	stopper()
+}
+
+func TestCheckoutPathWithAllComponents(t *testing.T) {
+	t.Parallel()
+
+	cfg := ExecutorConfig{
+		BuildPath:                        "/var/lib/buildkite-agent/builds",
+		AgentName:                        "my-agent",
+		OrganizationSlug:                 "my-org",
+		PipelineSlug:                     "my-pipeline",
+		CheckoutPathIncludesPipeline:     true,
+		CheckoutPathIncludesHostname:     true,
+		CheckoutPathIncludesOrganization: true,
+	}
+
+	e := New(cfg)
+
+	var err error
+	e.shell, err = shell.New()
+	assert.NoError(t, err)
+
+	err = e.setUp(context.Background())
+	assert.NoError(t, err)
+
+	checkoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	assert.True(t, exists, "BUILDKITE_BUILD_CHECKOUT_PATH should be set")
+	assert.Equal(t, filepath.FromSlash("/var/lib/buildkite-agent/builds/my-agent/my-org/my-pipeline"), checkoutPath)
+}
+
+func TestCheckoutPathWithoutPipeline(t *testing.T) {
+	t.Parallel()
+
+	cfg := ExecutorConfig{
+		BuildPath:                        "/var/lib/buildkite-agent/builds",
+		AgentName:                        "my-agent",
+		OrganizationSlug:                 "my-org",
+		PipelineSlug:                     "my-pipeline",
+		CheckoutPathIncludesPipeline:     false,
+		CheckoutPathIncludesHostname:     true,
+		CheckoutPathIncludesOrganization: true,
+	}
+
+	e := New(cfg)
+
+	var err error
+	e.shell, err = shell.New()
+	assert.NoError(t, err)
+
+	err = e.setUp(context.Background())
+	assert.NoError(t, err)
+
+	checkoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	assert.True(t, exists)
+	assert.Equal(t, filepath.FromSlash("/var/lib/buildkite-agent/builds/my-agent/my-org"), checkoutPath)
+}
+
+func TestCheckoutPathWithoutOrganization(t *testing.T) {
+	t.Parallel()
+
+	cfg := ExecutorConfig{
+		BuildPath:                        "/var/lib/buildkite-agent/builds",
+		AgentName:                        "my-agent",
+		OrganizationSlug:                 "my-org",
+		PipelineSlug:                     "my-pipeline",
+		CheckoutPathIncludesPipeline:     true,
+		CheckoutPathIncludesHostname:     true,
+		CheckoutPathIncludesOrganization: false,
+	}
+
+	e := New(cfg)
+
+	var err error
+	e.shell, err = shell.New()
+	assert.NoError(t, err)
+
+	err = e.setUp(context.Background())
+	assert.NoError(t, err)
+
+	checkoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	assert.True(t, exists)
+	assert.Equal(t, filepath.FromSlash("/var/lib/buildkite-agent/builds/my-agent/my-pipeline"), checkoutPath)
+}
+
+func TestCheckoutPathMinimal(t *testing.T) {
+	t.Parallel()
+
+	cfg := ExecutorConfig{
+		BuildPath:                        "/var/lib/buildkite-agent/builds",
+		AgentName:                        "my-agent",
+		OrganizationSlug:                 "my-org",
+		PipelineSlug:                     "my-pipeline",
+		CheckoutPathIncludesPipeline:     false,
+		CheckoutPathIncludesHostname:     false,
+		CheckoutPathIncludesOrganization: false,
+	}
+
+	e := New(cfg)
+
+	var err error
+	e.shell, err = shell.New()
+	assert.NoError(t, err)
+
+	err = e.setUp(context.Background())
+	assert.NoError(t, err)
+
+	checkoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	assert.True(t, exists)
+	assert.Equal(t, filepath.FromSlash("/var/lib/buildkite-agent/builds"), checkoutPath)
 }
