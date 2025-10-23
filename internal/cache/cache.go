@@ -44,7 +44,7 @@ type CacheClient interface {
 
 // Save saves caches based on the provided configuration and logs results as each cache is processed
 func Save(ctx context.Context, l logger.Logger, cfg Config) error {
-	cacheClient, cacheIDs, err := setupCacheClient(ctx, cfg)
+	cacheClient, cacheIDs, err := setupCacheClient(ctx, l, cfg)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func Save(ctx context.Context, l logger.Logger, cfg Config) error {
 
 // Restore restores caches based on the provided configuration and logs results as each cache is processed
 func Restore(ctx context.Context, l logger.Logger, cfg Config) error {
-	cacheClient, cacheIDs, err := setupCacheClient(ctx, cfg)
+	cacheClient, cacheIDs, err := setupCacheClient(ctx, l, cfg)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func loadCacheConfiguration(cacheConfigFile string) ([]cache.Cache, error) {
 }
 
 // setupCacheClient creates a cache client and determines which cache IDs to process
-func setupCacheClient(ctx context.Context, cfg Config) (*zstash.Cache, []string, error) {
+func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash.Cache, []string, error) {
 	client := api.NewClient(ctx, version.Version(), cfg.APIEndpoint, cfg.APIToken)
 
 	caches, err := loadCacheConfiguration(cfg.CacheConfigFile)
