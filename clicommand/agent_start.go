@@ -1072,10 +1072,9 @@ var AgentStartCommand = cli.Command{
 			TracingBackend:                     cfg.TracingBackend,
 			TracingServiceName:                 cfg.TracingServiceName,
 			TracingPropagateTraceparent:        cfg.TracingPropagateTraceparent,
-			TraceContextEncoding:               cfg.TraceContextEncoding,
-			AllowMultipartArtifactUpload:       !cfg.NoMultipartArtifactUpload,
-			KubernetesExec:                     cfg.KubernetesExec,
-			KubernetesLogCollectionGracePeriod: kubernetesLogCollectionGracePeriod,
+			TraceContextEncoding:         cfg.TraceContextEncoding,
+			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
+			KubernetesExec:               cfg.KubernetesExec,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
