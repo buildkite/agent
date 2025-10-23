@@ -106,6 +106,8 @@ func TestCheckoutPathWithAllComponents(t *testing.T) {
 	e.shell, err = shell.New()
 	assert.NoError(t, err)
 
+	e.shell.Env.Remove("BUILDKITE_BUILD_CHECKOUT_PATH")
+
 	err = e.setUp(context.Background())
 	assert.NoError(t, err)
 
@@ -132,6 +134,8 @@ func TestCheckoutPathWithoutPipeline(t *testing.T) {
 	var err error
 	e.shell, err = shell.New()
 	assert.NoError(t, err)
+
+	e.shell.Env.Remove("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	err = e.setUp(context.Background())
 	assert.NoError(t, err)
@@ -160,6 +164,8 @@ func TestCheckoutPathWithoutOrganization(t *testing.T) {
 	e.shell, err = shell.New()
 	assert.NoError(t, err)
 
+	e.shell.Env.Remove("BUILDKITE_BUILD_CHECKOUT_PATH")
+
 	err = e.setUp(context.Background())
 	assert.NoError(t, err)
 
@@ -186,6 +192,8 @@ func TestCheckoutPathMinimal(t *testing.T) {
 	var err error
 	e.shell, err = shell.New()
 	assert.NoError(t, err)
+
+	e.shell.Env.Remove("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	err = e.setUp(context.Background())
 	assert.NoError(t, err)
