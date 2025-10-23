@@ -558,6 +558,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// Add options from the agent configuration
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
+	env["BUILDKITE_CHECKOUT_PATH_INCLUDES_PIPELINE"] = fmt.Sprint(r.conf.AgentConfiguration.CheckoutPathIncludesPipeline)
+	env["BUILDKITE_CHECKOUT_PATH_INCLUDES_HOSTNAME"] = fmt.Sprint(r.conf.AgentConfiguration.CheckoutPathIncludesHostname)
+	env["BUILDKITE_CHECKOUT_PATH_INCLUDES_ORGANIZATION"] = fmt.Sprint(r.conf.AgentConfiguration.CheckoutPathIncludesOrganization)
 	env["BUILDKITE_SOCKETS_PATH"] = r.conf.AgentConfiguration.SocketsPath
 	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
 	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate)

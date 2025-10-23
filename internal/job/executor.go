@@ -860,8 +860,23 @@ func (e *Executor) setUp(ctx context.Context) error {
 		if e.BuildPath == "" {
 			return fmt.Errorf("Must set either a BUILDKITE_BUILD_PATH or a BUILDKITE_BUILD_CHECKOUT_PATH")
 		}
-		e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
-			filepath.Join(e.BuildPath, dirForAgentName(e.AgentName), e.OrganizationSlug, e.PipelineSlug))
+
+		// Construct the checkout path, considering --checkout-path-includes-* flags, defaulting to /builds/<agent-hostname>/<org>/<pipeline>
+		pathParts := []string{e.BuildPath}
+
+		if e.CheckoutPathIncludesHostname {
+			pathParts = append(pathParts, dirForAgentName(e.AgentName))
+		}
+
+		if e.CheckoutPathIncludesOrganization {
+			pathParts = append(pathParts, e.OrganizationSlug)
+		}
+
+		if e.CheckoutPathIncludesPipeline {
+			pathParts = append(pathParts, e.PipelineSlug)
+		}
+
+		e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(pathParts...))
 	}
 
 	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored

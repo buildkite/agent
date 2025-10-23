@@ -113,11 +113,14 @@ type AgentStartConfig struct {
 	WriteJobLogsToStdout bool     `cli:"write-job-logs-to-stdout"`
 	DisableWarningsFor   []string `cli:"disable-warnings-for" normalize:"list"`
 
-	BuildPath            string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath            string   `cli:"hooks-path" normalize:"filepath"`
-	AdditionalHooksPaths []string `cli:"additional-hooks-paths" normalize:"list"`
-	SocketsPath          string   `cli:"sockets-path" normalize:"filepath"`
-	PluginsPath          string   `cli:"plugins-path" normalize:"filepath"`
+	BuildPath                        string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	CheckoutPathIncludesPipeline     bool     `cli:"checkout-path-includes-pipeline"`
+	CheckoutPathIncludesHostname     bool     `cli:"checkout-path-includes-hostname"`
+	CheckoutPathIncludesOrganization bool     `cli:"checkout-path-includes-organization"`
+	HooksPath                        string   `cli:"hooks-path" normalize:"filepath"`
+	AdditionalHooksPaths             []string `cli:"additional-hooks-paths" normalize:"list"`
+	SocketsPath                      string   `cli:"sockets-path" normalize:"filepath"`
+	PluginsPath                      string   `cli:"plugins-path" normalize:"filepath"`
 
 	Shell           string `cli:"shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
@@ -542,6 +545,21 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Path to where the builds will run from",
 			EnvVar: "BUILDKITE_BUILD_PATH",
+		},
+		cli.BoolTFlag{
+			Name:   "checkout-path-includes-pipeline",
+			Usage:  "Include the pipeline slug in the checkout path",
+			EnvVar: "BUILDKITE_CHECKOUT_PATH_INCLUDES_PIPELINE",
+		},
+		cli.BoolTFlag{
+			Name:   "checkout-path-includes-hostname",
+			Usage:  "Include the agent hostname in the checkout path",
+			EnvVar: "BUILDKITE_CHECKOUT_PATH_INCLUDES_HOSTNAME",
+		},
+		cli.BoolTFlag{
+			Name:   "checkout-path-includes-organization",
+			Usage:  "Include the organization slug in the checkout path",
+			EnvVar: "BUILDKITE_CHECKOUT_PATH_INCLUDES_ORGANIZATION",
 		},
 		cli.StringFlag{
 			Name:   "hooks-path",
@@ -1010,50 +1028,53 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:              cfg.BootstrapScript,
-			BuildPath:                    cfg.BuildPath,
-			SocketsPath:                  cfg.SocketsPath,
-			GitMirrorsPath:               cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
-			HooksPath:                    cfg.HooksPath,
-			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
-			PluginsPath:                  cfg.PluginsPath,
-			GitCheckoutFlags:             cfg.GitCheckoutFlags,
-			GitCloneFlags:                cfg.GitCloneFlags,
-			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
-			GitCleanFlags:                cfg.GitCleanFlags,
-			GitFetchFlags:                cfg.GitFetchFlags,
-			GitSubmodules:                !cfg.NoGitSubmodules,
-			SSHKeyscan:                   !cfg.NoSSHKeyscan,
-			CommandEval:                  !cfg.NoCommandEval,
-			PluginsEnabled:               !cfg.NoPlugins,
-			PluginValidation:             !cfg.NoPluginValidation,
-			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
-			LocalHooksEnabled:            !cfg.NoLocalHooks,
-			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
-			StrictSingleHooks:            cfg.StrictSingleHooks,
-			RunInPty:                     !cfg.NoPTY,
-			ANSITimestamps:               !cfg.NoANSITimestamps,
-			TimestampLines:               cfg.TimestampLines,
-			DisconnectAfterJob:           cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:   cfg.DisconnectAfterIdleTimeout,
-			DisconnectAfterUptime:        cfg.DisconnectAfterUptime,
-			CancelGracePeriod:            cfg.CancelGracePeriod,
-			SignalGracePeriod:            signalGracePeriod,
-			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
-			JobLogPath:                   cfg.JobLogPath,
-			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
-			LogFormat:                    cfg.LogFormat,
-			Shell:                        cfg.Shell,
-			RedactedVars:                 cfg.RedactedVars,
-			AcquireJob:                   cfg.AcquireJob,
-			TracingBackend:               cfg.TracingBackend,
-			TracingServiceName:           cfg.TracingServiceName,
-			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
-			TraceContextEncoding:         cfg.TraceContextEncoding,
-			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
-			KubernetesExec:               cfg.KubernetesExec,
+			BootstrapScript:                  cfg.BootstrapScript,
+			BuildPath:                        cfg.BuildPath,
+			CheckoutPathIncludesPipeline:     cfg.CheckoutPathIncludesPipeline,
+			CheckoutPathIncludesHostname:     cfg.CheckoutPathIncludesHostname,
+			CheckoutPathIncludesOrganization: cfg.CheckoutPathIncludesOrganization,
+			SocketsPath:                      cfg.SocketsPath,
+			GitMirrorsPath:                   cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:            cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:             cfg.GitMirrorsSkipUpdate,
+			HooksPath:                        cfg.HooksPath,
+			AdditionalHooksPaths:             cfg.AdditionalHooksPaths,
+			PluginsPath:                      cfg.PluginsPath,
+			GitCheckoutFlags:                 cfg.GitCheckoutFlags,
+			GitCloneFlags:                    cfg.GitCloneFlags,
+			GitCloneMirrorFlags:              cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                    cfg.GitCleanFlags,
+			GitFetchFlags:                    cfg.GitFetchFlags,
+			GitSubmodules:                    !cfg.NoGitSubmodules,
+			SSHKeyscan:                       !cfg.NoSSHKeyscan,
+			CommandEval:                      !cfg.NoCommandEval,
+			PluginsEnabled:                   !cfg.NoPlugins,
+			PluginValidation:                 !cfg.NoPluginValidation,
+			PluginsAlwaysCloneFresh:          cfg.PluginsAlwaysCloneFresh,
+			LocalHooksEnabled:                !cfg.NoLocalHooks,
+			AllowedEnvironmentVariables:      allowedEnvironmentVariables,
+			StrictSingleHooks:                cfg.StrictSingleHooks,
+			RunInPty:                         !cfg.NoPTY,
+			ANSITimestamps:                   !cfg.NoANSITimestamps,
+			TimestampLines:                   cfg.TimestampLines,
+			DisconnectAfterJob:               cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:       cfg.DisconnectAfterIdleTimeout,
+			DisconnectAfterUptime:            cfg.DisconnectAfterUptime,
+			CancelGracePeriod:                cfg.CancelGracePeriod,
+			SignalGracePeriod:                signalGracePeriod,
+			EnableJobLogTmpfile:              cfg.EnableJobLogTmpfile,
+			JobLogPath:                       cfg.JobLogPath,
+			WriteJobLogsToStdout:             cfg.WriteJobLogsToStdout,
+			LogFormat:                        cfg.LogFormat,
+			Shell:                            cfg.Shell,
+			RedactedVars:                     cfg.RedactedVars,
+			AcquireJob:                       cfg.AcquireJob,
+			TracingBackend:                   cfg.TracingBackend,
+			TracingServiceName:               cfg.TracingServiceName,
+			TracingPropagateTraceparent:      cfg.TracingPropagateTraceparent,
+			TraceContextEncoding:             cfg.TraceContextEncoding,
+			AllowMultipartArtifactUpload:     !cfg.NoMultipartArtifactUpload,
+			KubernetesExec:                   cfg.KubernetesExec,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,

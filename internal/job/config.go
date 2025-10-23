@@ -117,6 +117,15 @@ type ExecutorConfig struct {
 	// Path where the builds will be run
 	BuildPath string
 
+	// Whether to include the pipeline slug in the checkout path
+	CheckoutPathIncludesPipeline bool
+
+	// Whether to include the agent hostname in the checkout path
+	CheckoutPathIncludesHostname bool
+
+	// Whether to include the organization slug in the checkout path
+	CheckoutPathIncludesOrganization bool
+
 	// Path where the sockets are stored
 	SocketsPath string
 

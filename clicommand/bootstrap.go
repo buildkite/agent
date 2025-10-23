@@ -47,68 +47,71 @@ Example:
     $ buildkite-agent bootstrap --build-path builds`
 
 type BootstrapConfig struct {
-	Command                      string   `cli:"command"`
-	JobID                        string   `cli:"job" validate:"required"`
-	Repository                   string   `cli:"repository" validate:"required"`
-	Commit                       string   `cli:"commit" validate:"required"`
-	Branch                       string   `cli:"branch" validate:"required"`
-	Tag                          string   `cli:"tag"`
-	RefSpec                      string   `cli:"refspec"`
-	Plugins                      string   `cli:"plugins"`
-	Secrets                      string   `cli:"secrets"`
-	PullRequest                  string   `cli:"pullrequest"`
-	PullRequestUsingMergeRefspec bool     `cli:"pull-request-using-merge-refspec"`
-	GitSubmodules                bool     `cli:"git-submodules"`
-	SSHKeyscan                   bool     `cli:"ssh-keyscan"`
-	AgentName                    string   `cli:"agent" validate:"required"`
-	Queue                        string   `cli:"queue"`
-	OrganizationSlug             string   `cli:"organization" validate:"required"`
-	PipelineSlug                 string   `cli:"pipeline" validate:"required"`
-	PipelineProvider             string   `cli:"pipeline-provider" validate:"required"`
-	AutomaticArtifactUploadPaths string   `cli:"artifact-upload-paths"`
-	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
-	CleanCheckout                bool     `cli:"clean-checkout"`
-	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
-	GitCloneFlags                string   `cli:"git-clone-flags"`
-	GitFetchFlags                string   `cli:"git-fetch-flags"`
-	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
-	GitCleanFlags                string   `cli:"git-clean-flags"`
-	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
-	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config"`
-	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
-	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
-	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
-	AdditionalHooksPaths         []string `cli:"additional-hooks-paths" normalize:"list"`
-	SocketsPath                  string   `cli:"sockets-path" normalize:"filepath"`
-	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
-	CommandEval                  bool     `cli:"command-eval"`
-	PluginsEnabled               bool     `cli:"plugins-enabled"`
-	PluginValidation             bool     `cli:"plugin-validation"`
-	PluginsAlwaysCloneFresh      bool     `cli:"plugins-always-clone-fresh"`
-	LocalHooksEnabled            bool     `cli:"local-hooks-enabled"`
-	StrictSingleHooks            bool     `cli:"strict-single-hooks"`
-	PTY                          bool     `cli:"pty"`
-	LogLevel                     string   `cli:"log-level"`
-	Debug                        bool     `cli:"debug"`
-	Shell                        string   `cli:"shell"`
-	Experiments                  []string `cli:"experiment" normalize:"list"`
-	Phases                       []string `cli:"phases" normalize:"list"`
-	Profile                      string   `cli:"profile"`
-	CancelSignal                 string   `cli:"cancel-signal"`
-	CancelGracePeriod            int      `cli:"cancel-grace-period"`
-	SignalGracePeriodSeconds     int      `cli:"signal-grace-period-seconds"`
-	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
-	TracingBackend               string   `cli:"tracing-backend"`
-	TracingServiceName           string   `cli:"tracing-service-name"`
-	TracingTraceParent           string   `cli:"tracing-traceparent"`
-	TracingPropagateTraceparent  bool     `cli:"tracing-propagate-traceparent"`
-	TraceContextEncoding         string   `cli:"trace-context-encoding"`
-	NoJobAPI                     bool     `cli:"no-job-api"`
-	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
-	KubernetesExec               bool     `cli:"kubernetes-exec"`
-	KubernetesContainerID        int      `cli:"kubernetes-container-id"`
+	Command                          string   `cli:"command"`
+	JobID                            string   `cli:"job" validate:"required"`
+	Repository                       string   `cli:"repository" validate:"required"`
+	Commit                           string   `cli:"commit" validate:"required"`
+	Branch                           string   `cli:"branch" validate:"required"`
+	Tag                              string   `cli:"tag"`
+	RefSpec                          string   `cli:"refspec"`
+	Plugins                          string   `cli:"plugins"`
+	Secrets                          string   `cli:"secrets"`
+	PullRequest                      string   `cli:"pullrequest"`
+	PullRequestUsingMergeRefspec     bool     `cli:"pull-request-using-merge-refspec"`
+	GitSubmodules                    bool     `cli:"git-submodules"`
+	SSHKeyscan                       bool     `cli:"ssh-keyscan"`
+	AgentName                        string   `cli:"agent" validate:"required"`
+	Queue                            string   `cli:"queue"`
+	OrganizationSlug                 string   `cli:"organization" validate:"required"`
+	PipelineSlug                     string   `cli:"pipeline" validate:"required"`
+	PipelineProvider                 string   `cli:"pipeline-provider" validate:"required"`
+	AutomaticArtifactUploadPaths     string   `cli:"artifact-upload-paths"`
+	ArtifactUploadDestination        string   `cli:"artifact-upload-destination"`
+	CleanCheckout                    bool     `cli:"clean-checkout"`
+	GitCheckoutFlags                 string   `cli:"git-checkout-flags"`
+	GitCloneFlags                    string   `cli:"git-clone-flags"`
+	GitFetchFlags                    string   `cli:"git-fetch-flags"`
+	GitCloneMirrorFlags              string   `cli:"git-clone-mirror-flags"`
+	GitCleanFlags                    string   `cli:"git-clean-flags"`
+	GitMirrorsPath                   string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout            int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate             bool     `cli:"git-mirrors-skip-update"`
+	GitSubmoduleCloneConfig          []string `cli:"git-submodule-clone-config"`
+	BinPath                          string   `cli:"bin-path" normalize:"filepath"`
+	BuildPath                        string   `cli:"build-path" normalize:"filepath"`
+	CheckoutPathIncludesPipeline     bool     `cli:"checkout-path-includes-pipeline"`
+	CheckoutPathIncludesHostname     bool     `cli:"checkout-path-includes-hostname"`
+	CheckoutPathIncludesOrganization bool     `cli:"checkout-path-includes-organization"`
+	HooksPath                        string   `cli:"hooks-path" normalize:"filepath"`
+	AdditionalHooksPaths             []string `cli:"additional-hooks-paths" normalize:"list"`
+	SocketsPath                      string   `cli:"sockets-path" normalize:"filepath"`
+	PluginsPath                      string   `cli:"plugins-path" normalize:"filepath"`
+	CommandEval                      bool     `cli:"command-eval"`
+	PluginsEnabled                   bool     `cli:"plugins-enabled"`
+	PluginValidation                 bool     `cli:"plugin-validation"`
+	PluginsAlwaysCloneFresh          bool     `cli:"plugins-always-clone-fresh"`
+	LocalHooksEnabled                bool     `cli:"local-hooks-enabled"`
+	StrictSingleHooks                bool     `cli:"strict-single-hooks"`
+	PTY                              bool     `cli:"pty"`
+	LogLevel                         string   `cli:"log-level"`
+	Debug                            bool     `cli:"debug"`
+	Shell                            string   `cli:"shell"`
+	Experiments                      []string `cli:"experiment" normalize:"list"`
+	Phases                           []string `cli:"phases" normalize:"list"`
+	Profile                          string   `cli:"profile"`
+	CancelSignal                     string   `cli:"cancel-signal"`
+	CancelGracePeriod                int      `cli:"cancel-grace-period"`
+	SignalGracePeriodSeconds         int      `cli:"signal-grace-period-seconds"`
+	RedactedVars                     []string `cli:"redacted-vars" normalize:"list"`
+	TracingBackend                   string   `cli:"tracing-backend"`
+	TracingServiceName               string   `cli:"tracing-service-name"`
+	TracingTraceParent               string   `cli:"tracing-traceparent"`
+	TracingPropagateTraceparent      bool     `cli:"tracing-propagate-traceparent"`
+	TraceContextEncoding             string   `cli:"trace-context-encoding"`
+	NoJobAPI                         bool     `cli:"no-job-api"`
+	DisableWarningsFor               []string `cli:"disable-warnings-for" normalize:"list"`
+	KubernetesExec                   bool     `cli:"kubernetes-exec"`
+	KubernetesContainerID            int      `cli:"kubernetes-container-id"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -294,6 +297,21 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Directory where builds will be created",
 			EnvVar: "BUILDKITE_BUILD_PATH",
 		},
+		cli.BoolTFlag{
+			Name:   "checkout-path-includes-pipeline",
+			Usage:  "Include the pipeline slug in the checkout path",
+			EnvVar: "BUILDKITE_CHECKOUT_PATH_INCLUDES_PIPELINE",
+		},
+		cli.BoolTFlag{
+			Name:   "checkout-path-includes-hostname",
+			Usage:  "Include the agent hostname in the checkout path",
+			EnvVar: "BUILDKITE_CHECKOUT_PATH_INCLUDES_HOSTNAME",
+		},
+		cli.BoolTFlag{
+			Name:   "checkout-path-includes-organization",
+			Usage:  "Include the organization slug in the checkout path",
+			EnvVar: "BUILDKITE_CHECKOUT_PATH_INCLUDES_ORGANIZATION",
+		},
 		cli.StringFlag{
 			Name:   "hooks-path",
 			Value:  "",
@@ -462,64 +480,67 @@ var BootstrapCommand = cli.Command{
 
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
-			AgentName:                    cfg.AgentName,
-			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
-			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
-			BinPath:                      cfg.BinPath,
-			Branch:                       cfg.Branch,
-			BuildPath:                    cfg.BuildPath,
-			SocketsPath:                  cfg.SocketsPath,
-			CancelSignal:                 cancelSig,
-			SignalGracePeriod:            signalGracePeriod,
-			CleanCheckout:                cfg.CleanCheckout,
-			Command:                      cfg.Command,
-			CommandEval:                  cfg.CommandEval,
-			Commit:                       cfg.Commit,
-			Debug:                        cfg.Debug,
-			GitCheckoutFlags:             cfg.GitCheckoutFlags,
-			GitCleanFlags:                cfg.GitCleanFlags,
-			GitCloneFlags:                cfg.GitCloneFlags,
-			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
-			GitFetchFlags:                cfg.GitFetchFlags,
-			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
-			GitMirrorsPath:               cfg.GitMirrorsPath,
-			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
-			GitSubmodules:                cfg.GitSubmodules,
-			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
-			HooksPath:                    cfg.HooksPath,
-			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
-			JobID:                        cfg.JobID,
-			LocalHooksEnabled:            cfg.LocalHooksEnabled,
-			OrganizationSlug:             cfg.OrganizationSlug,
-			Phases:                       cfg.Phases,
-			PipelineProvider:             cfg.PipelineProvider,
-			PipelineSlug:                 cfg.PipelineSlug,
-			PluginValidation:             cfg.PluginValidation,
-			Plugins:                      cfg.Plugins,
-			PluginsEnabled:               cfg.PluginsEnabled,
-			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
-			PluginsPath:                  cfg.PluginsPath,
-			PullRequest:                  cfg.PullRequest,
-			PullRequestUsingMergeRefspec: cfg.PullRequestUsingMergeRefspec,
-			Queue:                        cfg.Queue,
-			RedactedVars:                 cfg.RedactedVars,
-			RefSpec:                      cfg.RefSpec,
-			Repository:                   cfg.Repository,
-			RunInPty:                     runInPty,
-			SSHKeyscan:                   cfg.SSHKeyscan,
-			Shell:                        cfg.Shell,
-			StrictSingleHooks:            cfg.StrictSingleHooks,
-			Tag:                          cfg.Tag,
-			TracingBackend:               cfg.TracingBackend,
-			TracingServiceName:           cfg.TracingServiceName,
-			TraceContextCodec:            traceContextCodec,
-			TracingTraceParent:           cfg.TracingTraceParent,
-			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
-			JobAPI:                       !cfg.NoJobAPI,
-			DisabledWarnings:             cfg.DisableWarningsFor,
-			KubernetesExec:               cfg.KubernetesExec,
-			KubernetesContainerID:        cfg.KubernetesContainerID,
-			Secrets:                      cfg.Secrets,
+			AgentName:                        cfg.AgentName,
+			ArtifactUploadDestination:        cfg.ArtifactUploadDestination,
+			AutomaticArtifactUploadPaths:     cfg.AutomaticArtifactUploadPaths,
+			BinPath:                          cfg.BinPath,
+			Branch:                           cfg.Branch,
+			BuildPath:                        cfg.BuildPath,
+			CheckoutPathIncludesPipeline:     cfg.CheckoutPathIncludesPipeline,
+			CheckoutPathIncludesHostname:     cfg.CheckoutPathIncludesHostname,
+			CheckoutPathIncludesOrganization: cfg.CheckoutPathIncludesOrganization,
+			SocketsPath:                      cfg.SocketsPath,
+			CancelSignal:                     cancelSig,
+			SignalGracePeriod:                signalGracePeriod,
+			CleanCheckout:                    cfg.CleanCheckout,
+			Command:                          cfg.Command,
+			CommandEval:                      cfg.CommandEval,
+			Commit:                           cfg.Commit,
+			Debug:                            cfg.Debug,
+			GitCheckoutFlags:                 cfg.GitCheckoutFlags,
+			GitCleanFlags:                    cfg.GitCleanFlags,
+			GitCloneFlags:                    cfg.GitCloneFlags,
+			GitCloneMirrorFlags:              cfg.GitCloneMirrorFlags,
+			GitFetchFlags:                    cfg.GitFetchFlags,
+			GitMirrorsLockTimeout:            cfg.GitMirrorsLockTimeout,
+			GitMirrorsPath:                   cfg.GitMirrorsPath,
+			GitMirrorsSkipUpdate:             cfg.GitMirrorsSkipUpdate,
+			GitSubmodules:                    cfg.GitSubmodules,
+			GitSubmoduleCloneConfig:          cfg.GitSubmoduleCloneConfig,
+			HooksPath:                        cfg.HooksPath,
+			AdditionalHooksPaths:             cfg.AdditionalHooksPaths,
+			JobID:                            cfg.JobID,
+			LocalHooksEnabled:                cfg.LocalHooksEnabled,
+			OrganizationSlug:                 cfg.OrganizationSlug,
+			Phases:                           cfg.Phases,
+			PipelineProvider:                 cfg.PipelineProvider,
+			PipelineSlug:                     cfg.PipelineSlug,
+			PluginValidation:                 cfg.PluginValidation,
+			Plugins:                          cfg.Plugins,
+			PluginsEnabled:                   cfg.PluginsEnabled,
+			PluginsAlwaysCloneFresh:          cfg.PluginsAlwaysCloneFresh,
+			PluginsPath:                      cfg.PluginsPath,
+			PullRequest:                      cfg.PullRequest,
+			PullRequestUsingMergeRefspec:     cfg.PullRequestUsingMergeRefspec,
+			Queue:                            cfg.Queue,
+			RedactedVars:                     cfg.RedactedVars,
+			RefSpec:                          cfg.RefSpec,
+			Repository:                       cfg.Repository,
+			RunInPty:                         runInPty,
+			SSHKeyscan:                       cfg.SSHKeyscan,
+			Shell:                            cfg.Shell,
+			StrictSingleHooks:                cfg.StrictSingleHooks,
+			Tag:                              cfg.Tag,
+			TracingBackend:                   cfg.TracingBackend,
+			TracingServiceName:               cfg.TracingServiceName,
+			TraceContextCodec:                traceContextCodec,
+			TracingTraceParent:               cfg.TracingTraceParent,
+			TracingPropagateTraceparent:      cfg.TracingPropagateTraceparent,
+			JobAPI:                           !cfg.NoJobAPI,
+			DisabledWarnings:                 cfg.DisableWarningsFor,
+			KubernetesExec:                   cfg.KubernetesExec,
+			KubernetesContainerID:            cfg.KubernetesContainerID,
+			Secrets:                          cfg.Secrets,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
