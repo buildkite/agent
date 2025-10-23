@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/zstash"
 	"github.com/buildkite/zstash/api"
@@ -90,6 +91,11 @@ var CacheRestoreCommand = cli.Command{
 			return fmt.Errorf("failed to load cache configuration: %w", err)
 		}
 
+		if len(caches) == 0 {
+			l.Info("No caches defined in the cache configuration file, nothing to save")
+			return nil
+		}
+
 		cacheClient, err := zstash.NewCache(zstash.Config{
 			Client:       client,
 			BucketURL:    cfg.BucketURL,
@@ -115,41 +121,30 @@ var CacheRestoreCommand = cli.Command{
 		}
 
 		for _, cacheID := range cacheIDs {
+			l.Info("Restoring cache: %s", cacheID)
 			result, err := cacheClient.Restore(ctx, cacheID)
 			if err != nil {
 				return fmt.Errorf("failed to restore cache %q: %w", cacheID, err)
 			}
 
 			switch {
-			case result.CacheHit:
-				// Cache was found and restored
-				l.Info("Cache restored", map[string]interface{}{
-					"cache_id":          cacheID,
-					"cache_key":         result.Key,
-					"archive_size":      humanize.Bytes(uint64(result.Archive.Size)),
-					"written_bytes":     humanize.Bytes(uint64(result.Archive.WrittenBytes)),
-					"written_entries":   fmt.Sprintf("%d", result.Archive.WrittenEntries),
-					"compression_ratio": fmt.Sprintf("%.2f", result.Archive.CompressionRatio),
-					"transfer_speed":    fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed),
-				})
-			case result.FallbackUsed:
-				// Cache was not found, but a fallback was used
-				l.Info("Cache restored (fallback used)", map[string]interface{}{
-					"cache_id":          cacheID,
-					"cache_key":         result.Key,
-					"fallback_used":     result.FallbackUsed,
-					"archive_size":      humanize.Bytes(uint64(result.Archive.Size)),
-					"written_bytes":     humanize.Bytes(uint64(result.Archive.WrittenBytes)),
-					"written_entries":   fmt.Sprintf("%d", result.Archive.WrittenEntries),
-					"compression_ratio": fmt.Sprintf("%.2f", result.Archive.CompressionRatio),
-					"transfer_speed":    fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed),
-				})
+			case result.CacheHit, result.FallbackUsed:
+				l.WithFields(
+					logger.StringField("cache_id", cacheID),
+					logger.StringField("cache_key", result.Key),
+					logger.StringField("fallback_used", fmt.Sprintf("%t", result.FallbackUsed)),
+					logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
+					logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
+					logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
+					logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
+					logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
+				).Info("Cache restored")
 			default:
 				// Cache was not found
-				l.Info("Cache not restored (not found)", map[string]interface{}{
-					"cache_id":  cacheID,
-					"cache_key": result.Key,
-				})
+				l.WithFields(
+					logger.StringField("cache_id", cacheID),
+					logger.StringField("cache_key", result.Key),
+				).Info("Cache not restored (not found)")
 			}
 		}
 
