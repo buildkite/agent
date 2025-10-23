@@ -4,13 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
-	"github.com/buildkite/zstash"
-	"github.com/buildkite/zstash/api"
-	"github.com/dustin/go-humanize"
+	"github.com/buildkite/agent/v3/internal/cache"
 	"github.com/urfave/cli"
 )
 
@@ -80,68 +75,19 @@ var CacheSaveCommand = cli.Command{
 			return fmt.Errorf("an API token must be provided to save caches")
 		}
 
-		// we are using the zstash api package here which has a different client constructor but uses the same values
-		client := api.NewClient(ctx, version.Version(), apiCfg.Endpoint, apiCfg.Token)
-
-		caches, err := loadCacheConfiguration(cfg.CacheConfigFile)
-		if err != nil {
-			return fmt.Errorf("failed to load cache configuration: %w", err)
+		// Build cache configuration
+		cacheCfg := cache.Config{
+			BucketURL:       cfg.BucketURL,
+			Branch:          cfg.Branch,
+			Pipeline:        cfg.Pipeline,
+			Organization:    cfg.Organization,
+			CacheConfigFile: cfg.CacheConfigFile,
+			Ids:             cfg.Ids,
+			APIEndpoint:     apiCfg.Endpoint,
+			APIToken:        apiCfg.Token,
 		}
 
-		if len(caches) == 0 {
-			l.Info("No caches defined in the cache configuration file, nothing to save")
-			return nil
-		}
-
-		cacheClient, err := zstash.NewCache(zstash.Config{
-			Client:       client,
-			BucketURL:    cfg.BucketURL,
-			Format:       "zip",
-			Branch:       cfg.Branch,
-			Pipeline:     cfg.Pipeline,
-			Organization: cfg.Organization,
-			Caches:       caches,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create cache client: %w", err)
-		}
-
-		// split the ids by comma
-		cacheIDs := strings.Split(cfg.Ids, ",")
-
-		if len(cacheIDs) == 0 {
-			// Save all caches configured in the client
-			for _, cache := range cacheClient.ListCaches() {
-				cacheIDs = append(cacheIDs, cache.ID)
-			}
-		}
-
-		for _, cacheID := range cacheIDs {
-			l.Info("Saving cache: %s", cacheID)
-			result, err := cacheClient.Save(ctx, cacheID)
-			if err != nil {
-				return fmt.Errorf("failed to save cache %q: %w", cacheID, err)
-			}
-
-			switch {
-			case result.CacheCreated:
-				l.WithFields(
-					logger.StringField("cache_id", cacheID),
-					logger.StringField("cache_key", result.Key),
-					logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
-					logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
-					logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
-					logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
-					logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
-				).Info("Cache created")
-			default:
-				l.WithFields(
-					logger.StringField("cache_id", cacheID),
-					logger.StringField("cache_key", result.Key),
-				).Info("Cache already exists, not saving")
-			}
-		}
-
-		return nil
+		// Perform cache save (logging happens inside)
+		return cache.Save(ctx, l, cacheCfg)
 	},
 }
