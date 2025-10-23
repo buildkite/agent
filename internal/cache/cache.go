@@ -108,6 +108,14 @@ func setupCacheClient(ctx context.Context, cfg Config) (*zstash.Cache, []string,
 		Pipeline:     cfg.Pipeline,
 		Organization: cfg.Organization,
 		Caches:       caches,
+		OnProgress: func(stage, message string, current, total int) {
+			l.WithFields(
+				logger.StringField("stage", stage),
+				logger.StringField("message", message),
+				logger.IntField("current", current),
+				logger.IntField("total", total),
+			).Info("Cache progress")
+		},
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create cache client: %w", err)
