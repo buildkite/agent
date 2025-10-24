@@ -22,6 +22,9 @@ The cache configuration file defines which files or directories should be cached
 and their associated cache keys. Caches are scoped by organization, pipeline, and
 branch.
 
+Note: This feature is currently in development and subject to change. It is not
+yet available to all customers.
+
 Example:
 
     $ buildkite-agent cache save

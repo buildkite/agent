@@ -22,6 +22,9 @@ and their associated cache keys. Caches are scoped by organization, pipeline, an
 branch. If an exact cache match is not found, the command will attempt to use
 fallback keys if defined in your cache configuration.
 
+Note: This feature is currently in development and subject to change. It is not
+yet available to all customers.
+
 Example:
 
     $ buildkite-agent cache restore
