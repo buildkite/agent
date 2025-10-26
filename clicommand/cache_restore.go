@@ -41,12 +41,13 @@ Configuration File Format:
 
 The cache configuration file should be in YAML format:
 
-    - id: node
-      key: '{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum "package-lock.json" }}'
-	  fallback_keys:
-		- '{{ id }}-{{ agent.os }}-{{ agent.arch }}-'
-      paths:
-        - node_modules
+    dependencies:
+      - id: node
+        key: '{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum "package-lock.json" }}'
+        fallback_keys:
+          - '{{ id }}-{{ agent.os }}-{{ agent.arch }}-'
+        paths:
+          - node_modules
 
 Cache Restoration Results:
 

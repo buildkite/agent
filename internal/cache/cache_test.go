@@ -294,33 +294,34 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 func TestLoadCacheConfiguration_Valid(t *testing.T) {
 	t.Parallel()
 
-	config := `- id: node
-  key: 'node-{{ checksum "package-lock.json" }}'
-  paths:
-    - node_modules
-- id: ruby
-  key: 'ruby-{{ checksum "Gemfile.lock" }}'
-  paths:
-    - vendor/bundle
+	config := `dependencies:
+  - id: node
+    key: 'node-{{ checksum "package-lock.json" }}'
+    paths:
+      - node_modules
+  - id: ruby
+    key: 'ruby-{{ checksum "Gemfile.lock" }}'
+    paths:
+      - vendor/bundle
 `
 	configFile := createTempCacheConfig(t, config)
 
-	caches, err := loadCacheConfiguration(configFile)
+	fileConfig, err := loadCacheConfiguration(configFile)
 	require.NoError(t, err)
-	require.Len(t, caches, 2)
-	require.Equal(t, "node", caches[0].ID)
-	require.Equal(t, "ruby", caches[1].ID)
+	require.Len(t, fileConfig.Dependencies, 2)
+	require.Equal(t, "node", fileConfig.Dependencies[0].ID)
+	require.Equal(t, "ruby", fileConfig.Dependencies[1].ID)
 }
 
 func TestLoadCacheConfiguration_InvalidYAML(t *testing.T) {
 	t.Parallel()
 
-	config := `---
-- id: node
-  key: test
-  paths
-    - invalid indentation here
-  : wrong syntax
+	config := `dependencies:
+  - id: node
+    key: test
+    paths
+      - invalid indentation here
+    : wrong syntax
 `
 	configFile := createTempCacheConfig(t, config)
 
@@ -342,9 +343,9 @@ func TestLoadCacheConfiguration_EmptyFile(t *testing.T) {
 
 	configFile := createTempCacheConfig(t, "")
 
-	caches, err := loadCacheConfiguration(configFile)
+	fileConfig, err := loadCacheConfiguration(configFile)
 	require.NoError(t, err)
-	require.Empty(t, caches)
+	require.Empty(t, fileConfig.Dependencies)
 }
 
 // Tests for setupCacheClient
@@ -353,14 +354,15 @@ func TestSetupCacheClient_InvalidCacheIDs(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	config := `- id: cache1
-  key: 'test-key-1'
-  paths:
-    - path1
-- id: cache2
-  key: 'test-key-2'
-  paths:
-    - path2
+	config := `dependencies:
+  - id: cache1
+    key: 'test-key-1'
+    paths:
+      - path1
+  - id: cache2
+    key: 'test-key-2'
+    paths:
+      - path2
 `
 	configFile := createTempCacheConfig(t, config)
 
@@ -386,14 +388,15 @@ func TestSetupCacheClient_ValidCacheIDs(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	config := `- id: cache1
-  key: 'test-key-1'
-  paths:
-    - path1
-- id: cache2
-  key: 'test-key-2'
-  paths:
-    - path2
+	config := `dependencies:
+  - id: cache1
+    key: 'test-key-1'
+    paths:
+      - path1
+  - id: cache2
+    key: 'test-key-2'
+    paths:
+      - path2
 `
 	configFile := createTempCacheConfig(t, config)
 
@@ -418,14 +421,15 @@ func TestSetupCacheClient_AllCaches(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	config := `- id: cache1
-  key: 'test-key-1'
-  paths:
-    - path1
-- id: cache2
-  key: 'test-key-2'
-  paths:
-    - path2
+	config := `dependencies:
+  - id: cache1
+    key: 'test-key-1'
+    paths:
+      - path1
+  - id: cache2
+    key: 'test-key-2'
+    paths:
+      - path2
 `
 	configFile := createTempCacheConfig(t, config)
 

@@ -35,6 +35,12 @@ type Config struct {
 	APIToken string
 }
 
+// FileConfig represents the structure of the cache configuration YAML file
+type FileConfig struct {
+	// Dependencies is the list of dependency caches to restore/save
+	Dependencies []cache.Cache `yaml:"dependencies"`
+}
+
 // CacheClient defines the interface for cache operations
 type CacheClient interface {
 	Save(ctx context.Context, cacheID string) (zstash.SaveResult, error)
@@ -73,30 +79,30 @@ func Restore(ctx context.Context, l logger.Logger, cfg Config) error {
 }
 
 // loadCacheConfiguration loads cache configuration from a YAML file
-func loadCacheConfiguration(cacheConfigFile string) ([]cache.Cache, error) {
+func loadCacheConfiguration(cacheConfigFile string) (*FileConfig, error) {
 	data, err := os.ReadFile(cacheConfigFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache config file: %w", err)
 	}
 
-	var caches []cache.Cache
-	if err := yaml.Unmarshal(data, &caches); err != nil {
+	var config FileConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal cache config file: %w", err)
 	}
 
-	return caches, nil
+	return &config, nil
 }
 
 // setupCacheClient creates a cache client and determines which cache IDs to process
 func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash.Cache, []string, error) {
 	client := api.NewClient(ctx, version.Version(), cfg.APIEndpoint, cfg.APIToken)
 
-	caches, err := loadCacheConfiguration(cfg.CacheConfigFile)
+	fileConfig, err := loadCacheConfiguration(cfg.CacheConfigFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load cache configuration: %w", err)
 	}
 
-	if len(caches) == 0 {
+	if len(fileConfig.Dependencies) == 0 {
 		return nil, nil, nil
 	}
 
@@ -107,7 +113,7 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 		Branch:       cfg.Branch,
 		Pipeline:     cfg.Pipeline,
 		Organization: cfg.Organization,
-		Caches:       caches,
+		Caches:       fileConfig.Dependencies,
 		OnProgress: func(stage, message string, current, total int) {
 			l.WithFields(
 				logger.StringField("stage", stage),
@@ -125,20 +131,20 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 	var cacheIDs []string
 	if cfg.Ids != "" {
 		cacheIDs = strings.Split(cfg.Ids, ",")
-		
+
 		// Validate that specified cache IDs exist
 		validIDs := make(map[string]bool)
 		for _, cache := range cacheClient.ListCaches() {
 			validIDs[cache.ID] = true
 		}
-		
+
 		var invalidIDs []string
 		for _, id := range cacheIDs {
 			if !validIDs[id] {
 				invalidIDs = append(invalidIDs, id)
 			}
 		}
-		
+
 		if len(invalidIDs) > 0 {
 			return nil, nil, fmt.Errorf("cache IDs not found in configuration: %s", strings.Join(invalidIDs, ", "))
 		}
