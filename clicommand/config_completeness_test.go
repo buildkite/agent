@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -91,6 +92,47 @@ func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestDescriptionsAreIndentedUsingSpaces(t *testing.T) {
+	t.Parallel()
+
+	for name, command := range commandsByFullName(t, BuildkiteAgentCommands) {
+		if command.Description == "" {
+			t.Fatalf("command %q has no description; please add one", name)
+		}
+
+		lines := strings.Split(command.Description, "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, "\t") {
+				fullCommandName := "buildkite-agent " + name
+				t.Errorf("line %d of description for command %q contains tab characters; please use spaces for indentation in command descriptions", i, fullCommandName)
+			}
+		}
+	}
+}
+
+// cli.Command.FullName() doesn't actually print the full name of a command when its a subcommand,
+// so we need to build a map of full command names to cli.Command structs ourselves
+func commandsByFullName(t *testing.T, commands []cli.Command) map[string]cli.Command {
+	t.Helper()
+
+	result := make(map[string]cli.Command)
+
+	for _, command := range commands {
+		if len(command.Subcommands) == 0 {
+			result[command.FullName()] = command
+		}
+
+		for _, subcommand := range command.Subcommands {
+			subcommands := commandsByFullName(t, []cli.Command{subcommand})
+			for subcommandName, cmd := range subcommands {
+				result[fmt.Sprintf("%s %s", command.FullName(), subcommandName)] = cmd
+			}
+		}
+	}
+
+	return result
 }
 
 func TestAllCommandsAreTestedForConfigCompleteness(t *testing.T) {
