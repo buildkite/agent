@@ -14,7 +14,7 @@ const cacheRestoreHelpDescription = `Usage:
 
 Description:
 
-Restores files from the cache for the current build based on the cache configuration
+Restores files from the cache for the current job based on the cache configuration
 defined in your cache config file (defaults to .buildkite/cache.yml).
 
 The cache configuration file defines which files or directories should be restored
