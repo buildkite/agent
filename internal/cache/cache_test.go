@@ -346,3 +346,102 @@ func TestLoadCacheConfiguration_EmptyFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, caches)
 }
+
+// Tests for setupCacheClient
+
+func TestSetupCacheClient_InvalidCacheIDs(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	config := `- id: cache1
+  key: 'test-key-1'
+  paths:
+    - path1
+- id: cache2
+  key: 'test-key-2'
+  paths:
+    - path2
+`
+	configFile := createTempCacheConfig(t, config)
+
+	cfg := Config{
+		CacheConfigFile: configFile,
+		Ids:             "cache1,invalid1,cache2,invalid2",
+		BucketURL:       "s3://test-bucket",
+		Branch:          "main",
+		Pipeline:        "test-pipeline",
+		Organization:    "test-org",
+		APIEndpoint:     "https://api.buildkite.com/v3",
+		APIToken:        "test-token",
+	}
+
+	_, _, err := setupCacheClient(ctx, logger.Discard, cfg)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cache IDs not found in configuration")
+	require.ErrorContains(t, err, "invalid1")
+	require.ErrorContains(t, err, "invalid2")
+}
+
+func TestSetupCacheClient_ValidCacheIDs(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	config := `- id: cache1
+  key: 'test-key-1'
+  paths:
+    - path1
+- id: cache2
+  key: 'test-key-2'
+  paths:
+    - path2
+`
+	configFile := createTempCacheConfig(t, config)
+
+	cfg := Config{
+		CacheConfigFile: configFile,
+		Ids:             "cache1,cache2",
+		BucketURL:       "s3://test-bucket",
+		Branch:          "main",
+		Pipeline:        "test-pipeline",
+		Organization:    "test-org",
+		APIEndpoint:     "https://api.buildkite.com/v3",
+		APIToken:        "test-token",
+	}
+
+	client, cacheIDs, err := setupCacheClient(ctx, logger.Discard, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	require.Equal(t, []string{"cache1", "cache2"}, cacheIDs)
+}
+
+func TestSetupCacheClient_AllCaches(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	config := `- id: cache1
+  key: 'test-key-1'
+  paths:
+    - path1
+- id: cache2
+  key: 'test-key-2'
+  paths:
+    - path2
+`
+	configFile := createTempCacheConfig(t, config)
+
+	cfg := Config{
+		CacheConfigFile: configFile,
+		Ids:             "",
+		BucketURL:       "s3://test-bucket",
+		Branch:          "main",
+		Pipeline:        "test-pipeline",
+		Organization:    "test-org",
+		APIEndpoint:     "https://api.buildkite.com/v3",
+		APIToken:        "test-token",
+	}
+
+	client, cacheIDs, err := setupCacheClient(ctx, logger.Discard, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	require.ElementsMatch(t, []string{"cache1", "cache2"}, cacheIDs)
+}

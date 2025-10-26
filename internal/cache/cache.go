@@ -125,6 +125,23 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 	var cacheIDs []string
 	if cfg.Ids != "" {
 		cacheIDs = strings.Split(cfg.Ids, ",")
+		
+		// Validate that specified cache IDs exist
+		validIDs := make(map[string]bool)
+		for _, cache := range cacheClient.ListCaches() {
+			validIDs[cache.ID] = true
+		}
+		
+		var invalidIDs []string
+		for _, id := range cacheIDs {
+			if !validIDs[id] {
+				invalidIDs = append(invalidIDs, id)
+			}
+		}
+		
+		if len(invalidIDs) > 0 {
+			return nil, nil, fmt.Errorf("cache IDs not found in configuration: %s", strings.Join(invalidIDs, ", "))
+		}
 	} else {
 		// Process all caches configured in the client
 		for _, cache := range cacheClient.ListCaches() {
