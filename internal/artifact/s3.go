@@ -72,21 +72,20 @@ func (p *credentialsProvider) IsExpired() bool {
 func awsS3Session(region string, l logger.Logger) (*session.Session, error) {
 	// Chicken and egg... but this is kinda how they do it in the sdk
 
-	// Determine the profile to use
 	profile := os.Getenv("BUILDKITE_S3_PROFILE")
 	if profile == "" {
 		profile = os.Getenv("AWS_PROFILE")
 	}
 
-	// Create session with above profile, using default credential chain
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Profile: profile,
+		Config: aws.Config{
+			Region: aws.String(region),
+		},
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	sess.Config.Region = aws.String(region)
 
 	defaultCredsProvider := &credentialsProvider{creds: sess.Config.Credentials}
 
