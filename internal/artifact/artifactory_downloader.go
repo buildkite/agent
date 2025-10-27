@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -66,8 +67,8 @@ func (d ArtifactoryDownloader) Start(ctx context.Context) error {
 	)
 
 	// create headers map
-	headers := map[string]string{
-		"Authorization": fmt.Sprintf("Basic %s", getBasicAuthHeader(username, password)),
+	headers := http.Header{
+		"Authorization": []string{fmt.Sprintf("Basic %s", getBasicAuthHeader(username, password))},
 	}
 
 	client := agenthttp.NewClient(
