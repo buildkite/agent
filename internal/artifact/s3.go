@@ -8,12 +8,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	"github.com/buildkite/agent/v3/logger"
 )
@@ -60,23 +57,44 @@ func (e *buildkiteEnvProvider) IsExpired() bool {
 	return !e.retrieved
 }
 
+type credentialsProvider struct {
+	creds *credentials.Credentials
+}
+
+func (p *credentialsProvider) Retrieve() (credentials.Value, error) {
+	return p.creds.Get()
+}
+
+func (p *credentialsProvider) IsExpired() bool {
+	return p.creds.IsExpired()
+}
+
 func awsS3Session(region string, l logger.Logger) (*session.Session, error) {
 	// Chicken and egg... but this is kinda how they do it in the sdk
-	sess, err := session.NewSession()
+
+	// Determine the profile to use
+	profile := os.Getenv("BUILDKITE_S3_PROFILE")
+	if profile == "" {
+		profile = os.Getenv("AWS_PROFILE")
+	}
+
+	// Create session with above profile, using default credential chain
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Profile: profile,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	sess.Config.Region = aws.String(region)
 
+	defaultCredsProvider := &credentialsProvider{creds: sess.Config.Credentials}
+
+	// Prepend our Buildkite-specific environment variable provider to give it higher priority than the standard providers
 	sess.Config.Credentials = credentials.NewChainCredentials(
 		[]credentials.Provider{
 			&buildkiteEnvProvider{},
-			&credentials.EnvProvider{},
-			sharedCredentialsProvider(),
-			webIdentityRoleProvider(sess),
-			// EC2 and ECS meta-data providers
-			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
+			defaultCredsProvider,
 		},
 	)
 
@@ -102,23 +120,6 @@ func awsS3Session(region string, l logger.Logger) (*session.Session, error) {
 	}
 
 	return sess, nil
-}
-
-func sharedCredentialsProvider() credentials.Provider {
-	// If empty SDK will default to environment variable "AWS_PROFILE"
-	// or "default" if environment variable is also not set.
-	awsProfile := os.Getenv("BUILDKITE_S3_PROFILE")
-
-	return &credentials.SharedCredentialsProvider{Profile: awsProfile}
-}
-
-func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRoleProvider {
-	return stscreds.NewWebIdentityRoleProviderWithOptions(
-		sts.New(sess),
-		os.Getenv("AWS_ROLE_ARN"),
-		os.Getenv("AWS_ROLE_SESSION_NAME"),
-		stscreds.FetchTokenPath(os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")),
-	)
 }
 
 func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
