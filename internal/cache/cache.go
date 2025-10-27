@@ -27,8 +27,8 @@ type Config struct {
 	Organization string
 	// CacheConfigFile is the path to the cache configuration YAML file
 	CacheConfigFile string
-	// Ids is a comma-separated list of cache IDs (if empty, processes all caches)
-	Ids string
+	// Ids is a list of cache IDs (if empty, processes all caches)
+	Ids []string
 	// APIEndpoint is the Agent API endpoint
 	APIEndpoint string
 	// APIToken is the access token used to authenticate
@@ -128,10 +128,7 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 	}
 
 	// Determine which cache IDs to process
-	var cacheIDs []string
-	if cfg.Ids != "" {
-		cacheIDs = strings.Split(cfg.Ids, ",")
-
+	if len(cfg.Ids) > 0 {
 		// Validate that specified cache IDs exist
 		validIDs := make(map[string]bool)
 		for _, cache := range cacheClient.ListCaches() {
@@ -139,7 +136,7 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 		}
 
 		var invalidIDs []string
-		for _, id := range cacheIDs {
+		for _, id := range cfg.Ids {
 			if !validIDs[id] {
 				invalidIDs = append(invalidIDs, id)
 			}
@@ -148,14 +145,16 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 		if len(invalidIDs) > 0 {
 			return nil, nil, fmt.Errorf("cache IDs not found in configuration: %s", strings.Join(invalidIDs, ", "))
 		}
-	} else {
-		// Process all caches configured in the client
-		for _, cache := range cacheClient.ListCaches() {
-			cacheIDs = append(cacheIDs, cache.ID)
-		}
+
+		return cacheClient, cfg.Ids, nil
 	}
 
-	return cacheClient, cacheIDs, nil
+	var cacheDs []string
+	for _, cache := range cacheClient.ListCaches() {
+		cacheDs = append(cacheDs, cache.ID)
+	}
+
+	return cacheClient, cacheDs, nil
 }
 
 // restoreWithClient performs the restore operation for the given cache IDs using the provided client

@@ -368,7 +368,7 @@ func TestSetupCacheClient_InvalidCacheIDs(t *testing.T) {
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             "cache1,invalid1,cache2,invalid2",
+		Ids:             []string{"cache1", "invalid1", "cache2", "invalid2"},
 		BucketURL:       "s3://test-bucket",
 		Branch:          "main",
 		Pipeline:        "test-pipeline",
@@ -402,7 +402,7 @@ func TestSetupCacheClient_ValidCacheIDs(t *testing.T) {
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             "cache1,cache2",
+		Ids:             []string{"cache1", "cache2"},
 		BucketURL:       "s3://test-bucket",
 		Branch:          "main",
 		Pipeline:        "test-pipeline",
@@ -435,7 +435,7 @@ func TestSetupCacheClient_AllCaches(t *testing.T) {
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             "",
+		Ids:             []string{},
 		BucketURL:       "s3://test-bucket",
 		Branch:          "main",
 		Pipeline:        "test-pipeline",
