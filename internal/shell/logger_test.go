@@ -124,7 +124,7 @@ func BenchmarkDoubleFmt(b *testing.B) {
 		fmt.Fprintf(io.Discard, "%s", fmt.Sprintf(format, v...))
 		fmt.Fprintln(io.Discard)
 	}
-	for range b.N {
+	for b.Loop() {
 		logf("asdfghjkl %s %d %t", "hi", 42, true)
 	}
 }
@@ -134,7 +134,7 @@ func BenchmarkFmtConcat(b *testing.B) {
 	logf := func(format string, v ...any) {
 		fmt.Fprintf(io.Discard, format+"\n", v...)
 	}
-	for range b.N {
+	for b.Loop() {
 		logf("asdfghjkl %s %d %t", "hi", 42, true)
 	}
 }

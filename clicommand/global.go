@@ -324,7 +324,7 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 		}
 		// split comma delimited env
 		if envVars := f.String(); envVars != "" {
-			for _, env := range strings.Split(envVars, ",") {
+			for env := range strings.SplitSeq(envVars, ",") {
 				os.Unsetenv(env)
 			}
 		}
