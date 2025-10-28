@@ -250,10 +250,10 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 	}
 
 	// splits lines on null-bytes to gracefully handle line endings and repositories with newlines
-	lines := strings.Split(strings.TrimRight(output, "\x00"), "\x00")
+	lines := strings.SplitSeq(strings.TrimRight(output, "\x00"), "\x00")
 
 	// process each line
-	for _, line := range lines {
+	for line := range lines {
 		tokens := strings.SplitN(line, "\n", 2)
 		if len(tokens) != 2 {
 			return nil, fmt.Errorf("Failed to parse .gitmodules line %q", line)

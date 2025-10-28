@@ -79,7 +79,7 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 		if len(fields) != 3 {
 			continue
 		}
-		for _, addr := range strings.Split(fields[0], ",") {
+		for addr := range strings.SplitSeq(fields[0], ",") {
 			if addr == normalized || addr == knownhosts.HashHostname(normalized) {
 				return true, nil
 			}

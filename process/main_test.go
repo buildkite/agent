@@ -17,7 +17,7 @@ import (
 func TestMain(m *testing.M) {
 	switch os.Getenv("TEST_MAIN") {
 	case "tester":
-		for _, line := range strings.Split(strings.TrimSuffix(longTestOutput, "\n"), "\n") {
+		for line := range strings.SplitSeq(strings.TrimSuffix(longTestOutput, "\n"), "\n") {
 			fmt.Printf("%s\n", line)
 			time.Sleep(time.Millisecond * 20)
 		}

@@ -343,10 +343,10 @@ func (l Loader) fieldValueIsEmpty(fieldName string) bool {
 
 func (l Loader) validateField(fieldName string, label string, validationRules string) error {
 	// Split up the validation rules
-	rules := strings.Split(validationRules, ",")
+	rules := strings.SplitSeq(validationRules, ",")
 
 	// Loop through each rule, and perform it
-	for _, rule := range rules {
+	for rule := range rules {
 		switch rule {
 		case "required":
 			if l.fieldValueIsEmpty(fieldName) {
@@ -428,7 +428,7 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 
 			for _, value := range valueAsSlice {
 				// Split values with commas into fields
-				for _, normalized := range strings.Split(value, ",") {
+				for normalized := range strings.SplitSeq(value, ",") {
 					if normalized == "" {
 						continue
 					}
