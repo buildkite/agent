@@ -9,7 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 )
 
-// GetConfigV2 creates a new AWS SDK v2 config.
+// GetConfigV2 creates a new AWS SDK v2 config that uses the current region from
+// IMDS, if not otherwise provided.
 func GetConfigV2(ctx context.Context, optFns ...func(*config.LoadOptions) error) (cfg aws.Config, err error) {
 	cfg, err = config.LoadDefaultConfig(ctx, optFns...)
 	if err != nil {

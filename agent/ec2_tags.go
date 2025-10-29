@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/buildkite/agent/v3/internal/awslib"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -15,7 +16,7 @@ import (
 type EC2Tags struct{}
 
 func (e EC2Tags) Get(ctx context.Context) (map[string]string, error) {
-	cfg, err := config.LoadDefaultConfig(ctx)
+	cfg, err := awslib.GetConfigV2(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("loading default AWS config: %w", err)
 	}
@@ -27,7 +28,7 @@ func (e EC2Tags) Get(ctx context.Context) (map[string]string, error) {
 		Path: "instance-id",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("fetching metadata from IMDS: %v", err)
+		return nil, fmt.Errorf("fetching metadata from IMDS: %w", err)
 	}
 
 	instanceID, err := io.ReadAll(mdOut.Content)
@@ -51,7 +52,7 @@ func (e EC2Tags) Get(ctx context.Context) (map[string]string, error) {
 	}
 
 	// Collect the tags
-	tags := make(map[string]string)
+	tags := make(map[string]string, len(resp.Tags))
 	for _, tag := range resp.Tags {
 		tags[*tag.Key] = *tag.Value
 	}
