@@ -529,7 +529,7 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 		}
 
 		// Propagate service name so child processes don't create their own service
-		if serviceName := env.Get("BUILDKITE_TRACING_SERVICE_NAME"); serviceName != "" {
+		if serviceName, ok := env.Get("BUILDKITE_TRACING_SERVICE_NAME"); ok {
 			env.Set("OTEL_SERVICE_NAME", serviceName)
 		}
 	}
