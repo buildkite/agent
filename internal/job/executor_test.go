@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -87,8 +88,12 @@ func TestStartTracing_Datadog(t *testing.T) {
 	stopper()
 }
 
-func TestCheckoutPathWithAllComponents(t *testing.T) {
+func TestCheckoutPathFull(t *testing.T) {
 	t.Parallel()
+
+	if os.Getenv("BUILDKITE_BUILD_CHECKOUT_PATH") != "" {
+		t.Skip("BUILDKITE_BUILD_CHECKOUT_PATH already set")
+	}
 
 	cfg := ExecutorConfig{
 		BuildPath:                        "/var/lib/buildkite-agent/builds",
@@ -106,8 +111,6 @@ func TestCheckoutPathWithAllComponents(t *testing.T) {
 	e.shell, err = shell.New()
 	assert.NoError(t, err)
 
-	e.shell.Env.Remove("BUILDKITE_BUILD_CHECKOUT_PATH")
-
 	err = e.setUp(context.Background())
 	assert.NoError(t, err)
 
@@ -116,8 +119,12 @@ func TestCheckoutPathWithAllComponents(t *testing.T) {
 	assert.Equal(t, filepath.FromSlash("/var/lib/buildkite-agent/builds/my-agent/my-org/my-pipeline"), checkoutPath)
 }
 
-func TestCheckoutPathWithoutPipeline(t *testing.T) {
+func TestCheckoutPathNoPipeline(t *testing.T) {
 	t.Parallel()
+
+	if os.Getenv("BUILDKITE_BUILD_CHECKOUT_PATH") != "" {
+		t.Skip("BUILDKITE_BUILD_CHECKOUT_PATH already set")
+	}
 
 	cfg := ExecutorConfig{
 		BuildPath:                        "/var/lib/buildkite-agent/builds",
@@ -135,8 +142,6 @@ func TestCheckoutPathWithoutPipeline(t *testing.T) {
 	e.shell, err = shell.New()
 	assert.NoError(t, err)
 
-	e.shell.Env.Remove("BUILDKITE_BUILD_CHECKOUT_PATH")
-
 	err = e.setUp(context.Background())
 	assert.NoError(t, err)
 
@@ -145,8 +150,12 @@ func TestCheckoutPathWithoutPipeline(t *testing.T) {
 	assert.Equal(t, filepath.FromSlash("/var/lib/buildkite-agent/builds/my-agent/my-org"), checkoutPath)
 }
 
-func TestCheckoutPathWithoutOrganization(t *testing.T) {
+func TestCheckoutPathNoOrganization(t *testing.T) {
 	t.Parallel()
+
+	if os.Getenv("BUILDKITE_BUILD_CHECKOUT_PATH") != "" {
+		t.Skip("BUILDKITE_BUILD_CHECKOUT_PATH already set")
+	}
 
 	cfg := ExecutorConfig{
 		BuildPath:                        "/var/lib/buildkite-agent/builds",
@@ -164,8 +173,6 @@ func TestCheckoutPathWithoutOrganization(t *testing.T) {
 	e.shell, err = shell.New()
 	assert.NoError(t, err)
 
-	e.shell.Env.Remove("BUILDKITE_BUILD_CHECKOUT_PATH")
-
 	err = e.setUp(context.Background())
 	assert.NoError(t, err)
 
@@ -174,8 +181,12 @@ func TestCheckoutPathWithoutOrganization(t *testing.T) {
 	assert.Equal(t, filepath.FromSlash("/var/lib/buildkite-agent/builds/my-agent/my-pipeline"), checkoutPath)
 }
 
-func TestCheckoutPathMinimal(t *testing.T) {
+func TestCheckoutPathDefault(t *testing.T) {
 	t.Parallel()
+
+	if os.Getenv("BUILDKITE_BUILD_CHECKOUT_PATH") != "" {
+		t.Skip("BUILDKITE_BUILD_CHECKOUT_PATH already set")
+	}
 
 	cfg := ExecutorConfig{
 		BuildPath:                        "/var/lib/buildkite-agent/builds",
@@ -192,8 +203,6 @@ func TestCheckoutPathMinimal(t *testing.T) {
 	var err error
 	e.shell, err = shell.New()
 	assert.NoError(t, err)
-
-	e.shell.Env.Remove("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	err = e.setUp(context.Background())
 	assert.NoError(t, err)
