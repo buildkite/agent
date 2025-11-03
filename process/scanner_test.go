@@ -27,7 +27,7 @@ func TestScanLines(t *testing.T) {
 	pr, pw := io.Pipe()
 
 	go func() {
-		for _, line := range strings.Split(strings.TrimSuffix(longTestOutput, "\n"), "\n") {
+		for line := range strings.SplitSeq(strings.TrimSuffix(longTestOutput, "\n"), "\n") {
 			fmt.Fprintf(pw, "%s\n", line)
 			time.Sleep(time.Millisecond * 10)
 		}

@@ -887,7 +887,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 		e.shell.Commentf("Your pipeline environment has protected environment variables set. " +
 			"These can only be set via hooks, plugins or the agent configuration.")
 
-		for _, env := range strings.Split(ignored, ",") {
+		for env := range strings.SplitSeq(ignored, ",") {
 			e.shell.Warningf("Ignored %s", env)
 		}
 
@@ -1322,7 +1322,7 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 
 	scriptContents := []string{"@echo off"}
 
-	for _, line := range strings.Split(cmd, "\n") {
+	for line := range strings.SplitSeq(cmd, "\n") {
 		if line != "" {
 			if shouldCallBatchLine(line) {
 				scriptContents = append(scriptContents, "call "+line)

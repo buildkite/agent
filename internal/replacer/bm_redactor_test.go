@@ -8,9 +8,9 @@ import (
 )
 
 func BenchmarkBMRedactor(b *testing.B) {
-	b.ResetTimer()
+
 	r := NewBMRedactor(io.Discard, "[REDACTED]", bigLipsumSecrets)
-	for range b.N {
+	for b.Loop() {
 		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
 			b.Errorf("fmt.Fprintln(r, bigLipsum) error = %v", err)
 		}

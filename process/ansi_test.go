@@ -63,8 +63,8 @@ func BenchmarkANSIParser(b *testing.B) {
 	if err != nil {
 		b.Fatalf("os.ReadFile(fixtures/npm.sh.raw) error = %v", err)
 	}
-	b.ResetTimer()
-	for range b.N {
+
+	for b.Loop() {
 		var p ansiParser
 		p.Write(npm)
 	}

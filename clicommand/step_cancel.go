@@ -25,7 +25,7 @@ Example:
     $ buildkite-agent step cancel --step "key"
     $ buildkite-agent step cancel --step "key" --force
     $ buildkite-agent step cancel --step "key" --force --force-grace-period-seconds 30
-		`
+`
 
 type StepCancelConfig struct {
 	GlobalConfig
