@@ -113,6 +113,10 @@ type AgentWorker struct {
 
 	// disable the delay between pings, to speed up certain testing scenarios
 	noWaitBetweenPingsForTesting bool
+
+	// Nudge worker and channel for accelerating pings
+	nudgeWorker *NudgeWorker
+	nudgeChan   chan struct{}
 }
 
 type agentWorkerState string
@@ -175,6 +179,7 @@ func (e *errUnrecoverable) Unwrap() error {
 // Creates the agent worker and initializes its API Client
 func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.Collector, apiClient APIClient, c AgentWorkerConfig) *AgentWorker {
 	apiClient = apiClient.FromAgentRegisterResponse(reg)
+	nudgeChan := make(chan struct{}, 1)
 	return &AgentWorker{
 		logger:           l,
 		agent:            reg,
@@ -192,6 +197,8 @@ func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.
 		spawnIndex:         c.SpawnIndex,
 		agentStdout:        c.AgentStdout,
 		state:              agentWorkerStateIdle,
+		nudgeChan:          nudgeChan,
+		nudgeWorker:        NewNudgeWorker(l, apiClient.Config().Endpoint, reg.AccessToken, nudgeChan),
 	}
 }
 
@@ -238,6 +245,12 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) (star
 	defer cancel()
 
 	go a.runHeartbeatLoop(heartbeatCtx)
+
+	// Start the nudge worker if not in acquisition mode
+	if a.agentConfiguration.AcquireJob == "" && a.nudgeWorker != nil {
+		a.nudgeWorker.Start(heartbeatCtx)
+		defer a.nudgeWorker.Stop()
+	}
 
 	// If the agent is booted in acquisition mode, acquire that particular job
 	// before running the ping loop.
@@ -351,6 +364,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	// * the agent has exceeded its disconnect-after-uptime and the ping action isn't "pause".
 	for {
 		setStat("😴 Waiting until next ping interval tick")
+		nudged := false
 		select {
 		case <-testTriggerCh:
 			// instant receive from closed chan when noWaitBetweenPingsForTesting is true
@@ -358,6 +372,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 			// continue below
 		case <-pingTicker.C:
 			// continue below
+		case <-a.nudgeChan:
+			// nudge received, skip jitter and ping immediately
+			setStat("🌅 Received nudge!")
+			nudged = true
 		case <-a.stop:
 			return nil
 		case <-ctx.Done():
@@ -366,19 +384,21 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 
 		// Within the interval, wait a random amount of time to avoid
 		// spontaneous synchronisation across agents.
-		jitter := rand.N(pingInterval)
-		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
-		select {
-		case <-testTriggerCh:
-			// instant receive from closed chan when noWaitBetweenPingsForTesting is true
-		case <-time.After(jitter):
-			// continue below
-		case <-a.stop:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
+		// Skip jitter if we received a nudge
+		if !nudged {
+			jitter := rand.N(pingInterval)
+			setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
+			select {
+			case <-testTriggerCh:
+				// instant receive from closed chan when noWaitBetweenPingsForTesting is true
+			case <-time.After(jitter):
+				// continue below
+			case <-a.stop:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
-
 		setStat("📡 Pinging Buildkite for instructions")
 		job, action, err := a.Ping(ctx)
 		if err != nil {

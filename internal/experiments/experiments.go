@@ -24,6 +24,7 @@ const (
 const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
+	AgentNudge                     = "agent-nudge"
 	AllowArtifactPathTraversal     = "allow-artifact-path-traversal"
 	DescendingSpawnPriority        = "descending-spawn-priority"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
@@ -49,6 +50,7 @@ const (
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
+		AgentNudge:                     {},
 		AllowArtifactPathTraversal:     {},
 		DescendingSpawnPriority:        {},
 		InterpolationPrefersRuntimeEnv: {},
