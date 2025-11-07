@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.111.0](https://github.com/buildkite/agent/tree/v3.111.0) (2025-11-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.110.0...v3.111.0)
+
+> [!WARNING]
+> If you use a custom S3 bucket for artifacts, this applies to you.
+>
+> As part of updating to AWS Go SDK v2, the "credential chain" for providing
+> authentication credentials to access artifacts in custom S3 buckets, is now
+> more standard. The existing `BUILDKITE_S3_` env vars are still available and
+> take precedence, but when these are not set, the AWS-default mechanisms are
+> used as provided by the SDK, with as few customisations as possible.
+>
+> This means additional ways to pass credentials to the AWS S3 client may be
+> accepted, and where multiple credentials are available, the precedence may
+> have changed (to match what the AWS SDK expects by default).
+>
+> Because of this, and the number of combinations of different ways to provide
+> credentials, this change may inadvertently break pipelines using custom S3
+> buckets for artifacts. Please reach out to support@buildkite.com or raise
+> issues in GitHub if this impacts you!
+
+### Added
+- Add cache save and restore using github.com/buildkite/zstash [#3551](https://github.com/buildkite/agent/pull/3551) (@wolfeidau)
+
+### Changed
+- Upgrade to AWS Go SDK v2 [#3554](https://github.com/buildkite/agent/pull/3554) (@DrJosh9000)
+- Catch all 'ignored' vars [#3502](https://github.com/buildkite/agent/pull/3502) (@DrJosh9000)
+
+### Internal
+- chore: go modernize to do a bit of a tidy up and remove some junk [#3560](https://github.com/buildkite/agent/pull/3560) (@wolfeidau)
+- Enforce that command descriptions indent using spaces, not tabs [#3553](https://github.com/buildkite/agent/pull/3553) (@moskyb)
+
+### Dependency updates
+- build(deps): bump the cloud-providers group across 1 directory with 9 updates [#3566](https://github.com/buildkite/agent/pull/3566) (@dependabot[bot])
+- build(deps): bump golangci/golangci-lint from v2.5-alpine to v2.6-alpine in /.buildkite in the container-images group across 1 directory [#3563](https://github.com/buildkite/agent/pull/3563) (@dependabot[bot])
+- build(deps): bump the container-images group across 4 directories with 1 update [#3564](https://github.com/buildkite/agent/pull/3564) (@dependabot[bot])
+- build(deps): bump gopkg.in/DataDog/dd-trace-go.v1 from 1.74.7 to 1.74.8 [#3555](https://github.com/buildkite/agent/pull/3555) (@dependabot[bot])
+- build(deps): bump the cloud-providers group with 6 updates [#3556](https://github.com/buildkite/agent/pull/3556) (@dependabot[bot])
+- build(deps): bump the container-images group across 4 directories with 1 update [#3557](https://github.com/buildkite/agent/pull/3557) (@dependabot[bot])
+- build(deps): bump docker/library/golang from `02ce1d7` to `5034fa4` in /.buildkite in the container-images group across 1 directory [#3558](https://github.com/buildkite/agent/pull/3558) (@dependabot[bot])
+
+
 ## [v3.110.0](https://github.com/buildkite/agent/tree/v3.110.0) (2025-10-22)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.109.1...v3.110.0)
 
