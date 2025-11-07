@@ -2,5 +2,6 @@ FROM public.ecr.aws/docker/library/golang:1.24.9@sha256:5034fa44b36163a4109b71ed
 COPY build/ssh.conf /etc/ssh/ssh_config.d/
 
 RUN go install github.com/google/go-licenses@latest
+RUN go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
 # Ruby used for polyglot hook integration tests
 RUN apt update && apt install -y ruby

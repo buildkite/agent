@@ -51,4 +51,7 @@ go build -v -ldflags "-X github.com/buildkite/agent/v3/version.buildNumber=${BUI
 
 chmod +x "${BUILD_PATH}/${BINARY_FILENAME}"
 
+# Generate SBOM
+cyclonedx-gomod mod -json -output pkg/bom.json ./
+
 echo -e "\nDone: \033[33m${BUILD_PATH}/${BINARY_FILENAME}\033[0m 💪"
