@@ -12,6 +12,7 @@ type Annotation struct {
 	Style    string `json:"style,omitempty"`
 	Append   bool   `json:"append,omitempty"`
 	Priority int    `json:"priority,omitempty"`
+	Scope    string `json:"scope,omitempty"`
 }
 
 // Annotate a build in the Buildkite UI
