@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/buildkite/agent/v3/agent/edgeping"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/ptr"
@@ -316,29 +316,47 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	defer setStat("🛑 Ping loop stopped!")
 	setStat("🏃 Starting...")
 
+	// Create a context that cancels when a.stop is closed
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-a.stop
+		cancel()
+	}()
+
 	disconnectAfterIdleTimeout := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout)
-
-	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
-	pingTicker := time.NewTicker(pingInterval)
-	defer pingTicker.Stop()
 
-	// testTriggerCh will normally block forever, and so will not affect the for/select loop.
-	var testTriggerCh chan struct{}
-	if a.noWaitBetweenPingsForTesting {
-		// a closed channel will unblock the for/select instantly, for zero-delay ping loop testing.
-		testTriggerCh = make(chan struct{})
-		close(testTriggerCh)
+	var source edgeping.PingSource
+
+	if a.agentConfiguration.UseStreamingPings {
+		endpoint := a.agent.Endpoint
+		if endpoint == "" {
+			endpoint = a.apiClient.Config().Endpoint
+		}
+		a.logger.Info("Using streaming pings via agent-edge (endpoint: %s)", endpoint)
+		source = edgeping.NewStreamPingSource(
+			endpoint,
+			a.agent.UUID,
+			a.logger,
+		)
+	} else {
+		a.logger.Info("Using polling pings")
+		source = edgeping.NewPollPingSource(
+			a.apiClient.Ping,
+			pingInterval,
+			a.logger,
+			a.noWaitBetweenPingsForTesting,
+		)
 	}
-
-	first := make(chan struct{}, 1)
-	first <- struct{}{}
+	defer source.Close()
 
 	lastActionTime := time.Now()
 	a.logger.Info("Waiting for instructions...")
 
 	ranJob := false
 	wasPaused := false
+	streamingMode := a.agentConfiguration.UseStreamingPings
 
 	// Continue this loop until one of:
 	// * the context is cancelled
@@ -350,44 +368,38 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	//   longer than the idle timeout, and the ping action isn't "pause".
 	// * the agent has exceeded its disconnect-after-uptime and the ping action isn't "pause".
 	for {
-		setStat("😴 Waiting until next ping interval tick")
-		select {
-		case <-testTriggerCh:
-			// instant receive from closed chan when noWaitBetweenPingsForTesting is true
-		case <-first:
-			// continue below
-		case <-pingTicker.C:
-			// continue below
-		case <-a.stop:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		setStat("📡 Waiting for ping")
 
-		// Within the interval, wait a random amount of time to avoid
-		// spontaneous synchronisation across agents.
-		jitter := rand.N(pingInterval)
-		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
-		select {
-		case <-testTriggerCh:
-			// instant receive from closed chan when noWaitBetweenPingsForTesting is true
-		case <-time.After(jitter):
-			// continue below
-		case <-a.stop:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-
-		setStat("📡 Pinging Buildkite for instructions")
-		job, action, err := a.Ping(ctx)
+		event, err := source.Next(ctx)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				a.logger.Debug("Context cancelled during ping")
+				return err
+			}
+
+			if errors.Is(err, edgeping.ErrStreamUnavailable) && streamingMode {
+				a.logger.Warn("Streaming pings unavailable, falling back to polling")
+				source.Close()
+				source = edgeping.NewPollPingSource(
+					a.apiClient.Ping,
+					pingInterval,
+					a.logger,
+					a.noWaitBetweenPingsForTesting,
+				)
+				streamingMode = false
+				continue
+			}
+
 			if errors.Is(err, &errUnrecoverable{}) {
 				a.logger.Error("%v", err)
 			} else {
 				a.logger.Warn("%v", err)
 			}
+			continue
 		}
+
+		job := event.Job
+		action := event.Action
 
 		switch action {
 		case "disconnect":
@@ -485,21 +497,9 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 		ranJob = true
 		if a.agentConfiguration.DisconnectAfterJob {
 			// Unless paused, this agent disconnects after the next ping.
-			// Do the ping immediately so we reduce the chances our agent is assigned a job
-			pingTicker.Reset(pingInterval)
 			continue
 		}
 		lastActionTime = time.Now()
-
-		// Observation: jobs are rarely the last within a pipeline,
-		// thus if this worker just completed a job,
-		// there is likely another immediately available.
-		// Skip waiting for the ping interval until
-		// a ping without a job has occurred,
-		// but in exchange, ensure the next ping must wait a full
-		// pingInterval to avoid too much server load.
-
-		pingTicker.Reset(pingInterval)
 	}
 }
 
