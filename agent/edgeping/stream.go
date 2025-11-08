@@ -178,19 +178,17 @@ func (s *StreamPingSource) Next(ctx context.Context) (*PingEvent, error) {
 
 		event := &PingEvent{}
 
-		if result.msg.Action != nil {
-			switch *result.msg.Action {
-			case agentv1.PingAction_PING_ACTION_IDLE:
-				event.Action = "idle"
-			case agentv1.PingAction_PING_ACTION_PAUSE:
-				event.Action = "pause"
-			case agentv1.PingAction_PING_ACTION_DISCONNECT:
-				event.Action = "disconnect"
+		switch resp := result.msg.Response.(type) {
+		case *agentv1.PingResponse_Idle:
+			event.Action = "idle"
+		case *agentv1.PingResponse_Pause:
+			event.Action = "pause"
+		case *agentv1.PingResponse_Disconnect:
+			event.Action = "disconnect"
+		case *agentv1.PingResponse_JobAssigned:
+			if resp.JobAssigned.Job != nil {
+				event.Job = &api.Job{ID: resp.JobAssigned.Job.Id}
 			}
-		}
-
-		if result.msg.Job != nil {
-			event.Job = &api.Job{ID: result.msg.Job.Id}
 		}
 
 		s.logger.Debug("Received ping from stream: action=%s, job=%v", event.Action, event.Job != nil)
