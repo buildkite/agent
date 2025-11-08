@@ -67,4 +67,5 @@ type AgentConfiguration struct {
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
+	UseStreamingPings            bool
 }

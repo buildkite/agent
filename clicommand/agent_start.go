@@ -105,6 +105,7 @@ type AgentStartConfig struct {
 	CancelGracePeriod          int    `cli:"cancel-grace-period"`
 	SignalGracePeriodSeconds   int    `cli:"signal-grace-period-seconds"`
 	ReflectExitStatus          bool   `cli:"reflect-exit-status"`
+	UseStreamingPings          bool   `cli:"use-streaming-pings"`
 
 	EnableJobLogTmpfile bool   `cli:"enable-job-log-tmpfile"`
 	JobLogPath          string `cli:"job-log-path" normalize:"filepath"`
@@ -380,6 +381,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_UPTIME",
 		},
 		cancelGracePeriodFlag,
+		cli.BoolFlag{
+			Name:   "use-streaming-pings",
+			Usage:  "Use streaming pings via agent-edge instead of polling. Automatically derives endpoint from --endpoint by appending /connect",
+			EnvVar: "BUILDKITE_AGENT_USE_STREAMING_PINGS",
+		},
 		cli.BoolFlag{
 			Name:   "enable-job-log-tmpfile",
 			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job",
@@ -1041,6 +1047,7 @@ var AgentStartCommand = cli.Command{
 			DisconnectAfterUptime:        cfg.DisconnectAfterUptime,
 			CancelGracePeriod:            cfg.CancelGracePeriod,
 			SignalGracePeriod:            signalGracePeriod,
+			UseStreamingPings:            cfg.UseStreamingPings,
 			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
 			JobLogPath:                   cfg.JobLogPath,
 			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
