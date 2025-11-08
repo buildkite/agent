@@ -316,6 +316,14 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	defer setStat("🛑 Ping loop stopped!")
 	setStat("🏃 Starting...")
 
+	// Create a context that cancels when a.stop is closed
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-a.stop
+		cancel()
+	}()
+
 	disconnectAfterIdleTimeout := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout)
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
 
@@ -362,19 +370,24 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	for {
 		setStat("📡 Waiting for ping")
 
-		select {
-		case <-a.stop:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
 		event, err := source.Next(ctx)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				a.logger.Debug("Context cancelled during ping")
+				return err
+			}
+
 			if errors.Is(err, edgeping.ErrStreamUnavailable) && streamingMode {
-				a.logger.Error("Streaming pings unavailable after retries")
-				return fmt.Errorf("streaming pings failed: %w", err)
+				a.logger.Warn("Streaming pings unavailable, falling back to polling")
+				source.Close()
+				source = edgeping.NewPollPingSource(
+					a.apiClient.Ping,
+					pingInterval,
+					a.logger,
+					a.noWaitBetweenPingsForTesting,
+				)
+				streamingMode = false
+				continue
 			}
 
 			if errors.Is(err, &errUnrecoverable{}) {

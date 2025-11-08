@@ -22,6 +22,8 @@ type StreamPingSource struct {
 	logger        logger.Logger
 	agentID       string
 	stream        *connect.ServerStreamForClient[agentv1.PingResponse]
+	streamCtx     context.Context
+	streamCancel  context.CancelFunc
 	retryAttempts int
 	maxRetries    int
 }
@@ -51,20 +53,41 @@ func NewStreamPingSource(agentEndpoint string, agentID string, logger logger.Log
 	}
 }
 
-func (s *StreamPingSource) connect(ctx context.Context) error {
+func (s *StreamPingSource) connect(parentCtx context.Context) error {
 	s.logger.Info("Connecting to StreamPings endpoint")
 
-	stream, err := s.client.StreamPings(ctx, connect.NewRequest(&agentv1.StreamPingsRequest{
-		AgentId: s.agentID,
-	}))
-	if err != nil {
-		return fmt.Errorf("failed to start stream: %w", err)
+	streamCtx, cancel := context.WithCancel(parentCtx)
+
+	type connectResult struct {
+		stream *connect.ServerStreamForClient[agentv1.PingResponse]
+		err    error
 	}
 
-	s.stream = stream
-	s.retryAttempts = 0
-	s.logger.Info("StreamPings connection established")
-	return nil
+	connectCh := make(chan connectResult, 1)
+	go func() {
+		stream, err := s.client.StreamPings(streamCtx, connect.NewRequest(&agentv1.StreamPingsRequest{
+			AgentId: s.agentID,
+		}))
+		connectCh <- connectResult{stream: stream, err: err}
+	}()
+
+	select {
+	case <-parentCtx.Done():
+		cancel()
+		return parentCtx.Err()
+	case result := <-connectCh:
+		if result.err != nil {
+			cancel()
+			return fmt.Errorf("failed to start stream: %w", result.err)
+		}
+
+		s.stream = result.stream
+		s.streamCtx = streamCtx
+		s.streamCancel = cancel
+		s.retryAttempts = 0
+		s.logger.Info("StreamPings connection established")
+		return nil
+	}
 }
 
 func (s *StreamPingSource) Next(ctx context.Context) (*PingEvent, error) {
@@ -92,39 +115,95 @@ func (s *StreamPingSource) Next(ctx context.Context) (*PingEvent, error) {
 		}
 	}
 
-	if !s.stream.Receive() {
-		err := s.stream.Err()
-		s.logger.Warn("Stream receive error, reconnecting: %v", err)
-		s.stream.Close()
-		s.stream = nil
-		return s.Next(ctx)
+	type receiveResult struct {
+		msg *agentv1.PingResponse
+		err error
 	}
 
-	msg := s.stream.Msg()
-
-	event := &PingEvent{}
-
-	if msg.Action != nil {
-		switch *msg.Action {
-		case agentv1.PingAction_PING_ACTION_IDLE:
-			event.Action = "idle"
-		case agentv1.PingAction_PING_ACTION_PAUSE:
-			event.Action = "pause"
-		case agentv1.PingAction_PING_ACTION_DISCONNECT:
-			event.Action = "disconnect"
+	receiveCh := make(chan receiveResult, 1)
+	go func() {
+		defer close(receiveCh)
+		if s.stream.Receive() {
+			if s.streamCtx != nil {
+				select {
+				case receiveCh <- receiveResult{msg: s.stream.Msg()}:
+				case <-s.streamCtx.Done():
+					return
+				}
+			} else {
+				receiveCh <- receiveResult{msg: s.stream.Msg()}
+			}
+		} else {
+			if s.streamCtx != nil {
+				select {
+				case receiveCh <- receiveResult{err: s.stream.Err()}:
+				case <-s.streamCtx.Done():
+					return
+				}
+			} else {
+				receiveCh <- receiveResult{err: s.stream.Err()}
+			}
 		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		s.logger.Info("Context cancelled, closing stream")
+		if s.streamCancel != nil {
+			s.streamCancel()
+		}
+		if s.stream != nil {
+			s.stream.Close()
+		}
+		select {
+		case <-receiveCh:
+			s.logger.Info("Receive goroutine exited")
+		case <-time.After(1 * time.Second):
+			s.logger.Warn("Timed out waiting for receive goroutine; proceeding with shutdown")
+		}
+		return nil, ctx.Err()
+	case result, ok := <-receiveCh:
+		if !ok {
+			return nil, context.Canceled
+		}
+		if result.err != nil {
+			s.logger.Warn("Stream receive error, reconnecting: %v", result.err)
+			if s.streamCancel != nil {
+				s.streamCancel()
+			}
+			s.stream.Close()
+			s.stream = nil
+			return s.Next(ctx)
+		}
+
+		event := &PingEvent{}
+
+		if result.msg.Action != nil {
+			switch *result.msg.Action {
+			case agentv1.PingAction_PING_ACTION_IDLE:
+				event.Action = "idle"
+			case agentv1.PingAction_PING_ACTION_PAUSE:
+				event.Action = "pause"
+			case agentv1.PingAction_PING_ACTION_DISCONNECT:
+				event.Action = "disconnect"
+			}
+		}
+
+		if result.msg.Job != nil {
+			event.Job = &api.Job{ID: result.msg.Job.Id}
+		}
+
+		s.logger.Debug("Received ping from stream: action=%s, job=%v", event.Action, event.Job != nil)
+
+		return event, nil
 	}
-
-	if msg.Job != nil {
-		event.Job = &api.Job{ID: msg.Job.Id}
-	}
-
-	s.logger.Debug("Received ping from stream: action=%s, job=%v", event.Action, event.Job != nil)
-
-	return event, nil
 }
 
 func (s *StreamPingSource) Close() error {
+	if s.streamCancel != nil {
+		s.streamCancel()
+		s.streamCancel = nil
+	}
 	if s.stream != nil {
 		s.stream.Close()
 		s.stream = nil
