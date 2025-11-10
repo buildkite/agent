@@ -13,17 +13,15 @@ import (
 	"github.com/buildkite/agent/v3/status"
 )
 
-// AgentPool manages multiple parallel AgentWorkers
+// AgentPool manages multiple parallel AgentWorkers.
 type AgentPool struct {
-	workers     []*AgentWorker
-	idleMonitor *IdleMonitor
+	workers []*AgentWorker
 }
 
-// NewAgentPool returns a new AgentPool
+// NewAgentPool returns a new AgentPool.
 func NewAgentPool(workers []*AgentWorker) *AgentPool {
 	return &AgentPool{
-		workers:     workers,
-		idleMonitor: NewIdleMonitor(len(workers)),
+		workers: workers,
 	}
 }
 
@@ -57,12 +55,15 @@ func (r *AgentPool) Start(ctx context.Context) error {
 	defer done()
 	setStat("🏃 Spawning workers...")
 
+	idleMon := newIdleMonitor(len(r.workers))
+
 	errCh := make(chan error)
 
 	// Spawn each worker "in parallel" (in its own goroutine)
 	for _, worker := range r.workers {
 		go func() {
-			errCh <- r.runWorker(ctx, worker)
+			defer idleMon.markDead(worker)
+			errCh <- r.runWorker(ctx, worker, idleMon)
 		}()
 	}
 
@@ -76,7 +77,7 @@ func (r *AgentPool) Start(ctx context.Context) error {
 	return errors.Join(errs...) // nil if all errs are nil
 }
 
-func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker) error {
+func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor) error {
 	// Connect the worker to the API
 	if err := worker.Connect(ctx); err != nil {
 		return err
@@ -85,7 +86,7 @@ func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker) error {
 	defer worker.Disconnect(ctx) //nolint:errcheck // Error is logged within core/client
 
 	// Starts the agent worker and wait for it to finish.
-	return worker.Start(ctx, r.idleMonitor)
+	return worker.Start(ctx, idleMon)
 }
 
 // StopGracefully stops all workers in the pool gracefully.

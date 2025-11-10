@@ -217,7 +217,7 @@ func (a *AgentWorker) statusCallback(context.Context) (any, error) {
 }
 
 // Starts the agent worker
-func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) (startErr error) {
+func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr error) {
 	// Record the start time for max agent lifetime tracking
 	a.startTime = time.Now()
 
@@ -248,7 +248,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) (star
 		// there's really no point in letting the idle monitor know
 		// we're busy, but it's probably a good thing to do for good
 		// measure.
-		idleMonitor.MarkBusy(a.agent.UUID)
+		idleMon.markBusy(a)
 
 		if err := a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob); err != nil {
 			// If the job acquisition was rejected, we can exit with an error
@@ -270,7 +270,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) (star
 		}
 	}
 
-	return a.runPingLoop(ctx, idleMonitor)
+	return a.runPingLoop(ctx, idleMon)
 }
 
 func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) {
@@ -311,12 +311,13 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) {
 	}
 }
 
-func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor) error {
+// runPingLoop runs the loop that pings Buildkite for work. It does all critical
+// agent things.
+// The lifetime of an agent is the lifetime of the ping loop.
+func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) error {
 	ctx, setStat, _ := status.AddSimpleItem(ctx, "Ping loop")
 	defer setStat("🛑 Ping loop stopped!")
 	setStat("🏃 Starting...")
-
-	disconnectAfterIdleTimeout := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout)
 
 	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
@@ -334,7 +335,6 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 	first := make(chan struct{}, 1)
 	first <- struct{}{}
 
-	lastActionTime := time.Now()
 	a.logger.Info("Waiting for instructions...")
 
 	ranJob := false
@@ -430,8 +430,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 		}
 
 		// Exit after disconnect-after-uptime is exceeded.
-		if a.agentConfiguration.DisconnectAfterUptime > 0 {
-			maxUptime := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterUptime)
+		if maxUptime := a.agentConfiguration.DisconnectAfterUptime; maxUptime > 0 {
 			if time.Since(a.startTime) >= maxUptime {
 				if job != nil {
 					a.logger.Error("Agent ping dispatched a job (id %q) but agent has exceeded max uptime of %v!", job.ID, maxUptime)
@@ -443,40 +442,26 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 
 		// Note that Ping only returns a job if err == nil.
 		if job == nil {
-			if disconnectAfterIdleTimeout == 0 {
+			idleTimeout := a.agentConfiguration.DisconnectAfterIdleTimeout
+			if idleTimeout == 0 {
 				// No job and no idle timeout.
 				continue
 			}
 
-			// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout).
-			// Only do this check if we weren't just dispatched a job.
-			// (If we were dispatched a job, we're not idle.)
-			idleDeadline := lastActionTime.Add(disconnectAfterIdleTimeout)
-			if time.Now().After(idleDeadline) {
-				// Let other agents know this agent is now idle and termination
-				// is possible
-				idleMonitor.MarkIdle(a.agent.UUID)
-
-				// But only terminate if everyone else is also idle
-				if idleMonitor.Idle() {
-					a.logger.Info("All agents have been idle for %v. Disconnecting...", disconnectAfterIdleTimeout)
-					return nil
-				}
-				a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
-					time.Since(lastActionTime).Seconds())
+			// Exit if every agent has been idle for at least the timeout.
+			if idleMon.shouldExit(idleTimeout) {
+				a.logger.Info("All agents have been idle for at least %v. Disconnecting...", idleTimeout)
+				return nil
 			}
-			// Not idle enough yet. Wait and ping again.
+
+			// Not idle enough to exit. Wait and ping again.
 			continue
 		}
-
-		// Let other agents know this agent is now busy and
-		// not to idle terminate
-		idleMonitor.MarkBusy(a.agent.UUID)
 
 		setStat("💼 Accepting job")
 
 		// Runs the job, only errors if something goes wrong
-		if err := a.AcceptAndRunJob(ctx, job); err != nil {
+		if err := a.AcceptAndRunJob(ctx, job, idleMon); err != nil {
 			a.logger.Error("%v", err)
 			setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
 			continue
@@ -489,7 +474,6 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 			pingTicker.Reset(pingInterval)
 			continue
 		}
-		lastActionTime = time.Now()
 
 		// Observation: jobs are rarely the last within a pipeline,
 		// thus if this worker just completed a job,
@@ -700,8 +684,12 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 }
 
 // Accepts a job and runs it, only returns an error if something goes wrong
-func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
+func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job, idleMon *idleMonitor) error {
 	a.logger.Info("Assigned job %s. Accepting...", job.ID)
+
+	// An agent is busy during a job, and idle when the job is done.
+	idleMon.markBusy(a)
+	defer idleMon.markIdle(a)
 
 	// Accept the job. We'll retry on connection related issues, but if
 	// Buildkite returns a 422 or 500 for example, we'll just bail out,
