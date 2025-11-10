@@ -1,44 +1,88 @@
 package agent
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
-// This monitor has a 3rd implicit state we will call "initializing" that all agents start in
-// Agents can transition to busy and/or idle but always start in the "initializing" state
+// idleMonitor tracks agent idleness, needed for "disconnect-after-idle" type
+// logic.
+//
+// In addition to "busy", "idle", and "dead", idleMonitor has an implicit
+// "initial" state. Agents always start in the "initial" state
 /*
-//                -> Busy
-//              /     ^
-// Initializing       |
-//              \     v
-//                -> Idle
+//                -> Busy --
+//              /     ^      \
+//      Initial ------+--------> Dead
+//              \     v      /
+//                -> Idle --
 */
-// This (intentionally?) ensures the DisconnectAfterIdleTimeout doesn't fire before agents have had a chance to run a job
-type IdleMonitor struct {
-	sync.Mutex
+// This (intentionally) ensures the DisconnectAfterIdleTimeout doesn't fire
+// before agents have had a chance to run a job.
+type idleMonitor struct {
+	mu          sync.Mutex
+	exiting     bool
 	totalAgents int
-	idle        map[string]struct{}
+	idleAt      map[*AgentWorker]time.Time
 }
 
-func NewIdleMonitor(totalAgents int) *IdleMonitor {
-	return &IdleMonitor{
+// newIdleMonitor creates a new IdleMonitor.
+func newIdleMonitor(totalAgents int) *idleMonitor {
+	return &idleMonitor{
 		totalAgents: totalAgents,
-		idle:        map[string]struct{}{},
+		idleAt:      make(map[*AgentWorker]time.Time),
 	}
 }
 
-func (i *IdleMonitor) Idle() bool {
-	i.Lock()
-	defer i.Unlock()
-	return len(i.idle) == i.totalAgents
+// shouldExit reports whether all agents are dead or have been idle for at least
+// minIdle.  If shouldExit returns true, it will return true on all subsequent
+// calls.
+func (i *idleMonitor) shouldExit(minIdle time.Duration) bool {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	// Once the idle monitor decides we're exiting, we're exiting.
+	if i.exiting {
+		return true
+	}
+
+	// Are all alive agents dead or idle for long enough?
+	idle := 0
+	for _, t := range i.idleAt {
+		if !t.IsZero() && time.Since(t) < minIdle {
+			return false
+		}
+		idle++
+	}
+	if idle < i.totalAgents {
+		return false
+	}
+	i.exiting = true
+	return true
 }
 
-func (i *IdleMonitor) MarkIdle(agentUUID string) {
-	i.Lock()
-	defer i.Unlock()
-	i.idle[agentUUID] = struct{}{}
+// markIdle marks an agent as idle.
+func (i *idleMonitor) markIdle(agent *AgentWorker) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	// Allow MarkIdle to be called multiple times without updating the idleAt
+	// timestamp.
+	if _, alreadyIdle := i.idleAt[agent]; alreadyIdle {
+		return
+	}
+	i.idleAt[agent] = time.Now()
 }
 
-func (i *IdleMonitor) MarkBusy(agentUUID string) {
-	i.Lock()
-	defer i.Unlock()
-	delete(i.idle, agentUUID)
+// markDead marks an agent as dead.
+func (i *idleMonitor) markDead(agent *AgentWorker) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.idleAt[agent] = time.Time{}
+}
+
+// markBusy marks an agent as busy.
+func (i *idleMonitor) markBusy(agent *AgentWorker) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	delete(i.idleAt, agent)
 }

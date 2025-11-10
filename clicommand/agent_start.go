@@ -1037,8 +1037,8 @@ var AgentStartCommand = cli.Command{
 			ANSITimestamps:               !cfg.NoANSITimestamps,
 			TimestampLines:               cfg.TimestampLines,
 			DisconnectAfterJob:           cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:   cfg.DisconnectAfterIdleTimeout,
-			DisconnectAfterUptime:        cfg.DisconnectAfterUptime,
+			DisconnectAfterIdleTimeout:   time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
+			DisconnectAfterUptime:        time.Duration(cfg.DisconnectAfterUptime) * time.Second,
 			CancelGracePeriod:            cfg.CancelGracePeriod,
 			SignalGracePeriod:            signalGracePeriod,
 			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
@@ -1131,11 +1131,11 @@ var AgentStartCommand = cli.Command{
 		}
 
 		if agentConf.DisconnectAfterIdleTimeout > 0 {
-			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
+			l.Info("Agents will disconnect after %v of inactivity", agentConf.DisconnectAfterIdleTimeout)
 		}
 
 		if agentConf.DisconnectAfterUptime > 0 {
-			l.Info("Agents will disconnect after %d seconds of uptime and shut down after any running jobs complete", agentConf.DisconnectAfterUptime)
+			l.Info("Agents will disconnect after %v of uptime and shut down after any running jobs complete", agentConf.DisconnectAfterUptime)
 		}
 
 		if len(cfg.AllowedRepositories) > 0 {
