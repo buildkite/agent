@@ -338,6 +338,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor)
 		source = edgeping.NewStreamPingSource(
 			endpoint,
 			a.agent.UUID,
+			a.agent.AccessToken,
 			a.logger,
 		)
 	} else {

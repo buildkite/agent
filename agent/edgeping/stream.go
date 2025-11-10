@@ -19,6 +19,7 @@ var ErrStreamUnavailable = errors.New("streaming ping unavailable")
 type StreamPingSource struct {
 	logger        logger.Logger
 	agentID       string
+	accessToken   string
 	streamURL     string
 	stream        *eventsource.Stream
 	retryAttempts int
@@ -47,14 +48,15 @@ func streamEndpointFromAgentEndpoint(agentEndpoint string, agentID string) strin
 	return u.String()
 }
 
-func NewStreamPingSource(agentEndpoint string, agentID string, logger logger.Logger) *StreamPingSource {
+func NewStreamPingSource(agentEndpoint string, agentID string, accessToken string, logger logger.Logger) *StreamPingSource {
 	streamURL := streamEndpointFromAgentEndpoint(agentEndpoint, agentID)
 
 	return &StreamPingSource{
-		logger:     logger,
-		agentID:    agentID,
-		streamURL:  streamURL,
-		maxRetries: 5,
+		logger:      logger,
+		agentID:     agentID,
+		accessToken: accessToken,
+		streamURL:   streamURL,
+		maxRetries:  5,
 		httpClient: &http.Client{
 			Timeout: 0, // No timeout for SSE connections
 		},
@@ -63,11 +65,15 @@ func NewStreamPingSource(agentEndpoint string, agentID string, logger logger.Log
 
 func (s *StreamPingSource) connect(ctx context.Context) error {
 	s.logger.Info("Connecting to StreamPings endpoint at %s", s.streamURL)
+	s.logger.Debug("Using access token: %s...", s.accessToken[:min(8, len(s.accessToken))])
 
 	req, err := http.NewRequestWithContext(ctx, "GET", s.streamURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+
+	req.Header.Set("Authorization", "Token "+s.accessToken)
+	s.logger.Debug("Set Authorization header: Token %s...", s.accessToken[:min(8, len(s.accessToken))])
 
 	stream, err := eventsource.SubscribeWithRequest("", req)
 	if err != nil {
