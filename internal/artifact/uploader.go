@@ -356,11 +356,10 @@ func (a *Uploader) build(path string, absolutePath string) (*api.Artifact, error
 	defer file.Close() //nolint:errcheck // File is only open for read.
 
 	// Generate a SHA-1 and SHA-256 checksums for the file.
-	// Writing to hashes never errors, but reading from the file might.
 	hash1, hash256 := sha1.New(), sha256.New()
 	size, err := io.Copy(io.MultiWriter(hash1, hash256), file)
 	if err != nil {
-		return nil, fmt.Errorf("reading contents of %s: %w", absolutePath, err)
+		return nil, fmt.Errorf("hashing artifact file %s: %w", absolutePath, err)
 	}
 	sha1sum := fmt.Sprintf("%040x", hash1.Sum(nil))
 	sha256sum := fmt.Sprintf("%064x", hash256.Sum(nil))
