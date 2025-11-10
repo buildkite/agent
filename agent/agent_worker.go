@@ -332,8 +332,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		close(testTriggerCh)
 	}
 
-	first := make(chan struct{}, 1)
-	first <- struct{}{}
+	// On the first iteration, skip waiting for the pingTicker.
+	// This doesn't skip the jitter, though.
+	skipTicker := make(chan struct{}, 1)
+	skipTicker <- struct{}{}
 
 	a.logger.Info("Waiting for instructions...")
 
@@ -354,7 +356,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		select {
 		case <-testTriggerCh:
 			// instant receive from closed chan when noWaitBetweenPingsForTesting is true
-		case <-first:
+		case <-skipTicker:
 			// continue below
 		case <-pingTicker.C:
 			// continue below
@@ -468,22 +470,21 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		}
 
 		ranJob = true
-		if a.agentConfiguration.DisconnectAfterJob {
-			// Unless paused, this agent disconnects after the next ping.
-			// Do the ping immediately so we reduce the chances our agent is assigned a job
-			pingTicker.Reset(pingInterval)
-			continue
-		}
 
 		// Observation: jobs are rarely the last within a pipeline,
 		// thus if this worker just completed a job,
 		// there is likely another immediately available.
 		// Skip waiting for the ping interval until
 		// a ping without a job has occurred,
-		// but in exchange, ensure the next ping must wait a full
+		// but in exchange, ensure the next ping must wait at least a full
 		// pingInterval to avoid too much server load.
-
 		pingTicker.Reset(pingInterval)
+		select {
+		case skipTicker <- struct{}{}:
+			// Ticker will be skipped
+		default:
+			// We're already skipping the ticker, don't block.
+		}
 	}
 }
 
