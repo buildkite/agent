@@ -11,6 +11,8 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/status"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // AgentPool manages multiple parallel AgentWorkers.
@@ -29,6 +31,7 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", healthHandler(l))
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/status", status.Handle)
 	mux.HandleFunc("/status.json", ap.statusJSONHandler(l))
 
@@ -61,10 +64,7 @@ func (r *AgentPool) Start(ctx context.Context) error {
 
 	// Spawn each worker "in parallel" (in its own goroutine)
 	for _, worker := range r.workers {
-		go func() {
-			defer idleMon.markDead(worker)
-			errCh <- r.runWorker(ctx, worker, idleMon)
-		}()
+		go runWorker(ctx, worker, idleMon, errCh)
 	}
 
 	setStat("✅ Workers spawned!")
@@ -77,16 +77,21 @@ func (r *AgentPool) Start(ctx context.Context) error {
 	return errors.Join(errs...) // nil if all errs are nil
 }
 
-func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor) error {
+func runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor, errCh chan<- error) {
+	agentWorkersStarted.Inc()
+	defer agentWorkersEnded.Inc()
+	defer idleMon.markDead(worker)
+
 	// Connect the worker to the API
 	if err := worker.Connect(ctx); err != nil {
-		return err
+		errCh <- err
+		return
 	}
 	// Ensure the worker is disconnected at the end of this function.
 	defer worker.Disconnect(ctx) //nolint:errcheck // Error is logged within core/client
 
 	// Starts the agent worker and wait for it to finish.
-	return worker.Start(ctx, idleMon)
+	errCh <- worker.Start(ctx, idleMon)
 }
 
 // StopGracefully stops all workers in the pool gracefully.
