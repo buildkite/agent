@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.112.0](https://github.com/buildkite/agent/tree/v3.112.0) (2025-11-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.111.0...v3.112.0)
+
+### Added
+
+The agent can now annotate jobs as well as builds! Job annotations will show up in a dedicated section of the job detail
+in the build UI. This is a great way to provide additional, richly-formatted context and information about specific jobs.
+
+See the [PR](https://github.com/buildkite/agent/pull/3569) for more details.
+
+### Changed
+- Agents will now check for new work more quickly immediately after finishing a job [#3571](https://github.com/buildkite/agent/pull/3571) (@DrJosh9000)
+
+### Fixed
+- IdleMonitor-related fixes [#3570](https://github.com/buildkite/agent/pull/3570) (@DrJosh9000)
+- Fix confusing error message when hashing artifact payloads [#3565](https://github.com/buildkite/agent/pull/3565) (@moskyb)
+
+### Internal
+- Dependency updates [#3575](https://github.com/buildkite/agent/pull/3575) [#3574](https://github.com/buildkite/agent/pull/3574) [#3573](https://github.com/buildkite/agent/pull/3573) [#3572](https://github.com/buildkite/agent/pull/3572) (@dependabot[bot])
+
 ## [v3.111.0](https://github.com/buildkite/agent/tree/v3.111.0) (2025-11-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.110.0...v3.111.0)
 
