@@ -66,6 +66,7 @@ type AnnotateConfig struct {
 	Priority     int      `cli:"priority"`
 	Job          string   `cli:"job" validate:"required"`
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
+	Scope        string   `cli:"scope"`
 }
 
 var AnnotateCommand = cli.Command{
@@ -100,6 +101,12 @@ var AnnotateCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the annotation come from",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "scope",
+			Value:  "build",
+			Usage:  "The scope of the annotation, which will control where the annotation is displayed in the Buildkite UI. One of 'build', 'job'",
+			EnvVar: "BUILDKITE_ANNOTATION_SCOPE",
 		},
 
 		RedactedVars,
@@ -159,6 +166,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		Context:  cfg.Context,
 		Append:   cfg.Append,
 		Priority: cfg.Priority,
+		Scope:    cfg.Scope,
 	}
 
 	// Retry the annotation a few times before giving up

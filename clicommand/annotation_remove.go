@@ -32,6 +32,7 @@ type AnnotationRemoveConfig struct {
 	APIConfig
 
 	Context string `cli:"context" validate:"required"`
+	Scope   string `cli:"scope"`
 	Job     string `cli:"job" validate:"required"`
 }
 
@@ -45,6 +46,12 @@ var AnnotationRemoveCommand = cli.Command{
 			Value:  "default",
 			Usage:  "The context of the annotation used to differentiate this annotation from others",
 			EnvVar: "BUILDKITE_ANNOTATION_CONTEXT",
+		},
+		cli.StringFlag{
+			Name:   "scope",
+			Value:  "build",
+			Usage:  "The scope of the annotation to remove. One of either 'build' or 'job'",
+			EnvVar: "BUILDKITE_ANNOTATION_SCOPE",
 		},
 		cli.StringFlag{
 			Name:   "job",
@@ -68,7 +75,7 @@ var AnnotationRemoveCommand = cli.Command{
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			// Attempt to remove the annotation
-			resp, err := client.AnnotationRemove(ctx, cfg.Job, cfg.Context)
+			resp, err := client.AnnotationRemove(ctx, cfg.Job, cfg.Context, cfg.Scope)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400 || resp.StatusCode == 410) {
