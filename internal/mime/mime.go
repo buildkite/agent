@@ -779,6 +779,8 @@ var types = map[string]string{
 	".spq":         "application/scvp-vp-request",
 	".spx":         "audio/ogg",
 	".sql":         "application/x-sql",
+	".sqlite":      "application/vnd.sqlite3",
+	".sqlite3":     "application/vnd.sqlite3",
 	".src":         "application/x-wais-source",
 	".srt":         "application/x-subrip",
 	".sru":         "application/sru+xml",
