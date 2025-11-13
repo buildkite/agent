@@ -457,6 +457,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 				continue
 			}
 
+			// This ensures agents that never receive a job are still tracked
+			// by the idle monitor and can properly trigger disconnect-after-idle-timeout.
+			idleMon.markIdle(a)
+
 			// Exit if every agent has been idle for at least the timeout.
 			if idleMon.shouldExit(idleTimeout) {
 				a.logger.Info("All agents have been idle for at least %v. Disconnecting...", idleTimeout)
