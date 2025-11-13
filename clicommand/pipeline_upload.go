@@ -319,7 +319,11 @@ var PipelineUploadCommand = cli.Command{
 				if len(cfg.RedactedVars) > 0 {
 					// Secret detection uses the original environment, since
 					// Interpolate merges the pipeline's env block into `environ`.
-					searchForSecrets(l, &cfg, environ, result, input.name)
+					err := searchForSecrets(l, &cfg, environ, result, input.name)
+					if err != nil {
+						l.Error("%v", err)
+						return NewSilentExitError(1)
+					}
 				}
 
 				var (
@@ -509,6 +513,7 @@ func searchForSecrets(
 	if err != nil {
 		l.Warn("Couldn't match environment variable names against redacted-vars: %v", err)
 	}
+
 	for _, name := range short {
 		shortValues[name] = struct{}{}
 	}
