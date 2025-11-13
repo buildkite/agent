@@ -352,6 +352,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 	//   longer than the idle timeout, and the ping action isn't "pause".
 	// * the agent has exceeded its disconnect-after-uptime and the ping action isn't "pause".
 	for {
+		startWait := time.Now()
 		setStat("😴 Waiting until next ping interval tick")
 		select {
 		case <-testTriggerCh:
@@ -380,17 +381,23 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		case <-ctx.Done():
 			return ctx.Err()
 		}
+		pingWaitDurations.Observe(time.Since(startWait).Seconds())
 
 		setStat("📡 Pinging Buildkite for instructions")
+		pingsSent.Inc()
+		startPing := time.Now()
 		job, action, err := a.Ping(ctx)
 		if err != nil {
+			pingErrors.Inc()
 			if errors.Is(err, &errUnrecoverable{}) {
 				a.logger.Error("%v", err)
 			} else {
 				a.logger.Warn("%v", err)
 			}
 		}
+		pingDurations.Observe(time.Since(startPing).Seconds())
 
+		pingActions.WithLabelValues(action).Inc()
 		switch action {
 		case "disconnect":
 			a.StopUngracefully()
@@ -732,6 +739,9 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job, idleMon
 func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignoreAgentInDispatches *bool) error {
 	a.setBusy(acceptResponse.ID)
 	defer a.setIdle()
+
+	jobsStarted.Inc()
+	defer jobsEnded.Inc()
 
 	jobMetricsScope := a.metrics.With(metrics.Tags{
 		"pipeline": acceptResponse.Env["BUILDKITE_PIPELINE_SLUG"],

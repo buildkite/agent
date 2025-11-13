@@ -176,7 +176,17 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	r.logStreamer = NewLogStreamer(
 		r.agentLogger,
 		func(ctx context.Context, chunk *api.Chunk) error {
-			return r.client.UploadChunk(ctx, r.conf.Job.ID, chunk)
+			startUpload := time.Now()
+			// core.Client.UploadChunk contains the retry/backoff.
+			if err := r.client.UploadChunk(ctx, r.conf.Job.ID, chunk); err != nil {
+				logChunkUploadErrors.Inc()
+				logBytesUploadErrors.Add(float64(chunk.Size))
+				return err
+			}
+			logUploadDurations.Observe(time.Since(startUpload).Seconds())
+			logChunksUploaded.Inc()
+			logBytesUploaded.Add(float64(chunk.Size))
+			return nil
 		},
 		LogStreamerConfig{
 			Concurrency:       3,
