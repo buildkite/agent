@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.113.0](https://github.com/buildkite/agent/tree/v3.113.0) (2025-11-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.112.0...v3.113.0)
+
+### Added
+- Add Prometheus /metrics handler and some basic metrics [#3576](https://github.com/buildkite/agent/pull/3576) (@DrJosh9000)
+
+### Fixed
+- Fix the pipeline upload --reject-secrets flag not rejecting secrets [#3580](https://github.com/buildkite/agent/pull/3580) (@moskyb)
+- Fix idle tracking for agents that never received jobs [#3579](https://github.com/buildkite/agent/pull/3579) (@scadu)
+
+### Internal
+- Clarify agent idlemonitor states in comment [#3582](https://github.com/buildkite/agent/pull/3582) (@DrJosh9000)
+- Put secret scan error into exit message [#3581](https://github.com/buildkite/agent/pull/3581) (@DrJosh9000)
+
+### Dependency updates
+- build(deps): bump the golang-x group with 3 updates [#3583](https://github.com/buildkite/agent/pull/3583) (@dependabot[bot])
+- build(deps): bump the cloud-providers group with 7 updates [#3584](https://github.com/buildkite/agent/pull/3584) (@dependabot[bot])
+
 ## [v3.112.0](https://github.com/buildkite/agent/tree/v3.112.0) (2025-11-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.111.0...v3.112.0)
 
