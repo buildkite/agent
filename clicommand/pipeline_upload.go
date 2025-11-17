@@ -321,8 +321,7 @@ var PipelineUploadCommand = cli.Command{
 					// Interpolate merges the pipeline's env block into `environ`.
 					err := searchForSecrets(l, &cfg, environ, result, input.name)
 					if err != nil {
-						l.Error("%v", err)
-						return NewSilentExitError(1)
+						return NewExitError(1, err)
 					}
 				}
 
