@@ -9,7 +9,9 @@ import (
 // logic.
 //
 // In addition to "busy", "idle", and "dead", idleMonitor has an implicit
-// "initial" state. Agents always start in the "initial" state
+// "initial" state. Agents always start in the "initial" state, but typically
+// quickly transistion into either the idle or busy states (as soon as they
+// have completed their first ping.)
 /*
 //                -> Busy --
 //              /     ^      \
@@ -17,8 +19,6 @@ import (
 //              \     v      /
 //                -> Idle --
 */
-// This (intentionally) ensures the DisconnectAfterIdleTimeout doesn't fire
-// before agents have had a chance to run a job.
 type idleMonitor struct {
 	mu          sync.Mutex
 	exiting     bool
