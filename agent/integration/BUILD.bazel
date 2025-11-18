@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//agent",
         "//api",
+        "//internal/ptr",
         "//logger",
         "//metrics",
         "@com_github_buildkite_bintest_v3//:bintest",
@@ -29,6 +30,7 @@ go_test(
         "//agent",
         "//api",
         "//clicommand",
+        "//logger",
         "//version",
         "@com_github_buildkite_bintest_v3//:bintest",
         "@com_github_buildkite_go_pipeline//:go-pipeline",

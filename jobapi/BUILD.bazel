@@ -15,7 +15,6 @@ go_library(
     importpath = "github.com/buildkite/agent/v3/jobapi",
     visibility = ["//visibility:public"],
     deps = [
-        "//agent",
         "//env",
         "//internal/replacer",
         "//internal/shell",

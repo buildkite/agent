@@ -21,6 +21,7 @@ go_library(
         "retryable.go",
         "secrets.go",
         "steps.go",
+        "token.go",
         "uuid.go",
     ],
     importpath = "github.com/buildkite/agent/v3/api",
@@ -40,6 +41,7 @@ go_test(
     srcs = [
         "api_internal_test.go",
         "client_internal_test.go",
+        "client_private_test.go",
         "client_test.go",
         "oidc_test.go",
         "secrets_test.go",
