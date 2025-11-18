@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/pool"
 )
 
 type DownloaderConfig struct {
@@ -83,43 +83,101 @@ func (a *Downloader) Download(ctx context.Context) error {
 
 	a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
 
-	p := pool.New(pool.MaxConcurrencyLimit)
-	errors := []error{}
 	s3Clients, err := a.generateS3Clients(ctx, artifacts)
 	if err != nil {
-		return fmt.Errorf("failed to generate S3 clients for artifact upload: %w", err)
+		return fmt.Errorf("failed to generate S3 clients for artifact download: %w", err)
 	}
 
+	// A goroutine to collect download errors into a slice.
+	errorsCh := make(chan error)
+	// errorsOutCh is buffered (1) in order to let the error collector finish,
+	// even if Download has returned and nothing is receiving from the channel
+	// anymore.
+	errorsOutCh := make(chan []error, 1)
+	go func() {
+		var errors []error
+		for err := range errorsCh {
+			errors = append(errors, err)
+		}
+		errorsOutCh <- errors
+	}()
+
+	// A bunch of worker goroutines. Start the smaller of:
+	// - GOMAXPROCS (often equal to NumCPU) times 10 (historic choice; downloads
+	//   are not likely to be bounded by CPU)
+	// - the number of artifacts to download.
+	var wg sync.WaitGroup
+	artifactsCh := make(chan *api.Artifact)
+	for range min(10*runtime.GOMAXPROCS(0), len(artifacts)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for {
+				var artifact *api.Artifact
+				var open bool
+				select {
+				case artifact, open = <-artifactsCh:
+					if !open {
+						return
+					}
+					// continue below
+
+				case <-ctx.Done():
+					return
+				}
+
+				// Convert windows paths to slashes, otherwise we get a literal
+				// download of "dir/dir/file" vs sub-directories on non-windows agents
+				path := artifact.Path
+				if runtime.GOOS != "windows" {
+					path = strings.ReplaceAll(path, `\`, `/`)
+				}
+
+				dler := a.createDownloader(artifact, path, destination, s3Clients)
+
+				if err := dler.Start(ctx); err != nil {
+					a.logger.Error("Failed to download artifact: %s", err)
+					select {
+					case errorsCh <- err:
+						// error sent
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}()
+	}
+
+	// Send the artifacts to the workers then signal completion by closing the
+	// channel.
 	for _, artifact := range artifacts {
-		p.Spawn(func() {
-			// Convert windows paths to slashes, otherwise we get a literal
-			// download of "dir/dir/file" vs sub-directories on non-windows agents
-			path := artifact.Path
-			if runtime.GOOS != "windows" {
-				path = strings.ReplaceAll(path, `\`, `/`)
-			}
-
-			dler := a.createDownloader(artifact, path, destination, s3Clients)
-
-			// If the downloaded encountered an error, lock
-			// the pool, collect it, then unlock the pool
-			// again.
-			if err := dler.Start(ctx); err != nil {
-				a.logger.Error("Failed to download artifact: %s", err)
-
-				p.Lock()
-				errors = append(errors, err)
-				p.Unlock()
-			}
-		})
+		select {
+		case artifactsCh <- artifact:
+			// Artifact being downloaded
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
+	close(artifactsCh)
 
-	p.Wait()
+	// Wait for downloads to complete.
+	wg.Wait()
 
-	if len(errors) > 0 {
-		return fmt.Errorf("There were errors with downloading some of the artifacts")
+	// All workers have returned, so all errors have been sent, so close the
+	// error channel.
+	close(errorsCh)
+
+	// Read the slice of all errors from the error collector.
+	select {
+	case errors := <-errorsOutCh:
+		if len(errors) > 0 {
+			return fmt.Errorf("There were errors with downloading some of the artifacts")
+		}
+
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-
 	return nil
 }
 
