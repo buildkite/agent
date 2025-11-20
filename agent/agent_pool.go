@@ -154,7 +154,6 @@ func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
 			AggregateStatus: aggregateState,
 			Workers:         statuses,
 		})
-
 		if err != nil {
 			l.Error("Could not encode status.json response: %v", err)
 		}

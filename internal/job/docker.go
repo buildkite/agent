@@ -24,7 +24,7 @@ func hasDeprecatedDockerIntegration(sh *shell.Shell) bool {
 }
 
 func runDeprecatedDockerIntegration(ctx context.Context, sh *shell.Shell, cmd []string) error {
-	var warnNotSet = func(k1, k2 string) {
+	warnNotSet := func(k1, k2 string) {
 		sh.Warningf("%s is set, but without %s, which it requires. You should be able to safely remove this from your pipeline.", k1, k2)
 	}
 

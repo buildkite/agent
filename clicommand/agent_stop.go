@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-
 	"time"
 
 	"github.com/buildkite/agent/v3/api"

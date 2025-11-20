@@ -32,7 +32,7 @@ func findExecutable(file string) error {
 // LookPath searches for an executable binary named file in the directories within the path variable,
 // which is a colon delimited path.
 // If file contains a slash, it is tried directly
-func LookPath(file string, path string, fileExtensions string) (string, error) {
+func LookPath(file, path, fileExtensions string) (string, error) {
 	if strings.Contains(file, "/") {
 		err := findExecutable(file)
 		if err == nil {

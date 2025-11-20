@@ -325,9 +325,7 @@ var PipelineUploadCommand = cli.Command{
 					}
 				}
 
-				var (
-					key signature.Key
-				)
+				var key signature.Key
 
 				switch {
 				case cfg.SigningAWSKMSKey != "":

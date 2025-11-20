@@ -76,7 +76,6 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 		MetricsScope:       scope,
 		JobStatusInterval:  1 * time.Second,
 	})
-
 	if err != nil {
 		t.Fatalf("agent.NewJobRunner() error = %v", err)
 	}

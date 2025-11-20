@@ -558,7 +558,6 @@ func (a *AgentWorker) Connect(ctx context.Context) error {
 
 // Performs a heatbeat
 func (a *AgentWorker) Heartbeat(ctx context.Context) error {
-
 	// Retry the heartbeat a few times
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(10),

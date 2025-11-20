@@ -4,8 +4,9 @@ package agent
 
 import (
 	"context"
-	"github.com/buildkite/agent/v3/api"
 	"net/http"
+
+	"github.com/buildkite/agent/v3/api"
 )
 
 // APIClient is an interface generated for "github.com/buildkite/agent/v3/api.Client".

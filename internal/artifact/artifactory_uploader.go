@@ -88,11 +88,11 @@ func NewArtifactoryUploader(l logger.Logger, c ArtifactoryUploaderConfig) (*Arti
 	}, nil
 }
 
-func ParseArtifactoryDestination(destination string) (repo string, path string) {
+func ParseArtifactoryDestination(destination string) (repo, path string) {
 	parts := strings.Split(strings.TrimPrefix(string(destination), "rt://"), "/")
 	path = strings.Join(parts[1:], "/")
 	repo = parts[0]
-	return
+	return repo, path
 }
 
 func (u *ArtifactoryUploader) URL(artifact *api.Artifact) string {

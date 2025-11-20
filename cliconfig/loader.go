@@ -173,7 +173,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 	return warnings, nil
 }
 
-func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
+func (l Loader) setFieldValueFromCLI(fieldName, cliName string) error {
 	// Get the kind of field we need to set
 	fieldKind, err := reflections.GetFieldKind(l.Config, fieldName)
 	if err != nil {
@@ -341,7 +341,7 @@ func (l Loader) fieldValueIsEmpty(fieldName string) bool {
 	}
 }
 
-func (l Loader) validateField(fieldName string, label string, validationRules string) error {
+func (l Loader) validateField(fieldName, label, validationRules string) error {
 	// Split up the validation rules
 	rules := strings.SplitSeq(validationRules, ",")
 
@@ -372,7 +372,7 @@ func (l Loader) validateField(fieldName string, label string, validationRules st
 	return nil
 }
 
-func (l Loader) normalizeField(fieldName string, normalization string) error {
+func (l Loader) normalizeField(fieldName, normalization string) error {
 	if normalization == "filepath" {
 		value, _ := reflections.GetField(l.Config, fieldName)
 		fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)

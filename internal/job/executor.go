@@ -565,7 +565,6 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		r.Break()
 		return err
 	})
-
 	if err != nil {
 		exitCode := shell.ExitCode(err)
 		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
@@ -1068,7 +1067,7 @@ func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 }
 
 // CommandPhase determines how to run the build, and then runs it
-func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr error) {
+func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error) {
 	var preCommandErr error
 
 	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.TracingBackend)

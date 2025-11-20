@@ -127,7 +127,7 @@ func (ls *LogStreamer) Process(ctx context.Context, output []byte) error {
 				humanize.IBytes(ls.bytes), humanize.IBytes(ls.conf.MaxSizeBytes))
 			ls.warnedAboutSize = true
 			// In a future version, this will error out, e.g.:
-			//return fmt.Errorf("%w (%d > %d)", errLogExceededMaxSize, ls.bytes, ls.conf.MaxSizeBytes)
+			// return fmt.Errorf("%w (%d > %d)", errLogExceededMaxSize, ls.bytes, ls.conf.MaxSizeBytes)
 		}
 
 		// The next chunk will be up to MaxChunkSizeBytes in size.

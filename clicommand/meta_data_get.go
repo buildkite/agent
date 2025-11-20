@@ -91,7 +91,6 @@ var MetaDataGetCommand = cli.Command{
 			}
 			return metaData, resp, nil
 		})
-
 		if err != nil {
 			// Buildkite returns a 404 if the key doesn't exist. If
 			// we get this status, and we've got a default - return

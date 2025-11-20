@@ -4,6 +4,7 @@ package system
 
 import (
 	"fmt"
+
 	"github.com/buildkite/agent/v3/logger"
 	"golang.org/x/sys/windows"
 )

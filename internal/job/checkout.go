@@ -331,7 +331,7 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 	return osutil.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
-func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit string) bool {
+func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
 	// Resolve commit to an actual commit object
 	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(ctx, shell.ShowStderr(false))
 	if err != nil {
