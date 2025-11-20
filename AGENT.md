@@ -6,7 +6,7 @@
 - **Test:** `go test ./...` (run all tests)
 - **Test (single package):** `go test ./path/to/package`
 - **Test (race detection):** `go test -race ./...`
-- **Lint/Format:** `go fmt ./...` and `golangci-lint run`
+- **Lint/Format:** `go tool gofumpt -extra -w .` and `golangci-lint run`
 - **Generate:** `go generate ./...`
 - **Deps:** `go mod tidy`
 
@@ -25,7 +25,7 @@ Go CLI application with main packages:
 
 ## Code Style
 
-- Standard Go formatting with `go fmt`
+- Formatting with `gofumpt` in extra mode: `go tool gofumpt -extra -w .`
 - Struct-based configuration patterns (e.g., `AgentWorkerConfig`, `JobRunnerConfig`)
 - Context-aware functions: `func Name(ctx context.Context, ...)`
 - Import organization: stdlib, external deps, internal packages
