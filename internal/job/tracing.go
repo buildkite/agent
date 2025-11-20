@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -259,7 +260,7 @@ func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
 		jobKey = "n/a"
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"buildkite.agent":             e.AgentName,
 		"buildkite.version":           version.Version(),
 		"buildkite.queue":             e.Queue,
@@ -279,6 +280,19 @@ func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
 		"buildkite.rebuilt_from_id":   rebuiltFromID,
 		"buildkite.triggered_from_id": triggeredFromID,
 	}
+
+	// Add agent metadata from BUILDKITE_AGENT_META_DATA_* env vars
+	// These come from the agent's registration tags
+	const metaDataPrefix = "BUILDKITE_AGENT_META_DATA_"
+	for key, value := range env.Dump() {
+		if after, found := strings.CutPrefix(key, metaDataPrefix); found {
+			// Convert key to lowercase for attribute naming
+			attrKey := "buildkite.agent.metadata." + strings.ToLower(after)
+			result[attrKey] = value
+		}
+	}
+
+	return result
 }
 
 func DDTracingExtras() map[string]any {
