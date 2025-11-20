@@ -72,7 +72,6 @@ func TestEnvironmentSet_NormalizesKeyNames(t *testing.T) {
 		upper, _ := e.Get(strings.ToUpper(mountain))
 		assert.Equal(t, upper, "Cerro Poincenot")
 	}
-
 }
 
 func TestEnvironmentGetBool(t *testing.T) {

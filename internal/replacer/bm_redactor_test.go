@@ -8,7 +8,6 @@ import (
 )
 
 func BenchmarkBMRedactor(b *testing.B) {
-
 	r := NewBMRedactor(io.Discard, "[REDACTED]", bigLipsumSecrets)
 	for b.Loop() {
 		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
@@ -116,7 +115,6 @@ func (redactor *BoyerMooreRedactor) Reset(needles []string) {
 			}
 		}
 	}
-
 }
 
 func (redactor *BoyerMooreRedactor) Write(input []byte) (int, error) {

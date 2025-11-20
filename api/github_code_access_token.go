@@ -54,7 +54,6 @@ func (c *Client) GenerateGithubCodeAccessToken(ctx context.Context, repoURL, job
 
 		return resp, err
 	})
-
 	if err != nil {
 		return "", resp, err
 	}

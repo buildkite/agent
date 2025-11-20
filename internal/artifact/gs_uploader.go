@@ -60,11 +60,11 @@ func NewGSUploader(ctx context.Context, l logger.Logger, c GSUploaderConfig) (*G
 	}, nil
 }
 
-func ParseGSDestination(destination string) (name string, path string) {
+func ParseGSDestination(destination string) (name, path string) {
 	parts := strings.Split(strings.TrimPrefix(string(destination), "gs://"), "/")
 	path = strings.Join(parts[1:], "/")
 	name = parts[0]
-	return
+	return name, path
 }
 
 func clientFromJSON(ctx context.Context, data []byte, scope string) (*http.Client, error) {
@@ -109,7 +109,7 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 	// Also ensure that we always have exactly one / between prefix and artifactPath
 	path := path.Join(pathPrefix, u.artifactPath(artifact))
 
-	var artifactURL = &url.URL{
+	artifactURL := &url.URL{
 		Scheme: "https",
 		Host:   host,
 		Path:   path,

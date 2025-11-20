@@ -347,7 +347,7 @@ func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) e
 	}
 }
 
-func (a *Uploader) build(path string, absolutePath string) (*api.Artifact, error) {
+func (a *Uploader) build(path, absolutePath string) (*api.Artifact, error) {
 	// Open the file to hash its contents.
 	file, err := os.Open(absolutePath)
 	if err != nil {
@@ -633,7 +633,6 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 				}
 				return etag, err
 			})
-
 			// If it failed, abort any other work items for this artifact.
 			if err != nil {
 				a.logger.Info("Upload failed for %s: %v", workUnit.Description(), err)

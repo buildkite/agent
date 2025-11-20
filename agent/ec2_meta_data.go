@@ -9,8 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 )
 
-type EC2MetaData struct {
-}
+type EC2MetaData struct{}
 
 // Takes a map of tags and meta-data paths to get, returns a map of tags and fetched values.
 func (e EC2MetaData) GetPaths(ctx context.Context, paths map[string]string) (map[string]string, error) {

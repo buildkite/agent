@@ -54,7 +54,6 @@ func NewS3Uploader(ctx context.Context, l logger.Logger, c S3UploaderConfig) (*S
 		// Initialize the s3 client, and authenticate it
 		return NewS3Client(ctx, l, bucketName)
 	})
-
 	if err != nil {
 		return nil, err
 	}

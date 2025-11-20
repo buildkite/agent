@@ -343,7 +343,6 @@ func TestPatchEnv(t *testing.T) {
 			testAPI(t, environ, req, client, c)
 		})
 	}
-
 }
 
 func TestGetEnv(t *testing.T) {

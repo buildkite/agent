@@ -8,7 +8,7 @@ import (
 
 // FormatCommand formats a command amd arguments for human reading
 func FormatCommand(command string, args []string) string {
-	var truncate = func(s string, i int) string {
+	truncate := func(s string, i int) string {
 		if len(s) < i {
 			return s
 		}

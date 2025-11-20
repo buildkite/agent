@@ -325,7 +325,6 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
-
 }
 
 func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {

@@ -153,7 +153,6 @@ func (s *Server) PushBranch(repoName, branchName string) (string, []byte, error)
 	commitCmd = exec.Command("git", "commit", "-m", "Add new file")
 	commitCmd.Dir = tempDir
 	if out, err := commitCmd.CombinedOutput(); err != nil {
-
 		return "", out, fmt.Errorf("failed to commit new file: %w", err)
 	}
 
@@ -247,7 +246,6 @@ func (s *Server) handleGitUploadPack(w http.ResponseWriter, r *http.Request) {
 
 // handleGitReceivePack handles the git-receive-pack endpoint (used for git push)
 func (s *Server) handleGitReceivePack(w http.ResponseWriter, r *http.Request) {
-
 	repoName := r.PathValue("repository")
 
 	repoName = strings.TrimSuffix(repoName, ".git")
@@ -284,7 +282,6 @@ func (s *Server) handleGitReceivePack(w http.ResponseWriter, r *http.Request) {
 
 // handleGitInfoRefs handles the info/refs endpoint
 func (s *Server) handleGitInfoRefs(w http.ResponseWriter, r *http.Request) {
-
 	repoName := r.PathValue("repository")
 
 	repoName = strings.TrimSuffix(repoName, ".git")

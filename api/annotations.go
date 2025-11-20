@@ -29,7 +29,7 @@ func (c *Client) Annotate(ctx context.Context, jobId string, annotation *Annotat
 }
 
 // Remove an annotation from a build
-func (c *Client) AnnotationRemove(ctx context.Context, jobId string, context, scope string) (*Response, error) {
+func (c *Client) AnnotationRemove(ctx context.Context, jobId, context, scope string) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/annotations/%s", railsPathEscape(jobId), railsPathEscape(context))
 
 	req, err := c.newRequest(ctx, "DELETE", u, nil)

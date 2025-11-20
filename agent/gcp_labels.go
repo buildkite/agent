@@ -33,7 +33,6 @@ func (e GCPLabels) Get(ctx context.Context) (map[string]string, error) {
 		meta["gcp:zone"],
 		meta["gcp:instance-name"],
 	).Context(ctx).Do()
-
 	if err != nil {
 		return nil, err
 	}

@@ -207,10 +207,12 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
+	mvdan.cc/gofumpt v0.9.2 // indirect
 )
 
 tool (
 	github.com/Khan/genqlient/generate
 	github.com/buildkite/test-engine-client
 	gotest.tools/gotestsum
+	mvdan.cc/gofumpt
 )

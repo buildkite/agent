@@ -59,7 +59,7 @@ type AgentWorker struct {
 	stats agentStats
 
 	// The API Client used when this agent is communicating with the API
-	apiClient APIClient
+	apiClient *api.Client
 
 	// The core Client is used to drive some APIClient methods
 	client *core.Client
@@ -173,7 +173,7 @@ func (e *errUnrecoverable) Unwrap() error {
 }
 
 // Creates the agent worker and initializes its API Client
-func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.Collector, apiClient APIClient, c AgentWorkerConfig) *AgentWorker {
+func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.Collector, apiClient *api.Client, c AgentWorkerConfig) *AgentWorker {
 	apiClient = apiClient.FromAgentRegisterResponse(reg)
 	return &AgentWorker{
 		logger:           l,
@@ -558,7 +558,6 @@ func (a *AgentWorker) Connect(ctx context.Context) error {
 
 // Performs a heatbeat
 func (a *AgentWorker) Heartbeat(ctx context.Context) error {
-
 	// Retry the heartbeat a few times
 	r := roko.NewRetrier(
 		roko.WithMaxAttempts(10),

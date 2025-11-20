@@ -129,7 +129,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 			return err
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
@@ -180,7 +179,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			}
 			return err
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
@@ -209,7 +207,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 			return err
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to fetch ECS meta-data: %s", err.Error()))
@@ -238,7 +235,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 			return nil
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to fetch GCP meta-data: %s", err.Error()))
@@ -286,7 +282,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			}
 			return err
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))

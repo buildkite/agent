@@ -276,7 +276,8 @@ func TestFormUploadFileMissing(t *testing.T) {
 				Method:    "POST",
 				Path:      "buildkiteartifacts.com",
 				FileInput: "file",
-			}},
+			},
+		},
 	}
 
 	work, err := uploader.CreateWork(artifact)

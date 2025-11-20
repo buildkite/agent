@@ -1,7 +1,5 @@
 package api
 
-//go:generate go run github.com/rjeczalik/interfaces/cmd/interfacer@v0.3.0 -for github.com/buildkite/agent/v3/api.Client -as agent.APIClient -o ../agent/api.go
-
 import (
 	"bytes"
 	"context"
@@ -309,7 +307,6 @@ func newResponse(r *http.Response) *Response {
 // interface, the raw response body will be written to v, without attempting to
 // first decode it.
 func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
-
 	resp, err := agenthttp.Do(c.logger, c.client, req,
 		agenthttp.WithDebugHTTP(c.conf.DebugHTTP),
 		agenthttp.WithTraceHTTP(c.conf.TraceHTTP),
@@ -411,7 +408,7 @@ func addOptions(s string, opt any) (string, error) {
 	return u.String(), nil
 }
 
-func joinURLPath(endpoint string, path string) string {
+func joinURLPath(endpoint, path string) string {
 	return strings.TrimRight(endpoint, "/") + "/" + strings.TrimLeft(path, "/")
 }
 

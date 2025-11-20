@@ -34,7 +34,7 @@ func TestCollect(t *testing.T) {
 	volumeName := filepath.VolumeName(root)
 	rootWithoutVolume := strings.TrimPrefix(root, volumeName)
 
-	var testCases = []struct {
+	testCases := []struct {
 		Name         string
 		Path         []string
 		AbsolutePath string

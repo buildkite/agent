@@ -644,7 +644,7 @@ func TestRepositorylessCheckout_WithGitMirrors(t *testing.T) {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	var script = []string{
+	script := []string{
 		"#!/usr/bin/env bash",
 		"export BUILDKITE_REPO=",
 	}

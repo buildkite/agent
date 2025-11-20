@@ -12,12 +12,14 @@ if ! git diff --no-ext-diff --exit-code; then
   exit 1
 fi
 
-echo --- :go: Checking go formatting
-gofmt -w .
-if ! git diff --no-ext-diff --exit-code; then
+echo +++ :go: Checking go formatting
+
+fumpt_out=$(go tool gofumpt -extra -l .)
+if ! [ -z "${fumpt_out}" ]; then
   echo ^^^ +++
-  echo "Files have not been formatted with gofmt."
-  echo "Fix this by running \`go fmt ./...\` locally, and committing the result."
+  echo "Files have not been formatted with gofumpt:"
+  echo "${fumpt_out}"
+  echo "Fix this by running \`gofumpt -extra -w .\` locally, and committing the result."
 
   exit 1
 fi
@@ -35,7 +37,7 @@ if ! git diff --no-ext-diff --exit-code; then
 fi
 
 echo +++ :go: Running golangci-lint...
-if ! lint_out="$(golangci-lint run --color=always)" ; then 
+if ! lint_out="$(golangci-lint run --color=always)" ; then
   echo ^^^ +++
   echo "golangci-lint found the following issues:"
   echo ""

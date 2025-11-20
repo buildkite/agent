@@ -96,7 +96,7 @@ type JobRunner struct {
 	agentLogger logger.Logger
 
 	// The APIClient that will be used when updating the job
-	apiClient APIClient
+	apiClient *api.Client
 
 	// The agentlib Client is used to drive some APIClient methods
 	client *core.Client
@@ -142,7 +142,7 @@ type jobProcess interface {
 }
 
 // Initializes the job runner
-func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
 	if conf.Job.Token != "" {
@@ -822,7 +822,6 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 
 		// Re-get the job and check its status to see if it's been cancelled
 		jobState, response, err := r.apiClient.GetJobState(ctx, r.conf.Job.ID)
-
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
 				r.agentLogger.Error("Invalid access token, cancelling job %s", r.conf.Job.ID)
@@ -860,7 +859,6 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 
 		return err
 	})
-
 	if err != nil {
 		r.agentLogger.Error("Ultimately unable to upload header times: %v", err)
 	}

@@ -212,7 +212,7 @@ func (e *ExecutorTester) MockAgent(t *testing.T) *bintest.Mock {
 }
 
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
-func (e *ExecutorTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
+func (e *ExecutorTester) writeHookScript(m *bintest.Mock, name, dir string, args ...string) (string, error) {
 	hookScript := filepath.Join(dir, name)
 	body := ""
 

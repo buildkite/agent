@@ -201,7 +201,7 @@ func TestReplacerResetMidStream(t *testing.T) {
 	}
 
 	// update the replacer with a new secret
-	//replacer.Flush() // manual flush is NOT necessary before Reset
+	// replacer.Flush() // manual flush is NOT necessary before Reset
 	replacer.Reset([]string{"secret1111", "secret2222"})
 
 	// finish writing
@@ -354,7 +354,6 @@ func TestAddingNeedles(t *testing.T) {
 }
 
 func BenchmarkReplacer(b *testing.B) {
-
 	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redacted)
 	for b.Loop() {
 		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
