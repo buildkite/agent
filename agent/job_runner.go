@@ -96,7 +96,7 @@ type JobRunner struct {
 	agentLogger logger.Logger
 
 	// The APIClient that will be used when updating the job
-	apiClient APIClient
+	apiClient *api.Client
 
 	// The agentlib Client is used to drive some APIClient methods
 	client *core.Client
@@ -142,7 +142,7 @@ type jobProcess interface {
 }
 
 // Initializes the job runner
-func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
 	if conf.Job.Token != "" {

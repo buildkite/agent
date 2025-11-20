@@ -26,7 +26,7 @@ var locationRegex = regexp.MustCompile(`jobs/(?P<jobID>[^/]+)/pipelines/(?P<uplo
 
 // PipelineUploader contains the data needed to upload a pipeline to Buildkite
 type PipelineUploader struct {
-	Client         APIClient
+	Client         *api.Client
 	Change         *api.PipelineChange
 	JobID          string
 	RetrySleepFunc func(time.Duration)
