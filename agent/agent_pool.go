@@ -64,7 +64,9 @@ func (r *AgentPool) Start(ctx context.Context) error {
 
 	// Spawn each worker "in parallel" (in its own goroutine)
 	for _, worker := range r.workers {
-		go runWorker(ctx, worker, idleMon, errCh)
+		go func() {
+			errCh <- runWorker(ctx, worker, idleMon)
+		}()
 	}
 
 	setStat("✅ Workers spawned!")
@@ -77,21 +79,20 @@ func (r *AgentPool) Start(ctx context.Context) error {
 	return errors.Join(errs...) // nil if all errs are nil
 }
 
-func runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor, errCh chan<- error) {
+func runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor) error {
 	agentWorkersStarted.Inc()
 	defer agentWorkersEnded.Inc()
 	defer idleMon.markDead(worker)
 
 	// Connect the worker to the API
 	if err := worker.Connect(ctx); err != nil {
-		errCh <- err
-		return
+		return err
 	}
 	// Ensure the worker is disconnected at the end of this function.
 	defer worker.Disconnect(ctx) //nolint:errcheck // Error is logged within core/client
 
 	// Starts the agent worker and wait for it to finish.
-	errCh <- worker.Start(ctx, idleMon)
+	return worker.Start(ctx, idleMon)
 }
 
 // StopGracefully stops all workers in the pool gracefully.
