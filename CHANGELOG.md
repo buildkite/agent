@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.113.1](https://github.com/buildkite/agent/tree/v3.113.1) (2025-11-25)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.113.0...v3.113.1)
+
+### Fixed
+- Fix for the agent sometimes failing to disconnect properly when exiting - agent pool: Send error after disconnecting [#3596](https://github.com/buildkite/agent/pull/3596) (@DrJosh9000)
+
+
 ## [v3.113.0](https://github.com/buildkite/agent/tree/v3.113.0) (2025-11-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.112.0...v3.113.0)
 
