@@ -1,0 +1,1 @@
+FROM public.ecr.aws/docker/library/golang:1.24.10@sha256:7b13449f08287fdb53114d65bdf20eb3965e4e54997903b5cb9477df0ea37c12
