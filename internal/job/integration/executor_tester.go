@@ -184,7 +184,7 @@ func (e *ExecutorTester) MustMock(t *testing.T, name string) *bintest.Mock {
 	t.Helper()
 	mock, err := e.Mock(name)
 	if err != nil {
-		t.Fatalf("BootstrapTester.Mock(%q) error = %v", name, err)
+		t.Fatalf("ExecutorTester.Mock(%q) error = %v", name, err)
 	}
 	return mock
 }
