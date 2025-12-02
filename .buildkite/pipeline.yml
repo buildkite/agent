@@ -44,7 +44,7 @@ steps:
               - "os=linux"
               - "arch=amd64"
               - "race=false"
-  
+
     - name: ":linux: Linux ARM64 Tests"
       key: test-linux-arm64
       command: ".buildkite/steps/tests.sh"
@@ -67,7 +67,7 @@ steps:
               - "os=linux"
               - "arch=arm64"
               - "race=false"
-              
+
     - name: ":windows: Windows AMD64 Tests"
       key: test-windows
       command: "bash .buildkite\\steps\\tests.sh"
@@ -85,7 +85,7 @@ steps:
               - "os=windows"
               - "arch=arm64"
               - "race=false"
-  
+
     - name: ":satellite: Detect Data Races"
       key: test-race-linux-arm64
       command: ".buildkite/steps/tests.sh -race"
@@ -109,7 +109,7 @@ steps:
               - "os=linux"
               - "arch=arm64"
               - "race=true"
-              
+
     - name: ":coverage: Test coverage report Linux ARM64"
       key: test-coverage-linux-arm64
       command: ".buildkite/steps/test-coverage-report.sh"
@@ -126,7 +126,7 @@ steps:
         - artifacts#v1.9.4:
             download: "coverage/**"
             step: test-linux-arm64
-    
+
     - name: ":coverage: Test coverage report Linux AMD64"
       key: test-coverage-linux-amd64
       command: ".buildkite/steps/test-coverage-report.sh"
@@ -143,7 +143,7 @@ steps:
         - artifacts#v1.9.4:
             download: "coverage/**"
             step: test-linux-amd64
-    
+
     - name: ":coverage: Test coverage report Linux ARM64 Race"
       key: test-coverage-linux-arm64-race
       command: ".buildkite/steps/test-coverage-report.sh"
@@ -160,7 +160,7 @@ steps:
         - artifacts#v1.9.4:
             download: "coverage/**"
             step: test-race-linux-arm64
-  
+
     - label: ":writing_hand: Annotate with Test Failures"
       depends_on:
         - test-linux-amd64
@@ -171,7 +171,7 @@ steps:
       plugins:
         - junit-annotate#v1.6.0:
             artifacts: junit-*.xml
-            
+
   # --- end Tests and Coverage ---
 
   - group: ":hammer_and_wrench: Binary builds"
@@ -225,8 +225,22 @@ steps:
 
             - with: { os: openbsd, arch: arm64 }
               skip: "arm64 OpenBSD is not currently supported"
-              
+
   # --- end Binary builds ---
+
+  - label: ":end::two::end: E2E Testing"
+    key: e2e-tests
+    depends_on: build-binary
+    trigger: agent-e2e-tests
+    async: false
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
+      env:
+        BUILDKITE_PULL_REQUEST: "${BUILDKITE_PULL_REQUEST}"
+        BUILDKITE_PULL_REQUEST_BASE_BRANCH: "${BUILDKITE_PULL_REQUEST_BASE_BRANCH}"
+        BUILDKITE_PULL_REQUEST_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
 
   - label: ":bathtub: Check version string is clean"
     key: check-version-string
@@ -340,7 +354,7 @@ steps:
               - ubuntu-22.04
               - ubuntu-24.04
               - sidecar
-              
+
   # --- end Docker Image tests ---
 
   - name: ":debian: Debian package build"

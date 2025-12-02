@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# TODO: download the agent to test as an artifact
-#buildkite-agent artifact download buildkite-agent . --build "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
-#export CI_E2E_TESTS_AGENT_PATH="${PWD}/buildkite-agent"
+if [[ -z "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}" ]] ; then
+	# For now, e2e test the agent that's currently running
+	export CI_E2E_TESTS_AGENT_PATH="$(which buildkite-agent)"
+else
+	# Download the artifact from the triggering build
+	ARTIFACT="pkg/buildkite-agent-$(go env GOOS)-$(go env GOARCH)"
+	buildkite-agent artifact download "${ARTIFACT}" . --build "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
+	chmod +x "${ARTIFACT}"
+	export CI_E2E_TESTS_AGENT_PATH="${PWD}/${ARTIFACT}"
+fi
 
-# For now, e2e test the agent that's currently running
-export CI_E2E_TESTS_AGENT_PATH="$(which buildkite-agent)"
 go test -v -tags e2e ./internal/e2e/... | sed -e 's/^/>  /'
