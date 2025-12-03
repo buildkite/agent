@@ -1,10 +1,6 @@
 agents:
   queue: agent-runners-linux-amd64
 
-env:
-  CI_E2E_TESTS_TARGET_ORG: agent-e2e-testing
-  CI_E2E_TESTS_TARGET_CLUSTER: e1773a06-b43c-4b77-84e5-5e088a737f6a
-
 steps:
   - label: ":go::sleuth_or_spy: Run agent end-to-end tests"
     command: .buildkite/steps/e2e-tests.sh
