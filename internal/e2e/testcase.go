@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/version"
-	"github.com/buildkite/roko"
 
 	"github.com/buildkite/go-buildkite/v4"
+	"github.com/buildkite/roko"
 )
 
 var (
@@ -167,29 +167,38 @@ func (tc *testCase) triggerBuild() *buildkite.Build {
 	return &build
 }
 
-// waitForBuild waits until the build is in a terminal state (passed, failed, canceled, etc). It polls the build once per second.
-func (tc *testCase) waitForBuild(ctx context.Context, build *buildkite.Build) (string, error) {
+// waitForBuild waits until the build is in a terminal state
+// (passed, failed, canceled, etc). It polls the build once per second.
+// Note that the build pointed to by build is updated with the latest state
+// after each poll. It calls t.Fatal if there was an error fetching the build
+// or the context ends.
+func (tc *testCase) waitForBuild(ctx context.Context, build *buildkite.Build) string {
 	tick := time.Tick(time.Second)
 	for {
 		// The arg is called "id" but it needs the build number...
 		state, _, err := tc.bkClient.Builds.Get(ctx, targetOrg, tc.pipeline.Slug, strconv.Itoa(build.Number), &buildkite.BuildGetOptions{})
 		if err != nil {
-			return "", err
+			tc.Fatalf("buildkite.Client.Builds.Get(ctx, %q, %q, %d, &{}) error = %v", targetOrg, tc.pipeline.Slug, build.Number, err)
+			return ""
 		}
+
+		*build = state
 		switch state.State {
 		case "passed", "failed", "canceled", "canceling":
-			return state.State, nil
+			return state.State
 
 		case "scheduled", "running":
 			select {
 			case <-tick:
 				// time to poll again
 			case <-ctx.Done():
-				return "", ctx.Err()
+				tc.Fatalf("waitForBuild context ended: %v", ctx.Err())
+				return ""
 			}
 
 		default:
-			return state.State, fmt.Errorf("unknown build state %q", state.State)
+			tc.Logf("waitForBuild read an unknown build state: %q", state.State)
+			return state.State
 		}
 	}
 }
@@ -308,4 +317,41 @@ func (tc *testCase) startAgent(extraArgs ...string) *exec.Cmd {
 		tc.Fatalf("Couldn't start agent command %v: %v", cmd, err)
 	}
 	return cmd
+}
+
+// fetchLogs fetches the logs for all jobs in a build, as a single string.
+// It calls t.Fatal to end the test if the logs of any job' cannot be fetched
+// within a few retries.
+func (tc *testCase) fetchLogs(ctx context.Context, build *buildkite.Build) string {
+	tc.Helper()
+
+	r := roko.NewRetrier(
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+		roko.WithMaxAttempts(5),
+	)
+	logs, err := roko.DoFunc(ctx, r, func(*roko.Retrier) (string, error) {
+		var logs strings.Builder
+		for _, job := range build.Jobs {
+			jobLog, _, err := tc.bkClient.Jobs.GetJobLog(
+				ctx,
+				targetOrg,
+				tc.pipeline.Slug,
+				strconv.Itoa(build.Number),
+				job.ID,
+			)
+			if err != nil {
+				return "", err
+			}
+			if jobLog.Content == "" {
+				return "", fmt.Errorf("job %q log empty", job.ID)
+			}
+
+			logs.WriteString(jobLog.Content)
+		}
+		return logs.String(), nil
+	})
+	if err != nil {
+		tc.Fatalf("fetchLogs failed to fetch logs: %v", err)
+	}
+	return logs
 }

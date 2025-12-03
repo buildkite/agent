@@ -2,7 +2,10 @@
 
 package e2e
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestBasicE2E(t *testing.T) {
 	ctx := t.Context()
@@ -14,15 +17,14 @@ steps:
 `)
 
 	tc.startAgent()
-
 	build := tc.triggerBuild()
-	state, err := tc.waitForBuild(ctx, build)
-	if err != nil {
-		t.Fatalf("tc.waitForBuild(build %s) error = %v", build.ID, err)
-	}
+	state := tc.waitForBuild(ctx, build)
 	if got, want := state, "passed"; got != want {
 		t.Errorf("Build state = %q, want %q", got, want)
 	}
 
-	// TODO: add ability to inspect job logs
+	logs := tc.fetchLogs(ctx, build)
+	if !strings.Contains(logs, "hello world") {
+		t.Errorf("tc.fetchLogs(ctx, build %q) logs as follows, did not contain 'hello world'\n%s", build.ID, logs)
+	}
 }
