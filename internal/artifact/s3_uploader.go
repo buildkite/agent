@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -83,11 +84,10 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 		baseUrl = os.Getenv("BUILDKITE_S3_ACCESS_URL")
 	}
 
-	url, _ := url.Parse(baseUrl)
+	uri, _ := url.Parse(baseUrl)
+	uri.Path = path.Join(uri.Path, u.artifactPath(artifact))
 
-	url.Path += u.artifactPath(artifact)
-
-	return url.String()
+	return uri.String()
 }
 
 func (u *S3Uploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
