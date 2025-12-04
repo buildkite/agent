@@ -5,9 +5,11 @@ package e2e
 import (
 	"cmp"
 	"context"
+	"embed"
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -50,6 +52,9 @@ type cleanupFn = func() error
 
 func nopCleanup() error { return nil }
 
+//go:embed fixtures
+var fixturesFS embed.FS
+
 // testCase bundles the information needed to run an end-to-end test.
 // Note that it embeds testing.TB - each test should create its own testCase.
 type testCase struct {
@@ -67,15 +72,20 @@ type testCase struct {
 // It also registers cleanups with t.Cleanup so that the queue and pipeline
 // are (usually) automatically deleted.
 // It calls t.Fatal to end the test early if there was a failure setting up.
-func newTestCase(t testing.TB, pipelineConfigTemplate string) *testCase {
+func newTestCase(t testing.TB, file string) *testCase {
 	t.Helper()
 	ctx := t.Context()
 
 	name := strings.ToLower(t.Name() + "-" + jobID)
 
-	tmpl, err := template.New("pipeline").Parse(pipelineConfigTemplate)
+	pipelineCfgTmpl, err := fixturesFS.ReadFile(path.Join("fixtures", file))
 	if err != nil {
-		t.Fatalf("template.New(pipeline).Parse(%q) error = %v", pipelineConfigTemplate, err)
+		t.Fatalf("fixturesFS.ReadFile(%q) error = %v", file, err)
+	}
+
+	tmpl, err := template.New("pipeline").Parse(string(pipelineCfgTmpl))
+	if err != nil {
+		t.Fatalf("template.New(pipeline).Parse(%q) error = %v", pipelineCfgTmpl, err)
 	}
 
 	client, err := buildkite.NewClient(

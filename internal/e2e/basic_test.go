@@ -9,12 +9,7 @@ import (
 
 func TestBasicE2E(t *testing.T) {
 	ctx := t.Context()
-	tc := newTestCase(t, `
-agents:
-  queue: {{.queue}}
-steps:
-  - command: echo hello world
-`)
+	tc := newTestCase(t, "basic_e2e.yaml")
 
 	tc.startAgent()
 	build := tc.triggerBuild()
