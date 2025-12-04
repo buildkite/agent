@@ -29,9 +29,11 @@ var (
 	agentToken = os.Getenv("CI_E2E_TESTS_AGENT_TOKEN")
 
 	// E2E testing config
-	agentPath     = os.Getenv("CI_E2E_TESTS_AGENT_PATH")
-	targetOrg     = os.Getenv("CI_E2E_TESTS_TARGET_ORG")
-	targetCluster = os.Getenv("CI_E2E_TESTS_TARGET_CLUSTER")
+	agentPath = os.Getenv("CI_E2E_TESTS_AGENT_PATH")
+
+	// Obtained from agentToken in main_test.go
+	targetOrg     string
+	targetCluster string
 
 	// Values from the Buildkite job running the tests
 	jobID = cmp.Or(
