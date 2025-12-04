@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ -z "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}" ]] ; then
+if [[ -z "${BUILDKITE_TRIGGERED_FROM_BUILD_ID:-}" ]] ; then
 	# For now, e2e test the agent that's currently running
-	export CI_E2E_TESTS_AGENT_PATH="$(which buildkite-agent)"
+	CI_E2E_TESTS_AGENT_PATH="$(which buildkite-agent)"
+	export CI_E2E_TESTS_AGENT_PATH
 else
 	# Download the artifact from the triggering build
 	ARTIFACT="pkg/buildkite-agent-$(go env GOOS)-$(go env GOARCH)"
