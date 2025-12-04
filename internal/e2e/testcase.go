@@ -309,8 +309,16 @@ func (tc *testCase) startAgent(extraArgs ...string) *exec.Cmd {
 		"HOME=" + os.Getenv("HOME"),
 		"PATH=" + os.Getenv("PATH"),
 	}
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	var buf strings.Builder
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	tc.Cleanup(func() {
+		if err := cmd.Wait(); err != nil {
+			tc.Logf("Couldn't wait for agent to exit: cmd.Wait() = %v", err)
+		}
+		tc.Log("Agent output:")
+		tc.Log(buf.String())
+	})
 
 	// The agent should be cancelled automatically by t.Context.
 	// The default Cancel func set by CommandContext is `cmd.Process.Kill()`,
