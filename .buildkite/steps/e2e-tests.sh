@@ -12,4 +12,4 @@ else
 	export CI_E2E_TESTS_AGENT_PATH="${PWD}/${ARTIFACT}"
 fi
 
-go test -v -tags e2e ./internal/e2e/... | sed -e 's/^/>  /'
+go tool gotestsum --junitfile junit.xml -- -tags e2e ./internal/e2e/...
