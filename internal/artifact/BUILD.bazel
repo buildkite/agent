@@ -31,7 +31,6 @@ go_library(
         "//internal/experiments",
         "//internal/mime",
         "//logger",
-        "//pool",
         "//version",
         "@com_github_aws_aws_sdk_go//aws",
         "@com_github_aws_aws_sdk_go//aws/credentials",
