@@ -134,6 +134,7 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 		ACL:         permission,
 		Body:        f,
 	}
+
 	// if enabled we assign the sse configuration
 	if u.serverSideEncryptionEnabled() {
 		params.ServerSideEncryption = types.ServerSideEncryptionAes256

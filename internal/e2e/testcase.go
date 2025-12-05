@@ -106,8 +106,13 @@ func newTestCase(t testing.TB, file string) *testCase {
 		}
 	})
 
+	t.Logf("Created cluster queue %q in org %q", queue.Key, targetOrg)
+
 	var pipelineCfg strings.Builder
-	tmplInput := map[string]string{"queue": queue.Key}
+	tmplInput := map[string]string{
+		"queue":                  queue.Key,
+		"buildkite_agent_binary": agentPath,
+	}
 	if err := tmpl.Execute(&pipelineCfg, tmplInput); err != nil {
 		t.Fatalf("Could not execute pipeline config template: tmpl.Execute(%q) error = %v", tmplInput, err)
 	}
@@ -121,6 +126,8 @@ func newTestCase(t testing.TB, file string) *testCase {
 			t.Logf("Could not clean up pipeline %q (id = %s) in org %q: cleanup() = %v", pipeline.Slug, pipeline.ID, targetOrg, err)
 		}
 	})
+
+	t.Logf("Created pipeline %q in org %q", pipeline.Slug, targetOrg)
 
 	return &testCase{
 		TB:             t,
@@ -282,13 +289,22 @@ func (tc *testCase) startAgent(extraArgs ...string) *exec.Cmd {
 	dir := tc.TempDir()
 	buildPath := filepath.Join(dir, "builds")
 	hooksPath := filepath.Join(dir, "hooks")
-	socketsPath := filepath.Join(dir, "sockets")
 	pluginsPath := filepath.Join(dir, "plugins")
-	for _, path := range []string{buildPath, hooksPath, socketsPath, pluginsPath} {
+	for _, path := range []string{buildPath, hooksPath, pluginsPath} {
 		if err := os.Mkdir(path, 0o700); err != nil {
 			tc.Fatalf("Couldn't create dir inside temporary agent dir: os.Mkdir(%q, %o) = %v", path, 0o700, err)
 		}
 	}
+
+	// Unix domain sockets have a path length limit (~104 chars), so use a short
+	// path in /tmp instead of the potentially long tc.TempDir() path.
+	socketsPath, err := os.MkdirTemp("/tmp", "bk")
+	if err != nil {
+		tc.Fatalf("Couldn't create sockets dir: os.MkdirTemp(/tmp, bk) = %v", err)
+	}
+	tc.Cleanup(func() {
+		os.RemoveAll(socketsPath)
+	})
 
 	args := append([]string{
 		"start",
