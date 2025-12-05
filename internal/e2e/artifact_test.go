@@ -19,3 +19,21 @@ func TestArtifactUploadDownload(t *testing.T) {
 		t.Errorf("Build state = %q, want %q", got, want)
 	}
 }
+
+// Test that an agent can upload and download artifact to/from a customer-managed S3 bucket
+func TestArtifactUploadDownload_CustomBucket(t *testing.T) {
+	ctx := t.Context()
+	tc := newTestCase(t, "artifact_custom_bucket.yaml")
+
+	tc.startAgent()
+	build := tc.triggerBuild()
+	state := tc.waitForBuild(ctx, build)
+
+	logs := tc.fetchLogs(ctx, build)
+	t.Log("Job logs:")
+	t.Log(logs)
+
+	if got, want := state, "passed"; got != want {
+		t.Errorf("Build state = %q, want %q", got, want)
+	}
+}
