@@ -17,6 +17,7 @@ steps:
             - organization_slug
             - organization_id
             - pipeline_slug
+            - branch_name
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -40,6 +41,7 @@ steps:
             - organization_slug
             - organization_id
             - pipeline_slug
+            - branch_name
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -64,6 +66,7 @@ steps:
             - organization_slug
             - organization_id
             - pipeline_slug
+            - branch_name
       - docker#v5.8.0:
           environment:
             - "AWS_ACCESS_KEY_ID"
@@ -125,6 +128,7 @@ steps:
             - organization_slug
             - organization_id
             - pipeline_slug
+            - branch_name
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -190,6 +194,7 @@ steps:
                 - organization_slug
                 - organization_id
                 - pipeline_slug
+                - branch_name
           - ecr#v2.7.0:
               login: true
               account-ids: "445615400570"
@@ -217,6 +222,7 @@ steps:
             - organization_slug
             - organization_id
             - pipeline_slug
+            - branch_name
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
