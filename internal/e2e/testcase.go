@@ -106,21 +106,25 @@ func newTestCase(t testing.TB, file string) *testCase {
 		}
 	})
 
+	t.Logf("Created cluster queue %q in org %q", queue.Key, targetOrg)
+
 	var pipelineCfg strings.Builder
 	tmplInput := map[string]string{"queue": queue.Key}
 	if err := tmpl.Execute(&pipelineCfg, tmplInput); err != nil {
 		t.Fatalf("Could not execute pipeline config template: tmpl.Execute(%q) error = %v", tmplInput, err)
 	}
 
-	pipeline, cleanupPipeline, err := createPipeline(ctx, client, name, pipelineCfg.String())
+	pipeline, _, err := createPipeline(ctx, client, name, pipelineCfg.String())
 	if err != nil {
 		t.Fatalf("Could not create pipeline with the following config in org %q: testHelper.createPipeline(%q, pipelineCfg) error = %v\n%s", targetOrg, name, err, pipelineCfg.String())
 	}
 	t.Cleanup(func() {
-		if err := cleanupPipeline(); err != nil {
-			t.Logf("Could not clean up pipeline %q (id = %s) in org %q: cleanup() = %v", pipeline.Slug, pipeline.ID, targetOrg, err)
-		}
+		// if err := cleanupPipeline(); err != nil {
+		// 	t.Logf("Could not clean up pipeline %q (id = %s) in org %q: cleanup() = %v", pipeline.Slug, pipeline.ID, targetOrg, err)
+		// }
 	})
+
+	t.Logf("Created pipeline %q in org %q", pipeline.Slug, targetOrg)
 
 	return &testCase{
 		TB:             t,

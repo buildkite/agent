@@ -1,0 +1,33 @@
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: upload
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/ pipeline-buildkite-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - echo "hello world" > artifact.txt
+      - buildkite-agent artifact upload artifact.txt
+    env:
+      BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: s3://buildkite-agent-e2e-tests-custom-artifacts
+      # NB: not using ACLs (which is what this ACL does) means artifacts won't be available from the buildkite UI.
+      # This isn't really a big deal because the jobs and pipelines that these tests generate are ephemeral
+      BUILDKITE_S3_ACL: bucket-owner-full-control
+  - key: download
+    depends_on: upload
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/ pipeline-buildkite-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - buildkite-agent artifact download artifact.txt . && if [[ $(cat artifact.txt) == "hello world" ]]; then exit 0; else exit 1; fi
+    env:
+      BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: s3://buildkite-agent-e2e-tests-custom-artifacts
+      BUILDKITE_S3_ACL: bucket-owner-full-control
