@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.114.1](https://github.com/buildkite/agent/tree/v3.114.1) (2025-12-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.114.0...v3.114.1)
+
+### Fixed
+- Fix issue where artifacts uploaded to customer-managed s3 buckets could not be downloaded [#3607](https://github.com/buildkite/agent/pull/3607) (@moskyb)
+
+### Internal
+- Add an end-to-end testing framework! [#3611](https://github.com/buildkite/agent/pull/3611) [#3610](https://github.com/buildkite/agent/pull/3610) [#3609](https://github.com/buildkite/agent/pull/3609) [#3608](https://github.com/buildkite/agent/pull/3608) [#3606](https://github.com/buildkite/agent/pull/3606) [#3604](https://github.com/buildkite/agent/pull/3604) [#3599](https://github.com/buildkite/agent/pull/3599) (@DrJosh9000)
+- Dependency updates [#3601](https://github.com/buildkite/agent/pull/3601) [#3600](https://github.com/buildkite/agent/pull/3600) (@dependabot[bot])
+- Update MIME types [#3603](https://github.com/buildkite/agent/pull/3603) (@DrJosh9000)
+
 ## [v3.114.0](https://github.com/buildkite/agent/tree/v3.114.0) (2025-11-25)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.113.0...v3.114.0)
 
