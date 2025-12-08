@@ -1,1 +1,1 @@
-FROM golangci/golangci-lint:v2.6-alpine@sha256:a3abd55b17a74e36703f3d27e8183958b8bee15a1b1ffb25529192e114e0edbe
+FROM golangci/golangci-lint:v2.7-alpine@sha256:1e1851102b736971267400e08b3e4b2e7799c73976a998820f6f6b6b86b48343
