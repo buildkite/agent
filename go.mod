@@ -15,8 +15,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.4
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.20.14
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.275.0
-	github.com/aws/aws-sdk-go-v2/service/kms v1.49.1
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.276.0
+	github.com/aws/aws-sdk-go-v2/service/kms v1.49.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.93.1
 	github.com/aws/smithy-go v1.24.0
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
@@ -62,7 +62,7 @@ require (
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.39.0
 	golang.org/x/term v0.38.0
-	google.golang.org/api v0.256.0
+	google.golang.org/api v0.257.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.74.8
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.2
