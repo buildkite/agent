@@ -177,6 +177,8 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 				logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
 				logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
 				logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
+				logger.IntField("part_count", result.Transfer.PartCount),
+				logger.IntField("concurrency", result.Transfer.Concurrency),
 			).Info("Cache restored")
 		default:
 			l.WithFields(
@@ -208,6 +210,8 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 				logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
 				logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
 				logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
+				logger.IntField("part_count", result.Transfer.PartCount),
+				logger.IntField("concurrency", result.Transfer.Concurrency),
 			).Info("Cache created")
 		default:
 			l.WithFields(
