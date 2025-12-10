@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.114.2](https://github.com/buildkite/agent/tree/v3.114.2) (2025-12-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.114.1...v3.114.2)
+
+### Fixes
+- Further fixes to custom bucket artifact uploads/downloads [#3615](https://github.com/buildkite/agent/pull/3615) (@moskyb)
+
+## Internal
+- Dependabot updates [#3618](https://github.com/buildkite/agent/pull/3618) [#3619](https://github.com/buildkite/agent/pull/3619) [#3622](https://github.com/buildkite/agent/pull/3622) [#3623](https://github.com/buildkite/agent/pull/3623) [#3621](https://github.com/buildkite/agent/pull/3621) (@dependabot[bot])
+
 ## [v3.114.1](https://github.com/buildkite/agent/tree/v3.114.1) (2025-12-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.114.0...v3.114.1)
 
