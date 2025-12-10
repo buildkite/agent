@@ -33,6 +33,7 @@ go_test(
         "main_test.go",
         "plugin_integration_test.go",
         "redaction_integration_test.go",
+        "secrets_integration_test.go",
     ],
     embed = [":integration"],
     deps = [
@@ -43,6 +44,7 @@ go_test(
         "//jobapi",
         "//version",
         "@com_github_buildkite_bintest_v3//:bintest",
+        "@com_github_buildkite_go_pipeline//:go-pipeline",
         "@com_github_urfave_cli//:cli",
         "@tools_gotest_v3//assert",
     ],

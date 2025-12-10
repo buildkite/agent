@@ -8,8 +8,6 @@ go_library(
         "lookpath.go",
         "lookpath_windows.go",
         "shell.go",
-        "signal.go",
-        "signal_windows.go",
         "test.go",
     ],
     importpath = "github.com/buildkite/agent/v3/internal/shell",
@@ -24,6 +22,9 @@ go_library(
         "@com_github_buildkite_shellwords//:shellwords",
         "@com_github_gofrs_flock//:flock",
         "@com_github_opentracing_opentracing_go//:opentracing-go",
+        "@io_opentelemetry_go_otel//:otel",
+        "@io_opentelemetry_go_otel//propagation",
+        "@io_opentelemetry_go_otel_trace//:trace",
     ],
 )
 

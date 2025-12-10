@@ -17,6 +17,7 @@ go_test(
         "bm_redactor_test.go",
         "replacer_test.go",
     ],
+    data = glob(["testdata/**"]),
     deps = [
         ":replacer",
         "//internal/redact",

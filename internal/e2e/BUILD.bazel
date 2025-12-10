@@ -1,0 +1,8 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "e2e",
+    srcs = ["doc.go"],
+    importpath = "github.com/buildkite/agent/v3/internal/e2e",
+    visibility = ["//:__subpackages__"],
+)

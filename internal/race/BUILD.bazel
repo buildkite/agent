@@ -1,0 +1,11 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "race",
+    srcs = [
+        "race_disabled.go",
+        "race_enabled.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/race",
+    visibility = ["//:__subpackages__"],
+)

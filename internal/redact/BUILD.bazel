@@ -5,7 +5,10 @@ go_library(
     srcs = ["redact.go"],
     importpath = "github.com/buildkite/agent/v3/internal/redact",
     visibility = ["//:__subpackages__"],
-    deps = ["//env"],
+    deps = [
+        "//env",
+        "//internal/replacer",
+    ],
 )
 
 go_test(

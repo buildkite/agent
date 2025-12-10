@@ -12,8 +12,6 @@ go_library(
     visibility = ["//:__subpackages__"],
     deps = [
         "//env",
-        "//internal/osutil",
-        "//internal/shell",
         "//internal/shellscript",
         "//internal/tempfile",
     ],
