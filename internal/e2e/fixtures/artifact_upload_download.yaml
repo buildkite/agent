@@ -4,8 +4,8 @@ steps:
   - key: upload
     commands:
       - echo "hello world" > artifact.txt
-      - buildkite-agent artifact upload artifact.txt
+      - {{ .buildkite_agent_binary }} artifact upload artifact.txt
   - key: download
     depends_on: upload
     commands:
-      - buildkite-agent artifact download artifact.txt . && if [[ $(cat artifact.txt) == "hello world" ]]; then exit 0; else exit 1; fi
+      - {{ .buildkite_agent_binary }} artifact download artifact.txt . && if [[ $(cat artifact.txt) == "hello world" ]]; then exit 0; else exit 1; fi

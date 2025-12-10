@@ -134,6 +134,7 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 		ACL:         permission,
 		Body:        f,
 	}
+
 	// if enabled we assign the sse configuration
 	if u.serverSideEncryptionEnabled() {
 		params.ServerSideEncryption = types.ServerSideEncryptionAes256
@@ -144,9 +145,11 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.BucketPath, artifact.Path}
+	if u.BucketPath == "" {
+		return artifact.Path
+	}
 
-	return strings.Join(parts, "/")
+	return path.Join(u.BucketPath, artifact.Path)
 }
 
 func (u *S3Uploader) resolvePermission() (types.ObjectCannedACL, error) {
