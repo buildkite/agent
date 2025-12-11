@@ -114,12 +114,11 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 		Pipeline:     cfg.Pipeline,
 		Organization: cfg.Organization,
 		Caches:       fileConfig.Dependencies,
-		OnProgress: func(stage, message string, current, total int) {
+		OnProgress: func(cacheID, stage, message string, _, _ int) {
 			l.WithFields(
+				logger.StringField("cache_id", cacheID),
 				logger.StringField("stage", stage),
 				logger.StringField("message", message),
-				logger.IntField("current", current),
-				logger.IntField("total", total),
 			).Info("Cache progress")
 		},
 	})
