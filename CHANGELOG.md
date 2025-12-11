@@ -5,8 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [v3.114.2](https://github.com/buildkite/agent/tree/v3.114.2) (2025-12-10)
-[Full Changelog](https://github.com/buildkite/agent/compare/v3.114.1...v3.114.2)
+## [v3.115.0](https://github.com/buildkite/agent/tree/v3.115.0) (2025-12-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.114.1...v3.115.0)
+
+### Added
+- `--changed-files-path` for pipeline upload, which allows users to specify a list of files changed for `if_changed` computation [#3620](https://github.com/buildkite/agent/pull/3620) (@pyrocat101)
 
 ### Fixes
 - Further fixes to custom bucket artifact uploads/downloads [#3615](https://github.com/buildkite/agent/pull/3615) (@moskyb)
