@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
@@ -33,6 +35,8 @@ type Config struct {
 	APIEndpoint string
 	// APIToken is the access token used to authenticate
 	APIToken string
+	// Concurrency is the number of concurrent cache operations
+	Concurrency int
 }
 
 // FileConfig represents the structure of the cache configuration YAML file
@@ -60,7 +64,7 @@ func Save(ctx context.Context, l logger.Logger, cfg Config) error {
 		return nil
 	}
 
-	return saveWithClient(ctx, l, cacheClient, cacheIDs)
+	return saveWithClient(ctx, l, cacheClient, cacheIDs, cfg.Concurrency)
 }
 
 // Restore restores caches based on the provided configuration and logs results as each cache is processed
@@ -75,7 +79,7 @@ func Restore(ctx context.Context, l logger.Logger, cfg Config) error {
 		return nil
 	}
 
-	return restoreWithClient(ctx, l, cacheClient, cacheIDs)
+	return restoreWithClient(ctx, l, cacheClient, cacheIDs, cfg.Concurrency)
 }
 
 // loadCacheConfiguration loads cache configuration from a YAML file
@@ -158,67 +162,157 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 }
 
 // restoreWithClient performs the restore operation for the given cache IDs using the provided client
-func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient, cacheIDs []string) error {
-	for _, cacheID := range cacheIDs {
-		l.Info("Restoring cache: %s", cacheID)
-		result, err := client.Restore(ctx, cacheID)
-		if err != nil {
-			return fmt.Errorf("failed to restore cache %q: %w", cacheID, err)
-		}
+func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient, cacheIDs []string, concurrency int) error {
+	if concurrency <= 0 {
+		concurrency = runtime.GOMAXPROCS(0)
+	}
+	workerCount := min(concurrency, len(cacheIDs))
 
-		switch {
-		case result.CacheHit, result.FallbackUsed:
-			l.WithFields(
-				logger.StringField("cache_id", cacheID),
-				logger.StringField("cache_key", result.Key),
-				logger.StringField("fallback_used", fmt.Sprintf("%t", result.FallbackUsed)),
-				logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
-				logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
-				logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
-				logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
-				logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
-				logger.IntField("part_count", result.Transfer.PartCount),
-				logger.IntField("concurrency", result.Transfer.Concurrency),
-			).Info("Cache restored")
-		default:
-			l.WithFields(
-				logger.StringField("cache_id", cacheID),
-				logger.StringField("cache_key", result.Key),
-			).Info("Cache not restored (not found)")
+	wctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	cacheIDsCh := make(chan string)
+	var wg sync.WaitGroup
+
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for {
+				select {
+				case cacheID, open := <-cacheIDsCh:
+					if !open {
+						return
+					}
+
+					l.Info("Restoring cache: %s", cacheID)
+					result, err := client.Restore(wctx, cacheID)
+					if err != nil {
+						cancel(fmt.Errorf("failed to restore cache %q: %w", cacheID, err))
+						return
+					}
+
+					switch {
+					case result.CacheHit, result.FallbackUsed:
+						l.WithFields(
+							logger.StringField("cache_id", cacheID),
+							logger.StringField("cache_key", result.Key),
+							logger.StringField("fallback_used", fmt.Sprintf("%t", result.FallbackUsed)),
+							logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
+							logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
+							logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
+							logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
+							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
+							logger.IntField("part_count", result.Transfer.PartCount),
+							logger.IntField("concurrency", result.Transfer.Concurrency),
+						).Info("Cache restored")
+					default:
+						l.WithFields(
+							logger.StringField("cache_id", cacheID),
+							logger.StringField("cache_key", result.Key),
+						).Info("Cache not restored (not found)")
+					}
+
+				case <-wctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+sendLoop:
+	for _, cacheID := range cacheIDs {
+		select {
+		case cacheIDsCh <- cacheID:
+		case <-wctx.Done():
+			break sendLoop
 		}
+	}
+	close(cacheIDsCh)
+
+	wg.Wait()
+
+	if err := context.Cause(wctx); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // saveWithClient performs the save operation for the given cache IDs using the provided client
-func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, cacheIDs []string) error {
-	for _, cacheID := range cacheIDs {
-		l.Info("Saving cache: %s", cacheID)
-		result, err := client.Save(ctx, cacheID)
-		if err != nil {
-			return fmt.Errorf("failed to save cache %q: %w", cacheID, err)
-		}
+func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, cacheIDs []string, concurrency int) error {
+	if concurrency <= 0 {
+		concurrency = runtime.GOMAXPROCS(0)
+	}
+	workerCount := min(concurrency, len(cacheIDs))
 
-		switch {
-		case result.CacheCreated:
-			l.WithFields(
-				logger.StringField("cache_id", cacheID),
-				logger.StringField("cache_key", result.Key),
-				logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
-				logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
-				logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
-				logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
-				logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
-				logger.IntField("part_count", result.Transfer.PartCount),
-				logger.IntField("concurrency", result.Transfer.Concurrency),
-			).Info("Cache created")
-		default:
-			l.WithFields(
-				logger.StringField("cache_id", cacheID),
-				logger.StringField("cache_key", result.Key),
-			).Info("Cache already exists, not saving")
+	wctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+
+	cacheIDsCh := make(chan string)
+	var wg sync.WaitGroup
+
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for {
+				select {
+				case cacheID, open := <-cacheIDsCh:
+					if !open {
+						return
+					}
+
+					l.Info("Saving cache: %s", cacheID)
+					result, err := client.Save(wctx, cacheID)
+					if err != nil {
+						cancel(fmt.Errorf("failed to save cache %q: %w", cacheID, err))
+						return
+					}
+
+					switch {
+					case result.CacheCreated:
+						l.WithFields(
+							logger.StringField("cache_id", cacheID),
+							logger.StringField("cache_key", result.Key),
+							logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
+							logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
+							logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
+							logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
+							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
+							logger.IntField("part_count", result.Transfer.PartCount),
+							logger.IntField("concurrency", result.Transfer.Concurrency),
+						).Info("Cache created")
+					default:
+						l.WithFields(
+							logger.StringField("cache_id", cacheID),
+							logger.StringField("cache_key", result.Key),
+						).Info("Cache already exists, not saving")
+					}
+
+				case <-wctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+sendLoop:
+	for _, cacheID := range cacheIDs {
+		select {
+		case cacheIDsCh <- cacheID:
+		case <-wctx.Done():
+			break sendLoop
 		}
+	}
+	close(cacheIDsCh)
+
+	wg.Wait()
+
+	if err := context.Cause(wctx); err != nil {
+		return err
 	}
 
 	return nil

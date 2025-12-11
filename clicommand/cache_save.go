@@ -89,6 +89,7 @@ var CacheSaveCommand = cli.Command{
 			Ids:             cfg.Ids,
 			APIEndpoint:     apiCfg.Endpoint,
 			APIToken:        apiCfg.Token,
+			Concurrency:     cfg.Concurrency,
 		}
 
 		// Perform cache save (logging happens inside)
