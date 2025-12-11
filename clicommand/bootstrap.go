@@ -107,8 +107,6 @@ type BootstrapConfig struct {
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
-	KubernetesExec               bool     `cli:"kubernetes-exec"`
-	KubernetesContainerID        int      `cli:"kubernetes-container-id"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -398,7 +396,6 @@ var BootstrapCommand = cli.Command{
 			Usage:  "A list of warning IDs to disable",
 			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
 		},
-		KubernetesContainerIDFlag,
 		cancelSignalFlag,
 		cancelGracePeriodFlag,
 		signalGracePeriodSecondsFlag,
@@ -410,7 +407,6 @@ var BootstrapCommand = cli.Command{
 		ProfileFlag,
 		RedactedVars,
 		StrictSingleHooksFlag,
-		KubernetesExecFlag,
 		TraceContextEncodingFlag,
 	},
 	Action: func(c *cli.Context) error {
@@ -517,8 +513,6 @@ var BootstrapCommand = cli.Command{
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
-			KubernetesExec:               cfg.KubernetesExec,
-			KubernetesContainerID:        cfg.KubernetesContainerID,
 			Secrets:                      cfg.Secrets,
 		})
 

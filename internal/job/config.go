@@ -184,10 +184,6 @@ type ExecutorConfig struct {
 	// Whether to start the JobAPI
 	JobAPI bool
 
-	// Whether to enable Kubernetes support, and which container we're running in
-	KubernetesExec        bool
-	KubernetesContainerID int
-
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string
 

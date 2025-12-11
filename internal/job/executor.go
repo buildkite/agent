@@ -34,7 +34,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
-	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -95,34 +94,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Start with stdout and stderr as their usual selves.
 	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
 
-	// The shell environment is initially the current environment.
-	// It is mutated by kubernetesSetup and needed for setupRedactors.
+	// The shell environment is initially the current environment, needed for setupRedactors.
 	environ := env.FromSlice(os.Environ())
 
 	// Create a logger to stderr that can be used for things prior to the
 	// redactor setup.
 	// Be careful not to log customer secrets here!
 	tempLog := shell.NewWriterLogger(stderr, true, e.DisabledWarnings)
-
-	if e.KubernetesExec {
-		tempLog.Commentf("Using Kubernetes support")
-
-		socket := &kubernetes.Client{ID: e.KubernetesContainerID}
-		if err := e.kubernetesSetup(ctx, environ, socket); err != nil {
-			tempLog.Errorf("Failed to start kubernetes socket client: %v", err)
-			return 1
-		}
-
-		// Tee both stdout and stderr to the k8s socket client, so that the
-		// logs are shipped to the agent container and then to Buildkite, but
-		// are also visible as container logs.
-		stdout = io.MultiWriter(stdout, socket)
-		stderr = io.MultiWriter(stderr, socket)
-
-		defer func() {
-			_ = socket.Exit(exitCode)
-		}()
-	}
 
 	// setup the redactors here once and for the life of the executor
 	// they will be flushed at the end of each hook
@@ -1363,83 +1341,4 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)
 	return stdoutRedactor, logger
-}
-
-func (e *Executor) kubernetesSetup(ctx context.Context, environ *env.Environment, k8sAgentSocket *kubernetes.Client) error {
-	rtr := roko.NewRetrier(
-		roko.WithMaxAttempts(7),
-		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-	)
-	regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
-		return k8sAgentSocket.Connect(ctx)
-	})
-	if err != nil {
-		return fmt.Errorf("error connecting to kubernetes runner: %w", err)
-	}
-
-	// Set our environment vars based on the registration response.
-	// But note that the k8s stack interprets the job definition itself,
-	// and sets a variety of env vars (e.g. BUILDKITE_COMMAND) that
-	// *could* be different to the ones the agent normally supplies.
-	// Examples:
-	// * The command container could be passed a specific
-	//   BUILDKITE_COMMAND that is computed from the command+args
-	//   podSpec attributes (in the kubernetes "plugin"), instead of the
-	//   "command" attribute of the step.
-	// * BUILDKITE_PLUGINS is pre-processed by the k8s stack to remove
-	//   the kubernetes "plugin". If we used the agent's default
-	//   BUILDKITE_PLUGINS, we'd be trying to find a kubernetes plugin
-	//   that doesn't exist.
-	// So we should skip setting any vars that are already set, and
-	// specifically any that could be deliberately *unset* by the
-	// k8s stack (BUILDKITE_PLUGINS could be unset if kubernetes is
-	// the only "plugin" in the step).
-	// (Maybe we could move some of the k8s stack processing in here?)
-	//
-	// To think about: how to obtain the env vars early enough to set
-	// them in ExecutorConfig (because of how urfave/cli works, it
-	// must happen before App.Run, which is before the program even knows
-	// which subcommand is running).
-	for n, v := range env.FromSlice(regResp.Env).Dump() {
-		// Skip these ones specifically.
-		// See agent-stack-k8s/internal/controller/scheduler/scheduler.go#(*jobWrapper).Build
-		switch n {
-		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS":
-			continue
-
-		case "BUILDKITE_AGENT_ACCESS_TOKEN":
-			// Just in case someone has tried to fiddle with this, set it
-			// unconditionally (to be compatible with pre-v3.74.1 / PR 2851
-			// behavior).
-			environ.Set(n, v)
-			if err := os.Setenv(n, v); err != nil {
-				return err
-			}
-			continue
-		}
-		// Skip any that are already set.
-		if environ.Exists(n) {
-			continue
-		}
-		// Set it!
-		environ.Set(n, v)
-		if err := os.Setenv(n, v); err != nil {
-			return err
-		}
-	}
-
-	// So that the agent doesn't exit early thinking the client is lost, we want
-	// to continue talking to the agent container for as long as possible (after
-	// Interrupt). Hence detach the StatusLoop context from cancellation using
-	// [context.WithoutCancel]. The goroutine will exit with the process.
-	// (Why even have a context arg? Testing and possible future value-passing)
-	return k8sAgentSocket.StatusLoop(context.WithoutCancel(ctx), func(err error) {
-		// If the k8s client is interrupted for any reason (either the server
-		// is in state interrupted or the connection died or ...), we should
-		// cancel the job.
-		if err != nil {
-			e.shell.Errorf("Error waiting for client interrupt: %v", err)
-		}
-		e.Cancel()
-	})
 }

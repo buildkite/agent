@@ -78,7 +78,11 @@ type JobRunnerConfig struct {
 	// Whether to set debug HTTP Requests in the job
 	DebugHTTP bool
 
-	// Whether the job is executing as a k8s pod
+	// KubernetesExec enables Kubernetes execution mode. When true, the job runner
+	// creates a kubernetes.Runner that listens on a UNIX socket for other agent containers
+	// to connect, rather than spawning a local bootstrap subprocess. The other agent containers
+	// containers run `kubernetes-bootstrap` which connects to this socket, receives
+	// environment variables, and executes the bootstrap phases.
 	KubernetesExec bool
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
@@ -592,10 +596,6 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_CANCEL_GRACE_PERIOD", strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod))
 	setEnv("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod/time.Second)))
 	setEnv("BUILDKITE_TRACE_CONTEXT_ENCODING", r.conf.AgentConfiguration.TraceContextEncoding)
-
-	if r.conf.KubernetesExec {
-		setEnv("BUILDKITE_KUBERNETES_EXEC", "true")
-	}
 
 	if !r.conf.AgentConfiguration.AllowMultipartArtifactUpload {
 		setEnv("BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", "true")
