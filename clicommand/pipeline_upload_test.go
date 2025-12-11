@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -734,6 +735,130 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 		enabled:      true,
 		gathered:     true,
 		changedPaths: []string{"foo/happy.jpg"},
+	}
+
+	ica.apply(l, steps)
+	if diff := cmp.Diff(steps, want); diff != "" {
+		t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
+	}
+}
+
+func TestReadChangedFilesFromPath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{
+			name:    "single file",
+			content: "foo/bar.go\n",
+			want:    []string{"foo/bar.go"},
+		},
+		{
+			name:    "multiple files",
+			content: "foo/bar.go\nsrc/main.go\nREADME.md\n",
+			want:    []string{"foo/bar.go", "src/main.go", "README.md"},
+		},
+		{
+			name:    "empty lines filtered",
+			content: "foo/bar.go\n\nsrc/main.go\n\n",
+			want:    []string{"foo/bar.go", "src/main.go"},
+		},
+		{
+			name:    "no trailing newline",
+			content: "foo/bar.go\nsrc/main.go",
+			want:    []string{"foo/bar.go", "src/main.go"},
+		},
+		{
+			name:    "empty file",
+			content: "",
+			want:    []string{},
+		},
+		{
+			name:    "only newlines",
+			content: "\n\n\n",
+			want:    []string{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmpFile, err := os.CreateTemp("", "changed-files-*.txt")
+			if err != nil {
+				t.Fatalf("creating temp file: %v", err)
+			}
+			defer os.Remove(tmpFile.Name())
+
+			if _, err := tmpFile.WriteString(test.content); err != nil {
+				t.Fatalf("writing to temp file: %v", err)
+			}
+			tmpFile.Close()
+
+			l := logger.NewBuffer()
+			got, err := readChangedFilesFromPath(l, tmpFile.Name())
+			if err != nil {
+				t.Fatalf("readChangedFilesFromPath() error = %v", err)
+			}
+
+			if diff := cmp.Diff(got, test.want); diff != "" {
+				t.Errorf("readChangedFilesFromPath() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIfChangedApplicator_WithChangedFilesPath(t *testing.T) {
+	t.Parallel()
+
+	// Create a temp file with changed files
+	tmpFile, err := os.CreateTemp("", "changed-files-*.txt")
+	if err != nil {
+		t.Fatalf("creating temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString("foo/README.md\nbar/test.go\n"); err != nil {
+		t.Fatalf("writing to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	steps := pipeline.Steps{
+		&pipeline.CommandStep{
+			Command: "runs when foo changes",
+			RemainingFields: map[string]any{
+				"if_changed": "foo/**",
+			},
+		},
+		&pipeline.CommandStep{
+			Command: "runs when qux changes",
+			RemainingFields: map[string]any{
+				"if_changed": "qux/**",
+			},
+		},
+	}
+
+	want := pipeline.Steps{
+		&pipeline.CommandStep{
+			Command:         "runs when foo changes",
+			RemainingFields: map[string]any{},
+		},
+		&pipeline.CommandStep{
+			Command: "runs when qux changes",
+			RemainingFields: map[string]any{
+				"skip": ifChangedSkippedMsg,
+			},
+		},
+	}
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(i int) { t.Errorf("exitFn(%d) invoked", i) })
+
+	ica := &ifChangedApplicator{
+		enabled:          true,
+		changedFilesPath: tmpFile.Name(),
 	}
 
 	ica.apply(l, steps)
