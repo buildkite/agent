@@ -12,6 +12,7 @@ type CacheConfig struct {
 	Pipeline        string   `cli:"pipeline" validate:"required"`
 	Organization    string   `cli:"organization" validate:"required"`
 	CacheConfigFile string   `cli:"cache-config-file"`
+	Concurrency     int      `cli:"concurrency"`
 }
 
 func cacheFlags() []cli.Flag {
@@ -57,6 +58,12 @@ func cacheFlags() []cli.Flag {
 			Value:  ".buildkite/cache.yml",
 			Usage:  "Path to the cache configuration YAML file",
 			EnvVar: "BUILDKITE_CACHE_CONFIG_FILE",
+		},
+		cli.IntFlag{
+			Name:   "concurrency",
+			Value:  2,
+			Usage:  "Number of concurrent cache operations",
+			EnvVar: "BUILDKITE_CACHE_CONCURRENCY",
 		},
 	}
 }

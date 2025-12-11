@@ -77,7 +77,7 @@ func TestSaveWithClient_CacheCreated(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"})
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
 	require.NoError(t, err)
 }
 
@@ -94,7 +94,7 @@ func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"})
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
 	require.NoError(t, err)
 }
 
@@ -122,7 +122,7 @@ func TestSaveWithClient_MultipleCaches(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"})
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1)
 	require.NoError(t, err)
 	require.Equal(t, 3, callCount, "Expected Save to be called 3 times")
 }
@@ -138,7 +138,7 @@ func TestSaveWithClient_Error(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"})
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "failed to save cache")
 	require.ErrorContains(t, err, "save failed")
@@ -155,7 +155,7 @@ func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{})
+	err := saveWithClient(ctx, logger.Discard, mock, []string{}, 1)
 	require.NoError(t, err)
 }
 
@@ -185,7 +185,7 @@ func TestRestoreWithClient_CacheHit(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"})
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
 	require.NoError(t, err)
 }
 
@@ -213,7 +213,7 @@ func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"})
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
 	require.NoError(t, err)
 }
 
@@ -232,7 +232,7 @@ func TestRestoreWithClient_CacheMiss(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"})
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
 	require.NoError(t, err)
 }
 
@@ -252,7 +252,7 @@ func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"})
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1)
 	require.NoError(t, err)
 	require.Equal(t, 3, callCount, "Expected Restore to be called 3 times")
 }
@@ -268,7 +268,7 @@ func TestRestoreWithClient_Error(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"})
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "failed to restore cache")
 	require.ErrorContains(t, err, "restore failed")
@@ -285,7 +285,7 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{})
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{}, 1)
 	require.NoError(t, err)
 }
 
