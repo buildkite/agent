@@ -12,12 +12,12 @@ require (
 	github.com/DataDog/datadog-go/v5 v5.8.1
 	github.com/Khan/genqlient v0.8.1
 	github.com/aws/aws-sdk-go-v2 v1.41.0
-	github.com/aws/aws-sdk-go-v2/config v1.32.4
+	github.com/aws/aws-sdk-go-v2/config v1.32.5
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.16
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.20.14
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.20.15
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.276.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.49.3
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.93.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.93.2
 	github.com/aws/smithy-go v1.24.0
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.3.0
@@ -26,7 +26,7 @@ require (
 	github.com/buildkite/interpolate v0.1.5
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.1
-	github.com/buildkite/zstash v0.5.1
+	github.com/buildkite/zstash v0.6.0
 	github.com/creack/pty v1.1.19
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
@@ -96,7 +96,7 @@ require (
 	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.4 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.4 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.5 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
@@ -108,7 +108,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.12 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.41.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.41.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
