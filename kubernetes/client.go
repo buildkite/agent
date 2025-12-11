@@ -23,16 +23,22 @@ type Client struct {
 
 var errNotConnected = errors.New("client not connected")
 
+// Connect establishes a connection to the Agent container in the same k8s pod and registers the client.
+// Because k8s might run the containers "out of order", the server socket might not exist yet,
+// so this method retries the connection with a 1-second interval until the context is cancelled.
+// Callers should use context.WithTimeout to control the connection timeout.
 func (c *Client) Connect(ctx context.Context) (*RegisterResponse, error) {
 	if c.SocketPath == "" {
 		c.SocketPath = defaultSocketPath
 	}
 
-	// Because k8s might run the containers "out of order", the server socket
-	// might not exist yet. Try to connect several times.
+	// Retry until the context is cancelled. The high maxAttempts is a safety net
+	// in case the caller forgets to set a context deadline - in practice the
+	// context deadline should be the limiting factor.
+	const retryInterval = time.Second
 	r := roko.NewRetrier(
-		roko.WithMaxAttempts(30),
-		roko.WithStrategy(roko.Constant(time.Second)),
+		roko.WithMaxAttempts(3600),
+		roko.WithStrategy(roko.Constant(retryInterval)),
 	)
 	client, err := roko.DoFunc(ctx, r, func(*roko.Retrier) (*rpc.Client, error) {
 		return rpc.DialHTTP("unix", c.SocketPath)

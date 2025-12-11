@@ -309,6 +309,8 @@ func init() {
 
 // helper for ignoring the response from regular client.Connect
 func connect(ctx context.Context, c *Client) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	_, err := c.Connect(ctx)
 	return err
 }

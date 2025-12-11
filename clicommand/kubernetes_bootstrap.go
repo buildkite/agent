@@ -14,7 +14,6 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
-	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -76,19 +75,13 @@ var KubernetesBootstrapCommand = cli.Command{
 		// Registration passes down the env vars the agent normally sets on the
 		// subprocess, but in this case the bootstrap is in a separate
 		// container.
-		timeoutDuration := 120 * time.Second
+		connectionTimeout := 120 * time.Second
 		if cfg.KubernetesBootstrapConnectionTimeout > 0 {
-			timeoutDuration = cfg.KubernetesBootstrapConnectionTimeout
+			connectionTimeout = cfg.KubernetesBootstrapConnectionTimeout
 		}
-		interval := 3 * time.Second
-		maxAttempt := max(int(timeoutDuration.Seconds())/int(interval.Seconds()), 1)
-		rtr := roko.NewRetrier(
-			roko.WithMaxAttempts(maxAttempt),
-			roko.WithStrategy(roko.Constant(interval)),
-		)
-		regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
-			return socket.Connect(ctx)
-		})
+		connectCtx, connectCancel := context.WithTimeout(ctx, connectionTimeout)
+		defer connectCancel()
+		regResp, err := socket.Connect(connectCtx)
 		if err != nil {
 			return fmt.Errorf("error connecting to kubernetes runner: %w", err)
 		}
