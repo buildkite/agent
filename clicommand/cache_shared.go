@@ -20,7 +20,7 @@ func cacheFlags() []cli.Flag {
 		cli.StringSliceFlag{
 			Name:   "ids",
 			Value:  &cli.StringSlice{},
-			Usage:  "Comma-separated list of cache IDs (if empty, processes all caches)",
+			Usage:  "Cache IDs to process (can be specified multiple times; if empty, processes all caches)",
 			EnvVar: "BUILDKITE_CACHE_IDS",
 		},
 		cli.StringFlag{
