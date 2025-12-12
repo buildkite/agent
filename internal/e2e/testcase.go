@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,6 +33,7 @@ var (
 
 	// E2E testing config
 	agentPath = os.Getenv("CI_E2E_TESTS_AGENT_PATH")
+	printLogs = os.Getenv("CI_E2E_TESTS_PRINT_JOB_LOGS") == "true"
 
 	// Obtained from agentToken in main_test.go
 	targetOrg     string
@@ -191,6 +193,7 @@ func (tc *testCase) triggerBuild() *buildkite.Build {
 // Note that the build pointed to by build is updated with the latest state
 // after each poll. It calls t.Fatal if there was an error fetching the build
 // or the context ends.
+// If CI_E2E_TESTS_PRINT_JOB_LOGS=true, it fetches and prints the build logs.
 func (tc *testCase) waitForBuild(ctx context.Context, build *buildkite.Build) string {
 	tick := time.Tick(time.Second)
 	for {
@@ -204,6 +207,10 @@ func (tc *testCase) waitForBuild(ctx context.Context, build *buildkite.Build) st
 		*build = state
 		switch state.State {
 		case "passed", "failed", "canceled", "canceling":
+			if printLogs {
+				logs := tc.fetchLogs(ctx, build)
+				tc.Logf("Build logs:\n%s", logs)
+			}
 			return state.State
 
 		case "scheduled", "running":
@@ -265,6 +272,10 @@ func createPipeline(ctx context.Context, client *buildkite.Client, name, config 
 		ClusterID:     targetCluster,
 	})
 	if err != nil {
+		var errResp *buildkite.ErrorResponse
+		if errors.As(err, &errResp) && len(errResp.RawBody) > 0 {
+			return nil, nopCleanup, fmt.Errorf("%w: %s", err, errResp.RawBody)
+		}
 		return nil, nopCleanup, err
 	}
 
