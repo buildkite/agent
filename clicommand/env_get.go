@@ -12,7 +12,7 @@ import (
 
 const envClientErrMessage = `Could not create Job API client: %w
 This command can only be used from hooks or plugins running under a job executor
-where the Job API (available in agent v3.64.0 and later) is available.`
+where the agent's job API is available (in version v3.64.0 and later of the Buildkite Agent).`
 
 const envGetHelpDescription = `Usage:
 
