@@ -47,13 +47,13 @@ require (
 	github.com/qri-io/jsonschema v0.2.1
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli v1.22.17
-	go.opentelemetry.io/contrib/propagators/aws v1.38.0
-	go.opentelemetry.io/contrib/propagators/b3 v1.38.0
-	go.opentelemetry.io/contrib/propagators/jaeger v1.38.0
-	go.opentelemetry.io/contrib/propagators/ot v1.38.0
+	go.opentelemetry.io/contrib/propagators/aws v1.39.0
+	go.opentelemetry.io/contrib/propagators/b3 v1.39.0
+	go.opentelemetry.io/contrib/propagators/jaeger v1.39.0
+	go.opentelemetry.io/contrib/propagators/ot v1.39.0
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.39.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.39.0
 	go.opentelemetry.io/otel/sdk v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
 	golang.org/x/crypto v0.46.0
