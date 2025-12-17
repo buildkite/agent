@@ -579,7 +579,11 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
-	setEnv("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH", fmt.Sprint(r.conf.AgentConfiguration.PluginsAlwaysCloneFresh))
+	// Allow BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH to be enabled either by config
+	// or by pipeline/step env.
+	if r.conf.AgentConfiguration.PluginsAlwaysCloneFresh {
+		setEnv("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH", "true")
+	}
 	setEnv("BUILDKITE_LOCAL_HOOKS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled))
 
 	setEnv("BUILDKITE_GIT_CHECKOUT_FLAGS", r.conf.AgentConfiguration.GitCheckoutFlags)
