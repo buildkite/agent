@@ -676,6 +676,16 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		// attempt to continue anyway
 	}
 
+	// Construct web URLs for direct job and step linking (for observability integrations)
+	if buildURL, exists := env["BUILDKITE_BUILD_URL"]; exists && buildURL != "" {
+		if jobID := r.conf.Job.ID; jobID != "" {
+			setEnv("BUILDKITE_JOB_WEB_URL", fmt.Sprintf("%s#%s", buildURL, jobID))
+		}
+		if stepID, exists := env["BUILDKITE_STEP_ID"]; exists && stepID != "" {
+			setEnv("BUILDKITE_STEP_WEB_URL", fmt.Sprintf("%s#%s", buildURL, stepID))
+		}
+	}
+
 	// Finally, set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings.
 	if len(ignoredEnv) > 0 {
 		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
