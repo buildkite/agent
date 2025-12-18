@@ -453,26 +453,46 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 	if r.conf.Job.ChunksIntervalSeconds > 0 {
 		processInterval = time.Duration(r.conf.Job.ChunksIntervalSeconds) * time.Second
 	}
-	intervalTicker := time.NewTicker(processInterval)
-	defer intervalTicker.Stop()
-	first := make(chan struct{}, 1)
-	first <- struct{}{}
 
+	// We want log chunks to be uploaded regularly. If there were only a few
+	// agents in the world, a simple ticker loop would be fine. But there are a
+	// lot of agents, and we want to spread the requests over time. Some things
+	// to consider when designing such a loop:
+	//
+	// - Large groups of agents all starting the loop at the same time
+	// - Clock drift or backend issues causing the loops among agents to start
+	//   synchronising
+	// - Statistical reasons for agents tending to synchronise
+	// - Having loose or tight bounds on the time between requests
+	//
+	// In this case we want both a lower bound, because fewer larger chunks are
+	// more efficient than lots of smaller chunks, but also we probably want an
+	// upper bound, to improve the experience of tailing a log in the UI.
+	//
+	// Below is a loop within a loop. The inner loop is just a plain ticker loop
+	// that processes chunks once per interval pretty much exactly.
+	// The outer loop periodically restarts the inner loop at a random offset
+	// in time (jitter).
+	// Periodically applying jitter prevents large numbers of agents from
+	// synchronising, but only doing so every so often makes the time between
+	// requests regular (most of the time).
+	//
+	// 32 intervals is an arbitrarily chosen amount of time between jittering.
+	// Increasing it will make it more susceptible to spontaneous
+	// synchronsiation problems like clock drift,
+	// decreasing it will add more variability but also add more "large gaps"
+	// at the point where jitter is added.
+	//
+	// The outer loop repeats every 33 intervals, in order to fit both the inner
+	// loop (32 intervals) and the jitter (between 0 and 1 interval):
+	//   32 intervals < (jitter + inner loop) < 33 intervals
+	// So the gap between requests will usually be 1 interval, but occasionally
+	// be longer (up to 2 intervals).
+
+	const runLength = 32
+	rejitterTicker := time.Tick((runLength + 1) * processInterval)
 	for {
-		setStat("😴 Waiting for next log processing interval tick")
-		select {
-		case <-first:
-			// continue below
-		case <-intervalTicker.C:
-			// continue below
-		case <-ctx.Done():
-			return
-		case <-r.process.Done():
-			return
-		}
-
-		// Within the interval, wait a random amount of time to avoid
-		// spontaneous synchronisation across agents.
+		// The inner loop starts at a random offset within an interval.
 		jitter := rand.N(processInterval)
 		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
 		select {
@@ -484,19 +504,44 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 			return
 		}
 
-		setStat("📨 Sending process output to log streamer")
+		// The inner loop processes once per interval pretty much exactly.
+		intervalTicker := time.Tick(processInterval)
+		for range runLength {
+			setStat("📨 Sending process output to log streamer")
 
-		// Send the output of the process to the log streamer for processing
-		if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
-			r.agentLogger.Error("Could not stream the log output: %v", err)
-			// LogStreamer.Process only returns an error when it can no longer
-			// accept logs (maybe Stop was called, or a hard limit was reached).
-			// Since we can no longer send logs, Close the buffer, which causes
-			// future Writes to return io.ErrClosedPipe, typically SIGPIPE-ing
-			// the running process (if it is still running).
-			if err := r.output.Close(); err != nil && err != process.ErrAlreadyClosed {
-				r.agentLogger.Error("Process output buffer could not be closed: %v", err)
+			// Send the output of the process to the log streamer for processing
+			if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
+				r.agentLogger.Error("Could not stream the log output: %v", err)
+				// LogStreamer.Process only returns an error when it can no longer
+				// accept logs (maybe Stop was called, or a hard limit was reached).
+				// Since we can no longer send logs, Close the buffer, which causes
+				// future Writes to return io.ErrClosedPipe, typically SIGPIPE-ing
+				// the running process (if it is still running).
+				if err := r.output.Close(); err != nil && err != process.ErrAlreadyClosed {
+					r.agentLogger.Error("Process output buffer could not be closed: %v", err)
+				}
+				return
 			}
+
+			setStat("😴 Waiting for next log processing interval tick")
+			select {
+			case <-intervalTicker:
+				// continue next loop iteration
+			case <-ctx.Done():
+				return
+			case <-r.process.Done():
+				return
+			}
+		}
+
+		// Start the next run on a fixed schedule (for statistical reasons).
+		setStat("😴 Waiting for next re-jittering interval tick")
+		select {
+		case <-rejitterTicker:
+			// continue next loop iteration
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
 			return
 		}
 	}
