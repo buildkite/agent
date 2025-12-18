@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.115.2](https://github.com/buildkite/agent/tree/v3.115.2) (2025-12-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.115.1...v3.115.2)
+
+### Fixed
+- Try to avoid overriding BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH with false [#3644](https://github.com/buildkite/agent/pull/3644) (@DrJosh9000)
+- SUP-5826: Remove experiment from 'env' command [#3635](https://github.com/buildkite/agent/pull/3635) (@Mykematt)
+
+### Internal
+- Nested-loop jitter structure for log processing [#3645](https://github.com/buildkite/agent/pull/3645) (@DrJosh9000)
+- Add E2E test for Azure Blob storage [#3642](https://github.com/buildkite/agent/pull/3642) (@DrJosh9000)
+- PB-1007: add e2e test for gcs artifact upload/download [#3633](https://github.com/buildkite/agent/pull/3633) (@zhming0)
+- PB-1025: improve e2e test DevEX [#3634](https://github.com/buildkite/agent/pull/3634) (@zhming0)
+
+### Dependency updates
+- chore(deps): bump zstash to v0.7.0 [#3632](https://github.com/buildkite/agent/pull/3632) (@wolfeidau)
+- build(deps): bump the cloud-providers group with 2 updates [#3638](https://github.com/buildkite/agent/pull/3638) (@dependabot[bot])
+- build(deps): bump the otel group with 5 updates [#3637](https://github.com/buildkite/agent/pull/3637) (@dependabot[bot])
+- build(deps): bump github.com/DataDog/datadog-go/v5 from 5.8.1 to 5.8.2 [#3639](https://github.com/buildkite/agent/pull/3639) (@dependabot[bot])
+- build(deps): bump the container-images group across 5 directories with 1 update [#3640](https://github.com/buildkite/agent/pull/3640) (@dependabot[bot])
+- build(deps): bump docker/library/golang from `cf1272d` to `54528d1` in /.buildkite in the container-images group across 1 directory [#3641](https://github.com/buildkite/agent/pull/3641) (@dependabot[bot])
+
+
 ## [v3.115.1](https://github.com/buildkite/agent/tree/v3.115.1) (2025-12-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.115.0...v3.115.1)
 
