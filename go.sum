@@ -144,8 +144,8 @@ github.com/buildkite/shellwords v1.0.1 h1:88OjMbEBf+EliVB0tizXJynpAM2CKOvYwepg5n
 github.com/buildkite/shellwords v1.0.1/go.mod h1:so0eQnTxgbo58CTYX+4BCx5UuMzvRha9dcKdCKl6NV4=
 github.com/buildkite/test-engine-client v1.6.0 h1:yk/gdkFFU8B1+M16mxPNmxJgVoYffI/sx4XP1xmFesE=
 github.com/buildkite/test-engine-client v1.6.0/go.mod h1:J6LrqenaJPfVCffiWW1/QxjICFb+OkqCvdCd7qAI0AE=
-github.com/buildkite/zstash v0.7.0 h1:lKDGLaRjdjh7M0ItRfpy9HIUv02r1bszKC/8fupDjXY=
-github.com/buildkite/zstash v0.7.0/go.mod h1:BGBukIwUaM3r/ypdQWyaDIP3izQj1PSauoAS6fOaYwg=
+github.com/buildkite/zstash v0.8.0 h1:z8hBGGKIaN/UX0MZh51P8s28mWaDBkgD3uMoOu6Q96g=
+github.com/buildkite/zstash v0.8.0/go.mod h1:60v4pl8PnsVA6b09MC47aTR8Z1QNJoeQqOGp2jkEww8=
 github.com/cenkalti/backoff v1.1.1-0.20171020064038-309aa717adbf h1:yxlp0s+Sge9UsKEK0Bsvjiopb9XRk+vxylmZ9eGBfm8=
 github.com/cenkalti/backoff v1.1.1-0.20171020064038-309aa717adbf/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/cenkalti/backoff/v5 v5.0.3 h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM=
