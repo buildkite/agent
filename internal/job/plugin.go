@@ -78,13 +78,13 @@ func acquirePluginLock(pluginPath string, timeout int, logger shell.Logger) (*os
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			// Lock is held by another process
 			elapsed := time.Since(start)
-			
+
 			// Log waiting message only once
 			if !waitingLogged {
 				logger.Commentf("Waiting for plugin download to complete (another job is currently downloading the plugin)...")
 				waitingLogged = true
 			}
-			
+
 			if elapsed > timeoutDuration {
 				lockFile.Close()
 				return nil, fmt.Errorf("timeout waiting for plugin lock after %d seconds", timeout)
