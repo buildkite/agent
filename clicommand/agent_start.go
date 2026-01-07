@@ -28,7 +28,9 @@ import (
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/gcplib"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -985,7 +987,20 @@ var AgentStartCommand = cli.Command{
 			// assign a crypto signer which uses the KMS key to sign the pipeline
 			verificationJWKS, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
 			if err != nil {
-				return fmt.Errorf("couldn't create KMS signer: %w", err)
+				return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+			}
+
+		case cfg.SigningGCPKMSKey != "":
+			// load the GCP SDK config
+			gcpcfg, err := gcplib.GetConfig(ctx)
+			if err != nil {
+				return err
+			}
+
+			// assign a crypto signer which uses the GCP KMS key to sign the pipeline
+			verificationJWKS, err = gcpsigner.NewKMS(ctx, gcpcfg, cfg.SigningGCPKMSKey)
+			if err != nil {
+				return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
 			}
 
 		case cfg.VerificationJWKSFile != "":
