@@ -13,6 +13,8 @@ import (
 	"github.com/buildkite/agent/v3/internal/awslib"
 	"github.com/buildkite/agent/v3/internal/bkgql"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
+	"github.com/buildkite/agent/v3/internal/gcplib"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/go-pipeline"
@@ -40,6 +42,7 @@ type ToolSignConfig struct {
 
 	// AWS KMS key used for signing pipelines
 	AWSKMSKeyID string `cli:"signing-aws-kms-key"`
+
 	// GCP KMS key used for signing pipelines
 	GCPKMSKeyID string `cli:"signing-gcp-kms-key"`
 
@@ -194,7 +197,20 @@ Signing a pipeline from a file:
 			// assign a crypto signer which uses the KMS key to sign the pipeline
 			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.AWSKMSKeyID)
 			if err != nil {
-				return fmt.Errorf("couldn't create KMS signer: %w", err)
+				return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+			}
+
+		case cfg.GCPKMSKeyID != "":
+			// load the GCP SDK config
+			gcpcfg, err := gcplib.GetConfig(ctx)
+			if err != nil {
+				return err
+			}
+
+			// assign a crypto signer which uses the KMS key to sign the pipeline
+			key, err = gcpsigner.NewKMS(ctx, gcpcfg, cfg.GCPKMSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
 			}
 
 		default:
