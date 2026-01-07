@@ -100,14 +100,6 @@ var (
 		EnvVar: "BUILDKITE_SOCKETS_PATH",
 	}
 
-	KubernetesExecFlag = cli.BoolFlag{
-		Name: "kubernetes-exec",
-		Usage: "This is intended to be used only by the Buildkite k8s stack " +
-			"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
-			"logs and exit statuses between containers in a pod",
-		EnvVar: "BUILDKITE_KUBERNETES_EXEC",
-	}
-
 	KubernetesContainerIDFlag = cli.IntFlag{
 		Name: "kubernetes-container-id",
 		Usage: "This is intended to be used only by the Buildkite k8s stack " +
