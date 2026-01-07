@@ -40,6 +40,8 @@ type ToolSignConfig struct {
 
 	// AWS KMS key used for signing pipelines
 	AWSKMSKeyID string `cli:"signing-aws-kms-key"`
+	// GCP KMS key used for signing pipelines
+	GCPKMSKeyID string `cli:"signing-gcp-kms-key"`
 
 	// Enable debug logging for pipeline signing, this depends on debug logging also being enabled
 	DebugSigning bool `cli:"debug-signing"`
@@ -133,6 +135,12 @@ Signing a pipeline from a file:
 			Name:   "signing-aws-kms-key",
 			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
 			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
+		},
+		cli.StringFlag{
+			Name: "signing-gcp-kms-key",
+			Usage: "The GCP KMS key identifier which is used to sign pipelines. " +
+				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*",
+			EnvVar: "BUILDKITE_AGENT_GCP_KMS_KEY",
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",

@@ -96,6 +96,7 @@ type PipelineUploadConfig struct {
 	JWKSFile         string `cli:"jwks-file"`
 	JWKSKeyID        string `cli:"jwks-key-id"`
 	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
 }
 
@@ -168,6 +169,12 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "signing-aws-kms-key",
 			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
 			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
+		},
+		cli.StringFlag{
+			Name: "signing-gcp-kms-key",
+			Usage: "The GCP KMS key identifier which is used to sign pipelines. " +
+				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*",
+			EnvVar: "BUILDKITE_AGENT_GCP_KMS_KEY",
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",

@@ -93,6 +93,7 @@ type AgentStartConfig struct {
 
 	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
 	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
@@ -723,6 +724,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The KMS KMS key ID, or key alias used when signing and verifying the pipeline.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY",
 		},
+		cli.StringFlag{
+			Name:   "signing-gcp-kms-key",
+			Usage:  "The GCP KMS key resource name used when signing and verifying the pipeline. Format: projects/*/locations/*/keyRings/*/cryptoKeys/*",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
@@ -1066,6 +1072,7 @@ var AgentStartCommand = cli.Command{
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
 			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
+			SigningGCPKMSKey: cfg.SigningGCPKMSKey,
 			DebugSigning:     cfg.DebugSigning,
 
 			VerificationJWKS:             verificationJWKS,
