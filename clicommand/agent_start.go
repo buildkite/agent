@@ -747,10 +747,18 @@ var AgentStartCommand = cli.Command{
 		DebugHTTPFlag,
 		TraceHTTPFlag,
 
+		// Kubernetes
+		cli.BoolFlag{
+			Name: "kubernetes-exec",
+			Usage: "This is intended to be used only by the Buildkite k8s stack " +
+				"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
+				"logs and exit statuses between containers in a pod",
+			EnvVar: "BUILDKITE_KUBERNETES_EXEC",
+		},
+
 		// Other shared flags
 		RedactedVars,
 		StrictSingleHooksFlag,
-		KubernetesExecFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
 
