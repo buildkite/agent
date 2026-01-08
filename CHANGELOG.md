@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.115.3](https://github.com/buildkite/agent/tree/v3.115.3) (2026-01-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.115.2...v3.115.3)
+
+### Changed
+- PS-1525: keep BUILDKITE_KUBERNETES_EXEC true for k8s bootstrap [#3658](https://github.com/buildkite/agent/pull/3658) (@zhming0)
+
+### Internal
+- Dependencies updates: [#3649](https://github.com/buildkite/agent/pull/3649), [#3651](https://github.com/buildkite/agent/pull/3651), [#3650](https://github.com/buildkite/agent/pull/3650), [#3648](https://github.com/buildkite/agent/pull/3648) (@dependabot[bot])
+
+
 ## [v3.115.2](https://github.com/buildkite/agent/tree/v3.115.2) (2025-12-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.115.1...v3.115.2)
 
