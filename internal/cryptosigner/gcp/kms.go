@@ -39,10 +39,8 @@ type KMS struct {
 }
 
 // NewKMS creates a new crypto signer which uses GCP KMS to sign data.
-// The keyResourceName should be in the format:
+// The keyResourceName must be in the format:
 // projects/{project}/locations/{location}/keyRings/{keyring}/cryptoKeys/{key}/cryptoKeyVersions/{version}
-// or
-// projects/{project}/locations/{location}/keyRings/{keyring}/cryptoKeys/{key}
 func NewKMS(ctx context.Context, cfg *gcplib.Config, keyResourceName string) (*KMS, error) {
 	if keyResourceName == "" {
 		return nil, ErrInvalidKeyResourceName

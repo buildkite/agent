@@ -175,7 +175,7 @@ var PipelineUploadCommand = cli.Command{
 		cli.StringFlag{
 			Name: "signing-gcp-kms-key",
 			Usage: "The GCP KMS key identifier which is used to sign pipelines. " +
-				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*",
+				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
 			EnvVar: "BUILDKITE_AGENT_GCP_KMS_KEY",
 		},
 		cli.BoolFlag{

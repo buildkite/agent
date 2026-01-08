@@ -728,7 +728,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "signing-gcp-kms-key",
-			Usage:  "The GCP KMS key resource name used when signing and verifying the pipeline. Format: projects/*/locations/*/keyRings/*/cryptoKeys/*",
+			Usage:  "The GCP KMS key resource name used when signing and verifying the pipeline. Format: projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY",
 		},
 		cli.BoolFlag{
