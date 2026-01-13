@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.115.4](https://github.com/buildkite/agent/tree/v3.115.4) (2026-01-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.115.3...v3.115.4)
+
+### Changed
+
+- Fallback to `/usr/bin/env bash`, when `/bin/bash` does not exist [#3661](https://github.com/buildkite/agent/pull/3661) (@sundbry), [#3667](https://github.com/buildkite/agent/pull/3667) (@zhming0)
+
+### Internal
+- Bump various container base image version. [#3669](https://github.com/buildkite/agent/pull/3669), [#3668](https://github.com/buildkite/agent/pull/3668),  [#3667](https://github.com/buildkite/agent/pull/3667) (@dependabot[bot])
+
 ## [v3.115.3](https://github.com/buildkite/agent/tree/v3.115.3) (2026-01-08)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.115.2...v3.115.3)
 
