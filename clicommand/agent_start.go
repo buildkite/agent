@@ -289,6 +289,13 @@ func DefaultShell() string {
 	case "netbsd":
 		return "/usr/pkg/bin/bash -e -c"
 	default:
+		// On most Unix-like systems, bash is at /bin/bash and we prefer to use it
+		// directly to avoid PATH manipulation concerns with /usr/bin/env.
+		// However, some systems like NixOS or GNU Guix don't have /bin/bash.
+		// In those cases, fall back to /usr/bin/env bash which will find bash in PATH.
+		if _, err := os.Stat("/bin/bash"); err == nil {
+			return "/bin/bash -e -c"
+		}
 		return "/usr/bin/env bash -e -c"
 	}
 }
