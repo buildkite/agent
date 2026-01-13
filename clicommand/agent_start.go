@@ -289,7 +289,7 @@ func DefaultShell() string {
 	case "netbsd":
 		return "/usr/pkg/bin/bash -e -c"
 	default:
-		return "/bin/bash -e -c"
+		return "/usr/bin/env bash -e -c"
 	}
 }
 
