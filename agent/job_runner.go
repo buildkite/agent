@@ -577,7 +577,12 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
 	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
-	setEnv("BUILDKITE_SKIP_CHECKOUT", fmt.Sprint(r.conf.AgentConfiguration.SkipCheckout))
+	// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
+	// or by pipeline/step env
+	// This is here now to make it ready for if/when we add skip_checkout to the core app
+	if r.conf.AgentConfiguration.SkipCheckout {
+		setEnv("BUILDKITE_SKIP_CHECKOUT", "true")
+	}
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
 	// Allow BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH to be enabled either by config
