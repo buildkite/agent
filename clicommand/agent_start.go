@@ -150,6 +150,7 @@ type AgentStartConfig struct {
 	GitMirrorsLockTimeout int    `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
+	SkipCheckout          bool   `cli:"skip-checkout"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval           bool     `cli:"no-command-eval"`
@@ -625,6 +626,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
 		},
 		cli.BoolFlag{
+			Name:   "skip-checkout",
+			Usage:  "Skip the git checkout phase entirely",
+			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
+		},
+		cli.BoolFlag{
 			Name:   "no-feature-reporting",
 			Usage:  "Disables sending a list of enabled features back to the Buildkite mothership. We use this information to measure feature usage, but if you're not comfortable sharing that information then that's totally okay :)",
 			EnvVar: "BUILDKITE_AGENT_NO_FEATURE_REPORTING",
@@ -1040,6 +1046,7 @@ var AgentStartCommand = cli.Command{
 			GitCleanFlags:                cfg.GitCleanFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitSubmodules:                !cfg.NoGitSubmodules,
+			SkipCheckout:                 cfg.SkipCheckout,
 			SSHKeyscan:                   !cfg.NoSSHKeyscan,
 			CommandEval:                  !cfg.NoCommandEval,
 			PluginsEnabled:               !cfg.NoPlugins,
