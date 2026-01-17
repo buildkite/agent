@@ -75,6 +75,9 @@ type ExecutorConfig struct {
 	// Should the executor remove an existing checkout before running the job
 	CleanCheckout bool `env:"BUILDKITE_CLEAN_CHECKOUT"`
 
+	// Skip the checkout phase entirely
+	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
+
 	// Flags to pass to "git checkout" command
 	GitCheckoutFlags string `env:"BUILDKITE_GIT_CHECKOUT_FLAGS"`
 

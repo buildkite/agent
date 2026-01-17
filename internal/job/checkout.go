@@ -217,6 +217,11 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 
 // checkout runs checkout hook or default checkout logic
 func (e *Executor) checkout(ctx context.Context) error {
+	if e.SkipCheckout {
+		e.shell.Commentf("Skipping checkout, BUILDKITE_SKIP_CHECKOUT is set")
+		return nil
+	}
+
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
 	case e.hasPluginHook("checkout"):
