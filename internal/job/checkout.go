@@ -843,10 +843,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	})
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 
-	if e.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
-	}
-
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
@@ -995,11 +991,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		} else {
 			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
-				// submodules might need their fingerprints verified too
-				if e.SSHKeyscan {
-					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
-				}
-
 				if !mirrorSubmodules {
 					continue
 				}

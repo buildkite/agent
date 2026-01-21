@@ -330,11 +330,6 @@ func TestCheckingOutWithSSHKeyscan_WithGitMirrors(t *testing.T) {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		AndWriteToStdout("github.com ssh-rsa xxx=").
-		AndExitWith(0)
-
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
@@ -362,10 +357,6 @@ func TestCheckingOutWithoutSSHKeyscan_WithGitMirrors(t *testing.T) {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		NotCalled()
-
 	env := []string{
 		"BUILDKITE_REPO=https://github.com/buildkite/bash-example.git",
 		"BUILDKITE_SSH_KEYSCAN=false",
@@ -386,10 +377,6 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo_WithGitMirrors(t *testing.T
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
-
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		NotCalled()
 
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
