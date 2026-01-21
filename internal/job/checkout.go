@@ -863,10 +863,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	})
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 
-	if e.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
-	}
-
 	sshKeyPath, cleanupSSHKey, err := e.prepareGitSSHKey()
 	if err != nil {
 		return fmt.Errorf("preparing git ssh key: %w", err)
@@ -1040,11 +1036,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		} else {
 			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
-				// submodules might need their fingerprints verified too
-				if e.SSHKeyscan {
-					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
-				}
-
 				if !mirrorSubmodules {
 					continue
 				}
