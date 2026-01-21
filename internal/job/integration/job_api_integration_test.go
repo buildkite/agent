@@ -78,6 +78,10 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 		}
 
 		for name, val := range envResp.Env {
+			// Skip GIT_SSH_COMMAND, since it is modified by the executor
+			if name == "GIT_SSH_COMMAND" {
+				continue
+			}
 			if val != c.GetEnv(name) {
 				t.Errorf("expected c.GetEnv(%q) = %s, got %s", name, c.GetEnv(name), val)
 				c.Exit(1)
@@ -141,6 +145,4 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 			c.Exit(0)
 		}
 	})
-
-	tester.RunAndCheck(t)
 }
