@@ -142,5 +142,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t)
+	// Disable SSH keyscan since this test isn't about SSH and it modifies
+	// GIT_SSH_COMMAND, causing an env mismatch between the Job API and the process.
+	tester.RunAndCheck(t, "BUILDKITE_SSH_KEYSCAN=false")
 }
