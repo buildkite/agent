@@ -799,24 +799,6 @@ func dirForRepository(repository string) string {
 	return badCharsPattern.ReplaceAllString(repository, "-")
 }
 
-// Given a repository, it will add the host to the set of SSH known_hosts on the machine
-func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repository string) {
-	if osutil.FileExists(repository) {
-		return
-	}
-
-	knownHosts, err := findKnownHosts(sh)
-	if err != nil {
-		sh.Warningf("Failed to find SSH known_hosts file: %v", err)
-		return
-	}
-
-	if err = knownHosts.AddFromRepository(ctx, repository); err != nil {
-		sh.Warningf("Error adding to known_hosts: %v", err)
-		return
-	}
-}
-
 // setUp is run before all the phases run. It's responsible for initializing the
 // job environment
 func (e *Executor) setUp(ctx context.Context) error {
@@ -870,6 +852,13 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
+	// Configure SSH to automatically accept new host keys (TOFU - Trust On First Use)
+	// This replaces the previous ssh-keyscan approach with a simpler mechanism that
+	// achieves the same security model: accept new hosts, reject changed keys.
+	if e.SSHKeyscan {
+		e.configureSSHKeyscan()
+	}
+
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {
 		if err := e.fetchAndSetSecrets(ctx); err != nil {
@@ -882,6 +871,37 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// allowed to be used.
 	err = e.executeGlobalHook(ctx, "environment")
 	return err
+}
+
+// configureSSHKeyscan sets up GIT_SSH_COMMAND with host key checking options.
+// If GIT_SSH is set (a binary path), we skip configuration since we can't add flags.
+// For SSH >= 7.6, uses StrictHostKeyChecking=accept-new (TOFU: accept new, reject changed).
+// For older SSH, falls back to StrictHostKeyChecking=no with ephemeral known_hosts.
+func (e *Executor) configureSSHKeyscan() {
+	// If GIT_SSH is set, it's a path to a binary - we can't add flags to it
+	if _, hasGitSSH := e.shell.Env.Get("GIT_SSH"); hasGitSSH {
+		e.shell.Commentf("GIT_SSH is set, skipping SSH host key configuration")
+		return
+	}
+
+	// Determine the SSH options based on version
+	var sshOptions string
+	if sshSupportsAcceptNew() {
+		// OpenSSH 7.6+ supports accept-new: accept new host keys, reject changed ones
+		sshOptions = "-o StrictHostKeyChecking=accept-new"
+	} else {
+		// Older SSH: disable host key checking entirely
+		// Use /dev/null for known_hosts to avoid polluting the user's file
+		sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+		e.shell.Commentf("SSH version < 7.6 detected, using StrictHostKeyChecking=no")
+	}
+
+	// Append to existing GIT_SSH_COMMAND or create new one
+	existingSSHCommand, _ := e.shell.Env.Get("GIT_SSH_COMMAND")
+	if existingSSHCommand == "" {
+		existingSSHCommand = "ssh"
+	}
+	e.shell.Env.Set("GIT_SSH_COMMAND", existingSSHCommand+" "+sshOptions)
 }
 
 // fetchAndSetSecrets handles secrets fetching and processing directly

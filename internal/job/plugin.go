@@ -341,8 +341,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// existing repos, which is probably fast, but it's _surprisingly hard_ to write a really robust
 	// chain of Git commands that'll definitely get you a clean version of a given upstream branch
 	// ref (the branch might have been force-pushed, the checkout might have become dirty and
-	// unmergeable, etc.).  Plus, then we're duplicating a bunch of fetch/checkout machinery and
-	// perhaps missing things (like `addRepositoryHostToSSHKnownHosts` which is called down below).
+	// unmergeable, etc.).  Plus, then we're duplicating a bunch of fetch/checkout machinery.
 	// Alternatively, we can DRY it up and simply `rm -rf` the plugin directory if it exists, but
 	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
 	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
@@ -386,10 +385,6 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	repo, err := p.Repository()
 	if err != nil {
 		return nil, err
-	}
-
-	if e.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, repo)
 	}
 
 	// Make the directory. Use a random name that _doesn't_ look like a plugin
