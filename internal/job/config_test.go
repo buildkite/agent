@@ -18,6 +18,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		AgentName:                    "myAgent",
 		CleanCheckout:                false,
 		PluginsAlwaysCloneFresh:      false,
+		GitSubmodules:                false,
 	}
 
 	environ := env.FromSlice([]string{
@@ -27,6 +28,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_REPO=https://my.mirror/repo.git",
 		"BUILDKITE_CLEAN_CHECKOUT=true",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true",
+		"BUILDKITE_GIT_SUBMODULES=true",
 	})
 
 	changes := config.ReadFromEnvironment(environ)
@@ -36,6 +38,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_REPO":                       "https://my.mirror/repo.git",
 		"BUILDKITE_CLEAN_CHECKOUT":             "true",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH": "true",
+		"BUILDKITE_GIT_SUBMODULES":             "true",
 	}
 
 	if diff := cmp.Diff(changes, wantChanges); diff != "" {
@@ -57,6 +60,10 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	if got, want := config.PluginsAlwaysCloneFresh, true; got != want {
 		t.Errorf("config.PluginsAlwaysCloneFresh = %t, want %t", got, want)
 	}
+
+	if got, want := config.GitSubmodules, true; got != want {
+		t.Errorf("config.GitSubmodules = %t, want %t", got, want)
+	}
 }
 
 func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
@@ -64,10 +71,12 @@ func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 	config := &ExecutorConfig{
 		CleanCheckout:           true,
 		PluginsAlwaysCloneFresh: false,
+		GitSubmodules:           true,
 	}
 	environ := env.FromSlice([]string{
 		"BUILDKITE_CLEAN_CHECKOUT=blarg",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=grarg",
+		"BUILDKITE_GIT_SUBMODULES=notabool",
 	})
 	changes := config.ReadFromEnvironment(environ)
 	if len(changes) != 0 {
@@ -78,5 +87,8 @@ func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 	}
 	if got, want := config.PluginsAlwaysCloneFresh, false; got != want {
 		t.Errorf("config.PluginsAlwaysCloneFresh = %t, want %t", got, want)
+	}
+	if got, want := config.GitSubmodules, true; got != want {
+		t.Errorf("config.GitSubmodules = %t, want %t", got, want)
 	}
 }
