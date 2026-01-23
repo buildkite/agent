@@ -751,7 +751,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			e.shell.Commentf("Git submodules detected")
 			gitSubmodules = true
 		} else {
-			e.shell.OptionalWarningf("submodules-disabled", "This repository has submodules, but submodules are disabled at an agent level")
+			e.shell.OptionalWarningf("submodules-disabled", "This repository has submodules, but submodules are disabled")
 		}
 	}
 
