@@ -1,129 +1,115 @@
 package job
 
-import (
-	"context"
-	"path/filepath"
-	"testing"
-	"time"
+import "testing"
 
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/bintest/v3"
-	"github.com/stretchr/testify/assert"
-)
-
-func init() {
-	sshKeyscanRetryInterval = time.Millisecond
-}
-
-func TestFindingSSHTools(t *testing.T) {
+func TestExtractSSHVersion(t *testing.T) {
 	t.Parallel()
 
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatalf("shell.New() error = %v", err)
+	tests := []struct {
+		name      string
+		output    string
+		wantMajor int
+		wantMinor int
+		wantOK    bool
+	}{
+		{
+			name:      "OpenSSH 8.9",
+			output:    "OpenSSH_8.9p1 Ubuntu-3ubuntu0.1, OpenSSL 3.0.2 15 Mar 2022",
+			wantMajor: 8,
+			wantMinor: 9,
+			wantOK:    true,
+		},
+		{
+			name:      "OpenSSH 7.6",
+			output:    "OpenSSH_7.6p1 Ubuntu-4ubuntu0.7, OpenSSL 1.0.2n  7 Dec 2017",
+			wantMajor: 7,
+			wantMinor: 6,
+			wantOK:    true,
+		},
+		{
+			name:      "OpenSSH 7.5 (before accept-new)",
+			output:    "OpenSSH_7.5p1, OpenSSL 1.0.2k  26 Jan 2017",
+			wantMajor: 7,
+			wantMinor: 5,
+			wantOK:    true,
+		},
+		{
+			name:      "OpenSSH 9.0",
+			output:    "OpenSSH_9.0p1, LibreSSL 3.3.6",
+			wantMajor: 9,
+			wantMinor: 0,
+			wantOK:    true,
+		},
+		{
+			name:      "macOS format with space",
+			output:    "OpenSSH 9.6p1, LibreSSL 3.3.6",
+			wantMajor: 9,
+			wantMinor: 6,
+			wantOK:    true,
+		},
+		{
+			name:      "invalid output",
+			output:    "not ssh output",
+			wantMajor: 0,
+			wantMinor: 0,
+			wantOK:    false,
+		},
+		{
+			name:      "empty output",
+			output:    "",
+			wantMajor: 0,
+			wantMinor: 0,
+			wantOK:    false,
+		},
 	}
 
-	sh.Logger = shell.TestingLogger{T: t}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	if _, err := findPathToSSHTools(context.Background(), sh); err != nil {
-		t.Errorf("findPathToSSHTools(sh) error = %v", err)
+			major, minor, ok := extractSSHVersion(tc.output)
+			if ok != tc.wantOK {
+				t.Errorf("extractSSHVersion(%q) ok = %v, want %v", tc.output, ok, tc.wantOK)
+			}
+			if major != tc.wantMajor {
+				t.Errorf("extractSSHVersion(%q) major = %d, want %d", tc.output, major, tc.wantMajor)
+			}
+			if minor != tc.wantMinor {
+				t.Errorf("extractSSHVersion(%q) minor = %d, want %d", tc.output, minor, tc.wantMinor)
+			}
+		})
 	}
 }
 
-func TestSSHKeyscanReturnsOutput(t *testing.T) {
+func TestSSHVersionSupportsAcceptNew(t *testing.T) {
 	t.Parallel()
 
-	sh := shell.NewTestShell(t)
-
-	keyScan, err := bintest.NewMock("ssh-keyscan")
-	if err != nil {
-		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{"7.5 - no", "OpenSSH_7.5p1", false},
+		{"7.6 - yes", "OpenSSH_7.6p1", true},
+		{"7.7 - yes", "OpenSSH_7.7p1", true},
+		{"8.0 - yes", "OpenSSH_8.0p1", true},
+		{"9.0 - yes", "OpenSSH_9.0p1", true},
+		{"6.9 - no", "OpenSSH_6.9p1", false},
 	}
-	defer keyScan.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
-	sh.Env.Set("PATH", filepath.Dir(keyScan.Path))
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	keyScan.
-		Expect("github.com").
-		AndWriteToStdout("github.com ssh-rsa xxx=").
-		AndExitWith(0)
+			major, minor, ok := extractSSHVersion(tc.output)
+			if !ok {
+				t.Fatalf("failed to parse version from %q", tc.output)
+			}
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
-
-	assert.Equal(t, keyScanOutput, "github.com ssh-rsa xxx=")
-	assert.NoError(t, err)
-}
-
-func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
-	t.Parallel()
-
-	sh := shell.NewTestShell(t)
-
-	keyScan, err := bintest.NewMock("ssh-keyscan")
-	if err != nil {
-		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
+			got := major > 7 || (major == 7 && minor >= 6)
+			if got != tc.want {
+				t.Errorf("version %d.%d supportsAcceptNew = %v, want %v", major, minor, got, tc.want)
+			}
+		})
 	}
-	defer keyScan.CheckAndClose(t) //nolint:errcheck // bintest logs to t
-
-	sh.Env.Set("PATH", filepath.Dir(keyScan.Path))
-
-	keyScan.
-		Expect("-p", "123", "github.com").
-		AndWriteToStdout("github.com ssh-rsa xxx=").
-		AndExitWith(0)
-
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com:123")
-
-	assert.Equal(t, keyScanOutput, "github.com ssh-rsa xxx=")
-	assert.NoError(t, err)
-}
-
-func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
-	t.Parallel()
-
-	sh := shell.NewTestShell(t)
-
-	keyScan, err := bintest.NewMock("ssh-keyscan")
-	if err != nil {
-		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
-	}
-	defer keyScan.CheckAndClose(t) //nolint:errcheck // bintest logs to t
-
-	sh.Env.Set("PATH", filepath.Dir(keyScan.Path))
-
-	keyScan.
-		Expect("github.com").
-		AndWriteToStderr("it failed").
-		Exactly(3).
-		AndExitWith(1)
-
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
-
-	assert.Equal(t, keyScanOutput, "")
-	assert.EqualError(t, err, "`ssh-keyscan \"github.com\"` failed")
-}
-
-func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
-	t.Parallel()
-
-	sh := shell.NewTestShell(t)
-
-	keyScan, err := bintest.NewMock("ssh-keyscan")
-	if err != nil {
-		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
-	}
-	defer keyScan.CheckAndClose(t)
-	//nolint:errcheck // bintest logs to t
-	sh.Env.Set("PATH", filepath.Dir(keyScan.Path))
-
-	keyScan.
-		Expect("github.com").
-		AndWriteToStdout("").
-		Exactly(3).
-		AndExitWith(0)
-
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
-
-	assert.Equal(t, keyScanOutput, "")
-	assert.EqualError(t, err, "`ssh-keyscan \"github.com\"` returned nothing")
 }

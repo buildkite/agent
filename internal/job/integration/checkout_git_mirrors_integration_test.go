@@ -358,16 +358,21 @@ func TestCheckingOutWithSSHKeyscan_WithGitMirrors(t *testing.T) {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		AndWriteToStdout("github.com ssh-rsa xxx=").
-		AndExitWith(0)
-
+	var gitSSHCommand string
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
 	git.Expect("clone", "--mirror", "-v", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
-		AndExitWith(0)
+		AndCallFunc(func(c *bintest.Call) {
+			// Capture GIT_SSH_COMMAND for verification
+			for _, env := range c.Env {
+				if strings.HasPrefix(env, "GIT_SSH_COMMAND=") {
+					gitSSHCommand = env
+					break
+				}
+			}
+			c.Exit(0)
+		})
 
 	env := []string{
 		"BUILDKITE_REPO=git@github.com:buildkite/agent.git",
@@ -375,6 +380,11 @@ func TestCheckingOutWithSSHKeyscan_WithGitMirrors(t *testing.T) {
 	}
 
 	tester.RunAndCheck(t, env...)
+
+	// Verify GIT_SSH_COMMAND was set with accept-new
+	if !strings.Contains(gitSSHCommand, "StrictHostKeyChecking=accept-new") {
+		t.Errorf("Expected GIT_SSH_COMMAND to contain 'StrictHostKeyChecking=accept-new', got: %q", gitSSHCommand)
+	}
 }
 
 func TestCheckingOutWithoutSSHKeyscan_WithGitMirrors(t *testing.T) {
@@ -390,9 +400,21 @@ func TestCheckingOutWithoutSSHKeyscan_WithGitMirrors(t *testing.T) {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		NotCalled()
+	var gitSSHCommand string
+	git := tester.MustMock(t, "git")
+	git.IgnoreUnexpectedInvocations()
+
+	git.Expect("clone", "--mirror", "-v", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
+		AndCallFunc(func(c *bintest.Call) {
+			// Capture GIT_SSH_COMMAND for verification
+			for _, env := range c.Env {
+				if strings.HasPrefix(env, "GIT_SSH_COMMAND=") {
+					gitSSHCommand = env
+					break
+				}
+			}
+			c.Exit(0)
+		})
 
 	env := []string{
 		"BUILDKITE_REPO=https://github.com/buildkite/bash-example.git",
@@ -400,9 +422,14 @@ func TestCheckingOutWithoutSSHKeyscan_WithGitMirrors(t *testing.T) {
 	}
 
 	tester.RunAndCheck(t, env...)
+
+	// Verify GIT_SSH_COMMAND does NOT contain accept-new when SSHKeyscan is disabled
+	if strings.Contains(gitSSHCommand, "StrictHostKeyChecking=accept-new") {
+		t.Errorf("Expected GIT_SSH_COMMAND to NOT contain 'StrictHostKeyChecking=accept-new', got: %q", gitSSHCommand)
+	}
 }
 
-func TestCheckingOutWithSSHKeyscanAndUnscannableRepo_WithGitMirrors(t *testing.T) {
+func TestCheckingOutWithSSHKeyscanAndHTTPSRepo_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewExecutorTester(mainCtx)
@@ -415,15 +442,22 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo_WithGitMirrors(t *testing.T
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		NotCalled()
-
+	var gitSSHCommand string
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
+	// Even with HTTPS repos, GIT_SSH_COMMAND is set (it just won't be used)
 	git.Expect("clone", "--mirror", "-v", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
-		AndExitWith(0)
+		AndCallFunc(func(c *bintest.Call) {
+			// Capture GIT_SSH_COMMAND for verification
+			for _, env := range c.Env {
+				if strings.HasPrefix(env, "GIT_SSH_COMMAND=") {
+					gitSSHCommand = env
+					break
+				}
+			}
+			c.Exit(0)
+		})
 
 	env := []string{
 		"BUILDKITE_REPO=https://github.com/buildkite/bash-example.git",
@@ -431,6 +465,11 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo_WithGitMirrors(t *testing.T
 	}
 
 	tester.RunAndCheck(t, env...)
+
+	// Verify GIT_SSH_COMMAND was set with accept-new even for HTTPS repos
+	if !strings.Contains(gitSSHCommand, "StrictHostKeyChecking=accept-new") {
+		t.Errorf("Expected GIT_SSH_COMMAND to contain 'StrictHostKeyChecking=accept-new', got: %q", gitSSHCommand)
+	}
 }
 
 func TestCleaningAnExistingCheckout_WithGitMirrors(t *testing.T) {

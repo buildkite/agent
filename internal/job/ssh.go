@@ -1,89 +1,50 @@
 package job
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"time"
-
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/roko"
+	"os/exec"
+	"regexp"
+	"strconv"
 )
 
-var sshKeyscanRetryInterval = 2 * time.Second
-
-func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, error) {
-	toolsDir, err := findPathToSSHTools(ctx, sh)
-	if err != nil {
-		return "", err
+// sshSupportsAcceptNew checks if the installed SSH version supports
+// StrictHostKeyChecking=accept-new (requires OpenSSH 7.6+, released Oct 2017).
+func sshSupportsAcceptNew() bool {
+	major, minor, ok := parseSSHVersion()
+	if !ok {
+		return false
 	}
-
-	sshKeyScanPath := filepath.Join(toolsDir, "ssh-keyscan")
-	hostParts := strings.Split(host, ":")
-
-	r := roko.NewRetrier(
-		roko.WithMaxAttempts(3),
-		roko.WithStrategy(roko.Constant(sshKeyscanRetryInterval)),
-	)
-	return roko.DoFunc(ctx, r, func(r *roko.Retrier) (string, error) {
-		sshKeyScanCommand := fmt.Sprintf("ssh-keyscan %q", host)
-		args := []string{host}
-
-		// `ssh-keyscan` needs `-p` when scanning a host with a port
-		if len(hostParts) == 2 {
-			sshKeyScanCommand = fmt.Sprintf("ssh-keyscan -p %q %q", hostParts[1], hostParts[0])
-			args = []string{"-p", hostParts[1], hostParts[0]}
-		}
-
-		out, err := sh.Command(sshKeyScanPath, args...).RunAndCaptureStdout(ctx)
-		if err != nil {
-			keyScanError := fmt.Errorf("`%s` failed", sshKeyScanCommand)
-			sh.Warningf("%s (%s)", keyScanError, r)
-			return "", keyScanError
-		}
-		if strings.TrimSpace(out) == "" {
-			// Older versions of ssh-keyscan would exit 0 but not
-			// return anything, and we've observed newer versions
-			// of ssh-keyscan - just sometimes return no data
-			// (maybe networking related?). In any case, no
-			// response, means an error.
-			keyScanError := fmt.Errorf("`%s` returned nothing", sshKeyScanCommand)
-			sh.Warningf("%s (%s)", keyScanError, r)
-			return "", keyScanError
-		}
-
-		return out, nil
-	})
+	return major > 7 || (major == 7 && minor >= 6)
 }
 
-// On Windows, there are many horrible different versions of the ssh tools. Our
-// preference is the one bundled with git for windows which is generally MinGW.
-// Often this isn't in the path, so we go looking for it specifically.
-//
-// Some more details on the relative paths at
-// https://stackoverflow.com/a/11771907
-func findPathToSSHTools(ctx context.Context, sh *shell.Shell) (string, error) {
-	sshKeyscan, err := sh.AbsolutePath("ssh-keyscan")
-	if err == nil {
-		return filepath.Dir(sshKeyscan), nil
+// parseSSHVersion runs "ssh -V" and parses the version number.
+// Returns (major, minor, true) on success, (0, 0, false) on failure.
+func parseSSHVersion() (major, minor int, ok bool) {
+	cmd := exec.Command("ssh", "-V")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, 0, false
+	}
+	return extractSSHVersion(string(output))
+}
+
+// extractSSHVersion parses an SSH version string like "OpenSSH_8.9p1" or "OpenSSH_7.6p1".
+// Returns (major, minor, true) on success.
+func extractSSHVersion(output string) (major, minor int, ok bool) {
+	re := regexp.MustCompile(`OpenSSH[_\s](\d+)\.(\d+)`)
+	matches := re.FindStringSubmatch(output)
+	if len(matches) < 3 {
+		return 0, 0, false
 	}
 
-	if runtime.GOOS == "windows" {
-		execPath, _ := sh.Command("git", "--exec-path").RunAndCaptureStdout(ctx)
-		if len(execPath) > 0 {
-			for _, path := range []string{
-				filepath.Join(execPath, "..", "..", "..", "usr", "bin", "ssh-keygen.exe"),
-				filepath.Join(execPath, "..", "..", "bin", "ssh-keygen.exe"),
-			} {
-				if _, err := os.Stat(path); err == nil {
-					return filepath.Dir(path), nil
-				}
-			}
-		}
+	major, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0, 0, false
 	}
 
-	return "", fmt.Errorf("Unable to find ssh-keyscan: %w", err)
+	minor, err = strconv.Atoi(matches[2])
+	if err != nil {
+		return 0, 0, false
+	}
+
+	return major, minor, true
 }

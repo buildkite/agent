@@ -594,10 +594,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	if e.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
-	}
-
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
@@ -785,10 +781,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
 				submoduleArgs := slices.Clone(args)
-				// submodules might need their fingerprints verified too
-				if e.SSHKeyscan {
-					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
-				}
 
 				if !mirrorSubmodules {
 					continue
