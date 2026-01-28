@@ -113,6 +113,11 @@ type AgentWorker struct {
 
 	// disable the delay between pings, to speed up certain testing scenarios
 	noWaitBetweenPingsForTesting bool
+
+	// stopErr stores an error that caused the agent to stop, so it can be
+	// returned from the main loop even if the stop was triggered asynchronously
+	// (e.g., from the heartbeat goroutine).
+	stopErr atomic.Pointer[error]
 }
 
 type agentWorkerState string
@@ -362,7 +367,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		case <-pingTicker.C:
 			// continue below
 		case <-a.stop:
-			return nil
+			return a.getStopErr()
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -377,7 +382,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		case <-time.After(jitter):
 			// continue below
 		case <-a.stop:
-			return nil
+			return a.getStopErr()
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -391,9 +396,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 			pingErrors.Inc()
 			if errors.Is(err, &errUnrecoverable{}) {
 				a.logger.Error("%v", err)
-			} else {
-				a.logger.Warn("%v", err)
+				pingDurations.Observe(time.Since(startPing).Seconds())
+				return err
 			}
+			a.logger.Warn("%v", err)
 		}
 		pingDurations.Observe(time.Since(startPing).Seconds())
 
@@ -526,9 +532,28 @@ func (a *AgentWorker) StopGracefully() {
 	})
 }
 
+// getStopErr returns the error that caused the agent to stop, or nil if
+// stopped gracefully.
+func (a *AgentWorker) getStopErr() error {
+	if errPtr := a.stopErr.Load(); errPtr != nil {
+		return *errPtr
+	}
+	return nil
+}
+
 // StopUngracefully stops the agent from accepting new work and cancels any
 // existing job. It blocks until the job is cancelled, if there is one.
 func (a *AgentWorker) StopUngracefully() {
+	a.stopUngracefullyWithError(nil)
+}
+
+// stopUngracefullyWithError stops the agent ungracefully and stores an error
+// that caused the stop. This error will be returned from the main loop.
+func (a *AgentWorker) stopUngracefullyWithError(err error) {
+	if err != nil {
+		a.stopErr.CompareAndSwap(nil, &err)
+	}
+
 	a.stopOnce.Do(func() {
 		// Use the closure of the stop channel as a signal to the main run
 		// loop in Start() to stop looping and terminate
@@ -568,9 +593,10 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 		b, resp, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
 			if resp != nil && !api.IsRetryableStatus(resp) {
-				a.StopUngracefully()
+				unrecoverableErr := &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
+				a.stopUngracefullyWithError(unrecoverableErr)
 				r.Break()
-				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
+				return nil, unrecoverableErr
 			}
 
 			a.logger.Warn("%s (%s)", err, r)
@@ -618,8 +644,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
 		// responses with non-retryable statuses
 		if resp != nil && !api.IsRetryableStatus(resp) {
-			a.StopUngracefully()
-			return nil, action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
+			unrecoverableErr := &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
+			a.stopUngracefullyWithError(unrecoverableErr)
+			return nil, action, unrecoverableErr
 		}
 
 		// Get the last ping time to the nearest microsecond

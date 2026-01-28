@@ -999,3 +999,126 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 		t.Errorf("agent.Pings = %d, want %d", got, want)
 	}
 }
+
+func TestAgentWorker_Ping_UnrecoverableError_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	var pingCount int
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/ping":
+			pingCount++
+			if pingCount == 1 {
+				rw.WriteHeader(http.StatusOK)
+				fmt.Fprintf(rw, `{}`)
+			} else {
+				rw.WriteHeader(http.StatusUnauthorized)
+				fmt.Fprintf(rw, `{"message": "invalid token"}`)
+			}
+		case "/heartbeat":
+			rw.WriteHeader(http.StatusOK)
+			fmt.Fprintf(rw, `{"sent_at": "2024-01-01T00:00:00Z", "received_at": "2024-01-01T00:00:00Z"}`)
+		default:
+			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
+			http.Error(rw, "Not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       "test-token",
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 1,
+			HeartbeatInterval: 60, // Long interval so heartbeat doesn't interfere
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{
+			SpawnIndex:         1,
+			AgentConfiguration: AgentConfiguration{},
+		},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	idleMonitor := newIdleMonitor(1)
+
+	err := worker.Start(ctx, idleMonitor)
+
+	// The error should be non-nil and be an errUnrecoverable
+	require.Error(t, err, "expected Start() to return an error after 401")
+	assert.True(t, errors.Is(err, &errUnrecoverable{}), "expected errUnrecoverable, got: %v", err)
+	assert.Contains(t, err.Error(), "401", "error should mention 401 status")
+}
+
+func TestAgentWorker_Heartbeat_UnrecoverableError_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/ping":
+			rw.WriteHeader(http.StatusOK)
+			fmt.Fprintf(rw, `{}`)
+		case "/heartbeat":
+			rw.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprintf(rw, `{"message": "invalid token"}`)
+		default:
+			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
+			http.Error(rw, "Not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       "test-token",
+			Endpoint:          server.URL,
+			PingInterval:      60, // Long interval so ping doesn't interfere much
+			JobStatusInterval: 1,
+			HeartbeatInterval: 1, // Short interval to trigger heartbeat quickly
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{
+			SpawnIndex:         1,
+			AgentConfiguration: AgentConfiguration{},
+		},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	idleMonitor := newIdleMonitor(1)
+
+	err := worker.Start(ctx, idleMonitor)
+
+	// The error should be non-nil and be an errUnrecoverable
+	require.Error(t, err, "expected Start() to return an error after heartbeat 401")
+	assert.True(t, errors.Is(err, &errUnrecoverable{}), "expected errUnrecoverable, got: %v", err)
+	assert.Contains(t, err.Error(), "401", "error should mention 401 status")
+}
