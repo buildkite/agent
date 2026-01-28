@@ -106,7 +106,7 @@ var PipelineUploadCommand = cli.Command{
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.BoolFlag{
 			Name:   "replace",
-			Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed.",
+			Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed (default: false)",
 			EnvVar: "BUILDKITE_PIPELINE_REPLACE",
 		},
 		cli.StringFlag{
@@ -117,7 +117,7 @@ var PipelineUploadCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "dry-run",
-			Usage:  "Rather than uploading the pipeline, it will be echoed to stdout",
+			Usage:  "Rather than uploading the pipeline, it will be echoed to stdout (default: false)",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN",
 		},
 		cli.StringFlag{
@@ -128,17 +128,17 @@ var PipelineUploadCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-interpolation",
-			Usage:  "Skip variable interpolation into the pipeline prior to upload",
+			Usage:  "Skip variable interpolation into the pipeline prior to upload (default: false)",
 			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
 		},
 		cli.BoolFlag{
 			Name:   "reject-secrets",
-			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
+			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets (default: false)",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
 		cli.BoolTFlag{
 			Name:   "apply-if-changed",
-			Usage:  "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the step is skipped. Minimum Buildkite Agent version: v3.99 (with --apply-if-changed flag), v3.103.0 (enabled by default)",
+			Usage:  "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the step is skipped. Minimum Buildkite Agent version: v3.99 (with --apply-if-changed flag), v3.103.0 (enabled by default) (default: true)",
 			EnvVar: "BUILDKITE_AGENT_APPLY_IF_CHANGED,BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED",
 		},
 		cli.StringFlag{
@@ -171,7 +171,7 @@ var PipelineUploadCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
-			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
 			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
 		},
 		RedactedVars,

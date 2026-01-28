@@ -57,7 +57,7 @@ var StepCancelCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "force",
-			Usage:  "Transition unfinished jobs to a canceled state instead of waiting for jobs to finish uploading artifacts",
+			Usage:  "Transition unfinished jobs to a canceled state instead of waiting for jobs to finish uploading artifacts (default: false)",
 			EnvVar: "BUILDKITE_STEP_CANCEL_FORCE",
 		},
 

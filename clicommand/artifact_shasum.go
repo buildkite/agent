@@ -68,7 +68,7 @@ var ArtifactShasumCommand = cli.Command{
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.BoolFlag{
 			Name:  "sha256",
-			Usage: "Request SHA-256 instead of SHA-1, errors if SHA-256 not available",
+			Usage: "Request SHA-256 instead of SHA-1, errors if SHA-256 not available (default: false)",
 		},
 		cli.StringFlag{
 			Name:  "step",
@@ -84,7 +84,7 @@ var ArtifactShasumCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "include-retried-jobs",
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from retried jobs in the search",
+			Usage:  "Include artifacts from retried jobs in the search (default: false)",
 		},
 	}),
 	Action: func(c *cli.Context) error {

@@ -178,7 +178,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "pull-request-using-merge-refspec",
-			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec",
+			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec (default: false)",
 			EnvVar: "BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC",
 		},
 		cli.StringFlag{
@@ -225,7 +225,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "clean-checkout",
-			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command",
+			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command (default: false)",
 			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
 		},
 		cli.BoolFlag{
@@ -283,7 +283,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror",
+			Usage:  "Skip updating the Git mirror (default: false)",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		},
 		cli.StringFlag{
@@ -319,42 +319,42 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolTFlag{
 			Name:   "command-eval",
-			Usage:  "Allow running of arbitrary commands",
+			Usage:  "Allow running of arbitrary commands (default: true)",
 			EnvVar: "BUILDKITE_COMMAND_EVAL",
 		},
 		cli.BoolTFlag{
 			Name:   "plugins-enabled",
-			Usage:  "Allow plugins to be run",
+			Usage:  "Allow plugins to be run (default: true)",
 			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
 		},
 		cli.BoolFlag{
 			Name:   "plugin-validation",
-			Usage:  "Validate plugin configuration",
+			Usage:  "Validate plugin configuration (default: false)",
 			EnvVar: "BUILDKITE_PLUGIN_VALIDATION",
 		},
 		cli.BoolFlag{
 			Name:   "plugins-always-clone-fresh",
-			Usage:  "Always make a new clone of plugin source, even if already present",
+			Usage:  "Always make a new clone of plugin source, even if already present (default: false)",
 			EnvVar: "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH",
 		},
 		cli.BoolTFlag{
 			Name:   "local-hooks-enabled",
-			Usage:  "Allow local hooks to be run",
+			Usage:  "Allow local hooks to be run (default: true)",
 			EnvVar: "BUILDKITE_LOCAL_HOOKS_ENABLED",
 		},
 		cli.BoolTFlag{
 			Name:   "ssh-keyscan",
-			Usage:  "Automatically run ssh-keyscan before checkout",
+			Usage:  "Automatically run ssh-keyscan before checkout (default: true)",
 			EnvVar: "BUILDKITE_SSH_KEYSCAN",
 		},
 		cli.BoolTFlag{
 			Name:   "git-submodules",
-			Usage:  "Enable git submodules",
+			Usage:  "Enable git submodules (default: true)",
 			EnvVar: "BUILDKITE_GIT_SUBMODULES",
 		},
 		cli.BoolTFlag{
 			Name:   "pty",
-			Usage:  "Run jobs within a pseudo terminal",
+			Usage:  "Run jobs within a pseudo terminal (default: true)",
 			EnvVar: "BUILDKITE_PTY",
 		},
 		cli.StringFlag{
@@ -388,13 +388,13 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "tracing-propagate-traceparent",
-			Usage:  "Accept traceparent from Buildkite control plane",
+			Usage:  "Accept traceparent from Buildkite control plane (default: false)",
 			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
 		},
 
 		cli.BoolFlag{
 			Name:   "no-job-api",
-			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job.",
+			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job (default: false)",
 			EnvVar: "BUILDKITE_AGENT_NO_JOB_API",
 		},
 		cli.StringSliceFlag{

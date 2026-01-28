@@ -74,7 +74,7 @@ var StepUpdateCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "append",
-			Usage:  "Append to current attribute instead of replacing it",
+			Usage:  "Append to current attribute instead of replacing it (default: false)",
 			EnvVar: "BUILDKITE_STEP_UPDATE_APPEND",
 		},
 		RedactedVars,

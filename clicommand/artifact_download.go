@@ -77,7 +77,7 @@ var ArtifactDownloadCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "include-retried-jobs",
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from retried jobs in the search",
+			Usage:  "Include artifacts from retried jobs in the search (default: false)",
 		},
 	}),
 	Action: func(c *cli.Context) error {
