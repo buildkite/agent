@@ -999,3 +999,58 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 		t.Errorf("agent.Pings = %d, want %d", got, want)
 	}
 }
+
+func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	const agentSessionToken = "alpacas"
+
+	server := NewFakeAPIServer()
+	defer server.Close()
+
+	const headerKey = "Buildkite-Hello"
+	const headerValue = "world"
+
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(req *http.Request) (api.Ping, error) {
+		// Invalidate the token to trigger an unrecoverable error on
+		// subsequent pings.
+		server.DeleteAgent(agentSessionToken)
+		return api.Ping{}, nil
+	}
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(ctx, newIdleMonitor(1)); !isUnrecoverable(err) {
+		t.Errorf("worker.Start() = %v, want an unrecoverable error", err)
+	}
+
+	if got, want := agent.Pings, 1; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}
