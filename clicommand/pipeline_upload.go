@@ -805,52 +805,12 @@ stepsLoop:
 
 		// If we don't know the changed paths yet, either read from file or call out to Git.
 		if !ica.gathered {
-			var cps []string
-			var err error
-
-			if ica.changedFilesPath != "" {
-				// Read changed files from the provided file path.
-				cps, err = readChangedFilesFromPath(l, ica.changedFilesPath)
-				if err != nil {
-					l.Error("Couldn't read changed files from %q, not skipping any pipeline steps: %v", ica.changedFilesPath, err)
-					ica.enabled = false
-					continue stepsLoop
-				}
-			} else {
-				// Determine changed files using git.
-				cps, err = gatherChangedFiles(l, ica.diffBase)
-				if err != nil {
-					l.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
-					var exitErr *exec.ExitError
-					if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
-						// stderr came from git, which is typically human readable
-						l.Error("git: %s", exitErr.Stderr)
-					}
-					switch err := err.(type) {
-					case gitRevParseError:
-						l.Error("This could be because %q might not be a commit in the repository.\n"+
-							"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
-							err.arg,
-						)
-
-					case gitMergeBaseError:
-						l.Error("This could be because %q might not be a commit in the repository.\n"+
-							"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
-							err.diffBase,
-						)
-
-					case gitDiffError:
-						l.Error("This could be because the merge-base that Git found, %q, might be invalid.\n"+
-							"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
-							err.mergeBase,
-						)
-					}
-
-					// Because changed files couldn't be determined, we switch into
-					// disabled mode.
-					ica.enabled = false
-					continue stepsLoop
-				}
+			cps, err := ica.gatherChangedPaths(l)
+			if err != nil {
+				// Because changed files couldn't be determined, we switch into
+				// disabled mode.
+				ica.enabled = false
+				continue stepsLoop
 			}
 
 			// The changed files are now known.
@@ -920,6 +880,50 @@ stepsLoop:
 		// Note that the "skip" string is limited to 70 characters.
 		content["skip"] = ifChangedSkippedMsg
 	}
+}
+
+func (ica *ifChangedApplicator) gatherChangedPaths(l logger.Logger) ([]string, error) {
+	if ica.changedFilesPath != "" {
+		// Read changed files from the provided file path.
+		cps, err := readChangedFilesFromPath(l, ica.changedFilesPath)
+		if err != nil {
+			l.Error("Couldn't read changed files from %q, not skipping any pipeline steps: %v", ica.changedFilesPath, err)
+			return nil, err
+		}
+		return cps, nil
+	}
+
+	// Determine changed files using git.
+	cps, err := gatherChangedFiles(l, ica.diffBase)
+	if err != nil {
+		l.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			// stderr came from git, which is typically human readable
+			l.Error("git: %s", exitErr.Stderr)
+		}
+		switch err := err.(type) {
+		case gitRevParseError:
+			l.Error("This could be because %q might not be a commit in the repository.\n"+
+				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
+				err.arg,
+			)
+
+		case gitMergeBaseError:
+			l.Error("This could be because %q might not be a commit in the repository.\n"+
+				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
+				err.diffBase,
+			)
+
+		case gitDiffError:
+			l.Error("This could be because the merge-base that Git found, %q, might be invalid.\n"+
+				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
+				err.mergeBase,
+			)
+		}
+		return nil, err
+	}
+	return cps, nil
 }
 
 // ifChangedPatterns converts a string or list within `if_changed` into a slice
