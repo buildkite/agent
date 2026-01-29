@@ -312,6 +312,7 @@ var PipelineUploadCommand = cli.Command{
 				prependOriginIfNonempty("BUILDKITE_PIPELINE_DEFAULT_BRANCH"),
 				defaultGitDiffBase,
 			),
+			fetch:            cfg.FetchDiffBase,
 			changedFilesPath: cfg.ChangedFilesPath,
 		}
 
@@ -756,6 +757,7 @@ type ifChangedApplicator struct {
 	enabled          bool // apply-if-changed is enabled
 	gathered         bool // the changed files have been computed?
 	diffBase         string
+	fetch            bool   // fetch diffBase before computing diff?
 	changedFilesPath string // path to a file containing newline-separated changed files
 	changedPaths     []string
 }
@@ -893,6 +895,25 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l logger.Logger) ([]string, e
 		return cps, nil
 	}
 
+	if ica.fetch {
+		// First, fetch the remote refspec specified by diffBase.
+		remote, refspec, slash := strings.Cut(ica.diffBase, "/")
+		if !slash {
+			l.Warn("The diff-base %q was not in 'remote/refspec' form - continuing with the remote 'origin'", ica.diffBase)
+			remote = "origin"
+			refspec = ica.diffBase
+		}
+		if err := exec.Command("git", "fetch", "--", remote, refspec).Run(); err != nil {
+			l.Error("Couldn't fetch %q from origin: %v", err)
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+				// stderr came from git, which is typically human readable
+				l.Error("git: %s", exitErr.Stderr)
+			}
+			l.Info("if_changed will continue processing, but the diff may fail, or produce more paths than expected.")
+		}
+	}
+
 	// Determine changed files using git.
 	cps, err := computeGitDiff(l, ica.diffBase)
 	if err != nil {
@@ -905,19 +926,19 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l logger.Logger) ([]string, e
 		switch err := err.(type) {
 		case gitRevParseError:
 			l.Error("This could be because %q might not be a commit in the repository.\n"+
-				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
+				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var, or add --fetch-diff-base.",
 				err.arg,
 			)
 
 		case gitMergeBaseError:
 			l.Error("This could be because %q might not be a commit in the repository.\n"+
-				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
+				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var, or add --fetch-diff-base.",
 				err.diffBase,
 			)
 
 		case gitDiffError:
 			l.Error("This could be because the merge-base that Git found, %q, might be invalid.\n"+
-				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var.",
+				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var, or add --fetch-diff-base.",
 				err.mergeBase,
 			)
 		}
