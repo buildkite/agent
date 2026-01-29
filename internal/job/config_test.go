@@ -92,3 +92,77 @@ func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 		t.Errorf("config.GitSubmodules = %t, want %t", got, want)
 	}
 }
+
+func TestGitSubmodulesBidirectionalControl(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		initial     bool
+		envValue    string
+		wantValue   bool
+		wantChanged bool
+	}{
+		{
+			name:        "enable submodules",
+			initial:     false,
+			envValue:    "true",
+			wantValue:   true,
+			wantChanged: true,
+		},
+		{
+			name:        "disable submodules",
+			initial:     true,
+			envValue:    "false",
+			wantValue:   false,
+			wantChanged: true,
+		},
+		{
+			name:        "already enabled",
+			initial:     true,
+			envValue:    "true",
+			wantValue:   true,
+			wantChanged: false,
+		},
+		{
+			name:        "already disabled",
+			initial:     false,
+			envValue:    "false",
+			wantValue:   false,
+			wantChanged: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &ExecutorConfig{
+				GitSubmodules: tt.initial,
+			}
+
+			environ := env.FromSlice([]string{
+				"BUILDKITE_GIT_SUBMODULES=" + tt.envValue,
+			})
+
+			changes := config.ReadFromEnvironment(environ)
+
+			// Verify field value updated correctly
+			if got, want := config.GitSubmodules, tt.wantValue; got != want {
+				t.Errorf("config.GitSubmodules = %t, want %t", got, want)
+			}
+
+			// Verify changes map reflects whether value actually changed
+			if tt.wantChanged {
+				wantChanges := map[string]string{
+					"BUILDKITE_GIT_SUBMODULES": tt.envValue,
+				}
+				if diff := cmp.Diff(changes, wantChanges); diff != "" {
+					t.Errorf("changes diff (-got +want):\n%s", diff)
+				}
+			} else {
+				if len(changes) != 0 {
+					t.Errorf("changes = %v, want none (value unchanged)", changes)
+				}
+			}
+		})
+	}
+}
