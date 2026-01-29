@@ -576,7 +576,11 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
-	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+	// Disable cloning submodules if specified in Agent config as precedence
+	// else allow pipeline/step env to control it via BUILDKITE_GIT_SUBMODULES
+	if !r.conf.AgentConfiguration.GitSubmodules {
+		setEnv("BUILDKITE_GIT_SUBMODULES", "false")
+	}
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
 	// Allow BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH to be enabled either by config
