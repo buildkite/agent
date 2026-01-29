@@ -90,6 +90,7 @@ type PipelineUploadConfig struct {
 	// Used for if_changed processing
 	ApplyIfChanged   bool   `cli:"apply-if-changed"`
 	GitDiffBase      string `cli:"git-diff-base"`
+	FetchDiffBase    bool   `cli:"fetch-diff-base"`
 	ChangedFilesPath string `cli:"changed-files-path"`
 
 	// Used for signing
@@ -145,6 +146,11 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "git-diff-base",
 			Usage:  "Provides the base from which to find the git diff when processing ′if_changed′, e.g. origin/main. If not provided, it uses the first valid value of {origin/$BUILDKITE_PULL_REQUEST_BASE_BRANCH, origin/$BUILDKITE_PIPELINE_DEFAULT_BRANCH, origin/main}.",
 			EnvVar: "BUILDKITE_GIT_DIFF_BASE",
+		},
+		cli.BoolFlag{
+			Name:   "fetch-diff-base",
+			Usage:  "When enabled, the base for computing the git diff will be git-fetched prior to computing the diff (default: false)",
+			EnvVar: "BUILDKITE_FETCH_DIFF_BASE",
 		},
 		cli.StringFlag{
 			Name:   "changed-files-path",
