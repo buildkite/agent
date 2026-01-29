@@ -645,8 +645,8 @@ func readChangedFilesFromPath(l logger.Logger, path string) ([]string, error) {
 	return changedPaths, nil
 }
 
-// gatherChangedFiles determines changed files in this build.
-func gatherChangedFiles(l logger.Logger, diffBase string) (changedPaths []string, err error) {
+// computeGitDiff determines changed files in this build.
+func computeGitDiff(l logger.Logger, diffBase string) (changedPaths []string, err error) {
 	// Corporate needs you to find the differences between diffBase and HEAD.
 	diffBaseCommit, err := exec.Command("git", "rev-parse", diffBase).Output()
 	if err != nil {
@@ -894,7 +894,7 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l logger.Logger) ([]string, e
 	}
 
 	// Determine changed files using git.
-	cps, err := gatherChangedFiles(l, ica.diffBase)
+	cps, err := computeGitDiff(l, ica.diffBase)
 	if err != nil {
 		l.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
 		var exitErr *exec.ExitError
