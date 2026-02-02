@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package agentedge.v1;
+
+import "buf/validate/validate.proto";
+
+message StreamPingsRequest {
+  string agent_id = 1;
+}
+
+message StreamPingsResponse {
+
+  oneof action {
+    ResumeAction resume = 2;
+    PauseAction pause = 3;
+    DisconnectAction disconnect = 4;
+    JobAssignedAction job_assigned = 5;
+  }
+}
+
+message ResumeAction {}
+
+message PauseAction {
+  string reason = 1;
+}
+
+message DisconnectAction {
+  string reason = 1;
+}
+
+message JobAssignedAction {
+  Job job = 1;
+}
+
+message Job {
+  string id = 1;
+}
+
+service AgentEdgeService {
+  rpc StreamPings(StreamPingsRequest) returns (stream StreamPingsResponse) {}
+}

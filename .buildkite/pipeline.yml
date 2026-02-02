@@ -13,7 +13,10 @@ steps:
   - name: ":go::robot_face: Lint"
     key: check-code-committed
     command: .buildkite/steps/check-code-committed.sh
-    if_changed: "{go.mod,go.sum,**.go,.buildkite/steps/check-code-committed.sh}"
+    if_changed:
+      - go.{mod,sum}
+      - "**.go"
+      - .buildkite/steps/check-code-committed.sh
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -21,8 +24,25 @@ steps:
           mount-buildkite-agent: true
           run: lint
 
+  - name: ":go::robot_face: Check protobuf generation"
+    key: check-protobuf-genreation
+    command: .buildkite/steps/check-protobuf-generation.sh
+    if_changed:
+      - api/proto/**
+      - .buildkite/steps/check-protobuf-generation.sh
+    plugins:
+    - docker-compose#v4.14.0:
+        config: .buildkite/docker-compose.yml
+        cli-version: 2
+        mount-buildkite-agent: true
+        run: lint
+
   - group: ":go::scientist: Tests and Coverage"
-    if_changed: "{go.mod,go.sum,**.go,**/fixtures/**,.buildkite/steps/{tests,test-coverage-report}.sh}"
+    if_changed:
+      - go.{mod,sum}
+      - "**.go"
+      - "**/fixtures/**"
+      - .buildkite/steps/{tests,test-coverage-report}.sh
     steps:
     - name: ":linux: Linux AMD64 Tests"
       key: test-linux-amd64
