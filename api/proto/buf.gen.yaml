@@ -1,0 +1,18 @@
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: gen
+    opt:
+      - paths=source_relative
+  - local: protoc-gen-connect-go
+    out: gen
+    opt:
+      - paths=source_relative
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/buildkite/agent/v3/api/proto/gen
+  disable:
+    - file_option: go_package
+      module: buf.build/bufbuild/protovalidate
