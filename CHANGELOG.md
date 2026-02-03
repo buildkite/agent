@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.117.0](https://github.com/buildkite/agent/tree/v3.117.0) (2026-02-04)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.116.0...v3.117.0)
+
+### Added
+- Flag to fetch the diff-base before diffing for `if_changed` [#3689](https://github.com/buildkite/agent/pull/3689) (@DrJosh9000)
+
+### Fixed
+- Continue heartbeats while job is stopping [#3694](https://github.com/buildkite/agent/pull/3694) (@DrJosh9000)
+
+### Internal
+- Make `bucket-url` optional for cache commands [#3690](https://github.com/buildkite/agent/pull/3690) (@mitchbne)
+
 ## [v3.116.0](https://github.com/buildkite/agent/tree/v3.116.0) (2026-01-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.115.4...v3.116.0)
 
