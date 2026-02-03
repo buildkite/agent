@@ -183,13 +183,15 @@ type AgentStartConfig struct {
 	TraceContextEncoding      string `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
 
+	// API + agent behaviour
+	PingMode string `cli:"ping-mode"`
+
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
 	TraceHTTP bool   `cli:"trace-http"`
 	Token     string `cli:"token" validate:"required"`
 	Endpoint  string `cli:"endpoint" validate:"required"`
 	NoHTTP2   bool   `cli:"no-http2"`
-
 	// Deprecated
 	KubernetesLogCollectionGracePeriod time.Duration `cli:"kubernetes-log-collection-grace-period"`
 	NoSSHFingerprintVerification       bool          `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -753,6 +755,14 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
 		},
 
+		// API + agent behaviour
+		cli.StringFlag{
+			Name:   "ping-mode",
+			Usage:  "Selects available protocols for dispatching work to this agent. One of auto (default), ping-only, stream-only.",
+			Value:  "auto",
+			EnvVar: "BUILDKITE_AGENT_PING_MODE",
+		},
+
 		// API Flags
 		AgentRegisterTokenFlag, // != AgentAccessToken
 		EndpointFlag,
@@ -1076,6 +1086,7 @@ var AgentStartCommand = cli.Command{
 			TraceContextEncoding:         cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
 			KubernetesExec:               cfg.KubernetesExec,
+			PingMode:                     cfg.PingMode,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
