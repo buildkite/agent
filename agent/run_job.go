@@ -443,6 +443,20 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 		r.agentLogger.Debug("[JobRunner] Routine that processes the log has finished")
 	}()
 
+	// flushRemainingLogs sends any remaining buffered output to the log streamer.
+	// This should be called before exiting when the process has finished, to ensure
+	// logs aren't dropped due to context cancellation in cleanup().
+	flushRemainingLogs := func() {
+		setStat("📨 Flushing remaining logs after process exit")
+		if output := r.output.ReadAndTruncate(); len(output) > 0 {
+			// Use context.Background() to avoid being affected by parent context cancellation.
+			// The log streamer has its own internal stopping mechanism.
+			if err := r.logStreamer.Process(context.Background(), output); err != nil {
+				r.agentLogger.Warn("Could not flush remaining log output: %v", err)
+			}
+		}
+	}
+
 	select {
 	case <-r.process.Started():
 	case <-ctx.Done():
@@ -501,6 +515,7 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 		case <-ctx.Done():
 			return
 		case <-r.process.Done():
+			flushRemainingLogs()
 			return
 		}
 
@@ -530,6 +545,7 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 			case <-ctx.Done():
 				return
 			case <-r.process.Done():
+				flushRemainingLogs()
 				return
 			}
 		}
@@ -542,6 +558,7 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 		case <-ctx.Done():
 			return
 		case <-r.process.Done():
+			flushRemainingLogs()
 			return
 		}
 	}
