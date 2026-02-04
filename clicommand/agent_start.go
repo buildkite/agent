@@ -1315,7 +1315,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Setup the agent pool that spawns agent workers
-		pool := agent.NewAgentPool(workers)
+		pool := agent.NewAgentPool(workers, &agentConf)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
 		defer agentShutdownHook(l, cfg)
