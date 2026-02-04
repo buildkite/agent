@@ -100,6 +100,13 @@ type AgentWorker struct {
 	// JobRunner here
 	jobRunner atomic.Pointer[JobRunner]
 
+	// Used to exit the ping loop after running a job in acquire mode
+	ranJob bool
+
+	// Used to ensure "paused / unpaused" is logged only once upon
+	// entering/exiting pause state
+	wasPaused bool
+
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	agentStdout io.Writer
 
@@ -360,9 +367,6 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 
 	a.logger.Info("Waiting for instructions...")
 
-	ranJob := false
-	wasPaused := false
-
 	// Continue this loop until one of:
 	// * the context is cancelled
 	// * the stop channel is closed (a.Stop)
@@ -422,106 +426,127 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		}
 		pingDurations.Observe(time.Since(startPing).Seconds())
 
-		pingActions.WithLabelValues(action).Inc()
-		switch action {
-		case "disconnect":
-			a.StopUngracefully()
+		// Handle the action
+		switch a.handleAction(ctx, idleMon, jobID, action) {
+		case loopExit:
 			return nil
-
-		case "pause":
-			// An agent is not dispatched any jobs while it is paused, but the
-			// paused agent is expected to remain alive and pinging for
-			// instructions.
-			// *This includes acquire-job and disconnect-after-idle-timeout.*
-			wasPaused = true
+		case loopContinue:
 			continue
-		}
-
-		// At this point, action was neither "disconnect" nor "pause".
-		if wasPaused {
-			a.logger.Info("Agent has resumed after being paused")
-			wasPaused = false
-		}
-
-		// Exit after acquire-job.
-		// For acquire-job agents, registration sets ignore-in-dispatches=true,
-		// so job should be nil. If not nil, complain.
-		if a.agentConfiguration.AcquireJob != "" {
-			if job != nil {
-				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in acquire-job mode!", job.ID)
+		case loopPingImmediately:
+			// Skip waiting for the ping interval until
+			// a ping without a job has occurred,
+			// but in exchange, ensure the next ping must wait at least a full
+			// pingInterval to avoid too much server load.
+			pingTicker.Reset(pingInterval)
+			select {
+			case skipTicker <- struct{}{}:
+				// Ticker will be skipped
+			default:
+				// We're already skipping the ticker, don't block.
 			}
-			return nil
-		}
-
-		// Exit after disconnect-after-job. Finishing the job sets
-		// ignore-in-dispatches=true, so job should be nil. If not, complain.
-		if ranJob && a.agentConfiguration.DisconnectAfterJob {
-			if job != nil {
-				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)!", job.ID)
-			}
-			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
-			return nil
-		}
-
-		// Exit after disconnect-after-uptime is exceeded.
-		if maxUptime := a.agentConfiguration.DisconnectAfterUptime; maxUptime > 0 {
-			if time.Since(a.startTime) >= maxUptime {
-				if job != nil {
-					a.logger.Error("Agent ping dispatched a job (id %q) but agent has exceeded max uptime of %v!", job.ID, maxUptime)
-				}
-				a.logger.Info("Agent has exceeded max uptime of %v. Disconnecting...", maxUptime)
-				return nil
-			}
-		}
-
-		// Note that Ping only returns a job if err == nil.
-		if job == nil {
-			idleTimeout := a.agentConfiguration.DisconnectAfterIdleTimeout
-			if idleTimeout == 0 {
-				// No job and no idle timeout.
-				continue
-			}
-
-			// This ensures agents that never receive a job are still tracked
-			// by the idle monitor and can properly trigger disconnect-after-idle-timeout.
-			idleMon.markIdle(a)
-
-			// Exit if every agent has been idle for at least the timeout.
-			if idleMon.shouldExit(idleTimeout) {
-				a.logger.Info("All agents have been idle for at least %v. Disconnecting...", idleTimeout)
-				return nil
-			}
-
-			// Not idle enough to exit. Wait and ping again.
-			continue
-		}
-
-		setStat("💼 Accepting job")
-
-		// Runs the job, only errors if something goes wrong
-		if err := a.AcceptAndRunJob(ctx, job, idleMon); err != nil {
-			a.logger.Error("%v", err)
-			setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
-			continue
-		}
-
-		ranJob = true
-
-		// Observation: jobs are rarely the last within a pipeline,
-		// thus if this worker just completed a job,
-		// there is likely another immediately available.
-		// Skip waiting for the ping interval until
-		// a ping without a job has occurred,
-		// but in exchange, ensure the next ping must wait at least a full
-		// pingInterval to avoid too much server load.
-		pingTicker.Reset(pingInterval)
-		select {
-		case skipTicker <- struct{}{}:
-			// Ticker will be skipped
-		default:
-			// We're already skipping the ticker, don't block.
 		}
 	}
+}
+
+type loopAction int
+
+const (
+	loopExit loopAction = iota
+	loopContinue
+	loopPingImmediately
+)
+
+func (a *AgentWorker) handleAction(ctx context.Context, idleMon *idleMonitor, jobID, action string) loopAction {
+	pingActions.WithLabelValues(action).Inc()
+
+	switch action {
+	case "disconnect":
+		a.StopUngracefully()
+		return loopExit
+
+	case "pause":
+		// An agent is not dispatched any jobs while it is paused, but the
+		// paused agent is expected to remain alive and pinging for
+		// instructions.
+		// *This includes acquire-job and disconnect-after-idle-timeout.*
+		a.wasPaused = true
+		return loopContinue
+	}
+
+	// At this point, action was neither "disconnect" nor "pause".
+	if a.wasPaused {
+		a.logger.Info("Agent has resumed after being paused")
+		a.wasPaused = false
+	}
+
+	// Exit after acquire-job.
+	// For acquire-job agents, registration sets ignore-in-dispatches=true,
+	// so job should be nil. If not nil, complain.
+	if a.agentConfiguration.AcquireJob != "" {
+		if jobID != "" {
+			a.logger.Error("Agent ping dispatched a job (id %q) but agent is in acquire-job mode!", jobID)
+		}
+		return loopExit
+	}
+
+	// Exit after disconnect-after-job. Finishing the job sets
+	// ignore-in-dispatches=true, so job should be nil. If not, complain.
+	if a.ranJob && a.agentConfiguration.DisconnectAfterJob {
+		if jobID != "" {
+			a.logger.Error("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)!", jobID)
+		}
+		a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
+		return loopExit
+	}
+
+	// Exit after disconnect-after-uptime is exceeded.
+	if maxUptime := a.agentConfiguration.DisconnectAfterUptime; maxUptime > 0 {
+		if time.Since(a.startTime) >= maxUptime {
+			if jobID != "" {
+				a.logger.Error("Agent ping dispatched a job (id %q) but agent has exceeded max uptime of %v!", jobID, maxUptime)
+			}
+			a.logger.Info("Agent has exceeded max uptime of %v. Disconnecting...", maxUptime)
+			return loopExit
+		}
+	}
+
+	// Note that Ping only returns a job if err == nil.
+	if jobID == "" {
+		idleTimeout := a.agentConfiguration.DisconnectAfterIdleTimeout
+		if idleTimeout == 0 {
+			// No job and no idle timeout.
+			return loopContinue
+		}
+
+		// This ensures agents that never receive a job are still tracked
+		// by the idle monitor and can properly trigger disconnect-after-idle-timeout.
+		idleMon.markIdle(a)
+
+		// Exit if every agent has been idle for at least the timeout.
+		if idleMon.shouldExit(idleTimeout) {
+			a.logger.Info("All agents have been idle for at least %v. Disconnecting...", idleTimeout)
+			return loopExit
+		}
+
+		// Not idle enough to exit. Wait and ping again.
+		return loopContinue
+	}
+
+	// setStat("💼 Accepting job")
+
+	// Runs the job, only errors if something goes wrong
+	if err := a.AcceptAndRunJob(ctx, jobID, idleMon); err != nil {
+		a.logger.Error("%v", err)
+		// setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
+		return loopContinue
+	}
+
+	a.ranJob = true
+
+	// Observation: jobs are rarely the last within a pipeline,
+	// thus if this worker just completed a job,
+	// there is likely another immediately available.
+	return loopPingImmediately
 }
 
 func (a *AgentWorker) internalStop() {
