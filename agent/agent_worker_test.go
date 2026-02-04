@@ -317,11 +317,9 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	idleMonitor := newIdleMonitor(1)
-
 	// we expect the worker to try to acquire the job, but fail with ErrJobAcquisitionRejected
 	// because the server returns a 422 Unprocessable Entity.
-	err := worker.Start(ctx, idleMonitor)
+	err := worker.Start(ctx, nil)
 	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
@@ -400,9 +398,7 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	idleMonitor := newIdleMonitor(1)
-
-	if err := worker.Start(ctx, idleMonitor); err != nil {
+	if err := worker.Start(ctx, nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -494,9 +490,7 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	idleMonitor := newIdleMonitor(1)
-
-	if err := worker.Start(ctx, idleMonitor); err != nil {
+	if err := worker.Start(ctx, nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -581,12 +575,10 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	idleMonitor := newIdleMonitor(1)
-
 	// Record start time
 	startTime := time.Now()
 
-	if err := worker.Start(ctx, idleMonitor); err != nil {
+	if err := worker.Start(ctx, nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -665,7 +657,7 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(ctx, nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -754,7 +746,7 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(ctx, nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -834,7 +826,7 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(ctx, nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -903,7 +895,7 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(ctx, nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -914,9 +906,6 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 
 func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const agentSessionToken = "alpacas"
 
@@ -991,7 +980,7 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -1046,7 +1035,7 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); !isUnrecoverable(err) {
+	if err := worker.Start(ctx, nil); !isUnrecoverable(err) {
 		t.Errorf("worker.Start() = %v, want an unrecoverable error", err)
 	}
 
