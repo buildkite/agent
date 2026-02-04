@@ -831,3 +831,50 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 		}
 	}
 }
+
+// toggle is a channel-based "atomic bool" - the main benefit over an actual
+// atomic.Bool is the ability to use a channel operation for waiting.
+type toggle struct {
+	mu sync.Mutex
+	ch chan struct{}
+}
+
+// newToggle returns a toggle with a given initial state.
+func newToggle(blocked bool) *toggle {
+	ch := make(chan struct{})
+	if !blocked {
+		close(ch)
+	}
+	return &toggle{ch: ch}
+}
+
+// unblocked returns a channel that is closed when the toggle is unblocked.
+func (t *toggle) unblocked() <-chan struct{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.ch
+}
+
+// block blocks the toggle by replacing its channel with a new open channel.
+func (t *toggle) block() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	select {
+	case <-t.ch:
+		t.ch = make(chan struct{})
+	default:
+		// it's already blocked
+	}
+}
+
+// unblock unblocks the toggle by closing the existing channel.
+func (t *toggle) unblock() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	select {
+	case <-t.ch:
+		// it's already closed
+	default:
+		close(t.ch)
+	}
+}
