@@ -1,0 +1,31 @@
+env:
+  BUILDKITE_S3_DEFAULT_REGION: us-west-2
+  BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: s3://buildkite-agent-e2e-tests-custom-artifacts
+  # NB: not using ACLs (which is what this ACL does) means artifacts won't be available from the buildkite UI.
+  # This isn't really a big deal because the jobs and pipelines that these tests generate are ephemeral
+  BUILDKITE_S3_ACL: bucket-owner-full-control
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: upload
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - echo "hello world" > artifact-$${BUILDKITE_PIPELINE_SLUG}.txt
+      - {{ .buildkite_agent_binary }} artifact upload artifact-$${BUILDKITE_PIPELINE_SLUG}.txt
+  - key: download
+    depends_on: upload
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - {{ .buildkite_agent_binary }} artifact download artifact-$${BUILDKITE_PIPELINE_SLUG}.txt . && if [[ $(cat artifact-$${BUILDKITE_PIPELINE_SLUG}.txt) == "hello world" ]]; then exit 0; else exit 1; fi

@@ -6,12 +6,14 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v3/version"
@@ -249,7 +251,13 @@ func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 
 	b.WriteString(fmt.Sprintf(`"ts":%q,`, time.Now().Format(time.RFC3339)))
 	b.WriteString(fmt.Sprintf(`"level":%q,`, level.String()))
-	b.WriteString(fmt.Sprintf(`"msg":%q,`, msg))
+
+	// Serialize msg to JSON so we're not producing invalid JSON
+	jsonMsg, err := json.Marshal(msg)
+	if err != nil {
+		jsonMsg = []byte(`"error marshaling message"`)
+	}
+	b.WriteString(fmt.Sprintf(`"msg":%s,`, jsonMsg))
 
 	for _, field := range fields {
 		b.WriteString(fmt.Sprintf("%q:%q,", field.Key(), field.String()))
@@ -265,4 +273,19 @@ var Discard = &ConsoleLogger{
 	printer: &TextPrinter{
 		Writer: io.Discard,
 	},
+}
+
+// TestPrinter is a log printer than calls the Logf method of a [testing.T]
+// or [testing.B].
+type TestPrinter struct {
+	tb testing.TB
+}
+
+func NewTestPrinter(tb testing.TB) TestPrinter {
+	return TestPrinter{tb: tb}
+}
+
+func (tp TestPrinter) Print(level Level, msg string, fields Fields) {
+	now := time.Now().Format(DateFormat)
+	tp.tb.Logf("%s %s %s %v", now, level, msg, fields)
 }

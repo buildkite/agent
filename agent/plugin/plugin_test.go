@@ -133,7 +133,7 @@ func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 		},
 		{
 			`["github.com/buildkite-plugins/ping#main#lololo"]`,
-			"Too many #'s in \"github.com/buildkite-plugins/ping#main#lololo\"",
+			"Too many '#'s in \"github.com/buildkite-plugins/ping#main#lololo\"",
 		},
 	}
 
@@ -187,6 +187,14 @@ func TestPluginNameParsedFromLocation(t *testing.T) {
 		{
 			location: "vendor/src/vendored with a space",
 			wantName: "vendored-with-a-space",
+		},
+		{
+			location: "vendor/src/vendored-with-a-slash/",
+			wantName: "vendored-with-a-slash",
+		},
+		{
+			location: "vendor/src/vendored-with-two-slash//",
+			wantName: "vendored-with-two-slash",
 		},
 		{
 			location: "./.buildkite/plugins/docker-compose",

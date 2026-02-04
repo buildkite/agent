@@ -59,8 +59,8 @@ func (c *JobController) Start(ctx context.Context) error {
 }
 
 // Finish marks the job as finished in Buildkite.
-func (c *JobController) Finish(ctx context.Context, exit ProcessExit) error {
-	return c.client.FinishJob(ctx, c.job, time.Now(), exit, 0)
+func (c *JobController) Finish(ctx context.Context, exit ProcessExit, ignoreAgentInDispatches *bool) error {
+	return c.client.FinishJob(ctx, c.job, time.Now(), exit, 0, ignoreAgentInDispatches)
 }
 
 // BKTimestamp formats a time as a Buildkite timestamp code.

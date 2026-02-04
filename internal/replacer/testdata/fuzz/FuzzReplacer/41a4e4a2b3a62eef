@@ -1,0 +1,7 @@
+go test fuzz v1
+string("ip0")
+int(10)
+string("ip1")
+string("")
+string("")
+string("")

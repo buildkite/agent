@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -19,16 +20,11 @@ var dockerEnv = []string{
 }
 
 func hasDeprecatedDockerIntegration(sh *shell.Shell) bool {
-	for _, k := range dockerEnv {
-		if sh.Env.Exists(k) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(dockerEnv, sh.Env.Exists)
 }
 
 func runDeprecatedDockerIntegration(ctx context.Context, sh *shell.Shell, cmd []string) error {
-	var warnNotSet = func(k1, k2 string) {
+	warnNotSet := func(k1, k2 string) {
 		sh.Warningf("%s is set, but without %s, which it requires. You should be able to safely remove this from your pipeline.", k1, k2)
 	}
 
@@ -120,7 +116,7 @@ func runDockerComposeCommand(ctx context.Context, sh *shell.Shell, cmd []string)
 
 	// Compose strips dashes and underscores, so we'll remove them
 	// to match the docker container names
-	projectName := strings.Replace(fmt.Sprintf("buildkite%s", jobId), "-", "", -1)
+	projectName := strings.ReplaceAll("buildkite"+jobId, "-", "")
 
 	sh.Env.Set("COMPOSE_PROJ_NAME", projectName)
 	sh.Headerf(":docker: Building Docker images")
@@ -148,8 +144,8 @@ func runDockerCompose(ctx context.Context, sh *shell.Shell, projectName string, 
 	}
 
 	// composeFile might be multiple files, spaces or colons
-	for _, chunk := range strings.Fields(composeFile) {
-		for _, file := range strings.Split(chunk, ":") {
+	for chunk := range strings.FieldsSeq(composeFile) {
+		for file := range strings.SplitSeq(chunk, ":") {
 			args = append(args, "-f", file)
 		}
 	}

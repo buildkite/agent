@@ -100,9 +100,13 @@ func TestReplacerLoremIpsum(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			replacer := replacer.New(&buf, test.needles, redact.Redact)
-			fmt.Fprint(replacer, lipsum)
-			replacer.Flush()
+			replacer := replacer.New(&buf, test.needles, redact.Redacted)
+			if _, err := fmt.Fprint(replacer, lipsum); err != nil {
+				t.Errorf("fmt.Fprint(replacer, lipsum) error = %v", err)
+			}
+			if err := replacer.Flush(); err != nil {
+				t.Errorf("replacer.Flush() = %v", err)
+			}
 
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
@@ -114,12 +118,15 @@ func TestReplacerLoremIpsum(t *testing.T) {
 			t.Parallel()
 
 			var buf strings.Builder
-			replacer := replacer.New(&buf, test.needles, redact.Redact)
+			replacer := replacer.New(&buf, test.needles, redact.Redacted)
 			for _, c := range []byte(lipsum) {
-				replacer.Write([]byte{c})
+				if _, err := replacer.Write([]byte{c}); err != nil {
+					t.Errorf("replacer.Write([]byte{%d}) error = %v", c, err)
+				}
 			}
-			replacer.Flush()
-
+			if err := replacer.Flush(); err != nil {
+				t.Errorf("replacer.Flush() = %v", err)
+			}
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
 			}
@@ -164,13 +171,16 @@ func TestReplacerWriteBoundaries(t *testing.T) {
 			t.Parallel()
 			var buf strings.Builder
 
-			replacer := replacer.New(&buf, test.needles, redact.Redact)
+			replacer := replacer.New(&buf, test.needles, redact.Redacted)
 
 			for _, input := range test.inputs {
-				fmt.Fprint(replacer, input)
+				if _, err := fmt.Fprint(replacer, input); err != nil {
+					t.Errorf("fmt.Fprint(replacer, %q) error = %v", input, err)
+				}
 			}
-			replacer.Flush()
-
+			if err := replacer.Flush(); err != nil {
+				t.Errorf("replacer.Flush() = %v", err)
+			}
 			if got, want := buf.String(), test.want; got != want {
 				t.Errorf("post-redaction(needles = %q) buf.String() = %q, want %q", test.needles, got, want)
 			}
@@ -182,19 +192,26 @@ func TestReplacerResetMidStream(t *testing.T) {
 	t.Parallel()
 
 	var buf strings.Builder
-	replacer := replacer.New(&buf, []string{"secret1111"}, redact.Redact)
+	replacer := replacer.New(&buf, []string{"secret1111"}, redact.Redacted)
 
 	// start writing to the stream (no trailing newline, to be extra tricky)
-	replacer.Write([]byte("redact secret1111 but don't redact secret2222 until"))
+	input := "redact secret1111 but don't redact secret2222 until"
+	if _, err := replacer.Write([]byte(input)); err != nil {
+		t.Errorf("replacer.Write(%q) error = %v", input, err)
+	}
 
 	// update the replacer with a new secret
-	//replacer.Flush() // manual flush is NOT necessary before Reset
+	// replacer.Flush() // manual flush is NOT necessary before Reset
 	replacer.Reset([]string{"secret1111", "secret2222"})
 
 	// finish writing
-	replacer.Write([]byte(" after secret2222 is added\n"))
-	replacer.Flush()
-
+	input = " after secret2222 is added\n"
+	if _, err := replacer.Write([]byte(input)); err != nil {
+		t.Errorf("replacer.Write(%q) error = %v", input, err)
+	}
+	if err := replacer.Flush(); err != nil {
+		t.Errorf("replacer.Flush() = %v", err)
+	}
 	if got, want := buf.String(), "redact [REDACTED] but don't redact secret2222 until after [REDACTED] is added\n"; got != want {
 		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
@@ -204,11 +221,15 @@ func TestReplacerMultibyte(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	replacer := replacer.New(&buf, []string{"ÿ"}, redact.Redact)
+	replacer := replacer.New(&buf, []string{"ÿ"}, redact.Redacted)
 
-	replacer.Write([]byte("fooÿbar"))
-	replacer.Flush()
-
+	input := "fooÿbar"
+	if _, err := replacer.Write([]byte(input)); err != nil {
+		t.Errorf("replacer.Write(%q) error = %v", input, err)
+	}
+	if err := replacer.Flush(); err != nil {
+		t.Errorf("replacer.Flush() = %v", err)
+	}
 	if got, want := buf.String(), "foo[REDACTED]bar"; got != want {
 		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
@@ -217,66 +238,88 @@ func TestReplacerMultibyte(t *testing.T) {
 func TestReplacerMultiLine(t *testing.T) {
 	t.Parallel()
 
-	var buf strings.Builder
+	const secret = "-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"
 
-	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
-
-	fmt.Fprintln(replacer, "lalalala")
-	fmt.Fprintln(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----")
-	fmt.Fprintln(replacer, "asdf")
-	fmt.Fprintln(replacer, "-----END OPENSSH PRIVATE KEY-----")
-	fmt.Fprintln(replacer, "lalalala")
-	replacer.Flush()
-
-	want := "lalalala\n[REDACTED]lalalala\n"
-
-	if diff := cmp.Diff(buf.String(), want); diff != "" {
-		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+	tests := []struct {
+		name  string
+		input []string
+		want  string
+	}{
+		{
+			name: "exact",
+			input: []string{
+				"lalalala\n",
+				"-----BEGIN OPENSSH PRIVATE KEY-----\n",
+				"asdf\n",
+				"-----END OPENSSH PRIVATE KEY-----\n",
+				"lalalala\n",
+			},
+			want: "lalalala\n[REDACTED]\nlalalala\n",
+		},
+		{
+			name: "cr-lf line endings",
+			input: []string{
+				"lalalala\r\n",
+				"-----BEGIN OPENSSH PRIVATE KEY-----\r\n",
+				"asdf\r\n",
+				"-----END OPENSSH PRIVATE KEY-----\r\n",
+				"lalalala\r\n",
+			},
+			want: "lalalala\r\n[REDACTED]\r\nlalalala\r\n",
+		},
+		{
+			name: "cr-cr-lf line endings",
+			// Thanks to some combination of baked-mode PTY and other processing, log
+			// output linebreaks often look like \r\r\n, which is annoying both when
+			// redacting secrets and when opening them in a text editor.
+			input: []string{
+				"lalalala\r\r\n",
+				"-----BEGIN OPENSSH PRIVATE KEY-----\r\r\n",
+				"asdf\r\r\n",
+				"-----END OPENSSH PRIVATE KEY-----\r\r\n",
+				"lalalala\r\r\n",
+			},
+			want: "lalalala\r\r\n[REDACTED]\r\r\nlalalala\r\r\n",
+		},
+		{
+			name: "spaces instead of newlines",
+			input: []string{
+				"lalalala -----BEGIN OPENSSH PRIVATE KEY----- asdf -----END OPENSSH PRIVATE KEY----- lalalala\n",
+			},
+			want: "lalalala [REDACTED] lalalala\n",
+		},
+		{
+			name: "mixed whitespace garbage",
+			input: []string{
+				"lalalala\n\n\r\n",
+				"-----BEGIN OPENSSH PRIVATE KEY-----\n\n \n\v",
+				"asdf\n\t\t\n  \n",
+				"-----END OPENSSH PRIVATE KEY-----\n\n\n",
+				"lalalala",
+			},
+			want: "lalalala\n\n\r\n[REDACTED]\n\n\nlalalala",
+		},
 	}
-}
 
-func TestReplacerMultiLineCrLf(t *testing.T) {
-	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	var buf strings.Builder
+			var buf strings.Builder
+			r := replacer.New(&buf, []string{secret}, redact.Redacted)
+			for _, line := range test.input {
+				if _, err := fmt.Fprint(r, line); err != nil {
+					t.Errorf("fmt.Fprint(r, %q) error = %v", line, err)
+				}
+			}
+			if err := r.Flush(); err != nil {
+				t.Errorf("r.Flush() = %v", err)
+			}
 
-	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
-
-	fmt.Fprint(replacer, "lalalala\r\n")
-	fmt.Fprint(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----\r\n")
-	fmt.Fprint(replacer, "asdf\r\n")
-	fmt.Fprint(replacer, "-----END OPENSSH PRIVATE KEY-----\r\n")
-	fmt.Fprint(replacer, "lalalala\r\n")
-	replacer.Flush()
-
-	want := "lalalala\r\n[REDACTED]lalalala\r\n"
-
-	if diff := cmp.Diff(buf.String(), want); diff != "" {
-		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
-	}
-}
-
-func TestReplacerMultiLineCrCrLf(t *testing.T) {
-	t.Parallel()
-
-	var buf strings.Builder
-
-	replacer := replacer.New(&buf, []string{"-----BEGIN OPENSSH PRIVATE KEY-----\nasdf\n-----END OPENSSH PRIVATE KEY-----\n"}, redact.Redact)
-
-	// Thanks to some combination of baked-mode PTY and other processing, log
-	// output linebreaks often look like \r\r\n, which is annoying both when
-	// redacting secrets and when opening them in a text editor.
-	fmt.Fprint(replacer, "lalalala\r\r\n")
-	fmt.Fprint(replacer, "-----BEGIN OPENSSH PRIVATE KEY-----\r\r\n")
-	fmt.Fprint(replacer, "asdf\r\r\n")
-	fmt.Fprint(replacer, "-----END OPENSSH PRIVATE KEY-----\r\r\n")
-	fmt.Fprint(replacer, "lalalala\r\r\n")
-	replacer.Flush()
-
-	want := "lalalala\r\r\n[REDACTED]lalalala\r\r\n"
-
-	if diff := cmp.Diff(buf.String(), want); diff != "" {
-		t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+			if diff := cmp.Diff(buf.String(), test.want); diff != "" {
+				t.Errorf("post-redaction diff (-got +want):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -287,7 +330,7 @@ func TestAddingNeedles(t *testing.T) {
 	afterAddExpectedNeedles := []string{"secret1111", "secret2222", "pre-secret3333"}
 
 	var buf strings.Builder
-	replacer := replacer.New(&buf, needles, redact.Redact)
+	replacer := replacer.New(&buf, needles, redact.Redacted)
 	actualNeedles := replacer.Needles()
 
 	slices.Sort(needles)
@@ -311,12 +354,15 @@ func TestAddingNeedles(t *testing.T) {
 }
 
 func BenchmarkReplacer(b *testing.B) {
-	b.ResetTimer()
-	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redact)
-	for range b.N {
-		fmt.Fprintln(r, bigLipsum)
+	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redacted)
+	for b.Loop() {
+		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
+			b.Errorf("fmt.Fprintln(r, bigLipsum) error = %v", err)
+		}
 	}
-	r.Flush()
+	if err := r.Flush(); err != nil {
+		b.Errorf("replacer.Flush() = %v", err)
+	}
 }
 
 func FuzzReplacer(f *testing.F) {
@@ -329,14 +375,15 @@ func FuzzReplacer(f *testing.F) {
 	f.Add(lipsum, 10, "ipsum", "dolor", "sit", "amet")
 	f.Add(lipsum, 10, "a", "e", "i", "o")
 	f.Fuzz(func(t *testing.T, plaintext string, split int, a, b, c, d string) {
-		// Don't allow empty secrets, or secrets containing a character from
-		// the redaction substitution.
+		// Don't allow empty secrets, whitespace only secrets, or secrets
+		// containing a character from the redaction substitution.
 		//  - Replacing a secret with '[REDACTED]' may create text that happens
 		//    to be another secret.
 		//  - Unless disallowed, the fuzzer tends to rapidly find secrets like
 		//    "A" (one of the characters in REDACTED).
 		secrets := make([]string, 0, 4)
 		for _, s := range []string{a, b, c, d} {
+			s = strings.TrimSpace(s)
 			if s == "" || strings.ContainsAny(s, "[REDACTED]") {
 				continue
 			}
@@ -344,14 +391,23 @@ func FuzzReplacer(f *testing.F) {
 		}
 
 		var sb strings.Builder
-		replacer := replacer.New(&sb, secrets, redact.Redact)
+		replacer := replacer.New(&sb, secrets, redact.Redacted)
+
 		if split < 0 || split >= len(plaintext) {
-			fmt.Fprint(replacer, plaintext)
+			if _, err := fmt.Fprint(replacer, plaintext); err != nil {
+				t.Errorf("fmt.Fprint(replacer, %q) error = %v", plaintext, err)
+			}
 		} else {
-			fmt.Fprint(replacer, plaintext[:split])
-			fmt.Fprint(replacer, plaintext[split:])
+			if _, err := fmt.Fprint(replacer, plaintext[:split]); err != nil {
+				t.Errorf("fmt.Fprint(replacer, %q) error = %v", plaintext[:split], err)
+			}
+			if _, err := fmt.Fprint(replacer, plaintext[split:]); err != nil {
+				t.Errorf("fmt.Fprint(replacer, %q) error = %v", plaintext[split:], err)
+			}
 		}
-		replacer.Flush()
+		if err := replacer.Flush(); err != nil {
+			t.Errorf("replacer.Flush() = %v", err)
+		}
 		got := sb.String()
 
 		for _, s := range secrets {

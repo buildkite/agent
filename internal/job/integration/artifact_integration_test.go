@@ -14,14 +14,14 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
-		if err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700); err != nil {
-			t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
+		if err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0o700); err != nil {
+			t.Fatalf("os.WriteFile(test.txt, llamas, 0o700) = %v", err)
 		}
 		c.Exit(0)
 	})
@@ -43,14 +43,14 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	tester.MustMock(t, "my-command").Expect().AndCallFunc(func(c *bintest.Call) {
-		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
+		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0o700)
 		if err != nil {
-			t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
+			t.Fatalf("os.WriteFile(test.txt, llamas, 0o700) = %v", err)
 		}
 		c.Exit(1)
 	})
@@ -77,15 +77,15 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
-		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
+		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0o700)
 		if err != nil {
-			t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
+			t.Fatalf("os.WriteFile(test.txt, llamas, 0o700) = %v", err)
 		}
 		c.Exit(1)
 	})

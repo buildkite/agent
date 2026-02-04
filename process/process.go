@@ -75,7 +75,6 @@ func ParseSignal(sig string) (Signal, error) {
 // Configuration for a Process
 type Config struct {
 	PTY               bool
-	Timestamp         bool
 	Path              string
 	Args              []string
 	Env               []string
@@ -99,7 +98,7 @@ type Process struct {
 	pid           int
 	started, done chan struct{}
 
-	winJobHandle uintptr
+	winJobHandle uintptr //nolint:unused // Used in signal_windows.go
 }
 
 // New returns a new instance of Process
@@ -361,6 +360,12 @@ func (p *Process) Interrupt() error {
 
 	// interrupt the process (ctrl-c or SIGINT)
 	if err := p.interruptProcessGroup(); err != nil {
+		//  No process or process group can be found corresponding to that specified by pid.
+		if errors.Is(err, syscall.ESRCH) {
+			p.logger.Warn("[Process] Process %d has already exited", p.pid)
+			return nil
+		}
+
 		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.pid, err)
 
 		// Fallback to terminating if we get an error

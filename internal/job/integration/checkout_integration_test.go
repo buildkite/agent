@@ -36,7 +36,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 	ctx, _ := experiments.Enable(mainCtx, experiments.ResolveCommitAfterCheckout)
 	tester, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -59,14 +59,8 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 		{"rev-parse", "HEAD"},
 	})
-
-	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
-	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
-	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
@@ -76,7 +70,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -120,7 +114,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -186,7 +180,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -242,7 +236,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -336,7 +330,7 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -365,7 +359,7 @@ func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -400,7 +394,7 @@ func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) 
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -449,7 +443,7 @@ func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -479,7 +473,7 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -503,12 +497,54 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	assert.Equal(t, checkoutRepoCommit, commitHash)
 }
 
+func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("refs/pull/123/merge")
+	assert.NilError(t, err)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		"BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC=true",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "--no-local", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "refs/pull/123/merge"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+		{"rev-parse", "FETCH_HEAD"},
+	})
+
+	tester.RunAndCheck(t, env...)
+
+	// Check state of the checkout directory
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
+	assert.NilError(t, err)
+	assert.Equal(t, checkoutRepoCommit, commitHash)
+}
+
 func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -541,7 +577,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -552,7 +588,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 	}
 
 	// Simulate state from a previous checkout
-	if err := os.MkdirAll(tester.CheckoutDir(), 0755); err != nil {
+	if err := os.MkdirAll(tester.CheckoutDir(), 0o755); err != nil {
 		t.Fatalf("error creating dir to clone from: %s", err)
 	}
 	cmd := exec.Command("git", "clone", "-v", "--", tester.Repo.Path, ".")
@@ -604,7 +640,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -615,7 +651,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 	}
 
 	// Simulate state from a previous checkout
-	if err := os.MkdirAll(tester.CheckoutDir(), 0755); err != nil {
+	if err := os.MkdirAll(tester.CheckoutDir(), 0o755); err != nil {
 		t.Fatalf("error creating dir to clone from: %s", err)
 	}
 	cmd := exec.Command("git", "clone", "-v", "--", tester.Repo.Path, ".")
@@ -666,7 +702,7 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -682,7 +718,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -710,7 +746,7 @@ func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -731,7 +767,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -760,7 +796,7 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -770,8 +806,8 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 		t.Fatalf(`tester.Repo.Execute(clone, -v, --, %q, %q) error = %v\nout = %s`, tester.Repo.Path, tester.CheckoutDir(), err, out)
 	}
 	testpath := filepath.Join(tester.CheckoutDir(), "test.txt")
-	if err := os.WriteFile(testpath, []byte("llamas"), 0700); err != nil {
-		t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
+	if err := os.WriteFile(testpath, []byte("llamas"), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(test.txt, llamas, 0o700) = %v", err)
 	}
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -796,7 +832,7 @@ func TestForcingACleanCheckout(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -813,12 +849,33 @@ func TestForcingACleanCheckout(t *testing.T) {
 	}
 }
 
+func TestSkippingCheckout(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	tester.RunAndCheck(t, "BUILDKITE_SKIP_CHECKOUT=true")
+
+	if !strings.Contains(tester.Output, "Skipping checkout") {
+		t.Fatal(`tester.Output does not contain "Skipping checkout"`)
+	}
+
+	// Verify no git commands were run (no clone, fetch, checkout)
+	if strings.Contains(tester.Output, "git clone") {
+		t.Fatal(`tester.Output should not contain "git clone" when checkout is skipped`)
+	}
+}
+
 func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -845,7 +902,7 @@ func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -873,7 +930,7 @@ func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -899,7 +956,7 @@ func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -932,17 +989,17 @@ func TestRepositorylessCheckout(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
-	var script = []string{
-		"#!/bin/bash",
+	script := []string{
+		"#!/usr/bin/env bash",
 		"export BUILDKITE_REPO=",
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(environment, script, 0700) = %v", err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(environment, script, 0o700) = %v", err)
 	}
 
 	tester.MustMock(t, "git").Expect().NotCalled()
@@ -954,6 +1011,89 @@ func TestRepositorylessCheckout(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
+}
+
+func TestGitCheckoutWithCommitResolved(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{"BUILDKITE_COMMIT_RESOLVED=true"}
+
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Exactly(0)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{"BUILDKITE_COMMIT_RESOLVED=false"}
+
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0).Exactly(1)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{"BUILDKITE_COMMIT_RESOLVED=false"}
+
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1).Exactly(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
 }
 
 type subDirMatcher struct {

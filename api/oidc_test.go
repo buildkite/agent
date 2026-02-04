@@ -59,7 +59,7 @@ func (s *testOIDCTokenServer) New(t *testing.T) *httptest.Server {
 				return
 			}
 
-			io.WriteString(rw, fmt.Sprintf(`{"token":"%s"}`, s.oidcToken))
+			fmt.Fprintf(rw, `{"token":"%s"}`, s.oidcToken) //nolint:errcheck // The test would still fail
 
 		case forbiddenPath:
 			http.Error(
@@ -112,7 +112,7 @@ func TestOIDCToken(t *testing.T) {
 				Job:      jobID,
 				Audience: audience,
 			},
-			ExpectedBody: []byte(fmt.Sprintf(`{"audience":%q}`+"\n", audience)),
+			ExpectedBody: fmt.Appendf(nil, `{"audience":%q}`+"\n", audience),
 			OIDCToken:    &api.OIDCToken{Token: oidcToken},
 		},
 		{
@@ -121,7 +121,7 @@ func TestOIDCToken(t *testing.T) {
 				Job:      jobID,
 				Lifetime: lifetime,
 			},
-			ExpectedBody: []byte(fmt.Sprintf(`{"lifetime":%d}`+"\n", lifetime)),
+			ExpectedBody: fmt.Appendf(nil, `{"lifetime":%d}`+"\n", lifetime),
 			OIDCToken:    &api.OIDCToken{Token: oidcToken},
 		},
 		{

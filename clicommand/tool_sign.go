@@ -25,6 +25,8 @@ import (
 )
 
 type ToolSignConfig struct {
+	GlobalConfig
+
 	PipelineFile string `cli:"arg:0" label:"pipeline file"`
 
 	// These change the behaviour
@@ -49,13 +51,6 @@ type ToolSignConfig struct {
 
 	// Added to signature
 	Repository string `cli:"repo"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
 }
 
 const yamlIndent = 2
@@ -106,7 +101,7 @@ Signing a pipeline from a file:
     $ cat pipeline.yml | buildkite-agent tool sign \
         --jwks-file /path/to/private/key.json \
         --repo <repo url for your pipeline>`,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "graphql-token",
 			Usage:  "A token for the buildkite graphql API. This will be used to populate the value of the repository URL, and download the pipeline definition. Both ′repo′ and ′pipeline-file′ will be ignored in preference of values from the GraphQL API if the token in provided.",
@@ -114,12 +109,12 @@ Signing a pipeline from a file:
 		},
 		cli.BoolFlag{
 			Name:   "update",
-			Usage:  "Update the pipeline using the GraphQL API after signing it. This can only be used if ′graphql-token′ is provided.",
+			Usage:  "Update the pipeline using the GraphQL API after signing it. This can only be used if ′graphql-token′ is provided (default: false)",
 			EnvVar: "BUILDKITE_TOOL_SIGN_UPDATE",
 		},
 		cli.BoolFlag{
 			Name:   "no-confirm",
-			Usage:  "Show confirmation prompts before updating the pipeline with the GraphQL API.",
+			Usage:  "Show confirmation prompts before updating the pipeline with the GraphQL API (default: false)",
 			EnvVar: "BUILDKITE_TOOL_SIGN_NO_CONFIRM",
 		},
 
@@ -141,7 +136,7 @@ Signing a pipeline from a file:
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
-			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
 			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
 		},
 
@@ -169,14 +164,7 @@ Signing a pipeline from a file:
 			Usage:  "The URL of the pipeline's repository, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
 			EnvVar: "BUILDKITE_REPO",
 		},
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](context.Background(), c)
@@ -303,6 +291,13 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 			return fmt.Errorf("couldn't encode pipeline: %w", err)
 		}
 		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
+	}
+
+	// Merge pipeline-level secrets with step-level secrets before signing
+	for _, step := range parsedPipeline.Steps {
+		if commandStep, ok := step.(*pipeline.CommandStep); ok {
+			commandStep.MergeSecretsFromPipeline(parsedPipeline.Secrets)
+		}
 	}
 
 	err = signature.SignSteps(

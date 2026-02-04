@@ -23,30 +23,22 @@ with the ′agent-api′ experiment enabled.
 
 Examples:
 
-    #!/bin/bash
+    #!/usr/bin/env bash
     if [[ $(buildkite-agent lock do llama) == 'do' ]]; then
       # your critical section here...
       buildkite-agent lock done llama
     fi`
 
 type LockDoneConfig struct {
-	// Common config options
-	LockScope   string `cli:"lock-scope"`
-	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	GlobalConfig
+	LockCommonConfig
 }
 
 var LockDoneCommand = cli.Command{
 	Name:        "done",
 	Usage:       "Completes a do-once lock",
 	Description: lockDoneHelpDescription,
-	Flags:       append(globalFlags(), lockCommonFlags...),
+	Flags:       lockCommonFlags(),
 	Action:      lockDoneAction,
 }
 

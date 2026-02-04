@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(10)
+string("Ԙ\x8b")
+string("")
+string("")
+string("ŗ0\x8c")

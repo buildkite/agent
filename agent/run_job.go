@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strconv"
@@ -24,13 +25,7 @@ import (
 )
 
 const (
-	// Signal reasons
-	SignalReasonAgentRefused      = "agent_refused"
-	SignalReasonAgentStop         = "agent_stop"
-	SignalReasonCancel            = "cancel"
-	SignalReasonSignatureRejected = "signature_rejected"
-	SignalReasonProcessRunError   = "process_run_error"
-	// Don't add more signal reasons. If you must add a new signal reason, it must also be added to
+	// Think very carefully about adding new signal reasons. If you must add a new signal reason, it must also be added to
 	// the Job::Event::SignalReason enum in the rails app.
 	//
 	// They are meant to represent the reason a job was stopped, but they've also been used to
@@ -41,6 +36,29 @@ const (
 	//
 	// We should consider adding new fields 'not_run_reason' and 'not_run_details' instead of adding
 	// more signal reasons.
+
+	// SignalReasonAgentRefused is used when the agent refused to run the job, e.g. due to a failed `pre-bootstrap` hook,
+	// or a failed allowlist validation.
+	SignalReasonAgentRefused = "agent_refused"
+
+	// SignalReasonAgentStop is used when the agent is stopping, e.g. due to a pending host shutdown or EC2 spot instance termination.
+	SignalReasonAgentStop = "agent_stop"
+
+	// SignalReasonCancel is used when the job was cancelled via the Buildkite web UI.
+	SignalReasonCancel = "cancel"
+
+	// SignalReasonSignatureRejected is used when the job was signed with a signature that could not be verified, either
+	// because the signature is invalid, or because the agent does not have the verification key.
+	SignalReasonSignatureRejected = "signature_rejected"
+
+	// SignalReasonProcessRunError is used when the process to run the bootstrap script failed to run, e.g. due to a
+	// missing executable, or a permission error
+	SignalReasonProcessRunError = "process_run_error"
+
+	// SignalReasonStackError is used when the job was stopped due to a stack error, eg because in Kubernetes the pod running
+	// could not be launched. This signal reason is not used directly by the agent, but is used by the agent-stack-kubernetes
+	// to signal that the job was not run due to a stack error.
+	SignalReasonStackError = "stack_error"
 )
 
 type missingKeyError struct {
@@ -51,9 +69,13 @@ func (e *missingKeyError) Error() string {
 	return fmt.Sprintf("job was signed with signature %q, but no verification key was provided", e.signature)
 }
 
-// Runs the job
-func (r *JobRunner) Run(ctx context.Context) error {
-	r.agentLogger.Info("Starting job %s", r.conf.Job.ID)
+// Run runs the job.
+func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err error) {
+	if r.cancelled.Load() {
+		return errors.New("job already cancelled before running")
+	}
+
+	r.agentLogger.Info("Starting job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
 	defer done()
@@ -96,7 +118,15 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	cctx, cancel := context.WithCancel(ctx)
 	defer func(ctx context.Context, wg *sync.WaitGroup) {
 		cancel()
-		r.cleanup(ctx, wg, exit)
+		r.cleanup(ctx, wg, exit, ignoreAgentInDispatches)
+
+		// In acquire-job mode, we want to return any failed exit code so that
+		// the program can exit with the same code.
+		if r.conf.AgentConfiguration.AcquireJob != "" && exit.Status != 0 {
+			// Use errors.Join to return both this exit, and whatever err may
+			// be being returned already.
+			err = errors.Join(exit, err)
+		}
 	}(ctx, &wg) // Note the non-cancellable context (ctx rather than cctx) here - we don't want to be interrupted during cleanup
 
 	job := r.conf.Job
@@ -151,7 +181,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for
 	// it to tell us whether it is happy to proceed.
-	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
+	if hook, _ := hook.Find(nil, r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
 		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true positive result from the hook
 		ok, err := r.executePreBootstrapHook(ctx, hook)
 		if !ok {
@@ -173,7 +203,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	go r.jobCancellationChecker(cctx, &wg)
 
 	exit = r.runJob(cctx)
-
+	// The defer mutates the error return in some cases.
 	return nil
 }
 
@@ -302,9 +332,9 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
 	// to the user as they may be the caused by errors in the pipeline definition.
 	k8sProcess, isK8s := r.process.(*kubernetes.Runner)
-	if isK8s && !r.stopped {
+	if isK8s && !r.agentStopping.Load() {
 		switch {
-		case r.cancelled && k8sProcess.AnyClientIn(kubernetes.StateNotYetConnected):
+		case r.cancelled.Load() && k8sProcess.AnyClientIn(kubernetes.StateNotYetConnected):
 			fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers never connected to the agent. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)?
 `)
@@ -313,7 +343,6 @@ One or more containers never connected to the agent. Perhaps the container image
 One or more containers connected to the agent, but then stopped communicating without exiting normally. Perhaps the container was OOM-killed?
 `)
 		}
-
 	}
 
 	// Collect the finished process' exit status
@@ -324,12 +353,12 @@ One or more containers connected to the agent, but then stopped communicating wi
 	}
 
 	switch {
-	case r.stopped:
-		// The agent is being gracefully stopped, and we signaled the job to end. Often due
-		// to pending host shutdown or EC2 spot instance termination
+	case r.agentStopping.Load():
+		// The agent is being ungracefully stopped, and we signaled the job to
+		// end. Often due to pending host shutdown or EC2 spot instance termination
 		exit.SignalReason = SignalReasonAgentStop
 
-	case r.cancelled:
+	case r.cancelled.Load():
 		// The job was signaled because it was cancelled via the buildkite web UI
 		exit.SignalReason = SignalReasonCancel
 
@@ -345,13 +374,15 @@ One or more containers connected to the agent, but then stopped communicating wi
 	return exit
 }
 
-func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit) {
+func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit, ignoreAgentInDispatches *bool) {
 	finishedAt := time.Now()
 
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
 	// start the process will still be buffered. Also, there may still be logs in the buffer that
 	// were left behind because the uploader goroutine exited before it could flush them.
-	r.logStreamer.Process(ctx, r.output.ReadAndTruncate())
+	if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
+		r.agentLogger.Warn("Log streamer couldn't process final logs: %v", err)
+	}
 
 	// Stop the log streamer. This will block until all the chunks have been uploaded
 	r.logStreamer.Stop()
@@ -393,9 +424,11 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 	// Finish the build in the Buildkite Agent API
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
-	r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks())
+	if err := r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks(), ignoreAgentInDispatches); err != nil {
+		r.agentLogger.Error("Couldn't mark job as finished: %v", err)
+	}
 
-	r.agentLogger.Info("Finished job %s", r.conf.Job.ID)
+	r.agentLogger.Info("Finished job %s for build at %s", r.conf.Job.ID, r.conf.Job.Env["BUILDKITE_BUILD_URL"])
 }
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
@@ -416,26 +449,96 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 		return
 	}
 
-	for {
-		setStat("📨 Sending process output to log streamer")
+	processInterval := 1 * time.Second
+	if r.conf.Job.ChunksIntervalSeconds > 0 {
+		processInterval = time.Duration(r.conf.Job.ChunksIntervalSeconds) * time.Second
+	}
 
-		// Send the output of the process to the log streamer for processing
-		if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
-			r.agentLogger.Error("Could not stream the log output: %v", err)
-			// LogStreamer.Process only returns an error when it can no longer
-			// accept logs (maybe Stop was called, or a hard limit was reached).
-			// Since we can no longer send logs, Close the buffer, which causes
-			// future Writes to return io.ErrClosedPipe, typically SIGPIPE-ing
-			// the running process (if it is still running).
-			r.output.Close()
+	// We want log chunks to be uploaded regularly. If there were only a few
+	// agents in the world, a simple ticker loop would be fine. But there are a
+	// lot of agents, and we want to spread the requests over time. Some things
+	// to consider when designing such a loop:
+	//
+	// - Large groups of agents all starting the loop at the same time
+	// - Clock drift or backend issues causing the loops among agents to start
+	//   synchronising
+	// - Statistical reasons for agents tending to synchronise
+	// - Having loose or tight bounds on the time between requests
+	//
+	// In this case we want both a lower bound, because fewer larger chunks are
+	// more efficient than lots of smaller chunks, but also we probably want an
+	// upper bound, to improve the experience of tailing a log in the UI.
+	//
+	// Below is a loop within a loop. The inner loop is just a plain ticker loop
+	// that processes chunks once per interval pretty much exactly.
+	// The outer loop periodically restarts the inner loop at a random offset
+	// in time (jitter).
+	// Periodically applying jitter prevents large numbers of agents from
+	// synchronising, but only doing so every so often makes the time between
+	// requests regular (most of the time).
+	//
+	// 32 intervals is an arbitrarily chosen amount of time between jittering.
+	// Increasing it will make it more susceptible to spontaneous
+	// synchronsiation problems like clock drift,
+	// decreasing it will add more variability but also add more "large gaps"
+	// at the point where jitter is added.
+	//
+	// The outer loop repeats every 33 intervals, in order to fit both the inner
+	// loop (32 intervals) and the jitter (between 0 and 1 interval):
+	//   32 intervals < (jitter + inner loop) < 33 intervals
+	// So the gap between requests will usually be 1 interval, but occasionally
+	// be longer (up to 2 intervals).
+
+	const runLength = 32
+	rejitterTicker := time.Tick((runLength + 1) * processInterval)
+	for {
+		// The inner loop starts at a random offset within an interval.
+		jitter := rand.N(processInterval)
+		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
+		select {
+		case <-time.After(jitter):
+			// continue below
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
 			return
 		}
 
-		setStat("😴 Sleeping for a bit")
+		// The inner loop processes once per interval pretty much exactly.
+		intervalTicker := time.Tick(processInterval)
+		for range runLength {
+			setStat("📨 Sending process output to log streamer")
 
-		// Sleep for a bit, or until the job is finished
+			// Send the output of the process to the log streamer for processing
+			if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
+				r.agentLogger.Error("Could not stream the log output: %v", err)
+				// LogStreamer.Process only returns an error when it can no longer
+				// accept logs (maybe Stop was called, or a hard limit was reached).
+				// Since we can no longer send logs, Close the buffer, which causes
+				// future Writes to return io.ErrClosedPipe, typically SIGPIPE-ing
+				// the running process (if it is still running).
+				if err := r.output.Close(); err != nil && err != process.ErrAlreadyClosed {
+					r.agentLogger.Error("Process output buffer could not be closed: %v", err)
+				}
+				return
+			}
+
+			setStat("😴 Waiting for next log processing interval tick")
+			select {
+			case <-intervalTicker:
+				// continue next loop iteration
+			case <-ctx.Done():
+				return
+			case <-r.process.Done():
+				return
+			}
+		}
+
+		// Start the next run on a fixed schedule (for statistical reasons).
+		setStat("😴 Waiting for next re-jittering interval tick")
 		select {
-		case <-time.After(1 * time.Second):
+		case <-rejitterTicker:
+			// continue next loop iteration
 		case <-ctx.Done():
 			return
 		case <-r.process.Done():
@@ -446,18 +549,26 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync
 	// The final output after the process has finished is processed in Run().
 }
 
-func (r *JobRunner) CancelAndStop() error {
-	r.cancelLock.Lock()
-	r.stopped = true
-	r.cancelLock.Unlock()
-	return r.Cancel()
-}
-
-func (r *JobRunner) Cancel() error {
+// Cancel cancels the job. It can be summarised as:
+//   - Send the process an Interrupt. When run via a subprocess, this translates
+//     into SIGTERM. When run via the k8s socket, this transitions the connected
+//     client to RunStateInterrupt.
+//   - Wait for the signal grace period.
+//   - If the job hasn't exited, send the process a Terminate. This is either
+//     SIGKILL or closing the k8s socket server.
+//
+// Cancel blocks until this process is complete.
+// The `agentStopping` arg mainly affects logged messages.
+func (r *JobRunner) Cancel(reason CancelReason) error {
 	r.cancelLock.Lock()
 	defer r.cancelLock.Unlock()
 
-	if r.cancelled {
+	// In case the user clicks "Cancel" in the UI while the agent happens to be
+	// stopping, only go from !stopping -> stopping.
+	r.agentStopping.Store(r.agentStopping.Load() || reason == CancelReasonAgentStopping)
+
+	// Return early if already cancelled.
+	if !r.cancelled.CompareAndSwap(false, true) {
 		return nil
 	}
 
@@ -466,29 +577,32 @@ func (r *JobRunner) Cancel() error {
 		return nil
 	}
 
-	reason := ""
-	if r.stopped {
-		reason = "(agent stopping)"
-	}
-
 	r.agentLogger.Info(
-		"Canceling job %s with a grace period of %ds %s",
+		"Canceling job %s with a signal grace period of %v (%s)",
 		r.conf.Job.ID,
-		r.conf.AgentConfiguration.CancelGracePeriod,
+		r.conf.AgentConfiguration.SignalGracePeriod,
 		reason,
 	)
 
-	r.cancelled = true
-
-	// First we interrupt the process (ctrl-c or SIGINT)
+	// First we interrupt the process with the configured CancelSignal.
+	// At some point in the past, for subprocesses, the default was intended to
+	// be SIGINT, but you will find that the cancel-signal flag default and
+	// the process package's default are both SIGTERM.
 	if err := r.process.Interrupt(); err != nil {
 		return err
 	}
 
 	select {
-	// Grace period for cancelling
-	case <-time.After(time.Second * time.Duration(r.conf.AgentConfiguration.CancelGracePeriod)):
-		r.agentLogger.Info("Job %s hasn't stopped in time, terminating", r.conf.Job.ID)
+	// Grace period between Interrupt and Terminate = the signal grace period.
+	// Extra time between the end of the signal grace period and the end of the
+	// cancel grace period is the time we (agent side) need to upload logs and
+	// disconnect (if the agent is exiting).
+	case <-time.After(r.conf.AgentConfiguration.SignalGracePeriod):
+		r.agentLogger.Info(
+			"Job %s hasn't stopped within %v, terminating",
+			r.conf.Job.ID,
+			r.conf.AgentConfiguration.SignalGracePeriod,
+		)
 
 		// Terminate the process as we've exceeded our context
 		return r.process.Terminate()
@@ -497,4 +611,25 @@ func (r *JobRunner) Cancel() error {
 	case <-r.process.Done():
 		return nil
 	}
+}
+
+// CancelReason captures the reason why Cancel is called.
+type CancelReason int
+
+const (
+	CancelReasonJobState CancelReason = iota
+	CancelReasonAgentStopping
+	CancelReasonInvalidToken
+)
+
+func (r CancelReason) String() string {
+	switch r {
+	case CancelReasonJobState:
+		return "job cancelled on Buildkite"
+	case CancelReasonAgentStopping:
+		return "agent is stopping"
+	case CancelReasonInvalidToken:
+		return "access token is invalid"
+	}
+	return "unknown"
 }

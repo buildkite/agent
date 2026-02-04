@@ -3,10 +3,15 @@ package redact
 
 import (
 	"fmt"
+	"io"
+	"maps"
+	"os"
 	"path"
 	"slices"
+	"strings"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/replacer"
 )
 
 // LengthMin is the shortest string length that will be considered a
@@ -16,11 +21,47 @@ import (
 // from being redacted from useful log output.
 const LengthMin = 6
 
-var redacted = []byte("[REDACTED]")
+// Redacted ignores its input and returns "[REDACTED]".
+func Redacted([]byte) []byte { return []byte("[REDACTED]") }
 
-// Redact ignores its input and returns "[REDACTED]".
-func Redact([]byte) []byte {
-	return redacted
+// String is a convenience wrapper for redacting small strings.
+// This is fine to call repeatedly with many separate strings, but avoid using
+// this to redact large streams - it requires buffering the whole input and
+// output.
+func String(input string, needles []string) string {
+	var sb strings.Builder
+	// strings.Builder.Write doesn't return an error, so neither should a
+	// Replacer that writes to it. If there is a surprise error, that's panic
+	// territory.
+	repl := New(&sb, needles)
+	if _, err := repl.Write([]byte(input)); err != nil {
+		panic("Replacer failed to write to strings.Builder?")
+	}
+	if err := repl.Flush(); err != nil {
+		panic("Replacer failed to flush to strings.Builder?")
+	}
+	return sb.String()
+}
+
+// NeedlesFromEnv matches the patterns against [os.Environ]. It returns values
+// to redact and the names of env vars with "short" values.
+func NeedlesFromEnv(patterns []string) (values, short []string, err error) {
+	environ := env.FromSlice(os.Environ()).DumpPairs()
+	toRedact, short, err := Vars(patterns, environ)
+	if err != nil {
+		return nil, nil, fmt.Errorf("finding env vars to redact: %w", err)
+	}
+	// Make the values unique.
+	needles := make(map[string]struct{})
+	for _, v := range toRedact {
+		needles[v.Value] = struct{}{}
+	}
+	return slices.Collect(maps.Keys(needles)), short, nil
+}
+
+// New returns a replacer configured to write to dst, and redact all needles.
+func New(dst io.Writer, needles []string) *replacer.Replacer {
+	return replacer.New(dst, needles, Redacted)
 }
 
 // MatchAny reports if the name matches any of the patterns.

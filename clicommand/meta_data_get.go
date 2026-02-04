@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -23,30 +24,20 @@ Example:
     $ buildkite-agent meta-data get "foo"`
 
 type MetaDataGetConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Key     string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Default string `cli:"default"`
 	Job     string `cli:"job"`
 	Build   string `cli:"build"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var MetaDataGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Get data from a build",
 	Description: metaDataGetHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:  "default",
 			Value: "",
@@ -64,20 +55,7 @@ var MetaDataGetCommand = cli.Command{
 			Usage:  "Which build should the meta-data be retrieved from. --build will take precedence over --job",
 			EnvVar: "BUILDKITE_METADATA_BUILD_ID",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataGetConfig](ctx, c)
@@ -113,7 +91,6 @@ var MetaDataGetCommand = cli.Command{
 			}
 			return metaData, resp, nil
 		})
-
 		if err != nil {
 			// Buildkite returns a 404 if the key doesn't exist. If
 			// we get this status, and we've got a default - return
@@ -121,7 +98,7 @@ var MetaDataGetCommand = cli.Command{
 			//
 			// We also use `IsSet` instead of `cfg.Default != ""`
 			// to allow people to use a default of a blank string.
-			if resp.StatusCode == 404 && c.IsSet("default") {
+			if resp != nil && resp.StatusCode == 404 && c.IsSet("default") {
 				l.Warn(
 					"No meta-data value exists with key %q, returning the supplied default %q",
 					cfg.Key,

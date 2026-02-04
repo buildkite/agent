@@ -20,7 +20,7 @@ func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -65,7 +65,7 @@ func TestWithResolvingCommitExperiment_WithGitMirrors(t *testing.T) {
 	ctx, _ := experiments.Enable(mainCtx, experiments.ResolveCommitAfterCheckout)
 	tester, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -93,14 +93,8 @@ func TestWithResolvingCommitExperiment_WithGitMirrors(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
-		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 		{"rev-parse", "HEAD"},
 	})
-
-	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
-	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
-	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
@@ -110,7 +104,7 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -159,7 +153,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -231,7 +225,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -292,7 +286,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -336,7 +330,7 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite_WithGitMirrors(t
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -356,7 +350,7 @@ func TestCheckingOutWithSSHKeyscan_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -388,7 +382,7 @@ func TestCheckingOutWithoutSSHKeyscan_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -413,7 +407,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo_WithGitMirrors(t *testing.T
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -446,7 +440,7 @@ func TestCleaningAnExistingCheckout_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -460,8 +454,8 @@ func TestCleaningAnExistingCheckout_WithGitMirrors(t *testing.T) {
 		t.Fatalf(`tester.Repo.Execute(clone, -v, --, %q, %q) error = %v\nout = %s`, tester.Repo.Path, tester.CheckoutDir(), err, out)
 	}
 	testpath := filepath.Join(tester.CheckoutDir(), "test.txt")
-	if err := os.WriteFile(testpath, []byte("llamas"), 0700); err != nil {
-		t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
+	if err := os.WriteFile(testpath, []byte("llamas"), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(test.txt, llamas, 0o700) = %v", err)
 	}
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -486,7 +480,7 @@ func TestForcingACleanCheckout_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -512,7 +506,7 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder_WithGitMirrors(t *testi
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -543,7 +537,7 @@ func TestCheckoutRetriesOnCleanFailure_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -575,7 +569,7 @@ func TestCheckoutRetriesOnCloneFailure_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -605,7 +599,7 @@ func TestCheckoutDoesNotRetryOnHookFailure_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -642,7 +636,7 @@ func TestRepositorylessCheckout_WithGitMirrors(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -650,13 +644,13 @@ func TestRepositorylessCheckout_WithGitMirrors(t *testing.T) {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	var script = []string{
-		"#!/bin/bash",
+	script := []string{
+		"#!/usr/bin/env bash",
 		"export BUILDKITE_REPO=",
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(environment, script, 0700) = %v", err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(environment, script, 0o700) = %v", err)
 	}
 
 	tester.MustMock(t, "git").Expect().NotCalled()
@@ -675,7 +669,7 @@ func TestGitMirrorEnv(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -723,4 +717,80 @@ func TestGitMirrorEnv(t *testing.T) {
 	if !strings.HasPrefix(gitMirrorPath, tester.GitMirrorsDir) {
 		t.Errorf("gitMirrorPath = %q, want prefix %q", gitMirrorPath, tester.GitMirrorsDir)
 	}
+}
+
+func TestCheckingOutWithCustomRefspec_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
+
+	// Create a custom ref in the repository that's different from main
+	customRef := "refs/custom/test-ref"
+	out, err := tester.Repo.Execute("update-ref", customRef, "HEAD")
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(update-ref, %q, HEAD) error = %v\nout = %s", customRef, err, out)
+	}
+
+	// Create a new commit on a branch that's not in the custom ref
+	out, err = tester.Repo.Execute("checkout", "-b", "different-branch")
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(checkout, -b, different-branch) error = %v\nout = %s", err, out)
+	}
+
+	differentFile := "different.txt"
+	if err := os.WriteFile(filepath.Join(tester.Repo.Path, differentFile), []byte("different content"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile(%s, different content, 0o600) = %v", differentFile, err)
+	}
+
+	out, err = tester.Repo.Execute("add", differentFile)
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(add, %s) error = %v\nout = %s", differentFile, err, out)
+	}
+
+	out, err = tester.Repo.Execute("commit", "-m", "Different commit")
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(commit, -m, Different commit) error = %v\nout = %s", err, out)
+	}
+
+	// Go back to main
+	out, err = tester.Repo.Execute("checkout", "main")
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(checkout, main) error = %v\nout = %s", err, out)
+	}
+
+	env := []string{
+		"BUILDKITE_REFSPEC=" + customRef,
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// With the fix: the mirror should fetch the custom refspec instead of the branch
+	git.ExpectAll([][]any{
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
 }

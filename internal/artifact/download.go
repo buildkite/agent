@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -35,7 +36,10 @@ type DownloadConfig struct {
 	Destination string
 
 	// Optional Headers to append to the request
-	Headers map[string]string
+	Headers http.Header
+
+	// HTTP method to use (default is GET)
+	Method string
 
 	// The relative path that should be preserved in the download folder
 	Path string
@@ -130,7 +134,9 @@ func (d Download) try(ctx context.Context) error {
 	// Show a nice message that we're starting to download the file
 	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetPath)
 
-	request, err := http.NewRequestWithContext(ctx, "GET", d.conf.URL, nil)
+	method := cmp.Or(d.conf.Method, http.MethodGet)
+
+	request, err := http.NewRequestWithContext(ctx, method, d.conf.URL, nil)
 	if err != nil {
 		return err
 	}
@@ -140,8 +146,10 @@ func (d Download) try(ctx context.Context) error {
 		request.Header.Add(headerUserAgent, version.UserAgent())
 	}
 
-	for k, v := range d.conf.Headers {
-		request.Header.Add(k, v)
+	for k, vs := range d.conf.Headers {
+		for _, v := range vs {
+			request.Header.Add(k, v)
+		}
 	}
 
 	// Start by downloading the file
@@ -152,7 +160,7 @@ func (d Download) try(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Error while downloading %s (%T: %w)", d.conf.URL, err, err)
 	}
-	defer response.Body.Close()
+	defer response.Body.Close() //nolint:errcheck // Idiomatic response body handling.
 
 	// Double check the status
 	if response.StatusCode/100 != 2 && response.StatusCode/100 != 3 {
@@ -160,8 +168,8 @@ func (d Download) try(ctx context.Context) error {
 	}
 
 	// Now make the folder for our file
-	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-	if err := os.MkdirAll(targetDirectory, 0777); err != nil {
+	// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+	if err := os.MkdirAll(targetDirectory, 0o777); err != nil {
 		return fmt.Errorf("creating directory for %s (%T: %w)", targetPath, err, err)
 	}
 
@@ -170,8 +178,8 @@ func (d Download) try(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating temp file (%T: %w)", err, err)
 	}
-	defer os.Remove(temp.Name())
-	defer temp.Close()
+	defer os.Remove(temp.Name()) //nolint:errcheck // Best-effort cleanup
+	defer temp.Close()           //nolint:errcheck // Best-effort cleanup - primary Close checked below.
 
 	// Create a SHA256 to hash the download as we go.
 	hash := sha256.New()

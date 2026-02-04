@@ -3,7 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
-
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -26,47 +26,24 @@ Example:
     $ buildkite-agent build cancel`
 
 type BuildCancelConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Build string `cli:"build" validate:"required"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var BuildCancelCommand = cli.Command{
 	Name:        "cancel",
 	Usage:       "Cancel a build",
 	Description: buildCancelDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "build",
 			Value:  "",
 			Usage:  "The build UUID to cancel",
 			EnvVar: "BUILDKITE_BUILD_ID",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BuildCancelConfig](ctx, c)

@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "status",
+    srcs = ["status.go"],
+    embedsrcs = ["status.html.tmpl"],
+    importpath = "github.com/buildkite/agent/v3/status",
+    visibility = ["//visibility:public"],
+    deps = ["//version"],
+)
+
+go_test(
+    name = "status_test",
+    srcs = ["status_test.go"],
+    embed = [":status"],
+    deps = ["//version"],
+)

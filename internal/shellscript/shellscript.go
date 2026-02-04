@@ -18,7 +18,7 @@ func ShebangLine(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // File only open for read.
 	sc := bufio.NewScanner(f)
 	if !sc.Scan() {
 		// If the scan ended because of EOF, the file is empty and sc.Err = nil.

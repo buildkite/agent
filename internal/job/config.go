@@ -54,6 +54,9 @@ type ExecutorConfig struct {
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
 
+	// Whether the agent should attempt to checkout the pull request commit using the merge refspec
+	PullRequestUsingMergeRefspec bool
+
 	// The provider of the pipeline
 	PipelineProvider string
 
@@ -71,6 +74,9 @@ type ExecutorConfig struct {
 
 	// Should the executor remove an existing checkout before running the job
 	CleanCheckout bool `env:"BUILDKITE_CLEAN_CHECKOUT"`
+
+	// Skip the checkout phase entirely
+	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
 
 	// Flags to pass to "git checkout" command
 	GitCheckoutFlags string `env:"BUILDKITE_GIT_CHECKOUT_FLAGS"`
@@ -132,6 +138,9 @@ type ExecutorConfig struct {
 	// Path to the global hooks
 	HooksPath string
 
+	// Additional hooks directories that can be provided
+	AdditionalHooksPaths []string
+
 	// Path to the plugins directory
 	PluginsPath string
 
@@ -166,18 +175,23 @@ type ExecutorConfig struct {
 	// Service name to use when reporting traces.
 	TracingServiceName string
 
+	// Traceing context information
+	TracingTraceParent string
+
+	// Accept traceparent context from Buildkite control plane
+	TracingPropagateTraceparent bool
+
 	// Encoding (within base64) for the trace context environment variable.
 	TraceContextCodec tracetools.Codec
 
 	// Whether to start the JobAPI
 	JobAPI bool
 
-	// Whether to enable Kubernetes support, and which container we're running in
-	KubernetesExec        bool
-	KubernetesContainerID int
-
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string
+
+	// Secrets definition for the job step
+	Secrets string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map

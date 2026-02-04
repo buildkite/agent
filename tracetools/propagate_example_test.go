@@ -5,19 +5,15 @@ import (
 	"time"
 
 	"github.com/opentracing/opentracing-go"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
+	"github.com/opentracing/opentracing-go/mocktracer"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
 func ExampleEncodeTraceContext() {
 	// Start and configure the tracer to use the propagator.
-	t := opentracer.New(
-		// These args are just to ensure nothing actually gets sent if the test
-		// platform actually has a DD agent running locally.
-		// This is an unlikely, local, non-default agent address.
-		tracer.WithAgentAddr("10.0.0.1:65534"),
-		tracer.WithLogger(&nullLogger{}),
-	)
+	// A more realistic example would connect to, say, a real DataDog agent
+	// instead of using mocktracer.
+	t := mocktracer.New()
 	opentracing.SetGlobalTracer(t)
 	defer tracer.Stop()
 

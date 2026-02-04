@@ -1,51 +1,60 @@
 package agent
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"context"
+	"fmt"
+	"io"
+
 	"github.com/buildkite/agent/v3/internal/awslib"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
-type EC2Tags struct {
-}
+type EC2Tags struct{}
 
-func (e EC2Tags) Get() (map[string]string, error) {
-	sess, err := awslib.Session()
+func (e EC2Tags) Get(ctx context.Context) (map[string]string, error) {
+	cfg, err := awslib.GetConfigV2(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("loading default AWS config: %w", err)
 	}
 
-	tags := make(map[string]string)
-	ec2metadataClient := ec2metadata.New(sess)
+	client := imds.NewFromConfig(cfg)
 
 	// Grab the current instances id
-	instanceId, err := ec2metadataClient.GetMetadata("instance-id")
+	mdOut, err := client.GetMetadata(ctx, &imds.GetMetadataInput{
+		Path: "instance-id",
+	})
 	if err != nil {
-		return tags, err
+		return nil, fmt.Errorf("fetching metadata from IMDS: %w", err)
 	}
 
-	svc := ec2.New(sess)
+	instanceID, err := io.ReadAll(mdOut.Content)
+	if err != nil {
+		return nil, fmt.Errorf("reading instance ID from metadata: %w", err)
+	}
+
+	svc := ec2.NewFromConfig(cfg)
 
 	// Describe the tags of the current instance
-	resp, err := svc.DescribeTags(&ec2.DescribeTagsInput{
-		Filters: []*ec2.Filter{
+	resp, err := svc.DescribeTags(ctx, &ec2.DescribeTagsInput{
+		Filters: []types.Filter{
 			{
-				Name: aws.String("resource-id"),
-				Values: []*string{
-					aws.String(instanceId),
-				},
+				Name:   aws.String("resource-id"),
+				Values: []string{string(instanceID)},
 			},
 		},
 	})
 	if err != nil {
-		return tags, err
+		return nil, err
 	}
 
 	// Collect the tags
+	tags := make(map[string]string, len(resp.Tags))
 	for _, tag := range resp.Tags {
 		tags[*tag.Key] = *tag.Value
 	}
-
 	return tags, nil
 }

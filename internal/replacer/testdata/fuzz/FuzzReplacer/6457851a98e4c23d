@@ -1,0 +1,7 @@
+go test fuzz v1
+string("aaaa0")
+int(10)
+string("0")
+string("0")
+string("0")
+string("a1")

@@ -22,7 +22,6 @@ func main() {
 			"MOUNTAIN": "chimborazo",
 		},
 	})
-
 	if err != nil {
 		log.Fatalf("error: %v", fmt.Errorf("updating env: %w", err))
 	}

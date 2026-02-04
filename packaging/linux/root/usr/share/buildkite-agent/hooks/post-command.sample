@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # The `post-command` hook will run after the bootstrap script has run your
 # build commands

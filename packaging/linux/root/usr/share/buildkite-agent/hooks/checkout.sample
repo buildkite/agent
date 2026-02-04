@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # The `checkout` hook script will replace the default checkout routine of the
 # bootstrap.sh script. You can use this hook to do your own SCM checkout

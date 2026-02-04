@@ -1,0 +1,7 @@
+go test fuzz v1
+string("i0")
+int(-73)
+string("i0")
+string("\x10")
+string("\xa9\xf0\r")
+string("\x86h.\x8a\v\x1f\x89")

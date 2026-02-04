@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,19 +11,19 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/status"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// AgentPool manages multiple parallel AgentWorkers
+// AgentPool manages multiple parallel AgentWorkers.
 type AgentPool struct {
-	workers     []*AgentWorker
-	idleMonitor *IdleMonitor
+	workers []*AgentWorker
 }
 
-// NewAgentPool returns a new AgentPool
+// NewAgentPool returns a new AgentPool.
 func NewAgentPool(workers []*AgentWorker) *AgentPool {
 	return &AgentPool{
-		workers:     workers,
-		idleMonitor: NewIdleMonitor(len(workers)),
+		workers: workers,
 	}
 }
 
@@ -30,6 +31,7 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", healthHandler(l))
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/status", status.Handle)
 	mux.HandleFunc("/status.json", ap.statusJSONHandler(l))
 
@@ -50,55 +52,73 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 	}()
 }
 
-// Start kicks off the parallel AgentWorkers and waits for them to finish
+// Start kicks off the parallel AgentWorkers and waits for them to finish.
 func (r *AgentPool) Start(ctx context.Context) error {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Agent Pool")
 	defer done()
 	setStat("🏃 Spawning workers...")
 
-	var wg sync.WaitGroup
-	var spawn int = len(r.workers)
-	var errs = make(chan error, spawn)
+	idleMon := newIdleMonitor(len(r.workers))
 
-	// Spawn goroutines for each parallel worker
+	errCh := make(chan error)
+
+	// Spawn each worker "in parallel" (in its own goroutine)
 	for _, worker := range r.workers {
-		wg.Add(1)
-
-		go func(worker *AgentWorker) {
-			defer wg.Done()
-
-			if err := r.runWorker(ctx, worker); err != nil {
-				errs <- err
-			}
-		}(worker)
+		go func() {
+			errCh <- runWorker(ctx, worker, idleMon)
+		}()
 	}
 
 	setStat("✅ Workers spawned!")
 
-	go func() {
-		wg.Wait()
-		close(errs)
-	}()
-
-	return <-errs
+	// Number of receives = number of sends
+	errs := make([]error, 0, len(r.workers))
+	for range r.workers {
+		errs = append(errs, <-errCh)
+	}
+	return errors.Join(errs...) // nil if all errs are nil
 }
 
-func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker) error {
+func runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor) error {
+	agentWorkersStarted.Inc()
+	defer agentWorkersEnded.Inc()
+	defer idleMon.markDead(worker)
+
 	// Connect the worker to the API
 	if err := worker.Connect(ctx); err != nil {
 		return err
 	}
 	// Ensure the worker is disconnected at the end of this function.
-	defer worker.Disconnect(ctx)
+	defer worker.Disconnect(ctx) //nolint:errcheck // Error is logged within core/client
 
 	// Starts the agent worker and wait for it to finish.
-	return worker.Start(ctx, r.idleMonitor)
+	return worker.Start(ctx, idleMon)
 }
 
-func (r *AgentPool) Stop(graceful bool) {
+// StopGracefully stops all workers in the pool gracefully.
+func (r *AgentPool) StopGracefully() {
 	for _, worker := range r.workers {
-		worker.Stop(graceful)
+		worker.StopGracefully()
 	}
+}
+
+// StopUngracefully stops all workers in the pool ungracefully. It blocks until
+// all workers have returned from stopping, which means waiting for job
+// cancellation to finish.
+func (r *AgentPool) StopUngracefully() {
+	var wg sync.WaitGroup
+	wg.Add(len(r.workers))
+	for _, worker := range r.workers {
+		// Because StopUngracefully calls the job runner's Cancel, which blocks,
+		// concurrently stop all the workers.
+		// The number of concurrent Stops is bounded by the spawn count, and
+		// there already exists a handful of goroutines per worker.
+		go func() {
+			worker.StopUngracefully()
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 
 func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
@@ -135,7 +155,6 @@ func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
 			AggregateStatus: aggregateState,
 			Workers:         statuses,
 		})
-
 		if err != nil {
 			l.Error("Could not encode status.json response: %v", err)
 		}
@@ -144,11 +163,11 @@ func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
 
 func healthHandler(l logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		l.Info("%s %s", r.Method, r.URL.Path)
+		l.Debug("agent_pool.go/healthHandler: %s %s", r.Method, r.URL.Path)
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 		} else {
-			fmt.Fprintf(w, "OK: Buildkite agent is running")
+			fmt.Fprintf(w, "OK: Buildkite agent is running") //nolint:errcheck // YOLO?
 		}
 	}
 }

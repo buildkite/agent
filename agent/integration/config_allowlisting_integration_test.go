@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"maps"
 	"regexp"
 	"strings"
 	"testing"
@@ -106,7 +107,6 @@ func TestConfigAllowlisting(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -122,9 +122,7 @@ func TestConfigAllowlisting(t *testing.T) {
 				Token: "bkaj_job-token",
 			}
 
-			for k, v := range tc.extraEnv {
-				job.Env[k] = v
-			}
+			maps.Copy(job.Env, tc.extraEnv)
 
 			e := createTestAgentEndpoint()
 			server := e.server()
@@ -132,7 +130,7 @@ func TestConfigAllowlisting(t *testing.T) {
 
 			mb := mockBootstrap(t)
 			tc.mockBootstrapExpectation(mb)
-			defer mb.CheckAndClose(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 			err := runJob(t, context.Background(), testRunJobConfig{
 				job:           job,

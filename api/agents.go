@@ -21,14 +21,15 @@ type AgentRegisterRequest struct {
 
 // AgentRegisterResponse is the response from the Buildkite Agent API
 type AgentRegisterResponse struct {
-	UUID              string   `json:"id"`
-	Name              string   `json:"name"`
-	AccessToken       string   `json:"access_token"`
-	Endpoint          string   `json:"endpoint"`
-	PingInterval      int      `json:"ping_interval"`
-	JobStatusInterval int      `json:"job_status_interval"`
-	HeartbeatInterval int      `json:"heartbeat_interval"`
-	Tags              []string `json:"meta_data"`
+	UUID              string            `json:"id"`
+	Name              string            `json:"name"`
+	AccessToken       string            `json:"access_token"`
+	Endpoint          string            `json:"endpoint"`
+	RequestHeaders    map[string]string `json:"request_headers"`
+	PingInterval      int               `json:"ping_interval"`
+	JobStatusInterval int               `json:"job_status_interval"`
+	HeartbeatInterval int               `json:"heartbeat_interval"`
+	Tags              []string          `json:"meta_data"`
 }
 
 // Registers the agent against the Buildkite Agent API. The client for this
@@ -45,10 +46,14 @@ func (c *Client) Register(ctx context.Context, regReq *AgentRegisterRequest) (*A
 		return nil, resp, err
 	}
 
+	// If Buildkite told us to use Buildkite-* request headers, store those
+	c.setRequestHeaders(a.RequestHeaders)
+
 	return a, resp, err
 }
 
-// Connects the agent to the Buildkite Agent API
+// Connect connects the agent to the Buildkite Agent API (calls the connect
+// method - it doesn't necessarily open a new underlying network connection!).
 func (c *Client) Connect(ctx context.Context) (*Response, error) {
 	req, err := c.newRequest(ctx, "POST", "connect", nil)
 	if err != nil {
@@ -58,9 +63,52 @@ func (c *Client) Connect(ctx context.Context) (*Response, error) {
 	return c.doRequest(req, nil)
 }
 
-// Disconnects the agent to the Buildkite Agent API
+// Disconnect disconnects the agent from the Buildkite Agent API (calls the
+// disconnect method - it doesn't necessarily close the underlying network
+// connection!).
 func (c *Client) Disconnect(ctx context.Context) (*Response, error) {
 	req, err := c.newRequest(ctx, "POST", "disconnect", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req, nil)
+}
+
+// AgentStopRequest is a call to stop the agent via the Buildkite Agent API
+type AgentStopRequest struct {
+	Force bool `json:"force,omitempty"`
+}
+
+// Stop stops the agent via the Buildkite Agent API
+func (c *Client) Stop(ctx context.Context, stopReq *AgentStopRequest) (*Response, error) {
+	req, err := c.newRequest(ctx, "POST", "stop", stopReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req, nil)
+}
+
+// AgentPauseRequest is a call to pause the agent via the Buildkite Agent API.
+type AgentPauseRequest struct {
+	Note             string `json:"note,omitempty"`
+	TimeoutInMinutes int    `json:"timeout_in_minutes,omitempty"`
+}
+
+// Pause pauses the agent via the Buildkite Agent API.
+func (c *Client) Pause(ctx context.Context, pauseReq *AgentPauseRequest) (*Response, error) {
+	req, err := c.newRequest(ctx, "POST", "pause", pauseReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req, nil)
+}
+
+// Resume resumes a paused agent via the Buildkite Agent API.
+func (c *Client) Resume(ctx context.Context) (*Response, error) {
+	req, err := c.newRequest(ctx, "POST", "resume", nil)
 	if err != nil {
 		return nil, err
 	}

@@ -13,9 +13,7 @@ import (
 	"github.com/buildkite/roko"
 )
 
-var (
-	sshKeyscanRetryInterval = 2 * time.Second
-)
+var sshKeyscanRetryInterval = 2 * time.Second
 
 func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, error) {
 	toolsDir, err := findPathToSSHTools(ctx, sh)
@@ -31,7 +29,6 @@ func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, erro
 		roko.WithStrategy(roko.Constant(sshKeyscanRetryInterval)),
 	)
 	return roko.DoFunc(ctx, r, func(r *roko.Retrier) (string, error) {
-
 		sshKeyScanCommand := fmt.Sprintf("ssh-keyscan %q", host)
 		args := []string{host}
 

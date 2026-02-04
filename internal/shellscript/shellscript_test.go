@@ -12,8 +12,8 @@ func TestShebangLine(t *testing.T) {
 	}{
 		{
 			name:     "bash",
-			contents: "#!/bin/bash\necho 'Llamas!'",
-			want:     "#!/bin/bash",
+			contents: "#!/usr/bin/env bash\necho 'Llamas!'",
+			want:     "#!/usr/bin/env bash",
 		},
 		{
 			name:     "python3",
@@ -38,7 +38,9 @@ func TestShebangLine(t *testing.T) {
 			if err != nil {
 				t.Fatalf("os.CreateTemp(TestShebangLine-*) error = %v", err)
 			}
-			defer os.Remove(f.Name())
+			t.Cleanup(func() {
+				os.Remove(f.Name()) //nolint:errcheck // File removal is best-effort cleanup.
+			})
 
 			if _, err := f.WriteString(test.contents); err != nil {
 				t.Fatalf("f.WriteString(%q) error = %v", test.contents, err)
@@ -77,7 +79,7 @@ func TestIsPOSIXShell(t *testing.T) {
 		{"garbage", false},
 		{"/bin/sh", true},
 		{"/bin/fish", false},
-		{"#!/bin/bash", true},
+		{"#!/usr/bin/env bash", true},
 		{"#!/bin/cat", false},
 		{"#!/usr/bin/env bash", true},
 		{"#!/usr/bin/env python3", false},

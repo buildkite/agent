@@ -306,6 +306,30 @@ func TestProcessInterrupts(t *testing.T) {
 	assertProcessDoesntExist(t, p)
 }
 
+func TestProcessInterruptsAfterDone(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Process groups not supported on windows")
+		return
+	}
+
+	p := process.New(logger.Discard, process.Config{
+		Path: os.Args[0],
+		Env:  []string{"TEST_MAIN=tester-pgid"},
+	})
+
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("p.Run() = %v", err)
+	}
+
+	<-p.Done()
+
+	if err := p.Interrupt(); err != nil {
+		t.Fatalf("p.Interrupt() = %v", err)
+	}
+}
+
 func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 	t.Parallel()
 
@@ -383,7 +407,7 @@ func assertProcessDoesntExist(t *testing.T, p *process.Process) {
 }
 
 func BenchmarkProcess(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		proc := process.New(logger.Discard, process.Config{
 			Path: os.Args[0],
 			Env:  []string{"TEST_MAIN=output"},

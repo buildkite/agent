@@ -34,7 +34,6 @@ configuration:
 
 func TestDefinitionParsesYaml(t *testing.T) {
 	def, err := ParseDefinition([]byte(testPluginDef))
-
 	if err != nil {
 		t.Fatalf("ParseDefinition(testPluginDef) error = %v", err)
 	}

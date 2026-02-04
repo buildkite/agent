@@ -56,7 +56,7 @@ func findExecutable(file string, exts []string) (string, error) {
 // If file contains a slash, it is tried directly
 // LookPath also uses PATHEXT environment variable to match a suitable candidate.
 // The result may be an absolute path or a path relative to the current directory.
-func LookPath(file string, path string, fileExtensions string) (string, error) {
+func LookPath(file, path, fileExtensions string) (string, error) {
 	var exts []string
 	if fileExtensions != "" {
 		for _, e := range strings.Split(strings.ToLower(fileExtensions), ";") {

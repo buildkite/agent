@@ -1,43 +1,49 @@
 package agent
 
 import (
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/buildkite/agent/v3/internal/awslib"
+	"context"
+	"fmt"
+	"io"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 )
 
-type EC2MetaData struct {
-}
+type EC2MetaData struct{}
 
 // Takes a map of tags and meta-data paths to get, returns a map of tags and fetched values.
-func (e EC2MetaData) GetPaths(paths map[string]string) (map[string]string, error) {
+func (e EC2MetaData) GetPaths(ctx context.Context, paths map[string]string) (map[string]string, error) {
 	metaData := make(map[string]string)
 
-	c, err := newAWSClient()
+	c, err := newAWSClient(ctx)
 	if err != nil {
 		return metaData, err
 	}
 
 	for key, path := range paths {
-		value, err := c.GetMetadata(path)
+		mdOut, err := c.GetMetadata(ctx, &imds.GetMetadataInput{Path: path})
 		if err != nil {
-			return nil, err
-		} else {
-			metaData[key] = value
+			return nil, fmt.Errorf("fetching metadata: %w", err)
 		}
+		value, err := io.ReadAll(mdOut.Content)
+		if err != nil {
+			return nil, fmt.Errorf("reading metadata response: %w", err)
+		}
+		metaData[key] = string(value)
 	}
 
 	return metaData, nil
 }
 
-func (e EC2MetaData) Get() (map[string]string, error) {
+func (e EC2MetaData) Get(ctx context.Context) (map[string]string, error) {
 	metaData := make(map[string]string)
 
-	c, err := newAWSClient()
+	c, err := newAWSClient(ctx)
 	if err != nil {
 		return metaData, err
 	}
 
-	document, err := c.GetInstanceIdentityDocument()
+	document, err := c.GetInstanceIdentityDocument(ctx, nil)
 	if err != nil {
 		return metaData, err
 	}
@@ -50,19 +56,25 @@ func (e EC2MetaData) Get() (map[string]string, error) {
 	metaData["aws:instance-type"] = document.InstanceType
 	metaData["aws:region"] = document.Region
 
-	instanceLifeCycle, err := c.GetMetadata("instance-life-cycle")
-	if err == nil {
-		metaData["aws:instance-life-cycle"] = instanceLifeCycle
+	mdOut, err := c.GetMetadata(ctx, &imds.GetMetadataInput{Path: "instance-life-cycle"})
+	if err != nil {
+		return metaData, nil
+	}
+	instanceLifeCycle, err := io.ReadAll(mdOut.Content)
+	if err != nil {
+		return metaData, nil
 	}
 
+	metaData["aws:instance-life-cycle"] = string(instanceLifeCycle)
 	return metaData, nil
 }
 
-func newAWSClient() (*ec2metadata.EC2Metadata, error) {
-	sess, err := awslib.Session()
+func newAWSClient(ctx context.Context) (*imds.Client, error) {
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return &ec2metadata.EC2Metadata{}, err
+		return nil, fmt.Errorf("loading default AWS config: %w", err)
 	}
 
-	return ec2metadata.New(sess), nil
+	client := imds.NewFromConfig(cfg)
+	return client, nil
 }

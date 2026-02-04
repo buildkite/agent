@@ -1,0 +1,7 @@
+go test fuzz v1
+string("000000ipsums")
+int(10)
+string("psum")
+string("1")
+string("s")
+string("1")

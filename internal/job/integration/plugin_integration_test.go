@@ -20,7 +20,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -28,7 +28,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export LLAMAS_ROCK=absolutely",
 			pluginMock.Path + " testing",
 		},
@@ -81,13 +81,13 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"exit 5",
 		},
 	}
@@ -128,7 +128,7 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -152,7 +152,7 @@ func TestOverlappingPluginHooks(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -169,7 +169,7 @@ func TestOverlappingPluginHooks(t *testing.T) {
 				}
 			} else {
 				fakeHooks[hook] = []string{
-					"#!/bin/bash",
+					"#!/usr/bin/env bash",
 					pluginMock.Path + " " + hook,
 				}
 			}
@@ -216,13 +216,13 @@ func TestPluginCloneRetried(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export LLAMAS_ROCK=absolutely",
 		},
 	}
@@ -285,11 +285,11 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	tester, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
-	// Let's set a fixed location for plugins, otherwise NewBootstrapTester() gives us a random new
+	// Let's set a fixed location for plugins, otherwise NewExecutorTester() gives us a random new
 	// tempdir every time, which defeats our test.  Later we'll use this pluginsDir for the second
 	// test run, too.
 	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
@@ -299,14 +299,14 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	tester.PluginsDir = pluginsDir
 
 	// There's a bit of machinery in replacePluginPathInEnv to modify only the
-	// BUILDKITE_PLUGINS_PATH, leaving the rest of the environment variables NewBootstrapTester()
+	// BUILDKITE_PLUGINS_PATH, leaving the rest of the environment variables NewExecutorTester()
 	// gave us as-is.
 	tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
 
 	// Create a test plugin that sets an environment variable.
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export OSTRICH_EGGS=quite_large",
 		},
 	}
@@ -322,7 +322,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	// You may be surprised that we're creating a branch here.  This is so we can test the behaviour
 	// when a branch has had new commits added to it.
-	err = p.gitRepository.CreateBranch("something-fixed")
+	err = p.CreateBranch("something-fixed")
 	assert.NilError(t, err)
 
 	// To test this, we also set our testPlugin to version "something-fixed", so that the agent will
@@ -352,7 +352,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	// Now, we want to "repeat" the test build, having modified the plugin's contents.
 	tester2, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester2.Close()
 
@@ -362,7 +362,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	hooks2 := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export OSTRICH_EGGS=huge_actually",
 		},
 	}
@@ -398,7 +398,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -415,7 +415,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	hooks := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export OSTRICH_EGGS=quite_large",
 		},
 	}
@@ -430,7 +430,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	p := createTestPlugin(t, hooks)
 
 	// Same branch-name jiggery pokery as in the previous integration test
-	p.gitRepository.CreateBranch("something-fixed")
+	p.CreateBranch("something-fixed")
 	p.versionTag = "something-fixed"
 
 	json, err := p.ToJSON()
@@ -455,7 +455,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester2, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester2.Close()
 
@@ -467,7 +467,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	hooks2 := map[string][]string{
 		"environment": {
-			"#!/bin/bash",
+			"#!/usr/bin/env bash",
 			"export OSTRICH_EGGS=huge_actually",
 		},
 	}
@@ -510,14 +510,14 @@ func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 		t.Fatalf("newGitRepository() error = %v", err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(repo.Path, "hooks"), 0700); err != nil {
-		t.Fatalf("os.MkdirAll(hooks, 0700) = %v", err)
+	if err := os.MkdirAll(filepath.Join(repo.Path, "hooks"), 0o700); err != nil {
+		t.Fatalf("os.MkdirAll(hooks, 0o700) = %v", err)
 	}
 
 	for hook, lines := range hooks {
 		data := []byte(strings.Join(lines, "\n"))
-		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
-			t.Fatalf("os.WriteFile(hooks/%s, data, 0600) = %v", hook, err)
+		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0o600); err != nil {
+			t.Fatalf("os.WriteFile(hooks/%s, data, 0o600) = %v", hook, err)
 		}
 	}
 
@@ -545,8 +545,8 @@ func modifyTestPlugin(t *testing.T, hooks map[string][]string, testPlugin *testP
 
 	for hook, lines := range hooks {
 		data := []byte(strings.Join(lines, "\n"))
-		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
-			t.Fatalf("os.WriteFile(hooks/%s, data, 0600) = %v", hook, err)
+		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0o600); err != nil {
+			t.Fatalf("os.WriteFile(hooks/%s, data, 0o600) = %v", hook, err)
 		}
 	}
 
@@ -573,7 +573,7 @@ func (tp *testPlugin) ToJSON() (string, error) {
 // BUILDKITE_PLUGINS expects an array of these, so it would
 // generally be used on a []testPlugin slice.
 func (tp *testPlugin) MarshalJSON() ([]byte, error) {
-	normalizedPath := strings.TrimPrefix(strings.Replace(tp.Path, "\\", "/", -1), "/")
+	normalizedPath := strings.TrimPrefix(strings.ReplaceAll(tp.Path, "\\", "/"), "/")
 
 	p := map[string]any{
 		fmt.Sprintf("file:///%s#%s", normalizedPath, strings.TrimSpace(tp.versionTag)): map[string]string{
@@ -588,15 +588,16 @@ func (tp *testPlugin) MarshalJSON() ([]byte, error) {
 }
 
 // replacePluginPathInEnv is useful for modifying the Env blob of a tester created with
-// NewBootstrapTester().  We need to do that because the tester relies on BUILDKITE_PLUGINS_PATH,
+// NewExecutorTester().  We need to do that because the tester relies on BUILDKITE_PLUGINS_PATH,
 // not on the .PluginsDir field as one might expect.
 func replacePluginPathInEnv(originalEnv []string, pluginsDir string) (newEnv []string) {
-	newEnv = []string{}
-	for _, val := range originalEnv {
-		if !strings.HasPrefix(val, "BUILDKITE_PLUGINS_PATH=") {
-			newEnv = append(newEnv, val)
+	newEnv = make([]string, 0, len(originalEnv))
+	for _, e := range originalEnv {
+		if strings.HasPrefix(e, "BUILDKITE_PLUGINS_PATH=") {
+			newEnv = append(newEnv, "BUILDKITE_PLUGINS_PATH="+pluginsDir)
+		} else {
+			newEnv = append(newEnv, e)
 		}
 	}
-	newEnv = append(newEnv, "BUILDKITE_PLUGINS_PATH="+pluginsDir)
 	return newEnv
 }

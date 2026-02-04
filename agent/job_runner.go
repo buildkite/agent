@@ -5,16 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/env"
+	envutil "github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
@@ -49,35 +53,6 @@ const (
 	VerificationBehaviourBlock = "block"
 )
 
-// Certain env can only be set by agent configuration.
-// We show the user a warning in the bootstrap if they use any of these at a job level.
-var ProtectedEnv = map[string]struct{}{
-	"BUILDKITE_AGENT_ACCESS_TOKEN":       {},
-	"BUILDKITE_AGENT_DEBUG":              {},
-	"BUILDKITE_AGENT_ENDPOINT":           {},
-	"BUILDKITE_AGENT_PID":                {},
-	"BUILDKITE_BIN_PATH":                 {},
-	"BUILDKITE_BUILD_PATH":               {},
-	"BUILDKITE_COMMAND_EVAL":             {},
-	"BUILDKITE_CONFIG_PATH":              {},
-	"BUILDKITE_CONTAINER_COUNT":          {},
-	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
-	"BUILDKITE_GIT_CLONE_FLAGS":          {},
-	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
-	"BUILDKITE_GIT_FETCH_FLAGS":          {},
-	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT": {},
-	"BUILDKITE_GIT_MIRRORS_PATH":         {},
-	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":  {},
-	"BUILDKITE_GIT_SUBMODULES":           {},
-	"BUILDKITE_HOOKS_PATH":               {},
-	"BUILDKITE_KUBERNETES_EXEC":          {},
-	"BUILDKITE_LOCAL_HOOKS_ENABLED":      {},
-	"BUILDKITE_PLUGINS_ENABLED":          {},
-	"BUILDKITE_PLUGINS_PATH":             {},
-	"BUILDKITE_SHELL":                    {},
-	"BUILDKITE_SSH_KEYSCAN":              {},
-}
-
 type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
@@ -103,16 +78,15 @@ type JobRunnerConfig struct {
 	// Whether to set debug HTTP Requests in the job
 	DebugHTTP bool
 
-	// Whether the job is executing as a k8s pod
+	// KubernetesExec enables Kubernetes execution mode. When true, the job runner
+	// creates a kubernetes.Runner that listens on a UNIX socket for other agent containers
+	// to connect, rather than spawning a local bootstrap subprocess. The other agent containers
+	// containers run `kubernetes-bootstrap` which connects to this socket, receives
+	// environment variables, and executes the bootstrap phases.
 	KubernetesExec bool
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	AgentStdout io.Writer
-}
-
-type jobRunner interface {
-	Run(ctx context.Context) error
-	CancelAndStop() error
 }
 
 type JobRunner struct {
@@ -126,13 +100,13 @@ type JobRunner struct {
 	agentLogger logger.Logger
 
 	// The APIClient that will be used when updating the job
-	apiClient APIClient
+	apiClient *api.Client
 
 	// The agentlib Client is used to drive some APIClient methods
 	client *core.Client
 
 	// The internal process of the job
-	process jobAPI
+	process jobProcess
 
 	// The internal buffer of the process output
 	output *process.Buffer
@@ -146,24 +120,23 @@ type JobRunner struct {
 	// jobLogs is an io.Writer that sends data to the job logs
 	jobLogs io.Writer
 
-	// If the job is being cancelled
-	cancelled bool
+	// Job cancellation control
+	cancelLock sync.Mutex // prevent concurrent calls to Cancel
+
+	// State flags
+	cancelled     atomic.Bool // job is cancelled?
+	agentStopping atomic.Bool
 
 	// When the job was started
 	startedAt time.Time
-
-	// If the agent is being stopped
-	stopped bool
-
-	// A lock to protect concurrent calls to cancel
-	cancelLock sync.Mutex
 
 	// Files containing a copy of the job env
 	envShellFile *os.File
 	envJSONFile  *os.File
 }
 
-type jobAPI interface {
+// jobProcess is either a *process.Process, or a *kubernetes.Runner.
+type jobProcess interface {
 	Done() <-chan struct{}
 	Started() <-chan struct{}
 	Interrupt() error
@@ -172,14 +145,21 @@ type jobAPI interface {
 	WaitStatus() process.WaitStatus
 }
 
-var _ jobRunner = (*JobRunner)(nil)
-
 // Initializes the job runner
-func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
+func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
+	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
+	// our current apiClient is using
+	if conf.Job.Token != "" {
+		clientConf := apiClient.Config()
+		clientConf.Token = conf.Job.Token
+		apiClient = apiClient.New(clientConf)
+	}
+
 	r := &JobRunner{
 		agentLogger: l,
 		conf:        conf,
 		apiClient:   apiClient,
+		client:      &core.Client{APIClient: apiClient, Logger: l},
 	}
 
 	var err error
@@ -192,15 +172,6 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		conf.JobStatusInterval = 1 * time.Second
 	}
 
-	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
-	// our current apiClient is using
-	if r.conf.Job.Token != "" {
-		clientConf := r.apiClient.Config()
-		clientConf.Token = r.conf.Job.Token
-		r.apiClient = api.NewClient(r.agentLogger, clientConf)
-	}
-	r.client = &core.Client{APIClient: r.apiClient, Logger: l}
-
 	// Create our header times struct
 	r.headerTimesStreamer = newHeaderTimesStreamer(r.agentLogger, r.onUploadHeaderTime)
 
@@ -209,7 +180,17 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 	r.logStreamer = NewLogStreamer(
 		r.agentLogger,
 		func(ctx context.Context, chunk *api.Chunk) error {
-			return r.client.UploadChunk(ctx, r.conf.Job.ID, chunk)
+			startUpload := time.Now()
+			// core.Client.UploadChunk contains the retry/backoff.
+			if err := r.client.UploadChunk(ctx, r.conf.Job.ID, chunk); err != nil {
+				logChunkUploadErrors.Inc()
+				logBytesUploadErrors.Add(float64(chunk.Size))
+				return err
+			}
+			logUploadDurations.Observe(time.Since(startUpload).Seconds())
+			logChunksUploaded.Inc()
+			logBytesUploaded.Add(float64(chunk.Size))
+			return nil
 		},
 		LogStreamerConfig{
 			Concurrency:       3,
@@ -218,29 +199,10 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		},
 	)
 
-	// TempDir is not guaranteed to exist
-	tempDir := os.TempDir()
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-		if err = os.MkdirAll(tempDir, 0777); err != nil {
-			return nil, err
-		}
-	}
-
-	// Prepare a file to receive the given job environment
-	file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.conf.Job.ID))
+	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, conf.KubernetesExec)
 	if err != nil {
-		return r, err
+		return nil, err
 	}
-	r.agentLogger.Debug("[JobRunner] Created env file (shell format): %s", file.Name())
-	r.envShellFile = file
-
-	file, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", r.conf.Job.ID))
-	if err != nil {
-		return r, err
-	}
-	r.agentLogger.Debug("[JobRunner] Created env file (JSON format): %s", file.Name())
-	r.envJSONFile = file
 
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
@@ -268,7 +230,15 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 		if err != nil {
 			return nil, err
 		}
-		os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name())
+
+		err := os.Chmod(tmpFile.Name(), 0o644) // Make it world-readable - useful for log collection etc
+		if err != nil {
+			return nil, fmt.Errorf("failed to set permissions on job log tmpfile %s: %w", tmpFile.Name(), err)
+		}
+
+		if err := os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name()); err != nil {
+			return nil, fmt.Errorf("failed to set BUILDKITE_JOB_LOG_TMPFILE: %v", err)
+		}
 		outputWriter = io.MultiWriter(outputWriter, tmpFile)
 	}
 
@@ -338,6 +308,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 				logger.StringField("build_id", r.conf.Job.Env["BUILDKITE_BUILD_ID"]),
 				logger.StringField("build_number", r.conf.Job.Env["BUILDKITE_BUILD_NUMBER"]),
 				logger.StringField("job_url", fmt.Sprintf("%s#%s", r.conf.Job.Env["BUILDKITE_BUILD_URL"], r.conf.Job.ID)),
+				logger.StringField("build_url", r.conf.Job.Env["BUILDKITE_BUILD_URL"]),
 				logger.StringField("job_id", r.conf.Job.ID),
 				logger.StringField("step_key", r.conf.Job.Env["BUILDKITE_STEP_KEY"]),
 			)
@@ -364,11 +335,12 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient APIClient, con
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
 		}
 		r.process = kubernetes.NewRunner(r.agentLogger, kubernetes.RunnerConfig{
-			Stdout:            r.jobLogs,
-			Stderr:            r.jobLogs,
-			ClientCount:       containerCount,
-			Env:               processEnv,
-			ClientLostTimeout: 30 * time.Second,
+			Stdout:             r.jobLogs,
+			Stderr:             r.jobLogs,
+			ClientCount:        containerCount,
+			Env:                processEnv,
+			ClientStartTimeout: 5 * time.Minute,
+			ClientLostTimeout:  30 * time.Second,
 		})
 	} else { // not Kubernetes
 		// The bootstrap-script gets parsed based on the operating system
@@ -424,21 +396,84 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// sent by Buildkite. The variables below should always take
 	// precedence.
 	env := make(map[string]string)
-	for key, value := range r.conf.Job.Env {
-		env[key] = value
-	}
+	maps.Copy(env, r.conf.Job.Env)
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
 
+	// When in KubernetesExec mode, filter out the Kubernetes plugin,
+	// since it's not a real plugin. agent-stack-k8s reads it but we have no
+	// need for it. Supplying it when not using agent-stack-k8s is a mistake
+	// but not one worth preventing.
+	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
+		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
+		if err != nil {
+			r.agentLogger.Error("Invalid BUILDKITE_PLUGINS: %w", err)
+		}
+		if string(filtered) == "" {
+			delete(env, "BUILDKITE_PLUGINS")
+		} else {
+			env["BUILDKITE_PLUGINS"] = string(filtered)
+		}
+	}
+
+	// Wrap setting values in env, so that when any that were already present in
+	// supplied Job env are overwritten, they can be added to ignoredEnv.
+	var ignoredEnv []string
+	setEnv := func(name, value string) {
+		if _, exists := env[name]; exists {
+			ignoredEnv = append(ignoredEnv, name)
+		}
+		env[name] = value
+	}
+
 	// Write out the job environment to file:
-	// - envShellFile: in k="v" format, with newlines escaped
+	// - envShellFile: in k="v" format, with newlines escaped. If the
+	//   propagate-agent-vars experiment is enabled, the names of several agent
+	//   config variables are prepended at the top.
 	// - envJSONFile: as a single JSON object {"k":"v",...}, escaped appropriately for JSON.
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envShellFile != nil {
+		if experiments.IsEnabled(ctx, experiments.PropagateAgentConfigVars) {
+			// Note that some variables in this list might not be defined later,
+			// when something comes to read the file. See below where they are
+			// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
+			// Docker in particular tolerates undefined vars in an env file
+			// without complaints.
+			const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
+BUILDKITE_GIT_CLEAN_FLAGS
+BUILDKITE_GIT_CLONE_FLAGS
+BUILDKITE_GIT_CLONE_MIRROR_FLAGS
+BUILDKITE_GIT_FETCH_FLAGS
+BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
+BUILDKITE_GIT_MIRRORS_PATH
+BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
+BUILDKITE_GIT_SUBMODULES
+BUILDKITE_CANCEL_GRACE_PERIOD
+BUILDKITE_COMMAND_EVAL
+BUILDKITE_LOCAL_HOOKS_ENABLED
+BUILDKITE_PLUGINS_ENABLED
+BUILDKITE_REDACTED_VARS
+BUILDKITE_SHELL
+BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS
+BUILDKITE_SSH_KEYSCAN
+BUILDKITE_STRICT_SINGLE_HOOKS
+BUILDKITE_TRACE_CONTEXT_ENCODING
+BUILDKITE_TRACING_BACKEND
+BUILDKITE_TRACING_SERVICE_NAME
+BUILDKITE_TRACING_TRACEPARENT
+BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
+BUILDKITE_AGENT_AWS_KMS_KEY
+BUILDKITE_AGENT_JWKS_FILE
+BUILDKITE_AGENT_JWKS_KEY_ID`
+			if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
+				return nil, err
+			}
+		}
+
 		for key, value := range env {
-			if _, err := r.envShellFile.WriteString(fmt.Sprintf("%s=%q\n", key, value)); err != nil {
+			if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
 				return nil, err
 			}
 		}
@@ -457,121 +492,138 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// Now that the env files have been written, we can add their corresponding
 	// paths to the job env.
 	if r.envShellFile != nil {
-		env["BUILDKITE_ENV_FILE"] = r.envShellFile.Name()
+		setEnv("BUILDKITE_ENV_FILE", r.envShellFile.Name())
 	}
 	if r.envJSONFile != nil {
-		env["BUILDKITE_ENV_JSON_FILE"] = r.envJSONFile.Name()
-	}
-
-	var ignoredEnv []string
-
-	// Check if the user has defined any protected env
-	for k := range ProtectedEnv {
-		if _, exists := r.conf.Job.Env[k]; exists {
-			ignoredEnv = append(ignoredEnv, k)
-		}
+		setEnv("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
 	}
 
 	cache := r.conf.Job.Step.Cache
 	if cache != nil && len(cache.Paths) > 0 {
-		env["BUILDKITE_AGENT_CACHE_PATHS"] = strings.Join(cache.Paths, ",")
+		setEnv("BUILDKITE_AGENT_CACHE_PATHS", strings.Join(cache.Paths, ","))
 	}
 
-	// Set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings
-	if len(ignoredEnv) > 0 {
-		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
+	// Set BUILDKITE_SECRETS_CONFIG so bootstrap can access secrets configuration
+	if len(r.conf.Job.Step.Secrets) > 0 {
+		secretsJSON, err := json.Marshal(r.conf.Job.Step.Secrets)
+		if err != nil {
+			r.agentLogger.Error("Failed to marshal secrets configuration: %v", err)
+			return nil, err
+		}
+
+		setEnv("BUILDKITE_SECRETS_CONFIG", string(secretsJSON))
 	}
 
 	// Add the API configuration
 	apiConfig := r.apiClient.Config()
-	env["BUILDKITE_AGENT_ENDPOINT"] = apiConfig.Endpoint
-	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = apiConfig.Token
-	env["BUILDKITE_NO_HTTP2"] = fmt.Sprint(apiConfig.DisableHTTP2)
+	setEnv("BUILDKITE_AGENT_ENDPOINT", apiConfig.Endpoint)
+	setEnv("BUILDKITE_AGENT_ACCESS_TOKEN", apiConfig.Token)
+	setEnv("BUILDKITE_NO_HTTP2", fmt.Sprint(apiConfig.DisableHTTP2))
+
+	// ... including any server-specified request headers, so that sub-processes such as
+	// buildkite-agent annotate etc can respect them.
+	for header, values := range r.apiClient.ServerSpecifiedRequestHeaders() {
+		k := fmt.Sprintf(
+			"BUILDKITE_REQUEST_HEADER_%s",
+			strings.ToUpper(strings.ReplaceAll(header, "-", "_")),
+		)
+		for _, v := range values {
+			env[k] = v
+		}
+	}
 
 	// Add agent environment variables
-	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprint(r.conf.Debug)
-	env["BUILDKITE_AGENT_DEBUG_HTTP"] = fmt.Sprint(r.conf.DebugHTTP)
-	env["BUILDKITE_AGENT_PID"] = strconv.Itoa(os.Getpid())
+	setEnv("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
+	setEnv("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
+	setEnv("BUILDKITE_AGENT_PID", strconv.Itoa(os.Getpid()))
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)
+	// Note that [os.Executable] returns an absolute path.
 	exePath, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
-	dir, err := filepath.Abs(filepath.Dir(exePath))
-	if err != nil {
-		return nil, err
-	}
-	env["BUILDKITE_BIN_PATH"] = dir
+
+	setEnv("BUILDKITE_BIN_PATH", filepath.Dir(exePath))
 
 	// Add options from the agent configuration
-	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
-	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
-	env["BUILDKITE_SOCKETS_PATH"] = r.conf.AgentConfiguration.SocketsPath
-	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
-	env["BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"] = fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate)
-	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
-	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
-	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan)
-	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules)
-	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprint(r.conf.AgentConfiguration.CommandEval)
-	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled)
-	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled)
-	env["BUILDKITE_GIT_CHECKOUT_FLAGS"] = r.conf.AgentConfiguration.GitCheckoutFlags
-	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
-	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
-	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
-	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
-	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout)
-	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
-	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(ctx), ",")
-	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
-	env["BUILDKITE_STRICT_SINGLE_HOOKS"] = fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks)
-	env["BUILDKITE_CANCEL_GRACE_PERIOD"] = strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod)
-	env["BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"] = strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod / time.Second))
-	env["BUILDKITE_TRACE_CONTEXT_ENCODING"] = r.conf.AgentConfiguration.TraceContextEncoding
-
-	if r.conf.KubernetesExec {
-		env["BUILDKITE_KUBERNETES_EXEC"] = "true"
+	setEnv("BUILDKITE_CONFIG_PATH", r.conf.AgentConfiguration.ConfigPath)
+	setEnv("BUILDKITE_BUILD_PATH", r.conf.AgentConfiguration.BuildPath)
+	setEnv("BUILDKITE_SOCKETS_PATH", r.conf.AgentConfiguration.SocketsPath)
+	setEnv("BUILDKITE_GIT_MIRRORS_PATH", r.conf.AgentConfiguration.GitMirrorsPath)
+	setEnv("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate))
+	setEnv("BUILDKITE_HOOKS_PATH", r.conf.AgentConfiguration.HooksPath)
+	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
+	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
+	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
+	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+	// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
+	// or by pipeline/step env
+	// This is here now to make it ready for if/when we add skip_checkout to the core app
+	if r.conf.AgentConfiguration.SkipCheckout {
+		setEnv("BUILDKITE_SKIP_CHECKOUT", "true")
 	}
+	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
+	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
+	// Allow BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH to be enabled either by config
+	// or by pipeline/step env.
+	if r.conf.AgentConfiguration.PluginsAlwaysCloneFresh {
+		setEnv("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH", "true")
+	}
+	setEnv("BUILDKITE_LOCAL_HOOKS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled))
+
+	setEnv("BUILDKITE_GIT_CHECKOUT_FLAGS", r.conf.AgentConfiguration.GitCheckoutFlags)
+	setEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
+	setEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
+	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
+	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
+	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
+
+	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
+	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
+	setEnv("BUILDKITE_REDACTED_VARS", strings.Join(r.conf.AgentConfiguration.RedactedVars, ","))
+	setEnv("BUILDKITE_STRICT_SINGLE_HOOKS", fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks))
+	setEnv("BUILDKITE_CANCEL_GRACE_PERIOD", strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod))
+	setEnv("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod/time.Second)))
+	setEnv("BUILDKITE_TRACE_CONTEXT_ENCODING", r.conf.AgentConfiguration.TraceContextEncoding)
 
 	if !r.conf.AgentConfiguration.AllowMultipartArtifactUpload {
-		env["BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD"] = "true"
+		setEnv("BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", "true")
 	}
 
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
 	if r.conf.CancelSignal != process.SIGTERM {
-		env["BUILDKITE_CANCEL_SIGNAL"] = r.conf.CancelSignal.String()
+		setEnv("BUILDKITE_CANCEL_SIGNAL", r.conf.CancelSignal.String())
 	}
 
 	// Whether to enable profiling in the bootstrap
 	if r.conf.AgentConfiguration.Profile != "" {
-		env["BUILDKITE_AGENT_PROFILE"] = r.conf.AgentConfiguration.Profile
+		setEnv("BUILDKITE_AGENT_PROFILE", r.conf.AgentConfiguration.Profile)
 	}
 
 	// PTY-mode is enabled by default in `start` and `bootstrap`, so we only need
 	// to propagate it if it's explicitly disabled.
 	if !r.conf.AgentConfiguration.RunInPty {
-		env["BUILDKITE_PTY"] = "false"
+		setEnv("BUILDKITE_PTY", "false")
 	}
 
 	// pass through the KMS key ID for signing
 	if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
-		env["BUILDKITE_AGENT_AWS_KMS_KEY"] = r.conf.AgentConfiguration.SigningAWSKMSKey
+		setEnv("BUILDKITE_AGENT_AWS_KMS_KEY", r.conf.AgentConfiguration.SigningAWSKMSKey)
 	}
 
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
 	if r.conf.AgentConfiguration.SigningJWKSFile != "" {
-		env["BUILDKITE_AGENT_JWKS_FILE"] = r.conf.AgentConfiguration.SigningJWKSFile
+		setEnv("BUILDKITE_AGENT_JWKS_FILE", r.conf.AgentConfiguration.SigningJWKSFile)
 	}
 
 	if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
-		env["BUILDKITE_AGENT_JWKS_KEY_ID"] = r.conf.AgentConfiguration.SigningJWKSKeyID
+		setEnv("BUILDKITE_AGENT_JWKS_KEY_ID", r.conf.AgentConfiguration.SigningJWKSKeyID)
 	}
 
 	if r.conf.AgentConfiguration.DebugSigning {
-		env["BUILDKITE_AGENT_DEBUG_SIGNING"] = "true"
+		setEnv("BUILDKITE_AGENT_DEBUG_SIGNING", "true")
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
@@ -580,22 +632,40 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if pluginValidation, ok := env["BUILDKITE_PLUGIN_VALIDATION"]; ok {
 		switch pluginValidation {
 		case "true", "1", "on":
+			// Skip ignoredEnv by pretending it wasn't set by the job.
+			delete(env, "BUILDKITE_PLUGIN_VALIDATION")
 			enablePluginValidation = true
 		}
 	}
-	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprint(enablePluginValidation)
+	setEnv("BUILDKITE_PLUGIN_VALIDATION", fmt.Sprint(enablePluginValidation))
 
 	if r.conf.AgentConfiguration.TracingBackend != "" {
-		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
-		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
+		setEnv("BUILDKITE_TRACING_BACKEND", r.conf.AgentConfiguration.TracingBackend)
+		setEnv("BUILDKITE_TRACING_SERVICE_NAME", r.conf.AgentConfiguration.TracingServiceName)
+
+		// Buildkite backend can provide a traceparent property on the job
+		// which can be propagated to the job tracing if OpenTelemetry is used
+		//
+		// https://www.w3.org/TR/trace-context/#traceparent-header
+		if r.conf.Job.TraceParent != "" {
+			setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
+		}
+		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
+			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
+		}
 	}
 
-	env["BUILDKITE_AGENT_DISABLE_WARNINGS_FOR"] = strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ",")
+	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
 
 	// see documentation for BuildkiteMessageMax
 	if err := truncateEnv(r.agentLogger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
 		r.agentLogger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)
 		// attempt to continue anyway
+	}
+
+	// Finally, set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings.
+	if len(ignoredEnv) > 0 {
+		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
 
 	// Convert the env map into a slice (which is what the script gear
@@ -627,6 +697,18 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 	return nil
 }
 
+func removeKubernetesPlugin(pluginsJSON []byte) ([]byte, error) {
+	var plugins []map[string]json.RawMessage
+	if err := json.Unmarshal(pluginsJSON, &plugins); err != nil {
+		return pluginsJSON, err
+	}
+	plugins = slices.DeleteFunc(plugins, func(plugin map[string]json.RawMessage) bool {
+		_, isK8sPlugin := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]
+		return isK8sPlugin
+	})
+	return json.Marshal(plugins)
+}
+
 type LogWriter struct {
 	l logger.Logger
 }
@@ -651,7 +733,7 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	// - Env files are designed to be validated by the pre-bootstrap hook
 	// - The pre-bootstrap hook may want to create annotations, so it can also
 	//   have a few necessary and global args as env vars.
-	environ := env.New()
+	environ := envutil.New()
 	environ.Set("BUILDKITE_ENV_FILE", r.envShellFile.Name())
 	environ.Set("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
 	environ.Set("BUILDKITE_JOB_ID", r.conf.Job.ID)
@@ -696,43 +778,63 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 		return
 	}
 
+	intervalTicker := time.NewTicker(r.conf.JobStatusInterval)
+	defer intervalTicker.Stop()
+	first := make(chan struct{}, 1)
+	first <- struct{}{}
+
 	for {
+		setStat("😴 Waiting for next job status interval tick")
+		select {
+		case <-first:
+			// continue below
+		case <-intervalTicker.C:
+			// continue below
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+
+		// Within the interval, wait a random amount of time to avoid
+		// spontaneous synchronisation across agents.
+		jitter := rand.N(r.conf.JobStatusInterval)
+		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
+		select {
+		case <-time.After(jitter):
+			// continue below
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+
 		setStat("📡 Fetching job state from Buildkite")
 
 		// Re-get the job and check its status to see if it's been cancelled
 		jobState, response, err := r.apiClient.GetJobState(ctx, r.conf.Job.ID)
-
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
 				r.agentLogger.Error("Invalid access token, cancelling job %s", r.conf.Job.ID)
-				if err := r.Cancel(); err != nil {
+				if err := r.Cancel(CancelReasonInvalidToken); err != nil {
 					r.agentLogger.Error("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
 				}
 			} else {
 				// We don't really care if it fails, we'll just try again soon anyway
 				r.agentLogger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
 			}
-		} else if jobState.State == "canceling" || jobState.State == "canceled" {
-			if err := r.Cancel(); err != nil {
+			continue // the loop
+		}
+		if jobState.State == "canceling" || jobState.State == "canceled" {
+			if err := r.Cancel(CancelReasonJobState); err != nil {
 				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
-		}
-
-		setStat("😴 Sleeping for a bit")
-
-		// Sleep for a bit, or until the job is finished
-		select {
-		case <-time.After(r.conf.JobStatusInterval):
-		case <-ctx.Done():
-			return
-		case <-r.process.Done():
-			return
 		}
 	}
 }
 
 func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, times map[string]string) {
-	roko.NewRetrier(
+	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
@@ -748,6 +850,9 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 
 		return err
 	})
+	if err != nil {
+		r.agentLogger.Error("Ultimately unable to upload header times: %v", err)
+	}
 }
 
 // jobLogger is just a simple wrapper around a JSON Logger that satisfies the
@@ -772,4 +877,36 @@ func (l jobLogger) Write(data []byte) (int, error) {
 	msg := strings.TrimRight(string(data), "\r\n")
 	l.log.Info(msg)
 	return len(data), nil
+}
+
+func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shellFile, jsonFile *os.File, err error) {
+	// Use /workspace in Kubernetes mode for shared volume access between containers
+	tempDir := os.TempDir()
+	if kubernetesExec {
+		tempDir = "/workspace"
+	}
+
+	// tempDir is not guaranteed to exist
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err = os.MkdirAll(tempDir, 0o777); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	shellFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", jobID))
+	if err != nil {
+		return nil, nil, err
+	}
+	l.Debug("[JobRunner] Created env file (shell format): %s", shellFile.Name())
+
+	jsonFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", jobID))
+	if err != nil {
+		shellFile.Close()
+		os.Remove(shellFile.Name())
+		return nil, nil, err
+	}
+	l.Debug("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())
+
+	return shellFile, jsonFile, nil
 }

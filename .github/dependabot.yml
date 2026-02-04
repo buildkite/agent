@@ -14,6 +14,16 @@ updates:
       container-images:
         patterns:
           - "*"
+          
+  - package-ecosystem: docker
+    directories:
+      - /.buildkite
+    schedule:
+      interval: weekly
+    groups:
+      container-images:
+        patterns:
+          - "*"
 
   - package-ecosystem: gomod
     directory: /

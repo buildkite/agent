@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
@@ -45,13 +46,13 @@ var (
 
 	NoHTTP2Flag = cli.BoolFlag{
 		Name:   "no-http2",
-		Usage:  "Disable HTTP2 when communicating with the Agent API.",
+		Usage:  "Disable HTTP2 when communicating with the Agent API (default: false)",
 		EnvVar: "BUILDKITE_NO_HTTP2",
 	}
 
 	DebugFlag = cli.BoolFlag{
 		Name:   "debug",
-		Usage:  "Enable debug mode. Synonym for ′--log-level debug′. Takes precedence over ′--log-level′",
+		Usage:  "Enable debug mode. Synonym for ′--log-level debug′. Takes precedence over ′--log-level′ (default: false)",
 		EnvVar: "BUILDKITE_AGENT_DEBUG",
 	}
 
@@ -70,39 +71,53 @@ var (
 
 	DebugHTTPFlag = cli.BoolFlag{
 		Name:   "debug-http",
-		Usage:  "Enable HTTP debug mode, which dumps all request and response bodies to the log",
+		Usage:  "Enable HTTP debug mode, which dumps all request and response bodies to the log (default: false)",
 		EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
 	}
 
 	TraceHTTPFlag = cli.BoolFlag{
 		Name:   "trace-http",
-		Usage:  "Enable HTTP trace mode, which logs timings for each HTTP request. Timings are logged at the debug level unless a request fails at the network level in which case they are logged at the error level",
+		Usage:  "Enable HTTP trace mode, which logs timings for each HTTP request. Timings are logged at the debug level unless a request fails at the network level in which case they are logged at the error level (default: false)",
 		EnvVar: "BUILDKITE_AGENT_TRACE_HTTP",
 	}
 
 	NoColorFlag = cli.BoolFlag{
 		Name:   "no-color",
-		Usage:  "Don't show colors in logging",
+		Usage:  "Don't show colors in logging (default: false)",
 		EnvVar: "BUILDKITE_AGENT_NO_COLOR",
 	}
 
 	StrictSingleHooksFlag = cli.BoolFlag{
 		Name:   "strict-single-hooks",
-		Usage:  "Enforces that only one checkout hook, and only one command hook, can be run",
+		Usage:  "Enforces that only one checkout hook, and only one command hook, can be run (default: false)",
 		EnvVar: "BUILDKITE_STRICT_SINGLE_HOOKS",
 	}
 
-	KubernetesExecFlag = cli.BoolFlag{
-		Name: "kubernetes-exec",
+	SocketsPathFlag = cli.StringFlag{
+		Name:   "sockets-path",
+		Value:  defaultSocketsPath(),
+		Usage:  "Directory where the agent will place sockets",
+		EnvVar: "BUILDKITE_SOCKETS_PATH",
+	}
+
+	KubernetesContainerIDFlag = cli.IntFlag{
+		Name: "kubernetes-container-id",
 		Usage: "This is intended to be used only by the Buildkite k8s stack " +
-			"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
-			"logs and exit statuses between containers in a pod",
-		EnvVar: "BUILDKITE_KUBERNETES_EXEC",
+			"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
+			"used to identify this container within the pod",
+		EnvVar: "BUILDKITE_CONTAINER_ID",
+	}
+
+	KubernetesLogCollectionGracePeriodFlag = cli.DurationFlag{
+		Name:   "kubernetes-log-collection-grace-period",
+		Usage:  "Deprecated, do not use",
+		EnvVar: "BUILDKITE_KUBERNETES_LOG_COLLECTION_GRACE_PERIOD",
+		Value:  50 * time.Second,
 	}
 
 	NoMultipartArtifactUploadFlag = cli.BoolFlag{
 		Name:   "no-multipart-artifact-upload",
-		Usage:  "For Buildkite-hosted artifacts, disables the use of multipart uploads. Has no effect on uploads to other destinations such as custom cloud buckets",
+		Usage:  "For Buildkite-hosted artifacts, disables the use of multipart uploads. Has no effect on uploads to other destinations such as custom cloud buckets (default: false)",
 		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
 	}
 
@@ -138,6 +153,27 @@ var (
 	}
 )
 
+// GlobalConfig includes very common shared config options for easy inclusion across
+// config structs (via embedding).
+type GlobalConfig struct {
+	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
+}
+
+// APIConfig includes API-related shared options for easy inclusion across
+// config structs (via embedding). Subcommands that don't need APIConfig usually
+// do something "trivial" (e.g. acknowledgements) or "special" (e.g. start).
+type APIConfig struct {
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	DebugHTTP        bool   `cli:"debug-http"`
+	TraceHTTP        bool   `cli:"trace-http"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoHTTP2          bool   `cli:"no-http2"`
+}
+
 func globalFlags() []cli.Flag {
 	return []cli.Flag{
 		NoColorFlag,
@@ -145,6 +181,16 @@ func globalFlags() []cli.Flag {
 		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+	}
+}
+
+func apiFlags() []cli.Flag {
+	return []cli.Flag{
+		AgentAccessTokenFlag,
+		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+		TraceHTTPFlag,
 	}
 }
 
@@ -270,7 +316,7 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 		}
 		// split comma delimited env
 		if envVars := f.String(); envVars != "" {
-			for _, env := range strings.Split(envVars, ",") {
+			for env := range strings.SplitSeq(envVars, ",") {
 				os.Unsetenv(env)
 			}
 		}

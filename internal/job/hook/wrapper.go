@@ -203,11 +203,22 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		templateType = PosixShellTemplateType
 	}
 
+	// The os.TempDir might not exist, since user can set $TMPDIR.
+	// Although we attempt to do the same in job_runner, part of job_runner runs before backend env
+	// populated the process.
+	// So TLDR, $TMPDIR could change between job_runner and hook wrapper.
+	osTempDir := os.TempDir()
+	if _, err := os.Stat(osTempDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(osTempDir, 0o777); err != nil {
+			return nil, err
+		}
+	}
+
 	// On systems where multiple buildkite-agents are running under different
 	// users, a shared path could be owned by a different user.
 	// Creating a new temporary directory to hold the temporary files avoids
 	// this issue and makes cleanup easier.
-	tempDir, err := os.MkdirTemp(os.TempDir(), hookWrapperDir)
+	tempDir, err := os.MkdirTemp(osTempDir, hookWrapperDir)
 	if err != nil {
 		return nil, fmt.Errorf("creating temporary directory for hook wrapper: %w", err)
 	}
@@ -281,7 +292,7 @@ func WriteHookWrapper(
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // Close is checked below.
 
 	var tmpl *template.Template
 	switch templateType {

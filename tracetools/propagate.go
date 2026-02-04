@@ -57,8 +57,10 @@ func DecodeTraceContext(env map[string]string, codec Codec) (opentracing.SpanCon
 }
 
 // Encoder impls can encode values. Decoder impls can decode values.
-type Encoder interface{ Encode(v any) error }
-type Decoder interface{ Decode(v any) error }
+type (
+	Encoder interface{ Encode(v any) error }
+	Decoder interface{ Decode(v any) error }
+)
 
 // Codec implementations produce encoders/decoders.
 type Codec interface {

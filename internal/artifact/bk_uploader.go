@@ -29,10 +29,8 @@ const (
 	// - a single signed POST, which has a hard limit of 5GB, or
 	// - as a signed multipart, which has a limit of 5GB per _part_, but we
 	//   aren't supporting larger artifacts yet.
+	// Note that multipart parts have a minimum size of 5MB.
 	maxFormUploadedArtifactSize = int64(5 * 1024 * 1024 * 1024)
-
-	// Multipart parts have a minimum size of 5MB.
-	minPartSize = int64(5 * 1024 * 1024)
 )
 
 type BKUploaderConfig struct {
@@ -135,9 +133,11 @@ func (u *bkMultipartUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, 
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // File open for read only.
 
-	f.Seek(u.offset, 0)
+	if _, err := f.Seek(u.offset, 0); err != nil {
+		return nil, fmt.Errorf("seeking input file to offset %d: %w", u.offset, err)
+	}
 	lr := io.LimitReader(f, u.size)
 
 	req, err := http.NewRequestWithContext(ctx, u.action.Method, u.action.URL, lr)
@@ -165,7 +165,7 @@ func (u *bkMultipartUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Idiomatic for response bodies.
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -225,7 +225,7 @@ func (u *bkFormUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, error
 
 	// Be sure to close the response body at the end of
 	// this function
-	defer response.Body.Close()
+	defer response.Body.Close() //nolint:errcheck // Idiomatic for response bodies.
 
 	if response.StatusCode/100 != 2 {
 		body := &bytes.Buffer{}
@@ -241,7 +241,7 @@ func (u *bkFormUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, error
 }
 
 // Creates a new file upload http request with optional extra params
-func createFormUploadRequest(ctx context.Context, _ logger.Logger, artifact *api.Artifact) (*http.Request, error) {
+func createFormUploadRequest(ctx context.Context, _ logger.Logger, artifact *api.Artifact) (_ *http.Request, err error) {
 	streamer := newMultipartStreamer()
 	action := artifact.UploadInstructions.Action
 
@@ -261,19 +261,25 @@ func createFormUploadRequest(ctx context.Context, _ logger.Logger, artifact *api
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		// In the happy case, don't close the file - let the caller do that.
+		// In the sad case, close it before returning.
+		// This uses the named error return for the function to read the error.
+		if err != nil {
+			fh.Close() //nolint:errcheck // File open for read only.
+		}
+	}()
 
 	// It's important that we add the form field last because when
 	// uploading to an S3 form, they are really nit-picky about the field
 	// order, and the file needs to be the last one other it doesn't work.
 	if err := streamer.WriteFile(action.FileInput, artifact.Path, fh); err != nil {
-		fh.Close()
 		return nil, err
 	}
 
 	// Create the URL that we'll send data to
 	uri, err := url.Parse(action.URL)
 	if err != nil {
-		fh.Close()
 		return nil, err
 	}
 
@@ -282,7 +288,6 @@ func createFormUploadRequest(ctx context.Context, _ logger.Logger, artifact *api
 	// Create the request
 	req, err := http.NewRequestWithContext(ctx, action.Method, uri.String(), streamer.Reader())
 	if err != nil {
-		fh.Close()
 		return nil, err
 	}
 

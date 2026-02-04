@@ -1,0 +1,43 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "jobapi",
+    srcs = [
+        "client.go",
+        "doc.go",
+        "env.go",
+        "payloads.go",
+        "redactions.go",
+        "routes.go",
+        "server.go",
+        "socket.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/jobapi",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//env",
+        "//internal/replacer",
+        "//internal/shell",
+        "//internal/socket",
+        "@com_github_go_chi_chi_v5//:chi",
+        "@com_github_go_chi_chi_v5//middleware",
+    ],
+)
+
+go_test(
+    name = "jobapi_test",
+    srcs = [
+        "client_test.go",
+        "server_test.go",
+    ],
+    embed = [":jobapi"],
+    deps = [
+        "//env",
+        "//internal/redact",
+        "//internal/replacer",
+        "//internal/shell",
+        "//internal/socket",
+        "@com_github_google_go_cmp//cmp",
+        "@tools_gotest_v3//assert",
+    ],
+)

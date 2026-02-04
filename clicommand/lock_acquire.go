@@ -29,46 +29,30 @@ with the ′agent-api′ experiment enabled.
 
 Examples:
 
-    #!/bin/bash
+    #!/usr/bin/env bash
     token=$(buildkite-agent lock acquire llama)
     # your critical section here...
     buildkite-agent lock release llama "${token}"`
 
 type LockAcquireConfig struct {
-	// Common config options
-	LockScope   string `cli:"lock-scope"`
-	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
+	GlobalConfig
+	LockCommonConfig
 
 	LockWaitTimeout time.Duration `cli:"lock-wait-timeout"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-}
-
-func lockAcquireFlags() []cli.Flag {
-	flags := append(
-		[]cli.Flag{
-			cli.DurationFlag{
-				Name:   "lock-wait-timeout",
-				Usage:  "Sets a maximum duration to wait for a lock before giving up",
-				EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
-			},
-		},
-		lockCommonFlags...,
-	)
-	return append(flags, globalFlags()...)
 }
 
 var LockAcquireCommand = cli.Command{
 	Name:        "acquire",
 	Usage:       "Acquires a lock from the agent leader",
 	Description: lockAcquireHelpDescription,
-	Flags:       lockAcquireFlags(),
-	Action:      lockAcquireAction,
+	Flags: append(lockCommonFlags(),
+		cli.DurationFlag{
+			Name:   "lock-wait-timeout",
+			Usage:  "Sets a maximum duration to wait for a lock before giving up",
+			EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
+		},
+	),
+	Action: lockAcquireAction,
 }
 
 func lockAcquireAction(c *cli.Context) error {

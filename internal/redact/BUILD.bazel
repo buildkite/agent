@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "redact",
+    srcs = ["redact.go"],
+    importpath = "github.com/buildkite/agent/v3/internal/redact",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//env",
+        "//internal/replacer",
+    ],
+)
+
+go_test(
+    name = "redact_test",
+    srcs = ["redact_test.go"],
+    embed = [":redact"],
+    deps = [
+        "//env",
+        "@com_github_google_go_cmp//cmp",
+    ],
+)

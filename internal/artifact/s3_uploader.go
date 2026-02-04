@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
@@ -30,7 +33,7 @@ type S3Uploader struct {
 	BucketName string
 
 	// The s3 client to use
-	client *s3.S3
+	client *s3.Client
 
 	// The configuration
 	conf S3UploaderConfig
@@ -48,11 +51,10 @@ func NewS3Uploader(ctx context.Context, l logger.Logger, c S3UploaderConfig) (*S
 		roko.WithJitter(),
 	)
 
-	s3Client, err := roko.DoFunc(ctx, r, func(*roko.Retrier) (*s3.S3, error) {
+	s3Client, err := roko.DoFunc(ctx, r, func(*roko.Retrier) (*s3.Client, error) {
 		// Initialize the s3 client, and authenticate it
-		return NewS3Client(l, bucketName)
+		return NewS3Client(ctx, l, bucketName)
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -82,11 +84,10 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 		baseUrl = os.Getenv("BUILDKITE_S3_ACCESS_URL")
 	}
 
-	url, _ := url.Parse(baseUrl)
+	uri, _ := url.Parse(baseUrl)
+	uri.Path = path.Join(uri.Path, u.artifactPath(artifact))
 
-	url.Path += u.artifactPath(artifact)
-
-	return url.String()
+	return uri.String()
 }
 
 func (u *S3Uploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
@@ -107,14 +108,14 @@ func (u *s3UploaderWork) Description() string {
 	return singleUnitDescription(u.artifact)
 }
 
-func (u *s3UploaderWork) DoWork(context.Context) (*api.ArtifactPartETag, error) {
+func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, error) {
 	permission, err := u.resolvePermission()
 	if err != nil {
 		return nil, err
 	}
 
 	// Create an uploader with the session and default options
-	uploader := s3manager.NewUploaderWithClient(u.client)
+	uploader := manager.NewUploader(u.client)
 
 	// Open file from filesystem
 	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
@@ -126,42 +127,44 @@ func (u *s3UploaderWork) DoWork(context.Context) (*api.ArtifactPartETag, error) 
 	// Upload the file to S3.
 	u.logger.Debug("Uploading %q to bucket with permission %q", u.artifactPath(u.artifact), permission)
 
-	params := &s3manager.UploadInput{
+	params := &s3.PutObjectInput{
 		Bucket:      aws.String(u.BucketName),
 		Key:         aws.String(u.artifactPath(u.artifact)),
 		ContentType: aws.String(u.artifact.ContentType),
-		ACL:         aws.String(permission),
+		ACL:         permission,
 		Body:        f,
 	}
+
 	// if enabled we assign the sse configuration
 	if u.serverSideEncryptionEnabled() {
-		params.ServerSideEncryption = aws.String("AES256")
+		params.ServerSideEncryption = types.ServerSideEncryptionAes256
 	}
 
-	_, err = uploader.Upload(params)
+	_, err = uploader.Upload(ctx, params)
 	return nil, err
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.BucketPath, artifact.Path}
+	if u.BucketPath == "" {
+		return artifact.Path
+	}
 
-	return strings.Join(parts, "/")
+	return path.Join(u.BucketPath, artifact.Path)
 }
 
-func (u *S3Uploader) resolvePermission() (string, error) {
-	permission := "public-read"
-	if os.Getenv("BUILDKITE_S3_ACL") != "" {
-		permission = os.Getenv("BUILDKITE_S3_ACL")
-	} else if os.Getenv("AWS_S3_ACL") != "" {
-		permission = os.Getenv("AWS_S3_ACL")
+func (u *S3Uploader) resolvePermission() (types.ObjectCannedACL, error) {
+	permission := types.ObjectCannedACLPublicRead
+	switch {
+	case os.Getenv("BUILDKITE_S3_ACL") != "":
+		permission = types.ObjectCannedACL(os.Getenv("BUILDKITE_S3_ACL"))
+	case os.Getenv("AWS_S3_ACL") != "":
+		permission = types.ObjectCannedACL(os.Getenv("AWS_S3_ACL"))
 	}
 
-	switch permission {
-	case "private", "public-read", "public-read-write", "authenticated-read", "bucket-owner-read", "bucket-owner-full-control":
-		return permission, nil
-	default:
-		return "", fmt.Errorf("Invalid S3 ACL value: `%s`", permission)
+	if !slices.Contains(permission.Values(), permission) {
+		return "", invalidACLError(permission)
 	}
+	return permission, nil
 }
 
 // is encryption at rest enabled for artifacts to satisfy basic security requirements
@@ -173,4 +176,10 @@ func (u *S3Uploader) serverSideEncryptionEnabled() bool {
 	default:
 		return false
 	}
+}
+
+type invalidACLError string
+
+func (e invalidACLError) Error() string {
+	return fmt.Sprintf("invalid S3 ACL value: %q", string(e))
 }

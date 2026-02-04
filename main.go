@@ -4,7 +4,7 @@ package main
 
 // see https://blog.golang.org/generate
 //go:generate go run internal/mime/generate.go
-//go:generate go fmt internal/mime/mime.go
+//go:generate go tool gofumpt -w internal/mime/mime.go
 
 import (
 	"fmt"
@@ -16,13 +16,12 @@ import (
 )
 
 const appHelpTemplate = `Usage:
-
   {{.Name}} <command> [options...]
 
-Available commands are:
-
-  {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-  {{end}}
+Available commands are: {{range .VisibleCategories}}{{if .Name}}
+{{.Name}}:{{range .VisibleCommands}}
+  {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{"\n"}}{{else}}{{range .VisibleCommands}}
+  {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{"\n"}}{{end}}{{end}}
 Use "{{.Name}} <command> --help" for more information about a command.
 `
 
@@ -65,15 +64,10 @@ func main() {
 	app.Commands = clicommand.BuildkiteAgentCommands
 	app.ErrWriter = os.Stderr
 
-	// When no sub command is used
-	app.Action = func(c *cli.Context) {
-		_ = cli.ShowAppHelp(c)
-		os.Exit(1)
-	}
-
 	// When a sub command can't be found
 	app.CommandNotFound = func(c *cli.Context, command string) {
-		_ = cli.ShowAppHelp(c)
+		fmt.Fprintf(app.ErrWriter, "buildkite-agent: unknown subcommand %q\n", command)
+		fmt.Fprintf(app.ErrWriter, "Run '%s --help' for usage.\n", c.App.Name)
 		os.Exit(1)
 	}
 

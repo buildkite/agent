@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(106)
+string("0\x94\x94\x94")
+string("0\x97\xd8")
+string("0\xbe\x98\x99")
+string("0")

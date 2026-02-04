@@ -297,8 +297,13 @@ func TestGitFetch(t *testing.T) {
 		t.Fatalf("sh.AbsolutePath(git) = %v", err)
 	}
 
-	if err := gitFetch(ctx, sh, "--foo --bar", "repo", "ref1", "ref2"); err != nil {
-		t.Fatalf(`gitFetch(ctx, sh, "--foo --bar", "repo", "ref1", "ref2") = %v`, err)
+	if err := gitFetch(ctx, gitFetchArgs{
+		Shell:         sh,
+		GitFetchFlags: "--foo --bar",
+		Repository:    "repo",
+		RefSpecs:      []string{"ref1", "ref2"},
+	}); err != nil {
+		t.Fatalf(`gitFetch(ctx, gitFetchArgs{Shell: sh, GitFetchFlags: "--foo --bar", Remote: "repo", RefSpecs: []string{"ref1", "ref2"}} = %v`, err)
 	}
 
 	wantLog := [][]string{{absoluteGit, "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2"}}

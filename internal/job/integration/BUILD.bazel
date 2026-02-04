@@ -1,0 +1,51 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "integration",
+    srcs = [
+        "doc.go",
+        "executor_tester.go",
+        "git.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/job/integration",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//clicommand",
+        "//env",
+        "//internal/experiments",
+        "//internal/job",
+        "//internal/shell",
+        "@com_github_buildkite_bintest_v3//:bintest",
+        "@tools_gotest_v3//assert",
+    ],
+)
+
+go_test(
+    name = "integration_test",
+    srcs = [
+        "artifact_integration_test.go",
+        "checkout_git_mirrors_integration_test.go",
+        "checkout_integration_test.go",
+        "command_integration_test.go",
+        "docker_integration_test.go",
+        "hooks_integration_test.go",
+        "job_api_integration_test.go",
+        "main_test.go",
+        "plugin_integration_test.go",
+        "redaction_integration_test.go",
+        "secrets_integration_test.go",
+    ],
+    embed = [":integration"],
+    deps = [
+        "//clicommand",
+        "//internal/experiments",
+        "//internal/job",
+        "//internal/shell",
+        "//jobapi",
+        "//version",
+        "@com_github_buildkite_bintest_v3//:bintest",
+        "@com_github_buildkite_go_pipeline//:go-pipeline",
+        "@com_github_urfave_cli//:cli",
+        "@tools_gotest_v3//assert",
+    ],
+)

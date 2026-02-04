@@ -58,7 +58,7 @@ func CreatePlugin(location string, config map[string]any) (*Plugin, error) {
 	plugin.Vendored = strings.HasPrefix(plugin.Location, ".")
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
-		return nil, fmt.Errorf("Too many #'s in \"%s\"", location)
+		return nil, fmt.Errorf("Too many '#'s in %q", location)
 	}
 
 	if u.User != nil {
@@ -140,18 +140,25 @@ func (p *Plugin) Name() string {
 		return ""
 	}
 	// for filepaths, we can get windows backslashes, so we normalize them
-	location := strings.Replace(p.Location, "\\", "/", -1)
+	location := strings.ReplaceAll(p.Location, "\\", "/")
+	location = strings.TrimRight(location, "/") // Trailing slash is useless and will confuse the subsequent parsing
 
 	// Grab the last part of the location
 	parts := strings.Split(location, "/")
 	name := parts[len(parts)-1]
 
+	// If the last path segment starts with a dot (e.g. ".buildkite"), trim leading dots
+	// so the human-friendly name isn't rendered as "-buildkite" after normalization.
+	if strings.HasPrefix(name, ".") {
+		name = strings.TrimLeft(name, ".")
+	}
+
 	// Clean up the name
 	name = strings.ToLower(name)
 	name = whitespaceRE.ReplaceAllString(name, " ")
 	name = nonIDCharacterRE.ReplaceAllString(name, "-")
-	name = strings.Replace(name, "-buildkite-plugin-git", "", -1)
-	name = strings.Replace(name, "-buildkite-plugin", "", -1)
+	name = strings.ReplaceAll(name, "-buildkite-plugin-git", "")
+	name = strings.ReplaceAll(name, "-buildkite-plugin", "")
 
 	return name
 }
@@ -166,7 +173,8 @@ func (p *Plugin) Identifier() (string, error) {
 	return id, nil
 }
 
-// Repository returns the repository host where the code is stored.
+// Repository returns the repository URL where the plugin code is stored, without any subdirectory path.
+// For example, for "github.com/buildkite/plugins/docker-compose/plugin", it returns "github.com/buildkite/plugins".
 func (p *Plugin) Repository() (string, error) {
 	s, err := p.constructRepositoryHost()
 	if err != nil {
@@ -191,6 +199,8 @@ func (p *Plugin) Repository() (string, error) {
 }
 
 // RepositorySubdirectory returns the subdirectory path that the plugin is in.
+// For example, for "github.com/buildkite/plugins/docker-compose/plugin", it returns "docker-compose/plugin".
+// If the plugin is in the root of the repository, it returns an empty string.
 func (p *Plugin) RepositorySubdirectory() (string, error) {
 	repository, err := p.constructRepositoryHost()
 	if err != nil {
@@ -198,8 +208,12 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 	}
 
 	dir := strings.TrimPrefix(p.Location, repository)
+	dir = strings.TrimPrefix(dir, "/")
 
-	return strings.TrimPrefix(dir, "/"), nil
+	// Remove .git suffix if present as it's not part of the subdirectory
+	dir = strings.TrimSuffix(dir, ".git")
+
+	return dir, nil
 }
 
 // formatEnvKey converts strings into an ENV key friendly format
@@ -208,17 +222,17 @@ func formatEnvKey(key string) string {
 	return hypenOrSpaceRE.ReplaceAllString(newKey, "_")
 }
 
-func walkConfigValues(prefix string, v any, into *[]string) error {
+func flattenConfigToEnvMap(into map[string]string, v any, envPrefix string) error {
 	switch vv := v.(type) {
 	// handles all of our primitive types, golang provides a good string representation
 	case string, bool, json.Number:
-		*into = append(*into, fmt.Sprintf("%s=%v", prefix, vv))
+		into[envPrefix] = fmt.Sprintf("%v", vv)
 		return nil
 
 	// handle lists of things, which get a KEY_N prefix depending on the index
 	case []any:
-		for i := range vv {
-			if err := walkConfigValues(fmt.Sprintf("%s_%d", prefix, i), vv[i], into); err != nil {
+		for i, item := range vv {
+			if err := flattenConfigToEnvMap(into, item, fmt.Sprintf("%s_%d", envPrefix, i)); err != nil {
 				return err
 			}
 		}
@@ -227,72 +241,62 @@ func walkConfigValues(prefix string, v any, into *[]string) error {
 	// handle maps of things, which get a KEY_SUBKEY prefix depending on the map keys
 	case map[string]any:
 		for k, vvv := range vv {
-			if err := walkConfigValues(fmt.Sprintf("%s_%s", prefix, formatEnvKey(k)), vvv, into); err != nil {
+			if err := flattenConfigToEnvMap(into, vvv, fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))); err != nil {
 				return err
 			}
 		}
 		return nil
-	}
 
-	return fmt.Errorf("Unknown type %T %v", v, v)
+	default:
+		return fmt.Errorf("Unknown type %T %v", v, v)
+	}
 }
 
-// The input should be a slice of Env Variables of the form `k=v` where `k` is the variable name
-// and `v` is its value. If it can be determined that any of the env variables names is part of a
-// deprecation, either as the deprecated variable name or its replacement, append both to the
-// returned slice, and also append a deprecation error to the error value. If there are no
-// deprecations, the error value is guaranteed to be nil.
-func fanOutDeprecatedEnvVarNames(envSlice []string) ([]string, error) {
-	envSliceAfter := envSlice
-
-	var dnerrs *DeprecatedNameErrors
-	for _, kv := range envSlice {
-		k, v, ok := strings.Cut(kv, "=")
-		if !ok { // this is impossible if the precondition is met
-			continue
-		}
-
+// addDeprecatedEnvVarAliases provides backward compatibility for environment variable names.
+//
+// Before v3.48.0 (https://github.com/buildkite/agent/pull/2116), consecutive underscores in
+// derived env var names were collapsed (e.g., "some--key__name" → SOME_KEY_NAME).
+// Since v3.48.0, consecutive underscores are preserved (e.g., SOME__KEY__NAME).
+//
+// For compatibility, this function adds the collapsed form for any key containing consecutive
+// underscores and returns deprecation errors listing the affected variables.
+func addDeprecatedEnvVarAliases(envMap map[string]string) error {
+	var errs *DeprecatedNameErrors
+	for k, v := range envMap {
 		// the form with consecutive underscores is replacing the form without, but the replacement
-		// is what is expected to be in input slice
-		noConsecutiveUnderScoreKey := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
-		if k != noConsecutiveUnderScoreKey {
-			envSliceAfter = append(envSliceAfter, fmt.Sprintf("%s=%s", noConsecutiveUnderScoreKey, v))
-			dnerrs = dnerrs.Append(DeprecatedNameError{old: noConsecutiveUnderScoreKey, new: k})
+		// is what is expected to be in input map
+		withoutConsecutiveUnderscores := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
+		if k != withoutConsecutiveUnderscores {
+			envMap[withoutConsecutiveUnderscores] = v
+			errs = errs.Append(DeprecatedNameError{old: withoutConsecutiveUnderscores, new: k})
 		}
 	}
 
-	// guarantee that the error value is nil if there are no deprecations
-	if !dnerrs.IsEmpty() {
-		return envSliceAfter, dnerrs
+	if !errs.IsEmpty() {
+		return errs
 	}
-	return envSliceAfter, nil
+
+	return nil
 }
 
-// ConfigurationToEnvironment converts the plugin configuration values to
-// environment variables.
+// ConfigurationToEnvironment converts the plugin configuration values to environment variables.
 func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
-	envSlice := []string{}
-	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
-
-	// Append current plugin name
-	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
-
-	// Append current plugin configuration as JSON
 	configJSON, err := json.Marshal(p.Configuration)
 	if err != nil {
 		return env.New(), err
 	}
-	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJSON))
 
-	for k, v := range p.Configuration {
-		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
-		if err := walkConfigValues(configPrefix, v, &envSlice); err != nil {
-			return env.New(), err
-		}
+	envMap := make(map[string]string)
+	envMap["BUILDKITE_PLUGIN_NAME"] = formatEnvKey(p.Name())
+	envMap["BUILDKITE_PLUGIN_CONFIGURATION"] = string(configJSON)
+
+	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
+	if err := flattenConfigToEnvMap(envMap, p.Configuration, envPrefix); err != nil {
+		return env.New(), err
 	}
 
-	envSlice, err = fanOutDeprecatedEnvVarNames(envSlice)
-	return env.FromSlice(envSlice), err
+	err = addDeprecatedEnvVarAliases(envMap)
+	return env.FromMap(envMap), err
 }
 
 // Label returns a pretty name for the plugin.
@@ -301,6 +305,35 @@ func (p *Plugin) Label() string {
 		return p.Location
 	}
 	return p.Location + "#" + p.Version
+}
+
+// DisplayName returns a human-friendly name for the plugin suitable for logs.
+// Examples:
+//   - github.com/org/repo           => repo
+//   - github.com/org/repo/.buildkite => repo/.buildkite
+//   - file:///path/to/plugin         => plugin (last path element)
+func (p *Plugin) DisplayName() string {
+	// Filesystem paths: fall back to Name(), which returns the last segment normalized
+	if strings.HasPrefix(p.Location, "/") || strings.HasPrefix(p.Location, ".") || strings.Contains(p.Location, "\\") {
+		return p.Name()
+	}
+
+	host, err := p.constructRepositoryHost()
+	if err != nil || host == "" {
+		return p.Name()
+	}
+
+	// derive repo name from host path
+	parts := strings.Split(host, "/")
+	repo := parts[len(parts)-1]
+	repo = strings.TrimSuffix(repo, ".git")
+
+	// append subdirectory if present
+	subdir, err := p.RepositorySubdirectory()
+	if err != nil || subdir == "" {
+		return repo
+	}
+	return repo + "/" + subdir
 }
 
 func (p *Plugin) constructRepositoryHost() (string, error) {

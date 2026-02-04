@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/artifact"
@@ -50,34 +51,24 @@ available for artifacts uploaded since SHA-256 support was added to the
 agent.`
 
 type ArtifactShasumConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
 	Sha256             bool   `cli:"sha256"`
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var ArtifactShasumCommand = cli.Command{
 	Name:        "shasum",
 	Usage:       "Prints the SHA-1 hash for a single artifact specified by a search query",
 	Description: shasumHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.BoolFlag{
 			Name:  "sha256",
-			Usage: "Request SHA-256 instead of SHA-1, errors if SHA-256 not available",
+			Usage: "Request SHA-256 instead of SHA-1, errors if SHA-256 not available (default: false)",
 		},
 		cli.StringFlag{
 			Name:  "step",
@@ -93,22 +84,9 @@ var ArtifactShasumCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "include-retried-jobs",
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from retried jobs in the search",
+			Usage:  "Include artifacts from retried jobs in the search (default: false)",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactShasumConfig](ctx, c)

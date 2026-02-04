@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "osutil",
+    srcs = [
+        "doc.go",
+        "file.go",
+        "homedir.go",
+        "path.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/osutil",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "osutil_test",
+    srcs = [
+        "homedir_test.go",
+        "path_test.go",
+        "path_windows_test.go",
+    ],
+    embed = [":osutil"],
+    deps = ["@com_github_stretchr_testify//assert"],
+)

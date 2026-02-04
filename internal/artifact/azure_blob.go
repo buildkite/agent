@@ -17,7 +17,6 @@ const azureBlobHostSuffix = ".blob.core.windows.net"
 
 // NewAzureBlobClient creates a new Azure Blob Storage client.
 func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Client, error) {
-
 	// TODO: Other credential types?
 	// https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#readme-credential-types
 

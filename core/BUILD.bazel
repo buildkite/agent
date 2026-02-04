@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "core",
+    srcs = [
+        "api_client.go",
+        "client.go",
+        "controller.go",
+        "doc.go",
+        "job_controller.go",
+        "options.go",
+        "process_exit.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/core",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//api",
+        "//internal/system",
+        "//logger",
+        "//version",
+        "@com_github_buildkite_roko//:roko",
+        "@com_github_denisbrodbeck_machineid//:machineid",
+    ],
+)

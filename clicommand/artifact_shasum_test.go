@@ -34,10 +34,12 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := ArtifactShasumConfig{
-		Query:            "foo.*",
-		Build:            "buildid",
-		AgentAccessToken: "agentaccesstoken",
-		Endpoint:         server.URL,
+		Query: "foo.*",
+		Build: "buildid",
+		APIConfig: APIConfig{
+			AgentAccessToken: "agentaccesstoken",
+			Endpoint:         server.URL,
+		},
 	}
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
@@ -59,11 +61,13 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := ArtifactShasumConfig{
-		Query:            "foo.*",
-		Build:            "buildid",
-		Sha256:           true,
-		AgentAccessToken: "agentaccesstoken",
-		Endpoint:         server.URL,
+		Query:  "foo.*",
+		Build:  "buildid",
+		Sha256: true,
+		APIConfig: APIConfig{
+			AgentAccessToken: "agentaccesstoken",
+			Endpoint:         server.URL,
+		},
 	}
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)

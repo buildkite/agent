@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(-73)
+string("0")
+string("0")
+string("\xa9        ")
+string("0")

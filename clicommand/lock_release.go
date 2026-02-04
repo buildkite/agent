@@ -24,29 +24,21 @@ with the ′agent-api′ experiment enabled.
 
 Examples:
 
-    #!/bin/bash
+    #!/usr/bin/env bash
     token=$(buildkite-agent lock acquire llama)
     # your critical section here...
     buildkite-agent lock release llama "${token}"`
 
 type LockReleaseConfig struct {
-	// Common config options
-	LockScope   string `cli:"lock-scope"`
-	SocketsPath string `cli:"sockets-path" normalize:"filepath"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	GlobalConfig
+	LockCommonConfig
 }
 
 var LockReleaseCommand = cli.Command{
 	Name:        "release",
 	Usage:       "Releases a previously-acquired lock",
 	Description: lockReleaseHelpDescription,
-	Flags:       append(globalFlags(), lockCommonFlags...),
+	Flags:       lockCommonFlags(),
 	Action:      lockReleaseAction,
 }
 

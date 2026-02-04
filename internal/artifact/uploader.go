@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"iter"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -24,13 +25,9 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
-	"github.com/mattn/go-zglob"
 )
 
-const (
-	ArtifactPathDelimiter    = ";"
-	ArtifactFallbackMimeType = "binary/octet-stream"
-)
+const ArtifactFallbackMimeType = "binary/octet-stream"
 
 type UploaderConfig struct {
 	// The ID of the Job
@@ -49,6 +46,12 @@ type UploaderConfig struct {
 	DebugHTTP    bool
 	TraceHTTP    bool
 	DisableHTTP2 bool
+
+	// When true, disables parsing Paths as globs; treat each path literally.
+	Literal bool
+
+	// The delimiter used to split Paths into multiple paths/globs.
+	Delimiter string
 
 	// Whether to follow symbolic links when resolving globs
 	GlobResolveFollowSymlinks bool
@@ -159,6 +162,7 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 	// workers will avoid slamming the runtime (as could happen with a
 	// goroutine per file).
 	wctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
 	var wg sync.WaitGroup
 	for range runtime.GOMAXPROCS(0) {
 		wg.Add(1)
@@ -171,8 +175,14 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 		}()
 	}
 
-	// Start resolving globs into files.
-	if err := a.glob(wctx, filesCh); err != nil {
+	fileFinder := a.glob
+	if a.conf.Literal {
+		fileFinder = a.literal
+	}
+
+	// Start resolving globs (or not) and sending file paths to workers.
+	a.logger.Debug("Searching for %s", a.conf.Paths)
+	if err := fileFinder(wctx, a.paths(), filesCh); err != nil {
 		cancel(err)
 	}
 
@@ -195,70 +205,63 @@ type artifactCollector struct {
 	artifacts []*api.Artifact
 }
 
+func (a *Uploader) paths() iter.Seq[string] {
+	if a.conf.Delimiter == "" {
+		// Don't do any splitting.
+		return slices.Values([]string{a.conf.Paths})
+	}
+	return strings.SplitSeq(a.conf.Paths, a.conf.Delimiter)
+}
+
+func (a *Uploader) literal(ctx context.Context, paths iter.Seq[string], filesCh chan<- string) error {
+	// literal is solely responsible for writing to the channel
+	defer close(filesCh)
+
+	for path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		filesCh <- path
+	}
+	return nil
+}
+
 // glob resolves the globs (patterns with * and ** in them).
-func (a *Uploader) glob(ctx context.Context, filesCh chan<- string) error {
+func (a *Uploader) glob(ctx context.Context, paths iter.Seq[string], filesCh chan<- string) error {
 	// glob is solely responsible for writing to the channel.
 	defer close(filesCh)
 
-	if experiments.IsEnabled(ctx, experiments.UseZZGlob) {
-		// New zzglob library. Do all globs at once with MultiGlob, which takes
-		// care of any necessary parallelism under the hood.
-		a.logger.Debug("Searching for %s", a.conf.Paths)
-		var patterns []*zzglob.Pattern
-		for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
-			globPath := strings.TrimSpace(globPath)
-			if globPath == "" {
-				continue
-			}
-			pattern, err := zzglob.Parse(globPath)
-			if err != nil {
-				return fmt.Errorf("invalid glob pattern %q: %w", globPath, err)
-			}
-			patterns = append(patterns, pattern)
-		}
-
-		walkDirFunc := func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				a.logger.Warn("Couldn't walk path %s", path)
-				return nil
-			}
-			if d != nil && d.IsDir() {
-				a.logger.Warn("One of the glob patterns matched a directory: %s", path)
-				return nil
-			}
-			filesCh <- path
-			return nil
-		}
-		err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
-		if err != nil {
-			return fmt.Errorf("globbing patterns: %w", err)
-		}
-		return nil
-	}
-
-	// Old go-zglob library. Do each glob one at a time.
-	// go-zglob uses fastwalk under the hood to parallelise directory walking.
-	globfunc := zglob.Glob
-	if a.conf.GlobResolveFollowSymlinks {
-		// Follow symbolic links for files & directories while expanding globs
-		globfunc = zglob.GlobFollowSymlinks
-	}
-	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
-		globPath := strings.TrimSpace(globPath)
+	// Do all globs at once with MultiGlob, which takes care of any necessary
+	// parallelism under the hood.
+	var patterns []*zzglob.Pattern
+	for globPath := range paths {
+		globPath = strings.TrimSpace(globPath)
 		if globPath == "" {
 			continue
 		}
-		files, err := globfunc(globPath)
-		if errors.Is(err, os.ErrNotExist) {
-			a.logger.Info("File not found: %s", globPath)
-			continue
-		}
+		pattern, err := zzglob.Parse(globPath)
 		if err != nil {
-			return fmt.Errorf("resolving glob %s: %w", globPath, err)
+			return fmt.Errorf("invalid glob pattern %q: %w", globPath, err)
 		}
-		for _, path := range files {
-			filesCh <- path
+		patterns = append(patterns, pattern)
+	}
+
+	walkDirFunc := func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			a.logger.Warn("Couldn't walk path %s", path)
+			return nil
 		}
+		if d != nil && d.IsDir() {
+			a.logger.Warn("One of the glob patterns matched a directory: %s", path)
+			return nil
+		}
+		filesCh <- path
+		return nil
+	}
+	err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
+	if err != nil {
+		return fmt.Errorf("globbing patterns: %w", err)
 	}
 	return nil
 }
@@ -344,20 +347,19 @@ func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) e
 	}
 }
 
-func (a *Uploader) build(path string, absolutePath string) (*api.Artifact, error) {
+func (a *Uploader) build(path, absolutePath string) (*api.Artifact, error) {
 	// Open the file to hash its contents.
 	file, err := os.Open(absolutePath)
 	if err != nil {
 		return nil, fmt.Errorf("opening file %s: %w", absolutePath, err)
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck // File is only open for read.
 
 	// Generate a SHA-1 and SHA-256 checksums for the file.
-	// Writing to hashes never errors, but reading from the file might.
 	hash1, hash256 := sha1.New(), sha256.New()
 	size, err := io.Copy(io.MultiWriter(hash1, hash256), file)
 	if err != nil {
-		return nil, fmt.Errorf("reading contents of %s: %w", absolutePath, err)
+		return nil, fmt.Errorf("hashing artifact file %s: %w", absolutePath, err)
 	}
 	sha1sum := fmt.Sprintf("%040x", hash1.Sum(nil))
 	sha256sum := fmt.Sprintf("%064x", hash256.Sum(nil))
@@ -631,7 +633,6 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 				}
 				return etag, err
 			})
-
 			// If it failed, abort any other work items for this artifact.
 			if err != nil {
 				a.logger.Info("Upload failed for %s: %v", workUnit.Description(), err)
@@ -652,12 +653,6 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 
 func (a *artifactUploadWorker) stateUpdater(ctx context.Context, resultsCh <-chan workUnitResult, stateUpdaterErrCh chan<- error) {
 	var errs []error
-	defer func() {
-		if len(errs) > 0 {
-			stateUpdaterErrCh <- errors.Join(errs...)
-		}
-		close(stateUpdaterErrCh)
-	}()
 
 	// When this ticks, upload any pending artifact states as a batch.
 	updateTicker := time.NewTicker(1 * time.Second)
@@ -666,7 +661,7 @@ selectLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			break selectLoop
 
 		case <-updateTicker.C:
 			// Note: updateStates removes trackers for completed states.
@@ -711,7 +706,11 @@ selectLoop:
 	if err := a.updateStates(ctx); err != nil {
 		errs = append(errs, err)
 	}
-	return
+
+	if len(errs) > 0 {
+		stateUpdaterErrCh <- errors.Join(errs...)
+	}
+	close(stateUpdaterErrCh)
 }
 
 // updateStates uploads terminal artifact states to Buildkite in a batch.

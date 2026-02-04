@@ -8,12 +8,15 @@ import (
 )
 
 func BenchmarkBMRedactor(b *testing.B) {
-	b.ResetTimer()
 	r := NewBMRedactor(io.Discard, "[REDACTED]", bigLipsumSecrets)
-	for range b.N {
-		fmt.Fprintln(r, bigLipsum)
+	for b.Loop() {
+		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
+			b.Errorf("fmt.Fprintln(r, bigLipsum) error = %v", err)
+		}
 	}
-	r.Flush()
+	if err := r.Flush(); err != nil {
+		b.Errorf("r.Flush() = %v", err)
+	}
 }
 
 // BoyerMooreRedactor is a redactor based on Boyer-Moore, and is kept around for
@@ -112,7 +115,6 @@ func (redactor *BoyerMooreRedactor) Reset(needles []string) {
 			}
 		}
 	}
-
 }
 
 func (redactor *BoyerMooreRedactor) Write(input []byte) (int, error) {
@@ -161,13 +163,7 @@ func (redactor *BoyerMooreRedactor) Write(input []byte) (int, error) {
 			// Everything in this input prior to the start of that needle can be
 			// confirmed, and that needle (if present) will be redacted in the next
 			// loop or next write.
-			confirmedTo := cursor - redactor.maxlen
-
-			// The maxlen needle (if any) is fully in future write calls, this whole
-			// input slice can be confirmed.
-			if confirmedTo > len(input) {
-				confirmedTo = len(input)
-			}
+			confirmedTo := min(cursor-redactor.maxlen, len(input))
 
 			// Save the confirmed input to outbuf ready for pushing down and advance
 			// doneTo to signal we have a confirmed series of bytes ready for pushing

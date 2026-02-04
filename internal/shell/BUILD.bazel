@@ -1,0 +1,46 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "shell",
+    srcs = [
+        "batch.go",
+        "logger.go",
+        "lookpath.go",
+        "lookpath_windows.go",
+        "shell.go",
+        "test.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/shell",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//env",
+        "//internal/olfactor",
+        "//internal/shellscript",
+        "//logger",
+        "//process",
+        "//tracetools",
+        "@com_github_buildkite_shellwords//:shellwords",
+        "@com_github_gofrs_flock//:flock",
+        "@com_github_opentracing_opentracing_go//:opentracing-go",
+        "@io_opentelemetry_go_otel//:otel",
+        "@io_opentelemetry_go_otel//propagation",
+        "@io_opentelemetry_go_otel_trace//:trace",
+    ],
+)
+
+go_test(
+    name = "shell_test",
+    srcs = [
+        "export_test.go",
+        "logger_test.go",
+        "main_test.go",
+        "shell_test.go",
+    ],
+    embed = [":shell"],
+    deps = [
+        "//internal/replacer",
+        "@com_github_buildkite_bintest_v3//:bintest",
+        "@com_github_google_go_cmp//cmp",
+        "@tools_gotest_v3//assert",
+    ],
+)

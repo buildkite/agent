@@ -68,7 +68,7 @@ func (e *SilentExitError) Is(target error) bool {
 }
 
 // PrintMessageAndReturnExitCode prints the error message to stderr, preceded by
-// "fatal: " and returns the exit code for the given error. If `err` is a
+// "buildkite-agent: fatal: " and returns the exit code for the given error. If `err` is a
 // SilentExitError or ExitError, it will return the code from that. Otherwise
 // it will return 0 for nil errors and 1 for all other errors. Also, when `err`
 // is a SilentExitError, it will not print anything to stderr.
@@ -81,7 +81,7 @@ func PrintMessageAndReturnExitCode(err error) int {
 		return serr.Code()
 	}
 
-	fmt.Fprintf(os.Stderr, "fatal: %s\n", err)
+	fmt.Fprintf(os.Stderr, "buildkite-agent: fatal: %s\n", err)
 
 	if eerr := new(ExitError); errors.As(err, &eerr) {
 		return eerr.Code()

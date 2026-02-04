@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # The `pre-artifact` hook will run just before artifacts are uploaded
 

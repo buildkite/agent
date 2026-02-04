@@ -8,11 +8,11 @@ package process
 // including mention of some of the necessary deviations from the standards
 // (such as allowing some sequences to terminate with BEL instead of ESC '\').
 type ansiParser struct {
-	state ansiParserState
+	state *ansiParserState
 }
 
-// feed passes more bytes through the parser.
-func (m *ansiParser) feed(data ...byte) {
+// Write passes more bytes through the parser.
+func (m *ansiParser) Write(data []byte) (int, error) {
 	for _, b := range data {
 		if m.state != nil {
 			m.state = m.state[b]
@@ -22,6 +22,7 @@ func (m *ansiParser) feed(data ...byte) {
 			m.state = initialANSIState
 		}
 	}
+	return len(data), nil
 }
 
 // insideCode reports if the data is in the middle of an ANSI sequence.
@@ -30,11 +31,11 @@ func (m *ansiParser) insideCode() bool { return m.state != nil }
 
 // ansiParserState is a possible state of the parser. It's a map of incoming-
 // byte to next-state. Most next-states are nil (they exit the escape code).
-type ansiParserState map[byte]ansiParserState
+type ansiParserState [256]*ansiParserState
 
 var (
 	// initialANSIState is the state the parser enters once it reads ESC.
-	initialANSIState = ansiParserState{
+	initialANSIState = &ansiParserState{
 		// Note that most bytes immediately following ESC terminate the sequence.
 		// The following require more processing:
 		'[': csiParameterState, // CSI
@@ -45,10 +46,10 @@ var (
 		'_': stTextState,       // APC
 	}
 	// csiParameter state is the state the parser is in after ESC '['
-	csiParameterState = ansiParserState{}
+	csiParameterState = &ansiParserState{}
 
 	// stTextState is one of the ST-terminated text states (OSC, DCS, APC, etc)
-	stTextState = ansiParserState{}
+	stTextState = &ansiParserState{}
 )
 
 // The "looping states" can't be built as struct literals since they refer to
@@ -71,7 +72,7 @@ func init() {
 	//             |
 	//             +--anything else--> (nil)
 	//
-	csiIntermediate := ansiParserState{}
+	csiIntermediate := &ansiParserState{}
 	for b := byte(0x30); b <= 0x3F; b++ {
 		csiParameterState[b] = csiParameterState
 	}
@@ -94,7 +95,7 @@ func init() {
 	//                  |
 	//                  +--BEL--> (nil)
 	//
-	stEscapeState := ansiParserState{}
+	stEscapeState := &ansiParserState{}
 	for b := range 256 {
 		stTextState[byte(b)] = stTextState
 		stEscapeState[byte(b)] = stTextState

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # The `post-artifact` hook will run just after artifacts are uploaded
 

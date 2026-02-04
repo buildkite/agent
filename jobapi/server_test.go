@@ -343,7 +343,6 @@ func TestPatchEnv(t *testing.T) {
 			testAPI(t, environ, req, client, c)
 		})
 	}
-
 }
 
 func TestGetEnv(t *testing.T) {
@@ -410,7 +409,7 @@ func TestCreateRedaction(t *testing.T) {
 	)
 
 	writeBuf := &bytes.Buffer{}
-	rdc := replacer.New(writeBuf, []string{alreadyRedacted}, redact.Redact)
+	rdc := replacer.New(writeBuf, []string{alreadyRedacted}, redact.Redacted)
 	mux := replacer.NewMux(rdc)
 
 	env := testEnviron()

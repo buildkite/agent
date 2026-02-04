@@ -1,13 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 go version
 echo arch is "$(uname -m)"
 
-go install gotest.tools/gotestsum@v1.8.0
+export BUILDKITE_TEST_ENGINE_SUITE_SLUG=buildkite-agent
+export BUILDKITE_TEST_ENGINE_TEST_RUNNER=gotest
+export BUILDKITE_TEST_ENGINE_RESULT_PATH="junit-${BUILDKITE_JOB_ID}.xml"
+export BUILDKITE_TEST_ENGINE_RETRY_COUNT=1
+if [[ "$(go env GOOS)" == "windows" ]]; then
+  # I can't get windows to work with the $COVERAGE_DIR, I tried cygpath but no luck.
+  # need a Windows VM to debug.
+  export BUILDKITE_TEST_ENGINE_TEST_CMD="go tool gotestsum --junitfile={{resultPath}} -- -count=1 $* {{packages}}"
+else
+  mkdir -p coverage
+  COVERAGE_DIR="$PWD/coverage"
+  export BUILDKITE_TEST_ENGINE_TEST_CMD="go tool gotestsum --junitfile={{resultPath}} -- -count=1 -cover $* {{packages}} -test.gocoverdir=${COVERAGE_DIR}"
+fi
 
-echo '+++ Running tests'
-gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- -count=1 -coverprofile=cover.out -failfast "$@" ./...
-
-echo 'Producing coverage report'
-go tool cover -html cover.out -o cover.html
+go tool test-engine-client

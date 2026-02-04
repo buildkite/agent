@@ -12,6 +12,7 @@ type AgentConfiguration struct {
 	BootstrapScript             string
 	BuildPath                   string
 	HooksPath                   string
+	AdditionalHooksPaths        []string
 	SocketsPath                 string
 	GitMirrorsPath              string
 	GitMirrorsLockTimeout       int
@@ -23,6 +24,7 @@ type AgentConfiguration struct {
 	GitCleanFlags               string
 	GitFetchFlags               string
 	GitSubmodules               bool
+	SkipCheckout                bool
 	AllowedRepositories         []*regexp.Regexp
 	AllowedPlugins              []*regexp.Regexp
 	AllowedEnvironmentVariables []*regexp.Regexp
@@ -30,6 +32,7 @@ type AgentConfiguration struct {
 	CommandEval                 bool
 	PluginsEnabled              bool
 	PluginValidation            bool
+	PluginsAlwaysCloneFresh     bool
 	LocalHooksEnabled           bool
 	StrictSingleHooks           bool
 	RunInPty                    bool
@@ -47,7 +50,8 @@ type AgentConfiguration struct {
 	TimestampLines               bool
 	HealthCheckAddr              string
 	DisconnectAfterJob           bool
-	DisconnectAfterIdleTimeout   int
+	DisconnectAfterIdleTimeout   time.Duration
+	DisconnectAfterUptime        time.Duration
 	CancelGracePeriod            int
 	SignalGracePeriod            time.Duration
 	EnableJobLogTmpfile          bool
@@ -60,6 +64,7 @@ type AgentConfiguration struct {
 	AcquireJob                   string
 	TracingBackend               string
 	TracingServiceName           string
+	TracingPropagateTraceparent  bool
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool

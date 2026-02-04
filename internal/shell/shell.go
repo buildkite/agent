@@ -28,6 +28,9 @@ import (
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
 	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const lockRetryDuration = time.Second
@@ -210,10 +213,10 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 }
 
 // Interrupt interrupts the running process, if there is one.
-func (s *Shell) Interrupt() { s.proc.Load().Interrupt() }
+func (s *Shell) Interrupt() error { return s.proc.Load().Interrupt() }
 
 // Terminate terminates the running process, if there is one.
-func (s *Shell) Terminate() { s.proc.Load().Terminate() }
+func (s *Shell) Terminate() error { return s.proc.Load().Terminate() }
 
 // Returns the WaitStatus of the shell's process.
 //
@@ -498,16 +501,32 @@ func WithStringSearch(m map[string]bool) RunCommandOpt { return func(c *runConfi
 // injectTraceCtx adds tracing information to the given env vars to support
 // distributed tracing across jobs/builds.
 func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
-	span := opentracing.SpanFromContext(ctx)
-	// Not all shell runs will have tracing (nor do they really need to).
-	if span == nil {
-		return
-	}
-	if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
-		if s.debug {
-			s.Logger.Warningf("Failed to encode trace context: %v", err)
+	// OpenTracing path (for Datadog backend)
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
+			if s.debug {
+				s.Warningf("Failed to encode trace context: %v", err)
+			}
 		}
 		return
+	}
+
+	// OpenTelemetry path (for OpenTelemetry backend)
+	if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+		carrier := propagation.MapCarrier{}
+		otel.GetTextMapPropagator().Inject(ctx, carrier)
+
+		// Transform HTTP header names to environment variable names per
+		// https://opentelemetry.io/docs/specs/otel/context/env-carriers/
+		// Examples: "traceparent" -> "TRACEPARENT", "X-B3-TraceId" -> "X_B3_TRACEID"
+		//
+		// It remains unclear whether various ecosystems are well equipped handling normalized env vars.
+		// But it will be trivial to conform to the standard.
+		// We shall see how community responds to this.
+		for k, v := range carrier {
+			envKey := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
+			env.Set(envKey, v)
+		}
 	}
 }
 
@@ -565,19 +584,25 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		cmdCfg.Stderr = io.Discard
 	}
 
+	var processLogger logger.Logger
+	processLogger = logger.Discard
+
 	if s.debug {
 		// Display normally-hidden output streams using log streamer.
 		if cmdCfg.Stdout == io.Discard {
 			stdOutStreamer := NewLoggerStreamer(s.Logger)
-			defer stdOutStreamer.Close()
+			defer stdOutStreamer.Close() //nolint:errcheck // If this fails, YOLO?
 			cmdCfg.Stdout = stdOutStreamer
 		}
 
 		if cmdCfg.Stderr == io.Discard {
 			stdErrStreamer := NewLoggerStreamer(s.Logger)
-			defer stdErrStreamer.Close()
+			defer stdErrStreamer.Close() //nolint:errcheck // If this fails, YOLO?
 			cmdCfg.Stderr = stdErrStreamer
 		}
+
+		// This should respect the log format we set for the agent
+		processLogger = logger.NewConsoleLogger(logger.NewTextPrinter(cmdCfg.Stderr), os.Exit)
 	}
 
 	if s.commandLog != nil {
@@ -590,7 +615,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		return nil
 	}
 
-	p := process.New(logger.Discard, cmdCfg)
+	p := process.New(processLogger, cmdCfg)
 	s.proc.Store(p)
 
 	if err := p.Run(ctx); err != nil {

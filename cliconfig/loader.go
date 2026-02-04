@@ -35,7 +35,8 @@ type Loader struct {
 	File *File
 }
 
-var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
+// Matches "arg:index" (specific non-flag arg) or "arg:*" (all non-flag args).
+var argCLINameRE = regexp.MustCompile(`arg:(\d+|\*)`)
 
 // Loads the config from the CLI and config files that are present and returns
 // any warnings or errors
@@ -77,7 +78,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 	// Now it's onto actually setting the fields. We start by getting all
 	// the fields from the configuration interface
 	var fields []string
-	fields, _ = reflections.Fields(l.Config)
+	fields, _ = reflections.FieldsDeep(l.Config)
 
 	// Loop through each of the fields, and look for tags and handle them
 	// appropriately
@@ -172,7 +173,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 	return warnings, nil
 }
 
-func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
+func (l Loader) setFieldValueFromCLI(fieldName, cliName string) error {
 	// Get the kind of field we need to set
 	fieldKind, err := reflections.GetFieldKind(l.Config, fieldName)
 	if err != nil {
@@ -186,20 +187,26 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	var value any
 
 	// See the if the cli option is using the arg format (arg:1)
-	argMatch := argCliNameRegexp.FindStringSubmatch(cliName)
+	argMatch := argCLINameRE.FindStringSubmatch(cliName)
 	if len(argMatch) > 0 {
 		argNum := argMatch[1]
 
-		// Convert the arg position to an integer
-		argIndex, err := strconv.Atoi(argNum)
-		if err != nil {
-			return fmt.Errorf("converting string to int: %w", err)
-		}
+		if argNum == "*" {
+			// All args.
+			value = l.CLI.Args()
+		} else {
+			// It's an index.
+			// Convert the arg position to an integer
+			argIndex, err := strconv.Atoi(argNum)
+			if err != nil {
+				return fmt.Errorf("converting string to int: %w", err)
+			}
 
-		// Only set the value if the args are long enough for
-		// the position to exist.
-		if len(l.CLI.Args()) > argIndex {
-			value = l.CLI.Args()[argIndex]
+			// Only set the value if the args are long enough for
+			// the position to exist.
+			if len(l.CLI.Args()) > argIndex {
+				value = l.CLI.Args()[argIndex]
+			}
 		}
 
 		// Otherwise see if we can pull it from an environment variable
@@ -212,6 +219,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 				}
 			}
 		}
+
 	} else {
 		// If the cli name didn't have the special format, then we need to
 		// either load from the context's flags, or from a config file.
@@ -318,31 +326,34 @@ func (l Loader) fieldValueIsEmpty(fieldName string) bool {
 	value, _ := reflections.GetField(l.Config, fieldName)
 	fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
 
-	if fieldKind == reflect.String {
+	switch fieldKind {
+	case reflect.String:
 		return value == ""
-	} else if fieldKind == reflect.Slice {
+	case reflect.Slice:
 		v := reflect.ValueOf(value)
 		return v.Len() == 0
-	} else if fieldKind == reflect.Bool {
+	case reflect.Bool:
 		return value == false
-	} else if fieldKind == reflect.Int {
+	case reflect.Int:
 		return value == 0
-	} else {
+	default:
 		panic(fmt.Sprintf("Can't determine empty-ness for field type %s", fieldKind))
 	}
 }
 
-func (l Loader) validateField(fieldName string, label string, validationRules string) error {
+func (l Loader) validateField(fieldName, label, validationRules string) error {
 	// Split up the validation rules
-	rules := strings.Split(validationRules, ",")
+	rules := strings.SplitSeq(validationRules, ",")
 
 	// Loop through each rule, and perform it
-	for _, rule := range rules {
-		if rule == "required" {
+	for rule := range rules {
+		switch rule {
+		case "required":
 			if l.fieldValueIsEmpty(fieldName) {
 				return l.Errorf("Missing %s.", label)
 			}
-		} else if rule == "file-exists" {
+
+		case "file-exists":
 			value, _ := reflections.GetField(l.Config, fieldName)
 
 			// Make sure the value is converted to a string
@@ -352,7 +363,8 @@ func (l Loader) validateField(fieldName string, label string, validationRules st
 					return fmt.Errorf("couldn't find %s located at %s: %w", label, value, err)
 				}
 			}
-		} else {
+
+		default:
 			return fmt.Errorf("unknown config validation rule %q", rule)
 		}
 	}
@@ -360,7 +372,7 @@ func (l Loader) validateField(fieldName string, label string, validationRules st
 	return nil
 }
 
-func (l Loader) normalizeField(fieldName string, normalization string) error {
+func (l Loader) normalizeField(fieldName, normalization string) error {
 	if normalization == "filepath" {
 		value, _ := reflections.GetField(l.Config, fieldName)
 		fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
@@ -416,7 +428,7 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 
 			for _, value := range valueAsSlice {
 				// Split values with commas into fields
-				for _, normalized := range strings.Split(value, ",") {
+				for normalized := range strings.SplitSeq(value, ",") {
 					if normalized == "" {
 						continue
 					}

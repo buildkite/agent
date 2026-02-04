@@ -1,0 +1,7 @@
+go test fuzz v1
+string("000100010001000")
+int(50)
+string("00")
+string("0")
+string("0")
+string("000")

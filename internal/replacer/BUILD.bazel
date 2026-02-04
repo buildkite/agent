@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "replacer",
+    srcs = [
+        "mux.go",
+        "replacer.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/replacer",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "replacer_test",
+    srcs = [
+        "big_lipsum_test.go",
+        "bm_redactor_test.go",
+        "replacer_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    deps = [
+        ":replacer",
+        "//internal/redact",
+        "@com_github_google_go_cmp//cmp",
+        "@tools_gotest_v3//assert",
+    ],
+)

@@ -3,9 +3,11 @@ package job
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -17,8 +19,8 @@ import (
 	"go.opentelemetry.io/contrib/propagators/ot"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -37,7 +39,7 @@ type stopper func()
 func noopStopper() {}
 
 func (e *Executor) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	switch e.ExecutorConfig.TracingBackend {
+	switch e.TracingBackend {
 	case tracetools.BackendDatadog:
 		// Newer versions of the tracing libs print out diagnostic info which spams the
 		// Buildkite agent logs. Disable it by default unless it's been explicitly set.
@@ -54,8 +56,8 @@ func (e *Executor) startTracing(ctx context.Context) (tracetools.Span, context.C
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 
 	default:
-		e.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", e.ExecutorConfig.TracingBackend)
-		e.ExecutorConfig.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the job's tracking backend
+		e.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", e.TracingBackend)
+		e.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the job's tracking backend
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 	}
 }
@@ -73,7 +75,7 @@ func (e *Executor) ddResourceName() string {
 // abstraction so the agent can support multiple libraries if needbe.
 func (e *Executor) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	opts := []tracer.StartOption{
-		tracer.WithService(e.ExecutorConfig.TracingServiceName),
+		tracer.WithService(e.TracingServiceName),
 		tracer.WithSampler(tracer.NewAllSampler()),
 		tracer.WithAnalytics(true),
 	}
@@ -100,7 +102,7 @@ func (e *Executor) startTracingDatadog(ctx context.Context) (tracetools.Span, co
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
 func (e *Executor) extractDDTraceCtx() opentracing.SpanContext {
-	sctx, err := tracetools.DecodeTraceContext(e.shell.Env.Dump(), e.ExecutorConfig.TraceContextCodec)
+	sctx, err := tracetools.DecodeTraceContext(e.shell.Env.Dump(), e.TraceContextCodec)
 	if err != nil {
 		// Return nil so a new span will be created
 		return nil
@@ -124,15 +126,31 @@ func (e *Executor) otRootSpanName() string {
 }
 
 func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	client := otlptracegrpc.NewClient()
-	exporter, err := otlptrace.New(ctx, client)
+	// Set up trace exporter based on protocol
+	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+	// default to grpc to avoid breaking change
+	if protocol == "" {
+		protocol = "grpc"
+	}
+
+	var exporter sdktrace.SpanExporter
+	var err error
+	switch protocol {
+	case "grpc":
+		exporter, err = otlptracegrpc.New(ctx)
+	case "http/protobuf", "http":
+		exporter, err = otlptracehttp.New(ctx)
+	default:
+		e.shell.Errorf("Unsupported OTLP protocol: %s. Disabling tracing.", protocol)
+		return &tracetools.NoopSpan{}, ctx, noopStopper
+	}
 	if err != nil {
 		e.shell.Errorf("Error creating OTLP trace exporter %s. Disabling tracing.", err)
 		return &tracetools.NoopSpan{}, ctx, noopStopper
 	}
 
 	attributes := []attribute.KeyValue{
-		semconv.ServiceNameKey.String(e.ExecutorConfig.TracingServiceName),
+		semconv.ServiceNameKey.String(e.TracingServiceName),
 		semconv.ServiceVersionKey.String(version.Version()),
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
@@ -167,6 +185,7 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
+	ctx = e.contextWithTraceparentIfEnabled(ctx)
 	ctx, span := tracer.Start(ctx, e.otRootSpanName(),
 		trace.WithAttributes(
 			attribute.String("analytics.event", "true"),
@@ -180,6 +199,24 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	}
 
 	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
+}
+
+// accepting traceparent from Buildkite control plane is an opt-in feature as its
+// technically a breaking change to the behaviour, and if the server-side tracing
+// isn't set up correctly, agent traces may end up without root spans to link to
+func (e *Executor) contextWithTraceparentIfEnabled(ctx context.Context) context.Context {
+	if !e.TracingPropagateTraceparent {
+		return ctx
+	}
+
+	if e.TracingTraceParent == "" {
+		e.shell.Warningf("tracing-propagate-traceparent enabled, but no traceparent provided by server")
+		return ctx
+	}
+
+	return otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier{
+		"traceparent": e.TracingTraceParent,
+	})
 }
 
 func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
@@ -223,7 +260,7 @@ func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
 		jobKey = "n/a"
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"buildkite.agent":             e.AgentName,
 		"buildkite.version":           version.Version(),
 		"buildkite.queue":             e.Queue,
@@ -243,6 +280,19 @@ func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
 		"buildkite.rebuilt_from_id":   rebuiltFromID,
 		"buildkite.triggered_from_id": triggeredFromID,
 	}
+
+	// Add agent metadata from BUILDKITE_AGENT_META_DATA_* env vars
+	// These come from the agent's registration tags
+	const metaDataPrefix = "BUILDKITE_AGENT_META_DATA_"
+	for key, value := range env.Dump() {
+		if after, found := strings.CutPrefix(key, metaDataPrefix); found {
+			// Convert key to lowercase for attribute naming
+			attrKey := "buildkite.agent.metadata." + strings.ToLower(after)
+			result[attrKey] = value
+		}
+	}
+
+	return result
 }
 
 func DDTracingExtras() map[string]any {
@@ -252,17 +302,15 @@ func DDTracingExtras() map[string]any {
 	}
 }
 
-func Merge(maps ...map[string]any) map[string]any {
+func Merge(ms ...map[string]any) map[string]any {
 	fullCap := 0
-	for _, m := range maps {
+	for _, m := range ms {
 		fullCap += len(m)
 	}
 
 	merged := make(map[string]any, fullCap)
-	for _, m := range maps {
-		for key, val := range m {
-			merged[key] = val
-		}
+	for _, m := range ms {
+		maps.Copy(merged, m)
 	}
 
 	return merged

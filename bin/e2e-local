@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run e2e tests locally against a freshly compiled buildkite-agent.
+#
+# NOTE: Tests run against a production Buildkite org, not a test environment.
+#
+# Required environment variables:
+#   CI_E2E_TESTS_BUILDKITE_API_TOKEN - Buildkite API token
+#   CI_E2E_TESTS_AGENT_TOKEN         - Buildkite agent token
+#
+# Optional environment variables:
+#   CI_E2E_TESTS_PRINT_JOB_LOGS=true     - Print job logs after each test
+#
+# Usage:
+#   bin/e2e-local                     # run all e2e tests
+#   bin/e2e-local -run TestBasicE2E   # run a specific test
+#   bin/e2e-local -v                  # verbose output
+
+# Compile buildkite-agent
+AGENT_BINARY="$(pwd)/pkg/buildkite-agent-$(go env GOOS)-$(go env GOARCH)"
+echo "Compiling buildkite-agent to ${AGENT_BINARY}..."
+go build -o "${AGENT_BINARY}" .
+
+# Run e2e tests
+export CI_E2E_TESTS_AGENT_PATH="${AGENT_BINARY}"
+exec go test -tags e2e ./internal/e2e/... "$@"

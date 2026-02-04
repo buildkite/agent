@@ -1,0 +1,4 @@
+agents:
+  queue: "{{.queue}}"
+steps:
+  - command: echo hello world

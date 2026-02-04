@@ -22,7 +22,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 				return
 			}
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprint(rw, `{"id":"12-34-56-78-91", "name":"agent-1", "access_token":"alpacas"}`)
+			fmt.Fprint(rw, `{"id":"12-34-56-78-91", "name":"agent-1", "access_token":"alpacas"}`) //nolint:errcheck // The test would still fail
 
 		case "/connect":
 			if got, want := authToken(req), "alpacas"; got != want {
@@ -30,7 +30,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 				return
 			}
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprint(rw, `{}`)
+			fmt.Fprint(rw, `{}`) //nolint:errcheck // The test would still fail
 
 		default:
 			http.Error(rw, fmt.Sprintf("not found; method = %q, path = %q", req.Method, req.URL.Path), http.StatusNotFound)
@@ -52,16 +52,16 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	})
 
 	// Check a register works
-	regResp, httpResp, err := c.Register(ctx, &api.AgentRegisterRequest{})
+	reg, httpResp, err := c.Register(ctx, &api.AgentRegisterRequest{})
 	if err != nil {
 		t.Fatalf("c.Register(&AgentRegisterRequest{}) error = %v", err)
 	}
 
-	if got, want := regResp.Name, "agent-1"; got != want {
+	if got, want := reg.Name, "agent-1"; got != want {
 		t.Errorf("regResp.Name = %q, want %q", got, want)
 	}
 
-	if got, want := regResp.AccessToken, "alpacas"; got != want {
+	if got, want := reg.AccessToken, "alpacas"; got != want {
 		t.Errorf("regResp.AccessToken = %q, want %q", got, want)
 	}
 
@@ -70,7 +70,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	}
 
 	// New client with the access token
-	c2 := c.FromAgentRegisterResponse(regResp)
+	c2 := c.FromAgentRegisterResponse(reg)
 
 	// Check a connect works
 	if _, err := c2.Connect(ctx); err != nil {

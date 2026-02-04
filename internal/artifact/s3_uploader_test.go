@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 func TestParseS3Destination(t *testing.T) {
@@ -35,56 +35,101 @@ func TestParseS3Destination(t *testing.T) {
 }
 
 func TestResolveServerSideEncryptionConfig(t *testing.T) {
-
-	assert := require.New(t)
-
-	for _, tc := range []struct {
-		ServerSideEncryptionConfig string
-		ExpectedResult             bool
+	// Test manipulates env vars, so not parallel.
+	tests := []struct {
+		config string
+		want   bool
 	}{
-		{"True", true},
-		{"falsE", false},
-		{"lol", false},
-	} {
+		{config: "True", want: true},
+		{config: "falsE", want: false},
+		{config: "lol", want: false},
+	}
+
+	for _, test := range tests {
 		uploader := &S3Uploader{}
-		os.Setenv("BUILDKITE_S3_SSE_ENABLED", tc.ServerSideEncryptionConfig)
-		config := uploader.serverSideEncryptionEnabled()
+		if err := os.Setenv("BUILDKITE_S3_SSE_ENABLED", test.config); err != nil {
+			t.Fatalf("os.Setenv(BUILDKITE_S3_SSE_ENABLED, %q) = %v", test.config, err)
+		}
+		t.Cleanup(func() {
+			os.Unsetenv("BUILDKITE_S3_SSE_ENABLED") //nolint:errcheck // Best-effort cleanup.
+		})
 
-		assert.Equal(tc.ExpectedResult, config)
-
-		os.Unsetenv("BUILDKITE_S3_SSE_ENABLED")
+		if got := uploader.serverSideEncryptionEnabled(); got != test.want {
+			t.Errorf("BUILDKITE_S3_SSE_ENABLED=%q uploader.serverSideEncryptionEnabled() = %t, want %t", test.config, got, test.want)
+		}
 	}
 }
 
 func TestResolvePermission(t *testing.T) {
-
-	assert := require.New(t)
-	for _, tc := range []struct {
-		Permission     string
-		ExpectedResult string
-		ShouldErr      bool
+	// Test manipulates env vars, so not parallel.
+	tests := []struct {
+		permission string
+		want       types.ObjectCannedACL
 	}{
-		{"", "public-read", false},
-		{"private", "private", false},
-		{"public-read", "public-read", false},
-		{"public-read-write", "public-read-write", false},
-		{"authenticated-read", "authenticated-read", false},
-		{"bucket-owner-read", "bucket-owner-read", false},
-		{"bucket-owner-full-control", "bucket-owner-full-control", false},
-		{"foo", "", true},
-	} {
-		uploader := &S3Uploader{}
-		os.Setenv("BUILDKITE_S3_ACL", tc.Permission)
-		config, err := uploader.resolvePermission()
+		{
+			permission: "",
+			want:       types.ObjectCannedACLPublicRead,
+		},
+		{
+			permission: "private",
+			want:       types.ObjectCannedACLPrivate,
+		},
+		{
+			permission: "public-read",
+			want:       types.ObjectCannedACLPublicRead,
+		},
+		{
+			permission: "public-read-write",
+			want:       types.ObjectCannedACLPublicReadWrite,
+		},
+		{
+			permission: "authenticated-read",
+			want:       types.ObjectCannedACLAuthenticatedRead,
+		},
+		{
+			permission: "bucket-owner-read",
+			want:       types.ObjectCannedACLBucketOwnerRead,
+		},
+		{
+			permission: "bucket-owner-full-control",
+			want:       types.ObjectCannedACLBucketOwnerFullControl,
+		},
+	}
 
-		// if it should error we just look at the error
-		if tc.ShouldErr {
-			assert.Error(err)
-		} else {
-			assert.Nil(err)
-			assert.Equal(tc.ExpectedResult, config)
-		}
+	for _, test := range tests {
+		t.Run(test.permission, func(t *testing.T) {
+			// Test manipulates env vars, so not parallel.
+			uploader := &S3Uploader{}
+			if err := os.Setenv("BUILDKITE_S3_ACL", test.permission); err != nil {
+				t.Fatalf("os.Setenv(BUILDKITE_S3_ACL, %q) = %v", test.permission, err)
+			}
+			t.Cleanup(func() {
+				os.Unsetenv("BUILDKITE_S3_ACL") //nolint:errcheck // Best-effort cleanup.
+			})
+			got, err := uploader.resolvePermission()
+			if err != nil {
+				t.Fatalf("BUILDKITE_S3_ACL=%q uploader.resolvePermission() error = %v", test.permission, err)
+			}
+			if got != test.want {
+				t.Errorf("BUILDKITE_S3_ACL=%q uploader.resolvePermission() = %v, want %v", test.permission, got, test.want)
+			}
+		})
+	}
+}
 
-		os.Unsetenv("BUILDKITE_S3_ACL")
+func TestResolvePermission_InvalidPermission(t *testing.T) {
+	// Test manipulates env vars, so not parallel.
+	permission := "foo"
+	uploader := &S3Uploader{}
+	if err := os.Setenv("BUILDKITE_S3_ACL", permission); err != nil {
+		t.Fatalf("os.Setenv(BUILDKITE_S3_ACL, %q) = %v", permission, err)
+	}
+	t.Cleanup(func() {
+		os.Unsetenv("BUILDKITE_S3_ACL") //nolint:errcheck // Best-effort cleanup.
+	})
+	wantErr := invalidACLError(permission)
+	_, err := uploader.resolvePermission()
+	if err != wantErr {
+		t.Errorf("BUILDKITE_S3_ACL=%q uploader.resolvePermission() error = %v, want %v", permission, err, wantErr)
 	}
 }

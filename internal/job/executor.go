@@ -5,7 +5,9 @@
 package job
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,18 +23,21 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/internal/secrets"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
-	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -48,6 +53,9 @@ type Executor struct {
 
 	// Shell is the shell environment for the executor
 	shell *shell.Shell
+
+	// The checkout directory root
+	checkoutRoot *os.Root
 
 	// Plugins to use
 	plugins []*plugin.Plugin
@@ -86,34 +94,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Start with stdout and stderr as their usual selves.
 	stdout, stderr := io.Writer(os.Stdout), io.Writer(os.Stderr)
 
-	// The shell environment is initially the current environment.
-	// It is mutated by kubernetesSetup and needed for setupRedactors.
+	// The shell environment is initially the current environment, needed for setupRedactors.
 	environ := env.FromSlice(os.Environ())
 
 	// Create a logger to stderr that can be used for things prior to the
 	// redactor setup.
 	// Be careful not to log customer secrets here!
 	tempLog := shell.NewWriterLogger(stderr, true, e.DisabledWarnings)
-
-	if e.KubernetesExec {
-		tempLog.Commentf("Using Kubernetes support")
-
-		socket := &kubernetes.Client{ID: e.KubernetesContainerID}
-		if err := e.kubernetesSetup(ctx, environ, socket); err != nil {
-			e.shell.Errorf("Failed to start kubernetes socket client: %v", err)
-			return 1
-		}
-
-		// Tee both stdout and stderr to the k8s socket client, so that the
-		// logs are shipped to the agent container and then to Buildkite, but
-		// are also visible as container logs.
-		stdout = io.MultiWriter(stdout, socket)
-		stderr = io.MultiWriter(stderr, socket)
-
-		defer func() {
-			_ = socket.Exit(exitCode)
-		}()
-	}
 
 	// setup the redactors here once and for the life of the executor
 	// they will be flushed at the end of each hook
@@ -122,13 +109,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell.
 	if e.shell == nil {
 		sh, err := shell.New(
-			shell.WithDebug(e.ExecutorConfig.Debug),
+			shell.WithDebug(e.Debug),
 			shell.WithEnv(environ),
 			shell.WithLogger(preRedactedLogger), // shell -> logger -> redactor -> real stderr
-			shell.WithInterruptSignal(e.ExecutorConfig.CancelSignal),
-			shell.WithPTY(e.ExecutorConfig.RunInPty),
+			shell.WithInterruptSignal(e.CancelSignal),
+			shell.WithPTY(e.RunInPty),
 			shell.WithStdout(preRedactedStdout), // shell -> redactor -> real stdout
-			shell.WithSignalGracePeriod(e.ExecutorConfig.SignalGracePeriod),
+			shell.WithSignalGracePeriod(e.SignalGracePeriod),
 			shell.WithTraceContextCodec(e.TraceContextCodec),
 		)
 		if err != nil {
@@ -145,7 +132,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Listen for cancellation. Once ctx is cancelled, some tasks can run
 	// afterwards during the signal grace period. These use graceCtx.
-	graceCtx, graceCancel := withGracePeriod(ctx, e.SignalGracePeriod)
+	graceCtx, graceCancel := WithGracePeriod(ctx, e.SignalGracePeriod)
 	defer graceCancel()
 	go func() {
 		<-e.cancelCh
@@ -221,9 +208,21 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	if phaseErr == nil && e.includePhase("checkout") {
 		phaseErr = e.CheckoutPhase(ctx)
 	} else {
+		// For various reasons we should still pretend there was a checkout
+		// phase. It might have happened in a different container, or may have
+		// been disabled, but there can be important files at the checkout path,
+		// e.g. local hooks, which require a checkout root.
 		checkoutDir, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 		if exists {
 			_ = e.shell.Chdir(checkoutDir)
+		}
+		root, err := os.OpenRoot(e.shell.Getwd())
+		if err != nil {
+			phaseErr = cmp.Or(phaseErr, err)
+		}
+		if root != nil {
+			e.checkoutRoot = root
+			runtime.AddCleanup(e, func(r *os.Root) { r.Close() }, root)
 		}
 	}
 
@@ -309,9 +308,16 @@ func (e *Executor) Cancel() error {
 		return errors.New("already cancelled")
 	}
 	e.cancelled = true
+	e.shell.Env.Set("BUILDKITE_JOB_CANCELLED", "true")
 	close(e.cancelCh)
 	return nil
 }
+
+const (
+	HookScopeAgent      = "agent"
+	HookScopeRepository = "repository"
+	HookScopePlugin     = "plugin"
+)
 
 type HookConfig struct {
 	Name           string
@@ -323,18 +329,17 @@ type HookConfig struct {
 }
 
 func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
-	if e.TracingBackend != tracetools.BackendOpenTelemetry {
+	if e.TracingBackend != tracetools.BackendDatadog {
 		return scope
 	}
 
-	// The scope names local and global are confusing, and different to what we document, so we should use the
-	// documented names (repository and agent, respectively) in OpenTelemetry.
-	// However, we need to keep the OpenTracing/Datadog implementation the same, hence this horrible function
+	// In olden times, when the datadog tracing backend was written, these hook scopes were named "local" and "global"
+	// We need to maintain backwards compatibility with the old names for span attribute reasons, so we map them here
 	switch scope {
-	case "local":
-		return "repository"
-	case "global":
-		return "agent"
+	case HookScopeRepository:
+		return "local"
+	case HookScopeAgent:
+		return "global"
 	default:
 		return scope
 	}
@@ -344,7 +349,7 @@ func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
 func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	scopeName := e.tracingImplementationSpecificHookScope(hookCfg.Scope)
 	spanName := e.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -419,14 +424,21 @@ Hooks of this kind are unfortunately not supported on Windows, as we have no way
 	}
 }
 
-func (e *Executor) runUnwrappedHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
+func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookConfig) error {
 	environ := hookCfg.Env.Copy()
 
 	environ.Set("BUILDKITE_HOOK_PHASE", hookCfg.Name)
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	return e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
+	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ)); err != nil {
+		return err
+	}
+	// Passing an empty env changes through because in polyglot hook we can't detect
+	// env change.
+	// But we call this method anyway because a hook might use buildkite-agent env set to update environment.
+	e.applyEnvironmentChanges(hook.EnvChanges{})
+	return nil
 }
 
 func logOpenedHookInfo(l shell.Logger, debug bool, hookName, path string) {
@@ -531,7 +543,6 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		r.Break()
 		return err
 	})
-
 	if err != nil {
 		exitCode := shell.ExitCode(err)
 		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
@@ -589,6 +600,9 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 	return nil
 }
 
+// 1. Apply env changes -> e.shell.Env
+// 2. Refresh executor config (e.shell.Env might change via Job API)
+// 3. Log all changes.
 func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != e.shell.Getwd() {
@@ -596,30 +610,13 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 		}
 	}
 
-	// Do we even have any environment variables to change?
-	if changes.Diff.Empty() {
-		return
-	}
-
 	e.shell.Env.Apply(changes.Diff)
-
-	// reset output redactors based on new environment variable values
-	toRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, e.shell.Env.DumpPairs())
-	if err != nil {
-		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
-	}
-	if len(short) > 0 {
-		slices.Sort(short)
-		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
-	}
-
-	for _, pair := range toRedact {
-		e.redactors.Add(pair.Value)
-	}
+	e.addOutputRedactors()
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
-	executorConfigEnvChanges := e.ExecutorConfig.ReadFromEnvironment(e.shell.Env)
+	// Note this func mutates/refreshes the ExecutorConfig too.
+	executorConfigEnvChanges := e.ReadFromEnvironment(e.shell.Env)
 
 	// Print out the env vars that changed. As we go through each
 	// one, we'll determine if it was a special environment variable
@@ -630,8 +627,11 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// environment variable contains sensitive information (such as
 	// THIRD_PARTY_API_KEY) we'll just not show any values for
 	// anything not controlled by us.
+	executorConfigEnvChangesLogged := make(map[string]bool)
+
 	for k, v := range changes.Diff.Added {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s is now %q", k, v)
 		} else {
 			e.shell.Commentf("%s added", k)
@@ -639,6 +639,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 	for k, v := range changes.Diff.Changed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s was %q and is now %q", k, v.Old, v.New)
 		} else {
 			e.shell.Commentf("%s changed", k)
@@ -646,43 +647,103 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 	for k, v := range changes.Diff.Removed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
+			executorConfigEnvChangesLogged[k] = true
 			e.shell.Commentf("%s is now %q", k, v)
 		} else {
 			e.shell.Commentf("%s removed", k)
 		}
 	}
+
+	// When an env var is changed via buildkite-agent env set instead,
+	// it might not appear in the script "changes".
+	for k, v := range executorConfigEnvChanges {
+		if !executorConfigEnvChangesLogged[k] {
+			e.shell.Commentf("%s is now %q", k, v)
+		}
+	}
+}
+
+// Should be called whenever we updated our e.shell.Env.
+func (e *Executor) addOutputRedactors() {
+	// reset output redactors based on new environment variable values
+	toRedact, short, err := redact.Vars(e.RedactedVars, e.shell.Env.DumpPairs())
+	if err != nil {
+		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+	}
+	if len(short) > 0 {
+		slices.Sort(short)
+		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+	}
+
+	// This should probably be a reset rather than a mutate.
+	// But does a particular string stop being a secret if we learn new secret strings?
+	// For produence, we use Add.
+	for _, pair := range toRedact {
+		e.redactors.Add(pair.Value)
+	}
 }
 
 func (e *Executor) hasGlobalHook(name string) bool {
-	_, err := e.globalHookPath(name)
-	return err == nil
+	_, err := hook.Find(nil, e.HooksPath, name)
+	if err == nil {
+		return true
+	}
+	for _, additional := range e.AdditionalHooksPaths {
+		_, err := hook.Find(nil, additional, name)
+		if err == nil {
+			return true
+		}
+	}
+	return false
 }
 
-// Returns the absolute path to a global hook, or os.ErrNotExist if none is found
-func (e *Executor) globalHookPath(name string) (string, error) {
-	return hook.Find(e.HooksPath, name)
+// find all matching paths for the specified hook
+func (e *Executor) getAllGlobalHookPaths(name string) ([]string, error) {
+	hooks := []string{}
+	p, err := hook.Find(nil, e.HooksPath, name)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return []string{}, err
+		}
+	} else {
+		hooks = append(hooks, p)
+	}
+
+	for _, additional := range e.AdditionalHooksPaths {
+		p, err = hook.Find(nil, additional, name)
+		// as this is an additional hook, don't fail if there's a problem here
+		if err == nil {
+			hooks = append(hooks, p)
+		}
+	}
+
+	return hooks, nil
 }
 
 // Executes a global hook if one exists
 func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
-	if !e.hasGlobalHook(name) {
+	allHooks, err := e.getAllGlobalHookPaths(name)
+	if err != nil {
 		return nil
 	}
-	p, err := e.globalHookPath(name)
-	if err != nil {
-		return err
+	for _, h := range allHooks {
+		err = e.executeHook(ctx, HookConfig{
+			Scope: HookScopeAgent,
+			Name:  name,
+			Path:  h,
+		})
+		if err != nil {
+			return err
+		}
 	}
-	return e.executeHook(ctx, HookConfig{
-		Scope: "global",
-		Name:  name,
-		Path:  p,
-	})
+	return nil
 }
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
 func (e *Executor) localHookPath(name string) (string, error) {
-	dir := filepath.Join(e.shell.Getwd(), ".buildkite", "hooks")
-	return hook.Find(dir, name)
+	// The local hooks dir must exist within the checkout root.
+	dir := filepath.Join(".buildkite", "hooks")
+	return hook.Find(e.checkoutRoot, dir, name)
 }
 
 func (e *Executor) hasLocalHook(name string) bool {
@@ -696,8 +757,8 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// If the hook doesn't exist, that's fine, we'll just skip it
-			if e.ExecutorConfig.Debug {
-				e.shell.Logger.Commentf("Local hook %s doesn't exist: %s, skipping", name, err)
+			if e.Debug {
+				e.shell.Commentf("Local hook %s doesn't exist: %s, skipping", name, err)
 			}
 			return nil
 		}
@@ -709,7 +770,7 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	// For high-security configs, we allow the disabling of local hooks.
-	localHooksEnabled := e.ExecutorConfig.LocalHooksEnabled
+	localHooksEnabled := e.LocalHooksEnabled
 
 	// Allow hooks to disable local hooks by setting BUILDKITE_NO_LOCAL_HOOKS=true
 	noLocalHooks, _ := e.shell.Env.Get("BUILDKITE_NO_LOCAL_HOOKS")
@@ -722,7 +783,7 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	return e.executeHook(ctx, HookConfig{
-		Scope: "local",
+		Scope: HookScopeRepository,
 		Name:  name,
 		Path:  localHookPath,
 	})
@@ -759,7 +820,7 @@ func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repo
 // setUp is run before all the phases run. It's responsible for initializing the
 // job environment
 func (e *Executor) setUp(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -767,7 +828,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	if e.BinPath != "" {
 		path, _ := e.shell.Env.Get("PATH")
 		// BinPath goes last so we don't disturb other tools
-		e.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", path, string(os.PathListSeparator), e.BinPath))
+		e.shell.Env.Set("PATH", fmt.Sprintf("%s%c%s", path, os.PathListSeparator, e.BinPath))
 	}
 
 	// Set a BUILDKITE_BUILD_CHECKOUT_PATH unless one exists already. We do this here
@@ -788,7 +849,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 		e.shell.Commentf("Your pipeline environment has protected environment variables set. " +
 			"These can only be set via hooks, plugins or the agent configuration.")
 
-		for _, env := range strings.Split(ignored, ",") {
+		for env := range strings.SplitSeq(ignored, ",") {
 			e.shell.Warningf("Ignored %s", env)
 		}
 
@@ -801,13 +862,20 @@ func (e *Executor) setUp(ctx context.Context) error {
 			if strings.HasPrefix(envar, "BUILDKITE_AGENT_ACCESS_TOKEN=") {
 				e.shell.Printf("BUILDKITE_AGENT_ACCESS_TOKEN=******************")
 			} else if strings.HasPrefix(envar, "BUILDKITE") || strings.HasPrefix(envar, "CI") || strings.HasPrefix(envar, "PATH") {
-				e.shell.Printf("%s", strings.Replace(envar, "\n", "\\n", -1))
+				e.shell.Printf("%s", strings.ReplaceAll(envar, "\n", "\\n"))
 			}
 		}
 	}
 
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
+
+	// Fetch and set secrets before environment hook execution
+	if e.Secrets != "" {
+		if err := e.fetchAndSetSecrets(ctx); err != nil {
+			return fmt.Errorf("failed to fetch secrets for job: %w", err)
+		}
+	}
 
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
@@ -816,9 +884,84 @@ func (e *Executor) setUp(ctx context.Context) error {
 	return err
 }
 
+// fetchAndSetSecrets handles secrets fetching and processing directly
+func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
+	if e.Secrets == "" {
+		return nil // No secrets to process
+	}
+
+	// Parse secrets from JSON using the pipeline.Secret type
+	var pipelineSecrets []*pipeline.Secret
+	if err := json.Unmarshal([]byte(e.Secrets), &pipelineSecrets); err != nil {
+		return fmt.Errorf("failed to parse secrets JSON: %w", err)
+	}
+
+	if len(pipelineSecrets) == 0 {
+		return nil // No secrets to process
+	}
+
+	e.shell.Headerf("Preparing secrets")
+
+	// Extract keys for fetching
+	keys := make([]string, len(pipelineSecrets))
+	for i, ps := range pipelineSecrets {
+		keys[i] = ps.Key
+	}
+
+	// Create API client for fetching secrets.
+	apiClient := api.NewClient(logger.NewBuffer(), api.Config{
+		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
+		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
+	})
+
+	// Fetch all secrets
+	fetchedSecrets, errs := secrets.FetchSecrets(ctx, apiClient, e.JobID, keys, 10)
+	if len(errs) > 0 {
+		var errorMsg strings.Builder
+		for _, err := range errs {
+			fmt.Fprintf(&errorMsg, "\n   %s", err)
+		}
+		return errors.New(errorMsg.String())
+	}
+
+	secretValuesByKey := make(map[string]string, len(fetchedSecrets))
+	for _, fetchedSecret := range fetchedSecrets {
+		secretValuesByKey[fetchedSecret.Key] = fetchedSecret.Value
+	}
+
+	// Set environment variables and register for redaction
+	for _, pipelineSecret := range pipelineSecrets {
+		if secretValue, exists := secretValuesByKey[pipelineSecret.Key]; exists {
+			// Always register the secret value for redaction regardless of env var setting
+			e.redactors.Add(secretValue)
+
+			// Set the environment variable only if environment_variable is specified and non-nil
+			if pipelineSecret.EnvironmentVariable != "" {
+				// Check if the environment variable is protected
+				if env.IsProtected(pipelineSecret.EnvironmentVariable) {
+					return fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+
+				var alreadySet bool
+				_, alreadySet = e.shell.Env.Get(pipelineSecret.EnvironmentVariable)
+
+				e.shell.Env.Set(pipelineSecret.EnvironmentVariable, secretValue)
+
+				if alreadySet {
+					e.shell.Commentf("Secret %s added as environment variable %s (overwritten)", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				} else {
+					e.shell.Commentf("Secret %s added as environment variable %s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // tearDown is called before the executor exits, even on error
 func (e *Executor) tearDown(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -859,7 +1002,7 @@ func (e *Executor) tearDown(ctx context.Context) error {
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
 func (e *Executor) runPreCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(err) }()
 
 	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
@@ -889,7 +1032,7 @@ func (e *Executor) runCommand(ctx context.Context) error {
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
 func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(err) }()
 
 	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
@@ -902,10 +1045,10 @@ func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 }
 
 // CommandPhase determines how to run the build, and then runs it
-func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr error) {
+func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error) {
 	var preCommandErr error
 
-	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.TracingBackend)
 	defer func() {
 		span.FinishWithError(hookErr)
 	}()
@@ -918,7 +1061,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 		}
 		// Because post-command hooks are often used for post-job cleanup, they
 		// can run during the grace period.
-		graceCtx, cancel := withGracePeriod(ctx, e.SignalGracePeriod)
+		graceCtx, cancel := WithGracePeriod(ctx, e.SignalGracePeriod)
 		defer cancel()
 		hookErr = e.runPostCommandHooks(graceCtx)
 	}()
@@ -951,17 +1094,13 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr error, commandErr 
 
 	switch {
 	case isExitError && isExitSignaled:
-		// The recursive trap created a segfault that we were previously inadvertently suppressing
-		// in the next branch. Once the experiment is promoted, we should keep this branch in case
-		// to show the error to users.
 		e.shell.Errorf("The command was interrupted by a signal: %v", commandErr)
+		return nil, commandErr
 
-		// although error is an exit error, it's not returned. (seems like a bug)
-		// TODO: investigate phasing this out under a experiment
-		return nil, nil
 	case isExitError && !isExitSignaled:
 		e.shell.Errorf("The command exited with status %d", shell.ExitCode(commandErr))
 		return nil, commandErr
+
 	default:
 		e.shell.Errorf("%s", commandErr)
 
@@ -975,7 +1114,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	defer e.redactors.Flush()
 
 	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -988,7 +1127,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		return fmt.Errorf("The command phase has no `command` to execute. Provide a `command` field in your step configuration, or define a `command` hook in a step plug-in, your repository `.buildkite/hooks`, or agent `hooks-path`.")
 	}
 
-	scriptFileName := strings.Replace(e.Command, "\n", "", -1)
+	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
 	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && osutil.FileExists(pathToCommand)
 	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
@@ -1062,7 +1201,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		// command-eval agents, such risks are everpresent since the master
 		// can tell the agent to do anything anyway, but no-command-eval agents
 		// shouldn't be vulnerable to this!
-		if e.ExecutorConfig.CommandEval {
+		if e.CommandEval {
 			// Make script executable
 			if err = osutil.ChmodExecutable(pathToCommand); err != nil {
 				e.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
@@ -1145,7 +1284,7 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 
 	scriptContents := []string{"@echo off"}
 
-	for _, line := range strings.Split(cmd, "\n") {
+	for line := range strings.SplitSeq(cmd, "\n") {
 		if line != "" {
 			if shouldCallBatchLine(line) {
 				scriptContents = append(scriptContents, "call "+line)
@@ -1177,7 +1316,7 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 //
 //	(returned shell.Logger) -> redactor 2 -> stderr
 func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
-	varsToRedact, short, err := redact.Vars(e.ExecutorConfig.RedactedVars, environ.DumpPairs())
+	varsToRedact, short, err := redact.Vars(e.RedactedVars, environ.DumpPairs())
 	if err != nil {
 		log.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
 	}
@@ -1187,7 +1326,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	}
 
 	if e.Debug {
-		log.Commentf("Enabling output redaction for values from environment variables matching: %v", e.ExecutorConfig.RedactedVars)
+		log.Commentf("Enabling output redaction for values from environment variables matching: %v", e.RedactedVars)
 	}
 
 	needles := make([]string, 0, len(varsToRedact))
@@ -1195,97 +1334,11 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 		needles = append(needles, pair.Value)
 	}
 
-	stdoutRedactor := replacer.New(stdout, needles, redact.Redact)
+	stdoutRedactor := replacer.New(stdout, needles, redact.Redacted)
 	e.redactors.Append(stdoutRedactor)
-	loggerRedactor := replacer.New(stderr, needles, redact.Redact)
+	loggerRedactor := replacer.New(stderr, needles, redact.Redacted)
 	e.redactors.Append(loggerRedactor)
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)
 	return stdoutRedactor, logger
-}
-
-func (e *Executor) kubernetesSetup(ctx context.Context, environ *env.Environment, k8sAgentSocket *kubernetes.Client) error {
-	rtr := roko.NewRetrier(
-		roko.WithMaxAttempts(7),
-		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-	)
-	regResp, err := roko.DoFunc(ctx, rtr, func(rtr *roko.Retrier) (*kubernetes.RegisterResponse, error) {
-		return k8sAgentSocket.Connect(ctx)
-	})
-	if err != nil {
-		return fmt.Errorf("error connecting to kubernetes runner: %w", err)
-	}
-
-	// Set our environment vars based on the registration response.
-	// But note that the k8s stack interprets the job definition itself,
-	// and sets a variety of env vars (e.g. BUILDKITE_COMMAND) that
-	// *could* be different to the ones the agent normally supplies.
-	// Examples:
-	// * The command container could be passed a specific
-	//   BUILDKITE_COMMAND that is computed from the command+args
-	//   podSpec attributes (in the kubernetes "plugin"), instead of the
-	//   "command" attribute of the step.
-	// * BUILDKITE_PLUGINS is pre-processed by the k8s stack to remove
-	//   the kubernetes "plugin". If we used the agent's default
-	//   BUILDKITE_PLUGINS, we'd be trying to find a kubernetes plugin
-	//   that doesn't exist.
-	// So we should skip setting any vars that are already set, and
-	// specifically any that could be deliberately *unset* by the
-	// k8s stack (BUILDKITE_PLUGINS could be unset if kubernetes is
-	// the only "plugin" in the step).
-	// (Maybe we could move some of the k8s stack processing in here?)
-	//
-	// To think about: how to obtain the env vars early enough to set
-	// them in ExecutorConfig (because of how urfave/cli works, it
-	// must happen before App.Run, which is before the program even knows
-	// which subcommand is running).
-	for n, v := range env.FromSlice(regResp.Env).Dump() {
-		// Skip these ones specifically.
-		// See agent-stack-k8s/internal/controller/scheduler/scheduler.go#(*jobWrapper).Build
-		switch n {
-		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS":
-			continue
-
-		case "BUILDKITE_AGENT_ACCESS_TOKEN":
-			// Just in case someone has tried to fiddle with this, set it
-			// unconditionally (to be compatible with pre-v3.74.1 / PR 2851
-			// behavior).
-			environ.Set(n, v)
-			if err := os.Setenv(n, v); err != nil {
-				return err
-			}
-			continue
-		}
-		// Skip any that are already set.
-		if environ.Exists(n) {
-			continue
-		}
-		// Set it!
-		environ.Set(n, v)
-		if err := os.Setenv(n, v); err != nil {
-			return err
-		}
-	}
-
-	// Proceed when ready
-	if err := k8sAgentSocket.Await(ctx, kubernetes.RunStateStart); err != nil {
-		return fmt.Errorf("error waiting for client to become ready: %w", err)
-	}
-
-	go func() {
-		// If the k8s client is interrupted because the "server" agent is
-		// stopped or unreachable, we should stop running the job.
-		err := k8sAgentSocket.Await(ctx, kubernetes.RunStateInterrupt)
-		// If the k8s client is interrupted because our own ctx was cancelled,
-		// then the job is already stopping, so there's no point logging an
-		// error.
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		if err != nil {
-			e.shell.Errorf("Error waiting for client interrupt: %v", err)
-		}
-		e.Cancel()
-	}()
-	return nil
 }

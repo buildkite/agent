@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -16,6 +17,9 @@ type configCommandPair struct {
 var commandConfigPairs = []configCommandPair{
 	{Config: AcknowledgementsConfig{}, Command: AcknowledgementsCommand},
 	{Config: AgentStartConfig{}, Command: AgentStartCommand},
+	{Config: AgentStopConfig{}, Command: AgentStopCommand},
+	{Config: AgentPauseConfig{}, Command: AgentPauseCommand},
+	{Config: AgentResumeConfig{}, Command: AgentResumeCommand},
 	{Config: AnnotateConfig{}, Command: AnnotateCommand},
 	{Config: AnnotationRemoveConfig{}, Command: AnnotationRemoveCommand},
 	{Config: ArtifactDownloadConfig{}, Command: ArtifactDownloadCommand},
@@ -24,11 +28,14 @@ var commandConfigPairs = []configCommandPair{
 	{Config: ArtifactUploadConfig{}, Command: ArtifactUploadCommand},
 	{Config: BuildCancelConfig{}, Command: BuildCancelCommand},
 	{Config: BootstrapConfig{}, Command: BootstrapCommand},
+	{Config: CacheRestoreConfig{}, Command: CacheRestoreCommand},
+	{Config: CacheSaveConfig{}, Command: CacheSaveCommand},
 	{Config: EnvDumpConfig{}, Command: EnvDumpCommand},
 	{Config: EnvGetConfig{}, Command: EnvGetCommand},
 	{Config: EnvSetConfig{}, Command: EnvSetCommand},
 	{Config: EnvUnsetConfig{}, Command: EnvUnsetCommand},
 	{Config: GitCredentialsHelperConfig{}, Command: GitCredentialsHelperCommand},
+	{Config: KubernetesBootstrapConfig{}, Command: KubernetesBootstrapCommand},
 	{Config: LockAcquireConfig{}, Command: LockAcquireCommand},
 	{Config: LockDoConfig{}, Command: LockDoCommand},
 	{Config: LockDoneConfig{}, Command: LockDoneCommand},
@@ -58,7 +65,7 @@ func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
 			flagNames[flag.GetName()] = struct{}{}
 		}
 
-		fields, err := reflections.Fields(pair.Config)
+		fields, err := reflections.FieldsDeep(pair.Config)
 		if err != nil {
 			t.Fatalf("getting fields for type %T: %v", pair.Config, err)
 		}
@@ -87,6 +94,47 @@ func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestDescriptionsAreIndentedUsingSpaces(t *testing.T) {
+	t.Parallel()
+
+	for name, command := range commandsByFullName(t, BuildkiteAgentCommands) {
+		if command.Description == "" {
+			t.Fatalf("command %q has no description; please add one", name)
+		}
+
+		lines := strings.Split(command.Description, "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, "\t") {
+				fullCommandName := "buildkite-agent " + name
+				t.Errorf("line %d of description for command %q contains tab characters; please use spaces for indentation in command descriptions", i, fullCommandName)
+			}
+		}
+	}
+}
+
+// cli.Command.FullName() doesn't actually print the full name of a command when its a subcommand,
+// so we need to build a map of full command names to cli.Command structs ourselves
+func commandsByFullName(t *testing.T, commands []cli.Command) map[string]cli.Command {
+	t.Helper()
+
+	result := make(map[string]cli.Command)
+
+	for _, command := range commands {
+		if len(command.Subcommands) == 0 {
+			result[command.FullName()] = command
+		}
+
+		for _, subcommand := range command.Subcommands {
+			subcommands := commandsByFullName(t, []cli.Command{subcommand})
+			for subcommandName, cmd := range subcommands {
+				result[fmt.Sprintf("%s %s", command.FullName(), subcommandName)] = cmd
+			}
+		}
+	}
+
+	return result
 }
 
 func TestAllCommandsAreTestedForConfigCompleteness(t *testing.T) {

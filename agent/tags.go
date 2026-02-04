@@ -40,22 +40,22 @@ func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []str
 			return K8sTagsFromEnv(os.Environ())
 		},
 		ec2MetaDataDefault: func() (map[string]string, error) {
-			return EC2MetaData{}.Get()
+			return EC2MetaData{}.Get(ctx)
 		},
 		ec2MetaDataPaths: func(paths map[string]string) (map[string]string, error) {
-			return EC2MetaData{}.GetPaths(paths)
+			return EC2MetaData{}.GetPaths(ctx, paths)
 		},
 		ec2Tags: func() (map[string]string, error) {
-			return EC2Tags{}.Get()
+			return EC2Tags{}.Get(ctx)
 		},
 		ecsMetaDataDefault: func() (map[string]string, error) {
 			return ECSMetadata{}.Get(ctx)
 		},
 		gcpMetaDataDefault: func() (map[string]string, error) {
-			return GCPMetaData{}.Get()
+			return GCPMetaData{}.Get(ctx)
 		},
 		gcpMetaDataPaths: func(paths map[string]string) (map[string]string, error) {
-			return GCPMetaData{}.GetPaths(paths)
+			return GCPMetaData{}.GetPaths(ctx, paths)
 		},
 		gcpLabels: func() (map[string]string, error) {
 			return GCPLabels{}.Get(ctx)
@@ -129,7 +129,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 			return err
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
@@ -180,7 +179,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			}
 			return err
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
@@ -209,7 +207,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 			return err
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to fetch ECS meta-data: %s", err.Error()))
@@ -238,7 +235,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 			return nil
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to fetch GCP meta-data: %s", err.Error()))
@@ -286,7 +282,6 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			}
 			return err
 		})
-
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))
@@ -303,7 +298,7 @@ func parseTagValuePathPairs(paths []string) (map[string]string, error) {
 		// Sanity check the format of each pair to ensure that it’s parseable
 		index := strings.LastIndex(pair, "=")
 		if index == -1 || index == 0 || index == len(pair)-1 {
-			return result, errors.New(fmt.Sprintf("`%s` cannot be parsed, format should be `tag=metadata/path`", pair))
+			return result, fmt.Errorf("%q cannot be parsed, format should be `tag=metadata/path`", pair)
 		}
 
 		x := strings.Split(pair, "=")

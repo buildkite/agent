@@ -139,7 +139,7 @@ func (v *__UpdatePipelineInput) GetId() string { return v.Id }
 // GetYaml returns __UpdatePipelineInput.Yaml, and is useful for accessing the field via an interface.
 func (v *__UpdatePipelineInput) GetYaml() string { return v.Yaml }
 
-// The query or mutation executed by GetPipeline.
+// The query executed by GetPipeline.
 const GetPipeline_Operation = `
 query GetPipeline ($orgPipelineSlug: ID!) {
 	pipeline(slug: $orgPipelineSlug) {
@@ -158,7 +158,7 @@ func GetPipeline(
 	ctx_ context.Context,
 	client_ graphql.Client,
 	orgPipelineSlug string,
-) (*GetPipelineResponse, error) {
+) (data_ *GetPipelineResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetPipeline",
 		Query:  GetPipeline_Operation,
@@ -166,10 +166,9 @@ func GetPipeline(
 			OrgPipelineSlug: orgPipelineSlug,
 		},
 	}
-	var err_ error
 
-	var data_ GetPipelineResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &GetPipelineResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -177,10 +176,10 @@ func GetPipeline(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by UpdatePipeline.
+// The mutation executed by UpdatePipeline.
 const UpdatePipeline_Operation = `
 mutation UpdatePipeline ($id: ID!, $yaml: String!) {
 	pipelineUpdate(input: {id:$id,steps:{yaml:$yaml}}) {
@@ -199,7 +198,7 @@ func UpdatePipeline(
 	client_ graphql.Client,
 	id string,
 	yaml string,
-) (*UpdatePipelineResponse, error) {
+) (data_ *UpdatePipelineResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "UpdatePipeline",
 		Query:  UpdatePipeline_Operation,
@@ -208,10 +207,9 @@ func UpdatePipeline(
 			Yaml: yaml,
 		},
 	}
-	var err_ error
 
-	var data_ UpdatePipelineResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &UpdatePipelineResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -219,5 +217,5 @@ func UpdatePipeline(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }

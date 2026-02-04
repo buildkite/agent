@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,13 +60,13 @@ func ParseDefinition(b []byte) (*Definition, error) {
 // plugin.yaml, or plugin.yml. It parses the first one it finds, and returns the
 // resulting Definition. If none of those files can be found, it returns
 // ErrDefinitionNotFound.
-func LoadDefinitionFromDir(dir string) (*Definition, error) {
-	f, err := findDefinitionFile(dir)
+func LoadDefinitionFromDir(root *os.Root, dir string) (*Definition, error) {
+	f, err := findDefinitionFile(root, dir)
 	if err != nil {
 		return nil, err
 	}
 
-	b, err := os.ReadFile(f)
+	b, err := readFileInRoot(root, f)
 	if err != nil {
 		return nil, err
 	}
@@ -74,18 +75,37 @@ func LoadDefinitionFromDir(dir string) (*Definition, error) {
 }
 
 // findDefinitionFile searches for known plugin definition files.
-func findDefinitionFile(dir string) (string, error) {
+func findDefinitionFile(root *os.Root, dir string) (string, error) {
+	stat := os.Stat
+	if root != nil {
+		stat = root.Stat
+	}
+
 	possibleFilenames := []string{
 		filepath.Join(dir, "plugin.json"),
 		filepath.Join(dir, "plugin.yaml"),
 		filepath.Join(dir, "plugin.yml"),
 	}
 	for _, filename := range possibleFilenames {
-		if _, err := os.Stat(filename); err == nil {
+		if _, err := stat(filename); err == nil {
 			return filename, nil
 		}
 	}
 	return "", ErrDefinitionNotFound
+}
+
+// readFileInRoot uses root to open the file and read it entirely.
+// If root == nil it returns os.ReadFile(path).
+func readFileInRoot(root *os.Root, path string) ([]byte, error) {
+	if root == nil {
+		return os.ReadFile(path)
+	}
+	f, err := root.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close() //nolint:errcheck // Best-effort cleanup of read-only file
+	return io.ReadAll(f)
 }
 
 // Validator validates plugin definitions.

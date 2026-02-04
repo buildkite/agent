@@ -1,0 +1,37 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "hook",
+    srcs = [
+        "binary.go",
+        "hook.go",
+        "type.go",
+        "wrapper.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/job/hook",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//env",
+        "//internal/shellscript",
+        "//internal/tempfile",
+    ],
+)
+
+go_test(
+    name = "hook_test",
+    srcs = [
+        "main_test.go",
+        "type_test.go",
+        "wrapper_test.go",
+    ],
+    deps = [
+        ":hook",
+        "//clicommand",
+        "//env",
+        "//internal/shell",
+        "//internal/tempfile",
+        "//version",
+        "@com_github_urfave_cli//:cli",
+        "@tools_gotest_v3//assert",
+    ],
+)

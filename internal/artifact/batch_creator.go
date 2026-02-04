@@ -108,7 +108,6 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 
 			return creation, err
 		})
-
 		// Did the batch creation eventually fail?
 		if err != nil {
 			return nil, err

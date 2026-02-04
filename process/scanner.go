@@ -18,7 +18,7 @@ func NewScanner(l logger.Logger) *Scanner {
 }
 
 func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
-	var reader = bufio.NewReader(r)
+	reader := bufio.NewReader(r)
 	var appending []byte
 
 	s.logger.Debug("[LineScanner] Starting to read lines")

@@ -6,8 +6,13 @@ steps:
     env:
       CODENAME: "experimental"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-edge
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -26,8 +31,13 @@ steps:
       CODENAME: "experimental"
       RPM_S3_BUCKET: "yum.buildkite.com"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-edge
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
       - docker#v5.8.0:
           image: "buildkite/agent:3.55.0-ubuntu"
           entrypoint: bash
@@ -79,8 +89,13 @@ steps:
       CODENAME: "experimental"
       DEB_S3_BUCKET: "apt.buildkite.com/buildkite-agent"
     plugins:
-      - aws-assume-role-with-web-identity:
+      - aws-assume-role-with-web-identity#v1.4.0:
           role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-edge
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
       - ecr#v2.7.0:
           login: true
           account-ids: "032379705303"
@@ -144,8 +159,13 @@ steps:
           CODENAME: "experimental"
           REGISTRY: "{{matrix.registry}}"
         plugins:
-          - aws-assume-role-with-web-identity:
+          - aws-assume-role-with-web-identity#v1.4.0:
               role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-edge
+              session-tags:
+                - organization_slug
+                - organization_id
+                - pipeline_slug
+                - build_branch
           - ecr#v2.7.0:
               login: true
               account-ids: "445615400570"

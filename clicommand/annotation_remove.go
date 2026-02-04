@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -27,28 +28,19 @@ Example:
     $ buildkite-agent annotation remove --context "remove-me"`
 
 type AnnotationRemoveConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Context string `cli:"context" validate:"required"`
+	Scope   string `cli:"scope"`
 	Job     string `cli:"job" validate:"required"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var AnnotationRemoveCommand = cli.Command{
 	Name:        "remove",
 	Usage:       "Remove an existing annotation from a Buildkite build",
 	Description: annotationRemoveHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "context",
 			Value:  "default",
@@ -56,25 +48,18 @@ var AnnotationRemoveCommand = cli.Command{
 			EnvVar: "BUILDKITE_ANNOTATION_CONTEXT",
 		},
 		cli.StringFlag{
+			Name:   "scope",
+			Value:  "build",
+			Usage:  "The scope of the annotation to remove. One of either 'build' or 'job'",
+			EnvVar: "BUILDKITE_ANNOTATION_SCOPE",
+		},
+		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
 			Usage:  "Which job is removing the annotation",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotationRemoveConfig](ctx, c)
@@ -90,7 +75,7 @@ var AnnotationRemoveCommand = cli.Command{
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			// Attempt to remove the annotation
-			resp, err := client.AnnotationRemove(ctx, cfg.Job, cfg.Context)
+			resp, err := client.AnnotationRemove(ctx, cfg.Job, cfg.Context, cfg.Scope)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400 || resp.StatusCode == 410) {

@@ -237,7 +237,9 @@ func TestWorkingDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`os.MkdirTemp("", "shelltest") error = %v`, err)
 	}
-	defer os.RemoveAll(tempDir)
+	t.Cleanup(func() {
+		os.RemoveAll(tempDir) //nolint:errcheck // Best-effort cleanup.
+	})
 
 	// macos has a symlinked temp dir
 	if runtime.GOOS == "darwin" {
@@ -250,8 +252,8 @@ func TestWorkingDir(t *testing.T) {
 
 	dirs := []string{tempDir, "my", "test", "dirs"}
 
-	if err := os.MkdirAll(filepath.Join(dirs...), 0700); err != nil {
-		t.Fatalf("os.MkdirAll(dirs, 0700) = %v", err)
+	if err := os.MkdirAll(filepath.Join(dirs...), 0o700); err != nil {
+		t.Fatalf("os.MkdirAll(dirs, 0o700) = %v", err)
 	}
 
 	currentWd, err := os.Getwd()
@@ -321,7 +323,9 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`os.MkdirTemp("", "TestLockFileRetriesAndTimesOut") error = %v`, err)
 	}
-	defer os.RemoveAll(dir)
+	t.Cleanup(func() {
+		os.RemoveAll(dir) //nolint:errcheck // Best-effort cleanup.
+	})
 
 	sh := newShellForTest(t,
 		shell.WithStdout(io.Discard),

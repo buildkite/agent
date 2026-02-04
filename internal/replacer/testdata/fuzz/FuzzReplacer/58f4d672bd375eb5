@@ -1,0 +1,7 @@
+go test fuzz v1
+string("sit")
+int(10)
+string("0")
+string("it")
+string("t0")
+string("")

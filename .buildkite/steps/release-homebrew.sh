@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Must be executed after github-release.sh as it depends on release meta-data
+# Must be executed after github-release.sh as it depends on release meta-data
 
 set -euo pipefail
 
@@ -86,7 +86,7 @@ echo "--- :octocat: Fetching current Homebrew formula from GitHub Contents API"
 FORMULA_FILE=./pkg/buildkite-agent.rb
 UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
 
-CONTENTS_API_RESPONSE="$(curl "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb" -H "Authorization: token ${GITHUB_RELEASE_ACCESS_TOKEN}")"
+CONTENTS_API_RESPONSE="$(curl "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/Formula/buildkite-agent.rb" -H "Authorization: token ${GITHUB_RELEASE_ACCESS_TOKEN}")"
 
 echo "Base64 decoding GitHub response into $FORMULA_FILE"
 
@@ -127,7 +127,7 @@ JSON
 
 if [[ "${DRY_RUN:-}" == "false" ]] ; then
   echo "Posting JSON to GitHub Contents API"
-  curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb" \
+  curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/Formula/buildkite-agent.rb" \
       -H "Authorization: token ${GITHUB_RELEASE_ACCESS_TOKEN}" \
       -H "Content-Type: application/json" \
       --data-binary "@pkg/github_post_data.json" \

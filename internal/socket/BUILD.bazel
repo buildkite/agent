@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "socket",
+    srcs = [
+        "available.go",
+        "available_windows.go",
+        "client.go",
+        "doc.go",
+        "middleware.go",
+        "server.go",
+        "utils.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/socket",
+    visibility = ["//:__subpackages__"],
+    deps = select({
+        "@rules_go//go/platform:windows": [
+            "@org_golang_x_sys//windows/registry",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+go_test(
+    name = "socket_test",
+    srcs = [
+        "client_test.go",
+        "middleware_test.go",
+        "server_test.go",
+    ],
+    embed = [":socket"],
+    deps = ["@com_github_google_go_cmp//cmp"],
+)

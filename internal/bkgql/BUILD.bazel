@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bkgql",
+    srcs = [
+        "client.go",
+        "generated.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/internal/bkgql",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/agenthttp",
+        "@com_github_khan_genqlient//graphql",
+    ],
+)

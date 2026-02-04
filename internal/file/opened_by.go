@@ -52,7 +52,7 @@ func OpenedBy(l shell.Logger, debug bool, path string) (string, error) {
 	return "", ErrFileNotOpen
 }
 
-func openedByPid(l shell.Logger, debug bool, absPath string, pid string) bool {
+func openedByPid(l shell.Logger, debug bool, absPath, pid string) bool {
 	dirEntries, err := os.ReadDir(fmt.Sprintf("/proc/%s/fd", pid))
 	if err != nil {
 		if debug {

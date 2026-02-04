@@ -23,8 +23,6 @@ This command cannot unset Buildkite read-only variables.
 
 To read the new values of variables from within the current phase, use ′env get′.
 
-Note that this subcommand is only available from within the job executor with the job-api experiment enabled.
-
 Examples:
 
 Unsetting the variables ′LLAMA′ and ′ALPACA′:
@@ -40,22 +38,17 @@ Unsetting the variables ′LLAMA′ and ′ALPACA′ with a JSON list supplied o
         buildkite-agent env unset --input-format=json --output-format=quiet -`
 
 type EnvUnsetConfig struct {
+	GlobalConfig
+
 	InputFormat  string `cli:"input-format"`
 	OutputFormat string `cli:"output-format"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
 }
 
 var EnvUnsetCommand = cli.Command{
 	Name:        "unset",
 	Usage:       "Unsets variables from the job execution environment",
 	Description: envUnsetHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "input-format",
 			Usage:  "Input format: plain or json",
@@ -68,14 +61,7 @@ var EnvUnsetCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_ENV_UNSET_OUTPUT_FORMAT",
 			Value:  "plain",
 		},
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 	Action: envUnsetAction,
 }
 

@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -38,9 +39,9 @@ jobs, you can target the particular job you want to search the artifacts from us
 
 You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)
 
-Output formatting can be altered with the -format flag as follows:
+Output formatting can be altered with the --format flag as follows:
 
-    $ buildkite-agent artifact search "*" -format "%p\n"
+    $ buildkite-agent artifact search "*" --format "%p\n"
 
 The above will return a list of filenames separated by newline.`
 
@@ -69,25 +70,15 @@ Format specifiers:
   %u    Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead`
 
 type ArtifactSearchConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
 	AllowEmptyResults  bool   `cli:"allow-empty-results"`
 	PrintFormat        string `cli:"format"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var ArtifactSearchCommand = cli.Command{
@@ -95,7 +86,7 @@ var ArtifactSearchCommand = cli.Command{
 	Usage:              "Searches artifacts in Buildkite",
 	Description:        searchHelpDescription,
 	CustomHelpTemplate: artifactSearchHelpTemplate,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
@@ -110,35 +101,34 @@ var ArtifactSearchCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "include-retried-jobs",
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from retried jobs in the search",
+			Usage:  "Include artifacts from retried jobs in the search (default: false)",
 		},
 		cli.BoolFlag{
 			Name:  "allow-empty-results",
-			Usage: "By default, searches exit 1 if there are no results. If this flag is set, searches will exit 0 with an empty set",
+			Usage: "By default, searches exit 1 if there are no results. If this flag is set, searches will exit 0 with an empty set (default: false)",
 		},
 		cli.StringFlag{
 			Name:  "format",
-			Value: "%j %p %c\n",
+			Value: "%j %p %c\\n", // Note: users supply \n in the flag value literally
 			Usage: "Output formatting of results. See below for listing of available format specifiers.",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](ctx, c)
 		defer done()
+
+		printFormat := cfg.PrintFormat
+		if strings.Contains(printFormat, `"`) {
+			// Otherwise this would break the strconv.Unquote
+			printFormat = strings.ReplaceAll(printFormat, `"`, `\"`)
+		}
+		// Handling all escape sequences, like \n, \t etc
+		unquoted, err := strconv.Unquote(`"` + printFormat + `"`)
+		if err != nil {
+			return fmt.Errorf("Unable to parse format %q", printFormat)
+		}
+		printFormat = unquoted
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
@@ -168,7 +158,7 @@ var ArtifactSearchCommand = cli.Command{
 				"%u", artifact.URL,
 				"%i", artifact.ID,
 			)
-			if _, err := fmt.Fprint(c.App.Writer, r.Replace(cfg.PrintFormat)); err != nil {
+			if _, err := fmt.Fprint(c.App.Writer, r.Replace(printFormat)); err != nil {
 				return err
 			}
 		}

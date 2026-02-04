@@ -1,0 +1,21 @@
+agents:
+  queue: agent-runners-linux-amd64
+
+steps:
+  - label: ":go::sleuth_or_spy: Run agent end-to-end tests"
+    command: .buildkite/steps/e2e-tests.sh
+    secrets:
+      - CI_E2E_TESTS_BUILDKITE_API_TOKEN
+      - CI_E2E_TESTS_AGENT_TOKEN
+      - CI_E2E_TESTS_ANALYTICS_TOKEN
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          mount-buildkite-agent: true
+          run: e2e
+      - test-collector#v1.11.0:
+          files: "junit.xml"
+          format: "junit"
+          api-token-env-name: CI_E2E_TESTS_ANALYTICS_TOKEN
+

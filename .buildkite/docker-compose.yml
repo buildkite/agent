@@ -1,6 +1,17 @@
-version: '3.5'
-
 services:
+  lint:
+    build:
+      context: .
+      dockerfile: Dockerfile-lint
+    volumes:
+      - ../:/work:cached
+      - ~/gocache:/gocache
+      - ~/gomodcache:/gomodcache
+    working_dir: /work
+    environment:
+      - GOCACHE=/gocache
+      - GOMODCACHE=/gomodcache
+
   agent:
     build:
       context: .
@@ -17,6 +28,23 @@ services:
       - "BUILDKITE_BUILD_PATH=/buildkite"
       - GOCACHE=/gocache
       - GOMODCACHE=/gomodcache
+      - BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile-e2e
+    volumes:
+      - ../:/work:cached
+    working_dir: /work
+    environment:
+      - BUILDKITE_BUILD_NUMBER
+      - BUILDKITE_JOB_ID
+      - BUILDKITE_BUILD_CREATOR_EMAIL
+      - BUILDKITE_BUILD_CREATOR
+      - BUILDKITE_TRIGGERED_FROM_BUILD_ID
+      - CI_E2E_TESTS_BUILDKITE_API_TOKEN
+      - CI_E2E_TESTS_AGENT_TOKEN
 
   ruby:
     image: ruby:2.7.6

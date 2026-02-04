@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(10)
+string("\xee\x97\xd2")
+string("\xe7\xb4\xc5")
+string("0")
+string("0")

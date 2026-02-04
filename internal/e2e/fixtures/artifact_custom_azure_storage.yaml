@@ -1,0 +1,21 @@
+env:
+  BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: "https://l0srwtxpsx7s9h26qra8a40j.blob.core.windows.net/buildkite-agent-e2e-test/${BUILDKITE_PIPELINE_ID}"
+
+agents:
+  queue: {{ .queue }}
+
+secrets:
+  - AZURE_E2E_TEST_KEY
+
+steps:
+  - key: upload
+    commands: |
+      set -e
+      echo "hello world" > artifact.txt
+      BUILDKITE_AZURE_BLOB_ACCESS_KEY="$${AZURE_E2E_TEST_KEY}" {{ .buildkite_agent_binary }} artifact upload artifact.txt
+  - key: download
+    depends_on: upload
+    commands: |
+      set -e
+      BUILDKITE_AZURE_BLOB_ACCESS_KEY="$${AZURE_E2E_TEST_KEY}" {{ .buildkite_agent_binary }} artifact download artifact.txt .
+      [[ $(cat artifact.txt) == "hello world" ]]

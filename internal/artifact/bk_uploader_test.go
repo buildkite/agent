@@ -51,7 +51,7 @@ func TestFormUploading(t *testing.T) {
 			http.Error(rw, fmt.Sprintf(`req.FormFile("file") error = %v`, err), http.StatusBadRequest)
 			return
 		}
-		defer file.Close()
+		defer file.Close() //nolint:errcheck // File open for read only.
 
 		b := &bytes.Buffer{}
 		if _, err := io.Copy(b, file); err != nil {
@@ -76,7 +76,9 @@ func TestFormUploading(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`os.MkdirTemp("", "agent") error = %v`, err)
 	}
-	defer os.Remove(temp)
+	t.Cleanup(func() {
+		os.RemoveAll(temp) //nolint:errcheck // Best-effort cleanup.
+	})
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -86,8 +88,12 @@ func TestFormUploading(t *testing.T) {
 	for _, wd := range []string{temp, cwd} {
 		t.Run(wd, func(t *testing.T) {
 			abspath := filepath.Join(wd, "llamas.txt")
-			err = os.WriteFile(abspath, []byte("llamas"), 0700)
-			defer os.Remove(abspath)
+			if err := os.WriteFile(abspath, []byte("llamas"), 0o700); err != nil {
+				t.Fatalf("os.WriteFile(%q, llamas, 0o700) = %v", abspath, err)
+			}
+			t.Cleanup(func() {
+				os.Remove(abspath) //nolint:errcheck // Best-effort cleanup.
+			})
 
 			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
 			artifact := &api.Artifact{
@@ -161,7 +167,9 @@ func TestMultipartUploading(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`os.MkdirTemp("", "agent") error = %v`, err)
 	}
-	defer os.Remove(temp)
+	t.Cleanup(func() {
+		os.RemoveAll(temp) //nolint:errcheck // Best-effort cleanup.
+	})
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -171,8 +179,12 @@ func TestMultipartUploading(t *testing.T) {
 	for _, wd := range []string{temp, cwd} {
 		t.Run(wd, func(t *testing.T) {
 			abspath := filepath.Join(wd, "llamas3.txt")
-			err = os.WriteFile(abspath, []byte("llamasllamasllamas"), 0700)
-			defer os.Remove(abspath)
+			if err := os.WriteFile(abspath, []byte("llamasllamasllamas"), 0o700); err != nil {
+				t.Fatalf("os.WriteFile(%q, llamasllamasllamas, 0o700) = %v", abspath, err)
+			}
+			t.Cleanup(func() {
+				os.Remove(abspath) //nolint:errcheck // Best-effort cleanup.
+			})
 
 			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
 			actions := []api.ArtifactUploadAction{
@@ -242,7 +254,9 @@ func TestFormUploadFileMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`os.MkdirTemp("", "agent") error = %v`, err)
 	}
-	defer os.Remove(temp)
+	t.Cleanup(func() {
+		os.RemoveAll(temp) //nolint:errcheck // Best-effort cleanup.
+	})
 
 	abspath := filepath.Join(temp, "llamas.txt")
 
@@ -262,7 +276,8 @@ func TestFormUploadFileMissing(t *testing.T) {
 				Method:    "POST",
 				Path:      "buildkiteartifacts.com",
 				FileInput: "file",
-			}},
+			},
+		},
 	}
 
 	work, err := uploader.CreateWork(artifact)

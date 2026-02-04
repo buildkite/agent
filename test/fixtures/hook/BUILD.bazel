@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "hook_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/buildkite/agent/v3/test/fixtures/hook",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "hook",
+    embed = [":hook_lib"],
+    visibility = ["//visibility:public"],
+)

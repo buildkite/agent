@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -35,34 +37,29 @@ Example:
     $ buildkite-agent step update "label" "New Label"
     $ buildkite-agent step update "label" " (add to end of label)" --append
     $ buildkite-agent step update "label" < ./tmp/some-new-label
-    $ ./script/label-generator | buildkite-agent step update "label"`
+    $ ./script/label-generator | buildkite-agent step update "label"
+    $ buildkite-agent step update "priority" 10 --step "my-step-key"
+    $ buildkite-agent step update "notify" '[{"github_commit_status": {"context": "my-context"}}]' --append
+    $ buildkite-agent step update "notify" '[{"slack": "my-slack-workspace#my-channel"}]' --append
+`
 
 type StepUpdateConfig struct {
-	Attribute string `cli:"arg:0" label:"attribute" validate:"required"`
-	Value     string `cli:"arg:1" label:"value"`
-	Append    bool   `cli:"append"`
-	StepOrKey string `cli:"step" validate:"required"`
-	Build     string `cli:"build"`
+	GlobalConfig
+	APIConfig
 
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
+	Attribute    string   `cli:"arg:0" label:"attribute" validate:"required"`
+	Value        string   `cli:"arg:1" label:"value"`
+	Append       bool     `cli:"append"`
+	StepOrKey    string   `cli:"step" validate:"required"`
+	Build        string   `cli:"build"`
+	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 }
 
 var StepUpdateCommand = cli.Command{
 	Name:        "update",
 	Usage:       "Change the value of an attribute",
 	Description: stepUpdateHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "step",
 			Value:  "",
@@ -77,23 +74,11 @@ var StepUpdateCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "append",
-			Usage:  "Append to current attribute instead of replacing it",
+			Usage:  "Append to current attribute instead of replacing it (default: false)",
 			EnvVar: "BUILDKITE_STEP_UPDATE_APPEND",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+		RedactedVars,
+	}),
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](context.Background(), c)
 		defer done()
@@ -111,6 +96,16 @@ var StepUpdateCommand = cli.Command{
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
+
+		// Apply secret redaction to the value.
+		needles, _, err := redact.NeedlesFromEnv(cfg.RedactedVars)
+		if err != nil {
+			return err
+		}
+		if redactedValue := redact.String(cfg.Value, needles); redactedValue != cfg.Value {
+			l.Warn("New value for step %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.StepOrKey, cfg.Attribute)
+			cfg.Value = redactedValue
+		}
 
 		// Generate a UUID that will identify this change. We do this
 		// outside of the retry loop because we want this UUID to be

@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
@@ -31,12 +34,7 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 		return fmt.Errorf("enabling git credential.useHttpPath: %w", err)
 	}
 
-	buildkiteAgent, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("getting executable path: %w", err)
-	}
-
-	helper := fmt.Sprintf(`%s git-credentials-helper`, buildkiteAgent)
+	helper := fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
 	err = e.shell.Command("git", "config", "--global", "credential.helper", helper).Run(ctx, shell.ShowPrompt(false))
 	if err != nil {
 		return fmt.Errorf("configuring git credential.helper: %w", err)
@@ -56,6 +54,11 @@ func (e *Executor) configureHTTPSInsteadOfSSH(ctx context.Context) error {
 func (e *Executor) removeCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
+	if e.checkoutRoot != nil {
+		e.checkoutRoot.Close()
+		e.checkoutRoot = nil
+	}
+
 	// on windows, sometimes removing large dirs can fail for various reasons
 	// for instance having files open
 	// see https://github.com/golang/go/issues/20841
@@ -74,18 +77,26 @@ func (e *Executor) removeCheckoutDir() error {
 		<-time.After(time.Second * 10)
 	}
 
-	return fmt.Errorf("Failed to remove %s", checkoutPath)
+	return fmt.Errorf("failed to remove %s", checkoutPath)
 }
 
+// createCheckoutDir checks for the existence of a directory at
+// $BUILDKITE_BUILD_CHECKOUT_PATH, and creates it if it does not exist.
+// It opens the checkout directory as an [os.Root], saved to e.checkoutRoot.
+// It then changes e.shell's working directory to the checkout directory.
 func (e *Executor) createCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	if !osutil.FileExists(checkoutPath) {
-		e.shell.Commentf("Creating \"%s\"", checkoutPath)
-		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
+		e.shell.Commentf("Creating %q", checkoutPath)
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err := os.MkdirAll(checkoutPath, 0o777); err != nil {
 			return err
 		}
+	}
+
+	if err := e.refreshCheckoutRoot(); err != nil {
+		return err
 	}
 
 	if e.shell.Getwd() != checkoutPath {
@@ -97,10 +108,30 @@ func (e *Executor) createCheckoutDir() error {
 	return nil
 }
 
+// refreshCheckoutRoot refreshes e.checkoutRoot
+func (e *Executor) refreshCheckoutRoot() error {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if e.checkoutRoot != nil {
+		if err := e.checkoutRoot.Close(); err != nil {
+			// While it's unlikely, it's not a blocking error
+			e.shell.Warningf("unable to close existing checkoutRoot during refreshCheckoutRoot: %w", err)
+		}
+	}
+	root, err := os.OpenRoot(checkoutPath)
+	if err != nil {
+		return fmt.Errorf("opening checkout path as root: %w", err)
+	}
+	// This cleanup is largely ornamental, since the executor pointer only
+	// becomes unreachable when the bootstrap exits.
+	runtime.AddCleanup(e, func(r *os.Root) { r.Close() }, root)
+	e.checkoutRoot = root
+	return nil
+}
+
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (e *Executor) CheckoutPhase(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -123,9 +154,9 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	e.shell.Headerf("Preparing working directory")
 
 	// If we have a blank repository then use a temp dir for builds
-	if e.ExecutorConfig.Repository == "" {
+	if e.Repository == "" {
 		var buildDir string
-		buildDir, err = os.MkdirTemp("", "buildkite-job-"+e.ExecutorConfig.JobID)
+		buildDir, err = os.MkdirTemp("", "buildkite-job-"+e.JobID)
 		if err != nil {
 			return err
 		}
@@ -140,88 +171,8 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 		return err
 	}
 
-	// There can only be one checkout hook, either plugin or global, in that order
-	switch {
-	case e.hasPluginHook("checkout"):
-		if err := e.executePluginHook(ctx, "checkout", e.pluginCheckouts); err != nil {
-			return err
-		}
-	case e.hasGlobalHook("checkout"):
-		if err := e.executeGlobalHook(ctx, "checkout"); err != nil {
-			return err
-		}
-	default:
-		if e.ExecutorConfig.Repository == "" {
-			e.shell.Commentf("Skipping checkout, BUILDKITE_REPO is empty")
-			break
-		}
-
-		if err := roko.NewRetrier(
-			roko.WithMaxAttempts(3),
-			roko.WithStrategy(roko.Constant(2*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			err := e.defaultCheckoutPhase(ctx)
-			if err == nil {
-				return nil
-			}
-
-			var errLockTimeout ErrTimedOutAcquiringLock
-			switch {
-			case shell.IsExitError(err) && shell.ExitCode(err) == -1:
-				e.shell.Warningf("Checkout was interrupted by a signal")
-				r.Break()
-
-			case errors.As(err, &errLockTimeout):
-				e.shell.Warningf("Checkout could not acquire the %s lock before timing out", errLockTimeout.Name)
-				r.Break()
-				// 94 chosen by fair die roll
-				return &shell.ExitError{Code: 94, Err: err}
-
-			case errors.Is(err, context.Canceled):
-				e.shell.Warningf("Checkout was cancelled")
-				r.Break()
-
-			case errors.Is(ctx.Err(), context.Canceled):
-				e.shell.Warningf("Checkout was cancelled due to context cancellation")
-				r.Break()
-
-			default:
-				e.shell.Warningf("Checkout failed! %s (%s)", err, r)
-
-				// Specifically handle git errors
-				if ge := new(gitError); errors.As(err, &ge) {
-					switch ge.Type {
-					// These types can fail because of corrupted checkouts
-					case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone,
-						gitErrorCheckoutRetryClean, gitErrorFetchRetryClean,
-						gitErrorFetchBadObject:
-					// Otherwise, don't clean the checkout dir
-					default:
-						return err
-					}
-				}
-
-				// Checkout can fail because of corrupted files in the checkout
-				// which can leave the agent in a state where it keeps failing
-				// This removes the checkout dir, which means the next checkout
-				// will be a lot slower (clone vs fetch), but hopefully will
-				// allow the agent to self-heal
-				if err := e.removeCheckoutDir(); err != nil {
-					e.shell.Printf("Failed to remove checkout dir while cleaning up after a checkout error.")
-				}
-
-				// Now make sure the build directory exists again before we try
-				// to checkout again, or proceed and run hooks which presume the
-				// checkout dir exists
-				if err := e.createCheckoutDir(); err != nil {
-					return err
-				}
-			}
-
-			return err
-		}); err != nil {
-			return err
-		}
+	if err := e.checkout(ctx); err != nil {
+		return err
 	}
 
 	err = e.sendCommitToBuildkite(ctx)
@@ -264,11 +215,128 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
+// checkout runs checkout hook or default checkout logic
+func (e *Executor) checkout(ctx context.Context) error {
+	if e.SkipCheckout {
+		e.shell.Commentf("Skipping checkout, BUILDKITE_SKIP_CHECKOUT is set")
+		return nil
+	}
+
+	// There can only be one checkout hook, either plugin or global, in that order
+	switch {
+	case e.hasPluginHook("checkout"):
+		if err := e.executePluginHook(ctx, "checkout", e.pluginCheckouts); err != nil {
+			return err
+		}
+	case e.hasGlobalHook("checkout"):
+		if err := e.executeGlobalHook(ctx, "checkout"); err != nil {
+			return err
+		}
+	default:
+		if e.Repository == "" {
+			e.shell.Commentf("Skipping checkout, BUILDKITE_REPO is empty")
+			break
+		}
+
+		if err := roko.NewRetrier(
+			roko.WithMaxAttempts(3),
+			roko.WithStrategy(roko.Constant(2*time.Second)),
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			err := e.defaultCheckoutPhase(ctx)
+			if err == nil {
+				return nil
+			}
+
+			var errLockTimeout ErrTimedOutAcquiringLock
+			var errGit *gitError
+
+			switch {
+			case shell.IsExitError(err) && shell.ExitCode(err) == -1:
+				e.shell.Warningf("Checkout was interrupted by a signal")
+				r.Break()
+
+			case errors.As(err, &errLockTimeout):
+				e.shell.Warningf("Checkout could not acquire the %s lock before timing out", errLockTimeout.Name)
+				r.Break()
+				// 94 chosen by fair die roll
+				return &shell.ExitError{Code: 94, Err: err}
+
+			case errors.Is(err, context.Canceled):
+				e.shell.Warningf("Checkout was cancelled")
+				r.Break()
+
+			case errors.Is(ctx.Err(), context.Canceled):
+				e.shell.Warningf("Checkout was cancelled due to context cancellation")
+				r.Break()
+
+			case errors.As(err, &errGit):
+				if errGit.WasRetried {
+					// This error has already been retried, so don't retry it again
+					// Also don't print the retrier information, as it will be confusing -- it'll say "Attempt 1/3" but
+					// we won't actually be retrying it
+					e.shell.Warningf("Checkout failed! %s", err)
+					r.Break()
+				} else {
+					e.shell.Warningf("Checkout failed! %s (%s)", err, r)
+				}
+
+				switch errGit.Type {
+				case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone,
+					gitErrorCheckoutRetryClean, gitErrorFetchRetryClean,
+					gitErrorFetchBadObject:
+					// Checkout can fail because of corrupted files in the checkout which can leave the agent in a state where it
+					// keeps failing. This removes the checkout dir, which means the next checkout will be a lot slower (clone vs
+					// fetch), but hopefully will allow the agent to self-heal
+					if err := e.removeCheckoutDir(); err != nil {
+						e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
+					}
+
+					// Now make sure the build directory exists again before we try to checkout again, or proceed and run hooks
+					// which presume the checkout dir exists
+					if err := e.createCheckoutDir(); err != nil {
+						return err
+					}
+
+				default:
+					// Otherwise, don't clean the checkout dir
+					return err
+				}
+
+			default:
+				e.shell.Warningf("Checkout failed! %s (%s)", err, r)
+
+				// If it's some kind of error that we don't know about, clean the checkout dir just to be safe
+				if err := e.removeCheckoutDir(); err != nil {
+					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
+				}
+
+				// Now make sure the build directory exists again before we try to checkout again, or proceed and run hooks
+				// which presume the checkout dir exists
+				if err := e.createCheckoutDir(); err != nil {
+					return err
+				}
+			}
+
+			return err
+		}); err != nil {
+			return err
+		}
+	}
+
+	// After everything, we need to refresh checkout root.
+	// This is because checkout hook might re-create the checkout root folder entirely, deprecating e.checkoutRoot.
+	if err := e.refreshCheckoutRoot(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func hasGitSubmodules(sh *shell.Shell) bool {
 	return osutil.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
-func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit string) bool {
+func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
 	// Resolve commit to an actual commit object
 	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(ctx, shell.ShowStderr(false))
 	if err != nil {
@@ -286,19 +354,21 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit st
 
 func (e *Executor) updateGitMirror(ctx context.Context, repository string) (string, error) {
 	// Create a unique directory for the repository mirror
-	mirrorDir := filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+	mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 	isMainRepository := repository == e.Repository
 
 	// Create the mirrors path if it doesn't exist
 	if baseDir := filepath.Dir(mirrorDir); !osutil.FileExists(baseDir) {
 		e.shell.Commentf("Creating \"%s\"", baseDir)
-		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-		if err := os.MkdirAll(baseDir, 0777); err != nil {
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err := os.MkdirAll(baseDir, 0o777); err != nil {
 			return "", err
 		}
 	}
 
-	e.shell.Chdir(e.ExecutorConfig.GitMirrorsPath)
+	if err := e.shell.Chdir(e.GitMirrorsPath); err != nil {
+		return "", fmt.Errorf("failed to change directory to %q: %w", e.GitMirrorsPath, err)
+	}
 
 	lockTimeout := time.Second * time.Duration(e.GitMirrorsLockTimeout)
 
@@ -316,7 +386,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 		return "", fmt.Errorf("unable to acquire clone lock: %w", err)
 	}
-	defer mirrorCloneLock.Unlock()
+	defer mirrorCloneLock.Unlock() //nolint:errcheck // Best-effort cleanup - primary unlock checked below.
 
 	// If we don't have a mirror, we need to clone it
 	if !osutil.FileExists(mirrorDir) {
@@ -333,8 +403,10 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		return mirrorDir, nil
 	}
 
-	// If it exists, immediately release the clone lock
-	mirrorCloneLock.Unlock()
+	// If it exists, immediately release the clone lock.
+	if err := mirrorCloneLock.Unlock(); err != nil {
+		return "", fmt.Errorf("unable to release clone lock: %w", err)
+	}
 
 	// Check if the mirror has a commit, this is atomic so should be safe to do
 	if isMainRepository {
@@ -358,7 +430,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 		return "", fmt.Errorf("unable to acquire update lock: %w", err)
 	}
-	defer mirrorUpdateLock.Unlock()
+	defer mirrorUpdateLock.Unlock() //nolint:errcheck // Best-effort cleanup - primary unlock checked below.
 
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
@@ -378,20 +450,38 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	}
 
 	if isMainRepository {
-		if e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github") {
-			e.shell.Commentf("Fetch and mirror pull request head from GitHub")
-			refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
-			// Fetch the PR head from the upstream repository into the mirror.
-			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", refspec)
-			if err := cmd.Run(ctx); err != nil {
-				return "", err
+		var refspecs []string
+		var retry bool
+
+		switch {
+		case e.RefSpec != "":
+			// If a custom refspec is provided, use it instead of the branch
+			e.shell.Commentf("Fetching and mirroring custom refspec %s", e.RefSpec)
+			refspecs = []string{e.RefSpec}
+		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
+			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
+			var refspec string
+			if e.PullRequestUsingMergeRefspec {
+				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+			} else {
+				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 			}
-		} else {
+			refspecs = []string{refspec}
+			retry = true
+		default:
 			// Fetch the build branch from the upstream repository into the mirror.
-			cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin", e.Branch)
-			if err := cmd.Run(ctx); err != nil {
-				return "", err
-			}
+			refspecs = []string{e.Branch}
+		}
+
+		// Fetch the refspecs from the upstream repository into the mirror.
+		if err := gitFetch(ctx, gitFetchArgs{
+			Shell:      e.shell,
+			GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
+			Repository: "origin",
+			RefSpecs:   refspecs,
+			Retry:      retry,
+		}); err != nil {
+			return "", err
 		}
 	} else { // not the main repo.
 
@@ -413,11 +503,15 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		// 1. In case of remote URL confusion (bug introduced in #1959), and
 		// 2. There's possibly some object churn when remotes are renamed.
 		if err := e.shell.Command("git", "--git-dir", mirrorDir, "fsck").Run(ctx); err != nil {
-			e.shell.Logger.Warningf("Couldn't run git fsck: %v", err)
+			e.shell.Warningf("Couldn't run git fsck: %v", err)
 		}
 		if err := e.shell.Command("git", "--git-dir", mirrorDir, "gc").Run(ctx); err != nil {
-			e.shell.Logger.Warningf("Couldn't run git gc: %v", err)
+			e.shell.Warningf("Couldn't run git gc: %v", err)
 		}
+	}
+
+	if err := mirrorUpdateLock.Unlock(); err != nil {
+		return "", fmt.Errorf("unable to release update lock: %w", err)
 	}
 
 	return mirrorDir, nil
@@ -477,8 +571,8 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
 	var mirrorDir string
 	// Skip updating the Git mirror before using it?
-	if e.ExecutorConfig.GitMirrorsSkipUpdate {
-		mirrorDir = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+	if e.GitMirrorsSkipUpdate {
+		mirrorDir = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
 
 		// Check if specified mirrorDir exists, otherwise the clone will fail.
@@ -496,7 +590,7 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.ExecutorConfig.TracingBackend)
+	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
 	span.AddAttributes(map[string]string{
 		"checkout.repo_name": e.Repository,
 		"checkout.refspec":   e.RefSpec,
@@ -512,7 +606,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
-	if e.ExecutorConfig.GitMirrorsPath != "" && e.ExecutorConfig.Repository != "" {
+	if e.GitMirrorsPath != "" && e.Repository != "" {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
 		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
 		if err != nil {
@@ -565,43 +659,81 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		// If a refspec is provided then use it instead.
 		// For example, `refs/not/a/head`
 		e.shell.Commentf("Fetch and checkout custom refspec")
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.RefSpec); err != nil {
+		if err := gitFetch(ctx, gitFetchArgs{
+			Shell:         e.shell,
+			GitFetchFlags: gitFetchFlags,
+			Repository:    "origin",
+			RefSpecs:      []string{e.RefSpec},
+		}); err != nil {
 			return fmt.Errorf("fetching refspec %q: %w", e.RefSpec, err)
 		}
 
 	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-		// GitHub has a special ref which lets us fetch a pull request head, whether
-		// or not it's a current head in this repository or a fork. See:
-		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-		e.shell.Commentf("Fetch and checkout pull request head from GitHub")
-		refspec := fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		var refspec string
+		var retry bool
 
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", refspec); err != nil {
-			return fmt.Errorf("fetching PR refspec %q: %w", refspec, err)
+		if e.PullRequestUsingMergeRefspec {
+			// Merge refspecs represents a speculative merge of the PR branch against the base branch.
+			// Checking out this refspec enables testing the result of the merge before it happens.
+			// If a merge conflict exists, this refspec won't be created and the fetch will fail. In this
+			// case we want the job to fail earlier, rather than retrying the fetch (which adds ~2-3 mins job run time before failing)
+			// Note: An outer retry loop will still retry the failed checkout 3 times before failing.
+			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
+			retry = false
+			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+		} else {
+			// GitHub has a special ref which lets us fetch a pull request head, whether
+			// or not it's a current head in this repository or a fork. See:
+			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
+			e.shell.Commentf("Fetch and checkout pull request head from GitHub")
+			retry = true
+			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		}
+		refspecs := []string{refspec}
+
+		if e.Commit == "HEAD" {
+			// If we don't know the commit, we don't want to fetch with a fallback (otherwise FETCH_HEAD
+			// will resolve during a fallback to the alphabetically earliest branch/tag - rather than the
+			// correct commit for this build)
+			if err := gitFetch(ctx, gitFetchArgs{
+				Shell:         e.shell,
+				GitFetchFlags: gitFetchFlags,
+				Repository:    "origin",
+				Retry:         retry,
+				RefSpecs:      refspecs,
+			}); err != nil {
+				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+			}
+		} else {
+			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
+			// have been force pushes to the pull request, so this ensures we have it.
+			// Note: this is the typical case e.Commit != HEAD.
+			refspecs = append(refspecs, e.Commit)
+			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
+			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
+				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+			}
 		}
 
 		gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
 		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
-		if e.Commit != "HEAD" {
-			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
-			// have been force pushes to the pull request, so this ensures we have it.
-			if err := gitFetchCommitWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
-				return err
-			}
-		}
-
 	case e.Commit == "HEAD":
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := gitFetch(ctx, e.shell, gitFetchFlags, "origin", e.Branch); err != nil {
+		if err := gitFetch(ctx, gitFetchArgs{
+			Shell:         e.shell,
+			GitFetchFlags: gitFetchFlags,
+			Repository:    "origin",
+			RefSpecs:      []string{e.Branch},
+		}); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
 
 	default:
 		// Otherwise fetch and checkout the commit directly.
-		if err := gitFetchCommitWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
+		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
 			return err
 		}
 	}
@@ -655,9 +787,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		if err != nil {
 			e.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
-			mirrorSubmodules := e.ExecutorConfig.GitMirrorsPath != ""
+			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
-				submoduleArgs := append([]string(nil), args...)
+				submoduleArgs := slices.Clone(args)
 				// submodules might need their fingerprints verified too
 				if e.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
@@ -681,7 +813,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 				// Tests use a local temp path for the repository, real repositories don't. Handle both.
 				var repositoryPath string
 				if !osutil.FileExists(repository) {
-					repositoryPath = filepath.Join(e.ExecutorConfig.GitMirrorsPath, dirForRepository(repository))
+					repositoryPath = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 				} else {
 					repositoryPath = repository
 				}
@@ -741,25 +873,39 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
-func gitFetchCommitWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags, commit string) error {
-	err := gitFetch(ctx, shell, gitFetchFlags, "origin", commit)
-	if err == nil {
-		return nil // it worked
+// gitFetchWithFallback run git fetch for refspecs, when it fails on recoverable reason, it will retry fetching
+// all heads and refs.
+func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags string, refspecs ...string) error {
+	if len(refspecs) == 0 {
+		return fmt.Errorf("no refspecs provided for git fetch")
 	}
+
+	// Try to fetch all refspecs in a single call first
+	err := gitFetch(ctx, gitFetchArgs{
+		Shell:         shell,
+		GitFetchFlags: gitFetchFlags,
+		Repository:    "origin",
+		RefSpecs:      refspecs,
+	})
+	if err == nil {
+		return nil // all refspecs worked in single fetch
+	}
+
 	if gerr := new(gitError); errors.As(err, &gerr) {
-		// if we fail in a way that means the repository is corrupt, we should bail
 		switch gerr.Type {
-		case gitErrorFetchRetryClean, gitErrorFetchBadObject:
-			return fmt.Errorf("fetching commit %q: %w", commit, err)
 		case gitErrorFetchBadReference:
-			// fallback to fetching all heads and tags
+			// refspecs might contains short SHA
+			break
+		default:
+			// bail due to repository corruption or other non recoverable issue
+			return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
 		}
 	}
 
-	// The commit might be something that's not possible to fetch directly
-	// (eg. a short commit hash), so we fall back to fetching all heads and tags,
-	// hoping that the commit is included.
-	shell.Commentf("Commit fetch failed, trying to fetch all heads and tags")
+	// The refspecs might be something that's not possible to fetch directly
+	// (e.g. short commit hashes), so we fall back to fetching all heads and tags,
+	// hoping that the refspecs are included.
+	shell.Commentf("Some refspec fetches failed, trying to fetch all heads and tags")
 	// By default `git fetch origin` will only fetch tags which are
 	// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
 	// fetch all tags in addition to the default refspec, but pre 1.9.0 it
@@ -769,10 +915,14 @@ func gitFetchCommitWithFallback(ctx context.Context, shell *shell.Shell, gitFetc
 		return fmt.Errorf("getting remote.origin.fetch: %w", err)
 	}
 
-	if err := gitFetch(ctx, shell,
-		gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*",
-	); err != nil {
-		return fmt.Errorf("fetching commit %q: %w", commit, err)
+	if err := gitFetch(ctx, gitFetchArgs{
+		Shell:         shell,
+		GitFetchFlags: gitFetchFlags,
+		Repository:    "origin",
+		Retry:         true,
+		RefSpecs:      []string{gitFetchRefspec, "+refs/tags/*:refs/tags/*"},
+	}); err != nil {
+		return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
 	}
 
 	return nil
@@ -787,7 +937,15 @@ const CommitMetadataKey = "buildkite:git:commit"
 // note that we bail early if the key already exists, as we don't want to overwrite it
 func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	e.shell.Commentf("Checking to see if git commit information needs to be sent to Buildkite...")
-	cmd := e.shell.Command("buildkite-agent", "meta-data", "exists", CommitMetadataKey)
+
+	commitResolved, _ := e.shell.Env.Get("BUILDKITE_COMMIT_RESOLVED")
+	if commitResolved == "true" {
+		// we can skip the metadata shenanigans here and push straight through
+		e.shell.Commentf("BUILDKITE_COMMIT is already resolved and meta-data populated, skipping")
+		return nil
+	}
+
+	cmd := e.shell.Command(self.Path(ctx), "meta-data", "exists", CommitMetadataKey)
 	if err := cmd.Run(ctx); err == nil {
 		// Command exited 0, ie the key exists, so we don't need to send it again
 		e.shell.Commentf("Git commit information has already been sent to Buildkite")
@@ -820,7 +978,7 @@ func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
 	}
 
 	stdin := strings.NewReader(out)
-	cmd = e.shell.CloneWithStdin(stdin).Command("buildkite-agent", "meta-data", "set", CommitMetadataKey)
+	cmd = e.shell.CloneWithStdin(stdin).Command(self.Path(ctx), "meta-data", "set", CommitMetadataKey)
 	if err := cmd.Run(ctx); err != nil {
 		return fmt.Errorf("sending git commit information to Buildkite: %w", err)
 	}

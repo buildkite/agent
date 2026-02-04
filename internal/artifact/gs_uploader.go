@@ -2,7 +2,6 @@ package artifact
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
-	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
@@ -46,7 +44,7 @@ type GSUploader struct {
 func NewGSUploader(ctx context.Context, l logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
 	client, err := newGoogleClient(ctx, storage.DevstorageFullControlScope)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
+		return nil, fmt.Errorf("creating Google Cloud Storage client: %w", err)
 	}
 	service, err := storage.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
@@ -62,32 +60,32 @@ func NewGSUploader(ctx context.Context, l logger.Logger, c GSUploaderConfig) (*G
 	}, nil
 }
 
-func ParseGSDestination(destination string) (name string, path string) {
+func ParseGSDestination(destination string) (name, path string) {
 	parts := strings.Split(strings.TrimPrefix(string(destination), "gs://"), "/")
 	path = strings.Join(parts[1:], "/")
 	name = parts[0]
-	return
+	return name, path
 }
 
-func clientFromJSON(data []byte, scope string) (*http.Client, error) {
+func clientFromJSON(ctx context.Context, data []byte, scope string) (*http.Client, error) {
 	conf, err := google.JWTConfigFromJSON(data, scope)
 	if err != nil {
 		return nil, err
 	}
-	return conf.Client(oauth2.NoContext), nil
+	return conf.Client(ctx), nil
 }
 
 func newGoogleClient(ctx context.Context, scope string) (*http.Client, error) {
 	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON") != "" {
 		data := []byte(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON"))
-		return clientFromJSON(data, scope)
+		return clientFromJSON(ctx, data, scope)
 	}
 	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
 		data, err := os.ReadFile(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS"))
 		if err != nil {
 			return nil, err
 		}
-		return clientFromJSON(data, scope)
+		return clientFromJSON(ctx, data, scope)
 	}
 	return google.DefaultClient(ctx, scope)
 }
@@ -111,7 +109,7 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 	// Also ensure that we always have exactly one / between prefix and artifactPath
 	path := path.Join(pathPrefix, u.artifactPath(artifact))
 
-	var artifactURL = &url.URL{
+	artifactURL := &url.URL{
 		Scheme: "https",
 		Host:   host,
 		Path:   path,
@@ -164,7 +162,7 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 	}
 	file, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Failed to open file %q (%v)", u.artifact.AbsolutePath, err))
+		return nil, fmt.Errorf("opening file %q: %w", u.artifact.AbsolutePath, err)
 	}
 	call := u.service.Objects.Insert(u.BucketName, object)
 	if permission != "" {
@@ -173,7 +171,7 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 	if res, err := call.Media(file, googleapi.ContentType("")).Do(); err == nil {
 		u.logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
 	} else {
-		return nil, errors.New(fmt.Sprintf("Failed to PUT file %q (%v)", u.artifactPath(u.artifact), err))
+		return nil, fmt.Errorf("failed to PUT file %q: %w", u.artifactPath(u.artifact), err)
 	}
 
 	return nil, nil

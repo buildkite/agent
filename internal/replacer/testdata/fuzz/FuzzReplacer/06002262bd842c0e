@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(10)
+string("")
+string("A")
+string("")
+string("")

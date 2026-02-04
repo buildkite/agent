@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -24,29 +25,19 @@ Example:
     $ buildkite-agent meta-data exists "foo"`
 
 type MetaDataExistsConfig struct {
+	GlobalConfig
+	APIConfig
+
 	Key   string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Job   string `cli:"job"`
 	Build string `cli:"build"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var MetaDataExistsCommand = cli.Command{
 	Name:        "exists",
 	Usage:       "Check to see if the meta data key exists for a build",
 	Description: metaDataExistsHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
@@ -59,20 +50,7 @@ var MetaDataExistsCommand = cli.Command{
 			Usage:  "Which build should the meta-data be retrieved from. --build will take precedence over --job",
 			EnvVar: "BUILDKITE_METADATA_BUILD_ID",
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataExistsConfig](ctx, c)

@@ -26,7 +26,7 @@ var locationRegex = regexp.MustCompile(`jobs/(?P<jobID>[^/]+)/pipelines/(?P<uplo
 
 // PipelineUploader contains the data needed to upload a pipeline to Buildkite
 type PipelineUploader struct {
-	Client         APIClient
+	Client         *api.Client
 	Change         *api.PipelineChange
 	JobID          string
 	RetrySleepFunc func(time.Duration)
@@ -209,7 +209,7 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 		case "pending", "processing":
 			setNextIntervalFromResponse(r, resp)
 			err := fmt.Errorf("Pipeline upload not yet applied: %s", uploadStatus.State)
-			l.Warn("%s (%s)", err, r)
+			l.Info("%s (%s)", err, r)
 			return err
 		case "rejected", "failed":
 			l.Error("Unrecoverable error, skipping retries")

@@ -1,0 +1,32 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "plugin",
+    srcs = [
+        "definition.go",
+        "error.go",
+        "plugin.go",
+    ],
+    importpath = "github.com/buildkite/agent/v3/agent/plugin",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//env",
+        "@com_github_buildkite_go_pipeline//ordered",
+        "@com_github_qri_io_jsonschema//:jsonschema",
+        "@in_gopkg_yaml_v3//:yaml_v3",
+    ],
+)
+
+go_test(
+    name = "plugin_test",
+    srcs = [
+        "definition_test.go",
+        "error_test.go",
+        "plugin_test.go",
+    ],
+    embed = [":plugin"],
+    deps = [
+        "@com_github_google_go_cmp//cmp",
+        "@com_github_qri_io_jsonschema//:jsonschema",
+    ],
+)

@@ -6,7 +6,8 @@ import (
 	"sync"
 )
 
-var errAlreadyClosed = errors.New("already closed")
+// ErrAlreadyClosed is returned when a buffer has already been closed.
+var ErrAlreadyClosed = errors.New("already closed")
 
 // Buffer implements a concurrent-safe output buffer for processes.
 type Buffer struct {
@@ -32,7 +33,7 @@ func (l *Buffer) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {
-		return errAlreadyClosed
+		return ErrAlreadyClosed
 	}
 	l.closed = true
 	return nil

@@ -1,0 +1,7 @@
+go test fuzz v1
+string("0")
+int(10)
+string("\x99")
+string("0")
+string("\xbc")
+string("0")

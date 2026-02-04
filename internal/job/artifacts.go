@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/tracetools"
 )
 
@@ -12,7 +13,7 @@ func (e *Executor) artifactPhase(ctx context.Context) error {
 	}
 
 	spanName := e.implementationSpecificSpanName("artifacts", "artifact upload")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -36,7 +37,7 @@ func (e *Executor) artifactPhase(ctx context.Context) error {
 
 // Run the pre-artifact hooks
 func (e *Executor) preArtifactHooks(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-artifact", e.ExecutorConfig.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-artifact", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -57,7 +58,7 @@ func (e *Executor) preArtifactHooks(ctx context.Context) error {
 
 // Run the artifact upload command
 func (e *Executor) uploadArtifacts(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "artifact-upload", e.ExecutorConfig.TracingBackend)
+	span, _ := tracetools.StartSpanFromContext(ctx, "artifact-upload", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -69,7 +70,7 @@ func (e *Executor) uploadArtifacts(ctx context.Context) error {
 		args = append(args, e.ArtifactUploadDestination)
 	}
 
-	if err = e.shell.Command("buildkite-agent", args...).Run(ctx); err != nil {
+	if err = e.shell.Command(self.Path(ctx), args...).Run(ctx); err != nil {
 		return err
 	}
 
@@ -78,7 +79,7 @@ func (e *Executor) uploadArtifacts(ctx context.Context) error {
 
 // Run the post-artifact hooks
 func (e *Executor) postArtifactHooks(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "post-artifact", e.ExecutorConfig.TracingBackend)
+	span, _ := tracetools.StartSpanFromContext(ctx, "post-artifact", e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 

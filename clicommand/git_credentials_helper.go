@@ -20,8 +20,6 @@ const gitCredentialsHelperHelpDescription = `Usage:
 
 Description:
 
-[EXPERIMENTAL]
-
 Ask buildkite for credentials to use to authenticate with Github when cloning via HTTPS.
 The credentials are returned in the git-credential format.
 
@@ -31,15 +29,10 @@ if the pipeline has this feature enabled. All hosted compute jobs automatically 
 This command is intended to be used as a git credential helper, and not called directly.`
 
 type GitCredentialsHelperConfig struct {
+	GlobalConfig
+
 	JobID  string `cli:"job-id" validate:"required"`
 	Action string `cli:"arg:0"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
 
 	// API config
 	// DebugHTTP bool // Not present due to the possibility of leaking code access tokens to logs
@@ -50,9 +43,10 @@ type GitCredentialsHelperConfig struct {
 
 var GitCredentialsHelperCommand = cli.Command{
 	Name:        "git-credentials-helper",
-	Usage:       "Ask buildkite for credentials to use to authenticate with Github when cloning",
+	Usage:       "Internal process used by hosted compute jobs to authenticate with Github",
+	Category:    categoryInternal,
 	Description: gitCredentialsHelperHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "job-id",
 			Usage:  "The job id to get credentials for",
@@ -64,14 +58,7 @@ var GitCredentialsHelperCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		// DebugHTTPFlag, // Not present due to the possibility of leaking code access tokens to logs
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[GitCredentialsHelperConfig](ctx, c)

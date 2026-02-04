@@ -21,13 +21,13 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	filename := "environment"
 	script := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"export LLAMAS_ROCK=absolutely",
 	}
 	if runtime.GOOS == "windows" {
@@ -38,8 +38,8 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(%q, script, 0700) = %v", filename, err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
 	}
 
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
@@ -65,17 +65,17 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	preCmdFile, postCmdFile := "pre-command", "post-command"
 	preCommand := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"export LLAMAS_ROCK=absolutely",
 	}
 	postCommand := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"unset LLAMAS_ROCK",
 	}
 
@@ -91,12 +91,12 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, preCmdFile), []byte(strings.Join(preCommand, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(%q, preCommand, 0700) = %v", preCmdFile, err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, preCmdFile), []byte(strings.Join(preCommand, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, preCommand, 0o700) = %v", preCmdFile, err)
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, postCmdFile), []byte(strings.Join(postCommand, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(%q, postCommand, 0700) = %v", postCmdFile, err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, postCmdFile), []byte(strings.Join(postCommand, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, postCommand, 0o700) = %v", postCmdFile, err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -125,7 +125,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -134,14 +134,14 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	}
 
 	script := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"mkdir -p ./mysubdir",
 		"export MY_CUSTOM_SUBDIR=$(cd mysubdir; pwd)",
 		"cd ./mysubdir",
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(pre-command, script, 0700) = %v", err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(pre-command, script, 0o700) = %v", err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -159,7 +159,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -168,15 +168,15 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 	}
 
 	script := []string{
-		"#!/bin/bash",
+		"#!/usr/bin/env bash",
 		"mkdir -p ./mysubdir",
 		"export MY_CUSTOM_SUBDIR=$(cd mysubdir; pwd)",
 		"cd ./mysubdir",
 		"exit 0",
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatalf("os.WriteFile(pre-command, script, 0700) = %v", err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(pre-command, script, 0o700) = %v", err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -196,7 +196,7 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -226,7 +226,7 @@ func TestReplacingCheckoutHook(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -255,7 +255,7 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -280,7 +280,7 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -306,7 +306,7 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -325,7 +325,7 @@ func TestPreExitHooksDoesNotFireWithoutCommandPhase(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -418,7 +418,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 
 			tester, err := NewExecutorTester(ctx)
 			if err != nil {
-				t.Fatalf("NewBootstrapTester() error = %v", err)
+				t.Fatalf("NewExecutorTester() error = %v", err)
 			}
 			defer tester.Close()
 
@@ -468,7 +468,7 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -504,7 +504,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 		t.Run(hook, func(t *testing.T) {
 			tester, err := NewExecutorTester(ctx)
 			if err != nil {
-				t.Fatalf("NewBootstrapTester() error = %v", err)
+				t.Fatalf("NewExecutorTester() error = %v", err)
 			}
 			defer tester.Close()
 
@@ -534,7 +534,7 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -581,7 +581,7 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 
 	tester, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -591,8 +591,8 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 		`puts "ohai, it's ruby!"`,
 	}
 
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0755); err != nil {
-		t.Fatalf("os.WriteFile(%q, script, 0755) = %v", filename, err)
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o755); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o755) = %v", filename, err)
 	}
 
 	tester.RunAndCheck(t)
@@ -609,7 +609,7 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 
 	tester, err := NewExecutorTester(ctx)
 	if err != nil {
-		t.Fatalf("NewBootstrapTester() error = %v", err)
+		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
 

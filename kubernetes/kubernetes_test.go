@@ -5,6 +5,7 @@ package kubernetes
 import (
 	"context"
 	"encoding/gob"
+	"errors"
 	"net/rpc"
 	"os"
 	"path/filepath"
@@ -12,44 +13,44 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/require"
 )
 
 func TestOrderedClients(t *testing.T) {
 	runner := newRunner(t, 3)
 	socketPath := runner.conf.SocketPath
 
-	client0 := &Client{ID: 0}
-	client1 := &Client{ID: 1}
-	client2 := &Client{ID: 2}
-	clients := []*Client{client0, client1, client2}
+	clients := []*Client{{ID: 0}, {ID: 1}, {ID: 2}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	for _, client := range clients {
 		client.SocketPath = socketPath
-		require.NoError(t, connect(client))
+		if err := connect(ctx, client); err != nil {
+			t.Errorf("connect(ctx, client) error = %v", err)
+		}
 		t.Cleanup(client.Close)
 	}
-	ctx := context.Background()
-	require.NoError(t, client0.Await(ctx, RunStateStart))
-	require.NoError(t, client1.Await(ctx, RunStateWait))
-	require.NoError(t, client2.Await(ctx, RunStateWait))
 
-	require.NoError(t, client0.Exit(0))
-	require.NoError(t, client0.Await(ctx, RunStateStart))
-	require.NoError(t, client1.Await(ctx, RunStateStart))
-	require.NoError(t, client2.Await(ctx, RunStateWait))
+	for i := range clients {
+		err := clients[i].StatusLoop(ctx, func(err error) {
+			if err != nil {
+				t.Errorf("clients[%d] interrupted after start: err = %v", i, err)
+			}
+		})
+		if err != nil {
+			t.Errorf("clients[%d].StatusLoop(ctx, onInterrupt) = %v", i, err)
+		}
+		if err := clients[i].Exit(0); err != nil {
+			t.Errorf("clients[%d].Exit(0) = %v", i, err)
+		}
+	}
 
-	require.NoError(t, client1.Exit(0))
-	require.NoError(t, client0.Await(ctx, RunStateStart))
-	require.NoError(t, client1.Await(ctx, RunStateStart))
-	require.NoError(t, client2.Await(ctx, RunStateStart))
-
-	require.NoError(t, client2.Exit(0))
 	select {
 	case <-runner.Done():
 		break
 	default:
-		require.FailNow(t, "runner should be done when all clients have exited")
+		t.Fatal("runner should be done when all clients have exited")
 	}
 }
 
@@ -57,27 +58,44 @@ func TestLivenessCheck(t *testing.T) {
 	runner := newRunner(t, 2)
 	socketPath := runner.conf.SocketPath
 
-	client0 := &Client{ID: 0}
-	client1 := &Client{ID: 1}
-	clients := []*Client{client0, client1}
+	clients := []*Client{{ID: 0}, {ID: 1}}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
 
 	for _, client := range clients {
 		client.SocketPath = socketPath
-		require.NoError(t, connect(client))
+		if err := connect(ctx, client); err != nil {
+			t.Errorf("connect(ctx, client) error = %v", err)
+		}
 		t.Cleanup(client.Close)
 	}
-	ctx := context.Background()
-	require.NoError(t, client0.Await(ctx, RunStateStart))
-	require.NoError(t, client1.Await(ctx, RunStateWait))
 
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	interrupted := make(chan struct{})
+
+	// Only start the ping loop for client 0.
+	// Client 1 should time out after 2 seconds.
+	err := clients[0].StatusLoop(ctx, func(error) {
+		// Don't care what the err is here - just that client0 is interrupted.
+		select {
+		case <-interrupted:
+			// already closed
+		default:
+			close(interrupted)
+		}
+	})
+	if err != nil {
+		t.Errorf("clients[%d].StatusLoop(ctx, onInterrupt) = %v", 0, err)
+	}
+
 	select {
 	case <-runner.Done():
 		break
 	case <-ctx.Done():
-		t.Fatalf("timed out waiting for client0 to be declared lost and job terminated")
+		t.Errorf("timed out waiting for clients[1] to be declared lost and job terminated")
 	}
+
+	<-interrupted
 }
 
 func TestDuplicateClients(t *testing.T) {
@@ -87,8 +105,15 @@ func TestDuplicateClients(t *testing.T) {
 	client0 := &Client{ID: 0, SocketPath: socketPath}
 	client1 := &Client{ID: 0, SocketPath: socketPath}
 
-	require.NoError(t, connect(client0))
-	require.Error(t, connect(client1), "expected an error when connecting a client with a duplicate ID")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	if err := connect(ctx, client0); err != nil {
+		t.Errorf("connect(ctx, client0) error = %v", err)
+	}
+	if err := connect(ctx, client1); err == nil {
+		t.Errorf("connect(ctx, client1) error = %v, want some error (connecting a client with a duplicate ID)", err)
+	}
 }
 
 func TestExcessClients(t *testing.T) {
@@ -98,8 +123,15 @@ func TestExcessClients(t *testing.T) {
 	client0 := &Client{ID: 0, SocketPath: socketPath}
 	client1 := &Client{ID: 1, SocketPath: socketPath}
 
-	require.NoError(t, connect(client0))
-	require.Error(t, connect(client1), "expected an error when connecting too many clients")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	if err := connect(ctx, client0); err != nil {
+		t.Errorf("connect(ctx, client0) error = %v", err)
+	}
+	if err := connect(ctx, client1); err == nil {
+		t.Errorf("connect(ctx, client1) error = %v, want some error (connecting too many clients)", err)
+	}
 }
 
 func TestWaitStatusNonZero(t *testing.T) {
@@ -108,83 +140,177 @@ func TestWaitStatusNonZero(t *testing.T) {
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
 	client1 := &Client{ID: 1, SocketPath: runner.conf.SocketPath}
 
-	require.NoError(t, connect(client0))
-	require.NoError(t, connect(client1))
-	require.NoError(t, client0.Exit(1))
-	require.NoError(t, client1.Exit(0))
-	require.Equal(t, runner.WaitStatus().ExitStatus(), 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	if err := connect(ctx, client0); err != nil {
+		t.Errorf("connect(ctx, client0) error = %v", err)
+	}
+	if err := connect(ctx, client1); err != nil {
+		t.Errorf("connect(ctx, client1) error = %v", err)
+	}
+	if err := client0.Exit(1); err != nil {
+		t.Errorf("client0.Exit(1) error = %v", err)
+	}
+	if err := client1.Exit(0); err != nil {
+		t.Errorf("client1.Exit(0) error = %v", err)
+	}
+	if got, want := runner.WaitStatus().ExitStatus(), 1; got != want {
+		t.Errorf("runner.WaitStatus().ExitStatus() = %d, want %d", got, want)
+	}
 }
 
-func TestInterrupt(t *testing.T) {
+func TestInterruptBeforeStart(t *testing.T) {
 	runner := newRunner(t, 2)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
 
-	require.NoError(t, connect(client0))
-	require.NoError(t, runner.Interrupt())
+	if err := connect(ctx, client0); err != nil {
+		t.Errorf("connect(ctx, client0) error = %v", err)
+	}
+	if err := runner.Interrupt(); err != nil {
+		t.Errorf("runner.Interrupt() error = %v", err)
+	}
 
-	require.ErrorIs(t, client0.Await(ctx, RunStateWait), ErrInterrupt)
-	require.Error(t, client0.Await(ctx, RunStateStart), ErrInterrupt)
-	require.NoError(t, client0.Await(ctx, RunStateInterrupt))
+	err := client0.StatusLoop(ctx, func(err error) {
+		if err != nil {
+			t.Errorf("client0 interrupted after start: err = %v", err)
+		}
+	})
+	if !errors.Is(err, ErrInterruptBeforeStart) {
+		t.Errorf("client0.StatusLoop(ctx, onInterrupt) = %v, want %v", err, ErrInterruptBeforeStart)
+	}
 }
 
-func TestTerminate(t *testing.T) {
+func TestTerminateBeforeStart(t *testing.T) {
 	runner := newRunner(t, 2)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
 
-	require.NoError(t, connect(client0))
-	require.NoError(t, runner.Terminate())
+	if err := connect(ctx, client0); err != nil {
+		t.Errorf("connect(ctx, client0) error = %v", err)
+	}
+	if err := runner.Terminate(); err != nil {
+		t.Errorf("runner.Terminate() error = %v", err)
+	}
 
-	require.ErrorContains(t, client0.Await(ctx, RunStateWait), rpc.ErrShutdown.Error())
-	require.ErrorContains(t, client0.Await(ctx, RunStateStart), rpc.ErrShutdown.Error())
-	require.ErrorContains(t, client0.Await(ctx, RunStateInterrupt), rpc.ErrShutdown.Error())
+	err := client0.StatusLoop(ctx, func(err error) {
+		if err != nil {
+			t.Errorf("client0 interrupted after start: err = %v", err)
+		}
+	})
+	if wantErr := rpc.ServerError(rpc.ErrShutdown.Error()); !errors.Is(err, wantErr) {
+		t.Errorf("client0.StatusLoop(ctx, onInterrupt) = %[1]T(%[1]v), want %[2]T(%[2]v)", err, wantErr)
+	}
+}
+
+func TestInterruptAfterStart(t *testing.T) {
+	runner := newRunner(t, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
+
+	if err := connect(ctx, client0); err != nil {
+		t.Errorf("connect(ctx, client0) error = %v", err)
+	}
+
+	interrupted := make(chan struct{})
+	err := client0.StatusLoop(ctx, func(err error) {
+		if err != nil {
+			t.Errorf("client0 interrupted after start: err = %v", err)
+			return
+		}
+		close(interrupted)
+	})
+	if err != nil {
+		t.Errorf("client0.StatusLoop(ctx, onInterrupt) = %v", err)
+	}
+
+	if err := runner.Interrupt(); err != nil {
+		t.Errorf("runner.Interrupt() error = %v", err)
+	}
+
+	<-interrupted
+}
+
+func TestTerminateAfterStart(t *testing.T) {
+	runner := newRunner(t, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
+
+	if err := connect(ctx, client0); err != nil {
+		t.Errorf("connect(ctx, client0) error = %v", err)
+	}
+
+	terminated := make(chan struct{})
+	err := client0.StatusLoop(ctx, func(err error) {
+		wantErr := rpc.ServerError(rpc.ErrShutdown.Error())
+		if errors.Is(err, wantErr) {
+			close(terminated)
+			return
+		}
+		if err != nil {
+			t.Errorf("client0 interrupted after start: err = %[1]T(%[1]v), want %[2]T(%[2]v)", err, wantErr)
+		}
+	})
+	if err != nil {
+		t.Errorf("client0.StatusLoop(ctx, onInterrupt) = %v", err)
+	}
+
+	if err := runner.Terminate(); err != nil {
+		t.Errorf("runner.Terminate() error = %v", err)
+	}
+
+	<-terminated
 }
 
 func newRunner(t *testing.T, clientCount int) *Runner {
 	tempDir, err := os.MkdirTemp("", t.Name())
-	require.NoError(t, err)
+	if err := err; err != nil {
+		t.Errorf("err error = %v", err)
+	}
 	socketPath := filepath.Join(tempDir, "bk.sock")
 	t.Cleanup(func() {
 		os.RemoveAll(tempDir)
 	})
 	runner := NewRunner(logger.Discard, RunnerConfig{
-		SocketPath:        socketPath,
-		ClientCount:       clientCount,
-		ClientLostTimeout: 2 * time.Second,
+		SocketPath:         socketPath,
+		ClientCount:        clientCount,
+		ClientStartTimeout: 10 * time.Minute,
+		ClientLostTimeout:  2 * time.Second,
 	})
 	runnerCtx, cancelRunner := context.WithCancel(context.Background())
 	go runner.Run(runnerCtx)
-	t.Cleanup(func() {
-		cancelRunner()
-	})
+	t.Cleanup(cancelRunner)
 
 	// wait for runner to listen
-	require.Eventually(t, func() bool {
-		_, err := os.Lstat(socketPath)
-		return err == nil
-
-	}, time.Second*10, time.Millisecond, "expected socket file to exist")
-
-	return runner
+	timeout := time.After(10 * time.Second)
+	check := time.Tick(time.Millisecond)
+	var lastErr error
+	for {
+		select {
+		case <-check:
+			_, lastErr = os.Lstat(socketPath)
+			if lastErr == nil {
+				return runner
+			}
+		case <-timeout:
+			t.Errorf("after 10 seconds, os.Lstat(%q) error = %v", socketPath, lastErr)
+		}
+	}
 }
-
-var (
-	waitStatusSuccess  = waitStatus{Code: 0}
-	waitStatusFailure  = waitStatus{Code: 1}
-	waitStatusSignaled = waitStatus{Code: 0, SignalCode: intptr(1)}
-)
 
 func init() {
 	gob.Register(new(waitStatus))
 }
 
-func intptr(x int) *int {
-	return &x
-}
-
 // helper for ignoring the response from regular client.Connect
-func connect(c *Client) error {
-	_, err := c.Connect(context.Background())
+func connect(ctx context.Context, c *Client) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	_, err := c.Connect(ctx)
 	return err
 }

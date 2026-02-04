@@ -1,0 +1,23 @@
+env:
+  BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: "gs://buildkite-agent-e2e-testing/$BUILDKITE_PIPELINE_ID"
+
+agents:
+  queue: {{ .queue }}
+
+secrets:
+  - GCP_E2E_TEST_CREDENTIALS_JSON
+
+steps:
+  - key: upload
+    commands:
+      - set -e
+      - echo "hello world" > artifact.txt
+      - export BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON="$$GCP_E2E_TEST_CREDENTIALS_JSON"
+      - {{ .buildkite_agent_binary }} artifact upload artifact.txt
+  - key: download
+    depends_on: upload
+    commands:
+      - set -e
+      - export BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON="$$GCP_E2E_TEST_CREDENTIALS_JSON"
+      - {{ .buildkite_agent_binary }} artifact download artifact.txt .
+      - if [[ $(cat artifact.txt) == "hello world" ]]; then exit 0; else exit 1; fi

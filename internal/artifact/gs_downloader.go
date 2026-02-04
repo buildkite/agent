@@ -2,7 +2,6 @@ package artifact
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -47,7 +46,7 @@ func NewGSDownloader(l logger.Logger, c GSDownloaderConfig) *GSDownloader {
 func (d GSDownloader) Start(ctx context.Context) error {
 	client, err := newGoogleClient(ctx, storage.DevstorageReadOnlyScope)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
+		return fmt.Errorf("creating Google Cloud Storage client: %w", err)
 	}
 
 	url := "https://www.googleapis.com/storage/v1/b/" + d.BucketName() + "/o/" + escape(d.BucketFileLocation()) + "?alt=media"

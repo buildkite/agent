@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/logger"
 )
 
 type S3DownloaderConfig struct {
 	// The client for interacting with S3
-	S3Client *s3.S3
+	S3Client *s3.Client
 
 	// The S3 bucket name and the path, for example, s3://my-bucket-name/foo/bar
 	S3Path string
@@ -55,12 +55,14 @@ func (d S3Downloader) Start(ctx context.Context) error {
 		return fmt.Errorf("S3Downloader for %s: S3Client is nil", d.conf.S3Path)
 	}
 
-	req, _ := d.conf.S3Client.GetObjectRequest(&s3.GetObjectInput{
+	presigner := s3.NewPresignClient(d.conf.S3Client)
+
+	req, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(d.BucketName()),
 		Key:    aws.String(d.BucketFileLocation()),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = time.Duration(time.Hour)
 	})
-
-	signedURL, err := req.Presign(time.Hour)
 	if err != nil {
 		return fmt.Errorf("error pre-signing request: %w", err)
 	}
@@ -71,7 +73,9 @@ func (d S3Downloader) Start(ctx context.Context) error {
 		agenthttp.WithNoTimeout,
 	)
 	return NewDownload(d.logger, client, DownloadConfig{
-		URL:         signedURL,
+		URL:         req.URL,
+		Headers:     req.SignedHeader,
+		Method:      req.Method,
 		Path:        d.conf.Path,
 		Destination: d.conf.Destination,
 		Retries:     d.conf.Retries,

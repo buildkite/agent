@@ -21,7 +21,7 @@ var bigLipsumSecrets []string
 func init() {
 	// Find 10 most frequent words in bigLipsum to use as "secrets"
 	hist := make(map[string]int)
-	for _, w := range strings.Fields(bigLipsum) {
+	for w := range strings.FieldsSeq(bigLipsum) {
 		hist[strings.Trim(w, ".,")]++
 	}
 	words := make([]string, 0, len(hist))

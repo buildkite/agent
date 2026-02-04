@@ -30,25 +30,16 @@ var (
 
 	errSecretParse   = errors.New("failed to parse secrets")
 	errSecretRedact  = errors.New("failed to redact secrets")
+	errOIDCRedact    = errors.New("failed to redact OIDC token")
 	errUnknownFormat = errors.New("unknown format")
 )
 
 type RedactorAddConfig struct {
+	GlobalConfig
+	APIConfig
+
 	File   string `cli:"arg:0"`
 	Format string `cli:"format"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var RedactorAddCommand = cli.Command{
@@ -67,7 +58,7 @@ redacted from subsequent logs. Secrets fetched with the builtin
 ′secret get′ command do not require the use of this command, they will
 be redacted automatically.
 
-Example:
+Examples:
 
 To redact the verbatim contents of the file 'id_ed25519' from future logs:
 
@@ -75,38 +66,27 @@ To redact the verbatim contents of the file 'id_ed25519' from future logs:
 
 To redact the string 'llamasecret' from future logs:
 
-		$ echo llamasecret | buildkite-agent redactor add
+    $ echo llamasecret | buildkite-agent redactor add
 
-To redact multiple secrets from future logs in one command, create a flat
-JSON object file (for example, 'my-secrets.json'), with multiple "key" values,
-one for each secret:
+Pass a flat JSON object whose keys are unique and whose values are your secrets:
 
-		$ echo '{"key":"secret1","key":"secret2"}' | buildkite-agent redactor add --format json
+    $ echo '{"db_password":"secret1","api_token":"secret2","ssh_key":"secret3"}' | buildkite-agent redactor add --format json
 
 Or
 
-    $ buildkite-agent redactor add --format json my-secrets.json`,
-	Flags: []cli.Flag{
+    $ buildkite-agent redactor add --format json my-secrets.json
+
+JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON parser keeps only the final entry, so only that single value is added to the redactor:
+
+    $ echo '{"key":"value1","key":"value2","key":"value3"}' | buildkite-agent redactor add --format json`,
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "format",
 			Usage:  "The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
 			EnvVar: "BUILDKITE_AGENT_REDACT_ADD_FORMAT",
 			Value:  FormatStringNone,
 		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[RedactorAddConfig](ctx, c)

@@ -27,7 +27,7 @@ var ValidTracingBackends = map[string]struct{}{
 // StartSpanFromContext will start a span appropriate to the given tracing backend from the given context with the given
 // operation name. It will also do some common/repeated setup on the span to keep code a little more DRY.
 // If an unknown tracing backend is specified, it will return a span that noops on every operation
-func StartSpanFromContext(ctx context.Context, operation string, tracingBackend string) (Span, context.Context) {
+func StartSpanFromContext(ctx context.Context, operation, tracingBackend string) (Span, context.Context) {
 	switch tracingBackend {
 	case BackendDatadog:
 		span, ctx := opentracing.StartSpanFromContext(ctx, operation)

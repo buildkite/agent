@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
@@ -54,35 +56,28 @@ Example:
     $ ./script/dynamic_annotation_generator | buildkite-agent annotate --style "success"`
 
 type AnnotateConfig struct {
-	Body     string `cli:"arg:0" label:"annotation body"`
-	Style    string `cli:"style"`
-	Context  string `cli:"context"`
-	Append   bool   `cli:"append"`
-	Priority int    `cli:"priority"`
-	Job      string `cli:"job" validate:"required"`
+	GlobalConfig
+	APIConfig
 
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
+	Body         string   `cli:"arg:0" label:"annotation body"`
+	Style        string   `cli:"style"`
+	Context      string   `cli:"context"`
+	Append       bool     `cli:"append"`
+	Priority     int      `cli:"priority"`
+	Job          string   `cli:"job" validate:"required"`
+	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
+	Scope        string   `cli:"scope"`
 }
 
 var AnnotateCommand = cli.Command{
 	Name:        "annotate",
-	Usage:       "Annotate the build page within the Buildkite UI with text from within a Buildkite job",
+	Category:    categoryJobCommands,
+	Usage:       "Annotate the build page in the Buildkite UI with information from within a Buildkite job",
 	Description: annotateHelpDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "context",
-			Usage:  "The context of the annotation used to differentiate this annotation from others",
+			Usage:  "The context of the annotation used to differentiate this annotation from others. This value has a limit of 100 characters.",
 			EnvVar: "BUILDKITE_ANNOTATION_CONTEXT",
 		},
 		cli.StringFlag{
@@ -92,7 +87,7 @@ var AnnotateCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "append",
-			Usage:  "Append to the body of an existing annotation",
+			Usage:  "Append to the body of an existing annotation (default: false)",
 			EnvVar: "BUILDKITE_ANNOTATION_APPEND",
 		},
 		cli.IntFlag{
@@ -107,20 +102,15 @@ var AnnotateCommand = cli.Command{
 			Usage:  "Which job should the annotation come from",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
+		cli.StringFlag{
+			Name:   "scope",
+			Value:  "build",
+			Usage:  "The scope of the annotation, which will control where the annotation is displayed in the Buildkite UI. One of 'build', 'job'",
+			EnvVar: "BUILDKITE_ANNOTATION_SCOPE",
+		},
 
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+		RedactedVars,
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotateConfig](ctx, c)
@@ -148,7 +138,18 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 			return fmt.Errorf("failed to read from STDIN: %w", err)
 		}
 
-		body = string(stdin[:])
+		body = string(stdin)
+	}
+
+	// Apply secret redaction! Assume the agent has already logged messages
+	// about "short" vars.
+	needles, _, err := redact.NeedlesFromEnv(cfg.RedactedVars)
+	if err != nil {
+		return err
+	}
+	if redactedBody := redact.String(body, needles); redactedBody != body {
+		l.Warn("Annotation body contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret")
+		body = redactedBody
 	}
 
 	if bodySize := len(body); bodySize > maxBodySize {
@@ -165,6 +166,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		Context:  cfg.Context,
 		Append:   cfg.Append,
 		Priority: cfg.Priority,
+		Scope:    cfg.Scope,
 	}
 
 	// Retry the annotation a few times before giving up

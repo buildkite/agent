@@ -191,11 +191,11 @@ func (l *LoggerStreamer) Write(p []byte) (n int, err error) {
 	}
 
 	if n, err = l.buf.Write(p); err != nil {
-		return
+		return n, err
 	}
 
 	err = l.Output()
-	return
+	return n, err
 }
 
 func (l *LoggerStreamer) Close() error {

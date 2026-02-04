@@ -8,8 +8,11 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/buildkite/agent/v3/internal/job"
+	"github.com/buildkite/agent/v3/internal/self"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/urfave/cli"
@@ -52,7 +55,9 @@ type BootstrapConfig struct {
 	Tag                          string   `cli:"tag"`
 	RefSpec                      string   `cli:"refspec"`
 	Plugins                      string   `cli:"plugins"`
+	Secrets                      string   `cli:"secrets"`
 	PullRequest                  string   `cli:"pullrequest"`
+	PullRequestUsingMergeRefspec bool     `cli:"pull-request-using-merge-refspec"`
 	GitSubmodules                bool     `cli:"git-submodules"`
 	SSHKeyscan                   bool     `cli:"ssh-keyscan"`
 	AgentName                    string   `cli:"agent" validate:"required"`
@@ -63,6 +68,7 @@ type BootstrapConfig struct {
 	AutomaticArtifactUploadPaths string   `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
+	SkipCheckout                 bool     `cli:"skip-checkout"`
 	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
@@ -75,6 +81,7 @@ type BootstrapConfig struct {
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
+	AdditionalHooksPaths         []string `cli:"additional-hooks-paths" normalize:"list"`
 	SocketsPath                  string   `cli:"sockets-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool     `cli:"command-eval"`
@@ -96,16 +103,17 @@ type BootstrapConfig struct {
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
+	TracingTraceParent           string   `cli:"tracing-traceparent"`
+	TracingPropagateTraceparent  bool     `cli:"tracing-propagate-traceparent"`
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
-	KubernetesExec               bool     `cli:"kubernetes-exec"`
-	KubernetesContainerID        int      `cli:"kubernetes-container-id"`
 }
 
 var BootstrapCommand = cli.Command{
 	Name:        "bootstrap",
-	Usage:       "Run a Buildkite job locally",
+	Usage:       "Harness used internally by the agent to run jobs as subprocesses",
+	Category:    categoryInternal,
 	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
@@ -157,10 +165,21 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_PLUGINS",
 		},
 		cli.StringFlag{
+			Name:   "secrets",
+			Value:  "",
+			Usage:  "Secrets to be loaded into the job environment",
+			EnvVar: "BUILDKITE_SECRETS_CONFIG",
+		},
+		cli.StringFlag{
 			Name:   "pullrequest",
 			Value:  "",
 			Usage:  "The number/id of the pull request this commit belonged to",
 			EnvVar: "BUILDKITE_PULL_REQUEST",
+		},
+		cli.BoolFlag{
+			Name:   "pull-request-using-merge-refspec",
+			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec (default: false)",
+			EnvVar: "BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC",
 		},
 		cli.StringFlag{
 			Name:   "agent",
@@ -206,8 +225,13 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "clean-checkout",
-			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command",
+			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command (default: false)",
 			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
+		},
+		cli.BoolFlag{
+			Name:   "skip-checkout",
+			Usage:  "Skip the git checkout phase entirely",
+			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
 		},
 		cli.StringFlag{
 			Name:   "git-checkout-flags",
@@ -259,7 +283,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror",
+			Usage:  "Skip updating the Git mirror (default: false)",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		},
 		cli.StringFlag{
@@ -280,12 +304,13 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
-		cli.StringFlag{
-			Name:   "sockets-path",
-			Value:  defaultSocketsPath(),
-			Usage:  "Directory where the agent will place sockets",
-			EnvVar: "BUILDKITE_SOCKETS_PATH",
+		cli.StringSliceFlag{
+			Name:   "additional-hooks-paths",
+			Value:  &cli.StringSlice{},
+			Usage:  "Any additional directories to look for agent hooks",
+			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
 		},
+		SocketsPathFlag,
 		cli.StringFlag{
 			Name:   "plugins-path",
 			Value:  "",
@@ -294,42 +319,42 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolTFlag{
 			Name:   "command-eval",
-			Usage:  "Allow running of arbitrary commands",
+			Usage:  "Allow running of arbitrary commands (default: true)",
 			EnvVar: "BUILDKITE_COMMAND_EVAL",
 		},
 		cli.BoolTFlag{
 			Name:   "plugins-enabled",
-			Usage:  "Allow plugins to be run",
+			Usage:  "Allow plugins to be run (default: true)",
 			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
 		},
 		cli.BoolFlag{
 			Name:   "plugin-validation",
-			Usage:  "Validate plugin configuration",
+			Usage:  "Validate plugin configuration (default: false)",
 			EnvVar: "BUILDKITE_PLUGIN_VALIDATION",
 		},
 		cli.BoolFlag{
 			Name:   "plugins-always-clone-fresh",
-			Usage:  "Always make a new clone of plugin source, even if already present",
+			Usage:  "Always make a new clone of plugin source, even if already present (default: false)",
 			EnvVar: "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH",
 		},
 		cli.BoolTFlag{
 			Name:   "local-hooks-enabled",
-			Usage:  "Allow local hooks to be run",
+			Usage:  "Allow local hooks to be run (default: true)",
 			EnvVar: "BUILDKITE_LOCAL_HOOKS_ENABLED",
 		},
 		cli.BoolTFlag{
 			Name:   "ssh-keyscan",
-			Usage:  "Automatically run ssh-keyscan before checkout",
+			Usage:  "Automatically run ssh-keyscan before checkout (default: true)",
 			EnvVar: "BUILDKITE_SSH_KEYSCAN",
 		},
 		cli.BoolTFlag{
 			Name:   "git-submodules",
-			Usage:  "Enable git submodules",
+			Usage:  "Enable git submodules (default: true)",
 			EnvVar: "BUILDKITE_GIT_SUBMODULES",
 		},
 		cli.BoolTFlag{
 			Name:   "pty",
-			Usage:  "Run jobs within a pseudo terminal",
+			Usage:  "Run jobs within a pseudo terminal (default: true)",
 			EnvVar: "BUILDKITE_PTY",
 		},
 		cli.StringFlag{
@@ -355,22 +380,27 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
 			Value:  "buildkite-agent",
 		},
+		cli.StringFlag{
+			Name:   "tracing-traceparent",
+			Usage:  "W3C Trace Parent for tracing",
+			EnvVar: "BUILDKITE_TRACING_TRACEPARENT",
+			Value:  "",
+		},
+		cli.BoolFlag{
+			Name:   "tracing-propagate-traceparent",
+			Usage:  "Accept traceparent from Buildkite control plane (default: false)",
+			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
+		},
+
 		cli.BoolFlag{
 			Name:   "no-job-api",
-			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job.",
+			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job (default: false)",
 			EnvVar: "BUILDKITE_AGENT_NO_JOB_API",
 		},
 		cli.StringSliceFlag{
 			Name:   "disable-warnings-for",
 			Usage:  "A list of warning IDs to disable",
 			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
-		},
-		cli.IntFlag{
-			Name: "kubernetes-container-id",
-			Usage: "This is intended to be used only by the Buildkite k8s stack " +
-				"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
-				"used to identify this container within the pod",
-			EnvVar: "BUILDKITE_CONTAINER_ID",
 		},
 		cancelSignalFlag,
 		cancelGracePeriodFlag,
@@ -383,13 +413,23 @@ var BootstrapCommand = cli.Command{
 		ProfileFlag,
 		RedactedVars,
 		StrictSingleHooksFlag,
-		KubernetesExecFlag,
 		TraceContextEncodingFlag,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
+
+		// Secret env var that overrides the self-execution path, but only if
+		// the job ID is a magical, nonsensical value (set by the
+		// ExecutorTester).
+		// This does not alter what 'buildkite-agent' means within a command;
+		// for that, we would have to mess with $PATH.
+		if cfg.JobID == "1111-1111-1111-1111" {
+			if overrideSelf := os.Getenv("BUILDKITE_OVERRIDE_SELF"); overrideSelf != "" {
+				ctx = self.OverridePath(ctx, overrideSelf)
+			}
+		}
 
 		// Turn of PTY support if we're on Windows
 		runInPty := cfg.PTY
@@ -434,6 +474,7 @@ var BootstrapCommand = cli.Command{
 			CancelSignal:                 cancelSig,
 			SignalGracePeriod:            signalGracePeriod,
 			CleanCheckout:                cfg.CleanCheckout,
+			SkipCheckout:                 cfg.SkipCheckout,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,
@@ -449,6 +490,7 @@ var BootstrapCommand = cli.Command{
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			HooksPath:                    cfg.HooksPath,
+			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
 			JobID:                        cfg.JobID,
 			LocalHooksEnabled:            cfg.LocalHooksEnabled,
 			OrganizationSlug:             cfg.OrganizationSlug,
@@ -461,6 +503,7 @@ var BootstrapCommand = cli.Command{
 			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
 			PluginsPath:                  cfg.PluginsPath,
 			PullRequest:                  cfg.PullRequest,
+			PullRequestUsingMergeRefspec: cfg.PullRequestUsingMergeRefspec,
 			Queue:                        cfg.Queue,
 			RedactedVars:                 cfg.RedactedVars,
 			RefSpec:                      cfg.RefSpec,
@@ -473,10 +516,11 @@ var BootstrapCommand = cli.Command{
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
 			TraceContextCodec:            traceContextCodec,
+			TracingTraceParent:           cfg.TracingTraceParent,
+			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
-			KubernetesExec:               cfg.KubernetesExec,
-			KubernetesContainerID:        cfg.KubernetesContainerID,
+			Secrets:                      cfg.Secrets,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
@@ -487,7 +531,8 @@ var BootstrapCommand = cli.Command{
 			syscall.SIGHUP,
 			syscall.SIGTERM,
 			syscall.SIGINT,
-			syscall.SIGQUIT)
+			syscall.SIGQUIT,
+		)
 		defer signal.Stop(signals)
 
 		var (
@@ -524,18 +569,38 @@ var BootstrapCommand = cli.Command{
 		// If cancelled and our child process returns a non-zero, we should terminate
 		// ourselves with the same signal so that our caller can detect and handle appropriately
 		if cancelled && runtime.GOOS != "windows" {
-			p, err := os.FindProcess(os.Getpid())
-			if err != nil {
-				l.Error("Failed to find current process: %v", err)
+			// Per https://pkg.go.dev/os/signal:
+			// "A SIGQUIT, SIGILL, SIGTRAP, SIGABRT, SIGSTKFLT, SIGEMT, or
+			// SIGSYS signal causes the program to exit with a stack dump."
+			// Of these, `received` can only be SIGQUIT.
+			if received == syscall.SIGQUIT {
+				return &SilentExitError{code: 131} // 128 + 3 (SIGQUIT).
 			}
-
-			l.Debug("Terminating bootstrap after cancellation with %v", received)
-			err = p.Signal(received)
-			if err != nil {
+			if err := signalSelf(l, received); err != nil {
 				l.Error("Failed to signal self: %v", err)
 			}
 		}
 
 		return &SilentExitError{code: exitCode}
 	},
+}
+
+func signalSelf(l logger.Logger, sig os.Signal) error {
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		return fmt.Errorf("failed to find current process: %w", err)
+	}
+
+	l.Debug("Terminating bootstrap after cancellation with %v", sig)
+	err = p.Signal(sig)
+	if err != nil {
+		return fmt.Errorf("failed to signal self: %v", err)
+	}
+
+	// Wait for a bit to allow the signal to be processed. Without this, the program can exit before the signal actually
+	// get sent and received, and the WaitStatus of this process won't indicate that it was signalled.
+	// Note that in almost all cases, we won't actually wait for 10 seconds, as the signal is generally processed extremely
+	// quickly. Sending ourself a SIGTERM will stop the agent before the time.Sleep is up.
+	time.Sleep(10 * time.Second)
+	return nil
 }

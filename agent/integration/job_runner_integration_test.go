@@ -3,13 +3,16 @@ package integration
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -73,7 +76,6 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
@@ -122,7 +124,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 				t.Fatalf("runJob() error = %v", err)
 			}
 
-			mb.CheckAndClose(t)
+			mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 		})
 	}
 }
@@ -136,13 +138,15 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 		t.Fatalf("making bootstrap-hooks directory: %v", err)
 	}
 
-	defer os.RemoveAll(hooksDir)
+	t.Cleanup(func() {
+		os.RemoveAll(hooksDir) //nolint:errcheck // Hooks dir removal is best-effort cleanup.
+	})
 
 	mockPB := mockPreBootstrap(t, hooksDir)
 	mockPB.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 		c.Exit(1) // Fail the pre-bootstrap hook
 	})
-	defer mockPB.CheckAndClose(t)
+	defer mockPB.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	jobID := "my-job-id"
 	j := &api.Job{
@@ -160,8 +164,8 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	defer server.Close()
 
 	mb := mockBootstrap(t)
-	mb.Expect().NotCalled() // The bootstrap won't be called, as the pre-bootstrap hook failed
-	defer mb.CheckAndClose(t)
+	mb.Expect().NotCalled()   // The bootstrap won't be called, as the pre-bootstrap hook failed
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	err = runJob(t, ctx, testRunJobConfig{
 		job:           j,
@@ -203,7 +207,7 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 			}
 
 			mb := mockBootstrap(t)
-			defer mb.CheckAndClose(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 			mb.Expect().Once().AndExitWith(exit)
 
@@ -246,7 +250,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	}
 
 	mb := mockBootstrap(t)
-	defer mb.CheckAndClose(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), jobToken; got != want {
@@ -287,7 +291,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	}
 
 	mb := mockBootstrap(t)
-	defer mb.CheckAndClose(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), "bkaj_job-token"; got != want {
@@ -327,7 +331,7 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	}
 
 	mb := mockBootstrap(t)
-	defer mb.CheckAndClose(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("BUILDKITE_COMMAND_EVAL"), "true"; got != want {
@@ -341,10 +345,108 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	server := e.server()
 	defer server.Close()
 
-	runJob(t, ctx, testRunJobConfig{
+	testCfg := testRunJobConfig{
 		job:           j,
 		server:        server,
 		agentCfg:      agent.AgentConfiguration{CommandEval: true},
 		mockBootstrap: mb,
+	}
+
+	if err := runJob(t, ctx, testCfg); err != nil {
+		t.Errorf("runJob(t, ctx, %v) = %v", testCfg, err)
+	}
+}
+
+func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
+	t.Parallel()
+
+	runTestWithInterval := func(t *testing.T, intervalSeconds int) int {
+		t.Helper()
+		ctx := context.Background()
+
+		var (
+			chunkCount int
+			mu         sync.Mutex
+		)
+
+		e := createTestAgentEndpoint()
+		server := e.server(route{
+			Method: "POST",
+			Path:   "/jobs/{id}/chunks",
+			HandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				mu.Lock()
+				chunkCount++
+				mu.Unlock()
+				e.chunksHandler()(rw, req)
+			},
+		})
+		t.Cleanup(server.Close)
+
+		j := &api.Job{
+			ID:                    defaultJobID,
+			ChunksMaxSizeBytes:    100_000, // large number that will never get divided into multiple chunks
+			ChunksIntervalSeconds: intervalSeconds,
+			Env:                   map[string]string{},
+			Token:                 "bkaj_job-token",
+		}
+
+		mb := mockBootstrap(t)
+		mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+			start := time.Now()
+			for time.Since(start) < 4*time.Second {
+				fmt.Fprintf(c.Stdout, "Log output at %v\n", time.Now())
+				time.Sleep(100 * time.Millisecond)
+			}
+			c.Exit(0)
+		})
+
+		if err := runJob(t, ctx, testRunJobConfig{
+			job:           j,
+			server:        server,
+			agentCfg:      agent.AgentConfiguration{},
+			mockBootstrap: mb,
+		}); err != nil {
+			t.Fatalf("runJob() error = %v", err)
+		}
+
+		mb.CheckAndClose(t) //nolint:errcheck
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		t.Logf("Interval %ds: %d chunks uploaded", intervalSeconds, chunkCount)
+		return chunkCount
+	}
+
+	t.Run("2s interval should upload fewer chunks than 1s interval", func(t *testing.T) {
+		var count1s, count2s int
+
+		wg := &sync.WaitGroup{}
+		wg.Add(2)
+
+		// these run for 4 seconds, so we run them in parallel to not quite so much wall-clock time
+		go func() {
+			defer wg.Done()
+			count1s = runTestWithInterval(t, 1)
+		}()
+
+		go func() {
+			defer wg.Done()
+			count2s = runTestWithInterval(t, 2)
+		}()
+
+		wg.Wait()
+
+		t.Logf("1s interval: %d chunks, 2s interval: %d chunks", count1s, count2s)
+
+		// With a 4s job:
+		// 1s interval: first chunk + chunks at ~1s, ~2s, ~3s, ~4s = 5 chunks
+		// 2s interval: first chunk + chunks at ~2s, ~4s = 3 chunks
+		if count1s != 5 {
+			t.Errorf("1s interval: got %d chunks, expected 5", count1s)
+		}
+		if count2s != 3 {
+			t.Errorf("2s interval: got %d chunks, expected 3", count2s)
+		}
 	})
 }

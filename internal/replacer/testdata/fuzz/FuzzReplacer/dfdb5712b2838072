@@ -1,0 +1,7 @@
+go test fuzz v1
+string("d")
+int(10)
+string("\x800")
+string("d0")
+string("\xb20")
+string("")

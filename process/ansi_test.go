@@ -1,6 +1,9 @@
 package process
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestANSIParser(t *testing.T) {
 	t.Parallel()
@@ -48,9 +51,21 @@ func TestANSIParser(t *testing.T) {
 
 	for _, test := range tests {
 		var p ansiParser
-		p.feed([]byte(test.input)...)
+		p.Write([]byte(test.input))
 		if got := p.insideCode(); got != test.want {
 			t.Errorf("after p.feed(%q...): p.insideCode() = %t, want %t", test.input, got, test.want)
 		}
+	}
+}
+
+func BenchmarkANSIParser(b *testing.B) {
+	npm, err := os.ReadFile("fixtures/npm.sh.raw")
+	if err != nil {
+		b.Fatalf("os.ReadFile(fixtures/npm.sh.raw) error = %v", err)
+	}
+
+	for b.Loop() {
+		var p ansiParser
+		p.Write(npm)
 	}
 }

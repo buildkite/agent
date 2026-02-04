@@ -16,9 +16,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/ptr"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/bintest/v3"
@@ -45,6 +47,7 @@ type testRunJobConfig struct {
 	agentCfg         agent.AgentConfiguration
 	mockBootstrap    *bintest.Mock
 	verificationJWKS jwk.Set
+	client           *api.Client
 }
 
 func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
@@ -59,27 +62,30 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 	// set the bootstrap into the config
 	cfg.agentCfg.BootstrapScript = cfg.mockBootstrap.Path
 
-	client := api.NewClient(l, api.Config{
-		Endpoint: cfg.server.URL,
-		Token:    "llamasrock",
-	})
+	if cfg.client == nil {
+		cfg.client = api.NewClient(l, api.Config{
+			Endpoint: cfg.server.URL,
+			Token:    "llamasrock",
+		})
+	}
 
-	jr, err := agent.NewJobRunner(ctx, l, client, agent.JobRunnerConfig{
+	jr, err := agent.NewJobRunner(ctx, l, cfg.client, agent.JobRunnerConfig{
 		Job:                cfg.job,
 		JWKS:               cfg.verificationJWKS,
 		AgentConfiguration: cfg.agentCfg,
 		MetricsScope:       scope,
+		JobStatusInterval:  1 * time.Second,
 	})
-
 	if err != nil {
 		t.Fatalf("agent.NewJobRunner() error = %v", err)
 	}
 
-	if err := jr.Run(context.Background()); err != nil {
-		return err
+	var ignoreAgentInDispatches *bool
+	if cfg.agentCfg.DisconnectAfterJob {
+		ignoreAgentInDispatches = ptr.To(true)
 	}
 
-	return nil
+	return jr.Run(ctx, ignoreAgentInDispatches)
 }
 
 type testAgentEndpoint struct {
@@ -115,7 +121,7 @@ func (tae *testAgentEndpoint) finishesFor(t *testing.T, jobID string) []api.Job 
 	return finishes
 }
 
-func (tae *testAgentEndpoint) logsFor(t *testing.T, jobID string) string {
+func (tae *testAgentEndpoint) logsFor(t *testing.T, _ string) string {
 	t.Helper()
 	tae.mtx.Lock()
 	defer tae.mtx.Unlock()
@@ -214,16 +220,26 @@ func (t *testAgentEndpoint) server(extraRoutes ...route) *httptest.Server {
 
 	wrapRecordRequest := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			writeErr := func(status int, f string, v ...any) {
+				msg := fmt.Sprintf(f, v...)
+				fmt.Fprintln(os.Stderr, msg)
+				http.Error(rw, msg, status)
+			}
+
 			// wait a minute, what's going on here?
 			// well, we want to read the body of the request, but because HTTP response bodies are io.ReadClosers, they can only
 			// be read once. So we read the body, then write it back into the request body so that the next handler can read it.
-			b, _ := io.ReadAll(req.Body)
-			req.Body.Close()
+			b, err := io.ReadAll(req.Body)
+			if err != nil {
+				writeErr(http.StatusBadRequest, "incomplete body read: %v", err)
+				return
+			}
+			if err := req.Body.Close(); err != nil {
+				writeErr(http.StatusInternalServerError, "error from req.Body.Close: %v", err)
+				return
+			}
 
-			// bytes.NewBuffer takes ownership of the slice, so we need to copy it
-			newBodyBytes := make([]byte, len(b))
-			copy(newBodyBytes, b)
-			req.Body = io.NopCloser(bytes.NewBuffer(newBodyBytes))
+			req.Body = io.NopCloser(bytes.NewReader(b))
 
 			t.mtx.Lock()
 			t.calls[req.URL.Path] = append(t.calls[req.URL.Path], b)
@@ -232,9 +248,7 @@ func (t *testAgentEndpoint) server(extraRoutes ...route) *httptest.Server {
 			// We also require job tokens are used for authentication
 			authzHeader := req.Header.Get("Authorization")
 			if !strings.HasPrefix(authzHeader, "Token bkaj_") {
-				msg := fmt.Sprintf("Authorization header = %q, want job token prefix 'Token bkaj_'", authzHeader)
-				fmt.Fprintln(os.Stderr, msg)
-				http.Error(rw, msg, http.StatusUnauthorized)
+				writeErr(http.StatusUnauthorized, "Authorization header = %q, want job token prefix 'Token bkaj_'", authzHeader)
 				return
 			}
 

@@ -5,6 +5,7 @@ import (
 
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
+	"google.golang.org/api/option"
 )
 
 type GCPLabels struct{}
@@ -15,14 +16,14 @@ func (e GCPLabels) Get(ctx context.Context) (map[string]string, error) {
 		return nil, err
 	}
 
-	computeService, err := compute.New(client)
+	computeService, err := compute.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
 		return nil, err
 	}
 
 	// Grab the current instance's metadata as a convenience
 	// to obtain the projectId, zone, and instanceId.
-	meta, err := GCPMetaData{}.Get()
+	meta, err := GCPMetaData{}.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +33,6 @@ func (e GCPLabels) Get(ctx context.Context) (map[string]string, error) {
 		meta["gcp:zone"],
 		meta["gcp:instance-name"],
 	).Context(ctx).Do()
-
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "lock",
+    srcs = ["lock.go"],
+    importpath = "github.com/buildkite/agent/v3/lock",
+    visibility = ["//visibility:public"],
+    deps = ["//internal/agentapi"],
+)
+
+go_test(
+    name = "lock_test",
+    srcs = ["lock_test.go"],
+    embed = [":lock"],
+    deps = [
+        "//internal/agentapi",
+        "//logger",
+    ],
+)

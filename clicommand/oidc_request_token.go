@@ -2,35 +2,30 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
 type OIDCTokenConfig struct {
-	Audience string `cli:"audience"`
-	Lifetime int    `cli:"lifetime"`
-	Job      string `cli:"job"      validate:"required"`
+	GlobalConfig
+	APIConfig
+
+	Audience      string `cli:"audience"`
+	Lifetime      int    `cli:"lifetime"`
+	Job           string `cli:"job"      validate:"required"`
+	SkipRedaction bool   `cli:"skip-redaction"`
+	Format        string `cli:"format"`
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
 	Claims         []string `cli:"claim"           normalize:"list"`
 	AWSSessionTags []string `cli:"aws-session-tag" normalize:"list"`
-
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint"           validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 const (
@@ -58,7 +53,7 @@ var OIDCRequestTokenCommand = cli.Command{
 	Name:        "request-token",
 	Usage:       "Requests and prints an OIDC token from Buildkite with the specified audience,",
 	Description: oidcTokenDescription,
-	Flags: []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:  "audience",
 			Usage: "The audience that will consume the OIDC token. The API will choose a default audience if it is omitted.",
@@ -87,19 +82,17 @@ var OIDCRequestTokenCommand = cli.Command{
 			EnvVar: "BUILDKITE_OIDC_TOKEN_AWS_SESSION_TAGS",
 		},
 
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+		cli.BoolFlag{
+			Name:   "skip-redaction",
+			Usage:  "Skip redacting the OIDC token from the logs. Then, the command will print the token to the Job's logs if called directly (default: false)",
+			EnvVar: "BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION",
+		},
+		cli.StringFlag{
+			Name:  "format",
+			Value: "jwt",
+			Usage: "The format to output the token in. Supported values are 'jwt' (the default) and 'gcp'. When 'gcp' is specified, the token will be output in a JSON structure compatible with GCP's workload identity federation.",
+		},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](ctx, c)
@@ -108,6 +101,10 @@ var OIDCRequestTokenCommand = cli.Command{
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
 		if cfg.Lifetime < 0 {
 			return fmt.Errorf("lifetime %d must be a non-negative integer.", cfg.Lifetime)
+		}
+
+		if cfg.Format != "jwt" && cfg.Format != "gcp" {
+			return fmt.Errorf("format %q is not valid. Supported values are 'jwt' and 'gcp'", cfg.Format)
 		}
 
 		// Create the API client
@@ -151,7 +148,49 @@ var OIDCRequestTokenCommand = cli.Command{
 			return err
 		}
 
-		_, _ = fmt.Fprintln(c.App.Writer, token.Token)
+		if !cfg.SkipRedaction {
+			jobClient, err := jobapi.NewDefaultClient(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to create Job API client: %w", err)
+			}
+
+			if err := AddToRedactor(ctx, l, jobClient, token.Token); err != nil {
+				if cfg.Debug {
+					return err
+				}
+				return errOIDCRedact
+			}
+		}
+
+		switch cfg.Format {
+		case "jwt":
+			_, _ = fmt.Fprintln(c.App.Writer, token.Token)
+
+		case "gcp":
+			type gcpOIDCTokenResponse struct {
+				IDToken   string `json:"id_token"`
+				TokenType string `json:"token_type"`
+				Version   int    `json:"version"`
+				Success   bool   `json:"success"`
+			}
+
+			jsonOutput, err := json.Marshal(gcpOIDCTokenResponse{
+				IDToken:   token.Token,
+				TokenType: "urn:ietf:params:oauth:token-type:jwt",
+				Version:   1,
+				Success:   true,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to marshal GCP response: %w", err)
+			}
+
+			_, _ = fmt.Fprintln(c.App.Writer, string(jsonOutput))
+
+		default:
+			// This should never happen because we validate the format earlier
+			return fmt.Errorf("unknown format %q", cfg.Format)
+		}
+
 		return nil
 	},
 }

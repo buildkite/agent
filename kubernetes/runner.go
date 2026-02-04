@@ -25,11 +25,12 @@ func init() {
 const defaultSocketPath = "/workspace/buildkite.sock"
 
 type RunnerConfig struct {
-	SocketPath        string
-	ClientCount       int
-	Stdout, Stderr    io.Writer
-	Env               []string
-	ClientLostTimeout time.Duration
+	SocketPath         string
+	ClientCount        int
+	Stdout, Stderr     io.Writer
+	Env                []string
+	ClientStartTimeout time.Duration
+	ClientLostTimeout  time.Duration
 }
 
 // NewRunner returns a runner, implementing the agent's jobRunner interface.
@@ -50,6 +51,9 @@ func NewRunner(l logger.Logger, c RunnerConfig) *Runner {
 		done:      make(chan struct{}),
 		started:   make(chan struct{}),
 		interrupt: make(chan struct{}),
+
+		// Buffered in case startupCheck is disabled
+		startCounter: make(chan struct{}, c.ClientCount),
 	}
 }
 
@@ -64,8 +68,11 @@ type Runner struct {
 	// Channels that are closed at certain points in the job lifecycle
 	started, done, interrupt chan struct{}
 
-	// Guards the closing of the channels to ensure they are only closed once
+	// Guards the closing of the above channels to ensure they are only closed once
 	startedOnce, doneOnce, interruptOnce sync.Once
+
+	// Used to count clients as they connect
+	startCounter chan struct{}
 
 	server  *rpc.Server
 	mux     *http.ServeMux
@@ -77,7 +84,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	r.server.Register(r)
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
 
-	oldUmask, err := Umask(0) // set umask of socket file to 0777 (world read-write-executable)
+	oldUmask, err := Umask(0) // set umask of socket file to 0o777 (world read-write-executable)
 	if err != nil {
 		return fmt.Errorf("failed to set socket umask: %w", err)
 	}
@@ -96,7 +103,37 @@ func (r *Runner) Run(ctx context.Context) error {
 		go r.livenessCheck(ctx)
 	}
 
+	if err := r.startupCheck(ctx); err != nil {
+		return err
+	}
+
 	<-r.done
+	return nil
+}
+
+// startupCheck blocks until all containers have connected, or times out.
+func (r *Runner) startupCheck(ctx context.Context) error {
+	if r.conf.ClientStartTimeout <= 0 { // check is disabled
+		return nil
+	}
+
+	// wait for a value on startCounter once per client
+	timeout := time.After(r.conf.ClientStartTimeout)
+	for range r.clients {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case <-timeout:
+			return fmt.Errorf("timed out waiting %v for all containers to connect", r.conf.ClientStartTimeout)
+
+		case <-r.done:
+			return nil
+
+		case <-r.startCounter:
+			// Another client has started!
+		}
+	}
 	return nil
 }
 
@@ -137,6 +174,7 @@ func (r *Runner) livenessCheck(ctx context.Context) {
 }
 
 // Started returns a channel that is closed when the job has started running.
+// (At least one client container has connected.)
 func (r *Runner) Started() <-chan struct{} { return r.started }
 
 func (r *Runner) markStarted() { r.startedOnce.Do(func() { close(r.started) }) }
@@ -150,7 +188,7 @@ func (r *Runner) Interrupt() error {
 	return nil
 }
 
-// Terminate stops the RPC server, allowing Run to return immediately.
+// Terminate allows Run to return immediately, halting the RPC server.
 func (r *Runner) Terminate() error {
 	r.doneOnce.Do(func() { close(r.done) })
 	return nil
@@ -258,6 +296,7 @@ func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	}
 
 	r.markStarted()
+	r.startCounter <- struct{}{}
 
 	client := r.clients[id]
 	client.mu.Lock()

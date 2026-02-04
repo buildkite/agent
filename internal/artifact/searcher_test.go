@@ -14,7 +14,9 @@ import (
 )
 
 func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
-	defer os.Remove("llamas.txt")
+	t.Cleanup(func() {
+		os.Remove("llamas.txt") //nolint:errcheck // Best-effort cleanup.
+	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {

@@ -12,7 +12,7 @@ import (
 
 const envClientErrMessage = `Could not create Job API client: %w
 This command can only be used from hooks or plugins running under a job executor
-where the "job-api" experiment is enabled.`
+where the agent's job API is available (in version v3.64.0 and later of the Buildkite Agent).`
 
 const envGetHelpDescription = `Usage:
 
@@ -22,9 +22,6 @@ Description:
 
 Retrieves environment variables and their current values from the current job
 execution environment.
-
-Note that this subcommand is only available from within the job executor with
-the ′job-api′ experiment enabled.
 
 Changes to the job environment only apply to the environments of subsequent
 phases of the job. However, ′env get′ can be used to inspect the changes made
@@ -62,35 +59,23 @@ Getting variables as a JSON object:
     }`
 
 type EnvGetConfig struct {
-	Format string `cli:"format"`
+	GlobalConfig
 
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
+	Format string `cli:"format"`
 }
 
 var EnvGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Gets variables from the job execution environment",
 	Description: envGetHelpDescription,
-	Flags: []cli.Flag{
+	Flags: append(globalFlags(),
 		cli.StringFlag{
 			Name:   "format",
 			Usage:  "Output format: plain, json, or json-pretty",
 			EnvVar: "BUILDKITE_AGENT_ENV_GET_FORMAT",
 			Value:  "plain",
 		},
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
+	),
 	Action: envGetAction,
 }
 

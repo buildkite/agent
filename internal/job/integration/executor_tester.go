@@ -112,6 +112,11 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 			"BUILDKITE_JOB_ID=1111-1111-1111-1111",
 			"BUILDKITE_AGENT_ACCESS_TOKEN=test-token-please-ignore",
 			fmt.Sprintf("BUILDKITE_REDACTED_VARS=%s", strings.Join(*clicommand.RedactedVars.Value, ",")),
+			// Normally the executor will use the self-path to self-execute
+			// other subcommands such as 'artifact upload'.
+			// Because we've mocked buildkite-agent using bintest, we want it to
+			// use the mock instead.
+			"BUILDKITE_OVERRIDE_SELF=buildkite-agent",
 		},
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
@@ -179,7 +184,7 @@ func (e *ExecutorTester) MustMock(t *testing.T, name string) *bintest.Mock {
 	t.Helper()
 	mock, err := e.Mock(name)
 	if err != nil {
-		t.Fatalf("BootstrapTester.Mock(%q) error = %v", name, err)
+		t.Fatalf("ExecutorTester.Mock(%q) error = %v", name, err)
 	}
 	return mock
 }
@@ -207,7 +212,7 @@ func (e *ExecutorTester) MockAgent(t *testing.T) *bintest.Mock {
 }
 
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
-func (e *ExecutorTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
+func (e *ExecutorTester) writeHookScript(m *bintest.Mock, name, dir string, args ...string) (string, error) {
 	hookScript := filepath.Join(dir, name)
 	body := ""
 
