@@ -621,7 +621,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 
 // Performs a ping that checks Buildkite for a job or action to take
 // Returns a job, or nil if none is found
-func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, err error) {
+func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error) {
 	ping, resp, pingErr := a.apiClient.Ping(ctx)
 	// wait a minute, where's my if err != nil block? TL;DR look for pingErr ~20 lines down
 	// the api client returns an error if the response code isn't a 2xx, but there's still information in resp and ping
@@ -642,7 +642,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
 		// responses with non-retryable statuses
 		if resp != nil && !api.IsRetryableStatus(resp) {
-			return nil, action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
+			return "", action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
 		}
 
 		// Get the last ping time to the nearest microsecond
@@ -652,9 +652,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		if a.stats.lastPing.IsZero() {
-			return nil, action, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
+			return "", action, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
 		} else {
-			return nil, action, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
+			return "", action, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
 		}
 	}
 
@@ -683,10 +683,10 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 	// If we don't have a job, there's nothing to do!
 	// If we're paused, job should be nil, but in case it isn't, ignore it.
 	if ping.Job == nil || action == "pause" {
-		return nil, action, nil
+		return "", action, nil
 	}
 
-	return ping.Job, action, nil
+	return ping.Job.ID, action, nil
 }
 
 // AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
@@ -718,8 +718,8 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 }
 
 // Accepts a job and runs it, only returns an error if something goes wrong
-func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job, idleMon *idleMonitor) error {
-	a.logger.Info("Assigned job %s. Accepting...", job.ID)
+func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon *idleMonitor) error {
+	a.logger.Info("Assigned job %s. Accepting...", jobID)
 
 	// An agent is busy during a job, and idle when the job is done.
 	idleMon.markBusy(a)
@@ -734,7 +734,7 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job, idleMon
 	)
 
 	accepted, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.Job, error) {
-		accepted, _, err := a.apiClient.AcceptJob(ctx, job)
+		accepted, _, err := a.apiClient.AcceptJob(ctx, jobID)
 		if err != nil {
 			if api.IsRetryableError(err) {
 				a.logger.Warn("%s (%s)", err, r)
