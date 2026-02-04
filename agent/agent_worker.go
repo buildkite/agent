@@ -254,7 +254,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		// there's really no point in letting the idle monitor know
 		// we're busy, but it's probably a good thing to do for good
 		// measure.
-		idleMon.markBusy(a)
+		idleMon.MarkBusy(a)
 
 		if err := a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob); err != nil {
 			// If the job acquisition was rejected, we can exit with an error
@@ -484,16 +484,17 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 
 			// This ensures agents that never receive a job are still tracked
 			// by the idle monitor and can properly trigger disconnect-after-idle-timeout.
-			idleMon.markIdle(a)
+			idleMon.MarkIdle(a)
 
 			// Exit if every agent has been idle for at least the timeout.
-			if idleMon.shouldExit(idleTimeout) {
+			select {
+			case <-idleMon.Exiting():
 				a.logger.Info("All agents have been idle for at least %v. Disconnecting...", idleTimeout)
 				return nil
+			default:
+				// Not idle enough to exit. Wait and ping again.
+				continue
 			}
-
-			// Not idle enough to exit. Wait and ping again.
-			continue
 		}
 
 		setStat("💼 Accepting job")
@@ -722,8 +723,8 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon
 	a.logger.Info("Assigned job %s. Accepting...", jobID)
 
 	// An agent is busy during a job, and idle when the job is done.
-	idleMon.markBusy(a)
-	defer idleMon.markIdle(a)
+	idleMon.MarkBusy(a)
+	defer idleMon.MarkIdle(a)
 
 	// Accept the job. We'll retry on connection related issues, but if
 	// Buildkite returns a 422 or 500 for example, we'll just bail out,

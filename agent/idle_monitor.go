@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"sync"
+	"context"
 	"time"
 )
 
@@ -20,69 +20,146 @@ import (
 //                -> Idle --
 */
 type idleMonitor struct {
-	mu          sync.Mutex
-	exiting     bool
+	// exiting is closed when the idle monitor says all agents should exit
+	exiting chan struct{}
+
+	// totalAgents is the total number of agents configured to run
 	totalAgents int
-	idleAt      map[*AgentWorker]time.Time
+
+	// idleTimeout is a copy of the DisconnectAfterIdleTimeout value
+	idleTimeout time.Duration
+
+	// Channels used to update the monitor state
+	becameIdle chan *AgentWorker
+	becameBusy chan *AgentWorker
+	becameDead chan *AgentWorker
+
+	// idleAt tracks when each agent became idle/dead.
+	// Agents not present in the map are busy.
+	idleAt map[*AgentWorker]time.Time
 }
 
-// newIdleMonitor creates a new IdleMonitor.
-func newIdleMonitor(totalAgents int) *idleMonitor {
-	return &idleMonitor{
+// NewIdleMonitor creates a new IdleMonitor.
+func NewIdleMonitor(ctx context.Context, totalAgents int, idleTimeout time.Duration) *idleMonitor {
+	if idleTimeout <= 0 {
+		// Note that the methods handle a nil receiver safely.
+		return nil
+	}
+	i := &idleMonitor{
+		exiting:     make(chan struct{}),
 		totalAgents: totalAgents,
+		idleTimeout: idleTimeout,
+		becameIdle:  make(chan *AgentWorker),
+		becameBusy:  make(chan *AgentWorker),
+		becameDead:  make(chan *AgentWorker),
 		idleAt:      make(map[*AgentWorker]time.Time),
 	}
+	go i.monitor(ctx)
+	return i
 }
 
-// shouldExit reports whether all agents are dead or have been idle for at least
-// minIdle.  If shouldExit returns true, it will return true on all subsequent
-// calls.
-func (i *idleMonitor) shouldExit(minIdle time.Duration) bool {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	// Once the idle monitor decides we're exiting, we're exiting.
-	if i.exiting {
-		return true
-	}
-
-	// Are all alive agents dead or idle for long enough?
-	idle := 0
-	for _, t := range i.idleAt {
-		if !t.IsZero() && time.Since(t) < minIdle {
-			return false
-		}
-		idle++
-	}
-	if idle < i.totalAgents {
-		return false
-	}
-	i.exiting = true
-	return true
-}
-
-// markIdle marks an agent as idle.
-func (i *idleMonitor) markIdle(agent *AgentWorker) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	// Allow MarkIdle to be called multiple times without updating the idleAt
-	// timestamp.
-	if _, alreadyIdle := i.idleAt[agent]; alreadyIdle {
+// monitor is the internal goroutine for handling idleness.
+func (i *idleMonitor) monitor(ctx context.Context) {
+	if i == nil {
 		return
 	}
-	i.idleAt[agent] = time.Now()
+
+	// Once the idle monitor returns, all the agents should also exit.
+	defer close(i.exiting)
+
+	var lastTimeout <-chan time.Time
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-lastTimeout:
+			return
+
+		case agent := <-i.becameIdle:
+			// Idleness is counted from when the agent first became idle.
+			if _, alreadyIdle := i.idleAt[agent]; alreadyIdle {
+				break
+			}
+			i.idleAt[agent] = time.Now()
+
+		case agent := <-i.becameBusy:
+			delete(i.idleAt, agent)
+
+		case agent := <-i.becameDead:
+			i.idleAt[agent] = time.Time{}
+		}
+
+		// Update the timeout channel based on all the agent states
+		// Are there any busy agents? Then don't time out.
+		if len(i.idleAt) < i.totalAgents {
+			lastTimeout = nil
+			continue
+		}
+
+		// They're all idle or dead. Figure out when the timeout should happen.
+		// If they're all dead, then the timeout happens immediately.
+		// If at least one is idle and _not_ dead, then the timeout happens
+		// however much of idleTimeout remains since the agent that most
+		// recently became idle.
+		var timeout time.Duration
+		for _, t := range i.idleAt {
+			if t.IsZero() {
+				continue
+			}
+			timeout = max(timeout, i.idleTimeout-time.Since(t))
+		}
+		if timeout == 0 {
+			return
+		}
+		lastTimeout = time.After(timeout)
+	}
 }
 
-// markDead marks an agent as dead.
-func (i *idleMonitor) markDead(agent *AgentWorker) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	i.idleAt[agent] = time.Time{}
+// Exiting returns a channel that is closed when the monitor declares
+// all agents should exit. It is safe to use with a nil pointer.
+func (i *idleMonitor) Exiting() <-chan struct{} {
+	if i == nil {
+		return nil
+	}
+	return i.exiting
 }
 
-// markBusy marks an agent as busy.
-func (i *idleMonitor) markBusy(agent *AgentWorker) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	delete(i.idleAt, agent)
+// MarkIdle marks an agent as idle. It is safe to use with a nil pointer.
+func (i *idleMonitor) MarkIdle(agent *AgentWorker) {
+	if i == nil {
+		return
+	}
+	select {
+	case i.becameIdle <- agent:
+		// marked as idle
+	case <-i.exiting:
+		// no goroutine listening on i.becameIdle
+	}
+}
+
+// MarkDead marks an agent as dead. It is safe to use with a nil pointer.
+func (i *idleMonitor) MarkDead(agent *AgentWorker) {
+	if i == nil {
+		return
+	}
+	select {
+	case i.becameDead <- agent:
+		// marked as dead
+	case <-i.exiting:
+		// no goroutine listening on i.becameDead
+	}
+}
+
+// MarkBusy marks an agent as busy. It is safe to use with a nil pointer.
+func (i *idleMonitor) MarkBusy(agent *AgentWorker) {
+	if i == nil {
+		return
+	}
+	select {
+	case i.becameBusy <- agent:
+		// marked as busy
+	case <-i.exiting:
+		// no goroutine listening on i.becameBusy
+	}
 }
