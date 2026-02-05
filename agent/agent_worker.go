@@ -236,8 +236,13 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	// errCh receives 1 value from the heartbeat loop, and 1 from the ping loop.
 	errCh := make(chan error, 2)
 
+	// Use this context to control the heartbeat loop.
+	heartbeatCtx, stopHeartbeats := context.WithCancel(ctx)
+	defer stopHeartbeats()
+
+	// Start the heartbeat loop but don't wait for it to return.
 	go func() {
-		errCh <- a.runHeartbeatLoop(ctx)
+		errCh <- a.runHeartbeatLoop(heartbeatCtx)
 	}()
 
 	// If the agent is booted in acquisition mode, acquire that particular job
@@ -254,7 +259,6 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		if err := a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob); err != nil {
 			// If the job acquisition was rejected, we can exit with an error
 			// so that supervisor knows that the job was not acquired due to the job being rejected.
-			a.internalStop() // stop the heartbeat loop
 			if errors.Is(err, core.ErrJobAcquisitionRejected) {
 				return fmt.Errorf("Failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
 			}
@@ -272,14 +276,16 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		}
 	}
 
+	// Start the ping loop and block until it has stopped.
 	errCh <- a.runPingLoop(ctx, idleMon)
 
-	// Blocks until both heartbeat and ping loops have returned.
+	// The ping loop has ended, so stop the heartbeat loop.
+	stopHeartbeats()
+
+	// Block until both loops have returned, then join the errors.
+	// (Note that errors.Join does the right thing with nil.)
 	// Both loops are context aware, so no need to wait on ctx here.
-	for range 2 {
-		startErr = errors.Join(startErr, <-errCh)
-	}
-	return startErr
+	return errors.Join(<-errCh, <-errCh)
 }
 
 func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
@@ -315,13 +321,13 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
 				a.stats.Unlock()
 			}
 
-		case <-a.stop:
-			a.logger.Debug("Stopping heartbeats due to agent stop")
-			return nil
-
 		case <-ctx.Done():
 			a.logger.Debug("Stopping heartbeats due to context cancel")
-			return ctx.Err()
+			// An alternative to returning nil would be ctx.Err(), but we use
+			// the context for ordinary termination of this loop.
+			// A context cancellation from outside the agent worker would still
+			// be reflected in the value returned by the ping loop return.
+			return nil
 		}
 	}
 }
@@ -333,9 +339,6 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 	ctx, setStat, _ := status.AddSimpleItem(ctx, "Ping loop")
 	defer setStat("🛑 Ping loop stopped!")
 	setStat("🏃 Starting...")
-
-	// Everything stops once the ping loop stops
-	defer a.internalStop()
 
 	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
