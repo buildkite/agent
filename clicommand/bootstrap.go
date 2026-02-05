@@ -178,7 +178,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "pull-request-using-merge-refspec",
-			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec (default: false)",
+			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec. This feature is in private preview and requires backend enablement—contact support to enable (default: false)",
 			EnvVar: "BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC",
 		},
 		cli.StringFlag{
