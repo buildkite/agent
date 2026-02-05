@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	agentedgev1 "github.com/buildkite/agent/v3/api/proto/gen"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/ptr"
 	"github.com/buildkite/agent/v3/logger"
@@ -99,6 +100,13 @@ type AgentWorker struct {
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
 	jobRunner atomic.Pointer[JobRunner]
+
+	// Used to exit the ping loop after running a job in acquire mode
+	ranJob bool
+
+	// Used to ensure "paused / unpaused" is logged only once upon
+	// entering/exiting pause state
+	wasPaused bool
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	agentStdout io.Writer
@@ -233,8 +241,11 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	}
 	defer a.metricsCollector.Stop() //nolint:errcheck // Best-effort cleanup
 
-	// errCh receives 1 value from the heartbeat loop, and 1 from the ping loop.
-	errCh := make(chan error, 2)
+	// errCh receives a final error value from each loop:
+	// - heartbeat loop
+	// - ping loop
+	// - streaming ping loop
+	errCh := make(chan error, 3)
 
 	// Use this context to control the heartbeat loop.
 	heartbeatCtx, stopHeartbeats := context.WithCancel(ctx)
@@ -276,16 +287,45 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		}
 	}
 
-	// Start the ping loop and block until it has stopped.
-	errCh <- a.runPingLoop(ctx, idleMon)
+	// Use this toggle to suppress the ping loop while the streaming loop
+	// is working.
+	toggle := newToggle(false)
+
+	// Start the remaining loops and block until they have all stopped.
+	// Based on configuration, we have our choice of ping loop, streaming loop,
+	// or both.
+	var wg sync.WaitGroup
+
+	pingLoop := func() { defer wg.Done(); errCh <- a.runPingLoop(ctx, idleMon, toggle) }
+	streamingLoop := func() { defer wg.Done(); errCh <- a.runStreamingPingLoop(ctx, idleMon, toggle) }
+
+	var loops []func()
+	switch a.agentConfiguration.PingMode {
+	case "", "auto":
+		loops = []func(){pingLoop, streamingLoop}
+	case "ping-only":
+		loops = []func(){pingLoop}
+	case "stream-only":
+		loops = []func(){streamingLoop}
+	}
+
+	wg.Add(len(loops))
+	for _, l := range loops {
+		go l()
+	}
+	wg.Wait()
 
 	// The ping loop has ended, so stop the heartbeat loop.
 	stopHeartbeats()
 
-	// Block until both loops have returned, then join the errors.
+	// Block until all loops have returned, then join the errors.
 	// (Note that errors.Join does the right thing with nil.)
-	// Both loops are context aware, so no need to wait on ctx here.
-	return errors.Join(<-errCh, <-errCh)
+	// All loops are context aware, so no need to wait on ctx here.
+	var err error
+	for range len(loops) + 1 {
+		err = errors.Join(err, <-errCh)
+	}
+	return err
 }
 
 func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
@@ -332,10 +372,90 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
 	}
 }
 
-// runPingLoop runs the loop that pings Buildkite for work. It does all critical
-// agent things.
+func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, idleMon *idleMonitor, toggle *toggle) error {
+	ctx, setStat, _ := status.AddSimpleItem(ctx, "Streaming ping loop")
+	defer setStat("🛑 Ping stream loop stopped!")
+	setStat("🏃 Starting...")
+
+	var reconnTicker <-chan time.Time
+	skipTicker := make(chan struct{}, 1)
+
+	if a.agentConfiguration.PingMode == "stream-only" {
+		// If it's only us, then always attempt to reconnect immediately.
+		// TODO: need a fuzzed exponential backoff...
+		close(skipTicker)
+	} else {
+		reconnTicker = time.Tick(30 * time.Second)
+		skipTicker <- struct{}{}
+	}
+
+	for {
+		setStat("😴 Waiting to (attempt to re)connect to stream")
+		select {
+		case <-skipTicker:
+			// continue below
+		case <-reconnTicker:
+			// continue below
+		case <-a.stop:
+			a.logger.Debug("Stopping ping stream due to agent stop")
+			return nil
+		case <-ctx.Done():
+			a.logger.Debug("Stopping ping stream due to context cancel")
+			return ctx.Err()
+		}
+
+		setStat("📱 Connecting to ping stream...")
+		stream, err := a.apiClient.StreamPings(ctx)
+		if err != nil {
+			a.logger.Error("Connection to ping stream failed: %v", err)
+			toggle.unblock() // fall back to the ping loop
+			continue
+		}
+
+		setStat("🏞️ Streaming actions from Buildkite")
+		for msg, err := range stream {
+			if err != nil {
+				a.logger.Error("Connection to ping stream failed or ended: %v", err)
+				break
+			}
+			if msg == nil {
+				a.logger.Error("Ping stream yielded a nil message, so assuming the stream is broken")
+				break
+			}
+
+			// The stream is working, so suppress the ping loop
+			toggle.block()
+
+			var jobID, action string
+			switch act := msg.Action.(type) {
+			case *agentedgev1.StreamPingsResponse_Idle:
+				// continue below
+
+			case *agentedgev1.StreamPingsResponse_Pause:
+				action = "pause"
+
+			case *agentedgev1.StreamPingsResponse_Disconnect:
+				action = "disconnect"
+
+			case *agentedgev1.StreamPingsResponse_JobAssigned:
+				jobID = act.JobAssigned.Job.Id
+			}
+
+			// Handle the action
+			switch a.handleAction(ctx, idleMon, jobID, action) {
+			case loopExit:
+				return nil
+			case loopContinue, loopPingImmediately:
+				continue
+			}
+		}
+	}
+}
+
+// runPingLoop runs the (classical) loop that pings Buildkite for work. It does
+// all critical agent things.
 // The lifetime of an agent is the lifetime of the ping loop.
-func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) error {
+func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor, toggle *toggle) error {
 	ctx, setStat, _ := status.AddSimpleItem(ctx, "Ping loop")
 	defer setStat("🛑 Ping loop stopped!")
 	setStat("🏃 Starting...")
@@ -360,9 +480,6 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 
 	a.logger.Info("Waiting for instructions...")
 
-	ranJob := false
-	wasPaused := false
-
 	// Continue this loop until one of:
 	// * the context is cancelled
 	// * the stop channel is closed (a.Stop)
@@ -373,6 +490,20 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 	//   longer than the idle timeout, and the ping action isn't "pause".
 	// * the agent has exceeded its disconnect-after-uptime and the ping action isn't "pause".
 	for {
+		// If the streaming loop is working, then this loop (the ping loop)
+		// should be blocked from continuing.
+		setStat("🚦 Ping loop blocked by stream loop (this is good!)...")
+		select {
+		case <-toggle.unblocked():
+			// The stream loop failed? Fall back to this loop! (below)
+		case <-a.stop:
+			a.logger.Debug("Stopping pings due to agent stop")
+			return nil
+		case <-ctx.Done():
+			a.logger.Debug("Stopping pings due to context cancel")
+			return ctx.Err()
+		}
+
 		startWait := time.Now()
 		setStat("😴 Waiting until next ping interval tick")
 		select {
@@ -411,7 +542,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		setStat("📡 Pinging Buildkite for instructions")
 		pingsSent.Inc()
 		startPing := time.Now()
-		job, action, err := a.Ping(ctx)
+		jobID, action, err := a.Ping(ctx)
 		if err != nil {
 			pingErrors.Inc()
 			if isUnrecoverable(err) {
@@ -422,106 +553,127 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		}
 		pingDurations.Observe(time.Since(startPing).Seconds())
 
-		pingActions.WithLabelValues(action).Inc()
-		switch action {
-		case "disconnect":
-			a.StopUngracefully()
+		// Handle the action
+		switch a.handleAction(ctx, idleMon, jobID, action) {
+		case loopExit:
 			return nil
-
-		case "pause":
-			// An agent is not dispatched any jobs while it is paused, but the
-			// paused agent is expected to remain alive and pinging for
-			// instructions.
-			// *This includes acquire-job and disconnect-after-idle-timeout.*
-			wasPaused = true
+		case loopContinue:
 			continue
-		}
-
-		// At this point, action was neither "disconnect" nor "pause".
-		if wasPaused {
-			a.logger.Info("Agent has resumed after being paused")
-			wasPaused = false
-		}
-
-		// Exit after acquire-job.
-		// For acquire-job agents, registration sets ignore-in-dispatches=true,
-		// so job should be nil. If not nil, complain.
-		if a.agentConfiguration.AcquireJob != "" {
-			if job != nil {
-				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in acquire-job mode!", job.ID)
+		case loopPingImmediately:
+			// Skip waiting for the ping interval until
+			// a ping without a job has occurred,
+			// but in exchange, ensure the next ping must wait at least a full
+			// pingInterval to avoid too much server load.
+			pingTicker.Reset(pingInterval)
+			select {
+			case skipTicker <- struct{}{}:
+				// Ticker will be skipped
+			default:
+				// We're already skipping the ticker, don't block.
 			}
-			return nil
-		}
-
-		// Exit after disconnect-after-job. Finishing the job sets
-		// ignore-in-dispatches=true, so job should be nil. If not, complain.
-		if ranJob && a.agentConfiguration.DisconnectAfterJob {
-			if job != nil {
-				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)!", job.ID)
-			}
-			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
-			return nil
-		}
-
-		// Exit after disconnect-after-uptime is exceeded.
-		if maxUptime := a.agentConfiguration.DisconnectAfterUptime; maxUptime > 0 {
-			if time.Since(a.startTime) >= maxUptime {
-				if job != nil {
-					a.logger.Error("Agent ping dispatched a job (id %q) but agent has exceeded max uptime of %v!", job.ID, maxUptime)
-				}
-				a.logger.Info("Agent has exceeded max uptime of %v. Disconnecting...", maxUptime)
-				return nil
-			}
-		}
-
-		// Note that Ping only returns a job if err == nil.
-		if job == nil {
-			idleTimeout := a.agentConfiguration.DisconnectAfterIdleTimeout
-			if idleTimeout == 0 {
-				// No job and no idle timeout.
-				continue
-			}
-
-			// This ensures agents that never receive a job are still tracked
-			// by the idle monitor and can properly trigger disconnect-after-idle-timeout.
-			idleMon.markIdle(a)
-
-			// Exit if every agent has been idle for at least the timeout.
-			if idleMon.shouldExit(idleTimeout) {
-				a.logger.Info("All agents have been idle for at least %v. Disconnecting...", idleTimeout)
-				return nil
-			}
-
-			// Not idle enough to exit. Wait and ping again.
-			continue
-		}
-
-		setStat("💼 Accepting job")
-
-		// Runs the job, only errors if something goes wrong
-		if err := a.AcceptAndRunJob(ctx, job, idleMon); err != nil {
-			a.logger.Error("%v", err)
-			setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
-			continue
-		}
-
-		ranJob = true
-
-		// Observation: jobs are rarely the last within a pipeline,
-		// thus if this worker just completed a job,
-		// there is likely another immediately available.
-		// Skip waiting for the ping interval until
-		// a ping without a job has occurred,
-		// but in exchange, ensure the next ping must wait at least a full
-		// pingInterval to avoid too much server load.
-		pingTicker.Reset(pingInterval)
-		select {
-		case skipTicker <- struct{}{}:
-			// Ticker will be skipped
-		default:
-			// We're already skipping the ticker, don't block.
 		}
 	}
+}
+
+type loopAction int
+
+const (
+	loopExit loopAction = iota
+	loopContinue
+	loopPingImmediately
+)
+
+func (a *AgentWorker) handleAction(ctx context.Context, idleMon *idleMonitor, jobID, action string) loopAction {
+	pingActions.WithLabelValues(action).Inc()
+
+	switch action {
+	case "disconnect":
+		a.StopUngracefully()
+		return loopExit
+
+	case "pause":
+		// An agent is not dispatched any jobs while it is paused, but the
+		// paused agent is expected to remain alive and pinging for
+		// instructions.
+		// *This includes acquire-job and disconnect-after-idle-timeout.*
+		a.wasPaused = true
+		return loopContinue
+	}
+
+	// At this point, action was neither "disconnect" nor "pause".
+	if a.wasPaused {
+		a.logger.Info("Agent has resumed after being paused")
+		a.wasPaused = false
+	}
+
+	// Exit after acquire-job.
+	// For acquire-job agents, registration sets ignore-in-dispatches=true,
+	// so job should be nil. If not nil, complain.
+	if a.agentConfiguration.AcquireJob != "" {
+		if jobID != "" {
+			a.logger.Error("Agent ping dispatched a job (id %q) but agent is in acquire-job mode!", jobID)
+		}
+		return loopExit
+	}
+
+	// Exit after disconnect-after-job. Finishing the job sets
+	// ignore-in-dispatches=true, so job should be nil. If not, complain.
+	if a.ranJob && a.agentConfiguration.DisconnectAfterJob {
+		if jobID != "" {
+			a.logger.Error("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)!", jobID)
+		}
+		a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
+		return loopExit
+	}
+
+	// Exit after disconnect-after-uptime is exceeded.
+	if maxUptime := a.agentConfiguration.DisconnectAfterUptime; maxUptime > 0 {
+		if time.Since(a.startTime) >= maxUptime {
+			if jobID != "" {
+				a.logger.Error("Agent ping dispatched a job (id %q) but agent has exceeded max uptime of %v!", jobID, maxUptime)
+			}
+			a.logger.Info("Agent has exceeded max uptime of %v. Disconnecting...", maxUptime)
+			return loopExit
+		}
+	}
+
+	// Note that Ping only returns a job if err == nil.
+	if jobID == "" {
+		idleTimeout := a.agentConfiguration.DisconnectAfterIdleTimeout
+		if idleTimeout == 0 {
+			// No job and no idle timeout.
+			return loopContinue
+		}
+
+		// This ensures agents that never receive a job are still tracked
+		// by the idle monitor and can properly trigger disconnect-after-idle-timeout.
+		idleMon.markIdle(a)
+
+		// Exit if every agent has been idle for at least the timeout.
+		if idleMon.shouldExit(idleTimeout) {
+			a.logger.Info("All agents have been idle for at least %v. Disconnecting...", idleTimeout)
+			return loopExit
+		}
+
+		// Not idle enough to exit. Wait and ping again.
+		return loopContinue
+	}
+
+	// setStat("💼 Accepting job")
+
+	// Runs the job, only errors if something goes wrong
+	if err := a.AcceptAndRunJob(ctx, jobID, idleMon); err != nil {
+		a.logger.Error("%v", err)
+		// setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
+		return loopContinue
+	}
+
+	a.ranJob = true
+
+	// Observation: jobs are rarely the last within a pipeline,
+	// thus if this worker just completed a job,
+	// there is likely another immediately available.
+	return loopPingImmediately
 }
 
 func (a *AgentWorker) internalStop() {
@@ -621,7 +773,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 
 // Performs a ping that checks Buildkite for a job or action to take
 // Returns a job, or nil if none is found
-func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, err error) {
+func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error) {
 	ping, resp, pingErr := a.apiClient.Ping(ctx)
 	// wait a minute, where's my if err != nil block? TL;DR look for pingErr ~20 lines down
 	// the api client returns an error if the response code isn't a 2xx, but there's still information in resp and ping
@@ -642,7 +794,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
 		// responses with non-retryable statuses
 		if resp != nil && !api.IsRetryableStatus(resp) {
-			return nil, action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
+			return "", action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
 		}
 
 		// Get the last ping time to the nearest microsecond
@@ -652,9 +804,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		if a.stats.lastPing.IsZero() {
-			return nil, action, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
+			return "", action, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
 		} else {
-			return nil, action, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
+			return "", action, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
 		}
 	}
 
@@ -683,10 +835,10 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 	// If we don't have a job, there's nothing to do!
 	// If we're paused, job should be nil, but in case it isn't, ignore it.
 	if ping.Job == nil || action == "pause" {
-		return nil, action, nil
+		return "", action, nil
 	}
 
-	return ping.Job, action, nil
+	return ping.Job.ID, action, nil
 }
 
 // AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
@@ -718,8 +870,8 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 }
 
 // Accepts a job and runs it, only returns an error if something goes wrong
-func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job, idleMon *idleMonitor) error {
-	a.logger.Info("Assigned job %s. Accepting...", job.ID)
+func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon *idleMonitor) error {
+	a.logger.Info("Assigned job %s. Accepting...", jobID)
 
 	// An agent is busy during a job, and idle when the job is done.
 	idleMon.markBusy(a)
@@ -734,7 +886,7 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job, idleMon
 	)
 
 	accepted, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.Job, error) {
-		accepted, _, err := a.apiClient.AcceptJob(ctx, job)
+		accepted, _, err := a.apiClient.AcceptJob(ctx, jobID)
 		if err != nil {
 			if api.IsRetryableError(err) {
 				a.logger.Warn("%s (%s)", err, r)
@@ -829,5 +981,52 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 				fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat))
 			}
 		}
+	}
+}
+
+// toggle is a channel-based "atomic bool" - the main benefit over an actual
+// atomic.Bool is the ability to use a channel operation for waiting.
+type toggle struct {
+	mu sync.Mutex
+	ch chan struct{}
+}
+
+// newToggle returns a toggle with a given initial state.
+func newToggle(blocked bool) *toggle {
+	ch := make(chan struct{})
+	if !blocked {
+		close(ch)
+	}
+	return &toggle{ch: ch}
+}
+
+// unblocked returns a channel that is closed when the toggle is unblocked.
+func (t *toggle) unblocked() <-chan struct{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.ch
+}
+
+// block blocks the toggle by replacing its channel with a new open channel.
+func (t *toggle) block() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	select {
+	case <-t.ch:
+		t.ch = make(chan struct{})
+	default:
+		// it's already blocked
+	}
+}
+
+// unblock unblocks the toggle by closing the existing channel.
+func (t *toggle) unblock() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	select {
+	case <-t.ch:
+		// it's already closed
+	default:
+		close(t.ch)
 	}
 }
