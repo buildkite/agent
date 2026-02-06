@@ -27,6 +27,7 @@ var (
 	ErrInvalidKeyAlgorithm    = fmt.Errorf("unsupported key algorithm")
 	ErrInvalidKeyPurpose      = fmt.Errorf("key must have ASYMMETRIC_SIGN purpose")
 	ErrChecksumMismatch       = fmt.Errorf("signature checksum verification failed")
+	ErrUnsupportedHashAlg     = fmt.Errorf("unsupported hash algorithm")
 )
 
 // KMS is a crypto.Signer that uses a GCP KMS key for signing.
@@ -281,7 +282,7 @@ func (k *KMS) ComputeDigest(data []byte) ([]byte, error) {
 	case crypto.SHA512:
 		h = sha512.New()
 	default:
-		return nil, fmt.Errorf("unsupported hash algorithm: %v", k.hashAlg)
+		return nil, fmt.Errorf("%w: %v", ErrUnsupportedHashAlg, k.hashAlg)
 	}
 	h.Write(data)
 	return h.Sum(nil), nil

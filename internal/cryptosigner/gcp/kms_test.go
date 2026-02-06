@@ -1,8 +1,8 @@
 package gcpsigner
 
 import (
-	"context"
 	"crypto"
+	"errors"
 	"testing"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
@@ -104,8 +104,8 @@ func TestKMS_ComputeDigest_UnsupportedAlgorithm(t *testing.T) {
 	}
 
 	_, err := k.ComputeDigest([]byte("test data"))
-	if err == nil {
-		t.Error("Expected error for unsupported hash algorithm, got nil")
+	if !errors.Is(err, ErrUnsupportedHashAlg) {
+		t.Errorf("k.ComputeDigest([]byte(\"test data\")) error = %v, want %v", err, ErrUnsupportedHashAlg)
 	}
 }
 
