@@ -49,7 +49,7 @@ type ExecutorConfig struct {
 	Plugins string
 
 	// Should git submodules be checked out
-	GitSubmodules bool
+	GitSubmodules bool `env:"BUILDKITE_GIT_SUBMODULES"`
 
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
