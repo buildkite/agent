@@ -222,17 +222,17 @@ func formatEnvKey(key string) string {
 	return hypenOrSpaceRE.ReplaceAllString(newKey, "_")
 }
 
-func walkConfigValues(prefix string, v any, into *[]string) error {
+func flattenConfigToEnvMap(into map[string]string, v any, envPrefix string) error {
 	switch vv := v.(type) {
 	// handles all of our primitive types, golang provides a good string representation
 	case string, bool, json.Number:
-		*into = append(*into, fmt.Sprintf("%s=%v", prefix, vv))
+		into[envPrefix] = fmt.Sprintf("%v", vv)
 		return nil
 
 	// handle lists of things, which get a KEY_N prefix depending on the index
 	case []any:
-		for i := range vv {
-			if err := walkConfigValues(fmt.Sprintf("%s_%d", prefix, i), vv[i], into); err != nil {
+		for i, item := range vv {
+			if err := flattenConfigToEnvMap(into, item, fmt.Sprintf("%s_%d", envPrefix, i)); err != nil {
 				return err
 			}
 		}
@@ -241,72 +241,62 @@ func walkConfigValues(prefix string, v any, into *[]string) error {
 	// handle maps of things, which get a KEY_SUBKEY prefix depending on the map keys
 	case map[string]any:
 		for k, vvv := range vv {
-			if err := walkConfigValues(fmt.Sprintf("%s_%s", prefix, formatEnvKey(k)), vvv, into); err != nil {
+			if err := flattenConfigToEnvMap(into, vvv, fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))); err != nil {
 				return err
 			}
 		}
 		return nil
-	}
 
-	return fmt.Errorf("Unknown type %T %v", v, v)
+	default:
+		return fmt.Errorf("Unknown type %T %v", v, v)
+	}
 }
 
-// The input should be a slice of Env Variables of the form `k=v` where `k` is the variable name
-// and `v` is its value. If it can be determined that any of the env variables names is part of a
-// deprecation, either as the deprecated variable name or its replacement, append both to the
-// returned slice, and also append a deprecation error to the error value. If there are no
-// deprecations, the error value is guaranteed to be nil.
-func fanOutDeprecatedEnvVarNames(envSlice []string) ([]string, error) {
-	envSliceAfter := envSlice
-
-	var dnerrs *DeprecatedNameErrors
-	for _, kv := range envSlice {
-		k, v, ok := strings.Cut(kv, "=")
-		if !ok { // this is impossible if the precondition is met
-			continue
-		}
-
+// addDeprecatedEnvVarAliases provides backward compatibility for environment variable names.
+//
+// Before v3.48.0 (https://github.com/buildkite/agent/pull/2116), consecutive underscores in
+// derived env var names were collapsed (e.g., "some--key__name" → SOME_KEY_NAME).
+// Since v3.48.0, consecutive underscores are preserved (e.g., SOME__KEY__NAME).
+//
+// For compatibility, this function adds the collapsed form for any key containing consecutive
+// underscores and returns deprecation errors listing the affected variables.
+func addDeprecatedEnvVarAliases(envMap map[string]string) error {
+	var errs *DeprecatedNameErrors
+	for k, v := range envMap {
 		// the form with consecutive underscores is replacing the form without, but the replacement
-		// is what is expected to be in input slice
-		noConsecutiveUnderScoreKey := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
-		if k != noConsecutiveUnderScoreKey {
-			envSliceAfter = append(envSliceAfter, fmt.Sprintf("%s=%s", noConsecutiveUnderScoreKey, v))
-			dnerrs = dnerrs.Append(DeprecatedNameError{old: noConsecutiveUnderScoreKey, new: k})
+		// is what is expected to be in input map
+		withoutConsecutiveUnderscores := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
+		if k != withoutConsecutiveUnderscores {
+			envMap[withoutConsecutiveUnderscores] = v
+			errs = errs.Append(DeprecatedNameError{old: withoutConsecutiveUnderscores, new: k})
 		}
 	}
 
-	// guarantee that the error value is nil if there are no deprecations
-	if !dnerrs.IsEmpty() {
-		return envSliceAfter, dnerrs
+	if !errs.IsEmpty() {
+		return errs
 	}
-	return envSliceAfter, nil
+
+	return nil
 }
 
-// ConfigurationToEnvironment converts the plugin configuration values to
-// environment variables.
+// ConfigurationToEnvironment converts the plugin configuration values to environment variables.
 func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
-	envSlice := []string{}
-	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
-
-	// Append current plugin name
-	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
-
-	// Append current plugin configuration as JSON
 	configJSON, err := json.Marshal(p.Configuration)
 	if err != nil {
 		return env.New(), err
 	}
-	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJSON))
 
-	for k, v := range p.Configuration {
-		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
-		if err := walkConfigValues(configPrefix, v, &envSlice); err != nil {
-			return env.New(), err
-		}
+	envMap := make(map[string]string)
+	envMap["BUILDKITE_PLUGIN_NAME"] = formatEnvKey(p.Name())
+	envMap["BUILDKITE_PLUGIN_CONFIGURATION"] = string(configJSON)
+
+	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
+	if err := flattenConfigToEnvMap(envMap, p.Configuration, envPrefix); err != nil {
+		return env.New(), err
 	}
 
-	envSlice, err = fanOutDeprecatedEnvVarNames(envSlice)
-	return env.FromSlice(envSlice), err
+	err = addDeprecatedEnvVarAliases(envMap)
+	return env.FromMap(envMap), err
 }
 
 // Label returns a pretty name for the plugin.

@@ -849,6 +849,27 @@ func TestForcingACleanCheckout(t *testing.T) {
 	}
 }
 
+func TestSkippingCheckout(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	tester.RunAndCheck(t, "BUILDKITE_SKIP_CHECKOUT=true")
+
+	if !strings.Contains(tester.Output, "Skipping checkout") {
+		t.Fatal(`tester.Output does not contain "Skipping checkout"`)
+	}
+
+	// Verify no git commands were run (no clone, fetch, checkout)
+	if strings.Contains(tester.Output, "git clone") {
+		t.Fatal(`tester.Output should not contain "git clone" when checkout is skipped`)
+	}
+}
+
 func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 	t.Parallel()
 

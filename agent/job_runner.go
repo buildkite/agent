@@ -199,29 +199,10 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		},
 	)
 
-	// TempDir is not guaranteed to exist
-	tempDir := os.TempDir()
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
-		if err = os.MkdirAll(tempDir, 0o777); err != nil {
-			return nil, err
-		}
-	}
-
-	// Prepare a file to receive the given job environment
-	file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.conf.Job.ID))
+	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, conf.KubernetesExec)
 	if err != nil {
-		return r, err
+		return nil, err
 	}
-	r.agentLogger.Debug("[JobRunner] Created env file (shell format): %s", file.Name())
-	r.envShellFile = file
-
-	file, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", r.conf.Job.ID))
-	if err != nil {
-		return r, err
-	}
-	r.agentLogger.Debug("[JobRunner] Created env file (JSON format): %s", file.Name())
-	r.envJSONFile = file
 
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
@@ -578,6 +559,12 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
 	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+	// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
+	// or by pipeline/step env
+	// This is here now to make it ready for if/when we add skip_checkout to the core app
+	if r.conf.AgentConfiguration.SkipCheckout {
+		setEnv("BUILDKITE_SKIP_CHECKOUT", "true")
+	}
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
 	// Allow BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH to be enabled either by config
@@ -896,4 +883,36 @@ func (l jobLogger) Write(data []byte) (int, error) {
 	msg := strings.TrimRight(string(data), "\r\n")
 	l.log.Info(msg)
 	return len(data), nil
+}
+
+func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shellFile, jsonFile *os.File, err error) {
+	// Use /workspace in Kubernetes mode for shared volume access between containers
+	tempDir := os.TempDir()
+	if kubernetesExec {
+		tempDir = "/workspace"
+	}
+
+	// tempDir is not guaranteed to exist
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err = os.MkdirAll(tempDir, 0o777); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	shellFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", jobID))
+	if err != nil {
+		return nil, nil, err
+	}
+	l.Debug("[JobRunner] Created env file (shell format): %s", shellFile.Name())
+
+	jsonFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", jobID))
+	if err != nil {
+		shellFile.Close()
+		os.Remove(shellFile.Name())
+		return nil, nil, err
+	}
+	l.Debug("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())
+
+	return shellFile, jsonFile, nil
 }
