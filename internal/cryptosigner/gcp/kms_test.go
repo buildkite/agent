@@ -13,7 +13,7 @@ func TestNewKMS_InvalidKeyResourceName(t *testing.T) {
 
 	_, err := NewKMS(ctx, "")
 	if err != ErrInvalidKeyResourceName {
-		t.Errorf("Expected ErrInvalidKeyResourceName, got %v", err)
+		t.Errorf("NewKMS(ctx, \"\") error = %v, want %v", err, ErrInvalidKeyResourceName)
 	}
 }
 
@@ -36,7 +36,7 @@ func TestKMS_Close(t *testing.T) {
 	// Should not panic with nil client
 	err := k.Close()
 	if err != nil {
-		t.Errorf("Close() with nil client returned error: %v", err)
+		t.Errorf("k.Close() error = %v, want nil", err)
 	}
 }
 
