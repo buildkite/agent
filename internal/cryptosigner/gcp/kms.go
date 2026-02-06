@@ -31,6 +31,7 @@ var (
 
 // KMS is a crypto.Signer that uses a GCP KMS key for signing.
 type KMS struct {
+	ctx     context.Context
 	client  *kms.KeyManagementClient
 	kid     string // Full KMS key resource name
 	jwaAlg  jwa.KeyAlgorithm
@@ -103,6 +104,7 @@ func NewKMS(ctx context.Context, keyResourceName string, opts ...option.ClientOp
 	}
 
 	return &KMS{
+		ctx:     ctx,
 		client:  client,
 		kid:     keyResourceName,
 		jwaAlg:  jwaAlg,
@@ -167,7 +169,7 @@ func (k *KMS) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, 
 	}
 
 	// Call GCP KMS to sign
-	resp, err := k.client.AsymmetricSign(context.Background(), req)
+	resp, err := k.client.AsymmetricSign(k.ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign via GCP KMS: %w", err)
 	}
@@ -204,7 +206,7 @@ func (k *KMS) GetPublicKey() (crypto.PublicKey, error) {
 		Name: k.kid,
 	}
 
-	resp, err := k.client.GetPublicKey(context.Background(), req)
+	resp, err := k.client.GetPublicKey(k.ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get public key from GCP KMS: %w", err)
 	}
