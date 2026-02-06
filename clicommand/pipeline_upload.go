@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -74,6 +75,8 @@ const ifChangedSkippedMsg = "if_changed matched no unexcluded changed files in t
 
 const defaultGitDiffBase = "origin/main"
 
+const PipelineFreezeMetadataKey = "buildkite:pipeline:freeze"
+
 type PipelineUploadConfig struct {
 	GlobalConfig
 	APIConfig
@@ -83,6 +86,7 @@ type PipelineUploadConfig struct {
 	Job             string   `cli:"job"` // required, but not in dry-run mode
 	DryRun          bool     `cli:"dry-run"`
 	DryRunFormat    string   `cli:"format"`
+	FreezePipeline  bool     `cli:"freeze"`
 	NoInterpolation bool     `cli:"no-interpolation"`
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 	RejectSecrets   bool     `cli:"reject-secrets"`
@@ -126,6 +130,11 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "In dry-run mode, specifies the form to output the pipeline in. Must be one of: json,yaml",
 			Value:  "json",
 			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN_FORMAT",
+		},
+		cli.BoolFlag{
+			Name:   "freeze",
+			Usage:  "Prevent subsequent pipeline uploads in this build by setting freeze metadata after the first upload (default: false)",
+			EnvVar: "BUILDKITE_PIPELINE_FREEZE",
 		},
 		cli.BoolFlag{
 			Name:   "no-interpolation",
@@ -392,6 +401,38 @@ var PipelineUploadCommand = cli.Command{
 					continue
 				}
 
+				l.Info("Checking if pipeline freeze is active...")
+
+				// Check for pipeline freeze using meta-data exists command
+				// The command has built-in retry logic (10 attempts, 5s intervals)
+				cmd := exec.CommandContext(ctx, self.Path(ctx), "meta-data", "exists",
+					PipelineFreezeMetadataKey)
+
+				if err := cmd.Run(); err != nil {
+					// Check exit code to determine behavior
+					var exitErr *exec.ExitError
+					if errors.As(err, &exitErr) {
+						if exitErr.ExitCode() == 100 {
+							// Exit code 100 = key doesn't exist, freeze is not active
+							l.Info("Pipeline freeze is not active, proceeding with upload")
+							// Continue to upload
+						} else {
+							// Other non-zero exit = error (warn and proceed per fail-open policy)
+							l.Warn("Failed to check freeze metadata (exit code %d): %v (proceeding with upload)",
+								exitErr.ExitCode(), err)
+							// Continue to upload
+						}
+					} else {
+						// Non-ExitError (e.g., binary not found)
+						l.Warn("Failed to check freeze metadata: %v (proceeding with upload)", err)
+						// Continue to upload
+					}
+				} else {
+					// Exit code 0 = key exists, freeze IS active
+					return fmt.Errorf("pipeline upload blocked: freeze is active (metadata key %s exists). This build already has a frozen pipeline",
+						PipelineFreezeMetadataKey)
+				}
+
 				// Check we have a job id set if not in dry run
 				if cfg.Job == "" {
 					return errors.New("missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
@@ -417,6 +458,29 @@ var PipelineUploadCommand = cli.Command{
 				}
 
 				l.Info("Successfully parsed and uploaded pipeline #%d from %q", count, input.name)
+
+				// Set pipeline freeze metadata ONLY if --freeze flag is used
+				if cfg.FreezePipeline {
+					freezeValue := fmt.Sprintf("frozen at %s by job %s",
+						time.Now().UTC().Format(time.RFC3339),
+						cfg.Job)
+
+					l.Info("Setting pipeline freeze metadata to prevent subsequent uploads...")
+
+					// Use meta-data set command with stdin for the value
+					// The command has built-in retry logic (10 attempts, exponential backoff)
+					cmd := exec.CommandContext(ctx, self.Path(ctx), "meta-data", "set",
+						PipelineFreezeMetadataKey)
+
+					// Set stdin to pipe the freeze value
+					cmd.Stdin = strings.NewReader(freezeValue)
+
+					if err := cmd.Run(); err != nil {
+						l.Warn("Pipeline uploaded successfully, but failed to set freeze metadata (key: %s) - subsequent uploads may not be blocked: %v",
+							PipelineFreezeMetadataKey, err)
+					}
+				}
+
 				count++
 			}
 		}
