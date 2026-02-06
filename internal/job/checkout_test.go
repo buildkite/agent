@@ -147,6 +147,26 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 	}
 }
 
+func TestSkipCheckout(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	sh, err := shell.New()
+	require.NoError(t, err)
+
+	executor := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			Repository:   "https://github.com/buildkite/agent.git",
+			SkipCheckout: true,
+		},
+	}
+
+	err = executor.checkout(ctx)
+	require.NoError(t, err)
+}
+
 func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	if race.IsRaceTest {
 		t.Skip("this test simulates the agent recovering from a race condition, and needs to create one to test it.")

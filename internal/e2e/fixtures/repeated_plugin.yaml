@@ -1,0 +1,9 @@
+agents:
+  queue: "{{.queue}}"
+steps:
+  - command: echo 'Hello from the command'
+    env:
+      BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
+    plugins:
+      - plugin-test#d2df1d8
+      - plugin-test#d2df1d8

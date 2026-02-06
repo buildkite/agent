@@ -43,7 +43,7 @@ var AgentStopCommand = cli.Command{
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.BoolFlag{
 			Name:  "force",
-			Usage: "Cancel any currently running job",
+			Usage: "Cancel any currently running job (default: false)",
 		},
 	}),
 	Action: func(c *cli.Context) error {
