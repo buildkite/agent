@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewKMS_InvalidKeyResourceName(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err := NewKMS(ctx, "")
 	if err != ErrInvalidKeyResourceName {
