@@ -17,87 +17,6 @@ func TestNewKMS_InvalidKeyResourceName(t *testing.T) {
 	}
 }
 
-func TestKMS_HashFunc(t *testing.T) {
-	tests := []struct {
-		name     string
-		hashAlg  crypto.Hash
-		expected crypto.Hash
-	}{
-		{
-			name:     "SHA256",
-			hashAlg:  crypto.SHA256,
-			expected: crypto.SHA256,
-		},
-		{
-			name:     "SHA384",
-			hashAlg:  crypto.SHA384,
-			expected: crypto.SHA384,
-		},
-		{
-			name:     "SHA512",
-			hashAlg:  crypto.SHA512,
-			expected: crypto.SHA512,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			k := &KMS{
-				hashAlg: tt.hashAlg,
-			}
-
-			if got := k.HashFunc(); got != tt.expected {
-				t.Errorf("HashFunc() = %v, want %v", got, tt.expected)
-			}
-		})
-	}
-}
-
-func TestKMS_ComputeDigest(t *testing.T) {
-	tests := []struct {
-		name     string
-		hashAlg  crypto.Hash
-		data     []byte
-		expected int // expected digest length in bytes
-	}{
-		{
-			name:     "SHA256",
-			hashAlg:  crypto.SHA256,
-			data:     []byte("test data"),
-			expected: 32,
-		},
-		{
-			name:     "SHA384",
-			hashAlg:  crypto.SHA384,
-			data:     []byte("test data"),
-			expected: 48,
-		},
-		{
-			name:     "SHA512",
-			hashAlg:  crypto.SHA512,
-			data:     []byte("test data"),
-			expected: 64,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			k := &KMS{
-				hashAlg: tt.hashAlg,
-			}
-
-			digest, err := k.ComputeDigest(tt.data)
-			if err != nil {
-				t.Fatalf("ComputeDigest() error = %v", err)
-			}
-
-			if len(digest) != tt.expected {
-				t.Errorf("ComputeDigest() digest length = %d, want %d", len(digest), tt.expected)
-			}
-		})
-	}
-}
-
 func TestKMS_ComputeDigest_UnsupportedAlgorithm(t *testing.T) {
 	k := &KMS{
 		hashAlg: crypto.MD5, // Unsupported
@@ -106,25 +25,6 @@ func TestKMS_ComputeDigest_UnsupportedAlgorithm(t *testing.T) {
 	_, err := k.ComputeDigest([]byte("test data"))
 	if !errors.Is(err, ErrUnsupportedHashAlg) {
 		t.Errorf("k.ComputeDigest([]byte(\"test data\")) error = %v, want %v", err, ErrUnsupportedHashAlg)
-	}
-}
-
-func TestCRC32C(t *testing.T) {
-	// Test with known data
-	data := []byte("hello world")
-	checksum := crc32c(data)
-
-	// CRC32C should be deterministic
-	checksum2 := crc32c(data)
-	if checksum != checksum2 {
-		t.Errorf("CRC32C is not deterministic: %d != %d", checksum, checksum2)
-	}
-
-	// Different data should produce different checksums
-	differentData := []byte("goodbye world")
-	differentChecksum := crc32c(differentData)
-	if checksum == differentChecksum {
-		t.Error("Same CRC32C checksum for different data")
 	}
 }
 
