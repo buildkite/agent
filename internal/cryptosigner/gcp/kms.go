@@ -15,8 +15,8 @@ import (
 	"io"
 
 	kms "cloud.google.com/go/kms/apiv1"
-	"github.com/buildkite/agent/v3/internal/gcplib"
 	"github.com/lestrrat-go/jwx/v2/jwa"
+	"google.golang.org/api/option"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	kmspb "cloud.google.com/go/kms/apiv1/kmspb"
@@ -41,14 +41,16 @@ type KMS struct {
 // NewKMS creates a new crypto signer which uses GCP KMS to sign data.
 // The keyResourceName must be in the format:
 // projects/{project}/locations/{location}/keyRings/{keyring}/cryptoKeys/{key}/cryptoKeyVersions/{version}
-func NewKMS(ctx context.Context, cfg *gcplib.Config, keyResourceName string) (*KMS, error) {
+// Additional client options can be provided via opts. If no options are provided,
+// GCP will automatically use Application Default Credentials (ADC).
+func NewKMS(ctx context.Context, keyResourceName string, opts ...option.ClientOption) (*KMS, error) {
 	if keyResourceName == "" {
 		return nil, ErrInvalidKeyResourceName
 	}
 
-	client, err := cfg.NewKMSClient(ctx)
+	client, err := kms.NewKeyManagementClient(ctx, opts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create KMS client: %w", err)
 	}
 
 	// Get the public key to determine the algorithm and validate the key

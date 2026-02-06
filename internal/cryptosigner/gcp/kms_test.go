@@ -5,18 +5,13 @@ import (
 	"crypto"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/gcplib"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 )
 
 func TestNewKMS_InvalidKeyResourceName(t *testing.T) {
 	ctx := context.Background()
-	cfg, err := gcplib.GetConfig(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get GCP config: %v", err)
-	}
 
-	_, err = NewKMS(ctx, cfg, "")
+	_, err := NewKMS(ctx, "")
 	if err != ErrInvalidKeyResourceName {
 		t.Errorf("Expected ErrInvalidKeyResourceName, got %v", err)
 	}
