@@ -150,6 +150,7 @@ type AgentStartConfig struct {
 	GitMirrorsLockTimeout int    `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules       bool   `cli:"no-git-submodules"`
+	SkipCheckout          bool   `cli:"skip-checkout"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval           bool     `cli:"no-command-eval"`
@@ -289,7 +290,14 @@ func DefaultShell() string {
 	case "netbsd":
 		return "/usr/pkg/bin/bash -e -c"
 	default:
-		return "/bin/bash -e -c"
+		// On most Unix-like systems, bash is at /bin/bash and we prefer to use it
+		// directly to avoid PATH manipulation concerns with /usr/bin/env.
+		// However, some systems like NixOS or GNU Guix don't have /bin/bash.
+		// In those cases, fall back to /usr/bin/env bash which will find bash in PATH.
+		if _, err := os.Stat("/bin/bash"); err == nil {
+			return "/bin/bash -e -c"
+		}
+		return "/usr/bin/env bash -e -c"
 	}
 }
 
@@ -359,12 +367,12 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "reflect-exit-status",
-			Usage:  "When used with --acquire-job, causes the agent to exit with the same exit status as the job",
+			Usage:  "When used with --acquire-job, causes the agent to exit with the same exit status as the job (default: false)",
 			EnvVar: "BUILDKITE_AGENT_REFLECT_EXIT_STATUS",
 		},
 		cli.BoolFlag{
 			Name:   "disconnect-after-job",
-			Usage:  "Disconnect the agent after running exactly one job. When used in conjunction with the ′--spawn′ flag, each worker booted will run exactly one job",
+			Usage:  "Disconnect the agent after running exactly one job. When used in conjunction with the ′--spawn′ flag, each worker booted will run exactly one job (default: false)",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
 		},
 		cli.IntFlag{
@@ -382,7 +390,7 @@ var AgentStartCommand = cli.Command{
 		cancelGracePeriodFlag,
 		cli.BoolFlag{
 			Name:   "enable-job-log-tmpfile",
-			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job",
+			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job (default: false)",
 			EnvVar: "BUILDKITE_ENABLE_JOB_LOG_TMPFILE",
 		},
 		cli.StringFlag{
@@ -392,7 +400,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "write-job-logs-to-stdout",
-			Usage:  "Writes job logs to the agent process' stdout. This simplifies log collection if running agents in Docker.",
+			Usage:  "Writes job logs to the agent process' stdout. This simplifies log collection if running agents in Docker (default: false)",
 			EnvVar: "BUILDKITE_WRITE_JOB_LOGS_TO_STDOUT",
 		},
 		cli.StringFlag{
@@ -414,7 +422,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-host",
-			Usage:  "Include tags from the host (hostname, machine-id, os)",
+			Usage:  "Include tags from the host (hostname, machine-id, os) (default: false)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_HOST",
 		},
 		cli.StringSliceFlag{
@@ -431,12 +439,12 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-ec2-tags",
-			Usage:  "Include the host's EC2 tags as tags",
+			Usage:  "Include the host's EC2 tags as tags (default: false)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-ecs-meta-data",
-			Usage:  "Include the host's ECS meta-data as tags (container-name, image, and task-arn)",
+			Usage:  "Include the host's ECS meta-data as tags (container-name, image, and task-arn) (default: false)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_ECS_META_DATA",
 		},
 		cli.StringSliceFlag{
@@ -453,7 +461,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-gcp-labels",
-			Usage:  "Include the host's Google Cloud instance labels as tags",
+			Usage:  "Include the host's Google Cloud instance labels as tags (default: false)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_LABELS",
 		},
 		cli.DurationFlag{
@@ -528,7 +536,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror",
+			Usage:  "Skip updating the Git mirror (default: false)",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		},
 		cli.StringFlag{
@@ -564,12 +572,12 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-ansi-timestamps",
-			Usage:  "Do not insert ANSI timestamp codes at the start of each line of job output",
+			Usage:  "Do not insert ANSI timestamp codes at the start of each line of job output (default: false)",
 			EnvVar: "BUILDKITE_NO_ANSI_TIMESTAMPS",
 		},
 		cli.BoolFlag{
 			Name:   "timestamp-lines",
-			Usage:  "Prepend timestamps on each line of job output. Has no effect unless --no-ansi-timestamps is also used",
+			Usage:  "Prepend timestamps on each line of job output. Has no effect unless --no-ansi-timestamps is also used (default: false)",
 			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
 		},
 		cli.StringFlag{
@@ -579,47 +587,52 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-pty",
-			Usage:  "Do not run jobs within a pseudo terminal",
+			Usage:  "Do not run jobs within a pseudo terminal (default: false)",
 			EnvVar: "BUILDKITE_NO_PTY",
 		},
 		cli.BoolFlag{
 			Name:   "no-ssh-keyscan",
-			Usage:  "Don't automatically run ssh-keyscan before checkout",
+			Usage:  "Don't automatically run ssh-keyscan before checkout (default: false)",
 			EnvVar: "BUILDKITE_NO_SSH_KEYSCAN",
 		},
 		cli.BoolFlag{
 			Name:   "no-command-eval",
-			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
+			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins (default: false)",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
 		cli.BoolFlag{
 			Name:   "no-plugins",
-			Usage:  "Don't allow this agent to load plugins",
+			Usage:  "Don't allow this agent to load plugins (default: false)",
 			EnvVar: "BUILDKITE_NO_PLUGINS",
 		},
 		cli.BoolTFlag{
 			Name:   "no-plugin-validation",
-			Usage:  "Don't validate plugin configuration and requirements",
+			Usage:  "Don't validate plugin configuration and requirements (default: true)",
 			EnvVar: "BUILDKITE_NO_PLUGIN_VALIDATION",
 		},
 		cli.BoolFlag{
 			Name:   "plugins-always-clone-fresh",
-			Usage:  "Always make a new clone of plugin source, even if already present",
+			Usage:  "Always make a new clone of plugin source, even if already present (default: false)",
 			EnvVar: "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH",
 		},
 		cli.BoolFlag{
 			Name:   "no-local-hooks",
-			Usage:  "Don't allow local hooks to be run from checked out repositories",
+			Usage:  "Don't allow local hooks to be run from checked out repositories (default: false)",
 			EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
 		},
 		cli.BoolFlag{
 			Name:   "no-git-submodules",
-			Usage:  "Don't automatically checkout git submodules",
+			Usage:  "Don't automatically checkout git submodules (default: false)",
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
 		},
 		cli.BoolFlag{
+			Name:   "skip-checkout",
+			Usage:  "Skip the git checkout phase entirely",
+			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
+		},
+		cli.BoolFlag{
 			Name:   "no-feature-reporting",
-			Usage:  "Disables sending a list of enabled features back to the Buildkite mothership. We use this information to measure feature usage, but if you're not comfortable sharing that information then that's totally okay :)",
+			Usage:  "Disables sending a list of enabled features back to the Buildkite mothership. We use this information to measure feature usage, but if you're not comfortable sharing that information then that's totally okay :) (default: false)",
 			EnvVar: "BUILDKITE_AGENT_NO_FEATURE_REPORTING",
 		},
 		cli.StringSliceFlag{
@@ -630,7 +643,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "enable-environment-variable-allowlist",
-			Usage:  "Only run jobs where all environment variables are allowed by the allowed-environment-variables option, or have been set by Buildkite",
+			Usage:  "Only run jobs where all environment variables are allowed by the allowed-environment-variables option, or have been set by Buildkite (default: false)",
 			EnvVar: "BUILDKITE_ENABLE_ENVIRONMENT_VARIABLE_ALLOWLIST",
 		},
 		cli.StringSliceFlag{
@@ -647,7 +660,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "metrics-datadog",
-			Usage:  "Send metrics to DogStatsD for Datadog",
+			Usage:  "Send metrics to DogStatsD for Datadog (default: false)",
 			EnvVar: "BUILDKITE_METRICS_DATADOG",
 		},
 		cli.StringFlag{
@@ -658,7 +671,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "metrics-datadog-distributions",
-			Usage:  "Use Datadog Distributions for Timing metrics",
+			Usage:  "Use Datadog Distributions for Timing metrics (default: false)",
 			EnvVar: "BUILDKITE_METRICS_DATADOG_DISTRIBUTIONS",
 		},
 		cli.StringFlag{
@@ -681,7 +694,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "spawn-with-priority",
-			Usage:  "Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu) equal to the agent's index",
+			Usage:  "Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu) equal to the agent's index (default: false)",
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
 		},
 		cancelSignalFlag,
@@ -694,7 +707,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "tracing-propagate-traceparent",
-			Usage:  `Enable accepting traceparent context from Buildkite control plane (only supported for OpenTelemetry backend)`,
+			Usage:  `Enable accepting traceparent context from Buildkite control plane (only supported for OpenTelemetry backend) (default: false)`,
 			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
 		},
 		cli.StringFlag{
@@ -725,7 +738,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
-			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
 			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
 		},
 		cli.StringFlag{
@@ -747,10 +760,18 @@ var AgentStartCommand = cli.Command{
 		DebugHTTPFlag,
 		TraceHTTPFlag,
 
+		// Kubernetes
+		cli.BoolFlag{
+			Name: "kubernetes-exec",
+			Usage: "This is intended to be used only by the Buildkite k8s stack " +
+				"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
+				"logs and exit statuses between containers in a pod (default: false)",
+			EnvVar: "BUILDKITE_KUBERNETES_EXEC",
+		},
+
 		// Other shared flags
 		RedactedVars,
 		StrictSingleHooksFlag,
-		KubernetesExecFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
 
@@ -1025,6 +1046,7 @@ var AgentStartCommand = cli.Command{
 			GitCleanFlags:                cfg.GitCleanFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitSubmodules:                !cfg.NoGitSubmodules,
+			SkipCheckout:                 cfg.SkipCheckout,
 			SSHKeyscan:                   !cfg.NoSSHKeyscan,
 			CommandEval:                  !cfg.NoCommandEval,
 			PluginsEnabled:               !cfg.NoPlugins,

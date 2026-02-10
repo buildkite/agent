@@ -87,7 +87,7 @@ var AnnotateCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "append",
-			Usage:  "Append to the body of an existing annotation",
+			Usage:  "Append to the body of an existing annotation (default: false)",
 			EnvVar: "BUILDKITE_ANNOTATION_APPEND",
 		},
 		cli.IntFlag{

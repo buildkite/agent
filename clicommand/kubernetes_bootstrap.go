@@ -123,9 +123,11 @@ var KubernetesBootstrapCommand = cli.Command{
 			return err
 		}
 
-		// Ensure the Kubernetes socket setup is disabled in the subprocess
-		// (we're doing all that here).
-		environ.Set("BUILDKITE_KUBERNETES_EXEC", "false")
+		// BUILDKITE_KUBERNETES_EXEC is a legacy environment variable. It was used to activate the socket
+		// on the bootstrap command, and to activate the socket server on `buildkite-agent start`.
+		// The former has been superseded by this `kubernetes-bootstrap` command.
+		// We keep this env var because some users depend on it as a k8s environment detection mechanism.
+		environ.Set("BUILDKITE_KUBERNETES_EXEC", "true")
 
 		if _, exists := environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH"); !exists {
 			// The OG agent runs as a long-live worker, therefore it set a checkout path dynamically to cater

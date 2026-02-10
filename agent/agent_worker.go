@@ -163,9 +163,9 @@ func (e *errUnrecoverable) Error() string {
 	return fmt.Sprintf("%s failed with unrecoverable status: %s, mesage: %q", e.action, status, e.err)
 }
 
-func (e *errUnrecoverable) Is(other error) bool {
-	_, ok := other.(*errUnrecoverable)
-	return ok
+func isUnrecoverable(err error) bool {
+	var u *errUnrecoverable
+	return errors.As(err, &u)
 }
 
 func (e *errUnrecoverable) Unwrap() error {
@@ -233,11 +233,17 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	}
 	defer a.metricsCollector.Stop() //nolint:errcheck // Best-effort cleanup
 
-	// Use a context to run heartbeats for as long as the ping loop or job runs
-	heartbeatCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	// errCh receives 1 value from the heartbeat loop, and 1 from the ping loop.
+	errCh := make(chan error, 2)
 
-	go a.runHeartbeatLoop(heartbeatCtx)
+	// Use this context to control the heartbeat loop.
+	heartbeatCtx, stopHeartbeats := context.WithCancel(ctx)
+	defer stopHeartbeats()
+
+	// Start the heartbeat loop but don't wait for it to return.
+	go func() {
+		errCh <- a.runHeartbeatLoop(heartbeatCtx)
+	}()
 
 	// If the agent is booted in acquisition mode, acquire that particular job
 	// before running the ping loop.
@@ -270,10 +276,19 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		}
 	}
 
-	return a.runPingLoop(ctx, idleMon)
+	// Start the ping loop and block until it has stopped.
+	errCh <- a.runPingLoop(ctx, idleMon)
+
+	// The ping loop has ended, so stop the heartbeat loop.
+	stopHeartbeats()
+
+	// Block until both loops have returned, then join the errors.
+	// (Note that errors.Join does the right thing with nil.)
+	// Both loops are context aware, so no need to wait on ctx here.
+	return errors.Join(<-errCh, <-errCh)
 }
 
-func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) {
+func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
 	ctx, setStat, _ := status.AddSimpleItem(ctx, "Heartbeat loop")
 	defer setStat("💔 Heartbeat loop stopped!")
 	setStat("🏃 Starting...")
@@ -287,26 +302,32 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) {
 		case <-heartbeatTicker.C:
 			setStat("❤️ Sending heartbeat")
 			if err := a.Heartbeat(ctx); err != nil {
-				if errors.Is(err, &errUnrecoverable{}) {
+				if isUnrecoverable(err) {
 					a.logger.Error("%s", err)
-					return
+					// unrecoverable heartbeat failure also stops ping loop
+					a.StopUngracefully()
+					return err
 				}
 
 				// Get the last heartbeat time to the nearest microsecond
 				a.stats.Lock()
 				if a.stats.lastHeartbeat.IsZero() {
-					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (No heartbeat yet)",
+					a.logger.Error("Failed to heartbeat %s. Will try again in %v. (No heartbeat yet)",
 						err, heartbeatInterval)
 				} else {
-					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
+					a.logger.Error("Failed to heartbeat %s. Will try again in %v. (Last successful was %v ago)",
 						err, heartbeatInterval, time.Since(a.stats.lastHeartbeat))
 				}
 				a.stats.Unlock()
 			}
 
 		case <-ctx.Done():
-			a.logger.Debug("Stopping heartbeats")
-			return
+			a.logger.Debug("Stopping heartbeats due to context cancel")
+			// An alternative to returning nil would be ctx.Err(), but we use
+			// the context for ordinary termination of this loop.
+			// A context cancellation from outside the agent worker would still
+			// be reflected in the value returned by the ping loop return.
+			return nil
 		}
 	}
 }
@@ -362,8 +383,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		case <-pingTicker.C:
 			// continue below
 		case <-a.stop:
+			a.logger.Debug("Stopping pings due to agent stop")
 			return nil
 		case <-ctx.Done():
+			a.logger.Debug("Stopping pings due to context cancel")
 			return ctx.Err()
 		}
 
@@ -377,8 +400,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		case <-time.After(jitter):
 			// continue below
 		case <-a.stop:
+			a.logger.Debug("Stopping pings due to agent stop")
 			return nil
 		case <-ctx.Done():
+			a.logger.Debug("Stopping pings due to context cancel")
 			return ctx.Err()
 		}
 		pingWaitDurations.Observe(time.Since(startWait).Seconds())
@@ -389,11 +414,11 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 		job, action, err := a.Ping(ctx)
 		if err != nil {
 			pingErrors.Inc()
-			if errors.Is(err, &errUnrecoverable{}) {
+			if isUnrecoverable(err) {
 				a.logger.Error("%v", err)
-			} else {
-				a.logger.Warn("%v", err)
+				return err
 			}
+			a.logger.Warn("%v", err)
 		}
 		pingDurations.Observe(time.Since(startPing).Seconds())
 
@@ -499,6 +524,14 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, idleMon *idleMonitor) err
 	}
 }
 
+func (a *AgentWorker) internalStop() {
+	a.stopOnce.Do(func() {
+		// Use the closure of the stop channel as a signal to the main run
+		// loop in Start() to stop looping and terminate
+		close(a.stop)
+	})
+}
+
 // StopGracefully stops the agent from accepting new work. It allows the current
 // job to finish without interruption. Does not block.
 func (a *AgentWorker) StopGracefully() {
@@ -519,21 +552,13 @@ func (a *AgentWorker) StopGracefully() {
 		a.logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 	}
 
-	a.stopOnce.Do(func() {
-		// Use the closure of the stop channel as a signal to the main run
-		// loop in Start() to stop looping and terminate
-		close(a.stop)
-	})
+	a.internalStop()
 }
 
 // StopUngracefully stops the agent from accepting new work and cancels any
 // existing job. It blocks until the job is cancelled, if there is one.
 func (a *AgentWorker) StopUngracefully() {
-	a.stopOnce.Do(func() {
-		// Use the closure of the stop channel as a signal to the main run
-		// loop in Start() to stop looping and terminate
-		close(a.stop)
-	})
+	a.internalStop()
 
 	// If there's a job running, kill it, then disconnect.
 	if jr := a.jobRunner.Load(); jr != nil {
@@ -568,7 +593,6 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 		b, resp, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
 			if resp != nil && !api.IsRetryableStatus(resp) {
-				a.StopUngracefully()
 				r.Break()
 				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
 			}
@@ -618,7 +642,6 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
 		// responses with non-retryable statuses
 		if resp != nil && !api.IsRetryableStatus(resp) {
-			a.StopUngracefully()
 			return nil, action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
 		}
 

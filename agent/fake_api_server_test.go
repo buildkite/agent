@@ -58,8 +58,10 @@ type agentJob struct {
 type FakeAPIServer struct {
 	*httptest.Server
 
+	agentsMu sync.Mutex
+	agents   map[string]*FakeAgent // session token Auth header -> agent
+
 	mu            sync.Mutex
-	agents        map[string]*FakeAgent                 // session token Auth header -> agent
 	jobs          map[string]*FakeJob                   // uuid -> job
 	agentJobs     map[string]agentJob                   // job token Auth header -> (agent, job)
 	registrations map[string]*api.AgentRegisterResponse // reg token Auth header -> response
@@ -87,11 +89,23 @@ func NewFakeAPIServer() *FakeAPIServer {
 }
 
 func (fs *FakeAPIServer) AddAgent(token string) *FakeAgent {
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
+	fs.agentsMu.Lock()
+	defer fs.agentsMu.Unlock()
 	a := &FakeAgent{}
 	fs.agents["Token "+token] = a
 	return a
+}
+
+func (fs *FakeAPIServer) DeleteAgent(token string) {
+	fs.agentsMu.Lock()
+	defer fs.agentsMu.Unlock()
+	delete(fs.agents, "Token "+token)
+}
+
+func (fs *FakeAPIServer) agentForAuth(auth string) *FakeAgent {
+	fs.agentsMu.Lock()
+	defer fs.agentsMu.Unlock()
+	return fs.agents[auth]
 }
 
 func (fs *FakeAPIServer) AddJob(env map[string]string) *FakeJob {
@@ -113,8 +127,10 @@ func (fs *FakeAPIServer) AddJob(env map[string]string) *FakeJob {
 }
 
 func (fs *FakeAPIServer) Assign(agent *FakeAgent, job *FakeJob) {
+	fs.agentsMu.Lock()
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
+	defer fs.agentsMu.Unlock()
 	fs.assignNoMutex(agent, job)
 }
 
@@ -140,7 +156,7 @@ func (fs *FakeAPIServer) handleJobAcquire(rw http.ResponseWriter, req *http.Requ
 	// The agent doesn't know the job token yet, so it must use the session
 	// token.
 	auth := req.Header.Get("Authorization")
-	agent := fs.agents[auth]
+	agent := fs.agentForAuth(auth)
 	if agent == nil {
 		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
@@ -182,7 +198,7 @@ func (fs *FakeAPIServer) handleJobAccept(rw http.ResponseWriter, req *http.Reque
 
 	// The agent has the job info from the ping, but accepts as itself.
 	auth := req.Header.Get("Authorization")
-	agent := fs.agents[auth]
+	agent := fs.agentForAuth(auth)
 	if agent == nil {
 		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
@@ -317,7 +333,7 @@ func (fs *FakeAPIServer) handlePing(rw http.ResponseWriter, req *http.Request) {
 	var ping api.Ping
 
 	auth := req.Header.Get("Authorization")
-	agent := fs.agents[auth]
+	agent := fs.agentForAuth(auth)
 	if agent == nil {
 		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
@@ -361,9 +377,10 @@ func (fs *FakeAPIServer) handleHeartbeat(rw http.ResponseWriter, req *http.Reque
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
-	agent := fs.agents[req.Header.Get("Authorization")]
+	auth := req.Header.Get("Authorization")
+	agent := fs.agentForAuth(auth)
 	if agent == nil {
-		http.Error(rw, encodeMsg("unauthorized"), http.StatusUnauthorized)
+		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
 	}
 
