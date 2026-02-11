@@ -24,18 +24,24 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 	defer setStat("🛑 Ping loop stopped!")
 	setStat("🏃 Starting...")
 
-	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
-	pingTicker := time.NewTicker(pingInterval)
-	defer pingTicker.Stop()
+	state := &pingLoopState{
+		AgentWorker:  a,
+		bat:          bat,
+		outCh:        outCh,
+		pingInterval: pingInterval,
+		pingTicker:   time.NewTicker(pingInterval),
+		skipWait:     make(chan struct{}, 1),
+		setStat:      setStat,
+	}
+	defer state.pingTicker.Stop()
 
 	// On the first iteration, skip waiting for the pingTicker.
-	// This doesn't skip the jitter, though.
-	skipWait := make(chan struct{}, 1)
-	skipWait <- struct{}{}
+	// One buffered value won't skip the jitter, though.
+	state.skipWait <- struct{}{}
 	if a.noWaitBetweenPingsForTesting {
 		// a closed channel will unblock the for/select instantly, for zero-delay ping loop testing.
-		close(skipWait)
+		close(state.skipWait)
 	}
 
 	a.logger.Info("Waiting for instructions...")
@@ -45,9 +51,9 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		a.logger.Debug("[runPingLoop] Waiting for pingTicker")
 		setStat("😴 Waiting until next ping interval tick")
 		select {
-		case <-skipWait:
+		case <-state.skipWait:
 			// continue below
-		case <-pingTicker.C:
+		case <-state.pingTicker.C:
 			// continue below
 		case <-a.stop:
 			a.logger.Debug("[runPingLoop] Stopping due to agent stop")
@@ -63,7 +69,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		a.logger.Debug("[runPingLoop] Waiting for jitter %v", jitter)
 		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
 		select {
-		case <-skipWait:
+		case <-state.skipWait:
 			// continue below
 		case <-time.After(jitter):
 			// continue below
@@ -76,111 +82,128 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		}
 		pingWaitDurations.Observe(time.Since(startWait).Seconds())
 
-		// stop is only used internally when stopping.
-		stop := errors.New("stop")
-		err := func() error {
-			// Wait until the baton is available. If this takes forever, that's
-			// a good thing because it should mean the streaming loop is
-			// healthy.
-			// Once acquired, only release the baton after any work is complete,
-			// to prevent the streaming loop from resuming control until then,
-			// but we always release the baton, because the streaming loop is
-			// preferred.
-			a.logger.Debug("[runPingLoop] Waiting for baton")
-			select {
-			case <-bat.Acquire("ping"): // the baton is ours!
-				a.logger.Debug("[runPingLoop] Acquired the baton")
-				defer func() { // <- this is why the loop body is in a func
-					a.logger.Debug("[runPingLoop] Releasing the baton")
-					bat.Release("ping")
-				}()
-
-			case <-a.stop:
-				a.logger.Debug("[runPingLoop] Stopping due to agent stop")
-				return stop
-			case <-ctx.Done():
-				a.logger.Debug("[runPingLoop] Stopping due to context cancel")
-				return ctx.Err()
-			}
-
-			a.logger.Debug("[runPingLoop] Pinging buildkite for instructions")
-			setStat("📡 Pinging Buildkite for instructions")
-			pingsSent.Inc()
-			startPing := time.Now()
-			jobID, action, err := a.Ping(ctx)
-			if err != nil {
-				pingErrors.Inc()
-				if isUnrecoverable(err) {
-					a.logger.Error("%v", err)
-					return err
-				}
-				a.logger.Warn("%v", err)
-			}
-			pingDurations.Observe(time.Since(startPing).Seconds())
-
-			a.logger.Debug("[runPingLoop] Sending action")
-
-			// Send the action to the action loop
-			errCh := make(chan error)
-			msg := actionMessage{
-				action: action,
-				jobID:  jobID,
-				errCh:  errCh,
-			}
-			select {
-			case outCh <- msg:
-				// sent!
-			case <-a.stop:
-				a.logger.Debug("[runPingLoop] Stopping due to agent stop")
-				return stop
-			case <-ctx.Done():
-				a.logger.Debug("[runPingLoop] Stopping due to context cancel")
-				return ctx.Err()
-			}
-
-			// Wait for completion
-			select {
-			case err := <-errCh:
-				if err != nil || jobID == "" {
-					// We don't terminate the ping loop just because the
-					// action (usually a job) has failed.
-					return nil
-				}
-				if a.noWaitBetweenPingsForTesting {
-					// Don't bother resetting the ticker,
-					// don't try to send on a closed channel (skipWait).
-					return nil
-				}
-				// A job ran (or was at least started) successfully.
-				// Observation: jobs are rarely the last within a pipeline,
-				// thus if this worker just completed a job,
-				// there is likely another immediately available.
-				// Skip waiting for the ping interval until
-				// a ping without a job has occurred,
-				// but in exchange, ensure the next ping must wait at least a full
-				// pingInterval to avoid too much server load.
-				pingTicker.Reset(pingInterval)
-				select {
-				case skipWait <- struct{}{}:
-					// Ticker will be skipped
-				default:
-					// We're already skipping the ticker, don't block.
-				}
-				return nil
-			case <-a.stop:
-				a.logger.Debug("[runPingLoop] Stopping due to agent stop")
-				return stop
-			case <-ctx.Done():
-				a.logger.Debug("[runPingLoop] Stopping due to context cancel")
-				return ctx.Err()
-			}
-		}()
-		if err == stop {
+		err := state.pingLoopInner(ctx)
+		if err == internalStop {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+	}
+}
+
+// Internal error values that should not escape to the user.
+var (
+	// internalStop is used when stopping.
+	internalStop = errors.New("stop")
+)
+
+// pingLoopState exists to pass parameters to pingLoopInner.
+type pingLoopState struct {
+	*AgentWorker
+	bat          *baton
+	outCh        chan<- actionMessage
+	setStat      func(string)
+	pingTicker   *time.Ticker
+	pingInterval time.Duration
+	skipWait     chan struct{}
+}
+
+func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
+	// Wait until the baton is available. If this takes forever, that's
+	// a good thing because it should mean the streaming loop is
+	// healthy.
+	// Once acquired, only release the baton after any work is complete,
+	// to prevent the streaming loop from resuming control until then,
+	// but we always release the baton, because the streaming loop is
+	// preferred.
+	a.logger.Debug("[runPingLoop] Waiting for baton")
+	select {
+	case <-a.bat.Acquire("ping"): // the baton is ours!
+		a.logger.Debug("[runPingLoop] Acquired the baton")
+		defer func() { // <- this is why the ping loop body is in a func
+			a.logger.Debug("[runPingLoop] Releasing the baton")
+			a.bat.Release("ping")
+		}()
+
+	case <-a.stop:
+		a.logger.Debug("[runPingLoop] Stopping due to agent stop")
+		return internalStop
+	case <-ctx.Done():
+		a.logger.Debug("[runPingLoop] Stopping due to context cancel")
+		return ctx.Err()
+	}
+
+	a.logger.Debug("[runPingLoop] Pinging buildkite for instructions")
+	a.setStat("📡 Pinging Buildkite for instructions")
+	pingsSent.Inc()
+	startPing := time.Now()
+	jobID, action, err := a.Ping(ctx)
+	if err != nil {
+		pingErrors.Inc()
+		if isUnrecoverable(err) {
+			a.logger.Error("%v", err)
+			return err
+		}
+		a.logger.Warn("%v", err)
+	}
+	pingDurations.Observe(time.Since(startPing).Seconds())
+
+	a.logger.Debug("[runPingLoop] Sending action")
+
+	// Send the action to the action loop
+	errCh := make(chan error)
+	msg := actionMessage{
+		action: action,
+		jobID:  jobID,
+		errCh:  errCh,
+	}
+	select {
+	case a.outCh <- msg:
+		// sent!
+	case <-a.stop:
+		a.logger.Debug("[runPingLoop] Stopping due to agent stop")
+		return internalStop
+	case <-ctx.Done():
+		a.logger.Debug("[runPingLoop] Stopping due to context cancel")
+		return ctx.Err()
+	}
+
+	// Wait for completion
+	select {
+	case err := <-errCh:
+		if err != nil || jobID == "" {
+			// We don't terminate the ping loop just because the
+			// action (usually a job) has failed.
+			return nil
+		}
+		if a.noWaitBetweenPingsForTesting {
+			// Don't bother resetting the ticker,
+			// don't try to send on a closed channel (skipWait).
+			return nil
+		}
+		// A job ran (or was at least started) successfully.
+		// Observation: jobs are rarely the last within a pipeline,
+		// thus if this worker just completed a job,
+		// there is likely another immediately available.
+		// Skip waiting for the ping interval until
+		// a ping without a job has occurred,
+		// but in exchange, ensure the next ping must wait at least a full
+		// pingInterval to avoid too much server load.
+		a.pingTicker.Reset(a.pingInterval)
+		select {
+		case a.skipWait <- struct{}{}:
+			// Ticker will be skipped
+		default:
+			// We're already skipping the ticker, don't block.
+		}
+		return nil
+	case <-a.stop:
+		a.logger.Debug("[runPingLoop] Stopping due to agent stop")
+		return internalStop
+	case <-ctx.Done():
+		a.logger.Debug("[runPingLoop] Stopping due to context cancel")
+		return ctx.Err()
 	}
 }
 
