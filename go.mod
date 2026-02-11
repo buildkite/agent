@@ -1,8 +1,6 @@
 module github.com/buildkite/agent/v3
 
-go 1.24.0
-
-toolchain go1.24.5
+go 1.25
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0
@@ -21,7 +19,7 @@ require (
 	github.com/aws/smithy-go v1.24.0
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 	github.com/buildkite/bintest/v3 v3.3.0
-	github.com/buildkite/go-buildkite/v4 v4.13.1
+	github.com/buildkite/go-buildkite/v4 v4.14.1
 	github.com/buildkite/go-pipeline v0.16.0
 	github.com/buildkite/interpolate v0.1.5
 	github.com/buildkite/roko v1.4.0
