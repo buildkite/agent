@@ -465,6 +465,7 @@ BUILDKITE_TRACING_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
 BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
 BUILDKITE_AGENT_AWS_KMS_KEY
+BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
 BUILDKITE_AGENT_JWKS_KEY_ID`
 			if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
@@ -615,6 +616,11 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// pass through the KMS key ID for signing
 	if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
 		setEnv("BUILDKITE_AGENT_AWS_KMS_KEY", r.conf.AgentConfiguration.SigningAWSKMSKey)
+	}
+
+	// pass through the GCP KMS key for signing
+	if r.conf.AgentConfiguration.SigningGCPKMSKey != "" {
+		setEnv("BUILDKITE_AGENT_GCP_KMS_KEY", r.conf.AgentConfiguration.SigningGCPKMSKey)
 	}
 
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
