@@ -605,10 +605,14 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	var mirrorDir string
 
+	lockTimeout := time.Second * time.Duration(e.GitMirrorsLockTimeout)
+	getCtx, canc := context.WithTimeout(ctx, lockTimeout)
+	defer canc()
+
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
-		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
+		mirrorDir, err = e.getOrUpdateMirrorDir(getCtx, e.Repository)
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
 		}
