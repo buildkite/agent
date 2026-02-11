@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -17,6 +19,8 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 )
+
+var noSleep = WithRetrySleepFunc(func(time.Duration) {})
 
 func TestFetchSecrets_Success(t *testing.T) {
 	t.Parallel()
@@ -44,7 +48,7 @@ func TestFetchSecrets_Success(t *testing.T) {
 		Token:    "llamas",
 	})
 
-	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", []string{"DATABASE_URL", "API_TOKEN"}, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", []string{"DATABASE_URL", "API_TOKEN"}, 10)
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
 	}
@@ -73,7 +77,7 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	apiClient := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
-	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", []string{}, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", []string{}, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
@@ -95,7 +99,7 @@ func TestFetchSecrets_NilKeys(t *testing.T) {
 
 	apiClient := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
 
-	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", nil, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", nil, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
@@ -133,7 +137,7 @@ func TestFetchSecrets_SomeSecretsFail(t *testing.T) {
 	})
 
 	keys := []string{"DATABASE_URL", "MISSING"}
-	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", keys, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 errors, got %d: %v", len(errs), errs)
@@ -177,7 +181,7 @@ func TestFetchSecrets_AllSecretsFail(t *testing.T) {
 	})
 
 	keys := []string{"API_TOKEN", "DATABASE_URL"}
-	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", keys, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
@@ -218,7 +222,7 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	})
 
 	keys := []string{"TEST_SECRET"}
-	secrets, errs := FetchSecrets(t.Context(), apiClient, "test-job-id", keys, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", keys, 10, noSleep)
 
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
@@ -264,5 +268,80 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 
 	if !isConnRefused {
 		t.Errorf("expected connection refused error, got: %v (type: %T)", netErr.Err, netErr.Err)
+	}
+}
+
+func TestFetchSecrets_RetriesOnServerError(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		n := attempts.Add(1)
+		if n <= 2 {
+			// First two attempts return 502 Bad Gateway (retryable)
+			rw.WriteHeader(http.StatusBadGateway)
+			_, _ = fmt.Fprintf(rw, `{"message": "bad gateway"}`)
+			return
+		}
+		// Third attempt succeeds
+		rw.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(rw, `{"key": "MY_SECRET", "value": "secret-value"}`)
+	}))
+	t.Cleanup(server.Close)
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", []string{"MY_SECRET"}, 10, noSleep)
+	if len(errs) > 0 {
+		t.Fatalf("expected no errors after retries, got: %v", errs)
+	}
+
+	if len(secrets) != 1 {
+		t.Fatalf("expected 1 secret, got %d", len(secrets))
+	}
+
+	if secrets[0].Value != "secret-value" {
+		t.Errorf("expected secret value %q, got %q", "secret-value", secrets[0].Value)
+	}
+
+	if got := attempts.Load(); got != 3 {
+		t.Errorf("expected 3 attempts (2 failures + 1 success), got %d", got)
+	}
+}
+
+func TestFetchSecrets_NoRetryOnNonRetryableStatus(t *testing.T) {
+	t.Parallel()
+
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		attempts.Add(1)
+		// 404 is not retryable
+		rw.WriteHeader(http.StatusNotFound)
+		_, _ = fmt.Fprintf(rw, `{"message": "secret not found"}`)
+	}))
+	t.Cleanup(server.Close)
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", []string{"MISSING"}, 10, noSleep)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
+	}
+
+	if secrets != nil {
+		t.Errorf("expected nil secrets, got: %v", secrets)
+	}
+
+	// Should have only attempted once since 404 is not retryable
+	if got := attempts.Load(); got != 1 {
+		t.Errorf("expected 1 attempt (no retries for 404), got %d", got)
 	}
 }
