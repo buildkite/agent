@@ -144,6 +144,13 @@ type ExecutorConfig struct {
 	// Path to the plugins directory
 	PluginsPath string
 
+	// Whether to include the agent name in plugin paths (defaults to true for backward compatibility)
+	// When false, plugins are stored in a shared location and require file locking
+	PluginsPathIncludesAgentName bool
+
+	// Seconds to wait before allowing plugin clone lock to be acquired (only used when PluginsPathIncludesAgentName is false)
+	PluginsLockTimeout int
+
 	// Paths to automatically upload as artifacts when the build finishes
 	AutomaticArtifactUploadPaths string `env:"BUILDKITE_ARTIFACT_PATHS"`
 

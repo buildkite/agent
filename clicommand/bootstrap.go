@@ -88,6 +88,8 @@ type BootstrapConfig struct {
 	PluginsEnabled               bool     `cli:"plugins-enabled"`
 	PluginValidation             bool     `cli:"plugin-validation"`
 	PluginsAlwaysCloneFresh      bool     `cli:"plugins-always-clone-fresh"`
+	PluginsPathIncludesAgentName bool     `cli:"plugins-path-includes-agent-name"`
+	PluginsLockTimeout           int      `cli:"plugins-lock-timeout"`
 	LocalHooksEnabled            bool     `cli:"local-hooks-enabled"`
 	StrictSingleHooks            bool     `cli:"strict-single-hooks"`
 	PTY                          bool     `cli:"pty"`
@@ -313,7 +315,7 @@ var BootstrapCommand = cli.Command{
 		SocketsPathFlag,
 		cli.StringFlag{
 			Name:   "plugins-path",
-			Value:  "",
+			Value:  "/workspace/plugins",
 			Usage:  "Directory where the plugins are saved to",
 			EnvVar: "BUILDKITE_PLUGINS_PATH",
 		},
@@ -336,6 +338,17 @@ var BootstrapCommand = cli.Command{
 			Name:   "plugins-always-clone-fresh",
 			Usage:  "Always make a new clone of plugin source, even if already present (default: false)",
 			EnvVar: "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH",
+		},
+		cli.BoolFlag{
+			Name:   "plugins-path-includes-agent-name",
+			Usage:  "Include the agent name in the plugins path (when false, plugins are shared and file locking is used)",
+			EnvVar: "BUILDKITE_PLUGINS_PATH_INCLUDES_AGENT_NAME",
+		},
+		cli.IntFlag{
+			Name:   "plugins-lock-timeout",
+			Value:  300,
+			Usage:  "Seconds to wait before timing out when acquiring plugin clone lock",
+			EnvVar: "BUILDKITE_PLUGINS_LOCK_TIMEOUT",
 		},
 		cli.BoolTFlag{
 			Name:   "local-hooks-enabled",
@@ -502,6 +515,8 @@ var BootstrapCommand = cli.Command{
 			PluginsEnabled:               cfg.PluginsEnabled,
 			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
 			PluginsPath:                  cfg.PluginsPath,
+			PluginsPathIncludesAgentName: cfg.PluginsPathIncludesAgentName,
+			PluginsLockTimeout:           cfg.PluginsLockTimeout,
 			PullRequest:                  cfg.PullRequest,
 			PullRequestUsingMergeRefspec: cfg.PullRequestUsingMergeRefspec,
 			Queue:                        cfg.Queue,
