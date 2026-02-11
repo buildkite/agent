@@ -41,7 +41,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 	// We begin holding the baton, ensure it is released when we exit.
 	defer func() {
 		a.logger.Debug("[runDebouncer] Releasing the baton")
-		bat.Release("debouncer")
+		bat.Release(actorDebouncer)
 	}()
 
 	// lastActionResult is closed when the action handler is done handling the
@@ -67,7 +67,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 			a.logger.Debug("[runDebouncer] Stopping due to context cancel")
 			return ctx.Err()
 
-		case <-iif(healthy, bat.Acquire("debouncer")): // if the stream is healthy, take the baton if available
+		case <-iif(healthy, bat.Acquire(actorDebouncer)): // if the stream is healthy, take the baton if available
 			a.logger.Debug("[runDebouncer] Took the baton")
 			// We now have the baton!
 			// continue below to send any pending message, if able
@@ -88,7 +88,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 				if !actionInProgress {
 					// We can release the baton now.
 					a.logger.Debug("[runDebouncer] Releasing the baton")
-					bat.Release("debouncer")
+					bat.Release(actorDebouncer)
 				}
 				break // out of the select
 			}
@@ -111,7 +111,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 
 		// If we're healthy, have the baton, there's no action in progress,
 		// and there's a pending message, then send that message.
-		if !healthy || !bat.HeldBy("debouncer") || actionInProgress || pending == nil {
+		if !healthy || !bat.HeldBy(actorDebouncer) || actionInProgress || pending == nil {
 			continue
 		}
 		a.logger.Debug("[runDebouncer] Sending action %q, jobID %q", pending.action, pending.jobID)

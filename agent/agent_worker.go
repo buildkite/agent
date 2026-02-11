@@ -325,7 +325,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	switch a.agentConfiguration.PingMode {
 	case "", "auto":
 		loops = []func(){pingLoop, streamingLoop, debouncerLoop}
-		bat.Acquire("debouncer")
+		bat.Acquire(actorDebouncer)
 
 	case "ping-only":
 		loops = []func(){pingLoop}
@@ -334,7 +334,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	case "stream-only":
 		loops = []func(){streamingLoop, debouncerLoop}
 		fromPingLoopCh = nil // prevent action loop listening to ping side
-		bat.Acquire("debouncer")
+		bat.Acquire(actorDebouncer)
 	}
 
 	// There's always an action handler.
@@ -556,6 +556,11 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 		}
 	}
 }
+
+const (
+	actorPingLoop  = "ping"
+	actorDebouncer = "debouncer"
+)
 
 type actionMessage struct {
 	// Details of the action to execute
