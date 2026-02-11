@@ -50,7 +50,7 @@ steps:
       parallelism: 2
       artifact_paths:
         - junit-*.xml
-        - "coverage/**/*"
+        - "coverage-*/**"
       plugins:
         - docker-compose#v4.14.0:
             config: .buildkite/docker-compose.yml
@@ -71,7 +71,7 @@ steps:
       parallelism: 2
       artifact_paths:
         - junit-*.xml
-        - "coverage/**/*"
+        - "coverage-*/**"
       agents:
         queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
       plugins:
@@ -94,7 +94,7 @@ steps:
       parallelism: 2
       artifact_paths:
         - junit-*.xml
-        - "coverage/**/*"
+        - "coverage-*/**"
       agents:
         queue: $AGENT_RUNNERS_WINDOWS_QUEUE
       plugins:
@@ -113,7 +113,7 @@ steps:
       parallelism: 3
       artifact_paths:
         - junit-*.xml
-        - "coverage/**/*"
+        - "coverage-*/**"
       agents:
         queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
       plugins:
@@ -132,7 +132,7 @@ steps:
 
     - name: ":coverage: Test coverage report Linux ARM64"
       key: test-coverage-linux-arm64
-      command: ".buildkite/steps/test-coverage-report.sh"
+      command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64"
       artifact_paths:
         - "cover.html"
         - "cover.out"
@@ -144,12 +144,11 @@ steps:
             cli-version: 2
             run: agent
         - artifacts#v1.9.4:
-            download: "coverage/**"
-            step: test-linux-arm64
+            download: "coverage-linux-arm64/**"
 
     - name: ":coverage: Test coverage report Linux AMD64"
       key: test-coverage-linux-amd64
-      command: ".buildkite/steps/test-coverage-report.sh"
+      command: ".buildkite/steps/test-coverage-report.sh coverage-linux-amd64"
       artifact_paths:
         - "cover.html"
         - "cover.out"
@@ -161,12 +160,11 @@ steps:
             cli-version: 2
             run: agent
         - artifacts#v1.9.4:
-            download: "coverage/**"
-            step: test-linux-amd64
+            download: "coverage-linux-amd64/**"
 
     - name: ":coverage: Test coverage report Linux ARM64 Race"
       key: test-coverage-linux-arm64-race
-      command: ".buildkite/steps/test-coverage-report.sh"
+      command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64-race"
       artifact_paths:
         - "cover.html"
         - "cover.out"
@@ -178,8 +176,7 @@ steps:
             cli-version: 2
             run: agent
         - artifacts#v1.9.4:
-            download: "coverage/**"
-            step: test-race-linux-arm64
+            download: "coverage-linux-arm64-race/**"
 
     - label: ":writing_hand: Annotate with Test Failures"
       depends_on:
