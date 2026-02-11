@@ -1,0 +1,7 @@
+agents:
+  queue: "{{.queue}}"
+steps:
+  - command: |
+      {{.buildkite_agent_binary}} job update timeout 1
+      sleep 300
+    timeout_in_minutes: 10
