@@ -557,7 +557,11 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
-	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+	// Disable cloning submodules if specified in Agent config as precedence
+	// else allow pipeline/step env to control it via BUILDKITE_GIT_SUBMODULES
+	if !r.conf.AgentConfiguration.GitSubmodules {
+		setEnv("BUILDKITE_GIT_SUBMODULES", "false")
+	}
 	// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
 	// or by pipeline/step env
 	// This is here now to make it ready for if/when we add skip_checkout to the core app
