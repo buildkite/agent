@@ -166,7 +166,7 @@ fi
 
 mkdir -p "${DESTINATION}/bin"   # for the binary
 mkdir -p "${DESTINATION}/hooks" # for hooks
-INSTALL_TMP="$(mktemp -d -p "${DESTINATION}")" # for tarball extraction
+INSTALL_TMP="$(mktemp -d "${DESTINATION}/tmp.XXXXXX")" # for tarball extraction
 trap 'rm -fr ${INSTALL_TMP}' EXIT
 
 echo -e "Destination: \033[35m${DESTINATION}\033[0m"
