@@ -148,13 +148,13 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 
 				case *agentedgev1.StreamPingsResponse_Pause:
 					if reason := act.Pause.GetReason(); reason != "" {
-						a.logger.Info("%s", reason)
+						a.logger.Info("Pause reason: %s", reason)
 					}
 					amsg.action = "pause"
 
 				case *agentedgev1.StreamPingsResponse_Disconnect:
 					if reason := act.Disconnect.GetReason(); reason != "" {
-						a.logger.Info("%s", reason)
+						a.logger.Info("Disconnect reason: %s", reason)
 					}
 					amsg.action = "disconnect"
 
