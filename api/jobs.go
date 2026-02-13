@@ -134,3 +134,26 @@ func (c *Client) FinishJob(ctx context.Context, job *Job, ignoreAgentInDispatche
 
 	return c.doRequest(req, nil)
 }
+
+// JobUpdateResponse is the response from updating a job
+type JobUpdateResponse struct {
+	ID string `json:"id"`
+}
+
+// UpdateJob updates mutable attributes on a job
+func (c *Client) UpdateJob(ctx context.Context, id string, attrs map[string]string) (*JobUpdateResponse, *Response, error) {
+	u := fmt.Sprintf("jobs/%s", railsPathEscape(id))
+
+	req, err := c.newRequest(ctx, "PUT", u, attrs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	j := new(JobUpdateResponse)
+	resp, err := c.doRequest(req, j)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return j, resp, err
+}
