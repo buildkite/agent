@@ -6,6 +6,9 @@ import (
 	"testing"
 )
 
+// TestJobUpdateTimeout verifies that a job which reduces its timeout from 10
+// minutes to 1 minute via `job update timeout`, then sleeps for 5 minutes,
+// exceeds the new timeout and fails.
 func TestJobUpdateTimeout(t *testing.T) {
 	ctx := t.Context()
 	tc := newTestCase(t, "job_update_timeout.yaml")
