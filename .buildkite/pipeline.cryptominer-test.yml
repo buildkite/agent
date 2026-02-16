@@ -1,0 +1,70 @@
+steps:
+  # Test 1: Should be DETECTED - fake binary named "xmrig"
+  # Creates a script named xmrig and runs it. The scanner should detect
+  # the binary name and kill the job within ~10 seconds.
+  - label: ":rotating_light: detect fake xmrig binary"
+    command: |
+      echo "--- Creating fake miner binary"
+      cp /bin/sleep xmrig
+      chmod +x xmrig
+      echo "Running fake xmrig (should be killed within ~20s)..."
+      ./xmrig 120
+      echo "ERROR: should not reach here - scanner should have killed the job"
+      exit 1
+    soft_fail:
+      - exit_status: "*"
+
+  # Test 2: Should be DETECTED - suspicious command-line pattern (stratum URL)
+  # Runs a sleep process with miner-like arguments. The cmdline pattern
+  # matching should catch the stratum+tcp:// URL.
+  - label: ":rotating_light: detect stratum cmdline pattern"
+    command: |
+      echo "--- Running process with stratum URL in args"
+      /bin/bash -c 'sleep 120' &
+      # The scanner looks at the full cmdline, so we need to exec something
+      # that has the suspicious string in its command line.
+      # Use a script that stays alive with a suspicious-looking cmdline.
+      cat > fake_miner.sh <<'EOF'
+      #!/bin/bash
+      sleep 120
+      EOF
+      chmod +x fake_miner.sh
+      exec -a "miner -o stratum+tcp://pool.example.com:3333 -u wallet123" ./fake_miner.sh
+    soft_fail:
+      - exit_status: "*"
+
+  # Test 3: Should be DETECTED - known mining pool domain in args
+  # Uses a recognisable mining pool domain in the command line.
+  - label: ":rotating_light: detect mining pool domain"
+    command: |
+      echo "--- Running process with mining pool domain in args"
+      /bin/bash -c 'echo connecting to nicehash.com && sleep 120' &
+      CHILD_PID=$!
+      echo "Child PID: $CHILD_PID, waiting to be killed..."
+      wait $CHILD_PID
+      echo "ERROR: should not reach here"
+      exit 1
+    soft_fail:
+      - exit_status: "*"
+
+  # Test 4: Should NOT be detected - normal build commands
+  # A regular job that does normal things. Should complete successfully.
+  - label: ":white_check_mark: normal job not detected"
+    command: |
+      echo "--- Running normal build commands"
+      echo "These should not trigger cryptominer detection"
+      sleep 30
+      echo "All good, no false positive"
+
+  # Test 5: Should be DETECTED - renamed binary with mining algorithm flag
+  - label: ":rotating_light: detect algo flag in cmdline"
+    command: |
+      echo "--- Running process with mining algorithm flag"
+      cat > worker.sh <<'EOF'
+      #!/bin/bash
+      sleep 120
+      EOF
+      chmod +x worker.sh
+      exec -a "worker --algo randomx --url pool.example.com" ./worker.sh
+    soft_fail:
+      - exit_status: "*"

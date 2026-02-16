@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/internal/cryptominer"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/kubernetes"
@@ -59,6 +60,9 @@ const (
 	// could not be launched. This signal reason is not used directly by the agent, but is used by the agent-stack-kubernetes
 	// to signal that the job was not run due to a stack error.
 	SignalReasonStackError = "stack_error"
+
+	// SignalReasonCryptominerDetected is used when a cryptominer process was detected in the job's process tree.
+	SignalReasonCryptominerDetected = "cryptominer_detected"
 )
 
 type missingKeyError struct {
@@ -201,6 +205,10 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	wg.Add(2)
 	go r.streamJobLogsAfterProcessStart(cctx, &wg)
 	go r.jobCancellationChecker(cctx, &wg)
+
+	// Start cryptominer detection (always enabled, cannot be disabled)
+	wg.Add(1)
+	go r.cryptominerDetector(cctx, &wg)
 
 	exit = r.runJob(cctx)
 	// The defer mutates the error return in some cases.
@@ -613,6 +621,67 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	}
 }
 
+// cryptominerDetector monitors the job's process tree for cryptominer activity.
+func (r *JobRunner) cryptominerDetector(ctx context.Context, wg *sync.WaitGroup) {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Cryptominer Detector")
+	defer done()
+	setStat("Starting...")
+
+	defer func() {
+		wg.Done()
+		r.agentLogger.Debug("[JobRunner] Cryptominer detector routine has finished")
+	}()
+
+	// Wait for the process to start
+	select {
+	case <-r.process.Started():
+	case <-ctx.Done():
+		return
+	}
+
+	// Get the process ID to use as the PGID (process group ID)
+	// The process package sets up the job to run in its own process group
+	var pid int
+	if p, ok := r.process.(*process.Process); ok {
+		pid = p.Pid()
+	} else {
+		r.agentLogger.Debug("[JobRunner] Cryptominer detection not supported for this process type")
+		return
+	}
+
+	setStat("🔍 Monitoring for cryptominers")
+	for {
+		select {
+		case <-time.Tick(10 * time.Second):
+			result, err := cryptominer.ScanProcessGroupPortable(ctx, pid)
+			if err != nil {
+				r.agentLogger.Debug("[JobRunner] Cryptominer scan error: %v", err)
+				continue
+			}
+
+			if result.Found {
+
+				for _, match := range result.Matches {
+					r.agentLogger.Warn("[JobRunner] Cryptominer detected: pid=%d name=%s cmdline=%s",
+						match.PID, match.ProcessName, match.Cmdline)
+				}
+
+				fmt.Fprintln(r.jobLogs, "~~~ :rotating_light: Job terminated due to cryptominer detection")
+				fmt.Fprintln(r.jobLogs, cryptominer.FormatDetectionMessage(result))
+				if err := r.Cancel(CancelReasonCryptominerDetected); err != nil {
+					r.agentLogger.Error("[JobRunner] Failed to cancel job after cryptominer detection: %v", err)
+				}
+				return
+			}
+
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+	}
+}
+
 // CancelReason captures the reason why Cancel is called.
 type CancelReason int
 
@@ -620,6 +689,7 @@ const (
 	CancelReasonJobState CancelReason = iota
 	CancelReasonAgentStopping
 	CancelReasonInvalidToken
+	CancelReasonCryptominerDetected
 )
 
 func (r CancelReason) String() string {
@@ -630,6 +700,8 @@ func (r CancelReason) String() string {
 		return "agent is stopping"
 	case CancelReasonInvalidToken:
 		return "access token is invalid"
+	case CancelReasonCryptominerDetected:
+		return "cryptominer detected"
 	}
 	return "unknown"
 }
