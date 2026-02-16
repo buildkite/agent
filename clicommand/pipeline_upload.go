@@ -23,6 +23,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
@@ -97,6 +98,7 @@ type PipelineUploadConfig struct {
 	JWKSFile         string `cli:"jwks-file"`
 	JWKSKeyID        string `cli:"jwks-key-id"`
 	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
 }
 
@@ -174,6 +176,12 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "signing-aws-kms-key",
 			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
 			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
+		},
+		cli.StringFlag{
+			Name: "signing-gcp-kms-key",
+			Usage: "The GCP KMS key identifier which is used to sign pipelines. " +
+				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
+			EnvVar: "BUILDKITE_AGENT_GCP_KMS_KEY",
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
@@ -348,10 +356,17 @@ var PipelineUploadCommand = cli.Command{
 						return err
 					}
 
-					// assign a crypto signer which uses the KMS key to sign the pipeline
+					// assign a crypto signer which uses the AWS KMS key to sign the pipeline
 					key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
 					if err != nil {
-						return fmt.Errorf("couldn't create KMS signer: %w", err)
+						return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+					}
+
+				case cfg.SigningGCPKMSKey != "":
+					// assign a crypto signer which uses the GCP KMS key to sign the pipeline
+					key, err = gcpsigner.NewKMS(ctx, cfg.SigningGCPKMSKey)
+					if err != nil {
+						return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
 					}
 
 				case cfg.JWKSFile != "":

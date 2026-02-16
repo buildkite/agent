@@ -41,6 +41,7 @@ type AgentConfiguration struct {
 	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
 	SigningJWKSKeyID string // The key ID to sign pipeline uploads with
 	SigningAWSKMSKey string // The KMS key ID to sign pipeline uploads with
+	SigningGCPKMSKey string // The GCP KMS key to sign pipeline uploads with
 	DebugSigning     bool   // Whether to print step payloads when signing them
 
 	VerificationJWKS             any    // The set of keys to verify jobs with
