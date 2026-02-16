@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.118.0](https://github.com/buildkite/agent/compare/v3.117.0...v3.118.0) (2026-02-16)
+
+### Added
+* Add new `buildkite-agent job update` command to update job timeouts [#3707](https://github.com/buildkite/agent/pull/3707) ([matthewborden](https://github.com/matthewborden))
+* Enable setting BUILDKITE_GIT_SUBMODULE with Environment Variables [#3677](https://github.com/buildkite/agent/pull/3677) ([tomowatt](https://github.com/tomowatt))
+
+### Fixed
+* chore: Modified mktemp command for tarball extraction on macOS VMs [#3698](https://github.com/buildkite/agent/pull/3698) ([chrisnavar](https://github.com/chrisnavar))
+
+### Internal
+* Add public preview description to env BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC [#3699](https://github.com/buildkite/agent/pull/3699) ([SorchaAbel](https://github.com/SorchaAbel))
+
 ## [v3.117.0](https://github.com/buildkite/agent/tree/v3.117.0) (2026-02-04)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.116.0...v3.117.0)
 
