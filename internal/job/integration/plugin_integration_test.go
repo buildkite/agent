@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
 	"gotest.tools/v3/assert"
@@ -607,7 +608,10 @@ func replacePluginPathInEnv(originalEnv []string, pluginsDir string) (newEnv []s
 func TestZipPluginFromLocalFile(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewExecutorTester(mainCtx)
+	// Enable zip plugins experiment
+	ctx, _ := experiments.Enable(mainCtx, experiments.ZipPlugins)
+
+	tester, err := NewExecutorTester(ctx)
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
@@ -668,7 +672,10 @@ func TestZipPluginFromLocalFile(t *testing.T) {
 func TestZipPluginMissingHooksDirectory(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewExecutorTester(mainCtx)
+	// Enable zip plugins experiment
+	ctx, _ := experiments.Enable(mainCtx, experiments.ZipPlugins)
+
+	tester, err := NewExecutorTester(ctx)
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
