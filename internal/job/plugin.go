@@ -334,6 +334,12 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		e.shell.Commentf("Plugin checkout paths - PluginDir: %q, HooksDir: %q", checkout.PluginDir, checkout.HooksDir)
 	}
 
+	// Route zip plugins to zip handler
+	if p.IsZipPlugin() {
+		e.shell.Commentf("Plugin %q will be downloaded as zip archive", p.DisplayName())
+		return checkout, e.checkoutZipPlugin(ctx, p, checkout, pluginDirectory)
+	}
+
 	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
 	// BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true).
 	//
