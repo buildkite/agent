@@ -684,9 +684,9 @@ func TestIsZipPlugin(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		scheme     string
-		wantIsZip  bool
-		wantBase   string
+		scheme    string
+		wantIsZip bool
+		wantBase  string
 	}{
 		{
 			scheme:    "zip+https",
