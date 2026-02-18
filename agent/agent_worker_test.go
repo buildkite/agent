@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -49,8 +48,6 @@ func TestDisconnect(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ctx := context.Background()
-
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
@@ -73,7 +70,7 @@ func TestDisconnect(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.Disconnect(ctx)
+	err := worker.Disconnect(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"[info] Disconnecting...", "[info] Disconnected"}, l.Messages)
@@ -100,8 +97,6 @@ func TestDisconnectRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ctx := context.Background()
-
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
@@ -126,7 +121,7 @@ func TestDisconnectRetry(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.Disconnect(ctx)
+	err := worker.Disconnect(t.Context())
 	assert.NoError(t, err)
 
 	// 2 failed attempts sleep 1 second each
@@ -141,9 +136,6 @@ func TestDisconnectRetry(t *testing.T) {
 
 func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	jobID := "some-uuid"
 
@@ -175,7 +167,7 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.AcquireAndRunJob(ctx, jobID)
+	err := worker.AcquireAndRunJob(t.Context(), jobID)
 	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
@@ -183,9 +175,6 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 
 func TestAcquireAndRunJobWaiting(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
@@ -233,7 +222,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
+	err := worker.AcquireAndRunJob(t.Context(), "waitinguuid")
 	assert.ErrorContains(t, err, "423")
 
 	if !errors.Is(err, core.ErrJobLocked) {
@@ -250,9 +239,6 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 
 func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
@@ -319,7 +305,7 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 
 	// we expect the worker to try to acquire the job, but fail with ErrJobAcquisitionRejected
 	// because the server returns a 422 Unprocessable Entity.
-	err := worker.Start(ctx, nil)
+	err := worker.Start(t.Context(), nil)
 	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
@@ -327,9 +313,6 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 
 func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
 	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
@@ -398,7 +381,7 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, nil); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -412,9 +395,6 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 
 func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
 	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
@@ -490,7 +470,7 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, nil); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -507,9 +487,6 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 
 func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
 	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
@@ -578,7 +555,7 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 	// Record start time
 	startTime := time.Now()
 
-	if err := worker.Start(ctx, nil); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -597,9 +574,6 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 	// The registration request is made in clicommand.AgentStartCommand, and the response
 	// is passed into agent.NewAgentWorker(...), so we'll just test the response handling.
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	server := NewFakeAPIServer()
 	defer server.Close()
@@ -652,7 +626,7 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, nil); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -663,9 +637,6 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 
 func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const agentSessionToken = "alpacas"
 
@@ -741,7 +712,7 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, nil); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -753,9 +724,6 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 
 func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const agentSessionToken = "alpacas"
 
@@ -821,7 +789,7 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, nil); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -832,9 +800,6 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 
 func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const headerKey = "Buildkite-Hello"
 	const headerValue = "world"
@@ -875,7 +840,7 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	})
 	client := &core.Client{APIClient: apiClient, Logger: l}
 	// the underlying api.Client will capture & store the server-specified request headers here...
-	reg, err := client.Register(ctx, api.AgentRegisterRequest{})
+	reg, err := client.Register(t.Context(), api.AgentRegisterRequest{})
 	if err != nil {
 		t.Fatalf("failed to register: %v", err)
 	}
@@ -890,7 +855,7 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, nil); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -987,9 +952,6 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
 	const agentSessionToken = "alpacas"
 
 	server := NewFakeAPIServer()
@@ -1030,7 +992,7 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, nil); !isUnrecoverable(err) {
+	if err := worker.Start(t.Context(), nil); !isUnrecoverable(err) {
 		t.Errorf("worker.Start() = %v, want an unrecoverable error", err)
 	}
 
