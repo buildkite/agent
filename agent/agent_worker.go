@@ -473,6 +473,7 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 			continue
 		}
 
+		first := true
 		setStat("🏞️ Streaming actions from Buildkite")
 		for msg, err := range stream {
 			var amsg actionMessage
@@ -495,6 +496,9 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 				amsg.unhealthy = true
 
 			default:
+				amsg.first = first
+				first = false
+
 				switch act := msg.Action.(type) {
 				case *agentedgev1.StreamPingsResponse_Idle:
 					// continue below
@@ -663,6 +667,11 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, toggle chan struct{}, ou
 					// No, wait until the action is complete.
 					// (Logic is in <-lastActionDone branch.)
 				}
+				continue
+			}
+
+			// Ignore the first message from the stream, which is always idle.
+			if msg.first {
 				continue
 			}
 
@@ -901,6 +910,11 @@ type actionMessage struct {
 	// and the toggle should be returned so the ping loop is unblocked
 	// (once the current action is completed, if that's the case).
 	unhealthy bool
+
+	// If this is the first message from a stream, we ignore the contents
+	// (or lack of contents). The first message is always Idle, and is sent
+	// to ensure the headers are sent and the connection is healthy.
+	first bool
 }
 
 func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, fromPingLoop, fromStreamingLoop <-chan actionMessage) error {
