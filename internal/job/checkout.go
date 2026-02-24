@@ -538,7 +538,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 
 	// First check what the existing remote is, for both logging and debugging
 	// purposes.
-	args := []string{"remote", "get-url", "origin"}
+	args := []string{"config", "--get", "remote.origin.url"}
 	if gitDir != "" {
 		args = append([]string{"--git-dir", gitDir}, args...)
 	}

@@ -297,7 +297,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	// Git should attempt to fetch the shortHash, but fail. Then fallback to fetching
 	// all the heads and tags and checking out the short commit hash.
 	git.ExpectAll([][]any{
-		{"remote", "get-url", "origin"},
+		{"config", "--get", "remote.origin.url"},
 		{"clean", "-ffxdq"},
 		{"fetch", "--", "origin", shortCommitHash},
 		{"config", "remote.origin.fetch"},
@@ -615,7 +615,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"remote", "get-url", "origin"},
+		{"config", "--get", "remote.origin.url"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -678,7 +678,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"remote", "get-url", "origin"},
+		{"config", "--get", "remote.origin.url"},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
 		{"clone", "-v", "--depth=1", "--", tester.Repo.Path, "."},
