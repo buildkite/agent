@@ -164,14 +164,14 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		default: // no error, all good, keep going
 			l := r.agentLogger.WithFields(logger.StringField("jobID", job.ID), logger.StringField("signature", job.Step.Signature.Value))
 			l.Info("Successfully verified job")
-			fmt.Fprintln(r.jobLogs, "~~~ ✅ Job signature verified")
-			fmt.Fprintf(r.jobLogs, "signature: %s\n", job.Step.Signature.Value)
+			fmt.Fprintln(r.jobLogs, "~~~ ✅ Job signature verified") //nolint:errcheck // job log write; errors are non-actionable
+			fmt.Fprintf(r.jobLogs, "signature: %s\n", job.Step.Signature.Value) //nolint:errcheck // job log write; errors are non-actionable
 		}
 	}
 
 	// Validate the repository if the list of allowed repositories is set.
 	if err := r.validateConfigAllowlists(job); err != nil {
-		fmt.Fprintln(r.jobLogs, err.Error())
+		fmt.Fprintln(r.jobLogs, err.Error()) //nolint:errcheck // job log write; errors are non-actionable
 		r.agentLogger.Error(err.Error())
 
 		exit.Status = -1
@@ -186,7 +186,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		ok, err := r.executePreBootstrapHook(ctx, hook)
 		if !ok {
 			// Ensure the Job UI knows why this job resulted in failure
-			fmt.Fprintln(r.jobLogs, "pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details")
+			fmt.Fprintln(r.jobLogs, "pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details") //nolint:errcheck // job log write; errors are non-actionable
 			// But disclose more information in the agent logs
 			r.agentLogger.Error("pre-bootstrap hook rejected this job: %s", err)
 
@@ -297,21 +297,21 @@ func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
 	}
 
 	l.Warn("Job verification failed")
-	fmt.Fprintf(r.jobLogs, "%s Job signature verification failed\n", prefix)
-	fmt.Fprintf(r.jobLogs, "error: %s\n", err)
+	fmt.Fprintf(r.jobLogs, "%s Job signature verification failed\n", prefix)  //nolint:errcheck // job log write; errors are non-actionable
+	fmt.Fprintf(r.jobLogs, "error: %s\n", err)                               //nolint:errcheck // job log write; errors are non-actionable
 
 	if errors.Is(err, ErrNoSignature) {
-		fmt.Fprintln(r.jobLogs, "no signature in job")
+		fmt.Fprintln(r.jobLogs, "no signature in job") //nolint:errcheck // job log write; errors are non-actionable
 	} else if ise := new(invalidSignatureError); errors.As(err, &ise) {
-		fmt.Fprintf(r.jobLogs, "signature: %s\n", r.conf.Job.Step.Signature.Value)
+		fmt.Fprintf(r.jobLogs, "signature: %s\n", r.conf.Job.Step.Signature.Value) //nolint:errcheck // job log write; errors are non-actionable
 	} else if mke := new(missingKeyError); errors.As(err, &mke) {
-		fmt.Fprintf(r.jobLogs, "signature: %s\n", mke.signature)
+		fmt.Fprintf(r.jobLogs, "signature: %s\n", mke.signature) //nolint:errcheck // job log write; errors are non-actionable
 	}
 
 	if behavior == VerificationBehaviourWarn {
 		l.Warn("Job will be run whether or not it can be verified - this is not recommended.")
 		l.Warn("You can change this behavior with the `verification-failure-behavior` agent configuration option.")
-		fmt.Fprintln(r.jobLogs, "Job will be run without verification")
+		fmt.Fprintln(r.jobLogs, "Job will be run without verification") //nolint:errcheck // job log write; errors are non-actionable
 	}
 }
 
@@ -320,7 +320,7 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 	// Run the process. This will block until it finishes.
 	if err := r.process.Run(ctx); err != nil {
 		// Send the error to job logs
-		fmt.Fprintf(r.jobLogs, "Error running job: %s\n", err)
+		fmt.Fprintf(r.jobLogs, "Error running job: %s\n", err) //nolint:errcheck // job log write; errors are non-actionable
 
 		// The process did not run at all, so make sure it fails
 		return core.ProcessExit{
@@ -335,10 +335,12 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 	if isK8s && !r.agentStopping.Load() {
 		switch {
 		case r.cancelled.Load() && k8sProcess.AnyClientIn(kubernetes.StateNotYetConnected):
+			//nolint:errcheck // job log write; errors are non-actionable
 			fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers never connected to the agent. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)?
 `)
 		case k8sProcess.AnyClientIn(kubernetes.StateLost):
+			//nolint:errcheck // job log write; errors are non-actionable
 			fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers connected to the agent, but then stopped communicating without exiting normally. Perhaps the container was OOM-killed?
 `)

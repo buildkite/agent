@@ -16,7 +16,7 @@ func newAnnotateTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
 		case "/jobs/jobid/annotations":
-			io.WriteString(rw, `{"context":"", style:"", body:"abc"}`)
+			io.WriteString(rw, `{"context":"", style:"", body:"abc"}`) //nolint:errcheck // test handler
 		default:
 			t.Errorf("unexpected HTTP request: %s %v", req.Method, req.URL.RequestURI())
 		}

@@ -10,9 +10,9 @@ import (
 	"github.com/urfave/cli"
 )
 
-const envClientErrMessage = `Could not create Job API client: %w
-This command can only be used from hooks or plugins running under a job executor
-where the agent's job API is available (in version v3.64.0 and later of the Buildkite Agent).`
+const envClientErrMessage = `could not create Job API client: %w
+this command can only be used from hooks or plugins running under a job executor
+where the agent's job API is available (in version v3.64.0 and later of the Buildkite Agent)`
 
 const envGetHelpDescription = `Usage:
 
@@ -116,14 +116,14 @@ func envGetAction(c *cli.Context) error {
 		if len(c.Args()) == 1 {
 			// Just print the value.
 			for _, v := range envMap {
-				fmt.Fprintln(c.App.Writer, v)
+				fmt.Fprintln(c.App.Writer, v) //nolint:errcheck // CLI output; errors are non-actionable
 			}
 			break
 		}
 
 		// Print everything.
 		for _, v := range env.FromMap(envMap).ToSlice() {
-			fmt.Fprintln(c.App.Writer, v)
+			fmt.Fprintln(c.App.Writer, v) //nolint:errcheck // CLI output; errors are non-actionable
 		}
 
 	case "json", "json-pretty":

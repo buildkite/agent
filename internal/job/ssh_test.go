@@ -112,8 +112,7 @@ func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
 	}
-	defer keyScan.CheckAndClose(t)
-	//nolint:errcheck // bintest logs to t
+	defer keyScan.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 	sh.Env.Set("PATH", filepath.Dir(keyScan.Path))
 
 	keyScan.

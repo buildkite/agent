@@ -312,12 +312,12 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 		r := reflect.ValueOf(fl)
 		f := reflect.Indirect(r).FieldByName("EnvVar")
 		if !f.IsValid() {
-			return errors.New("EnvVar field not found on flag")
+			return errors.New("envVar field not found on flag")
 		}
 		// split comma delimited env
 		if envVars := f.String(); envVars != "" {
 			for env := range strings.SplitSeq(envVars, ",") {
-				os.Unsetenv(env)
+				os.Unsetenv(env) //nolint:errcheck // best-effort env cleanup
 			}
 		}
 	}
@@ -391,7 +391,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 
 	warnings, err := loader.Load()
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
+		fmt.Fprintf(c.App.ErrWriter, "%s\n", err) //nolint:errcheck // CLI output; errors are non-actionable
 		os.Exit(1)
 	}
 

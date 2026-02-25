@@ -69,7 +69,7 @@ func TestIsStdinIsReadableWithOutputRedirection(t *testing.T) {
 		t.Fatalf(`os.CreateTemp("", "output-redirect") error = %v`, err)
 	}
 
-	defer os.Remove(tmpfile.Name())
+	defer os.Remove(tmpfile.Name()) //nolint:errcheck // best-effort cleanup in test
 
 	if _, err := tmpfile.Write([]byte("output")); err != nil {
 		t.Fatalf(`tmpfile.Write([]byte("output")) error = %v`, err)

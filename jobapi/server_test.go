@@ -123,7 +123,7 @@ func TestServerStartStop(t *testing.T) {
 		t.Fatalf("socket test connection: %v", err)
 	}
 
-	test.Close()
+	test.Close() //nolint:errcheck // test connection verified; close is best-effort
 
 	err = srv.Stop()
 	if err != nil {
@@ -154,7 +154,7 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected initial server start to succeed, got %v", err)
 	}
-	defer srv1.Stop()
+	defer srv1.Stop() //nolint:errcheck // best-effort cleanup in test
 
 	expectedErr := fmt.Sprintf("creating socket server: file already exists at socket path %s", sockName)
 	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), replacer.NewMux())
@@ -446,7 +446,7 @@ func TestCreateRedaction(t *testing.T) {
 	_, err = rdc.Write([]byte("From Quito, go back to Guayaquil.\n"))
 	assert.NilError(t, err)
 
-	mux.Flush()
+	mux.Flush() //nolint:errcheck // best-effort flush in test
 
 	assert.Equal(
 		t,

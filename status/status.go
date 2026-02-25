@@ -165,6 +165,7 @@ func (i *templatedItem) Eval(ctx context.Context) template.HTML {
 
 	data, err := i.cb(ctx)
 	if err != nil {
+		//nolint:errcheck // fallback error template; nothing else to do if this also fails
 		errorTmpl.Execute(&sb, errorData{
 			Operation: "Error from item callback",
 			Error:     err,
@@ -173,6 +174,7 @@ func (i *templatedItem) Eval(ctx context.Context) template.HTML {
 		return template.HTML(sb.String())
 	}
 	if err := i.tmpl.Execute(&sb, data); err != nil {
+		//nolint:errcheck // fallback error template; nothing else to do if this also fails
 		errorTmpl.Execute(&sb, errorData{
 			Operation: "Error while executing item template",
 			Error:     err,
@@ -208,6 +210,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	rootItem.mu.RLock()
 	defer rootItem.mu.RUnlock()
 	if err := statusTmpl.Execute(w, data); err != nil {
+		//nolint:errcheck // fallback error template; nothing else to do if this also fails
 		errorTmpl.Execute(w, errorData{
 			Operation: "Error while executing main template",
 			Error:     err,

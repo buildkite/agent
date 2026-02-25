@@ -97,7 +97,7 @@ func createTestGitRespository() (*gitRepository, error) {
 func newGitRepository() (*gitRepository, error) {
 	tempDirRaw, err := os.MkdirTemp("", "git-repo")
 	if err != nil {
-		return nil, fmt.Errorf("Error creating temp dir: %w", err)
+		return nil, fmt.Errorf("error creating temp dir: %w", err)
 	}
 
 	// io.TempDir on Windows tilde-shortens (8.3 style?) long filenames in the path.
@@ -118,7 +118,7 @@ func newGitRepository() (*gitRepository, error) {
 	// EvalSymlinks seems best? Maybe there's a better way?
 	tempDir, err := filepath.EvalSymlinks(tempDirRaw)
 	if err != nil {
-		return nil, fmt.Errorf("EvalSymlinks for temp dir: %w", err)
+		return nil, fmt.Errorf("evalSymlinks for temp dir: %w", err)
 	}
 
 	gr := &gitRepository{Path: tempDir}

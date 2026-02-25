@@ -57,18 +57,18 @@ func (e *Executor) preparePlugins() error {
 	// Check if we can run plugins (disabled via --no-plugins)
 	if !e.PluginsEnabled {
 		if !e.LocalHooksEnabled {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
+			return fmt.Errorf("plugins have been disabled on this agent with `--no-local-hooks`")
 		} else if !e.CommandEval {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
+			return fmt.Errorf("plugins have been disabled on this agent with `--no-command-eval`")
 		} else {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
+			return fmt.Errorf("plugins have been disabled on this agent with `--no-plugins`")
 		}
 	}
 
 	var err error
 	e.plugins, err = plugin.CreateFromJSON(e.Plugins)
 	if err != nil {
-		return fmt.Errorf("Failed to parse a plugin definition: %w", err)
+		return fmt.Errorf("failed to parse a plugin definition: %w", err)
 	}
 
 	if e.Debug {
@@ -147,7 +147,7 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 
 		checkout, err := e.checkoutPlugin(ctx, p)
 		if err != nil {
-			return fmt.Errorf("Failed to checkout plugin %s: %w", p.Name(), err)
+			return fmt.Errorf("failed to checkout plugin %s: %w", p.Name(), err)
 		}
 
 		err = e.validatePluginCheckout(ctx, checkout)
@@ -183,13 +183,13 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 
 		// Check that the plugin exists in the checkout.
 		if fi, err := e.checkoutRoot.Stat(p.Location); err != nil || !fi.IsDir() {
-			return fmt.Errorf("Vendored plugin path %q must be a directory within the checked-out repository: %w", p.Location, err)
+			return fmt.Errorf("vendored plugin path %q must be a directory within the checked-out repository: %w", p.Location, err)
 		}
 
 		// Similarly, check that the plugin's hooks exists in the checkout.
 		hooksPath := filepath.Join(p.Location, "hooks")
 		if fi, err := e.checkoutRoot.Stat(hooksPath); err != nil || !fi.IsDir() {
-			return fmt.Errorf("Vendored plugin hooks path %q must be a directory within the checked-out repository: %w", hooksPath, err)
+			return fmt.Errorf("vendored plugin hooks path %q must be a directory within the checked-out repository: %w", hooksPath, err)
 		}
 
 		checkout := &pluginCheckout{
@@ -274,7 +274,7 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 			Name:       name,
 			Path:       hookPath,
 			Env:        envMap,
-			PluginName: p.Plugin.DisplayName(),
+			PluginName: p.DisplayName(),
 			SpanAttributes: map[string]string{
 				"plugin.name":        p.Plugin.Name(),
 				"plugin.version":     p.Version,
@@ -304,7 +304,7 @@ func (e *Executor) hasPluginHook(name string) bool {
 func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*pluginCheckout, error) {
 	// Make sure we have a plugin path before trying to do anything
 	if e.PluginsPath == "" {
-		return nil, fmt.Errorf("Can't checkout plugin without a `plugins-path`")
+		return nil, fmt.Errorf("can't checkout plugin without a `plugins-path`")
 	}
 
 	id, err := p.Identifier()
@@ -382,7 +382,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		if err != nil {
 			return nil, fmt.Errorf("opening plugin directory as a root: %w", err)
 		}
-		runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
+		runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot) //nolint:errcheck // cleanup finalizer; close error is non-actionable
 		checkout.Root = pluginRoot
 
 		// Ensure hooks is a directory that exists within the checkout.
@@ -466,7 +466,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	if err != nil {
 		return nil, fmt.Errorf("opening plugin directory as a root: %w", err)
 	}
-	runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
+	runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot) //nolint:errcheck // cleanup finalizer; close error is non-actionable
 	checkout.Root = pluginRoot
 
 	// Ensure hooks is a directory that exists within the checkout.

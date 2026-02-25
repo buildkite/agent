@@ -145,7 +145,7 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 		permission != "projectPrivate" &&
 		permission != "publicRead" &&
 		permission != "publicReadWrite" {
-		return nil, fmt.Errorf("Invalid GS ACL `%s`", permission)
+		return nil, fmt.Errorf("invalid GS ACL `%s`", permission)
 	}
 
 	if permission == "" {

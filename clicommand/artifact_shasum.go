@@ -108,15 +108,15 @@ func searchAndPrintShaSum(
 	searcher := artifact.NewSearcher(l, client, cfg.Build)
 	artifacts, err := searcher.Search(ctx, cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
 	if err != nil {
-		return fmt.Errorf("Error searching for artifacts: %s", err)
+		return fmt.Errorf("error searching for artifacts: %s", err)
 	}
 
 	artifactsFoundLength := len(artifacts)
 
 	if artifactsFoundLength == 0 {
-		return fmt.Errorf("No artifacts matched the search query")
+		return fmt.Errorf("no artifacts matched the search query")
 	} else if artifactsFoundLength > 1 {
-		return fmt.Errorf("Multiple artifacts were found. Try being more specific with the search or scope by step")
+		return fmt.Errorf("multiple artifacts were found, try being more specific with the search or scope by step")
 	} else {
 		a := artifacts[0]
 		l.Debug("Artifact \"%s\" found", a.Path)
@@ -130,7 +130,7 @@ func searchAndPrintShaSum(
 		} else {
 			sha = a.Sha1Sum
 		}
-		fmt.Fprintln(stdout, sha)
+		fmt.Fprintln(stdout, sha) //nolint:errcheck // CLI output; errors are non-actionable
 	}
 
 	return nil

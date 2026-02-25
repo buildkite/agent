@@ -28,10 +28,10 @@ func TestScanLines(t *testing.T) {
 
 	go func() {
 		for line := range strings.SplitSeq(strings.TrimSuffix(longTestOutput, "\n"), "\n") {
-			fmt.Fprintf(pw, "%s\n", line)
+			fmt.Fprintf(pw, "%s\n", line) //nolint:errcheck // test helper goroutine
 			time.Sleep(time.Millisecond * 10)
 		}
-		pw.Close()
+		pw.Close() //nolint:errcheck // signals EOF to reader; error is inconsequential
 	}()
 
 	scanner := process.NewScanner(logger.Discard)

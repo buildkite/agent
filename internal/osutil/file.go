@@ -9,12 +9,12 @@ import (
 func ChmodExecutable(filename string) error {
 	s, err := os.Stat(filename)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
+		return fmt.Errorf("failed to retrieve file information of %q (%s)", filename, err)
 	}
 	if s.Mode()&0o100 == 0 {
 		err = os.Chmod(filename, s.Mode()|0o100)
 		if err != nil {
-			return fmt.Errorf("Failed to mark \"%s\" as executable (%s)", filename, err)
+			return fmt.Errorf("failed to mark %q as executable (%s)", filename, err)
 		}
 	}
 	return nil

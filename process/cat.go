@@ -12,7 +12,7 @@ import (
 func Cat(path string) (string, error) {
 	files, err := filepath.Glob(path)
 	if err != nil {
-		return "", fmt.Errorf("Failed to get a list of files: %w", err)
+		return "", fmt.Errorf("failed to get a list of files: %w", err)
 	}
 
 	var buffer bytes.Buffer
@@ -20,7 +20,7 @@ func Cat(path string) (string, error) {
 	for _, file := range files {
 		data, err := os.ReadFile(file)
 		if err != nil {
-			return "", fmt.Errorf("Could not read file: %s (%T: %w)", file, err, err)
+			return "", fmt.Errorf("could not read file: %s (%T: %w)", file, err, err)
 		}
 
 		buffer.WriteString(string(data))

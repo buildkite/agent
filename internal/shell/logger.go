@@ -69,11 +69,11 @@ func (wl *WriterLogger) Write(b []byte) (int, error) {
 }
 
 func (wl *WriterLogger) Printf(format string, v ...any) {
-	fmt.Fprintf(wl.Writer, format+"\n", v...)
+	fmt.Fprintf(wl.Writer, format+"\n", v...) //nolint:errcheck // logger output; error handling would recurse
 }
 
 func (wl *WriterLogger) Headerf(format string, v ...any) {
-	fmt.Fprintf(wl.Writer, "~~~ "+format+"\n", v...)
+	fmt.Fprintf(wl.Writer, "~~~ "+format+"\n", v...) //nolint:errcheck // logger output; error handling would recurse
 }
 
 func (wl *WriterLogger) Commentf(format string, v ...any) {

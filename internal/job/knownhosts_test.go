@@ -25,8 +25,8 @@ func TestAddingToKnownHosts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen(tcp, %q) error = %v", svr.Addr, err)
 	}
-	go svr.Serve(ln)
-	defer svr.Close()
+	go svr.Serve(ln) //nolint:errcheck // returns when listener closes
+	defer svr.Close() //nolint:errcheck // best-effort cleanup in test
 
 	hostAddr := ln.Addr().String()
 	repoURL := fmt.Sprintf("ssh://git@%s/var/cache/git/project.git", hostAddr)

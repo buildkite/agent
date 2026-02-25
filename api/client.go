@@ -332,7 +332,7 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 			}
 		} else {
 			if strings.Contains(req.Header.Get("Content-Type"), "application/msgpack") {
-				return response, errors.New("Msgpack not supported")
+				return response, errors.New("msgpack not supported")
 			}
 
 			if err = json.NewDecoder(resp.Body).Decode(v); err != nil {

@@ -38,7 +38,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
@@ -72,7 +72,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
@@ -116,13 +116,13 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	submoduleRepo, err := createTestGitRespository()
 	if err != nil {
 		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
-	defer submoduleRepo.Close()
+	defer submoduleRepo.Close() //nolint:errcheck // best-effort cleanup in test
 
 	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
@@ -182,13 +182,13 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	submoduleRepo, err := createTestGitRespository()
 	if err != nil {
 		t.Fatalf("createTestGitRespository() error = %v", err)
 	}
-	defer submoduleRepo.Close()
+	defer submoduleRepo.Close() //nolint:errcheck // best-effort cleanup in test
 
 	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
@@ -238,7 +238,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--depth=1",
@@ -275,7 +275,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 
 	tester, err := NewExecutorTester(mainCtx)
 	assert.NilError(t, err)
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Do one checkout
 	tester.RunAndCheck(t)
@@ -332,7 +332,7 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
 	assert.NilError(t, err)
@@ -361,7 +361,7 @@ func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
 	assert.NilError(t, err)
@@ -396,7 +396,7 @@ func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
 	assert.NilError(t, err)
@@ -445,7 +445,7 @@ func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
 	assert.NilError(t, err)
@@ -475,7 +475,7 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
 	assert.NilError(t, err)
@@ -504,7 +504,7 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/merge")
 	assert.NilError(t, err)
@@ -546,7 +546,7 @@ func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
 	assert.NilError(t, err)
@@ -579,7 +579,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
@@ -642,7 +642,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v --depth=1",
@@ -704,7 +704,7 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	agent := tester.MockAgent(t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
@@ -720,7 +720,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.MustMock(t, "ssh-keyscan").
 		Expect("github.com").
@@ -748,7 +748,7 @@ func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.MustMock(t, "ssh-keyscan").
 		Expect("github.com").
@@ -769,7 +769,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.MustMock(t, "ssh-keyscan").
 		Expect("github.com").
@@ -798,7 +798,7 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Create an existing checkout
 	out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, tester.CheckoutDir())
@@ -834,7 +834,7 @@ func TestForcingACleanCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
@@ -856,7 +856,7 @@ func TestSkippingCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.RunAndCheck(t, "BUILDKITE_SKIP_CHECKOUT=true")
 
@@ -877,7 +877,7 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Create an existing checkout
 	out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, tester.CheckoutDir())
@@ -904,7 +904,7 @@ func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	var cleanCounter int32
 
@@ -932,7 +932,7 @@ func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	var cloneCounter int32
 
@@ -958,15 +958,15 @@ func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	var checkoutCounter int32
 
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		counter := atomic.AddInt32(&checkoutCounter, 1)
-		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
+		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter) //nolint:errcheck // test helper; write error is non-actionable
 		if counter == 1 {
-			fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
+			fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n") //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -991,7 +991,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	script := []string{
 		"#!/usr/bin/env bash",
@@ -1020,7 +1020,7 @@ func TestGitCheckoutWithCommitResolved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{"BUILDKITE_COMMIT_RESOLVED=true"}
 
@@ -1047,7 +1047,7 @@ func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{"BUILDKITE_COMMIT_RESOLVED=false"}
 
@@ -1074,7 +1074,7 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{"BUILDKITE_COMMIT_RESOLVED=false"}
 

@@ -22,7 +22,7 @@ type knownHosts struct {
 func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 	userHomePath, err := osutil.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("Could not find the current users home directory (%s)", err)
+		return nil, fmt.Errorf("could not find the current users home directory (%s)", err)
 	}
 
 	// Construct paths to the known_hosts file
@@ -53,7 +53,7 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck // read-only file; close error is inconsequential
 
 	normalized := knownhosts.Normalize(host)
 
@@ -112,7 +112,7 @@ func (kh *knownHosts) Add(ctx context.Context, host string) error {
 	// Scan the key and then write it to the known_host file
 	keyscanOutput, err := sshKeyScan(ctx, kh.Shell, host)
 	if err != nil {
-		return fmt.Errorf("Could not  `ssh-keyscan`: %w", err)
+		return fmt.Errorf("could not `ssh-keyscan`: %w", err)
 	}
 
 	kh.Shell.Commentf("Added host %q to known hosts at \"%s\"", host, kh.Path)
@@ -120,16 +120,16 @@ func (kh *knownHosts) Add(ctx context.Context, host string) error {
 	// Try and open the existing hostfile in (append_only) mode
 	f, err := os.OpenFile(kh.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o700)
 	if err != nil {
-		return fmt.Errorf("Could not open %q for appending: %w", kh.Path, err)
+		return fmt.Errorf("could not open %q for appending: %w", kh.Path, err)
 	}
 	defer f.Close() //nolint:errcheck // Best-effort cleanup - primary Close error is checked below.
 
 	if _, err := fmt.Fprintf(f, "%s\n", keyscanOutput); err != nil {
-		return fmt.Errorf("Could not write to %q: %w", kh.Path, err)
+		return fmt.Errorf("could not write to %q: %w", kh.Path, err)
 	}
 
 	if err := f.Close(); err != nil {
-		return fmt.Errorf("Could not close %q: %w", kh.Path, err)
+		return fmt.Errorf("could not close %q: %w", kh.Path, err)
 	}
 	return nil
 }
@@ -150,7 +150,7 @@ func (kh *knownHosts) AddFromRepository(ctx context.Context, repository string) 
 	host := resolveGitHost(ctx, kh.Shell, u.Host)
 
 	if err := kh.Add(ctx, host); err != nil {
-		return fmt.Errorf("Failed to add %q to known_hosts file %q: %w", host, u, err)
+		return fmt.Errorf("failed to add %q to known_hosts file %q: %w", host, u, err)
 	}
 
 	return nil
