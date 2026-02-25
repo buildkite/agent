@@ -915,8 +915,19 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
 	})
 
-	// Fetch all secrets
+	// Fetch all secrets. We pass secretLogger (a buffer) here because
+	// FetchSecrets takes a logger.Logger, but retry warnings within it need
+	// to reach the user. We flush those from the buffer afterwards.
 	fetchedSecrets, errs := secrets.FetchSecrets(ctx, secretLogger, apiClient, e.JobID, keys, 10)
+
+	// Surface any retry warnings that were buffered during fetching.
+	// The buffer logger prefixes warn messages with "[warn] ".
+	for _, msg := range secretLogger.Messages {
+		if after, ok := strings.CutPrefix(msg, "[warn] "); ok {
+			e.shell.Warningf("%s", after)
+		}
+	}
+
 	if len(errs) > 0 {
 		var errorMsg strings.Builder
 		for _, err := range errs {
