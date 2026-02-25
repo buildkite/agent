@@ -538,13 +538,33 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 
 	// First check what the existing remote is, for both logging and debugging
 	// purposes.
-	args := []string{"config", "--get", "remote.origin.url"}
+
+	// Check if there are multiple URLs configured (e.g., via git remote set-url --add).
+	args := []string{"config", "--get-all", "remote.origin.url"}
 	if gitDir != "" {
 		args = append([]string{"--git-dir", gitDir}, args...)
 	}
-	gotURL, err := e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
+	allURLs, err := e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
 	if err != nil {
 		return false, err
+	}
+
+	var gotURL string
+	urls := strings.Split(strings.TrimSpace(allURLs), "\n")
+	if len(urls) > 1 {
+		// Multiple URLs configured - fall back to git remote get-url which
+		// handles this correctly (returns primary fetch URL).
+		args = []string{"remote", "get-url", "origin"}
+		if gitDir != "" {
+			args = append([]string{"--git-dir", gitDir}, args...)
+		}
+		gotURL, err = e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		// Single URL - use config output directly to avoid insteadOf transformation.
+		gotURL = urls[0]
 	}
 
 	if gotURL == repository {

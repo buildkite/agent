@@ -297,7 +297,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	// Git should attempt to fetch the shortHash, but fail. Then fallback to fetching
 	// all the heads and tags and checking out the short commit hash.
 	git.ExpectAll([][]any{
-		{"config", "--get", "remote.origin.url"},
+		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-ffxdq"},
 		{"fetch", "--", "origin", shortCommitHash},
 		{"config", "remote.origin.fetch"},
@@ -615,7 +615,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"config", "--get", "remote.origin.url"},
+		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -678,7 +678,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]any{
-		{"config", "--get", "remote.origin.url"},
+		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
 		{"clone", "-v", "--depth=1", "--", tester.Repo.Path, "."},
@@ -1091,6 +1091,63 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 
 	agent := tester.MockAgent(t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1).Exactly(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestMultipleRemoteURLsFallsBackToGetURL(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+	}
+
+	// Simulate state from a previous checkout
+	if err := os.MkdirAll(tester.CheckoutDir(), 0o755); err != nil {
+		t.Fatalf("error creating dir to clone from: %s", err)
+	}
+	cmd := exec.Command("git", "clone", "-v", "--", tester.Repo.Path, ".")
+	cmd.Dir = tester.CheckoutDir()
+	if _, err = cmd.Output(); err != nil {
+		t.Fatalf("error cloning test repo: %s", err)
+	}
+
+	// Add a second remote URL to simulate multi-URL configuration
+	cmd = exec.Command("git", "remote", "set-url", "--add", "origin", "https://example.com/extra.git")
+	cmd.Dir = tester.CheckoutDir()
+	if _, err = cmd.Output(); err != nil {
+		t.Fatalf("error adding second remote URL: %s", err)
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// Assert the expected git commands - should call config --get-all first,
+	// then fall back to remote get-url when multiple URLs are detected
+	git.ExpectAll([][]any{
+		{"config", "--get-all", "remote.origin.url"},
+		{"remote", "get-url", "origin"},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
