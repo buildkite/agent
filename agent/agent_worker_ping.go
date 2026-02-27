@@ -12,7 +12,7 @@ import (
 )
 
 // runPingLoop runs the (classical) loop that pings Buildkite for work.
-func (a *AgentWorker) runPingLoop(ctx context.Context, toggle chan struct{}, outCh chan<- actionMessage) error {
+func (a *AgentWorker) runPingLoop(ctx context.Context, baton *BatonHolder, outCh chan<- actionMessage) error {
 	a.logger.Debug("[runPingLoop] Starting")
 	defer a.logger.Debug("[runPingLoop] Exiting")
 
@@ -84,13 +84,14 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, toggle chan struct{}, out
 			// (the ping loop) _should_ be blocked from continuing.
 			// Return the token after any work is complete, to prevent the
 			// streaming loop from taking back over until then.
-			a.logger.Debug("[runPingLoop] Waiting for toggle")
+			a.logger.Debug("[runPingLoop] Waiting for baton")
 			select {
-			case <-toggle: // the toggle is ours!
-				a.logger.Debug("[runPingLoop] Acquired the toggle")
+			case <-baton.Acquire():
+				baton.Acquired()
+				a.logger.Debug("[runPingLoop] Acquired the baton")
 				defer func() { // <- this is why the loop body is in a func
-					a.logger.Debug("[runPingLoop] Relinquishing the toggle")
-					toggle <- struct{}{}
+					a.logger.Debug("[runPingLoop] Releasing the baton")
+					baton.Release()
 				}()
 
 			case <-a.stop:

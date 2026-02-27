@@ -282,48 +282,15 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		}
 	}
 
-	// toggle ensures only one of the loops is producing actions.
-	//
-	// Here's how this works:
-	//
-	// As a channel, toggle is in one of two states: either it is empty, or
-	// contains 1 struct{}{} "value" (it's a buffered channel). But we can
-	// think of the system as having three possible states:
-	//
-	// - the toggle is available
-	// - the ping loop has the toggle
-	// - the debouncer loop has the toggle
-	//
-	// If toggle contains a value, then either loop can "take" the toggle
-	// immediately by receiving from the channel. Otherwise, it has to wait
-	// until a value is available for its receive operation to unblock.
-	// Similarly, "relinquishing" the toggle is a matter of sending a struct{}{}
-	// value to the channel. (Each side can unblock the other side.)
-	//
-	// Each loop can be doing other things while waiting to take the toggle,
-	// because a select statement will choose any operation that can proceed.
-	//
-	// Each loop keeps track of whether it has currently "has" the toggle or
-	// not, and each has a different policy for taking and relinquishing it.
-	//
-	// The ping loop waits for the toggle to become available and takes it
-	// before pinging, and relinquishes the toggle as soon as the action
-	// resulting from a ping has completed. In other words, the ping loop tries
-	// not to keep the toggle and politely waits for it.
-	//
-	// The debouncer (acting for the streaming side) instead holds the toggle
-	// as long as possible, until the stream becomes unhealthy. The ping loop
-	// is usually already waiting and ready to take the toggle at that point.
-	// If the streaming side becomes healthy again, the debouncer will try to
-	// take the toggle back, and most of the time this is quick because the ping
-	// loop spends most of its time waiting in between pings. But if the ping
-	// loop still has the toggle, that must be because the ping loop still has
-	// an action in progress (probably a job), so the debouncer must wait.
-	//
-	// The toggle initially belongs to the streaming/debouncer side, unless the
-	// ping mode is ping-only, in which case we seed toggle with a value below
-	// so the ping loop can simply take it.
-	toggle := make(chan struct{}, 1)
+	// baton ensures only one of the loops (ping or streaming/debouncer) is
+	// producing actions at a time. The debouncer holds the baton as long as
+	// streaming is healthy; when unhealthy it releases the baton so the ping
+	// loop can take over. The ping loop acquires before each ping and releases
+	// immediately after the resulting action completes.
+	baton := NewBaton()
+	pingHolder := baton.Holder()
+	debouncerHolder := baton.Holder()
+	debouncerHolder.Acquired()
 
 	// More channels to enable communication between the various loops.
 	fromPingLoopCh := make(chan actionMessage)      // ping loop to action handler
@@ -337,7 +304,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 
 	pingLoop := func() {
 		defer wg.Done()
-		errCh <- a.runPingLoop(ctx, toggle, fromPingLoopCh)
+		errCh <- a.runPingLoop(ctx, pingHolder, fromPingLoopCh)
 	}
 	streamingLoop := func() {
 		defer wg.Done()
@@ -345,7 +312,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	}
 	debouncerLoop := func() {
 		defer wg.Done()
-		errCh <- a.runDebouncer(ctx, toggle, fromDebouncerCh, fromStreamingLoopCh)
+		errCh <- a.runDebouncer(ctx, debouncerHolder, fromDebouncerCh, fromStreamingLoopCh)
 	}
 
 	var loops []func()
@@ -354,14 +321,13 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		loops = []func(){pingLoop, streamingLoop, debouncerLoop}
 
 	case "ping-only":
-		// Only add the ping loop, and let it take the toggle.
-		loops = []func(){pingLoop}
-		toggle <- struct{}{}
+		debouncerHolder.Release()
 		fromDebouncerCh = nil // prevent action loop listening to streaming side
+		loops = []func(){pingLoop}
 
 	case "stream-only":
-		loops = []func(){streamingLoop, debouncerLoop}
 		fromPingLoopCh = nil // prevent action loop listening to ping side
+		loops = []func(){streamingLoop, debouncerLoop}
 	}
 
 	// There's always an action handler.

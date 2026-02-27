@@ -28,7 +28,7 @@ import (
 // action handler directly, then the "resume" may cause the agent to
 // exit in a one-shot mode, even though the second "pause" means the
 // user actually *did* want the agent to be paused.
-func (a *AgentWorker) runDebouncer(ctx context.Context, toggle chan struct{}, outCh chan<- actionMessage, inCh <-chan actionMessage) error {
+func (a *AgentWorker) runDebouncer(ctx context.Context, baton *BatonHolder, outCh chan<- actionMessage, inCh <-chan actionMessage) error {
 	a.logger.Debug("[runDebouncer] Starting")
 	defer a.logger.Debug("[runDebouncer] Exiting")
 
@@ -36,22 +36,10 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, toggle chan struct{}, ou
 	// loop know to stop listening to it.
 	defer close(outCh)
 
-	// We begin holding the toggle. (The ping loop is prevented from running.)
-	haveToggle := true
-
-	relinquishToggle := func() {
-		if !haveToggle {
-			// Nothing to do
-			return
-		}
-		a.logger.Debug("[runDebouncer] Relinquishing the toggle")
-		toggle <- struct{}{}
-		haveToggle = false
-	}
-
-	// Give up the toggle when we're no longer running so that the regular
+	// Give up the baton when we're no longer running so that the regular
 	// ping loop can have a go (if it hasn't also ended).
-	defer relinquishToggle()
+	// Release is idempotent, so this is safe even if already released.
+	defer baton.Release()
 
 	// This "closed" channel is used for a little hack below.
 	// `<-cmp.Or(lastActionResult, closed)` will receive from:
@@ -73,9 +61,9 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, toggle chan struct{}, ou
 	pending := false
 
 	// Is the stream healthy?
-	// If so, take the toggle (which blocks the ping loop).
-	// If not, return the toggle (unblocking the ping loop).
-	// Returning the toggle may have to wait for the current action to complete.
+	// If so, take the baton (which blocks the ping loop).
+	// If not, release the baton (unblocking the ping loop).
+	// Releasing may have to wait for the current action to complete.
 	healthy := true
 
 	for {
@@ -87,10 +75,9 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, toggle chan struct{}, ou
 			a.logger.Debug("[runDebouncer] Stopping due to context cancel")
 			return ctx.Err()
 
-		case <-iif(healthy, toggle): // if the stream is healthy, take the toggle
-			a.logger.Debug("[runDebouncer] Taking the toggle")
-			// We have the toggle again!
-			haveToggle = true
+		case <-iif(healthy, baton.Acquire()): // if the stream is healthy, acquire the baton
+			baton.Acquired()
+			a.logger.Debug("[runDebouncer] Acquired the baton")
 
 			// Do we have a pending message?
 			if !pending {
@@ -129,33 +116,33 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, toggle chan struct{}, ou
 			if !healthy {
 				a.logger.Debug("[runDebouncer] Streaming loop is unhealthy")
 
-				// It is not, so unblock the toggle as soon as we can (when the
+				// It is not, so release the baton as soon as we can (when the
 				// current action is done).
 				select {
 				case <-cmp.Or(lastActionResult, closed):
 					// The last action is done, or there is no last action.
-					// We're unhealthy, so relinquish the toggle now.
-					relinquishToggle()
+					// We're unhealthy, so release the baton now.
+					baton.Release()
 
 				default:
-					// No, wait until the action is complete to relinquish.
+					// No, wait until the action is complete to release.
 					// (Logic is in <-lastActionResult branch.)
 				}
 				continue
 			}
 
-			// Yes, we're healthy. Do we have the toggle?
-			if !haveToggle {
-				// No, the ping loop is currently in possession of the toggle.
+			// Yes, we're healthy. Do we have the baton?
+			if !baton.Held() {
+				// No, the ping loop currently holds the baton.
 				// Debounce messages until we have it.
-				a.logger.Debug("[runDebouncer] Debouncing (action %q, jobID %q) while waiting for toggle", msg.action, msg.jobID)
+				a.logger.Debug("[runDebouncer] Debouncing (action %q, jobID %q) while waiting for baton", msg.action, msg.jobID)
 				nextAction = msg.action
 				nextJobID = msg.jobID
 				pending = true
 				continue
 			}
 
-			// Yes, we have the toggle.
+			// Yes, we have the baton.
 			// Can we send this message right away?
 			select {
 			case <-cmp.Or(lastActionResult, closed):
@@ -192,10 +179,10 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, toggle chan struct{}, ou
 			lastActionResult = nil
 			// Is the streaming side healthy?
 			if !healthy {
-				// No, we're not healthy. If we have the toggle, now is the
+				// No, we're not healthy. If we have the baton, now is the
 				// time to give it up, falling back to the ping loop.
 				a.logger.Debug("[runDebouncer] Streaming loop wasn't healthy earlier")
-				relinquishToggle()
+				baton.Release()
 				continue
 			}
 			// Yes, we're healthy. Is there a pending message to send?
