@@ -654,6 +654,15 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	gitFetchFlags := e.GitFetchFlags
 
+	// If configured, skip the fetch when the commit already exists locally.
+	// This is useful when a pre-populated git mirror is used with --reference,
+	// as the commit objects are already reachable and fetching is redundant.
+	skipFetch := e.SkipFetchExistingCommits && e.Commit != "HEAD" && hasGitCommit(ctx, e.shell, ".git", e.Commit)
+	if skipFetch {
+		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
+	}
+
+	if !skipFetch {
 	switch {
 	case e.RefSpec != "":
 		// If a refspec is provided then use it instead.
@@ -737,6 +746,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			return err
 		}
 	}
+	} // !skipFetch
 
 	gitCheckoutFlags := e.GitCheckoutFlags
 

@@ -132,6 +132,9 @@ type ExecutorConfig struct {
 	// Skip updating the Git mirror before using it
 	GitMirrorsSkipUpdate bool `env:"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"`
 
+	// Skip fetch if the commit is already available in the local checkout
+	SkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
+
 	// Path to the buildkite-agent binary
 	BinPath string
 

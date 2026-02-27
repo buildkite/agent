@@ -167,6 +167,87 @@ func TestSkipCheckout(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDefaultCheckoutPhase_SkipFetchExistingCommits(t *testing.T) {
+	t.Parallel()
+
+	assert := require.New(t)
+	ctx := context.Background()
+
+	sh, err := shell.New()
+	assert.NoError(err)
+
+	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
+	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
+	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
+
+	s := githttptest.NewServer()
+	defer s.Close()
+
+	projectName := "project-skip-fetch"
+
+	err = s.CreateRepository(projectName)
+	assert.NoError(err)
+
+	out, err := s.InitRepository(projectName)
+	if err != nil {
+		t.Fatalf("failed to init repository: %v output: %s", err, string(out))
+	}
+
+	commit, out, err := s.PushBranch(projectName, "main")
+	if err != nil {
+		t.Fatalf("failed to push branch: %v output: %s", err, string(out))
+	}
+
+	buildDir, err := os.MkdirTemp("", "build-path-")
+	assert.NoError(err)
+	t.Cleanup(func() {
+		os.RemoveAll(buildDir) //nolint:errcheck // Best-effort cleanup.
+	})
+
+	checkoutDir, err := os.MkdirTemp("", "checkout-path-")
+	assert.NoError(err)
+	t.Cleanup(func() {
+		os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
+	})
+
+	// First checkout: clone the repo so the commit is available locally
+	initialExecutor := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			Commit:        commit,
+			Branch:        "main",
+			BuildPath:     buildDir,
+			Repository:    s.RepoURL(projectName),
+			CleanCheckout: false,
+			GitCleanFlags: "-f -d -x",
+		},
+	}
+
+	sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
+
+	err = initialExecutor.defaultCheckoutPhase(ctx)
+	assert.NoError(err)
+
+	// Second checkout: with SkipFetchExistingCommits enabled.
+	// The commit is already present locally, so fetch should be skipped.
+	skipFetchExecutor := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			Commit:                   commit,
+			Branch:                   "main",
+			BuildPath:                buildDir,
+			Repository:               s.RepoURL(projectName),
+			CleanCheckout:            false,
+			GitCleanFlags:            "-f -d -x",
+			SkipFetchExistingCommits: true,
+		},
+	}
+
+	err = skipFetchExecutor.defaultCheckoutPhase(ctx)
+	assert.NoError(err)
+}
+
 func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	if race.IsRaceTest {
 		t.Skip("this test simulates the agent recovering from a race condition, and needs to create one to test it.")

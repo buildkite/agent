@@ -17,6 +17,7 @@ type AgentConfiguration struct {
 	GitMirrorsPath              string
 	GitMirrorsLockTimeout       int
 	GitMirrorsSkipUpdate        bool
+	SkipFetchExistingCommits    bool
 	PluginsPath                 string
 	GitCheckoutFlags            string
 	GitCloneFlags               string

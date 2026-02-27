@@ -148,8 +148,9 @@ type AgentStartConfig struct {
 	GitFetchFlags         string `cli:"git-fetch-flags"`
 	GitMirrorsPath        string `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout int    `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules       bool   `cli:"no-git-submodules"`
+	GitMirrorsSkipUpdate     bool   `cli:"git-mirrors-skip-update"`
+	SkipFetchExistingCommits bool   `cli:"git-skip-fetch-existing-commits"`
+	NoGitSubmodules          bool   `cli:"no-git-submodules"`
 	SkipCheckout          bool   `cli:"skip-checkout"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
@@ -538,6 +539,11 @@ var AgentStartCommand = cli.Command{
 			Name:   "git-mirrors-skip-update",
 			Usage:  "Skip updating the Git mirror (default: false)",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+		},
+		cli.BoolFlag{
+			Name:   "git-skip-fetch-existing-commits",
+			Usage:  "Skip fetch in checkout if the commit already exists in the local git repo (default: false)",
+			EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -1037,6 +1043,7 @@ var AgentStartCommand = cli.Command{
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
+			SkipFetchExistingCommits:     cfg.SkipFetchExistingCommits,
 			HooksPath:                    cfg.HooksPath,
 			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
 			PluginsPath:                  cfg.PluginsPath,

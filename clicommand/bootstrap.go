@@ -77,6 +77,7 @@ type BootstrapConfig struct {
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
+	SkipFetchExistingCommits     bool     `cli:"git-skip-fetch-existing-commits"`
 	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
@@ -286,6 +287,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Skip updating the Git mirror (default: false)",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		},
+		cli.BoolFlag{
+			Name:   "git-skip-fetch-existing-commits",
+			Usage:  "Skip fetch in checkout if the commit already exists in the local git repo (default: false)",
+			EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+		},
 		cli.StringFlag{
 			Name:   "bin-path",
 			Value:  "",
@@ -487,6 +493,7 @@ var BootstrapCommand = cli.Command{
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
+			SkipFetchExistingCommits:     cfg.SkipFetchExistingCommits,
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			HooksPath:                    cfg.HooksPath,
