@@ -138,6 +138,12 @@ var KubernetesBootstrapCommand = cli.Command{
 			environ.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(buildPath, "buildkite"))
 		}
 
+		// For k8s agents, use shared plugin paths by default since each pod runs ephemerally.
+		// This enables plugin caching across jobs when using persistent storage.
+		if _, exists := environ.Get("BUILDKITE_PLUGINS_PATH_INCLUDES_AGENT_NAME"); !exists {
+			environ.Set("BUILDKITE_PLUGINS_PATH_INCLUDES_AGENT_NAME", "false")
+		}
+
 		// BUILDKITE_BIN_PATH is a funny one. The bootstrap adds it to PATH,
 		// and the agent deduces it from its own path (as we do below), but in
 		// the k8s stack the agent could run from two different locations:
