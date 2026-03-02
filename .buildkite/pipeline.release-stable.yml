@@ -1,12 +1,12 @@
 steps:
-  - wait
-
   - name: ":spiral_note_pad: Check Changelog"
     command: ".buildkite/steps/check-changelog.sh"
-
-  - wait
+    key: "check_changelog"
 
   - name: ":s3: Upload Binaries to S3"
+    key: "upload_binaries_to_s3"
+    depends_on:
+      - "check_changelog"
     command: ".buildkite/steps/publish-to-s3.sh"
     env:
       CODENAME: "stable"
@@ -31,6 +31,9 @@ steps:
           mount-buildkite-agent: true
 
   - name: ":octocat: :rocket: Create Github Release (if necessary)"
+    key: "create_github_release_if_necessary"
+    depends_on:
+      - "check_changelog"
     command: ".buildkite/steps/github-release.sh"
     env:
       CODENAME: "stable"
@@ -55,6 +58,9 @@ steps:
           mount-buildkite-agent: true
 
   - name: ":redhat: Publish RPM Package"
+    key: "publish_rpm_package"
+    depends_on:
+      - "check_changelog"
     command: ".buildkite/steps/publish-rpm-package.sh"
     env:
       CODENAME: "stable"
@@ -84,6 +90,9 @@ steps:
           limit: 3
 
   - group: ":redhat: Publish RPM Package to Buildkite Packages"
+    key: "publish_rpm_package_to_buildkite_packages"
+    depends_on:
+      - "check_changelog"
     steps:
       - name: ":redhat: Publish {{matrix.pkg_arch}} RPM Package to Buildkite Packages"
         plugins:
@@ -117,6 +126,9 @@ steps:
               skip: true
 
   - name: ":debian: Publish Debian Package"
+    key: "publish_debian_package"
+    depends_on:
+      - "check_changelog"
     command: ".buildkite/steps/publish-debian-package.sh"
     env:
       CODENAME: "stable"
@@ -144,6 +156,9 @@ steps:
             - "/root/.gnupg"
 
   - group: ":debian: Publish Debian Package to Buildkite Packages"
+    key: "publish_debian_package_to_buildkite_packages"
+    depends_on:
+      - "check_changelog"
     steps:
       - name: ":debian: Publish {{matrix.pkg_arch}} Debian Package to Buildkite Packages"
         plugins:
@@ -181,6 +196,9 @@ steps:
               skip: true
 
   - group: ":docker: Publish Docker Images"
+    key: "publish_docker_images"
+    depends_on:
+      - "check_changelog"
     steps:
       - name: ":docker: Publish Docker Images to {{matrix.registry}}"
         command: ".buildkite/steps/publish-docker-images.sh"
@@ -208,9 +226,14 @@ steps:
             - with: { registry: "packages.buildkite.com" }
               soft_fail: true
 
-  - wait
-
   - name: ":beer: Publish Homebrew Package"
+    depends_on:
+      - "upload_binaries_to_s3"
+      - "create_github_release_if_necessary"
+      - "publish_rpm_package"
+      - "publish_rpm_package_to_buildkite_packages"
+      - "publish_debian_package"
+      - "publish_debian_package_to_buildkite_packages"
     command: ".buildkite/steps/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
     env:
