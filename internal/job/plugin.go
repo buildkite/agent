@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/roko"
@@ -343,6 +344,15 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	}
 	if e.Debug {
 		e.shell.Commentf("Plugin checkout paths - PluginDir: %q, HooksDir: %q", checkout.PluginDir, checkout.HooksDir)
+	}
+
+	// Route zip plugins to zip handler
+	if p.IsZipPlugin() {
+		if !experiments.IsEnabled(ctx, experiments.ZipPlugins) {
+			return nil, fmt.Errorf("zip plugins require the %q experiment to be enabled", experiments.ZipPlugins)
+		}
+		e.shell.Commentf("Plugin %q will be downloaded as zip archive", p.DisplayName())
+		return checkout, e.checkoutZipPlugin(ctx, p, checkout, pluginDirectory)
 	}
 
 	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting

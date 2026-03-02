@@ -134,6 +134,20 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 	return plugins, nil
 }
 
+// IsZipPlugin returns true if this plugin is a zip archive.
+func (p *Plugin) IsZipPlugin() bool {
+	return strings.HasPrefix(p.Scheme, "zip+")
+}
+
+// ZipBaseScheme returns the base scheme for a zip plugin (e.g., "https" for "zip+https"),
+// or the scheme itself if it's not a zip plugin.
+func (p *Plugin) ZipBaseScheme() string {
+	if p.IsZipPlugin() {
+		return strings.TrimPrefix(p.Scheme, "zip+")
+	}
+	return p.Scheme
+}
+
 // Name returns the name of the plugin.
 func (p *Plugin) Name() string {
 	if p.Location == "" {

@@ -32,6 +32,7 @@ const (
 	PTYRaw                         = "pty-raw"
 	ResolveCommitAfterCheckout     = "resolve-commit-after-checkout"
 	PropagateAgentConfigVars       = "propagate-agent-config-vars"
+	ZipPlugins                     = "zip-plugins"
 
 	// Promoted experiments
 	ANSITimestamps         = "ansi-timestamps"
@@ -57,6 +58,7 @@ var (
 		PTYRaw:                         {},
 		ResolveCommitAfterCheckout:     {},
 		PropagateAgentConfigVars:       {},
+		ZipPlugins:                     {},
 	}
 
 	Promoted = map[string]string{

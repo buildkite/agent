@@ -1,8 +1,10 @@
 package integration
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
 	"gotest.tools/v3/assert"
@@ -600,4 +603,230 @@ func replacePluginPathInEnv(originalEnv []string, pluginsDir string) (newEnv []s
 		}
 	}
 	return newEnv
+}
+
+func TestZipPluginFromLocalFile(t *testing.T) {
+	t.Parallel()
+
+	// Enable zip plugins experiment
+	ctx, _ := experiments.Enable(mainCtx, experiments.ZipPlugins)
+
+	tester, err := NewExecutorTester(ctx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	pluginMock := tester.MustMock(t, "my-plugin")
+
+	hooks := map[string][]string{
+		"environment": {
+			"#!/usr/bin/env bash",
+			"export ZIP_PLUGIN_LOADED=yes",
+			pluginMock.Path + " testing",
+		},
+	}
+	if runtime.GOOS == "windows" {
+		hooks = map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set ZIP_PLUGIN_LOADED=yes",
+				pluginMock.Path + " testing",
+			},
+		}
+	}
+
+	// Create a zip plugin
+	zipPath := createTestZipPlugin(t, hooks)
+	defer os.Remove(zipPath)
+
+	// Create plugin JSON with zip+file:// URL
+	pluginJSON := fmt.Sprintf(`[{"zip+file:///%s": {"config": "value"}}]`,
+		strings.ReplaceAll(filepath.ToSlash(zipPath), "\\", "/"))
+
+	env := []string{
+		"BUILDKITE_PLUGINS=" + pluginJSON,
+	}
+
+	pluginMock.Expect("testing").Once().AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, "ZIP_PLUGIN_LOADED=yes"); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, "ZIP_PLUGIN_LOADED=yes"); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestZipPluginMissingHooksDirectory(t *testing.T) {
+	t.Parallel()
+
+	// Enable zip plugins experiment
+	ctx, _ := experiments.Enable(mainCtx, experiments.ZipPlugins)
+
+	tester, err := NewExecutorTester(ctx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Create a zip file without hooks directory
+	zipPath := createInvalidZipPlugin(t)
+	defer os.Remove(zipPath)
+
+	// Create plugin JSON with zip+file:// URL
+	pluginJSON := fmt.Sprintf(`[{"zip+file:///%s": {}}]`,
+		strings.ReplaceAll(filepath.ToSlash(zipPath), "\\", "/"))
+
+	env := []string{
+		"BUILDKITE_PLUGINS=" + pluginJSON,
+	}
+
+	// This should fail because the zip doesn't have a hooks directory
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatalf("tester.Run() should have failed for zip without hooks directory")
+	}
+
+	// The job should fail (we got an error), which is what we expect
+	// The actual error message will be in the shell output
+}
+
+// createTestZipPlugin creates a zip file containing a plugin with the given hooks
+func createTestZipPlugin(t *testing.T, hooks map[string][]string) string {
+	t.Helper()
+
+	// Create temp directory for plugin content
+	tempDir := t.TempDir()
+	hooksDir := filepath.Join(tempDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o700); err != nil {
+		t.Fatalf("os.MkdirAll(%q, 0o700) = %v", hooksDir, err)
+	}
+
+	// Write hook files
+	for hook, lines := range hooks {
+		data := []byte(strings.Join(lines, "\n"))
+		hookPath := filepath.Join(hooksDir, hook)
+		if err := os.WriteFile(hookPath, data, 0o700); err != nil {
+			t.Fatalf("os.WriteFile(%q, data, 0o700) = %v", hookPath, err)
+		}
+	}
+
+	// Create zip file
+	zipFile, err := os.CreateTemp("", "test-plugin-*.zip")
+	if err != nil {
+		t.Fatalf("os.CreateTemp() error = %v", err)
+	}
+	zipPath := zipFile.Name()
+
+	if err := createZipArchive(tempDir, zipPath); err != nil {
+		t.Fatalf("createZipArchive() error = %v", err)
+	}
+
+	return zipPath
+}
+
+// createInvalidZipPlugin creates a zip file without a hooks directory
+func createInvalidZipPlugin(t *testing.T) string {
+	t.Helper()
+
+	// Create temp directory without hooks
+	tempDir := t.TempDir()
+
+	// Write a dummy file
+	dummyPath := filepath.Join(tempDir, "README.md")
+	if err := os.WriteFile(dummyPath, []byte("Test plugin"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile(%q) = %v", dummyPath, err)
+	}
+
+	// Create zip file
+	zipFile, err := os.CreateTemp("", "invalid-plugin-*.zip")
+	if err != nil {
+		t.Fatalf("os.CreateTemp() error = %v", err)
+	}
+	zipPath := zipFile.Name()
+
+	if err := createZipArchive(tempDir, zipPath); err != nil {
+		t.Fatalf("createZipArchive() error = %v", err)
+	}
+
+	return zipPath
+}
+
+// createZipArchive creates a zip archive from a source directory
+func createZipArchive(sourceDir, zipPath string) error {
+	// Create zip file
+	zipFile, err := os.Create(zipPath)
+	if err != nil {
+		return err
+	}
+	defer zipFile.Close()
+
+	// Create zip writer
+	zipWriter := zip.NewWriter(zipFile)
+	defer zipWriter.Close()
+
+	// Walk through source directory and add files to zip
+	return filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Get relative path
+		relPath, err := filepath.Rel(sourceDir, path)
+		if err != nil {
+			return err
+		}
+
+		// Skip root directory
+		if relPath == "." {
+			return nil
+		}
+
+		// Create header
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+
+		// Use forward slashes in zip file
+		header.Name = filepath.ToSlash(relPath)
+
+		// Set method to Deflate for better compression
+		if !info.IsDir() {
+			header.Method = zip.Deflate
+		}
+
+		// Create writer for file
+		writer, err := zipWriter.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		// If it's a directory, we're done
+		if info.IsDir() {
+			return nil
+		}
+
+		// Copy file content
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		_, err = io.Copy(writer, file)
+		return err
+	})
 }
