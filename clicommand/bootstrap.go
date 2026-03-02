@@ -69,6 +69,7 @@ type BootstrapConfig struct {
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
 	SkipCheckout                 bool     `cli:"skip-checkout"`
+	GitSkipFetchExistingCommits  bool     `cli:"git-skip-fetch-existing-commits"`
 	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
@@ -232,6 +233,11 @@ var BootstrapCommand = cli.Command{
 			Name:   "skip-checkout",
 			Usage:  "Skip the git checkout phase entirely",
 			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
+		},
+		cli.BoolFlag{
+			Name:   "git-skip-fetch-existing-commits",
+			Usage:  "Skip git fetch if the commit already exists in the local git directory",
+			EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 		},
 		cli.StringFlag{
 			Name:   "git-checkout-flags",
@@ -475,6 +481,7 @@ var BootstrapCommand = cli.Command{
 			SignalGracePeriod:            signalGracePeriod,
 			CleanCheckout:                cfg.CleanCheckout,
 			SkipCheckout:                 cfg.SkipCheckout,
+			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,

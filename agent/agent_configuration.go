@@ -25,6 +25,7 @@ type AgentConfiguration struct {
 	GitFetchFlags               string
 	GitSubmodules               bool
 	SkipCheckout                bool
+	GitSkipFetchExistingCommits bool
 	AllowedRepositories         []*regexp.Regexp
 	AllowedPlugins              []*regexp.Regexp
 	AllowedEnvironmentVariables []*regexp.Regexp

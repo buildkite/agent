@@ -78,6 +78,9 @@ type ExecutorConfig struct {
 	// Skip the checkout phase entirely
 	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
 
+	// Skip git fetch if the commit already exists locally
+	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
+
 	// Flags to pass to "git checkout" command
 	GitCheckoutFlags string `env:"BUILDKITE_GIT_CHECKOUT_FLAGS"`
 
