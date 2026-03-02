@@ -16,7 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/buildkite/agent/v3/api"
+	agentedgev1 "github.com/buildkite/agent/v3/api/proto/gen"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
@@ -49,8 +51,6 @@ func TestDisconnect(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ctx := context.Background()
-
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
@@ -73,7 +73,7 @@ func TestDisconnect(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.Disconnect(ctx)
+	err := worker.Disconnect(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"[info] Disconnecting...", "[info] Disconnected"}, l.Messages)
@@ -100,8 +100,6 @@ func TestDisconnectRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ctx := context.Background()
-
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
@@ -126,7 +124,7 @@ func TestDisconnectRetry(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.Disconnect(ctx)
+	err := worker.Disconnect(t.Context())
 	assert.NoError(t, err)
 
 	// 2 failed attempts sleep 1 second each
@@ -141,9 +139,6 @@ func TestDisconnectRetry(t *testing.T) {
 
 func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	jobID := "some-uuid"
 
@@ -175,7 +170,7 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.AcquireAndRunJob(ctx, jobID)
+	err := worker.AcquireAndRunJob(t.Context(), jobID)
 	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
@@ -183,9 +178,6 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 
 func TestAcquireAndRunJobWaiting(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
@@ -233,7 +225,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 		agentConfiguration: AgentConfiguration{},
 	}
 
-	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
+	err := worker.AcquireAndRunJob(t.Context(), "waitinguuid")
 	assert.ErrorContains(t, err, "423")
 
 	if !errors.Is(err, core.ErrJobLocked) {
@@ -250,9 +242,6 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 
 func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
@@ -317,11 +306,9 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	idleMonitor := newIdleMonitor(1)
-
 	// we expect the worker to try to acquire the job, but fail with ErrJobAcquisitionRejected
 	// because the server returns a 422 Unprocessable Entity.
-	err := worker.Start(ctx, idleMonitor)
+	err := worker.Start(t.Context(), nil)
 	if !errors.Is(err, core.ErrJobAcquisitionRejected) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobAcquisitionRejected, got %v", jobID, err)
 	}
@@ -329,9 +316,6 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 
 func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
 	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
@@ -400,9 +384,7 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	idleMonitor := newIdleMonitor(1)
-
-	if err := worker.Start(ctx, idleMonitor); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -416,9 +398,6 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 
 func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
 	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
@@ -494,9 +473,7 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	idleMonitor := newIdleMonitor(1)
-
-	if err := worker.Start(ctx, idleMonitor); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -513,9 +490,6 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 
 func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
 	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
@@ -581,12 +555,10 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	idleMonitor := newIdleMonitor(1)
-
 	// Record start time
 	startTime := time.Now()
 
-	if err := worker.Start(ctx, idleMonitor); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -596,23 +568,15 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 		t.Errorf("Agent should have disconnected after ~1 second, but took %v", elapsed)
 	}
 
-	// The agent should have made at least one ping before disconnecting
-	if pingCount == 0 {
-		t.Error("Agent should have made at least one ping before disconnecting")
-	}
-
-	// The agent should have made at least one ping and should have disconnected
-	// due to max uptime being exceeded. The important thing is that the agent
-	// disconnected properly with the uptime check, which we verified above.
+	// The agent may not get around to pinging before the uptime is exceeded.
+	// The important thing is that the agent disconnected properly with the
+	// uptime check, which we verified above.
 }
 
 func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 	// The registration request is made in clicommand.AgentStartCommand, and the response
 	// is passed into agent.NewAgentWorker(...), so we'll just test the response handling.
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	server := NewFakeAPIServer()
 	defer server.Close()
@@ -665,7 +629,7 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -676,9 +640,6 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 
 func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const agentSessionToken = "alpacas"
 
@@ -754,7 +715,7 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -766,9 +727,6 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 
 func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const agentSessionToken = "alpacas"
 
@@ -834,7 +792,7 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -845,9 +803,6 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 
 func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const headerKey = "Buildkite-Hello"
 	const headerValue = "world"
@@ -888,7 +843,7 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	})
 	client := &core.Client{APIClient: apiClient, Logger: l}
 	// the underlying api.Client will capture & store the server-specified request headers here...
-	reg, err := client.Register(ctx, api.AgentRegisterRequest{})
+	reg, err := client.Register(t.Context(), api.AgentRegisterRequest{})
 	if err != nil {
 		t.Fatalf("failed to register: %v", err)
 	}
@@ -903,7 +858,7 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -914,9 +869,6 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 
 func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const agentSessionToken = "alpacas"
 
@@ -991,7 +943,7 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); err != nil {
+	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() = %v", err)
 	}
 
@@ -1002,9 +954,6 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 
 func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 
 	const agentSessionToken = "alpacas"
 
@@ -1046,11 +995,392 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 	)
 	worker.noWaitBetweenPingsForTesting = true
 
-	if err := worker.Start(ctx, newIdleMonitor(1)); !isUnrecoverable(err) {
+	if err := worker.Start(t.Context(), nil); !isUnrecoverable(err) {
 		t.Errorf("worker.Start() = %v, want an unrecoverable error", err)
 	}
 
 	if got, want := agent.Pings, 1; got != want {
 		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}
+
+func TestAgentWorker_Streaming_Disconnect(t *testing.T) {
+	t.Parallel()
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		return api.Ping{}, errors.New("too many pings")
+	}
+	go func() {
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_Disconnect{},
+		}
+		close(agent.PingStream)
+	}()
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{},
+	)
+
+	if err := worker.Start(t.Context(), nil); err != nil {
+		t.Errorf("worker.Start() error = %v, want nil", err)
+	}
+	if got, want := agent.Pings, 0; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}
+
+func TestAgentWorker_Streaming_Pause_Resume_Disconnect(t *testing.T) {
+	t.Parallel()
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		return api.Ping{}, errors.New("too many pings")
+	}
+	go func() {
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_Pause{
+				Pause: &agentedgev1.PauseAction{
+					Reason: "Agent has been paused",
+				},
+			},
+		}
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_Resume{},
+		}
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_Disconnect{},
+		}
+		close(agent.PingStream)
+	}()
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{},
+	)
+
+	if err := worker.Start(t.Context(), nil); err != nil {
+		t.Errorf("worker.Start() error = %v, want nil", err)
+	}
+	if got, want := agent.Pings, 0; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}
+
+func TestAgentWorker_Streaming_Start_AcquireJob_Pause_Unpause(t *testing.T) {
+	t.Parallel()
+
+	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
+	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
+	if err := errors.Join(os.MkdirAll(buildPath, 0o777), os.MkdirAll(hooksPath, 0o777)); err != nil {
+		t.Fatalf("Couldn't create directories: %v", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name())) //nolint:errcheck // Best-effort cleanup
+	})
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	job := server.AddJob(map[string]string{
+		"BUILDKITE_COMMAND": "echo echo",
+	})
+
+	// Pre-register the agent.
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		return api.Ping{}, errors.New("too many pings")
+	}
+	go func() {
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_Pause{},
+		}
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_Resume{},
+		}
+		close(agent.PingStream)
+	}()
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 1,
+			HeartbeatInterval: 10,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{
+			SpawnIndex: 1,
+			AgentConfiguration: AgentConfiguration{
+				BootstrapScript: dummyBootstrap,
+				BuildPath:       buildPath,
+				HooksPath:       hooksPath,
+				AcquireJob:      job.Job.ID,
+			},
+		},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(t.Context(), nil); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	if got, want := agent.Pings, 0; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+	if got, want := job.State, JobStateFinished; got != want {
+		t.Errorf("job.State = %q, want %q", got, want)
+	}
+}
+
+func TestAgentWorker_Streaming_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
+	t.Parallel()
+
+	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
+	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
+	if err := errors.Join(os.MkdirAll(buildPath, 0o777), os.MkdirAll(hooksPath, 0o777)); err != nil {
+		t.Fatalf("Couldn't create directories: %v", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name())) //nolint:errcheck // Best-effort cleanup
+	})
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	job := server.AddJob(map[string]string{
+		"BUILDKITE_COMMAND": "echo echo",
+	})
+
+	// Pre-register the agent.
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		return api.Ping{}, errors.New("too many pings")
+	}
+	go func() {
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_JobAssigned{
+				JobAssigned: &agentedgev1.JobAssignedAction{
+					Job: &agentedgev1.Job{
+						Id: job.Job.ID,
+					},
+				},
+			},
+		}
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_Pause{},
+		}
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_Resume{},
+		}
+		close(agent.PingStream)
+	}()
+
+	server.Assign(agent, job)
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       "alpacas",
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 1,
+			HeartbeatInterval: 10,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{
+			SpawnIndex: 1,
+			AgentConfiguration: AgentConfiguration{
+				BootstrapScript:    dummyBootstrap,
+				BuildPath:          buildPath,
+				HooksPath:          hooksPath,
+				DisconnectAfterJob: true,
+			},
+		},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(t.Context(), nil); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	if got, want := agent.Pings, 0; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+	if got, want := agent.IgnoreInDispatches, true; got != want {
+		t.Errorf("agent.IgnoreInDispatches = %t, want %t", got, want)
+	}
+	if got, want := job.State, JobStateFinished; got != want {
+		t.Errorf("job.State = %q, want %q", got, want)
+	}
+}
+
+func TestAgentWorker_Streaming_UnrecoverableError_Fallback(t *testing.T) {
+	t.Parallel()
+
+	const agentSessionToken = "alpacas"
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(req *http.Request) (api.Ping, error) {
+		switch agent.Pings {
+		case 0:
+			return api.Ping{Action: "disconnect"}, nil
+		default:
+			return api.Ping{}, fmt.Errorf("unexpected ping #%d", agent.Pings)
+		}
+	}
+	agent.PingStreamHandler = func(ctx context.Context, r *connect.Request[agentedgev1.StreamPingsRequest], ss *connect.ServerStream[agentedgev1.StreamPingsResponse]) error {
+		return connect.NewError(connect.CodePermissionDenied, errors.New("flagrant system error"))
+	}
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(t.Context(), nil); err != nil {
+		t.Errorf("worker.Start() = %v, want nil", err)
+	}
+
+	if got, want := agent.Pings, 1; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}
+
+func TestAgentWorker_Streaming_RecoverableError_Fallback_Resume(t *testing.T) {
+	t.Parallel()
+
+	const agentSessionToken = "alpacas"
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	agent := server.AddAgent(agentSessionToken)
+	// Default ping handler - idle
+
+	connections := 0
+	agent.PingStreamHandler = func(ctx context.Context, req *connect.Request[agentedgev1.StreamPingsRequest], resp *connect.ServerStream[agentedgev1.StreamPingsResponse]) error {
+		connections++
+		switch connections {
+		case 1:
+			return connect.NewError(connect.CodeUnavailable, errors.New("demure system error"))
+		case 2:
+			return resp.Send(&agentedgev1.StreamPingsResponse{
+				Action: &agentedgev1.StreamPingsResponse_Disconnect{},
+			})
+		default:
+			return connect.NewError(connect.CodeInternal, errors.New("too many connections"))
+		}
+	}
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(t.Context(), nil); err != nil {
+		t.Errorf("worker.Start() = %v, want nil", err)
+	}
+
+	if connections != 2 {
+		t.Errorf("StreamPings connections = %d, want %d", connections, 2)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/status"
@@ -17,13 +18,15 @@ import (
 
 // AgentPool manages multiple parallel AgentWorkers.
 type AgentPool struct {
-	workers []*AgentWorker
+	workers     []*AgentWorker
+	idleTimeout time.Duration
 }
 
 // NewAgentPool returns a new AgentPool.
-func NewAgentPool(workers []*AgentWorker) *AgentPool {
+func NewAgentPool(workers []*AgentWorker, config *AgentConfiguration) *AgentPool {
 	return &AgentPool{
-		workers: workers,
+		workers:     workers,
+		idleTimeout: config.DisconnectAfterIdleTimeout,
 	}
 }
 
@@ -58,7 +61,7 @@ func (r *AgentPool) Start(ctx context.Context) error {
 	defer done()
 	setStat("🏃 Spawning workers...")
 
-	idleMon := newIdleMonitor(len(r.workers))
+	idleMon := NewIdleMonitor(ctx, len(r.workers), r.idleTimeout)
 
 	errCh := make(chan error)
 
@@ -82,7 +85,7 @@ func (r *AgentPool) Start(ctx context.Context) error {
 func runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor) error {
 	agentWorkersStarted.Inc()
 	defer agentWorkersEnded.Inc()
-	defer idleMon.markDead(worker)
+	defer idleMon.MarkDead(worker)
 
 	// Connect the worker to the API
 	if err := worker.Connect(ctx); err != nil {
