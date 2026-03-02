@@ -128,6 +128,12 @@ var (
 		EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 	}
 
+	GzipAPIRequestsFlag = cli.BoolFlag{
+		Name:   "gzip-api-requests",
+		Usage:  "Enable gzip compression for API request bodies",
+		EnvVar: "BUILDKITE_GZIP_API_REQUESTS",
+	}
+
 	RedactedVars = cli.StringSliceFlag{
 		Name:   "redacted-vars",
 		Usage:  "Pattern of environment variable names containing sensitive values",
@@ -172,6 +178,7 @@ type APIConfig struct {
 	TraceHTTP        bool   `cli:"trace-http"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
+	GzipAPIRequests  bool   `cli:"gzip-api-requests"`
 }
 
 func globalFlags() []cli.Flag {
@@ -191,6 +198,7 @@ func apiFlags() []cli.Flag {
 		NoHTTP2Flag,
 		DebugHTTPFlag,
 		TraceHTTPFlag,
+		GzipAPIRequestsFlag,
 	}
 }
 
@@ -353,6 +361,11 @@ func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 	noHTTP2, err := reflections.GetField(cfg, "NoHTTP2")
 	if err == nil {
 		conf.DisableHTTP2 = noHTTP2.(bool)
+	}
+
+	gzipAPIRequests, err := reflections.GetField(cfg, "GzipAPIRequests")
+	if err == nil {
+		conf.GzipAPIRequests = gzipAPIRequests.(bool)
 	}
 
 	return conf

@@ -1,9 +1,12 @@
 package api_test
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -75,6 +78,100 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	// Check a connect works
 	if _, err := c2.Connect(ctx); err != nil {
 		t.Errorf("c.FromAgentRegisterResponse(regResp).Connect() error = %v", err)
+	}
+}
+
+func TestCompressionBehavior(t *testing.T) {
+	tests := []struct {
+		name             string
+		gzipAPIRequests  bool
+		expectCompressed bool
+	}{
+		{
+			name:             "compression disabled by default",
+			gzipAPIRequests:  false,
+			expectCompressed: false,
+		},
+		{
+			name:             "compression enabled when requested",
+			gzipAPIRequests:  true,
+			expectCompressed: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requestBody []byte
+			var isCompressed bool
+
+			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+				// Read the request body
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					http.Error(rw, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				requestBody = body
+
+				// Check if the request is compressed
+				isCompressed = req.Header.Get("Content-Encoding") == "gzip"
+
+				// If compressed, try to decompress to verify it's valid gzip
+				if isCompressed {
+					gzReader, err := gzip.NewReader(bytes.NewReader(body))
+					if err != nil {
+						http.Error(rw, "Invalid gzip: "+err.Error(), http.StatusBadRequest)
+						return
+					}
+					defer gzReader.Close()
+
+					_, err = io.ReadAll(gzReader)
+					if err != nil {
+						http.Error(rw, "Failed to decompress: "+err.Error(), http.StatusBadRequest)
+						return
+					}
+				}
+
+				rw.WriteHeader(http.StatusOK)
+				fmt.Fprint(rw, `{}`)
+			}))
+			defer server.Close()
+
+			ctx := context.Background()
+			client := api.NewClient(logger.Discard, api.Config{
+				Endpoint:        server.URL,
+				Token:           "test-token",
+				GzipAPIRequests: tt.gzipAPIRequests,
+			})
+
+			// Make a request that will have a body (pipeline upload)
+			testPipeline := map[string]interface{}{
+				"steps": []interface{}{
+					map[string]interface{}{
+						"command": "echo hello",
+					},
+				},
+			}
+
+			_, err := client.UploadPipeline(ctx, "test-job-id", &api.PipelineChange{
+				UUID:     "test-uuid",
+				Pipeline: testPipeline,
+			})
+
+			if err != nil {
+				t.Fatalf("UploadPipeline failed: %v", err)
+			}
+
+			// Verify compression behavior matches expectation
+			if isCompressed != tt.expectCompressed {
+				t.Errorf("Expected compressed=%v, got compressed=%v", tt.expectCompressed, isCompressed)
+			}
+
+			// Verify we received a non-empty body
+			if len(requestBody) == 0 {
+				t.Error("Expected non-empty request body")
+			}
+		})
 	}
 }
 

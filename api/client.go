@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -46,6 +47,9 @@ type Config struct {
 
 	// If true timings for each request will be logged
 	TraceHTTP bool
+
+	// If true, request bodies will be gzip compressed
+	GzipAPIRequests bool
 
 	// The http client used, leave nil for the default
 	HTTPClient *http.Client
@@ -222,10 +226,22 @@ func (c *Client) newRequest(
 	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	buf := new(bytes.Buffer)
+
 	if body != nil {
-		err := json.NewEncoder(buf).Encode(body)
-		if err != nil {
-			return nil, err
+		if c.conf.GzipAPIRequests {
+			gzipWriter := gzip.NewWriter(buf)
+			err := json.NewEncoder(gzipWriter).Encode(body)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := gzipWriter.Close(); err != nil {
+				return nil, fmt.Errorf("closing gzip writer: %w", err)
+			}
+		} else {
+			if err := json.NewEncoder(buf).Encode(body); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -258,6 +274,9 @@ func (c *Client) newRequest(
 
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
+		if c.conf.GzipAPIRequests {
+			req.Header.Add("Content-Encoding", "gzip")
+		}
 	}
 
 	return req, nil
