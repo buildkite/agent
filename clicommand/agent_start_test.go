@@ -20,7 +20,7 @@ func setupHooksPath(t *testing.T) (string, func()) {
 	if err != nil {
 		assert.FailNow(t, "failed to create temp file: %v", err)
 	}
-	return hooksPath, func() { os.RemoveAll(hooksPath) }
+	return hooksPath, func() { os.RemoveAll(hooksPath) } //nolint:errcheck // best-effort cleanup in test
 }
 
 func writeAgentHook(t *testing.T, dir, hookName, msg string) string {

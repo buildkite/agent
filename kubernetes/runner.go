@@ -81,7 +81,7 @@ type Runner struct {
 
 // Run runs the socket server.
 func (r *Runner) Run(ctx context.Context) error {
-	r.server.Register(r)
+	r.server.Register(r) //nolint:errcheck // Register only fails for duplicate type or nil receiver
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
 
 	oldUmask, err := Umask(0) // set umask of socket file to 0o777 (world read-write-executable)
@@ -92,12 +92,12 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
-	defer l.Close()
-	defer os.Remove(r.conf.SocketPath)
+	defer l.Close()              //nolint:errcheck // best-effort cleanup on shutdown
+	defer os.Remove(r.conf.SocketPath) //nolint:errcheck // best-effort cleanup of socket file
 
-	Umask(oldUmask) // change back to regular umask
+	Umask(oldUmask) //nolint:errcheck // restoring umask; failure is non-actionable
 	r.listener = l
-	go http.Serve(l, r.mux)
+	go http.Serve(l, r.mux) //nolint:errcheck // returns when listener is closed on shutdown
 
 	if r.conf.ClientLostTimeout > 0 {
 		go r.livenessCheck(ctx)
@@ -164,7 +164,7 @@ func (r *Runner) livenessCheck(ctx context.Context) {
 				if client.State == StateConnected && lhf > r.conf.ClientLostTimeout {
 					r.logger.Error("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf)
 					client.State = StateLost
-					r.Terminate()
+					r.Terminate() //nolint:errcheck // Terminate always returns nil
 				}
 				client.mu.Unlock()
 			}
@@ -261,7 +261,7 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	client.mu.Unlock()
 
 	if args.ExitStatus != 0 {
-		r.Terminate()
+		r.Terminate() //nolint:errcheck // Terminate always returns nil
 	}
 
 	allTerminal := true
@@ -276,7 +276,7 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 		}
 	}
 	if allTerminal {
-		r.Terminate()
+		r.Terminate() //nolint:errcheck // Terminate always returns nil
 	}
 	return nil
 }

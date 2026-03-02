@@ -140,7 +140,7 @@ func New(opts ...NewShellOpt) (*Shell, error) {
 	if shell.wd == "" {
 		wd, err := os.Getwd()
 		if err != nil {
-			return nil, fmt.Errorf("Failed to find current working directory: %w", err)
+			return nil, fmt.Errorf("failed to find current working directory: %w", err)
 		}
 		shell.wd = wd
 	}
@@ -183,7 +183,7 @@ func (s *Shell) Chdir(path string) error {
 	s.Promptf("cd %s", shellwords.Quote(path))
 
 	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("Failed to change working: directory does not exist")
+		return fmt.Errorf("failed to change working: directory does not exist")
 	}
 
 	s.wd = path
@@ -318,7 +318,7 @@ func (s *Shell) Script(path string) (Command, error) {
 		// Find Bash, either part of Cygwin or MSYS. Must be in the path
 		bashPath, err := s.AbsolutePath("bash.exe")
 		if err != nil {
-			return Command{}, fmt.Errorf("Error finding bash.exe, needed to run scripts: %v. "+
+			return Command{}, fmt.Errorf("error finding bash.exe, needed to run scripts: %v. "+
 				"Is Git for Windows installed and correctly in your PATH variable?", err)
 		}
 		command = bashPath

@@ -57,7 +57,7 @@ func TestLockUnlock(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() { svr.Close() }) //nolint:errcheck // best-effort cleanup in test
 
 	// Lock it
 	token, err := cli.Lock(ctx, "llama")
@@ -90,7 +90,7 @@ func TestLocker(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() { svr.Close() }) //nolint:errcheck // best-effort cleanup in test
 
 	// This constitutes a test by virtue of Lock/Unlock panicking on any
 	// internal error.
@@ -121,7 +121,7 @@ func TestDoOnce(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() { svr.Close() }) //nolint:errcheck // best-effort cleanup in test
 
 	var wg sync.WaitGroup
 	var calls atomic.Int32

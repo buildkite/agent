@@ -100,7 +100,7 @@ var OIDCRequestTokenCommand = cli.Command{
 
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
 		if cfg.Lifetime < 0 {
-			return fmt.Errorf("lifetime %d must be a non-negative integer.", cfg.Lifetime)
+			return fmt.Errorf("lifetime %d must be a non-negative integer", cfg.Lifetime)
 		}
 
 		if cfg.Format != "jwt" && cfg.Format != "gcp" {

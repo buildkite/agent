@@ -106,7 +106,7 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 			if err != nil {
 				return fmt.Errorf("failed to open file %s: %w", fileName, err)
 			}
-			defer secretsFile.Close()
+			defer secretsFile.Close() //nolint:errcheck // read-only file; close error is inconsequential
 
 			secretsReader = bufio.NewReader(secretsFile)
 		}

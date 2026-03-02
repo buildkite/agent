@@ -274,7 +274,7 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 	}
 	socketPath := filepath.Join(tempDir, "bk.sock")
 	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
+		os.RemoveAll(tempDir) //nolint:errcheck // best-effort cleanup in test
 	})
 	runner := NewRunner(logger.Discard, RunnerConfig{
 		SocketPath:         socketPath,
@@ -283,7 +283,7 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 		ClientLostTimeout:  2 * time.Second,
 	})
 	runnerCtx, cancelRunner := context.WithCancel(context.Background())
-	go runner.Run(runnerCtx)
+	go runner.Run(runnerCtx) //nolint:errcheck // test goroutine; errors checked via test assertions
 	t.Cleanup(cancelRunner)
 
 	// wait for runner to listen

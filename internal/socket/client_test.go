@@ -18,15 +18,15 @@ func (yesNoJSONServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.URL.Path {
 	case "/yes":
-		w.Write([]byte(`{"message":"Yes!"}\n`))
+		w.Write([]byte(`{"message":"Yes!"}\n`))   //nolint:errcheck // test handler
 	case "/no":
-		w.Write([]byte(`{"message":"No."}\n`))
+		w.Write([]byte(`{"message":"No."}\n`))     //nolint:errcheck // test handler
 	case "/secret":
 		if r.Header.Get("Authorization") != "Bearer llama" {
 			http.Error(w, `{"error":"invalid authorization token"}\n`, http.StatusUnauthorized)
 			return
 		}
-		w.Write([]byte(`{"message":"seekruts"}\n`))
+		w.Write([]byte(`{"message":"seekruts"}\n`)) //nolint:errcheck // test handler
 	default:
 		http.Error(w, `{"error":"not found"}\n`, http.StatusNotFound)
 	}
@@ -51,7 +51,7 @@ func TestClientDo(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("srv.Start() = %v", err)
 	}
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() { svr.Close() }) //nolint:errcheck // best-effort cleanup in test
 
 	cli, err := NewClient(ctx, sockPath, "llama")
 	if err != nil {
@@ -108,7 +108,7 @@ func TestClientDoErrors(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("srv.Start() = %v", err)
 	}
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() { svr.Close() }) //nolint:errcheck // best-effort cleanup in test
 
 	cli, err := NewClient(ctx, sockPath, "alpaca")
 	if err != nil {

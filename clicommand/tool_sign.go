@@ -204,7 +204,7 @@ Signing a pipeline from a file:
 
 		err = sign(ctx, c, l, key, &cfg)
 		if err != nil {
-			return fmt.Errorf("Error signing pipeline: %w", err)
+			return fmt.Errorf("error signing pipeline: %w", err)
 		}
 
 		return nil
@@ -250,7 +250,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
-		defer file.Close()
+		defer file.Close() //nolint:errcheck // read-only file; close error is inconsequential
 
 		input = file
 		filename = cfg.PipelineFile

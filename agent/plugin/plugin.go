@@ -58,7 +58,7 @@ func CreatePlugin(location string, config map[string]any) (*Plugin, error) {
 	plugin.Vendored = strings.HasPrefix(plugin.Location, ".")
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
-		return nil, fmt.Errorf("Too many '#'s in %q", location)
+		return nil, fmt.Errorf("too many '#'s in %q", location)
 	}
 
 	if u.User != nil {
@@ -114,7 +114,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 				// Since there is a config, it's gotta be a hash
 				config, ok := config.(map[string]any)
 				if !ok {
-					return nil, fmt.Errorf("Configuration for \"%s\" is not a hash", location)
+					return nil, fmt.Errorf("configuration for %q is not a hash", location)
 				}
 
 				// Add the plugin with config to the array
@@ -127,7 +127,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 			}
 
 		default:
-			return nil, fmt.Errorf("Unknown type in plugin definition (%s)", vv)
+			return nil, fmt.Errorf("unknown type in plugin definition (%s)", vv)
 		}
 	}
 
@@ -248,7 +248,7 @@ func flattenConfigToEnvMap(into map[string]string, v any, envPrefix string) erro
 		return nil
 
 	default:
-		return fmt.Errorf("Unknown type %T %v", v, v)
+		return fmt.Errorf("unknown type %T %v", v, v)
 	}
 }
 
@@ -338,24 +338,24 @@ func (p *Plugin) DisplayName() string {
 
 func (p *Plugin) constructRepositoryHost() (string, error) {
 	if p.Location == "" {
-		return "", fmt.Errorf("Missing plugin location")
+		return "", fmt.Errorf("missing plugin location")
 	}
 
 	parts := strings.Split(p.Location, "/")
 	if len(parts) < 2 {
-		return "", fmt.Errorf("Incomplete plugin path %q", p.Location)
+		return "", fmt.Errorf("incomplete plugin path %q", p.Location)
 	}
 
 	switch parts[0] {
 	case "github.com", "bitbucket.org":
 		if len(parts) < 3 {
-			return "", fmt.Errorf("Incomplete plugin path %q", p.Location)
+			return "", fmt.Errorf("incomplete plugin path %q", p.Location)
 		}
 		return strings.Join(parts[:3], "/"), nil
 
 	case "gitlab.com":
 		if len(parts) < 3 {
-			return "", fmt.Errorf("Incomplete plugin path %q", p.Location)
+			return "", fmt.Errorf("incomplete plugin path %q", p.Location)
 		}
 		return strings.Join(parts, "/"), nil
 

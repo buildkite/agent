@@ -41,19 +41,19 @@ func runFakeServer() (svr *fakeServer, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("net.Listen(unix, %q) error = %w", f.sock, err)
 	}
-	go f.svr.Serve(ln)
+	go f.svr.Serve(ln) //nolint:errcheck // returns ErrServerClosed on normal shutdown
 	return f, nil
 }
 
-func (f *fakeServer) Close() { f.svr.Close() }
+func (f *fakeServer) Close() { f.svr.Close() } //nolint:errcheck // best-effort shutdown in test
 
 func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+f.token {
-		socket.WriteError(w, "invalid Authorization header", http.StatusForbidden)
+		socket.WriteError(w, "invalid Authorization header", http.StatusForbidden) //nolint:errcheck // test handler
 		return
 	}
 	if r.URL.Path != "/api/current-job/v0/env" {
-		socket.WriteError(w, fmt.Sprintf("not found: %q", r.URL.Path), http.StatusNotFound)
+		socket.WriteError(w, fmt.Sprintf("not found: %q", r.URL.Path), http.StatusNotFound) //nolint:errcheck // test handler
 		return
 	}
 
@@ -61,23 +61,23 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		b := EnvGetResponse{Env: f.env}
 		if err := json.NewEncoder(w).Encode(&b); err != nil {
-			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError) //nolint:errcheck // test handler
 		}
 
 	case "PATCH":
 		var req EnvUpdateRequestPayload
 		var resp EnvUpdateResponse
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest) //nolint:errcheck // test handler
 			return
 		}
 		for k, v := range req.Env {
 			if k == "READONLY" {
-				socket.WriteError(w, "mutating READONLY is not allowed", http.StatusBadRequest)
+				socket.WriteError(w, "mutating READONLY is not allowed", http.StatusBadRequest) //nolint:errcheck // test handler
 				return
 			}
 			if v == nil {
-				socket.WriteError(w, fmt.Sprintf("setting %q to null is not allowed", k), http.StatusBadRequest)
+				socket.WriteError(w, fmt.Sprintf("setting %q to null is not allowed", k), http.StatusBadRequest) //nolint:errcheck // test handler
 				return
 			}
 		}
@@ -91,19 +91,19 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Normalize()
 		if err := json.NewEncoder(w).Encode(&resp); err != nil {
-			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError) //nolint:errcheck // test handler
 		}
 
 	case "DELETE":
 		var req EnvDeleteRequest
 		var resp EnvDeleteResponse
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest) //nolint:errcheck // test handler
 			return
 		}
 		for _, k := range req.Keys {
 			if k == "READONLY" {
-				socket.WriteError(w, "deleting READONLY is not allowed", http.StatusBadRequest)
+				socket.WriteError(w, "deleting READONLY is not allowed", http.StatusBadRequest) //nolint:errcheck // test handler
 			}
 		}
 		for _, k := range req.Keys {
@@ -115,11 +115,11 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Normalize()
 		if err := json.NewEncoder(w).Encode(&resp); err != nil {
-			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError) //nolint:errcheck // test handler
 		}
 
 	default:
-		socket.WriteError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest)
+		socket.WriteError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest) //nolint:errcheck // test handler
 	}
 }
 

@@ -21,7 +21,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
 		socketPath := c.GetEnv("BUILDKITE_AGENT_JOB_API_SOCKET")
@@ -107,7 +107,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 			c.Exit(1)
 			return
 		}
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // response body close errors are inconsequential in tests
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
@@ -135,7 +135,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 
 	tester.ExpectGlobalHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("MOUNTAIN"), "chimborazo"; got != want {
-			fmt.Fprintf(c.Stderr, "MOUNTAIN = %q, want %q\n", got, want)
+			fmt.Fprintf(c.Stderr, "MOUNTAIN = %q, want %q\n", got, want) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)

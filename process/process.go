@@ -67,7 +67,7 @@ func (s Signal) String() string {
 func ParseSignal(sig string) (Signal, error) {
 	s, ok := signalMap[strings.ToUpper(sig)]
 	if !ok {
-		return Signal(0), fmt.Errorf("Unknown signal %q", sig)
+		return Signal(0), fmt.Errorf("unknown signal %q", sig)
 	}
 	return s, nil
 }
@@ -129,7 +129,7 @@ func (p *Process) WaitStatus() WaitStatus {
 // Run the command and block until it finishes
 func (p *Process) Run(ctx context.Context) error {
 	if p.command != nil {
-		return fmt.Errorf("Process is already running")
+		return fmt.Errorf("process is already running")
 	}
 
 	// Create a command
@@ -143,7 +143,7 @@ func (p *Process) Run(ctx context.Context) error {
 	// doesn't exist
 	if p.conf.Dir != "" {
 		if _, err := os.Stat(p.conf.Dir); os.IsNotExist(err) {
-			return fmt.Errorf("Process working directory %q doesn't exist", p.conf.Dir)
+			return fmt.Errorf("process working directory %q doesn't exist", p.conf.Dir)
 		}
 		p.command.Dir = p.conf.Dir
 	}
@@ -408,6 +408,6 @@ func timeoutWait(waitGroup *sync.WaitGroup) error {
 	case <-ch:
 		return nil
 	case <-time.After(10 * time.Second):
-		return errors.New("Timeout")
+		return errors.New("timeout")
 	}
 }

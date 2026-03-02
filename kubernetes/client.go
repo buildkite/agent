@@ -165,5 +165,5 @@ func (c *Client) StatusLoop(ctx context.Context, onInterrupt func(error)) error 
 }
 
 func (c *Client) Close() {
-	c.client.Close()
+	c.client.Close() //nolint:errcheck // best-effort cleanup; rpc.Client.Close only closes the underlying conn
 }

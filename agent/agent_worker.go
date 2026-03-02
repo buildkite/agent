@@ -260,7 +260,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 			// If the job acquisition was rejected, we can exit with an error
 			// so that supervisor knows that the job was not acquired due to the job being rejected.
 			if errors.Is(err, core.ErrJobAcquisitionRejected) {
-				return fmt.Errorf("Failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
+				return fmt.Errorf("failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
 			}
 
 			// If the job itself exited with nonzero code, then we want to exit
@@ -652,9 +652,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (job *api.Job, action string, er
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		if a.stats.lastPing.IsZero() {
-			return nil, action, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
+			return nil, action, fmt.Errorf("failed to ping: %w (no successful ping yet)", pingErr)
 		} else {
-			return nil, action, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
+			return nil, action, fmt.Errorf("failed to ping: %w (last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
 		}
 	}
 
@@ -748,7 +748,7 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job, idleMon
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
-		return fmt.Errorf("Failed to accept job: %w", err)
+		return fmt.Errorf("failed to accept job: %w", err)
 	}
 
 	// If we're disconnecting-after-job, signal back to Buildkite that we're not
@@ -791,17 +791,17 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 		KubernetesExec:     a.agentConfiguration.KubernetesExec,
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to initialize job: %w", err)
+		return fmt.Errorf("failed to initialize job: %w", err)
 	}
 	if !a.jobRunner.CompareAndSwap(nil, jr) {
-		return fmt.Errorf("Agent worker already has a job running")
+		return fmt.Errorf("agent worker already has a job running")
 	}
 	// No more job, no more runner.
 	defer a.jobRunner.Store(nil)
 
 	// Start running the job
 	if err := jr.Run(ctx, ignoreAgentInDispatches); err != nil {
-		return fmt.Errorf("Failed to run job: %w", err)
+		return fmt.Errorf("failed to run job: %w", err)
 	}
 
 	return nil
@@ -821,12 +821,12 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 
 		if a.stats.lastHeartbeatError != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "ERROR: last heartbeat failed: %v. last successful was %v ago", a.stats.lastHeartbeatError, time.Since(a.stats.lastHeartbeat))
+			fmt.Fprintf(w, "ERROR: last heartbeat failed: %v. last successful was %v ago", a.stats.lastHeartbeatError, time.Since(a.stats.lastHeartbeat)) //nolint:errcheck // status page writer; errors are non-actionable
 		} else {
 			if a.stats.lastHeartbeat.IsZero() {
-				fmt.Fprintf(w, "OK: no heartbeat yet")
+				fmt.Fprintf(w, "OK: no heartbeat yet") //nolint:errcheck // status page writer; errors are non-actionable
 			} else {
-				fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat))
+				fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat)) //nolint:errcheck // status page writer; errors are non-actionable
 			}
 		}
 	}

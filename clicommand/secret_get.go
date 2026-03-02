@@ -138,7 +138,7 @@ Examples:
 
 		case cfg.Format == "env":
 			for _, key := range slices.Sorted(maps.Keys(secretsMap)) {
-				fmt.Fprintf(c.App.Writer, "%s=%q\n", strings.ToUpper(key), secretsMap[key])
+				fmt.Fprintf(c.App.Writer, "%s=%q\n", strings.ToUpper(key), secretsMap[key]) //nolint:errcheck // CLI output; errors are non-actionable
 			}
 
 		default:

@@ -57,7 +57,7 @@ var LockAcquireCommand = cli.Command{
 
 func lockAcquireAction(c *cli.Context) error {
 	if c.NArg() != 1 {
-		fmt.Fprint(c.App.ErrWriter, lockAcquireHelpDescription)
+		fmt.Fprint(c.App.ErrWriter, lockAcquireHelpDescription) //nolint:errcheck // CLI help output
 		return &SilentExitError{code: 1}
 	}
 	key := c.Args()[0]
@@ -66,7 +66,7 @@ func lockAcquireAction(c *cli.Context) error {
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		return errors.New("only 'machine' scope for locks is supported in this version.")
+		return errors.New("only 'machine' scope for locks is supported in this version")
 	}
 
 	if cfg.LockWaitTimeout != 0 {

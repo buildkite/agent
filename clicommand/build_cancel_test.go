@@ -18,7 +18,7 @@ func TestBuildCancel(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			rw.WriteHeader(http.StatusOK)
-			rw.Write([]byte(`{"status": "canceled", "uuid": "1"}`))
+			rw.Write([]byte(`{"status": "canceled", "uuid": "1"}`)) //nolint:errcheck // test handler
 		}))
 
 		cfg := BuildCancelConfig{

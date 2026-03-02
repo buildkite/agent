@@ -337,7 +337,7 @@ func (m *multipartStreamer) WriteField(key, value string) error {
 // This can only be called once and must be the last thing written to the streamer
 func (m *multipartStreamer) WriteFile(key, artifactPath string, fh http.File) error {
 	if m.reader != nil {
-		return errors.New("WriteFile can't be called multiple times")
+		return errors.New("writeFile can't be called multiple times")
 	}
 
 	// Set up a reader that combines the body, the file and the closer in a stream

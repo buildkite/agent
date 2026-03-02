@@ -50,7 +50,7 @@ func runDeprecatedDockerIntegration(ctx context.Context, sh *shell.Shell, cmd []
 		warnNotSet("BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES", "BUILDKITE_DOCKER_COMPOSE_CONTAINER")
 	}
 
-	return errors.New("Failed to find any docker env")
+	return errors.New("failed to find any docker env")
 }
 
 func tearDownDeprecatedDockerIntegration(ctx context.Context, sh *shell.Shell) error {
