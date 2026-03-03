@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"time"
@@ -91,12 +90,6 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		}
 	}
 }
-
-// Internal error values that should not escape to the user.
-var (
-	// internalStop is used when stopping.
-	internalStop = errors.New("stop")
-)
 
 // pingLoopState exists to pass parameters to pingLoopInner.
 type pingLoopState struct {

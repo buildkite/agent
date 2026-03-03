@@ -48,7 +48,6 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 	// Note: This _could_ be implemented with an infinite loop containing a roko
 	// retrier, but it looked a bit messier to me.
 	initialMaxJitter := 1 * time.Second
-	attempts := 0
 
 	var skipWait chan struct{}
 	if a.noWaitBetweenPingsForTesting {
@@ -57,11 +56,17 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 		close(skipWait)
 	}
 
+	state := &streamLoopState{
+		AgentWorker: a,
+		outCh:       outCh,
+		setStat:     setStat,
+	}
+
 	for {
 		// Backoff exponentially, up to initialMaxJitter * 2^6.
 		// (Repeated failures may jitter up to 64 seconds between attempts.)
-		maxJitter := initialMaxJitter << min(attempts, 6)
-		attempts++
+		maxJitter := initialMaxJitter << min(state.attempts, 6)
+		state.attempts++
 
 		// Within the interval, wait a random amount of time to avoid
 		// spontaneous synchronisation across agents.
@@ -81,121 +86,156 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 			return ctx.Err()
 		}
 
-		setStat(fmt.Sprintf("📱 Connecting to ping stream (attempt %d)...", attempts))
-		a.logger.Debug("[runStreamingPingLoop] Connecting (attempt %d)", attempts)
-		stream, err := a.apiClient.StreamPings(streamCtx, a.agent.UUID)
+		err := state.startStream(ctx, streamCtx)
+		if err == internalStop {
+			return nil
+		}
 		if err != nil {
-			a.logger.Error("Connection to ping stream failed: %v", err)
-			if isUnrecoverable(err) {
-				a.logger.Error("Stopping ping stream because the error is unrecoverable")
-				return err
-			}
-			// Fast fallback to the ping loop
-			a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
-			select {
-			case outCh <- actionMessage{unhealthy: true}:
-				a.logger.Debug("[runStreamingPingLoop] Unhealthy message sent to debouncer")
-				// sent!
-			case <-a.stop:
-				a.logger.Debug("[runStreamingPingLoop] Stopping due to agent stop")
-				return nil
-			case <-ctx.Done():
-				a.logger.Debug("[runStreamingPingLoop] Stopping due to context cancel")
-				return ctx.Err()
-			}
-			continue
+			return err
+		}
+	}
+}
+
+// streamLoopState holds stream loop specific state for startStream
+// and streamLoopInner.
+type streamLoopState struct {
+	*AgentWorker
+	outCh    chan<- actionMessage
+	attempts int
+	firstMsg bool
+	setStat  func(string)
+}
+
+// startStream attempts 1 connection to the stream and handles its messages.
+func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
+	a.setStat(fmt.Sprintf("📱 Connecting to ping stream (attempt %d)...", a.attempts))
+	a.logger.Debug("[runStreamingPingLoop] Connecting (attempt %d)", a.attempts)
+	stream, err := a.apiClient.StreamPings(streamCtx, a.agent.UUID)
+	if err != nil {
+		a.logger.Error("Connection to ping stream failed: %v", err)
+		if isUnrecoverable(err) {
+			a.logger.Error("Stopping ping stream because the error is unrecoverable")
+			return err
+		}
+		// Fast fallback to the ping loop
+		a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
+		select {
+		case a.outCh <- actionMessage{unhealthy: true}:
+			a.logger.Debug("[runStreamingPingLoop] Unhealthy message sent to debouncer")
+			// sent!
+		case <-a.stop:
+			a.logger.Debug("[runStreamingPingLoop] Stopping due to agent stop")
+			return internalStop
+		case <-ctx.Done():
+			a.logger.Debug("[runStreamingPingLoop] Stopping due to context cancel")
+			return ctx.Err()
+		}
+		return nil // continue outer streaming loop
+	}
+
+	a.firstMsg = true // used for the "connection established" log
+
+	a.setStat("🏞️ Streaming actions from Buildkite")
+	a.logger.Debug("[runStreamingPingLoop] Waiting for a message...")
+	for msg, streamErr := range stream {
+		err := a.handle(ctx, msg, streamErr)
+		if err == internalBreak {
+			break
+		}
+		if err == internalStop {
+			return internalStop
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPingsResponse, streamErr error) error {
+	a.logger.Debug("[runStreamingPingLoop] Received msg %v, err %v", msg, streamErr)
+
+	var amsg actionMessage
+	switch {
+	case streamErr != nil:
+		a.logger.Debug("[runStreamingPingLoop] Connection to ping stream failed or ended: %v", streamErr)
+		if isUnrecoverable(streamErr) {
+			a.logger.Error("Stopping ping stream loop because the error is unrecoverable: %v", streamErr)
+			return streamErr
+		}
+		// Stay healthy if the error is deadline-exceeded.
+		// (The connection timed out, which we want to happen every so often).
+		if connect.CodeOf(streamErr) == connect.CodeDeadlineExceeded {
+			a.logger.Debug("[runStreamingPingLoop] Breaking stream loop to reconnect following deadline-exceeded")
+			return internalBreak
+		}
+		// It's some other error. Go unhealthy, which unblocks the ping loop.
+		a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
+		amsg.unhealthy = true
+
+	case msg == nil:
+		a.logger.Error("Ping stream yielded a nil message, so assuming the stream is broken")
+		a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
+		amsg.unhealthy = true
+
+	default:
+		if a.firstMsg {
+			a.logger.Info("Ping stream connection established")
+			a.firstMsg = false
 		}
 
-		firstMsg := true // used for the "connection established" log
+		switch act := msg.Action.(type) {
+		case *agentedgev1.StreamPingsResponse_Resume: // a.k.a. "idle"
+			// continue below
 
-		setStat("🏞️ Streaming actions from Buildkite")
-		a.logger.Debug("[runStreamingPingLoop] Waiting for a message...")
-	streamLoop:
-		for msg, err := range stream {
-			a.logger.Debug("[runStreamingPingLoop] Received msg %v, err %v", msg, err)
+		case *agentedgev1.StreamPingsResponse_Pause:
+			if reason := act.Pause.GetReason(); reason != "" {
+				a.logger.Info("Pause reason: %s", reason)
+			}
+			amsg.action = "pause"
 
-			var amsg actionMessage
-			switch {
-			case err != nil:
-				a.logger.Debug("[runStreamingPingLoop] Connection to ping stream failed or ended: %v", err)
-				if isUnrecoverable(err) {
-					a.logger.Error("Stopping ping stream loop because the error is unrecoverable: %v", err)
-					return err
-				}
-				// Go unhealthy, unless the error is deadline-exceeded.
-				// (The connection timed out, which we want to happen every so often).
-				if connect.CodeOf(err) == connect.CodeDeadlineExceeded {
-					a.logger.Debug("[runStreamingPingLoop] Breaking streamLoop to reconnect after deadline-exceeded")
-					break streamLoop
-				}
+		case *agentedgev1.StreamPingsResponse_Disconnect:
+			if reason := act.Disconnect.GetReason(); reason != "" {
+				a.logger.Info("Disconnect reason: %s", reason)
+			}
+			amsg.action = "disconnect"
+
+		case *agentedgev1.StreamPingsResponse_JobAssigned:
+			amsg.jobID = act.JobAssigned.GetJob().GetId()
+			if amsg.jobID == "" {
+				a.logger.Error("Ping stream yielded a JobAssigned message with nil job or empty job ID, so assuming the stream is broken")
 				a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
 				amsg.unhealthy = true
-
-			case msg == nil:
-				a.logger.Error("Ping stream yielded a nil message, so assuming the stream is broken")
-				a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
-				amsg.unhealthy = true
-
-			default:
-				if firstMsg {
-					a.logger.Info("Ping stream connection established")
-					firstMsg = false
-				}
-
-				switch act := msg.Action.(type) {
-				case *agentedgev1.StreamPingsResponse_Resume: // a.k.a. "idle"
-					// continue below
-
-				case *agentedgev1.StreamPingsResponse_Pause:
-					if reason := act.Pause.GetReason(); reason != "" {
-						a.logger.Info("Pause reason: %s", reason)
-					}
-					amsg.action = "pause"
-
-				case *agentedgev1.StreamPingsResponse_Disconnect:
-					if reason := act.Disconnect.GetReason(); reason != "" {
-						a.logger.Info("Disconnect reason: %s", reason)
-					}
-					amsg.action = "disconnect"
-
-				case *agentedgev1.StreamPingsResponse_JobAssigned:
-					amsg.jobID = act.JobAssigned.GetJob().GetId()
-					if amsg.jobID == "" {
-						a.logger.Error("Ping stream yielded a JobAssigned message with nil job or empty job ID, so assuming the stream is broken")
-						a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
-						amsg.unhealthy = true
-					}
-				}
-			}
-
-			// Send the message to the debouncer.
-			select {
-			case outCh <- amsg:
-				a.logger.Debug("[runStreamingPingLoop] Message sent to debouncer")
-				// sent!
-			case <-a.stop:
-				a.logger.Debug("[runStreamingPingLoop] Stopping due to agent stop")
-				return nil
-			case <-ctx.Done():
-				a.logger.Debug("[runStreamingPingLoop] Stopping due to context cancel")
-				return ctx.Err()
-			}
-
-			// In case the server sends a disconnect but doesn't close the
-			// stream, be sure to exit.
-			if amsg.action == "disconnect" {
-				a.logger.Debug("[runStreamingPingLoop] Stopping due to disconnect action")
-				a.internalStop()
-				return nil
-			}
-
-			if amsg.unhealthy {
-				a.logger.Debug("[runStreamingPingLoop] Breaking streamLoop to reconnect because the stream is unhealthy")
-				break streamLoop
-			} else {
-				// Stream is healthy, reset the retry counter
-				attempts = 0
 			}
 		}
 	}
+
+	// Send the message to the debouncer.
+	select {
+	case a.outCh <- amsg:
+		a.logger.Debug("[runStreamingPingLoop] Message sent to debouncer")
+		// sent!
+	case <-a.stop:
+		a.logger.Debug("[runStreamingPingLoop] Stopping due to agent stop")
+		return internalStop
+	case <-ctx.Done():
+		a.logger.Debug("[runStreamingPingLoop] Stopping due to context cancel")
+		return ctx.Err()
+	}
+
+	// In case the server sends a disconnect but doesn't close the
+	// stream, be sure to exit.
+	if amsg.action == "disconnect" {
+		a.logger.Debug("[runStreamingPingLoop] Stopping due to disconnect action")
+		a.internalStop()
+		return internalStop
+	}
+
+	if amsg.unhealthy {
+		a.logger.Debug("[runStreamingPingLoop] Breaking stream loop to reconnect because the stream is unhealthy")
+		return internalBreak
+	}
+	// Stream is healthy, reset the retry counter
+	a.attempts = 0
+	return nil
 }

@@ -557,6 +557,16 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 	}
 }
 
+// Internal error values that should not escape to the user.
+var (
+	// internalStop is used when stopping.
+	internalStop = errors.New("stop")
+
+	// internalBreak is used to stop an inner loop but continue
+	// an outer loop.
+	internalBreak = errors.New("break")
+)
+
 const (
 	actorPingLoop  = "ping"
 	actorDebouncer = "debouncer"
