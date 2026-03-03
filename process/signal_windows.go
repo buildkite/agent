@@ -89,7 +89,7 @@ func (p *Process) interruptProcessGroup() error {
 }
 
 func GetPgid(pid int) (int, error) {
-	return 0, errors.New("Not implemented on Windows")
+	return 0, errors.New("not implemented on Windows")
 }
 
 // SignalString returns the name of the given signal.

@@ -17,10 +17,10 @@ func TestRedactorRedactsAgentToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN")) //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
@@ -41,10 +41,10 @@ func TestRedactorDoesNotRedactAgentToken_WhenNotInRedactedVars(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN")) //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
@@ -65,7 +65,7 @@ func TestRedactorAdd_RedactsVarsAfterUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	secret := "hunter2"
 	tester.ExpectGlobalHook("command").AndCallFunc(redactionTestCommandHook(t, secret))
@@ -96,7 +96,7 @@ func TestRegression_TestRedactorAdd_StillWorksWhenNoInitialRedactedVarsAreProvid
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	secret := "hunter2"
 	tester.ExpectGlobalHook("command").AndCallFunc(redactionTestCommandHook(t, secret))
@@ -142,7 +142,7 @@ func redactionTestCommandHook(t *testing.T, secret string) func(c *bintest.Call)
 			return
 		}
 
-		fmt.Fprintf(c.Stderr, "The secret is: %s\n", secret)
+		fmt.Fprintf(c.Stderr, "The secret is: %s\n", secret) //nolint:errcheck // test helper; write error is non-actionable
 		time.Sleep(time.Second) // let the log line be written before we add it to the redactor
 
 		_, err = client.RedactionCreate(mainCtx, secret)
@@ -152,7 +152,7 @@ func redactionTestCommandHook(t *testing.T, secret string) func(c *bintest.Call)
 			return
 		}
 
-		fmt.Fprintf(c.Stderr, "There should be a redacted here: %s\n", secret)
+		fmt.Fprintf(c.Stderr, "There should be a redacted here: %s\n", secret) //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	}
 }

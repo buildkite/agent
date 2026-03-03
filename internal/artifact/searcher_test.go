@@ -21,6 +21,7 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
 		case "/builds/my-build/artifacts/search?query=llamas.txt&scope=my-build&state=finished":
+			//nolint:errcheck // test handler
 			fmt.Fprint(rw, `[{
 				"id": "4600ac5c-5a13-4e92-bb83-f86f218f7b32",
 				"file_size": 3,

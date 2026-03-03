@@ -12,7 +12,7 @@ import (
 
 func testHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("{}"))
+	w.Write([]byte("{}")) //nolint:errcheck // test handler
 }
 
 func shouldCall(t *testing.T) func(http.Handler) http.Handler {

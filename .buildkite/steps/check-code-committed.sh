@@ -42,16 +42,14 @@ if ! lint_out="$(golangci-lint run --color=always)" ; then
   echo "golangci-lint found the following issues:"
   echo ""
   echo "${lint_out}"
-  buildkite-agent annotate --style=warning <<EOF
+  buildkite-agent annotate --style=error <<EOF
 golangci-lint found the following issues:
 
 \`\`\`term
 ${lint_out}
 \`\`\`
 EOF
-  # While we're cleaning up things found by golangci-lint, don't fail if it
-  # finds things.
-  exit 0
+  exit 1
 fi
 
 echo +++ Everything is clean and tidy! 🎉

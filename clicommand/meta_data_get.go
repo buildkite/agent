@@ -104,7 +104,7 @@ var MetaDataGetCommand = cli.Command{
 					cfg.Key,
 					cfg.Default,
 				)
-				fmt.Fprint(c.App.Writer, cfg.Default)
+				fmt.Fprint(c.App.Writer, cfg.Default) //nolint:errcheck // CLI output; errors are non-actionable
 				return nil
 			}
 

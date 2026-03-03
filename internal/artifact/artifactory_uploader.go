@@ -66,7 +66,7 @@ func NewArtifactoryUploader(l logger.Logger, c ArtifactoryUploaderConfig) (*Arti
 	password := os.Getenv("BUILDKITE_ARTIFACTORY_PASSWORD")
 	// authentication is not set
 	if stringURL == "" || username == "" || password == "" {
-		return nil, errors.New("Must set BUILDKITE_ARTIFACTORY_URL, BUILDKITE_ARTIFACTORY_USER, BUILDKITE_ARTIFACTORY_PASSWORD when using rt:// path")
+		return nil, errors.New("must set BUILDKITE_ARTIFACTORY_URL, BUILDKITE_ARTIFACTORY_USER, BUILDKITE_ARTIFACTORY_PASSWORD when using rt:// path")
 	}
 
 	parsedURL, err := url.Parse(stringURL)

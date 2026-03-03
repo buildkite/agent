@@ -56,7 +56,7 @@ func (d ArtifactoryDownloader) Start(ctx context.Context) error {
 	username := os.Getenv("BUILDKITE_ARTIFACTORY_USER")
 	password := os.Getenv("BUILDKITE_ARTIFACTORY_PASSWORD")
 	if stringURL == "" || username == "" || password == "" {
-		return errors.New("Must set BUILDKITE_ARTIFACTORY_URL, BUILDKITE_ARTIFACTORY_USER, BUILDKITE_ARTIFACTORY_PASSWORD when using rt:// path")
+		return errors.New("must set BUILDKITE_ARTIFACTORY_URL, BUILDKITE_ARTIFACTORY_USER, BUILDKITE_ARTIFACTORY_PASSWORD when using rt:// path")
 	}
 
 	// create full URL

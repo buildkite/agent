@@ -23,7 +23,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	filename := "environment"
 	script := []string{
@@ -50,7 +50,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			fmt.Fprintf(c.Stderr, "%v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -67,7 +67,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	preCmdFile, postCmdFile := "pre-command", "post-command"
 	preCommand := []string{
@@ -101,7 +101,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("LLAMAS_ROCK") != "absolutely" {
-			fmt.Fprintf(c.Stderr, "Expected command hook to have environment variable LLAMAS_ROCK be %q, got %q\n", "absolutely", c.GetEnv("LLAMAS_ROCK"))
+			fmt.Fprintf(c.Stderr, "Expected command hook to have environment variable LLAMAS_ROCK be %q, got %q\n", "absolutely", c.GetEnv("LLAMAS_ROCK")) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -110,7 +110,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 
 	tester.ExpectGlobalHook("pre-exit").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("LLAMAS_ROCK") != "" {
-			fmt.Fprintf(c.Stderr, "Expected pre-exit hook to have environment variable LLAMAS_ROCK be empty, got %q\n", c.GetEnv("LLAMAS_ROCK"))
+			fmt.Fprintf(c.Stderr, "Expected pre-exit hook to have environment variable LLAMAS_ROCK be empty, got %q\n", c.GetEnv("LLAMAS_ROCK")) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -127,7 +127,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if runtime.GOOS == "windows" {
 		t.Skip("Not implemented for windows yet")
@@ -146,7 +146,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("MY_CUSTOM_SUBDIR") != c.Dir {
-			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("MY_CUSTOM_SUBDIR"), c.Dir)
+			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("MY_CUSTOM_SUBDIR"), c.Dir) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -161,7 +161,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if runtime.GOOS == "windows" {
 		t.Skip("Not implemented for windows yet")
@@ -181,7 +181,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH") != c.Dir {
-			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"), c.Dir)
+			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"), c.Dir) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -198,7 +198,7 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectGlobalHook("environment").Once()
 	tester.ExpectLocalHook("environment").NotCalled()
@@ -228,12 +228,12 @@ func TestReplacingCheckoutHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// run a checkout in our checkout hook, otherwise we won't have local hooks to run
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"))
-		fmt.Fprint(c.Stderr, out)
+		fmt.Fprint(c.Stderr, out) //nolint:errcheck // test helper; write error is non-actionable
 		if err != nil {
 			c.Exit(1)
 		} else {
@@ -257,7 +257,7 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0)
 
@@ -282,7 +282,7 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectLocalHook("command").Once().AndExitWith(0)
 	tester.ExpectGlobalHook("command").NotCalled()
@@ -308,7 +308,7 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
@@ -327,7 +327,7 @@ func TestPreExitHooksDoesNotFireWithoutCommandPhase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectGlobalHook("pre-exit").NotCalled()
 	tester.ExpectLocalHook("pre-exit").NotCalled()
@@ -420,7 +420,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewExecutorTester() error = %v", err)
 			}
-			defer tester.Close()
+			defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 			agent := tester.MockAgent(t)
 
@@ -470,7 +470,7 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.Env = append(tester.Env, "BUILDKITE_NO_LOCAL_HOOKS=true")
 
@@ -506,7 +506,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewExecutorTester() error = %v", err)
 			}
-			defer tester.Close()
+			defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 			tester.ExpectGlobalHook(hook).Once().AndExitWith(5)
 
@@ -536,7 +536,7 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
@@ -553,7 +553,7 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 	}()
 
 	time.Sleep(time.Millisecond * 500)
-	tester.Cancel()
+	tester.Cancel() //nolint:errcheck // best-effort cancel in test
 
 	t.Logf("Waiting for command to finish")
 	wg.Wait()
@@ -583,7 +583,7 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	filename := "environment"
 	script := []string{
@@ -611,7 +611,7 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// We build a binary as part of this test so that we can produce a binary hook
 	// Forgive me for my sins, RSC, but it's better than the alternatives.
@@ -632,7 +632,7 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 	tester.ExpectGlobalHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		// Set via ./test-binary-hook/main.go
 		if c.GetEnv("OCEAN") != "Pacífico" {
-			fmt.Fprintf(c.Stderr, "Expected OCEAN to be Pacífico, got %q", c.GetEnv("OCEAN"))
+			fmt.Fprintf(c.Stderr, "Expected OCEAN to be Pacífico, got %q", c.GetEnv("OCEAN")) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)

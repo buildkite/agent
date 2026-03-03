@@ -143,7 +143,7 @@ type route struct {
 func (t *testAgentEndpoint) getJobsHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusOK)
-		fmt.Fprintf(rw, `{"state":"running"}`)
+		fmt.Fprintf(rw, `{"state":"running"}`) //nolint:errcheck // test handler
 	}
 }
 

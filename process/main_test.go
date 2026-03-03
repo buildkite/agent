@@ -24,10 +24,10 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 
 	case "output":
-		fmt.Fprintf(os.Stdout, "llamas1\n")
-		fmt.Fprintf(os.Stderr, "alpacas1\r")
-		fmt.Fprintf(os.Stdout, "llamas2\r\n")
-		fmt.Fprintf(os.Stderr, "alpacas2\n")
+		fmt.Fprintf(os.Stdout, "llamas1\n") //nolint:errcheck // test helper process output
+		fmt.Fprintf(os.Stderr, "alpacas1\r")   //nolint:errcheck // test helper process output
+		fmt.Fprintf(os.Stdout, "llamas2\r\n") //nolint:errcheck // test helper process output
+		fmt.Fprintf(os.Stderr, "alpacas2\n")  //nolint:errcheck // test helper process output
 		os.Exit(0)
 
 	// don't handle the signals so that we can detect the process was signaled
@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 
 		go func() {
 			for s := range signals {
-				fmt.Fprintf(os.Stdout, "received signal: %d", s)
+				fmt.Fprintf(os.Stdout, "received signal: %d", s) //nolint:errcheck // test helper process output
 				time.Sleep(10 * time.Second)
 				os.Exit(0)
 			}

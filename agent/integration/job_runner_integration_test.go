@@ -394,7 +394,7 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 		mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 			start := time.Now()
 			for time.Since(start) < 4*time.Second {
-				fmt.Fprintf(c.Stdout, "Log output at %v\n", time.Now())
+				fmt.Fprintf(c.Stdout, "Log output at %v\n", time.Now()) //nolint:errcheck // test helper; write error is non-actionable
 				time.Sleep(100 * time.Millisecond)
 			}
 			c.Exit(0)

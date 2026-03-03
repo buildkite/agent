@@ -22,7 +22,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
@@ -55,7 +55,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
@@ -89,7 +89,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
@@ -128,7 +128,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
@@ -161,7 +161,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
@@ -201,7 +201,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)
@@ -235,7 +235,7 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)

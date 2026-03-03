@@ -44,7 +44,7 @@ func (e *Executor) startTracing(ctx context.Context) (tracetools.Span, context.C
 		// Newer versions of the tracing libs print out diagnostic info which spams the
 		// Buildkite agent logs. Disable it by default unless it's been explicitly set.
 		if _, has := os.LookupEnv("DD_TRACE_STARTUP_LOGS"); !has {
-			os.Setenv("DD_TRACE_STARTUP_LOGS", "false")
+			os.Setenv("DD_TRACE_STARTUP_LOGS", "false") //nolint:errcheck // best-effort env var override
 		}
 
 		return e.startTracingDatadog(ctx)

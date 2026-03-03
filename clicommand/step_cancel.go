@@ -73,7 +73,7 @@ var StepCancelCommand = cli.Command{
 		defer done()
 
 		if cfg.ForceGracePeriodSeconds < 0 {
-			return fmt.Errorf("The value of ′--force-grace-period-seconds′ must be greater than or equal to 0")
+			return fmt.Errorf("the value of ′--force-grace-period-seconds′ must be greater than or equal to 0")
 		}
 
 		return cancelStep(ctx, cfg, l)
@@ -112,7 +112,7 @@ func cancelStep(ctx context.Context, cfg StepCancelConfig, l logger.Logger) erro
 		l.Info("Successfully cancelled step: %s", stepCancelResponse.UUID)
 		return nil
 	}); err != nil {
-		return fmt.Errorf("Failed to cancel step: %w", err)
+		return fmt.Errorf("failed to cancel step: %w", err)
 	}
 
 	return nil

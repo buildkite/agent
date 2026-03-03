@@ -20,9 +20,9 @@ func TestGCPMetaDataGetPaths(t *testing.T) {
 
 		switch path := r.URL.EscapedPath(); path {
 		case "/computeMetadata/v1/value":
-			fmt.Fprintf(w, "I could live on only burritos for the rest of my life")
+			fmt.Fprintf(w, "I could live on only burritos for the rest of my life") //nolint:errcheck // test handler
 		case "/computeMetadata/v1/nested/paths/work":
-			fmt.Fprintf(w, "Velociraptors are terrifying")
+			fmt.Fprintf(w, "Velociraptors are terrifying") //nolint:errcheck // test handler
 		default:
 			// NB: Do not use t.Fatal/Fatalf/FailNow from outside the test
 			// runner goroutine. See https://pkg.go.dev/testing#T.FailNow

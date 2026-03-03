@@ -36,12 +36,6 @@ func IsRetryableStatus(r *Response) bool {
 // Looks at a bunch of connection related errors, and returns true if the error
 // matches one of them.
 func IsRetryableError(err error) bool {
-	if neterr, ok := err.(net.Error); ok {
-		if neterr.Temporary() {
-			return true
-		}
-	}
-
 	if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 		return true
 	}

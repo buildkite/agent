@@ -22,7 +22,7 @@ func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -67,7 +67,7 @@ func TestWithResolvingCommitExperiment_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -106,7 +106,7 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -155,7 +155,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -165,7 +165,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
-	defer submoduleRepo.Close()
+	defer submoduleRepo.Close() //nolint:errcheck // best-effort cleanup in test
 
 	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
@@ -227,7 +227,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -237,7 +237,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 	if err != nil {
 		t.Fatalf("createTestGitRespository() error = %v", err)
 	}
-	defer submoduleRepo.Close()
+	defer submoduleRepo.Close() //nolint:errcheck // best-effort cleanup in test
 
 	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
@@ -288,7 +288,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -332,7 +332,7 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite_WithGitMirrors(t
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -352,7 +352,7 @@ func TestCheckingOutWithSSHKeyscan_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -384,7 +384,7 @@ func TestCheckingOutWithoutSSHKeyscan_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -409,7 +409,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo_WithGitMirrors(t *testing.T
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -442,7 +442,7 @@ func TestCleaningAnExistingCheckout_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -482,7 +482,7 @@ func TestForcingACleanCheckout_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -508,7 +508,7 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder_WithGitMirrors(t *testi
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -539,7 +539,7 @@ func TestCheckoutRetriesOnCleanFailure_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -571,7 +571,7 @@ func TestCheckoutRetriesOnCloneFailure_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -601,7 +601,7 @@ func TestCheckoutDoesNotRetryOnHookFailure_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -611,9 +611,9 @@ func TestCheckoutDoesNotRetryOnHookFailure_WithGitMirrors(t *testing.T) {
 
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		counter := atomic.AddInt32(&checkoutCounter, 1)
-		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
+		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter) //nolint:errcheck // test helper; write error is non-actionable
 		if counter == 1 {
-			fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
+			fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n") //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -638,7 +638,7 @@ func TestRepositorylessCheckout_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -671,7 +671,7 @@ func TestGitMirrorEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
@@ -726,7 +726,7 @@ func TestCheckingOutWithCustomRefspec_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	if err := tester.EnableGitMirrors(); err != nil {
 		t.Fatalf("EnableGitMirrors() error = %v", err)

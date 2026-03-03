@@ -54,7 +54,7 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	go s.svr.Serve(ln)
+	go s.svr.Serve(ln) //nolint:errcheck // returns ErrServerClosed on normal shutdown
 	s.started = true
 
 	return nil

@@ -61,7 +61,7 @@ type PipelineUploader struct {
 func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
 	if err != nil {
-		return fmt.Errorf("Failed to upload and accept pipeline: %w", err)
+		return fmt.Errorf("failed to upload and accept pipeline: %w", err)
 	}
 
 	// If the route does not support async uploads, and it did not error, then the pipeline
@@ -75,12 +75,12 @@ func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 
 	jobIDFromResponse, uuidFromResponse, err := extractJobIdUUID(result.pipelineStatusURL.String())
 	if err != nil {
-		return fmt.Errorf("Failed to parse location to check status of pipeline: %w", err)
+		return fmt.Errorf("failed to parse location to check status of pipeline: %w", err)
 	}
 
 	if jobIDFromResponse != u.JobID {
 		return fmt.Errorf(
-			"JobID from API: %q does not match request: %s",
+			"jobID from API: %q does not match request: %s",
 			jobIDFromResponse,
 			u.JobID,
 		)
@@ -88,14 +88,14 @@ func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 
 	if uuidFromResponse != u.Change.UUID {
 		return fmt.Errorf(
-			"Pipeline Upload UUID from API: %q does not match request: %s",
+			"pipeline upload UUID from API: %q does not match request: %s",
 			uuidFromResponse,
 			u.Change.UUID,
 		)
 	}
 
 	if err := u.pollForPiplineUploadStatus(ctx, l); err != nil {
-		return fmt.Errorf("Failed to upload and process pipeline: %w", err)
+		return fmt.Errorf("failed to upload and process pipeline: %w", err)
 	}
 
 	return nil
@@ -208,17 +208,17 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 			return nil
 		case "pending", "processing":
 			setNextIntervalFromResponse(r, resp)
-			err := fmt.Errorf("Pipeline upload not yet applied: %s", uploadStatus.State)
+			err := fmt.Errorf("pipeline upload not yet applied: %s", uploadStatus.State)
 			l.Info("%s (%s)", err, r)
 			return err
 		case "rejected", "failed":
 			l.Error("Unrecoverable error, skipping retries")
 			r.Break()
-			return fmt.Errorf("Pipeline upload %s: %s", uploadStatus.State, uploadStatus.Message)
+			return fmt.Errorf("pipeline upload %s: %s", uploadStatus.State, uploadStatus.Message)
 		default:
 			l.Error("Unrecoverable error, skipping retries")
 			r.Break()
-			return fmt.Errorf("Unexpected pipeline upload state from API: %s", uploadStatus.State)
+			return fmt.Errorf("unexpected pipeline upload state from API: %s", uploadStatus.State)
 		}
 	})
 }

@@ -19,7 +19,7 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	setup := tester.MustMock(t, "Setup.cmd")
 	build := tester.MustMock(t, "BuildProject.cmd")
@@ -49,7 +49,7 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MockAgent(t)

@@ -22,7 +22,7 @@ func TestRunningPlugins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	pluginMock := tester.MustMock(t, "my-plugin")
 
@@ -57,7 +57,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	pluginMock.Expect("testing").Once().AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			fmt.Fprintf(c.Stderr, "%v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -66,7 +66,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			fmt.Fprintf(c.Stderr, "%v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -83,7 +83,7 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	hooks := map[string][]string{
 		"environment": {
@@ -130,7 +130,7 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	env := []string{
 		`BUILDKITE_PLUGINS=["sdgmdgn.@$!sdf,asdf#llamas"]`,
@@ -154,7 +154,7 @@ func TestOverlappingPluginHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	var testPlugins []*testPlugin
 	var pluginMocks []*bintest.Mock
@@ -218,7 +218,7 @@ func TestPluginCloneRetried(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	hooks := map[string][]string{
 		"environment": {
@@ -287,7 +287,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Let's set a fixed location for plugins, otherwise NewExecutorTester() gives us a random new
 	// tempdir every time, which defeats our test.  Later we'll use this pluginsDir for the second
@@ -340,7 +340,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			fmt.Fprintf(c.Stderr, "%v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -354,7 +354,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester2.Close()
+	defer tester2.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Same modification of BUILDKITE_PLUGINS_PATH.
 	tester2.PluginsDir = pluginsDir
@@ -378,7 +378,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			fmt.Fprintf(c.Stderr, "%v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -400,7 +400,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Let's set a fixed location for plugins, otherwise it'll be a random new tempdir every time
 	// which defeats our test.
@@ -430,7 +430,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	p := createTestPlugin(t, hooks)
 
 	// Same branch-name jiggery pokery as in the previous integration test
-	p.CreateBranch("something-fixed")
+	p.CreateBranch("something-fixed") //nolint:errcheck // test helper; branch creation error is non-critical
 	p.versionTag = "something-fixed"
 
 	json, err := p.ToJSON()
@@ -444,7 +444,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			fmt.Fprintf(c.Stderr, "%v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -457,7 +457,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester2.Close()
+	defer tester2.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester2.PluginsDir = pluginsDir
 	tester2.Env = replacePluginPathInEnv(tester2.Env, pluginsDir)
@@ -485,7 +485,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	// run.
 	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=huge_actually"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			fmt.Fprintf(c.Stderr, "%v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 		} else {
 			c.Exit(0)

@@ -51,7 +51,7 @@ func TestANSIParser(t *testing.T) {
 
 	for _, test := range tests {
 		var p ansiParser
-		p.Write([]byte(test.input))
+		p.Write([]byte(test.input)) //nolint:errcheck // ansiParser.Write never returns errors
 		if got := p.insideCode(); got != test.want {
 			t.Errorf("after p.feed(%q...): p.insideCode() = %t, want %t", test.input, got, test.want)
 		}
@@ -66,6 +66,6 @@ func BenchmarkANSIParser(b *testing.B) {
 
 	for b.Loop() {
 		var p ansiParser
-		p.Write(npm)
+		p.Write(npm) //nolint:errcheck // ansiParser.Write never returns errors
 	}
 }

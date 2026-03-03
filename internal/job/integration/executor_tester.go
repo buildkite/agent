@@ -405,7 +405,7 @@ func mockEnvAsJSONOnStdout(e *ExecutorTester) func(c *bintest.Call) {
 			c.Exit(1)
 		}
 
-		c.Stdout.Write(envJSON)
+		c.Stdout.Write(envJSON) //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	}
 }
@@ -434,7 +434,7 @@ func newTestLogWriter(t *testing.T) *testLogWriter {
 			r.CloseWithError(err)
 			return
 		}
-		r.Close()
+		r.Close() //nolint:errcheck // best-effort cleanup in test
 	}()
 
 	return lw

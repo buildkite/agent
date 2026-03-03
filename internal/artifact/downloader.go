@@ -62,7 +62,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 	destination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(destination)
 	if err != nil {
-		return fmt.Errorf("Could not find information about destination: %s %v",
+		return fmt.Errorf("could not find information about destination: %s %v",
 			destination, err)
 	}
 	if !fileInfo.IsDir() {
@@ -78,7 +78,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 	artifactCount := len(artifacts)
 
 	if artifactCount == 0 {
-		return errors.New("No artifacts found for downloading")
+		return errors.New("no artifacts found for downloading")
 	}
 
 	a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
@@ -172,7 +172,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 	select {
 	case errors := <-errorsOutCh:
 		if len(errors) > 0 {
-			return fmt.Errorf("There were errors with downloading some of the artifacts")
+			return fmt.Errorf("there were errors with downloading some of the artifacts")
 		}
 
 	case <-ctx.Done():

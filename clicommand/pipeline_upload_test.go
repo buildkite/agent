@@ -791,12 +791,12 @@ func TestReadChangedFilesFromPath(t *testing.T) {
 			if err != nil {
 				t.Fatalf("creating temp file: %v", err)
 			}
-			defer os.Remove(tmpFile.Name())
+			defer os.Remove(tmpFile.Name()) //nolint:errcheck // best-effort cleanup in test
 
 			if _, err := tmpFile.WriteString(test.content); err != nil {
 				t.Fatalf("writing to temp file: %v", err)
 			}
-			tmpFile.Close()
+			tmpFile.Close() //nolint:errcheck // best-effort close in test
 
 			l := logger.NewBuffer()
 			got, err := readChangedFilesFromPath(l, tmpFile.Name())
@@ -819,12 +819,12 @@ func TestIfChangedApplicator_WithChangedFilesPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer os.Remove(tmpFile.Name()) //nolint:errcheck // best-effort cleanup in test
 
 	if _, err := tmpFile.WriteString("foo/README.md\nbar/test.go\n"); err != nil {
 		t.Fatalf("writing to temp file: %v", err)
 	}
-	tmpFile.Close()
+	tmpFile.Close() //nolint:errcheck // best-effort close in test
 
 	steps := pipeline.Steps{
 		&pipeline.CommandStep{

@@ -138,19 +138,19 @@ func envSetAction(c *cli.Context) error {
 
 	case "plain":
 		if len(resp.Added) > 0 {
-			fmt.Fprintln(c.App.Writer, "Added:")
+			fmt.Fprintln(c.App.Writer, "Added:") //nolint:errcheck // CLI output; errors are non-actionable
 			for _, a := range resp.Added {
-				fmt.Fprintf(c.App.Writer, "+ %s\n", a)
+				fmt.Fprintf(c.App.Writer, "+ %s\n", a) //nolint:errcheck // CLI output; errors are non-actionable
 			}
 		}
 		if len(resp.Updated) > 0 {
-			fmt.Fprintln(c.App.Writer, "Updated:")
+			fmt.Fprintln(c.App.Writer, "Updated:") //nolint:errcheck // CLI output; errors are non-actionable
 			for _, u := range resp.Updated {
-				fmt.Fprintf(c.App.Writer, "~ %s\n", u)
+				fmt.Fprintf(c.App.Writer, "~ %s\n", u) //nolint:errcheck // CLI output; errors are non-actionable
 			}
 		}
 		if len(resp.Added) == 0 && len(resp.Updated) == 0 {
-			fmt.Fprintln(c.App.Writer, "No variables added or updated.")
+			fmt.Fprintln(c.App.Writer, "No variables added or updated.") //nolint:errcheck // CLI output; errors are non-actionable
 		}
 
 	case "json", "json-pretty":

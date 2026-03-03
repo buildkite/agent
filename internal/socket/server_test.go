@@ -31,9 +31,9 @@ func (yesNoServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.URL.Path {
 	case "/yes":
-		w.Write([]byte("Yes!\n"))
+		w.Write([]byte("Yes!\n")) //nolint:errcheck // test handler
 	case "/no":
-		w.Write([]byte("No.\n"))
+		w.Write([]byte("No.\n")) //nolint:errcheck // test handler
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
@@ -72,7 +72,7 @@ func TestServerStartStop(t *testing.T) {
 		t.Fatalf("socket test connection: %v", err)
 	}
 
-	test.Close()
+	test.Close() //nolint:errcheck // test connection verified; close is best-effort
 
 	if err := svr.Close(); err != nil {
 		t.Fatalf("svr.Close() = %v", err)
@@ -100,7 +100,7 @@ func TestServerHandler(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("svr.Start() = %v", err)
 	}
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() { svr.Close() }) //nolint:errcheck // best-effort cleanup in test
 
 	cli := &http.Client{
 		Transport: &http.Transport{
@@ -152,7 +152,7 @@ func TestServerHandler(t *testing.T) {
 			if err != nil {
 				t.Fatalf("cli.Do(req) = error %v", err)
 			}
-			defer resp.Body.Close()
+			defer resp.Body.Close() //nolint:errcheck // response body close errors are inconsequential in tests
 			if got, want := resp.StatusCode, test.wantStatus; got != want {
 				t.Errorf("resp.Status = %v, want %v", got, want)
 			}

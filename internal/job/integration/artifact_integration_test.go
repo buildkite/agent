@@ -16,7 +16,7 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
@@ -45,7 +45,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	tester.MustMock(t, "my-command").Expect().AndCallFunc(func(c *bintest.Call) {
 		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0o700)
@@ -79,7 +79,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {

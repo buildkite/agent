@@ -19,8 +19,6 @@ import (
 
 // setupSecretsAPIServer creates a mock HTTP server that handles secrets API requests
 func setupSecretsAPIServer(t *testing.T, secrets map[string]string) *httptest.Server {
-	const jobID = "1111-1111-1111-1111" // Must match tester JobID
-
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		// Check auth token - agent uses "Token" instead of "Bearer"
 		authHeader := req.Header.Get("Authorization")
@@ -62,7 +60,7 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Set up mock API server with secret values
 	secretsMap := map[string]string{
@@ -100,34 +98,34 @@ func TestSecretsIntegration_EnvironmentVariables(t *testing.T) {
 		// Verify each secret is available as an environment variable
 		dbURL := c.GetEnv("DATABASE_URL")
 		if dbURL == "" {
-			fmt.Fprintf(c.Stderr, "❌ DATABASE_URL is not set\n")
+			fmt.Fprintf(c.Stderr, "❌ DATABASE_URL is not set\n") //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 			return
 		}
-		fmt.Fprintf(c.Stderr, "✅ DATABASE_URL is set: %s\n", dbURL)
+		fmt.Fprintf(c.Stderr, "✅ DATABASE_URL is set: %s\n", dbURL) //nolint:errcheck // test helper; write error is non-actionable
 
 		apiToken := c.GetEnv("API_TOKEN")
 		if apiToken == "" {
-			fmt.Fprintf(c.Stderr, "❌ API_TOKEN is not set\n")
+			fmt.Fprintf(c.Stderr, "❌ API_TOKEN is not set\n") //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 			return
 		}
-		fmt.Fprintf(c.Stderr, "✅ API_TOKEN is set: %s\n", apiToken)
+		fmt.Fprintf(c.Stderr, "✅ API_TOKEN is set: %s\n", apiToken) //nolint:errcheck // test helper; write error is non-actionable
 
 		customVar := c.GetEnv("MY_CUSTOM_VAR")
 		if customVar == "" {
-			fmt.Fprintf(c.Stderr, "❌ MY_CUSTOM_VAR is not set\n")
+			fmt.Fprintf(c.Stderr, "❌ MY_CUSTOM_VAR is not set\n") //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 			return
 		}
-		fmt.Fprintf(c.Stderr, "✅ MY_CUSTOM_VAR is set: %s\n", customVar)
+		fmt.Fprintf(c.Stderr, "✅ MY_CUSTOM_VAR is set: %s\n", customVar) //nolint:errcheck // test helper; write error is non-actionable
 
 		c.Exit(0)
 	})
 
 	// Expect command hook to verify secrets persist
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "Command hook sees DATABASE_URL: %s\n", c.GetEnv("DATABASE_URL"))
+		fmt.Fprintf(c.Stderr, "Command hook sees DATABASE_URL: %s\n", c.GetEnv("DATABASE_URL")) //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
@@ -155,7 +153,7 @@ func TestSecretsIntegration_Redaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Set up mock API server with secret values
 	secretValue := "very-sensitive-secret-value-123"
@@ -180,7 +178,7 @@ func TestSecretsIntegration_Redaction(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
 		// Print the secret value to stderr - should be redacted
-		fmt.Fprintf(c.Stderr, "The sensitive token is: %s\n", c.GetEnv("SENSITIVE_TOKEN"))
+		fmt.Fprintf(c.Stderr, "The sensitive token is: %s\n", c.GetEnv("SENSITIVE_TOKEN")) //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
@@ -207,16 +205,16 @@ func TestSecretsIntegration_BackwardCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Don't set BUILDKITE_SECRETS_CONFIG
 	tester.ExpectGlobalHook("environment").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "Environment hook executed successfully\n")
+		fmt.Fprintf(c.Stderr, "Environment hook executed successfully\n") //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "Command hook executed successfully\n")
+		fmt.Fprintf(c.Stderr, "Command hook executed successfully\n") //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
@@ -241,18 +239,18 @@ func TestSecretsIntegration_EmptySecretsConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Set empty secrets array
 	secretsJSON := "[]"
 
 	tester.ExpectGlobalHook("environment").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "Environment hook executed with empty secrets\n")
+		fmt.Fprintf(c.Stderr, "Environment hook executed with empty secrets\n") //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "Command hook executed with empty secrets\n")
+		fmt.Fprintf(c.Stderr, "Command hook executed with empty secrets\n") //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
@@ -277,7 +275,7 @@ func TestSecretsIntegration_SecretFetchFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Set up mock API server with only one secret - the other will fail
 	secretsMap := map[string]string{
@@ -323,7 +321,7 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Set up mock API server with multiline secret
 	multilineSecret := "line1\nline2\nline3"
@@ -348,7 +346,7 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
 		// Print the multiline secret - should be redacted
-		fmt.Fprintf(c.Stderr, "Multiline secret: %s\n", c.GetEnv("MULTILINE_SECRET"))
+		fmt.Fprintf(c.Stderr, "Multiline secret: %s\n", c.GetEnv("MULTILINE_SECRET")) //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
@@ -375,7 +373,7 @@ func TestSecretsIntegration_LocalHookAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Set up mock API server with secret
 	secretsMap := map[string]string{
@@ -426,7 +424,7 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Set up mock API server with secret
 	secretValue := "job-api-secret-value"
@@ -452,39 +450,39 @@ func TestSecretsIntegration_JobAPIRedactionIntegration(t *testing.T) {
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
 		socketPath := c.GetEnv("BUILDKITE_AGENT_JOB_API_SOCKET")
 		if socketPath == "" {
-			fmt.Fprintf(c.Stderr, "Expected BUILDKITE_AGENT_JOB_API_SOCKET to be set\n")
+			fmt.Fprintf(c.Stderr, "Expected BUILDKITE_AGENT_JOB_API_SOCKET to be set\n") //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 			return
 		}
 
 		socketToken := c.GetEnv("BUILDKITE_AGENT_JOB_API_TOKEN")
 		if socketToken == "" {
-			fmt.Fprintf(c.Stderr, "Expected BUILDKITE_AGENT_JOB_API_TOKEN to be set\n")
+			fmt.Fprintf(c.Stderr, "Expected BUILDKITE_AGENT_JOB_API_TOKEN to be set\n") //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 			return
 		}
 
 		client, err := jobapi.NewClient(mainCtx, socketPath, socketToken)
 		if err != nil {
-			fmt.Fprintf(c.Stderr, "creating Job API client: %v\n", err)
+			fmt.Fprintf(c.Stderr, "creating Job API client: %v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 			return
 		}
 
 		// Print the secret before redaction is added via Job API
-		fmt.Fprintf(c.Stderr, "Secret before explicit redaction: %s\n", c.GetEnv("JOB_API_SECRET"))
+		fmt.Fprintf(c.Stderr, "Secret before explicit redaction: %s\n", c.GetEnv("JOB_API_SECRET")) //nolint:errcheck // test helper; write error is non-actionable
 		time.Sleep(100 * time.Millisecond) // brief pause
 
 		// Add additional redaction via Job API (should already be redacted from secrets fetch)
 		_, err = client.RedactionCreate(mainCtx, secretValue)
 		if err != nil {
-			fmt.Fprintf(c.Stderr, "creating redaction: %v\n", err)
+			fmt.Fprintf(c.Stderr, "creating redaction: %v\n", err) //nolint:errcheck // test helper; write error is non-actionable
 			c.Exit(1)
 			return
 		}
 
 		// Print the secret after additional redaction
-		fmt.Fprintf(c.Stderr, "Secret after explicit redaction: %s\n", c.GetEnv("JOB_API_SECRET"))
+		fmt.Fprintf(c.Stderr, "Secret after explicit redaction: %s\n", c.GetEnv("JOB_API_SECRET")) //nolint:errcheck // test helper; write error is non-actionable
 		c.Exit(0)
 	})
 
@@ -514,7 +512,7 @@ func TestSecretsIntegration_ProtectedEnvironmentVariableRejection(t *testing.T) 
 	if err != nil {
 		t.Fatalf("setting up executor tester: %v", err)
 	}
-	defer tester.Close()
+	defer tester.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// Set up mock API server with secret values
 	secretsMap := map[string]string{

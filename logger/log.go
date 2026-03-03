@@ -218,11 +218,11 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 
 	// Make sure we're only outputting a line one at a time
 	mutex.Lock()
-	fmt.Fprint(l.Writer, line)
+	fmt.Fprint(l.Writer, line)                                  //nolint:errcheck // logger output; error handling would recurse
 	if len(fields) > 0 {
-		fmt.Fprintf(l.Writer, " %s", strings.Join(fieldStrs, " "))
+		fmt.Fprintf(l.Writer, " %s", strings.Join(fieldStrs, " ")) //nolint:errcheck // logger output; error handling would recurse
 	}
-	fmt.Fprint(l.Writer, "\n")
+	fmt.Fprint(l.Writer, "\n") //nolint:errcheck // logger output; error handling would recurse
 	mutex.Unlock()
 }
 
@@ -265,7 +265,7 @@ func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 
 	// Make sure we're only outputting a line one at a time
 	mutex.Lock()
-	fmt.Fprintf(p.Writer, "{%s}\n", strings.TrimSuffix(b.String(), ","))
+	fmt.Fprintf(p.Writer, "{%s}\n", strings.TrimSuffix(b.String(), ",")) //nolint:errcheck // logger output; error handling would recurse
 	mutex.Unlock()
 }
 

@@ -52,7 +52,7 @@ func NewS3Downloader(l logger.Logger, c S3DownloaderConfig) *S3Downloader {
 
 func (d S3Downloader) Start(ctx context.Context) error {
 	if d.conf.S3Client == nil {
-		return fmt.Errorf("S3Downloader for %s: S3Client is nil", d.conf.S3Path)
+		return fmt.Errorf("s3Downloader for %s: S3Client is nil", d.conf.S3Path)
 	}
 
 	presigner := s3.NewPresignClient(d.conf.S3Client)

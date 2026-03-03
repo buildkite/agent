@@ -158,7 +158,7 @@ func (d Download) try(ctx context.Context) error {
 		agenthttp.WithTraceHTTP(d.conf.TraceHTTP),
 	)
 	if err != nil {
-		return fmt.Errorf("Error while downloading %s (%T: %w)", d.conf.URL, err, err)
+		return fmt.Errorf("error while downloading %s (%T: %w)", d.conf.URL, err, err)
 	}
 	defer response.Body.Close() //nolint:errcheck // Idiomatic response body handling.
 

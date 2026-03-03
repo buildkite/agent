@@ -29,7 +29,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer sshKeygen.Close() //nolint:errcheck // best-effort cleanup in test
 
 	// WithPTY(true) should be overriden by RunAndCapture.
 	sh := newShellForTest(t, shell.WithPTY(true))
@@ -59,7 +59,7 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer sshKeygen.Close() //nolint:errcheck // best-effort cleanup in test
 
 	sh := newShellForTest(t, shell.WithPTY(false))
 
@@ -87,7 +87,7 @@ func TestRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer sshKeygen.Close() //nolint:errcheck // best-effort cleanup in test
 
 	out := &bytes.Buffer{}
 
@@ -99,7 +99,7 @@ func TestRun(t *testing.T) {
 
 	go func() {
 		call := <-sshKeygen.Ch
-		fmt.Fprintln(call.Stdout, "Llama party! 🎉")
+		fmt.Fprintln(call.Stdout, "Llama party! 🎉") //nolint:errcheck // test helper goroutine
 		call.Exit(0)
 	}()
 
@@ -146,7 +146,7 @@ func TestContextCancelTerminates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
 	}
-	defer sleepCmd.Close()
+	defer sleepCmd.Close() //nolint:errcheck // best-effort cleanup in test
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -183,7 +183,7 @@ func TestInterrupt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
 	}
-	defer sleepCmd.Close()
+	defer sleepCmd.Close() //nolint:errcheck // best-effort cleanup in test
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -204,7 +204,7 @@ func TestInterrupt(t *testing.T) {
 	// interrupt the process after 50ms
 	go func() {
 		<-time.After(time.Millisecond * 50)
-		sh.Interrupt()
+		sh.Interrupt() //nolint:errcheck // test helper; interrupt error doesn't matter
 	}()
 
 	if err := sh.Command(sleepCmd.Path).Run(ctx); err == nil {
