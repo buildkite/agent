@@ -587,69 +587,16 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 	return e.updateGitMirror(ctx, repository)
 }
 
-// defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
-// hook exists. It performs the default checkout on the Repository provided in the config
-func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
-	span.AddAttributes(map[string]string{
-		"checkout.repo_name": e.Repository,
-		"checkout.refspec":   e.RefSpec,
-		"checkout.commit":    e.Commit,
-	})
-	var err error
-	defer func() { span.FinishWithError(err) }()
-
-	if e.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
-	}
-
-	var mirrorDir string
-
-	// If we can, get a mirror of the git repository to use for reference later
-	if e.GitMirrorsPath != "" && e.Repository != "" {
-		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
-		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
-		if err != nil {
-			return fmt.Errorf("getting/updating git mirror: %w", err)
-		}
-
-		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
-	}
-
-	// Make sure the build directory exists and that we change directory into it
-	if err := e.createCheckoutDir(); err != nil {
-		return fmt.Errorf("creating checkout dir: %w", err)
-	}
-
-	gitCloneFlags := e.GitCloneFlags
-	if mirrorDir != "" {
-		gitCloneFlags += fmt.Sprintf(" --reference %q", mirrorDir)
-	}
-
-	// Does the git directory exist?
-	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
-	if osutil.FileExists(existingGitDir) {
-		// Update the origin of the repository so we can gracefully handle
-		// repository renames
-		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
-			return fmt.Errorf("setting origin: %w", err)
-		}
-	} else {
-		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
-			return fmt.Errorf("cloning git repository: %w", err)
-		}
-	}
-
-	// Git clean prior to checkout, we do this even if submodules have been
-	// disabled to ensure previous submodules are cleaned up
-	if hasGitSubmodules(e.shell) {
-		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
-			return fmt.Errorf("cleaning git submodules: %w", err)
-		}
-	}
-
-	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
-		return fmt.Errorf("cleaning git repository: %w", err)
+// fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
+// enabled and the commit already exists locally, the fetch is skipped entirely.
+func (e *Executor) fetchSource(ctx context.Context) error {
+	// If configured, skip the fetch when the commit already exists locally.
+	// This is useful when a pre-populated git mirror is used with --reference,
+	// as the commit objects are already reachable and fetching is redundant.
+	if e.GitSkipFetchExistingCommits && e.Commit != "HEAD" &&
+		hasGitCommit(ctx, e.shell, ".git", e.Commit) {
+		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
+		return nil
 	}
 
 	gitFetchFlags := e.GitFetchFlags
@@ -736,6 +683,78 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
+// hook exists. It performs the default checkout on the Repository provided in the config
+func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
+	span.AddAttributes(map[string]string{
+		"checkout.repo_name": e.Repository,
+		"checkout.refspec":   e.RefSpec,
+		"checkout.commit":    e.Commit,
+	})
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
+	if e.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
+	}
+
+	var mirrorDir string
+
+	// If we can, get a mirror of the git repository to use for reference later
+	if e.GitMirrorsPath != "" && e.Repository != "" {
+		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
+		if err != nil {
+			return fmt.Errorf("getting/updating git mirror: %w", err)
+		}
+
+		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
+	}
+
+	// Make sure the build directory exists and that we change directory into it
+	if err := e.createCheckoutDir(); err != nil {
+		return fmt.Errorf("creating checkout dir: %w", err)
+	}
+
+	gitCloneFlags := e.GitCloneFlags
+	if mirrorDir != "" {
+		gitCloneFlags += fmt.Sprintf(" --reference %q", mirrorDir)
+	}
+
+	// Does the git directory exist?
+	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
+	if osutil.FileExists(existingGitDir) {
+		// Update the origin of the repository so we can gracefully handle
+		// repository renames
+		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
+			return fmt.Errorf("setting origin: %w", err)
+		}
+	} else {
+		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
+			return fmt.Errorf("cloning git repository: %w", err)
+		}
+	}
+
+	// Git clean prior to checkout, we do this even if submodules have been
+	// disabled to ensure previous submodules are cleaned up
+	if hasGitSubmodules(e.shell) {
+		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
+			return fmt.Errorf("cleaning git submodules: %w", err)
+		}
+	}
+
+	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
+		return fmt.Errorf("cleaning git repository: %w", err)
+	}
+
+	if err := e.fetchSource(ctx); err != nil {
+		return err
 	}
 
 	gitCheckoutFlags := e.GitCheckoutFlags

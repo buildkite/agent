@@ -141,16 +141,17 @@ type AgentStartConfig struct {
 	WaitForECSMetaDataTimeout string   `cli:"wait-for-ecs-meta-data-timeout"`
 	WaitForGCPLabelsTimeout   string   `cli:"wait-for-gcp-labels-timeout"`
 
-	GitCheckoutFlags      string `cli:"git-checkout-flags"`
-	GitCloneFlags         string `cli:"git-clone-flags"`
-	GitCloneMirrorFlags   string `cli:"git-clone-mirror-flags"`
-	GitCleanFlags         string `cli:"git-clean-flags"`
-	GitFetchFlags         string `cli:"git-fetch-flags"`
-	GitMirrorsPath        string `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout int    `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules       bool   `cli:"no-git-submodules"`
-	SkipCheckout          bool   `cli:"skip-checkout"`
+	GitCheckoutFlags            string `cli:"git-checkout-flags"`
+	GitCloneFlags               string `cli:"git-clone-flags"`
+	GitCloneMirrorFlags         string `cli:"git-clone-mirror-flags"`
+	GitCleanFlags               string `cli:"git-clean-flags"`
+	GitFetchFlags               string `cli:"git-fetch-flags"`
+	GitMirrorsPath              string `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout       int    `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate        bool   `cli:"git-mirrors-skip-update"`
+	NoGitSubmodules             bool   `cli:"no-git-submodules"`
+	SkipCheckout                bool   `cli:"skip-checkout"`
+	GitSkipFetchExistingCommits bool   `cli:"git-skip-fetch-existing-commits"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval           bool     `cli:"no-command-eval"`
@@ -631,6 +632,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
 		},
 		cli.BoolFlag{
+			Name:   "git-skip-fetch-existing-commits",
+			Usage:  "Skip git fetch if the commit already exists in the local git directory (default: false)",
+			EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+		},
+		cli.BoolFlag{
 			Name:   "no-feature-reporting",
 			Usage:  "Disables sending a list of enabled features back to the Buildkite mothership. We use this information to measure feature usage, but if you're not comfortable sharing that information then that's totally okay :) (default: false)",
 			EnvVar: "BUILDKITE_AGENT_NO_FEATURE_REPORTING",
@@ -1047,6 +1053,7 @@ var AgentStartCommand = cli.Command{
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitSubmodules:                !cfg.NoGitSubmodules,
 			SkipCheckout:                 cfg.SkipCheckout,
+			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			SSHKeyscan:                   !cfg.NoSSHKeyscan,
 			CommandEval:                  !cfg.NoCommandEval,
 			PluginsEnabled:               !cfg.NoPlugins,

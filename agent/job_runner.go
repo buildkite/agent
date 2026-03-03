@@ -568,6 +568,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if r.conf.AgentConfiguration.SkipCheckout {
 		setEnv("BUILDKITE_SKIP_CHECKOUT", "true")
 	}
+	if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
+		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
+	}
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
 	// Allow BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH to be enabled either by config
