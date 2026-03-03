@@ -85,8 +85,8 @@ func (c *Client) AcquireJob(ctx context.Context, id string, headers ...Header) (
 // AcceptJob accepts the passed in job. Returns the job with its finalized set of
 // environment variables (when a job is accepted, the agents environment is
 // applied to the job)
-func (c *Client) AcceptJob(ctx context.Context, job *Job) (*Job, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/accept", railsPathEscape(job.ID))
+func (c *Client) AcceptJob(ctx context.Context, jobID string) (*Job, *Response, error) {
+	u := fmt.Sprintf("jobs/%s/accept", railsPathEscape(jobID))
 
 	req, err := c.newRequest(ctx, "PUT", u, nil)
 	if err != nil {
