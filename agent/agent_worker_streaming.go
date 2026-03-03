@@ -47,7 +47,7 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 	//
 	// Note: This _could_ be implemented with an infinite loop containing a roko
 	// retrier, but it looked a bit messier to me.
-	initialMaxJitter := 1 * time.Second
+	initialWindow := 1 * time.Second
 
 	var skipWait chan struct{}
 	if a.noWaitBetweenPingsForTesting {
@@ -63,16 +63,17 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 	}
 
 	for {
-		// Backoff exponentially, up to initialMaxJitter * 2^6.
+		// Backoff exponentially, up to initialWindow * 2^6.
 		// (Repeated failures may jitter up to 64 seconds between attempts.)
-		maxJitter := initialMaxJitter << min(state.attempts, 6)
+		window := initialWindow << min(state.attempts, 6)
+		windowEnd := time.After(window)
 		state.attempts++
 
 		// Within the interval, wait a random amount of time to avoid
 		// spontaneous synchronisation across agents.
-		jitter := rand.N(maxJitter)
-		setStat(fmt.Sprintf("🫨 Jittering for %v (max %v)", jitter, maxJitter))
-		a.logger.Debug("[runStreamingPingLoop] Waiting for jitter %v (max %v)", jitter, maxJitter)
+		jitter := rand.N(window)
+		setStat(fmt.Sprintf("🫨 Jittering for %v (max %v)", jitter, window))
+		a.logger.Debug("[runStreamingPingLoop] Waiting for jitter %v (max %v)", jitter, window)
 		select {
 		case <-skipWait:
 			// continue below
@@ -92,6 +93,28 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 		}
 		if err != nil {
 			return err
+		}
+
+		// Wait the remainder of the jitter window.
+		// Windowing the jitter this way avoids statistical effects.
+		// (If we started a new jitter right away, the Nth request would
+		// happen at an approximately Normally-distributed time after start,
+		// because that's a sum of random variables each with finite variance.
+		// Central Limit Theorem! We'd rather have a uniform distribution
+		// over a window.)
+		setStat("😴 Waiting for remainder of window")
+		a.logger.Debug("[runStreamingPingLoop] Waiting for remainder of window")
+		select {
+		case <-skipWait:
+			// continue next iteration
+		case <-windowEnd:
+			// continue next iteration
+		case <-a.stop:
+			a.logger.Debug("[runStreamingPingLoop] Stopping due to agent stop")
+			return nil
+		case <-ctx.Done():
+			a.logger.Debug("[runStreamingPingLoop] Stopping due to context cancel")
+			return ctx.Err()
 		}
 	}
 }
