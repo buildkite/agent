@@ -310,15 +310,23 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	streamingLoop := func() {
 		defer wg.Done()
 		err := a.runStreamingPingLoop(ctx, fromStreamingLoopCh)
-		if a.agentConfiguration.PingMode != "streaming-only" {
-			// If the ping mode is streaming-only, then an unrecoverable failure
-			// in the streaming loop should be reported.
-			// Otherwise, it should fall back to the ping loop and carry on,
-			// and if that also has an unrecoverable failure we can report that.
-			// Said another way:
-			// Streaming is best-effort but preferred, unless in streaming-only
-			// mode (it's the only available option).
-			err = nil
+		if err != nil {
+			switch a.agentConfiguration.PingMode {
+			case PingModeStreamOnly:
+				// In streaming-only mode, an unrecoverable failure
+				// in the streaming loop should be reported and should
+				// terminate the agent worker.
+				a.logger.Error("Streaming ping mode failed due to an unrecoverable error: %v", err)
+			default:
+				// In auto mode, the worker should fall back to the ping loop
+				// and carry on. The user might find that interesting (especially if
+				// they are expecting streaming to work).
+				a.logger.Info("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err)
+				// If the ping loop then has its own unrecoverable error, then
+				// *that* will terminate the worker. But the streaming loop shouldn't.
+				// So treat the error from the streaming loop as "business as usual".
+				err = nil
+			}
 		}
 		errCh <- err
 	}

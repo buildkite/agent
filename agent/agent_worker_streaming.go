@@ -135,9 +135,11 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 	a.logger.Debug("[runStreamingPingLoop] Connecting (attempt %d)", a.attempts)
 	stream, err := a.apiClient.StreamPings(streamCtx, a.agent.UUID)
 	if err != nil {
-		a.logger.Error("Connection to ping stream failed: %v", err)
+		// TODO: after we've made streaming endpoints generally available,
+		// think about making some of these logs error or warning level.
+		a.logger.Debug("[runStreamingPingLoop] Connection to ping stream failed: %v", err)
 		if isUnrecoverable(err) {
-			a.logger.Error("Stopping ping stream because the error is unrecoverable")
+			a.logger.Debug("[runStreamingPingLoop] Stopping because the error is unrecoverable")
 			return err
 		}
 		// Fast fallback to the ping loop
@@ -181,9 +183,11 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 	var amsg actionMessage
 	switch {
 	case streamErr != nil:
+		// TODO: after we've made streaming endpoints generally available,
+		// think about making some of these logs error or warning level.
 		a.logger.Debug("[runStreamingPingLoop] Connection to ping stream failed or ended: %v", streamErr)
 		if isUnrecoverable(streamErr) {
-			a.logger.Error("Stopping ping stream loop because the error is unrecoverable: %v", streamErr)
+			a.logger.Debug("[runStreamingPingLoop] Stopping because the error is unrecoverable")
 			return streamErr
 		}
 		// Stay healthy if the error is deadline-exceeded.
@@ -197,7 +201,7 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 		amsg.unhealthy = true
 
 	case msg == nil:
-		a.logger.Error("Ping stream yielded a nil message, so assuming the stream is broken")
+		a.logger.Debug("[runStreamingPingLoop] Ping stream yielded a nil message, so assuming the stream is broken")
 		a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
 		amsg.unhealthy = true
 
