@@ -31,11 +31,11 @@ func TestBasicE2E(t *testing.T) {
 	}
 }
 
-func TestBasicE2E_PingOnly(t *testing.T) {
+func TestBasicE2E_PollOnly(t *testing.T) {
 	ctx := t.Context()
 	tc := newTestCase(t, "basic_e2e.yaml")
 
-	tc.startAgent("--ping-mode=ping-only")
+	tc.startAgent("--ping-mode=poll-only")
 	build := tc.triggerBuild()
 
 	// It should take much less time than 1 minute to successfully run the job.
