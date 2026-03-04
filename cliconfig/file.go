@@ -90,47 +90,40 @@ func parseLine(line string) (key, value string, err error) {
 
 	// ditch the comments (but keep quoted hashes)
 	if strings.Contains(line, "#") {
-		segmentsBetweenHashes := strings.Split(line, "#")
-		quotesAreOpen := false
-		segmentsToKeep := make([]string, 0)
-		for _, segment := range segmentsBetweenHashes {
-			if strings.Count(segment, "\"") == 1 || strings.Count(segment, "'") == 1 {
-				if quotesAreOpen {
-					quotesAreOpen = false
-					segmentsToKeep = append(segmentsToKeep, segment)
-				} else {
-					quotesAreOpen = true
+		var quoteChar rune
+		for i, c := range line {
+			if quoteChar != 0 {
+				if c == quoteChar {
+					quoteChar = 0
 				}
-			}
-
-			if len(segmentsToKeep) == 0 || quotesAreOpen {
-				segmentsToKeep = append(segmentsToKeep, segment)
+			} else if c == '"' || c == '\'' {
+				quoteChar = c
+			} else if c == '#' {
+				line = line[:i]
+				break
 			}
 		}
-
-		line = strings.Join(segmentsToKeep, "#")
 	}
 
 	// now split key from value
-	splitString := strings.SplitN(line, "=", 2)
+	foundEquals := false
+	key, value, foundEquals = strings.Cut(line, "=")
 
-	if len(splitString) != 2 {
+	if !foundEquals {
 		// try yaml mode!
-		splitString = strings.SplitN(line, ":", 2)
-	}
+		foundColon := false
+		key, value, foundColon = strings.Cut(line, ":")
 
-	if len(splitString) != 2 {
-		return "", "", fmt.Errorf("can't separate key from value in string %q, no valid separators (= or :) found", line)
+		if !foundColon {
+			return "", "", fmt.Errorf("can't separate key from value in string %q, no valid separators (= or :) found", line)
+		}
 	}
 
 	// Parse the key
-	key = splitString[0]
 	key = strings.TrimPrefix(key, "export")
 	key = strings.TrimSpace(key)
 
 	// Parse the value
-	value = splitString[1]
-	// trim
 	value = strings.TrimSpace(value)
 
 	// check if we've got quoted values
