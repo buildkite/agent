@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.119.1](https://github.com/buildkite/agent/tree/v3.119.1) (2026-03-04)
+
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.119.0...v3.119.1)
+
+### Fixed
+
+- Validate ping mode flag, tweak log levels [#3734](https://github.com/buildkite/agent/pull/3734) (@DrJosh9000)
+- Default ping-mode to ping-only for now [#3733](https://github.com/buildkite/agent/pull/3733) (@moskyb)
+
 ## [v3.119.0](https://github.com/buildkite/agent/tree/v3.119.0) (2026-03-03)
 
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.118.1...v3.119.0)
