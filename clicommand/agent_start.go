@@ -764,8 +764,8 @@ var AgentStartCommand = cli.Command{
 		// API + agent behaviour
 		cli.StringFlag{
 			Name:   "ping-mode",
-			Usage:  "Selects available protocols for dispatching work to this agent. One of auto (default), ping-only, stream-only.",
-			Value:  "auto",
+			Usage:  "Selects available protocols for dispatching work to this agent. One of ping-only (default), auto (prefer streaming, but fall back to polling when necessary) or stream-only.",
+			Value:  "ping-only",
 			EnvVar: "BUILDKITE_AGENT_PING_MODE",
 		},
 
