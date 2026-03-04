@@ -20,6 +20,12 @@ import (
 	"github.com/buildkite/roko"
 )
 
+const (
+	PingModeAuto       = "auto" // empty string can be used from tests
+	PingModeStreamOnly = "stream-only"
+	PingModePollOnly   = "poll-only"
+)
+
 type AgentWorkerConfig struct {
 	// Whether to set debug in the job
 	Debug bool
@@ -323,18 +329,21 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 
 	var loops []func()
 	switch a.agentConfiguration.PingMode {
-	case "", "auto":
+	case "", PingModeAuto: // note: "" can happen in some tests
 		loops = []func(){pingLoop, streamingLoop, debouncerLoop}
 		bat.Acquire(actorDebouncer)
 
-	case "ping-only":
+	case PingModePollOnly:
 		loops = []func(){pingLoop}
 		fromDebouncerCh = nil // prevent action loop listening to streaming side
 
-	case "stream-only":
+	case PingModeStreamOnly:
 		loops = []func(){streamingLoop, debouncerLoop}
 		fromPingLoopCh = nil // prevent action loop listening to ping side
 		bat.Acquire(actorDebouncer)
+
+	default:
+		return fmt.Errorf("unknown ping mode %q", a.agentConfiguration.PingMode)
 	}
 
 	// There's always an action handler.

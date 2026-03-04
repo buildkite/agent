@@ -60,8 +60,17 @@ Example:
 
     $ buildkite-agent start --token xxx`
 
+const pingModePingOnly = "ping-only"
+
 var (
 	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+
+	pingModes = []string{
+		agent.PingModeAuto,
+		agent.PingModePollOnly,
+		pingModePingOnly, // canonicalises to agent.PingModePollOnly
+		agent.PingModeStreamOnly,
+	}
 
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
 		regexp.MustCompile("^BUILDKITE$"),
@@ -764,8 +773,8 @@ var AgentStartCommand = cli.Command{
 		// API + agent behaviour
 		cli.StringFlag{
 			Name:   "ping-mode",
-			Usage:  "Selects available protocols for dispatching work to this agent. One of ping-only (default), auto (prefer streaming, but fall back to polling when necessary) or stream-only.",
-			Value:  "ping-only",
+			Usage:  "Selects available protocols for dispatching work to this agent. One of auto (default, prefer streaming, but fall back to polling when necessary), poll-only, or stream-only.",
+			Value:  "auto",
 			EnvVar: "BUILDKITE_AGENT_PING_MODE",
 		},
 
@@ -850,6 +859,15 @@ var AgentStartCommand = cli.Command{
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
 			return fmt.Errorf("failed to unset config from environment: %w", err)
+		}
+
+		if !slices.Contains(pingModes, cfg.PingMode) {
+			return fmt.Errorf("invalid ping mode %q, must be one of %v", cfg.PingMode, pingModes)
+		}
+		// Calling it "ping-only" was a mistake, so canonicalise it to "poll-only"
+		// on the very remote chance someone is using that.
+		if cfg.PingMode == pingModePingOnly {
+			cfg.PingMode = agent.PingModePollOnly
 		}
 
 		if cfg.VerificationJWKSFile != "" {
