@@ -210,6 +210,8 @@ func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error
 	// once we've done that, we can do the error handling for pingErr
 
 	if ping != nil {
+		a.setArtifactBatchHintsFromPing(ping)
+
 		// Is there a message that should be shown in the logs?
 		if ping.Message != "" {
 			a.logger.Info(ping.Message)
@@ -258,6 +260,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error
 			a.apiClient = newAPIClient
 			a.agent.Endpoint = ping.Endpoint
 			ping = newPing
+			a.setArtifactBatchHintsFromPing(ping)
 		}
 	}
 

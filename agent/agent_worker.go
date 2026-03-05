@@ -116,9 +116,19 @@ type AgentWorker struct {
 	// The time when this agent worker started
 	startTime time.Time
 
+	// Server-provided hints for artifact upload batching, updated from ping.
+	artifactBatchHintsMu       sync.RWMutex
+	artifactCreateBatchSize    int
+	artifactUpdateBatchSizeMax int
+
 	// disable the delay between pings, to speed up certain testing scenarios
 	noWaitBetweenPingsForTesting bool
 }
+
+const (
+	artifactCreateBatchSizeEnv    = "BUILDKITE_ARTIFACT_CREATE_BATCH_SIZE"
+	artifactUpdateBatchSizeMaxEnv = "BUILDKITE_ARTIFACT_UPDATE_BATCH_SIZE_MAX"
+)
 
 type agentWorkerState string
 
@@ -505,6 +515,8 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 }
 
 func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignoreAgentInDispatches *bool) error {
+	a.applyArtifactBatchHintsToJob(acceptResponse)
+
 	a.setBusy(acceptResponse.ID)
 	defer a.setIdle()
 
@@ -547,6 +559,47 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 	}
 
 	return nil
+}
+
+func (a *AgentWorker) setArtifactBatchHintsFromPing(ping *api.Ping) {
+	if ping == nil {
+		return
+	}
+
+	a.artifactBatchHintsMu.Lock()
+	defer a.artifactBatchHintsMu.Unlock()
+
+	if ping.ArtifactCreateBatchSize > 0 {
+		a.artifactCreateBatchSize = ping.ArtifactCreateBatchSize
+	}
+	if ping.ArtifactUpdateBatchSizeMax > 0 {
+		a.artifactUpdateBatchSizeMax = ping.ArtifactUpdateBatchSizeMax
+	}
+}
+
+func (a *AgentWorker) artifactBatchHints() (createBatchSize, updateBatchSizeMax int) {
+	a.artifactBatchHintsMu.RLock()
+	defer a.artifactBatchHintsMu.RUnlock()
+
+	return a.artifactCreateBatchSize, a.artifactUpdateBatchSizeMax
+}
+
+func (a *AgentWorker) applyArtifactBatchHintsToJob(job *api.Job) {
+	createBatchSize, updateBatchSizeMax := a.artifactBatchHints()
+	if createBatchSize <= 0 && updateBatchSizeMax <= 0 {
+		return
+	}
+
+	if job.Env == nil {
+		job.Env = make(map[string]string)
+	}
+
+	if createBatchSize > 0 {
+		job.Env[artifactCreateBatchSizeEnv] = fmt.Sprint(createBatchSize)
+	}
+	if updateBatchSizeMax > 0 {
+		job.Env[artifactUpdateBatchSizeMaxEnv] = fmt.Sprint(updateBatchSizeMax)
+	}
 }
 
 // Disconnect notifies the Buildkite API that this agent worker/session is
