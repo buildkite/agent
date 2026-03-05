@@ -773,7 +773,10 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 				defer cancel()
 			}
 
-			_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, chunk)
+			resp, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, chunk)
+			if applyRetryAfterHeader(resp, r) {
+				a.logger.Debug("UpdateArtifacts retry interval updated from Retry-After header")
+			}
 			if err != nil {
 				a.logger.Warn("%s (%s)", err, r)
 			}

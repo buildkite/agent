@@ -6,11 +6,20 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/require"
 )
+
+type nextIntervalRecorder struct {
+	next time.Duration
+}
+
+func (n *nextIntervalRecorder) SetNextInterval(d time.Duration) {
+	n.next = d
+}
 
 type stubArtifactAPIClient struct {
 	createFn func(context.Context, string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error)
@@ -116,4 +125,26 @@ func TestUpdateStatesRespectsConfiguredBatchMax(t *testing.T) {
 	for _, tracker := range worker.trackers {
 		require.Equal(t, "sent", tracker.State)
 	}
+}
+
+func TestApplyRetryAfterHeaderSetsRetryInterval(t *testing.T) {
+	t.Parallel()
+
+	r := &nextIntervalRecorder{}
+	resp := &api.Response{Response: &http.Response{Header: http.Header{"Retry-After": []string{"3"}}}}
+
+	updated := applyRetryAfterHeader(resp, r)
+	require.True(t, updated)
+	require.Equal(t, 3*time.Second, r.next)
+}
+
+func TestApplyRetryAfterHeaderIgnoresInvalidValues(t *testing.T) {
+	t.Parallel()
+
+	r := &nextIntervalRecorder{}
+	resp := &api.Response{Response: &http.Response{Header: http.Header{"Retry-After": []string{"not-a-number"}}}}
+
+	updated := applyRetryAfterHeader(resp, r)
+	require.False(t, updated)
+	require.Equal(t, time.Duration(0), r.next)
 }

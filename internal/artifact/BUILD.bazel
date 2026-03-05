@@ -16,6 +16,7 @@ go_library(
         "downloader.go",
         "gs_downloader.go",
         "gs_uploader.go",
+        "retry_after.go",
         "s3.go",
         "s3_downloader.go",
         "s3_uploader.go",
