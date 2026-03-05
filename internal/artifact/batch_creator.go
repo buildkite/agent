@@ -99,6 +99,9 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 			if resp != nil && resp.StatusCode == 429 {
 				saw429 = true
 			}
+			if applyRetryAfterHeader(resp, r) {
+				a.logger.Debug("CreateArtifacts retry interval updated from Retry-After header")
+			}
 			// the server returns a 403 code if the artifact has exceeded the service quota
 			// Break the retry on any 4xx code except for 429 Too Many Requests.
 			if resp != nil && (resp.StatusCode != 429 && resp.StatusCode >= 400 && resp.StatusCode <= 499) {
