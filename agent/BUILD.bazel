@@ -66,6 +66,7 @@ go_library(
 go_test(
     name = "agent_test",
     srcs = [
+        "artifact_batch_hints_test.go",
         "agent_worker_test.go",
         "fake_api_server_test.go",
         "gcp_meta_data_test.go",

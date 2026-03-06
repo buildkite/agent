@@ -61,6 +61,13 @@ type UploaderConfig struct {
 
 	// Whether to allow multipart uploads to the BK-hosted bucket
 	AllowMultipart bool
+
+	// Maximum artifacts in each CreateArtifacts request. If zero, uses the default.
+	CreateBatchSize int
+
+	// Maximum artifact states in each UpdateArtifacts request. If zero, all pending
+	// states are sent in one request.
+	UpdateBatchSizeMax int
 }
 
 type Uploader struct {
@@ -114,6 +121,7 @@ func (a *Uploader) Upload(ctx context.Context) error {
 		UploadDestination:      a.conf.Destination,
 		CreateArtifactsTimeout: 10 * time.Second,
 		AllowMultipart:         a.conf.AllowMultipart,
+		CreateBatchSize:        a.conf.CreateBatchSize,
 	})
 	artifacts, err = batchCreator.Create(ctx)
 	if err != nil {
@@ -742,40 +750,49 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 		})
 	}
 
-	// Post the update
-	timeout := 5 * time.Second
+	batchSize := a.conf.UpdateBatchSizeMax
+	if batchSize <= 0 || batchSize > len(statesToUpload) {
+		batchSize = len(statesToUpload)
+	}
 
-	// Update the states of the artifacts in bulk.
-	err := roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		ctxTimeout := ctx
-		if timeout != 0 {
-			var cancel func()
-			ctxTimeout, cancel = context.WithTimeout(ctx, timeout)
-			defer cancel()
-		}
+	for i := 0; i < len(statesToUpload); i += batchSize {
+		j := min(i+batchSize, len(statesToUpload))
+		chunk := statesToUpload[i:j]
 
-		_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, statesToUpload)
+		// Post the update
+		timeout := 5 * time.Second
+
+		err := roko.NewRetrier(
+			roko.WithMaxAttempts(10),
+			roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			ctxTimeout := ctx
+			if timeout != 0 {
+				var cancel func()
+				ctxTimeout, cancel = context.WithTimeout(ctx, timeout)
+				defer cancel()
+			}
+
+			_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, chunk)
+			if err != nil {
+				a.logger.Warn("%s (%s)", err, r)
+			}
+
+			// after four attempts (0, 1, 2, 3)...
+			if r.AttemptCount() == 3 {
+				// The short timeout has given us fast feedback on the first couple of attempts,
+				// but perhaps the server needs more time to complete the request, so fall back to
+				// the default HTTP client timeout.
+				a.logger.Debug("UpdateArtifacts timeout (%s) removed for subsequent attempts", timeout)
+				timeout = 0
+			}
+
+			return err
+		})
 		if err != nil {
-			a.logger.Warn("%s (%s)", err, r)
+			a.logger.Error("Error updating artifact states: %v", err)
+			return err
 		}
-
-		// after four attempts (0, 1, 2, 3)...
-		if r.AttemptCount() == 3 {
-			// The short timeout has given us fast feedback on the first couple of attempts,
-			// but perhaps the server needs more time to complete the request, so fall back to
-			// the default HTTP client timeout.
-			a.logger.Debug("UpdateArtifacts timeout (%s) removed for subsequent attempts", timeout)
-			timeout = 0
-		}
-
-		return err
-	})
-	if err != nil {
-		a.logger.Error("Error updating artifact states: %v", err)
-		return err
 	}
 
 	for _, tracker := range trackersToMarkSent {
