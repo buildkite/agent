@@ -1549,6 +1549,10 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		}
 	}
 
+	if len(hooks) == 0 {
+		return nil
+	}
+
 	// pipe from hook output to logger
 	r, w := io.Pipe()
 	sh, err := shell.New(
@@ -1570,6 +1574,10 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 			log.Info(scan.Text())
 		}
 	}()
+	defer func() {
+		_ = w.Close() // closing the writer ends scan.Scan and lets wg.Wait return
+		wg.Wait()
+	}()
 
 	// run hooks
 	for _, p = range hooks {
@@ -1584,10 +1592,6 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 			log.Error("%q hook: %v", hookName, err)
 			return err
 		}
-		w.Close() // goroutine scans until pipe is closed
-
-		// wait for hook to finish and output to flush to logger
-		wg.Wait()
 	}
 	return nil
 }
