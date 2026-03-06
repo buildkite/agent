@@ -163,6 +163,7 @@ func (h *headerTimesStreamer) Stop() {
 		h.streamingMu.Unlock()
 		return
 	}
+	h.streaming = false
 	close(h.timesCh)
 	h.streamingMu.Unlock()
 
