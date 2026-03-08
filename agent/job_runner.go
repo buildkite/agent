@@ -456,6 +456,7 @@ BUILDKITE_LOCAL_HOOKS_ENABLED
 BUILDKITE_PLUGINS_ENABLED
 BUILDKITE_REDACTED_VARS
 BUILDKITE_SHELL
+BUILDKITE_HOOKS_SHELL
 BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
@@ -588,6 +589,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
+	setEnv("BUILDKITE_HOOKS_SHELL", r.conf.AgentConfiguration.HooksShell)
 	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
 	setEnv("BUILDKITE_REDACTED_VARS", strings.Join(r.conf.AgentConfiguration.RedactedVars, ","))
 	setEnv("BUILDKITE_STRICT_SINGLE_HOOKS", fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks))

@@ -129,6 +129,7 @@ type AgentStartConfig struct {
 	PluginsPath          string   `cli:"plugins-path" normalize:"filepath"`
 
 	Shell           string `cli:"shell"`
+	HooksShell      string `cli:"hooks-shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
 	NoPTY           bool   `cli:"no-pty"`
 
@@ -420,6 +421,11 @@ var AgentStartCommand = cli.Command{
 			Value:  DefaultShell(),
 			Usage:  "The shell command used to interpret build commands, e.g /bin/bash -e -c",
 			EnvVar: "BUILDKITE_SHELL",
+		},
+		cli.StringFlag{
+			Name:   "hooks-shell",
+			Usage:  "The shell command used to interpret hooks commands, e.g pwsh -Command",
+			EnvVar: "BUILDKITE_HOOKS_SHELL",
 		},
 		cli.StringFlag{
 			Name:   "queue",
@@ -1103,6 +1109,7 @@ var AgentStartCommand = cli.Command{
 			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
 			LogFormat:                    cfg.LogFormat,
 			Shell:                        cfg.Shell,
+			HooksShell:                   cfg.HooksShell,
 			RedactedVars:                 cfg.RedactedVars,
 			AcquireJob:                   cfg.AcquireJob,
 			TracingBackend:               cfg.TracingBackend,

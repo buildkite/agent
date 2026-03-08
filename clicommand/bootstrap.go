@@ -95,6 +95,7 @@ type BootstrapConfig struct {
 	LogLevel                     string   `cli:"log-level"`
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
+	HooksShell                   string   `cli:"hooks-shell"`
 	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
@@ -368,6 +369,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The shell to use to interpret build commands",
 			EnvVar: "BUILDKITE_SHELL",
 			Value:  DefaultShell(),
+		},
+		cli.StringFlag{
+			Name:   "hooks-shell",
+			Usage:  "The shell to use to interpret hooks commands",
+			EnvVar: "BUILDKITE_HOOKS_SHELL",
 		},
 		cli.StringSliceFlag{
 			Name:   "phases",
