@@ -112,7 +112,8 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 	// preferred.
 	a.logger.Debug("[runPingLoop] Waiting for baton")
 	select {
-	case <-a.bat.Acquire(actorPingLoop): // the baton is ours!
+	case <-a.bat.Acquire(): // the baton is ours!
+		a.bat.Acquired(actorPingLoop)
 		a.logger.Debug("[runPingLoop] Acquired the baton")
 		defer func() { // <- this is why the ping loop body is in a func
 			a.logger.Debug("[runPingLoop] Releasing the baton")

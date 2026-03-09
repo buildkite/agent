@@ -67,7 +67,8 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 			a.logger.Debug("[runDebouncer] Stopping due to context cancel")
 			return ctx.Err()
 
-		case <-iif(healthy, bat.Acquire(actorDebouncer)): // if the stream is healthy, take the baton if available
+		case <-iif(healthy, bat.Acquire()): // if the stream is healthy, take the baton if available
+			bat.Acquired(actorDebouncer)
 			a.logger.Debug("[runDebouncer] Took the baton")
 			// We now have the baton!
 			// continue below to send any pending message, if able
