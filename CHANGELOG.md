@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.119.2](https://github.com/buildkite/agent/tree/v3.119.2) (2026-03-09)
+
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.119.1...v3.119.2)
+
+### Added
+
+- Generate a warning when cache is specified on self-hosted jobs [#3743](https://github.com/buildkite/agent/pull/3743) (@CerealBoy)
+
+### Internal
+
+- chore: add mise config for go and golangci-lint [#3739](https://github.com/buildkite/agent/pull/3739) (@lox)
+
 ## [v3.119.1](https://github.com/buildkite/agent/tree/v3.119.1) (2026-03-04)
 
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.119.0...v3.119.1)
