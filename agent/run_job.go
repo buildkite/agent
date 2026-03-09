@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -166,6 +167,15 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			l.Info("Successfully verified job")
 			fmt.Fprintln(r.jobLogs, "~~~ ✅ Job signature verified")
 			fmt.Fprintf(r.jobLogs, "signature: %s\n", job.Step.Signature.Value)
+		}
+	}
+
+	// Log a message if the job has cache settings but is running on a self-hosted agent.
+	if cache := job.Step.Cache; cache != nil && !cache.Disabled && len(cache.Paths) > 0 {
+		if job.Env["BUILDKITE_COMPUTE_TYPE"] == "self-hosted" {
+			fmt.Fprintln(r.jobLogs, "+++ ⚠️ Cache settings detected on self-hosted agent")
+			fmt.Fprintf(r.jobLogs, "cache paths: %s\n", strings.Join(cache.Paths, ", "))
+			r.agentLogger.Info("Job %s has cache settings but is running on a self-hosted agent", job.ID)
 		}
 	}
 
