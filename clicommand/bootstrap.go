@@ -78,7 +78,7 @@ type BootstrapConfig struct {
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
-	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config"`
+	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config" normalize:"list"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
