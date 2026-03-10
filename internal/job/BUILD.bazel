@@ -35,7 +35,6 @@ go_library(
         "//internal/socket",
         "//internal/tempfile",
         "//jobapi",
-        "//kubernetes",
         "//logger",
         "//process",
         "//tracetools",
