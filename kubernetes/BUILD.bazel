@@ -4,6 +4,7 @@ go_library(
     name = "kubernetes",
     srcs = [
         "client.go",
+        "doc.go",
         "runner.go",
         "umask.go",
         "umask_windows.go",
