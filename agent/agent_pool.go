@@ -110,16 +110,12 @@ func (r *AgentPool) StopGracefully() {
 // cancellation to finish.
 func (r *AgentPool) StopUngracefully() {
 	var wg sync.WaitGroup
-	wg.Add(len(r.workers))
 	for _, worker := range r.workers {
 		// Because StopUngracefully calls the job runner's Cancel, which blocks,
 		// concurrently stop all the workers.
 		// The number of concurrent Stops is bounded by the spawn count, and
 		// there already exists a handful of goroutines per worker.
-		go func() {
-			worker.StopUngracefully()
-			wg.Done()
-		}()
+		wg.Go(worker.StopUngracefully)
 	}
 	wg.Wait()
 }

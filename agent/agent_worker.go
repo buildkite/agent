@@ -298,17 +298,12 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	fromStreamingLoopCh := make(chan actionMessage) // streaming loop to debouncer
 	fromDebouncerCh := make(chan actionMessage)     // debouncer to action handler
 
-	// Start the loops and block until they have all stopped.
 	// Based on configuration, we have our choice of ping loop,
 	// streaming loop+debouncer loop, or both.
-	var wg sync.WaitGroup
-
 	pingLoop := func() {
-		defer wg.Done()
 		errCh <- a.runPingLoop(ctx, bat, fromPingLoopCh)
 	}
 	streamingLoop := func() {
-		defer wg.Done()
 		err := a.runStreamingPingLoop(ctx, fromStreamingLoopCh)
 		if err != nil {
 			switch a.agentConfiguration.PingMode {
@@ -331,7 +326,6 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		errCh <- err
 	}
 	debouncerLoop := func() {
-		defer wg.Done()
 		errCh <- a.runDebouncer(ctx, bat, fromDebouncerCh, fromStreamingLoopCh)
 	}
 
@@ -358,15 +352,14 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 
 	// There's always an action handler.
 	actionLoop := func() {
-		defer wg.Done()
 		errCh <- a.runActionLoop(ctx, idleMon, fromPingLoopCh, fromDebouncerCh)
 	}
 	loops = append(loops, actionLoop)
 
-	// Go loops!
-	wg.Add(len(loops))
+	// Start the loops and block until they have all stopped.
+	var wg sync.WaitGroup
 	for _, l := range loops {
-		go l()
+		wg.Go(l)
 	}
 	wg.Wait()
 

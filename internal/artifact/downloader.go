@@ -109,10 +109,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 	var wg sync.WaitGroup
 	artifactsCh := make(chan *api.Artifact)
 	for range min(10*runtime.GOMAXPROCS(0), len(artifacts)) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				var artifact *api.Artifact
 				var open bool
@@ -146,7 +143,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 					}
 				}
 			}
-		}()
+		})
 	}
 
 	// Send the artifacts to the workers then signal completion by closing the

@@ -208,9 +208,8 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	}
 
 	// Kick off log streaming and job status checking when the process starts.
-	wg.Add(2)
-	go r.streamJobLogsAfterProcessStart(cctx, &wg)
-	go r.jobCancellationChecker(cctx, &wg)
+	wg.Go(func() { r.streamJobLogsAfterProcessStart(cctx) })
+	wg.Go(func() { r.jobCancellationChecker(cctx) })
 
 	exit = r.runJob(cctx)
 	// The defer mutates the error return in some cases.
@@ -443,13 +442,12 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
 // every few seconds and sends it back to Buildkite.
-func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync.WaitGroup) {
+func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context) {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Log Streamer")
 	defer done()
 	setStat("🏃 Starting...")
 
 	defer func() {
-		wg.Done()
 		r.agentLogger.Debug("[JobRunner] Routine that processes the log has finished")
 	}()
 

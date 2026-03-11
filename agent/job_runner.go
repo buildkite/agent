@@ -767,17 +767,12 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 // jobCancellationChecker waits for the processes to start, then continuously
 // polls GetJobState to see if the job has been cancelled server-side. If so,
 // it calls r.Cancel.
-func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGroup) {
+func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Cancellation Checker")
 	defer done()
 	setStat("Starting...")
 
-	defer func() {
-		// Mark this routine as done in the wait group
-		wg.Done()
-
-		r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
-	}()
+	defer r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
 
 	select {
 	case <-r.process.Started():

@@ -92,9 +92,8 @@ func (ls *LogStreamer) Start(ctx context.Context) error {
 		ls.conf.MaxSizeBytes = defaultLogMaxSize
 	}
 
-	ls.workerWG.Add(ls.conf.Concurrency)
 	for i := range ls.conf.Concurrency {
-		go ls.worker(ctx, i)
+		ls.workerWG.Go(func() { ls.worker(ctx, i) })
 	}
 
 	return nil
@@ -180,7 +179,6 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 	ls.logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
 
 	defer ls.logger.Debug("[LogStreamer/Worker#%d] Worker has shutdown", id)
-	defer ls.workerWG.Done()
 
 	ctx, setStat, done := status.AddSimpleItem(ctx, fmt.Sprintf("Log Streamer Worker %d", id))
 	defer done()

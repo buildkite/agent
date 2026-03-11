@@ -421,19 +421,16 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 	t.Run("2s interval should upload fewer chunks than 1s interval", func(t *testing.T) {
 		var count1s, count2s int
 
-		wg := &sync.WaitGroup{}
-		wg.Add(2)
+		var wg sync.WaitGroup
 
 		// these run for 4 seconds, so we run them in parallel to not quite so much wall-clock time
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			count1s = runTestWithInterval(t, 1)
-		}()
+		})
 
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			count2s = runTestWithInterval(t, 2)
-		}()
+		})
 
 		wg.Wait()
 
