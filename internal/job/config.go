@@ -203,7 +203,7 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 	changed := map[string]string{}
 
 	// Use reflection for the type and values
-	fields := reflect.TypeOf(*c)
+	fields := reflect.TypeFor[ExecutorConfig]()
 	values := reflect.ValueOf(c).Elem()
 
 	// Iterate over all available fields and read the tag value
