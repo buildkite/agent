@@ -1565,15 +1565,13 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		scan := bufio.NewScanner(r) // log each line separately
 		log = log.WithFields(logger.StringField("hook", hookName))
 		for scan.Scan() {
 			log.Info(scan.Text())
 		}
-	}()
+	})
 	defer func() {
 		_ = w.Close() // closing the writer ends scan.Scan and lets wg.Wait return
 		wg.Wait()

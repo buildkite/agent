@@ -165,14 +165,11 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 	defer cancel(nil)
 	var wg sync.WaitGroup
 	for range runtime.GOMAXPROCS(0) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			if err := ac.worker(wctx, filesCh); err != nil {
 				cancel(err)
 			}
-		}()
+		})
 	}
 
 	fileFinder := a.glob
@@ -476,9 +473,6 @@ type workUnitResult struct {
 type artifactUploadWorker struct {
 	*Uploader
 
-	// Counts the worker goroutines.
-	wg sync.WaitGroup
-
 	// A tracker for every artifact.
 	// The map is written at the start of upload, and other goroutines only read
 	// afterwards.
@@ -562,9 +556,9 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	go worker.stateUpdater(ctx, resultsCh, errCh)
 
 	// Worker goroutines that work on work units.
+	var wg sync.WaitGroup
 	for range runtime.GOMAXPROCS(0) {
-		worker.wg.Add(1)
-		go worker.doWorkUnits(ctx, unitsCh, resultsCh)
+		wg.Go(func() { worker.doWorkUnits(ctx, unitsCh, resultsCh) })
 	}
 
 	// Send the work units for each artifact to the workers.
@@ -585,7 +579,7 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	a.logger.Debug("Waiting for uploads to complete...")
 
 	// Wait for the workers to finish
-	worker.wg.Wait()
+	wg.Wait()
 
 	// Since the workers are done, all work unit states have been sent to the
 	// state updater.
@@ -604,8 +598,6 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 }
 
 func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan workUnit, resultsCh chan<- workUnitResult) {
-	defer a.wg.Done()
-
 	for {
 		select {
 		case <-ctx.Done():
