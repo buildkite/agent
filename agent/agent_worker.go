@@ -339,7 +339,8 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	switch a.agentConfiguration.PingMode {
 	case "", PingModeAuto: // note: "" can happen in some tests
 		loops = []func(){pingLoop, streamingLoop, debouncerLoop}
-		bat.Acquire(actorDebouncer)
+		<-bat.Acquire()
+		bat.Acquired(actorDebouncer)
 
 	case PingModePollOnly:
 		loops = []func(){pingLoop}
@@ -348,7 +349,8 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	case PingModeStreamOnly:
 		loops = []func(){streamingLoop, debouncerLoop}
 		fromPingLoopCh = nil // prevent action loop listening to ping side
-		bat.Acquire(actorDebouncer)
+		<-bat.Acquire()
+		bat.Acquired(actorDebouncer)
 
 	default:
 		return fmt.Errorf("unknown ping mode %q", a.agentConfiguration.PingMode)
