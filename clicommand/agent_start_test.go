@@ -100,19 +100,6 @@ func TestAgentStartupHook(t *testing.T) {
 }
 
 func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
-	t.SkipNow()
-	// This test was added to validate that multiple global hooks can be added
-	// by using the AdditionalHooksPaths configuration option. When this test
-	// runs however, there's a timing issue where the second hook errors at
-	// execution time as the file is not available.
-	//
-	// Error:          Received unexpected error:
-	//                 error running "/opt/homebrew/bin/bash /var/folders/x3/rsj92m015tdcby8gz2j_25ym0000gn/T/471662504/agent-startup": unexpected error type *errors.errorString: io: read/write on closed pipe
-	// Test:           TestAgentStartupHookWithAdditionalPaths/with_additional_agent-startup_hook
-	// Messages:       [[info] $ /var/folders/x3/rsj92m015tdcby8gz2j_25ym0000gn/T/982974833/agent-startup [info] hello new world [error] "agent-startup" hook: error running "/opt/homebrew/bin/bash /var/folders/x3/rsj92m015tdcby8gz2j_25ym0000gn/T/471662504/agent-startup": unexpected error type *errors.errorString: io: read/write on closed pipe]
-	//
-	// For now it is skipped, and left as a placeholder!
-
 	t.Parallel()
 
 	cfg := func(hooksPath, additionalHooksPath string) AgentStartConfig {
