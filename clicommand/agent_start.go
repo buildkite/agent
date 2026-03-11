@@ -109,6 +109,7 @@ type AgentStartConfig struct {
 
 	AcquireJob                 string `cli:"acquire-job"`
 	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
+	PauseAfterJob              bool   `cli:"pause-after-job"`
 	DisconnectAfterIdleTimeout int    `cli:"disconnect-after-idle-timeout"`
 	DisconnectAfterUptime      int    `cli:"disconnect-after-uptime"`
 	CancelGracePeriod          int    `cli:"cancel-grace-period"`
@@ -243,6 +244,10 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 
 	if asc.DisconnectAfterJob {
 		features = append(features, "disconnect-after-job")
+	}
+
+	if asc.PauseAfterJob {
+		features = append(features, "pause-after-job")
 	}
 
 	if asc.DisconnectAfterIdleTimeout != 0 {
@@ -386,6 +391,11 @@ var AgentStartCommand = cli.Command{
 			Name:   "disconnect-after-job",
 			Usage:  "Disconnect the agent after running exactly one job. When used in conjunction with the ′--spawn′ flag, each worker booted will run exactly one job (default: false)",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
+		},
+		cli.BoolFlag{
+			Name:   "pause-after-job",
+			Usage:  "Pause the agent after running a job, instead of disconnecting. The agent remains connected and can be resumed via the API. Useful for running health checks between jobs without losing agent identity (default: false)",
+			EnvVar: "BUILDKITE_AGENT_PAUSE_AFTER_JOB",
 		},
 		cli.IntFlag{
 			Name:   "disconnect-after-idle-timeout",
@@ -922,6 +932,10 @@ var AgentStartCommand = cli.Command{
 			cfg.NoPlugins = true
 		}
 
+		if cfg.DisconnectAfterJob && cfg.PauseAfterJob {
+			l.Fatal("disconnect-after-job and pause-after-job are mutually exclusive")
+		}
+
 		// Guess the shell if none is provided
 		if cfg.Shell == "" {
 			cfg.Shell = DefaultShell()
@@ -1094,6 +1108,7 @@ var AgentStartCommand = cli.Command{
 			ANSITimestamps:               !cfg.NoANSITimestamps,
 			TimestampLines:               cfg.TimestampLines,
 			DisconnectAfterJob:           cfg.DisconnectAfterJob,
+			PauseAfterJob:                cfg.PauseAfterJob,
 			DisconnectAfterIdleTimeout:   time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
 			DisconnectAfterUptime:        time.Duration(cfg.DisconnectAfterUptime) * time.Second,
 			CancelGracePeriod:            cfg.CancelGracePeriod,

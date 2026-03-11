@@ -51,6 +51,7 @@ type AgentConfiguration struct {
 	TimestampLines               bool
 	HealthCheckAddr              string
 	DisconnectAfterJob           bool
+	PauseAfterJob                bool
 	DisconnectAfterIdleTimeout   time.Duration
 	DisconnectAfterUptime        time.Duration
 	CancelGracePeriod            int
