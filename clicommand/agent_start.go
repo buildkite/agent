@@ -150,17 +150,18 @@ type AgentStartConfig struct {
 	WaitForECSMetaDataTimeout string   `cli:"wait-for-ecs-meta-data-timeout"`
 	WaitForGCPLabelsTimeout   string   `cli:"wait-for-gcp-labels-timeout"`
 
-	GitCheckoutFlags            string `cli:"git-checkout-flags"`
-	GitCloneFlags               string `cli:"git-clone-flags"`
-	GitCloneMirrorFlags         string `cli:"git-clone-mirror-flags"`
-	GitCleanFlags               string `cli:"git-clean-flags"`
-	GitFetchFlags               string `cli:"git-fetch-flags"`
-	GitMirrorsPath              string `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout       int    `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate        bool   `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules             bool   `cli:"no-git-submodules"`
-	SkipCheckout                bool   `cli:"skip-checkout"`
-	GitSkipFetchExistingCommits bool   `cli:"git-skip-fetch-existing-commits"`
+	GitCheckoutFlags            string   `cli:"git-checkout-flags"`
+	GitCloneFlags               string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
+	GitCleanFlags               string   `cli:"git-clean-flags"`
+	GitFetchFlags               string   `cli:"git-fetch-flags"`
+	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
+	NoGitSubmodules             bool     `cli:"no-git-submodules"`
+	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
+	SkipCheckout                bool     `cli:"skip-checkout"`
+	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval           bool     `cli:"no-command-eval"`
@@ -550,6 +551,12 @@ var AgentStartCommand = cli.Command{
 			Name:   "git-mirrors-skip-update",
 			Usage:  "Skip updating the Git mirror (default: false)",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+		},
+		cli.StringSliceFlag{
+			Name:   "git-submodule-clone-config",
+			Value:  &cli.StringSlice{},
+			Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands such as ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead",
+			EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -1080,6 +1087,7 @@ var AgentStartCommand = cli.Command{
 			GitCleanFlags:                cfg.GitCleanFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitSubmodules:                !cfg.NoGitSubmodules,
+			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                 cfg.SkipCheckout,
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			SSHKeyscan:                   !cfg.NoSSHKeyscan,
