@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -220,10 +221,16 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		return []string{}
 	}
 
-	features := make([]string, 0, 8)
+	features := make([]string, 0, 9)
 
 	if asc.GitMirrorsPath != "" {
 		features = append(features, "git-mirrors")
+	}
+
+	if endpointURL, err := url.Parse(asc.Endpoint); err == nil {
+		if endpointURL.Host == "agent-edge.buildkite.com" && asc.PingMode != agent.PingModePollOnly {
+			features = append(features, "streaming-pings")
+		}
 	}
 
 	if asc.AcquireJob != "" {
