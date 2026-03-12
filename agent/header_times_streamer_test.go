@@ -13,12 +13,9 @@ func TestHeaderTimesStreamerScanAfterStopDoesNotPanic(t *testing.T) {
 
 	h := newHeaderTimesStreamer(logger.Discard, func(context.Context, int, int, map[string]string) {})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	runDone := make(chan struct{})
 	go func() {
-		h.Run(ctx)
+		h.Run(t.Context())
 		close(runDone)
 	}()
 
@@ -49,7 +46,6 @@ func TestHeaderTimesStreamerScanAfterStopDoesNotPanic(t *testing.T) {
 	select {
 	case <-stopDone:
 	case <-time.After(500 * time.Millisecond):
-		cancel()
 		t.Fatal("timed out waiting for header times streamer to stop")
 	}
 
@@ -66,7 +62,6 @@ func TestHeaderTimesStreamerScanAfterStopDoesNotPanic(t *testing.T) {
 	select {
 	case <-runDone:
 	case <-time.After(500 * time.Millisecond):
-		cancel()
 		t.Fatal("timed out waiting for header times streamer run loop to exit")
 	}
 }
