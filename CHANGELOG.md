@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.120.0](https://github.com/buildkite/agent/tree/v3.120.0) (2026-03-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.119.2...v3.120.0)
+
+> [!TIP] 
+> **Streaming job dispatch (Public Preview):** This release adds opt-in support for a new streaming connection between agents and Buildkite, significantly reducing job acceptance latency for self-hosted agents. To try it, start your agent with `--endpoint https://agent-edge.buildkite.com/v3`, for example:
+>
+>     buildkite-agent start --endpoint https://agent-edge.buildkite.com/v3
+>
+> You may alternatively use the environment variable `BUILDKITE_AGENT_ENDPOINT` or edit your `buildkite-agent.cfg` to contain `endpoint=https://agent-edge.buildkite.com/v3`.
+>
+> This capability is in public preview and will become the default in a future release. If you have any feedback or run into issues, please reach out to support@buildkite.com.
+
+> [!NOTE]
+> The minimum version of Go used to build the agent is now Go 1.25.
+
+### Fixed
+- fix: Make submodule clone config an agent config [#3752](https://github.com/buildkite/agent/pull/3752) (@DrJosh9000)
+- fix: prevent header times scan panic after stop [#3740](https://github.com/buildkite/agent/pull/3740) (@lox)
+- fix: handle multiple lifecycle hooks without closed pipe reuse [#3741](https://github.com/buildkite/agent/pull/3741) (@lox)
+- fix: potential deadlock in baton [#3754](https://github.com/buildkite/agent/pull/3754) (@DrJosh9000)
+- fix: Use targetPath helper and tempfile for Azure Blob download [#3751](https://github.com/buildkite/agent/pull/3751) (@DrJosh9000)
+
+### Internal
+
+- Add feature detection for streaming pings [#3757](https://github.com/buildkite/agent/pull/3757) (@moskyb)
+- chore: Apply other go fixes [#3756](https://github.com/buildkite/agent/pull/3756) (@DrJosh9000)
+- chore: use WaitGroup.Go where possible [#3755](https://github.com/buildkite/agent/pull/3755) (@DrJosh9000)
+
+### Dependency updates
+
+- build(deps): bump the container-images group across 5 directories with 1 update [#3749](https://github.com/buildkite/agent/pull/3749) (@dependabot[bot])
+- Upgrade to Go 1.25 and update all dependencies [#3750](https://github.com/buildkite/agent/pull/3750) (@DrJosh9000)
+
 ## [v3.119.2](https://github.com/buildkite/agent/tree/v3.119.2) (2026-03-09)
 
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.119.1...v3.119.2)
