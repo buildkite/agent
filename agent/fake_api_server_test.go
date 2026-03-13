@@ -47,6 +47,7 @@ type FakeAgent struct {
 	Stop               bool
 	Pings              int
 	Heartbeats         int
+	PauseCalls         int
 	IgnoreInDispatches bool
 
 	PingHandler func(*http.Request) (api.Ping, error)
@@ -99,6 +100,7 @@ func NewFakeAPIServer(opts ...fakeAPIServerOption) *FakeAPIServer {
 	mux.HandleFunc("PUT /jobs/{job_uuid}/finish", fs.handleJobFinish)
 	mux.HandleFunc("POST /jobs/{job_uuid}/chunks", fs.handleJobChunks)
 	mux.HandleFunc("GET /ping", fs.handlePing)
+	mux.HandleFunc("POST /pause", fs.handlePause)
 	mux.HandleFunc("POST /heartbeat", fs.handleHeartbeat)
 	mux.HandleFunc("POST /register", fs.handleRegister)
 	fs.Server = httptest.NewServer(mux)
@@ -414,6 +416,22 @@ func (fs *FakeAPIServer) handlePing(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Write(out) //nolint:errcheck // Test should fail on incomplete response.
+}
+
+func (fs *FakeAPIServer) handlePause(rw http.ResponseWriter, req *http.Request) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	auth := req.Header.Get("Authorization")
+	agent := fs.agentForAuth(auth)
+	if agent == nil {
+		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
+		return
+	}
+
+	agent.PauseCalls++
+	agent.Paused = true
+	rw.Write([]byte("{}")) //nolint:errcheck // Test should fail on incomplete response.
 }
 
 func (fs *FakeAPIServer) handleHeartbeat(rw http.ResponseWriter, req *http.Request) {

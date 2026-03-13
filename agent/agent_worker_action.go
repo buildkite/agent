@@ -136,6 +136,13 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 			// We're not paused any more! Log a helpful message.
 			a.logger.Info("Agent has resumed after being paused")
 			paused = false
+			// Reset ranJob so that pause-after-job agents can accept
+			// the next job after being resumed. Only reset for
+			// pause-after-job; disconnect-after-job agents should still
+			// disconnect after resume.
+			if a.agentConfiguration.PauseAfterJob {
+				ranJob = false
+			}
 		}
 
 		// For acquire-job agents, registration sets ignore-in-dispatches=true,
@@ -156,6 +163,26 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 			}
 			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
 			return nil
+		}
+
+		// In pause-after-job mode, finishing the job sets
+		// ignore-in-dispatches=true. Pause the agent so it remains connected
+		// but won't accept new jobs until resumed via the API.
+		if ranJob && a.agentConfiguration.PauseAfterJob && !paused {
+			if msg.jobID != "" {
+				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in pause-after-job mode (and already ran a job)! Ignoring the new job", msg.jobID)
+			}
+			a.logger.Info("Job finished, pausing agent (pause-after-job)")
+			if _, err := a.apiClient.Pause(ctx, &api.AgentPauseRequest{
+				Note: "pause-after-job",
+			}); err != nil {
+				a.logger.Error("Failed to pause agent: %v. Disconnecting instead.", err)
+				return nil
+			}
+			paused = true
+			idleMon.MarkBusy(a)
+			close(msg.errCh)
+			continue
 		}
 
 		// If the jobID is empty, then it's an idle message
@@ -217,10 +244,10 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon
 		return fmt.Errorf("Failed to accept job: %w", err)
 	}
 
-	// If we're disconnecting-after-job, signal back to Buildkite that we're not
-	// interested in jobs after this one.
+	// If we're disconnecting or pausing after the job, signal back to Buildkite
+	// that we're not interested in jobs after this one.
 	var ignoreAgentInDispatches *bool
-	if a.agentConfiguration.DisconnectAfterJob {
+	if a.agentConfiguration.DisconnectAfterJob || a.agentConfiguration.PauseAfterJob {
 		ignoreAgentInDispatches = ptr.To(true)
 	}
 
