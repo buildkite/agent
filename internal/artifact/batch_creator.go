@@ -25,6 +25,10 @@ type BatchCreatorConfig struct {
 
 	// Whether to allow multipart uploads to the BK-hosted bucket.
 	AllowMultipart bool
+
+	// Number of artifacts in each CreateArtifacts request.
+	// If zero, a default is used.
+	CreateBatchSize int
 }
 
 type BatchCreator struct {
@@ -48,12 +52,16 @@ func NewArtifactBatchCreator(l logger.Logger, ac APIClient, c BatchCreatorConfig
 
 func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 	length := len(a.conf.Artifacts)
-	chunks := 30
+	batchSize := a.conf.CreateBatchSize
+	if batchSize <= 0 {
+		batchSize = 30
+	}
+	const maxCreateBatchSize = 500
 
 	// Split into the artifacts into chunks so we're not uploading a ton of
 	// files at once.
-	for i := 0; i < length; i += chunks {
-		j := min(i+chunks, length)
+	for i := 0; i < length; {
+		j := min(i+batchSize, length)
 
 		// The artifacts that will be uploaded in this chunk
 		theseArtifacts := a.conf.Artifacts[i:j]
@@ -72,6 +80,7 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 		a.logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
 		timeout := a.conf.CreateArtifactsTimeout
+		saw429 := false
 
 		// Retry the batch upload a couple of times
 		r := roko.NewRetrier(
@@ -87,6 +96,9 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 			}
 
 			creation, resp, err := a.apiClient.CreateArtifacts(ctxTimeout, a.conf.JobID, batch)
+			if resp != nil && resp.StatusCode == 429 {
+				saw429 = true
+			}
 			// the server returns a 403 code if the artifact has exceeded the service quota
 			// Break the retry on any 4xx code except for 429 Too Many Requests.
 			if resp != nil && (resp.StatusCode != 429 && resp.StatusCode >= 400 && resp.StatusCode <= 499) {
@@ -121,6 +133,16 @@ func (a *BatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 				theseArtifacts[index].UploadInstructions = specific
 			}
 		}
+
+		if saw429 && batchSize < maxCreateBatchSize {
+			newBatchSize := min(batchSize*2, maxCreateBatchSize)
+			if newBatchSize != batchSize {
+				a.logger.Info("Received 429 while creating artifacts, increasing create batch size from %d to %d", batchSize, newBatchSize)
+				batchSize = newBatchSize
+			}
+		}
+
+		i = j
 	}
 
 	return a.conf.Artifacts, nil

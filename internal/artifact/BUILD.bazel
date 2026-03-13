@@ -93,6 +93,7 @@ go_test(
         "artifactory_downloader_test.go",
         "artifactory_uploader_test.go",
         "azure_blob_test.go",
+        "batching_test.go",
         "bk_uploader_test.go",
         "download_test.go",
         "downloader_test.go",
@@ -113,5 +114,6 @@ go_test(
         "@com_github_google_go_cmp//cmp",
         "@com_github_google_go_cmp//cmp/cmpopts",
         "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
     ],
 )
