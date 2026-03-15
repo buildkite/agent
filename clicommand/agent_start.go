@@ -294,7 +294,7 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 }
 
 func DefaultShell() string {
-	// https://github.com/golang/go/blob/master/src/go/build/syslist.go#L7
+	// https://github.com/golang/go/blob/master/src/internal/syslist/syslist.go#L17
 	switch runtime.GOOS {
 	case "windows":
 		return `C:\Windows\System32\CMD.exe /S /C`
@@ -1580,7 +1580,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 
 	// run hooks
 	for _, p = range hooks {
-		script, err := sh.Script(p)
+		script, err := sh.Script(p, cfg.HooksShell)
 		if err != nil {
 			log.Error("%q hook: %v", hookName, err)
 			return err

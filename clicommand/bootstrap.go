@@ -524,6 +524,7 @@ var BootstrapCommand = cli.Command{
 			RunInPty:                     runInPty,
 			SSHKeyscan:                   cfg.SSHKeyscan,
 			Shell:                        cfg.Shell,
+			HooksShell:                   cfg.HooksShell,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,

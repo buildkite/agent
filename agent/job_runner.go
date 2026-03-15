@@ -753,7 +753,7 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	environ.Set("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
 	environ.Set("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
 
-	script, err := sh.Script(hook)
+	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
 	if err != nil {
 		r.agentLogger.Error("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
 		return false, err
