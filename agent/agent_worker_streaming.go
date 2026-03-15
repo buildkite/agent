@@ -59,6 +59,7 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 	state := &streamLoopState{
 		AgentWorker: a,
 		outCh:       outCh,
+		firstMsg:    true, // log "connection established" on the first connection only
 		setStat:     setStat,
 	}
 
@@ -157,8 +158,6 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 		}
 		return nil // continue outer streaming loop
 	}
-
-	a.firstMsg = true // used for the "connection established" log
 
 	a.setStat("🏞️ Streaming actions from Buildkite")
 	a.logger.Debug("[runStreamingPingLoop] Waiting for a message...")
