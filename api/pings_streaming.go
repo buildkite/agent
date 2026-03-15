@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"net/http"
 	"net/url"
+	"time"
 
 	"connectrpc.com/connect"
 	agentedgev1 "github.com/buildkite/agent/v3/api/proto/gen"
@@ -22,8 +24,16 @@ func (c *Client) StreamPings(ctx context.Context, agentID string, opts ...connec
 	}
 	u.Path = "/"
 
+	// Use a separate HTTP client for streaming with a longer timeout.
+	// The shared c.client has a 60s timeout, which is too short for
+	// long-lived streams that are expected to idle between messages.
+	streamClient := &http.Client{
+		Transport: c.client.Transport,
+		Timeout:   5 * time.Minute,
+	}
+
 	cl := agentedgev1connect.NewAgentEdgeServiceClient(
-		c.client,
+		streamClient,
 		u.String(),
 		connect.WithGRPC(),
 		connect.WithClientOptions(opts...),
