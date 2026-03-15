@@ -27,7 +27,8 @@ func Find(root *os.Root, hookDir, name string) (string, error) {
 		exts = []string{".bat", ".cmd", ".ps1", ".exe"}
 	}
 	// always check for an extensionless file
-	exts = append(exts, "")
+	// PowerShell 7 is cross-platform
+	exts = append(exts, "", ".ps1")
 
 	// Check for a file named name+ext in hookDir.
 	for _, ext := range exts {
