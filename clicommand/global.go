@@ -142,6 +142,7 @@ var (
 			// Connection strings frequently contain passwords, e.g.
 			// https://user:pass@host/ or Server=foo;Database=my-db;User Id=user;Password=pass;
 			"*_CONNECTION_STRING",
+			"*_API_KEY",
 		},
 	}
 
