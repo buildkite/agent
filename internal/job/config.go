@@ -4,6 +4,7 @@ import (
 	"log"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
@@ -97,7 +98,7 @@ type ExecutorConfig struct {
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
-	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG" normalize:"list"`
+	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`
 
 	// Whether or not to run the hooks/commands in a PTY
 	RunInPty bool
@@ -222,10 +223,11 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 				}
 				v.SetString(newStr)
 				changed[tag] = newStr
+
 			case reflect.Bool:
 				newBool, err := strconv.ParseBool(newStr)
 				if err != nil {
-					log.Printf("warning: cannot parse %s=%s as bool, ignoring", tag, newStr)
+					log.Printf("warning: cannot parse %s=%q as bool, ignoring", tag, newStr)
 					break
 				}
 				if newBool == v.Bool() {
@@ -233,6 +235,16 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 				}
 				v.SetBool(newBool)
 				changed[tag] = newStr
+
+			case reflect.Slice:
+				if v.Type().Elem() != reflect.TypeFor[string]() {
+					log.Printf("warning: cannot parse %s=%q as %v, ignoring", tag, newStr, v.Type())
+					break
+				}
+				slice := strings.Split(newStr, ",")
+				v.Set(reflect.ValueOf(slice))
+				changed[tag] = newStr
+
 			default:
 				log.Printf("warning: job.ExecutorConfig.ReadFromEnvironment does not support %v for %s", v.Kind(), tag)
 			}
