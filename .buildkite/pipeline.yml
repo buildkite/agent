@@ -413,6 +413,11 @@ steps:
           artifacts: "releases/*.tar.gz;releases/*.zip"
           attestation_name: "buildkite-agent-github-releases.attestation.json"
 
+  - name: ":memo: Trigger docs draft"
+    if: build.branch == "main"
+    soft_fail: true
+    command: .buildkite/steps/trigger-docs-draft.sh
+
   - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
     depends_on:
