@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -169,6 +170,15 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		}
 	}
 
+	// Log a message if the job has cache settings but is running on a self-hosted agent.
+	if cache := job.Step.Cache; cache != nil && !cache.Disabled && len(cache.Paths) > 0 {
+		if job.Env["BUILDKITE_COMPUTE_TYPE"] == "self-hosted" {
+			fmt.Fprintln(r.jobLogs, "+++ ⚠️ Cache settings detected on self-hosted agent")
+			fmt.Fprintf(r.jobLogs, "cache paths: %s\n", strings.Join(cache.Paths, ", "))
+			r.agentLogger.Info("Job %s has cache settings but is running on a self-hosted agent", job.ID)
+		}
+	}
+
 	// Validate the repository if the list of allowed repositories is set.
 	if err := r.validateConfigAllowlists(job); err != nil {
 		fmt.Fprintln(r.jobLogs, err.Error())
@@ -198,9 +208,8 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	}
 
 	// Kick off log streaming and job status checking when the process starts.
-	wg.Add(2)
-	go r.streamJobLogsAfterProcessStart(cctx, &wg)
-	go r.jobCancellationChecker(cctx, &wg)
+	wg.Go(func() { r.streamJobLogsAfterProcessStart(cctx) })
+	wg.Go(func() { r.jobCancellationChecker(cctx) })
 
 	exit = r.runJob(cctx)
 	// The defer mutates the error return in some cases.
@@ -433,13 +442,12 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
 // every few seconds and sends it back to Buildkite.
-func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context, wg *sync.WaitGroup) {
+func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context) {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Log Streamer")
 	defer done()
 	setStat("🏃 Starting...")
 
 	defer func() {
-		wg.Done()
 		r.agentLogger.Debug("[JobRunner] Routine that processes the log has finished")
 	}()
 

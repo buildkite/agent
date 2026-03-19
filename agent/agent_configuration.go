@@ -24,6 +24,9 @@ type AgentConfiguration struct {
 	GitCleanFlags               string
 	GitFetchFlags               string
 	GitSubmodules               bool
+	GitSubmoduleCloneConfig     []string
+	SkipCheckout                bool
+	GitSkipFetchExistingCommits bool
 	AllowedRepositories         []*regexp.Regexp
 	AllowedPlugins              []*regexp.Regexp
 	AllowedEnvironmentVariables []*regexp.Regexp
@@ -67,4 +70,6 @@ type AgentConfiguration struct {
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
+
+	PingMode string
 }

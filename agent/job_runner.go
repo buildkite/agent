@@ -199,29 +199,10 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		},
 	)
 
-	// TempDir is not guaranteed to exist
-	tempDir := os.TempDir()
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
-		if err = os.MkdirAll(tempDir, 0o777); err != nil {
-			return nil, err
-		}
-	}
-
-	// Prepare a file to receive the given job environment
-	file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", r.conf.Job.ID))
+	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, conf.KubernetesExec)
 	if err != nil {
-		return r, err
+		return nil, err
 	}
-	r.agentLogger.Debug("[JobRunner] Created env file (shell format): %s", file.Name())
-	r.envShellFile = file
-
-	file, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", r.conf.Job.ID))
-	if err != nil {
-		return r, err
-	}
-	r.agentLogger.Debug("[JobRunner] Created env file (JSON format): %s", file.Name())
-	r.envJSONFile = file
 
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
@@ -469,6 +450,7 @@ BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
 BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
 BUILDKITE_GIT_SUBMODULES
+BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG
 BUILDKITE_CANCEL_GRACE_PERIOD
 BUILDKITE_COMMAND_EVAL
 BUILDKITE_LOCAL_HOOKS_ENABLED
@@ -576,7 +558,20 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
-	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+	// Disable cloning submodules if specified in Agent config as precedence
+	// else allow pipeline/step env to control it via BUILDKITE_GIT_SUBMODULES
+	if !r.conf.AgentConfiguration.GitSubmodules {
+		setEnv("BUILDKITE_GIT_SUBMODULES", "false")
+	}
+	// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
+	// or by pipeline/step env
+	// This is here now to make it ready for if/when we add skip_checkout to the core app
+	if r.conf.AgentConfiguration.SkipCheckout {
+		setEnv("BUILDKITE_SKIP_CHECKOUT", "true")
+	}
+	if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
+		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
+	}
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
 	// Allow BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH to be enabled either by config
@@ -592,6 +587,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
 	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
 	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
+	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
 	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
@@ -773,17 +769,12 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 // jobCancellationChecker waits for the processes to start, then continuously
 // polls GetJobState to see if the job has been cancelled server-side. If so,
 // it calls r.Cancel.
-func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGroup) {
+func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Cancellation Checker")
 	defer done()
 	setStat("Starting...")
 
-	defer func() {
-		// Mark this routine as done in the wait group
-		wg.Done()
-
-		r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
-	}()
+	defer r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
 
 	select {
 	case <-r.process.Started():
@@ -890,4 +881,36 @@ func (l jobLogger) Write(data []byte) (int, error) {
 	msg := strings.TrimRight(string(data), "\r\n")
 	l.log.Info(msg)
 	return len(data), nil
+}
+
+func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shellFile, jsonFile *os.File, err error) {
+	// Use /workspace in Kubernetes mode for shared volume access between containers
+	tempDir := os.TempDir()
+	if kubernetesExec {
+		tempDir = "/workspace"
+	}
+
+	// tempDir is not guaranteed to exist
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err = os.MkdirAll(tempDir, 0o777); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	shellFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", jobID))
+	if err != nil {
+		return nil, nil, err
+	}
+	l.Debug("[JobRunner] Created env file (shell format): %s", shellFile.Name())
+
+	jsonFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", jobID))
+	if err != nil {
+		shellFile.Close()
+		os.Remove(shellFile.Name())
+		return nil, nil, err
+	}
+	l.Debug("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())
+
+	return shellFile, jsonFile, nil
 }

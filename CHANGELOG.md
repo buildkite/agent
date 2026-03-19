@@ -5,6 +5,143 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.120.1](https://github.com/buildkite/agent/tree/v3.120.1) (2026-03-17)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.120.0...v3.120.1)
+
+### Fixed
+- Adds `API_KEY` values to the redacted list [#3761](https://github.com/buildkite/agent/pull/3761) (@mcncl)
+- fix: Support []string fields in ReadFromEnvironment [#3767](https://github.com/buildkite/agent/pull/3767) (@DrJosh9000)
+
+### Internal
+- Trigger docs-draft-writer pipeline on merge to main [#3760](https://github.com/buildkite/agent/pull/3760) (@omehegan)
+
+### Dependency updates
+- build(deps): bump the container-images group across 1 directory with 2 updates [#3764](https://github.com/buildkite/agent/pull/3764) (@dependabot[bot])
+- build(deps): bump the container-images group across 5 directories with 2 updates [#3766](https://github.com/buildkite/agent/pull/3766) (@dependabot[bot])
+- build(deps): bump the golang-x group with 3 updates [#3762](https://github.com/buildkite/agent/pull/3762) (@dependabot[bot])
+- build(deps): bump the cloud-providers group with 8 updates [#3765](https://github.com/buildkite/agent/pull/3765) (@dependabot[bot])
+
+## [v3.120.0](https://github.com/buildkite/agent/tree/v3.120.0) (2026-03-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.119.2...v3.120.0)
+
+> [!TIP] 
+> **Streaming job dispatch (Public Preview):** This release adds opt-in support for a new streaming connection between agents and Buildkite, significantly reducing job acceptance latency for self-hosted agents. To try it, start your agent with `--endpoint https://agent-edge.buildkite.com/v3`, for example:
+>
+>     buildkite-agent start --endpoint https://agent-edge.buildkite.com/v3
+>
+> You may alternatively use the environment variable `BUILDKITE_AGENT_ENDPOINT` or edit your `buildkite-agent.cfg` to contain `endpoint=https://agent-edge.buildkite.com/v3`.
+>
+> This capability is in public preview and will become the default in a future release. If you have any feedback or run into issues, please reach out to support@buildkite.com.
+
+> [!NOTE]
+> The minimum version of Go used to build the agent is now Go 1.25.
+
+### Fixed
+- fix: Make submodule clone config an agent config [#3752](https://github.com/buildkite/agent/pull/3752) (@DrJosh9000)
+- fix: prevent header times scan panic after stop [#3740](https://github.com/buildkite/agent/pull/3740) (@lox)
+- fix: handle multiple lifecycle hooks without closed pipe reuse [#3741](https://github.com/buildkite/agent/pull/3741) (@lox)
+- fix: potential deadlock in baton [#3754](https://github.com/buildkite/agent/pull/3754) (@DrJosh9000)
+- fix: Use targetPath helper and tempfile for Azure Blob download [#3751](https://github.com/buildkite/agent/pull/3751) (@DrJosh9000)
+
+### Internal
+
+- Add feature detection for streaming pings [#3757](https://github.com/buildkite/agent/pull/3757) (@moskyb)
+- chore: Apply other go fixes [#3756](https://github.com/buildkite/agent/pull/3756) (@DrJosh9000)
+- chore: use WaitGroup.Go where possible [#3755](https://github.com/buildkite/agent/pull/3755) (@DrJosh9000)
+
+### Dependency updates
+
+- build(deps): bump the container-images group across 5 directories with 1 update [#3749](https://github.com/buildkite/agent/pull/3749) (@dependabot[bot])
+- Upgrade to Go 1.25 and update all dependencies [#3750](https://github.com/buildkite/agent/pull/3750) (@DrJosh9000)
+
+## [v3.119.2](https://github.com/buildkite/agent/tree/v3.119.2) (2026-03-09)
+
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.119.1...v3.119.2)
+
+### Added
+
+- Generate a warning when cache is specified on self-hosted jobs [#3743](https://github.com/buildkite/agent/pull/3743) (@CerealBoy)
+
+### Internal
+
+- chore: add mise config for go and golangci-lint [#3739](https://github.com/buildkite/agent/pull/3739) (@lox)
+
+## [v3.119.1](https://github.com/buildkite/agent/tree/v3.119.1) (2026-03-04)
+
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.119.0...v3.119.1)
+
+### Fixed
+
+- Validate ping mode flag, tweak log levels [#3734](https://github.com/buildkite/agent/pull/3734) (@DrJosh9000)
+- Default ping-mode to ping-only for now [#3733](https://github.com/buildkite/agent/pull/3733) (@moskyb)
+
+## [v3.119.0](https://github.com/buildkite/agent/tree/v3.119.0) (2026-03-03)
+
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.118.1...v3.119.0)
+
+### Added
+
+- Streaming pings [#3697](https://github.com/buildkite/agent/pull/3697) (@DrJosh9000)
+- PS-1663: log s3 credential source for visibility [#3723](https://github.com/buildkite/agent/pull/3723) (@zhming0)
+
+### Fixed
+
+- Fix false URL mismatch detection with insteadOf [#3718](https://github.com/buildkite/agent/pull/3718) (@rajatvig)
+- A-970: Skip git fetch for already-present commits during checkout [#3725](https://github.com/buildkite/agent/pull/3725) (@zhming0)
+- Fix codeowner, add one more owner [#3724](https://github.com/buildkite/agent/pull/3724) (@zhming0)
+
+## [v3.118.1](https://github.com/buildkite/agent/tree/v3.118.1) (2026-02-25)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.118.0...v3.118.1)
+
+### Changed
+- Add retry logic to secret getting [#3706](https://github.com/buildkite/agent/pull/3706) (@mcncl)
+
+#### Internal
+- Test experiment documentation [#3719](https://github.com/buildkite/agent/pull/3719) (@moskyb)
+
+## [v3.118.0](https://github.com/buildkite/agent/compare/v3.117.0...v3.118.0) (2026-02-16)
+
+### Added
+* Add new `buildkite-agent job update` command to update job timeouts [#3707](https://github.com/buildkite/agent/pull/3707) ([matthewborden](https://github.com/matthewborden))
+* Enable setting BUILDKITE_GIT_SUBMODULE with Environment Variables [#3677](https://github.com/buildkite/agent/pull/3677) ([tomowatt](https://github.com/tomowatt))
+
+### Fixed
+* chore: Modified mktemp command for tarball extraction on macOS VMs [#3698](https://github.com/buildkite/agent/pull/3698) ([chrisnavar](https://github.com/chrisnavar))
+
+### Internal
+* Add public preview description to env BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC [#3699](https://github.com/buildkite/agent/pull/3699) ([SorchaAbel](https://github.com/SorchaAbel))
+
+## [v3.117.0](https://github.com/buildkite/agent/tree/v3.117.0) (2026-02-04)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.116.0...v3.117.0)
+
+### Added
+- Flag to fetch the diff-base before diffing for `if_changed` [#3689](https://github.com/buildkite/agent/pull/3689) (@DrJosh9000)
+
+### Fixed
+- Continue heartbeats while job is stopping [#3694](https://github.com/buildkite/agent/pull/3694) (@DrJosh9000)
+
+### Internal
+- Make `bucket-url` optional for cache commands [#3690](https://github.com/buildkite/agent/pull/3690) (@mitchbne)
+
+## [v3.116.0](https://github.com/buildkite/agent/tree/v3.116.0) (2026-01-28)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.115.4...v3.116.0)
+
+### Added
+- Support checkout skipping in agent [#3672](https://github.com/buildkite/agent/pull/3672) (@mcncl)
+- Add default BoolFlag, BoolTFlag values to descriptions [#3678](https://github.com/buildkite/agent/pull/3678) (@petetomasik)
+
+### Fixed
+- Exit with non-zero status if ping or heartbeat fail unrecoverably [#3687](https://github.com/buildkite/agent/pull/3687) (@DrJosh9000)
+- Repeated plugins run correct number of times with always-clone-fresh [#3684](https://github.com/buildkite/agent/pull/3684) (@DrJosh9000)
+- Fix nil pointer dereference in meta-data get on API timeout [#3682](https://github.com/buildkite/agent/pull/3682) (@lox)
+
+### Changed
+- In k8s mode, write BUILDKITE_ENV_FILE to /workspace [#3683](https://github.com/buildkite/agent/pull/3683) (@zhming0)
+
+### Internal
+- Refactor plugin config -> envar generation [#3655](https://github.com/buildkite/agent/pull/3655) (@moskyb)
+- Dependabot updates: [#3656](https://github.com/buildkite/agent/pull/3656), [#3654](https://github.com/buildkite/agent/pull/3654), [#3662](https://github.com/buildkite/agent/pull/3662), [#3673](https://github.com/buildkite/agent/pull/3673), [#3675](https://github.com/buildkite/agent/pull/3675), [#3680](https://github.com/buildkite/agent/pull/3680), [#3681](https://github.com/buildkite/agent/pull/3681) (@dependabot[bot])
+
 ## [v3.115.4](https://github.com/buildkite/agent/tree/v3.115.4) (2026-01-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.115.3...v3.115.4)
 

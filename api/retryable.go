@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"syscall"
 )
@@ -20,17 +19,17 @@ var retrableErrorSuffixes = []string{
 	io.EOF.Error(),
 }
 
-var retryableStatuses = []int{
-	http.StatusTooManyRequests,     // 429
-	http.StatusInternalServerError, // 500
-	http.StatusBadGateway,          // 502
-	http.StatusServiceUnavailable,  // 503
-	http.StatusGatewayTimeout,      // 504
+var retryableStatuses = map[int]bool{
+	http.StatusTooManyRequests:     true, // 429
+	http.StatusInternalServerError: true, // 500
+	http.StatusBadGateway:          true, // 502
+	http.StatusServiceUnavailable:  true, // 503
+	http.StatusGatewayTimeout:      true, // 504
 }
 
 // IsRetryableStatus returns true if the response's StatusCode is one that we should retry.
 func IsRetryableStatus(r *Response) bool {
-	return r.StatusCode >= 400 && slices.Contains(retryableStatuses, r.StatusCode)
+	return retryableStatuses[r.StatusCode]
 }
 
 // Looks at a bunch of connection related errors, and returns true if the error

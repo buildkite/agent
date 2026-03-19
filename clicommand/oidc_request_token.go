@@ -84,7 +84,7 @@ var OIDCRequestTokenCommand = cli.Command{
 
 		cli.BoolFlag{
 			Name:   "skip-redaction",
-			Usage:  "Skip redacting the OIDC token from the logs. Then, the command will print the token to the Job's logs if called directly.",
+			Usage:  "Skip redacting the OIDC token from the logs. Then, the command will print the token to the Job's logs if called directly (default: false)",
 			EnvVar: "BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION",
 		},
 		cli.StringFlag{

@@ -109,12 +109,12 @@ Signing a pipeline from a file:
 		},
 		cli.BoolFlag{
 			Name:   "update",
-			Usage:  "Update the pipeline using the GraphQL API after signing it. This can only be used if ′graphql-token′ is provided.",
+			Usage:  "Update the pipeline using the GraphQL API after signing it. This can only be used if ′graphql-token′ is provided (default: false)",
 			EnvVar: "BUILDKITE_TOOL_SIGN_UPDATE",
 		},
 		cli.BoolFlag{
 			Name:   "no-confirm",
-			Usage:  "Show confirmation prompts before updating the pipeline with the GraphQL API.",
+			Usage:  "Show confirmation prompts before updating the pipeline with the GraphQL API (default: false)",
 			EnvVar: "BUILDKITE_TOOL_SIGN_NO_CONFIRM",
 		},
 
@@ -136,7 +136,7 @@ Signing a pipeline from a file:
 		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
-			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled",
+			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
 			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
 		},
 

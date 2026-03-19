@@ -125,6 +125,8 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 		return nil
 	}
 
+	// If the same plugin is used multiple times, only check it out once.
+	checkoutsByLabel := make(map[string]*pluginCheckout)
 	checkouts := []*pluginCheckout{}
 
 	// Checkout and validate plugins that aren't vendored
@@ -133,6 +135,14 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 			if e.Debug {
 				e.shell.Commentf("Skipping vendored plugin %s", p.Name())
 			}
+			continue
+		}
+
+		// Already checked out (in this job)?
+		if checkout := checkoutsByLabel[p.Label()]; checkout != nil {
+			checkout2 := *checkout
+			checkout2.Plugin = p
+			checkouts = append(checkouts, &checkout2)
 			continue
 		}
 
@@ -146,6 +156,7 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 			return err
 		}
 
+		checkoutsByLabel[p.Label()] = checkout
 		checkouts = append(checkouts, checkout)
 	}
 

@@ -7,7 +7,7 @@ import "github.com/urfave/cli"
 type CacheConfig struct {
 	Ids             []string `cli:"ids"`
 	Registry        string   `cli:"registry"`
-	BucketURL       string   `cli:"bucket-url" validate:"required"`
+	BucketURL       string   `cli:"bucket-url"`
 	Branch          string   `cli:"branch" validate:"required"`
 	Pipeline        string   `cli:"pipeline" validate:"required"`
 	Organization    string   `cli:"organization" validate:"required"`

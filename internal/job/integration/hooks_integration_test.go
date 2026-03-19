@@ -542,15 +542,12 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 	tester.ExpectLocalHook("pre-exit").Once()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := tester.Run(t, "BUILDKITE_COMMAND=sleep 5"); err == nil {
 			t.Errorf(`tester.Run(t, "BUILDKITE_COMMAND=sleep 5") = %v, want non-nil error`, err)
 		}
 		t.Logf("Command finished")
-	}()
+	})
 
 	time.Sleep(time.Millisecond * 500)
 	tester.Cancel()

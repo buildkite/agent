@@ -99,13 +99,11 @@ func TestLocker(t *testing.T) {
 	var wg sync.WaitGroup
 	var locks int
 	for range 10 {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			l.Lock()
 			locks++
 			l.Unlock()
-			wg.Done()
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -126,15 +124,13 @@ func TestDoOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	var calls atomic.Int32
 	for range 10 {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			if err := cli.DoOnce(ctx, "once", func() {
 				calls.Add(1)
 			}); err != nil {
 				t.Errorf("Client.DoOnce(ctx, once, inc) = %v", err)
 			}
-			wg.Done()
-		}()
+		})
 	}
 
 	wg.Wait()

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,10 @@ import (
 	"sync"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/buildkite/agent/v3/api"
+	agentedgev1 "github.com/buildkite/agent/v3/api/proto/gen"
+	"github.com/buildkite/agent/v3/api/proto/gen/agentedgev1connect"
 	"github.com/google/uuid"
 )
 
@@ -46,6 +50,14 @@ type FakeAgent struct {
 	IgnoreInDispatches bool
 
 	PingHandler func(*http.Request) (api.Ping, error)
+
+	// PingStream is a simple way of providing streaming responses concurrently.
+	// It is used for the default handler.
+	PingStream chan *agentedgev1.StreamPingsResponse
+
+	// PingStreamHandler provides more flexibility in how the streaming request
+	// is handled. Setting PingStreamHandler overrides the default handler.
+	PingStreamHandler func(context.Context, *connect.Request[agentedgev1.StreamPingsRequest], *connect.ServerStream[agentedgev1.StreamPingsResponse]) error
 }
 
 // agentJob is just an agent/job tuple.
@@ -54,19 +66,23 @@ type agentJob struct {
 	job   *FakeJob
 }
 
+type fakeAPIServerOption = func(*FakeAPIServer, *http.ServeMux)
+
 // FakeAPIServer implements a fake Agent REST API server for testing.
 type FakeAPIServer struct {
 	*httptest.Server
 
+	agentsMu sync.Mutex
+	agents   map[string]*FakeAgent // session token Auth header -> agent
+
 	mu            sync.Mutex
-	agents        map[string]*FakeAgent                 // session token Auth header -> agent
 	jobs          map[string]*FakeJob                   // uuid -> job
 	agentJobs     map[string]agentJob                   // job token Auth header -> (agent, job)
 	registrations map[string]*api.AgentRegisterResponse // reg token Auth header -> response
 }
 
 // NewFakeAPIServer constructs a new FakeAPIServer for testing.
-func NewFakeAPIServer() *FakeAPIServer {
+func NewFakeAPIServer(opts ...fakeAPIServerOption) *FakeAPIServer {
 	fs := &FakeAPIServer{
 		agents:        make(map[string]*FakeAgent),
 		jobs:          make(map[string]*FakeJob),
@@ -74,6 +90,9 @@ func NewFakeAPIServer() *FakeAPIServer {
 		registrations: make(map[string]*api.AgentRegisterResponse),
 	}
 	mux := http.NewServeMux()
+	for _, opt := range opts {
+		opt(fs, mux)
+	}
 	mux.HandleFunc("PUT /jobs/{job_uuid}/acquire", fs.handleJobAcquire)
 	mux.HandleFunc("PUT /jobs/{job_uuid}/accept", fs.handleJobAccept)
 	mux.HandleFunc("PUT /jobs/{job_uuid}/start", fs.handleJobStart)
@@ -86,12 +105,50 @@ func NewFakeAPIServer() *FakeAPIServer {
 	return fs
 }
 
+// WithStreaming enables the ping streaming API for the fake server.
+func WithStreaming(fs *FakeAPIServer, mux *http.ServeMux) {
+	mux.Handle(agentedgev1connect.NewAgentEdgeServiceHandler(fs))
+}
+
+func (fs *FakeAPIServer) StreamPings(ctx context.Context, req *connect.Request[agentedgev1.StreamPingsRequest], resp *connect.ServerStream[agentedgev1.StreamPingsResponse]) error {
+	auth := req.Header().Get("Authorization")
+	agent := fs.agentForAuth(auth)
+	if agent == nil {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("invalid Authorization header value %q", auth))
+	}
+
+	if agent.PingStreamHandler != nil {
+		return agent.PingStreamHandler(ctx, req, resp)
+	}
+
+	for p := range agent.PingStream {
+		if err := resp.Send(p); err != nil {
+			return connect.NewError(connect.CodeUnknown, err)
+		}
+	}
+	return nil
+}
+
 func (fs *FakeAPIServer) AddAgent(token string) *FakeAgent {
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
-	a := &FakeAgent{}
+	fs.agentsMu.Lock()
+	defer fs.agentsMu.Unlock()
+	a := &FakeAgent{
+		PingStream: make(chan *agentedgev1.StreamPingsResponse),
+	}
 	fs.agents["Token "+token] = a
 	return a
+}
+
+func (fs *FakeAPIServer) DeleteAgent(token string) {
+	fs.agentsMu.Lock()
+	defer fs.agentsMu.Unlock()
+	delete(fs.agents, "Token "+token)
+}
+
+func (fs *FakeAPIServer) agentForAuth(auth string) *FakeAgent {
+	fs.agentsMu.Lock()
+	defer fs.agentsMu.Unlock()
+	return fs.agents[auth]
 }
 
 func (fs *FakeAPIServer) AddJob(env map[string]string) *FakeJob {
@@ -113,8 +170,10 @@ func (fs *FakeAPIServer) AddJob(env map[string]string) *FakeJob {
 }
 
 func (fs *FakeAPIServer) Assign(agent *FakeAgent, job *FakeJob) {
+	fs.agentsMu.Lock()
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
+	defer fs.agentsMu.Unlock()
 	fs.assignNoMutex(agent, job)
 }
 
@@ -140,7 +199,7 @@ func (fs *FakeAPIServer) handleJobAcquire(rw http.ResponseWriter, req *http.Requ
 	// The agent doesn't know the job token yet, so it must use the session
 	// token.
 	auth := req.Header.Get("Authorization")
-	agent := fs.agents[auth]
+	agent := fs.agentForAuth(auth)
 	if agent == nil {
 		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
@@ -182,7 +241,7 @@ func (fs *FakeAPIServer) handleJobAccept(rw http.ResponseWriter, req *http.Reque
 
 	// The agent has the job info from the ping, but accepts as itself.
 	auth := req.Header.Get("Authorization")
-	agent := fs.agents[auth]
+	agent := fs.agentForAuth(auth)
 	if agent == nil {
 		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
@@ -317,7 +376,7 @@ func (fs *FakeAPIServer) handlePing(rw http.ResponseWriter, req *http.Request) {
 	var ping api.Ping
 
 	auth := req.Header.Get("Authorization")
-	agent := fs.agents[auth]
+	agent := fs.agentForAuth(auth)
 	if agent == nil {
 		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
@@ -361,9 +420,10 @@ func (fs *FakeAPIServer) handleHeartbeat(rw http.ResponseWriter, req *http.Reque
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
-	agent := fs.agents[req.Header.Get("Authorization")]
+	auth := req.Header.Get("Authorization")
+	agent := fs.agentForAuth(auth)
 	if agent == nil {
-		http.Error(rw, encodeMsg("unauthorized"), http.StatusUnauthorized)
+		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
 	}
 

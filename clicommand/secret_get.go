@@ -76,7 +76,7 @@ Examples:
 		},
 		cli.BoolFlag{
 			Name:   "skip-redaction",
-			Usage:  "Skip redacting the retrieved secret from the logs. Then, the command will print the secret to the Job's logs if called directly.",
+			Usage:  "Skip redacting the retrieved secret from the logs. Then, the command will print the secret to the Job's logs if called directly (default: false)",
 			EnvVar: "BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION",
 		},
 	}),
@@ -94,7 +94,7 @@ Examples:
 		}
 
 		agentClient := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-		secrets, errs := secrets.FetchSecrets(ctx, agentClient, cfg.Job, cfg.Keys, 10)
+		secrets, errs := secrets.FetchSecrets(ctx, l, agentClient, cfg.Job, cfg.Keys, 10)
 		if len(errs) > 0 {
 			sb := &strings.Builder{}
 			sb.WriteString("Failed to fetch some secrets:\n")

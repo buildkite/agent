@@ -198,9 +198,7 @@ func (p *Process) Run(ctx context.Context) error {
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
 
-		waitGroup.Add(1)
-
-		go func() {
+		waitGroup.Go(func() {
 			p.logger.Debug("[Process] Starting to copy PTY to the buffer")
 
 			// Copy the pty to our writer. This will block until it EOFs or something breaks.
@@ -222,9 +220,7 @@ func (p *Process) Run(ctx context.Context) error {
 			default:
 				p.logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
 			}
-
-			waitGroup.Done()
-		}()
+		})
 	} else {
 		p.logger.Debug("[Process] Running without a PTY")
 

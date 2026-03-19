@@ -101,11 +101,11 @@ var ArtifactSearchCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "include-retried-jobs",
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from retried jobs in the search",
+			Usage:  "Include artifacts from retried jobs in the search (default: false)",
 		},
 		cli.BoolFlag{
 			Name:  "allow-empty-results",
-			Usage: "By default, searches exit 1 if there are no results. If this flag is set, searches will exit 0 with an empty set",
+			Usage: "By default, searches exit 1 if there are no results. If this flag is set, searches will exit 0 with an empty set (default: false)",
 		},
 		cli.StringFlag{
 			Name:  "format",
