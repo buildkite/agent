@@ -106,44 +106,25 @@ func (e *Executor) checkoutZipPlugin(ctx context.Context, p *plugin.Plugin, chec
 	return nil
 }
 
-// constructZipPluginURL builds the full URL for downloading the zip plugin
+// constructZipPluginURL builds the full URL for downloading the zip plugin.
+// It reconstructs the original URL from the plugin's parsed fields.
 func constructZipPluginURL(p *plugin.Plugin) (string, error) {
 	scheme := p.ZipBaseScheme()
 	if scheme == "" {
 		scheme = "https"
 	}
 
-	// Build the URL
-	u := &url.URL{
-		Scheme: scheme,
-		Host:   "",
-		Path:   p.Location,
-	}
-
-	// For file:// URLs, the location is the path
-	if scheme == "file" {
-		u.Path = p.Location
-		return u.String(), nil
-	}
-
-	// For http/https URLs, split host and path
-	parts := strings.SplitN(p.Location, "/", 2)
-	if len(parts) == 0 {
-		return "", fmt.Errorf("invalid plugin location: %s", p.Location)
-	}
-
-	u.Host = parts[0]
-	if len(parts) > 1 {
-		u.Path = "/" + parts[1]
+	u, err := url.Parse(scheme + "://" + p.Location)
+	if err != nil {
+		return "", fmt.Errorf("invalid plugin location %q: %w", p.Location, err)
 	}
 
 	// Add authentication if present
 	if p.Authentication != "" {
-		userInfo := strings.Split(p.Authentication, ":")
-		if len(userInfo) == 2 {
-			u.User = url.UserPassword(userInfo[0], userInfo[1])
+		if user, pass, ok := strings.Cut(p.Authentication, ":"); ok {
+			u.User = url.UserPassword(user, pass)
 		} else {
-			u.User = url.User(userInfo[0])
+			u.User = url.User(p.Authentication)
 		}
 	}
 
