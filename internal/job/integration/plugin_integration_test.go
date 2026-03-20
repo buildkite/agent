@@ -617,13 +617,10 @@ func TestZipPluginFromLocalFile(t *testing.T) {
 	}
 	defer tester.Close()
 
-	pluginMock := tester.MustMock(t, "my-plugin")
-
 	hooks := map[string][]string{
 		"environment": {
 			"#!/usr/bin/env bash",
 			"export ZIP_PLUGIN_LOADED=yes",
-			pluginMock.Path + " testing",
 		},
 	}
 	if runtime.GOOS == "windows" {
@@ -631,7 +628,6 @@ func TestZipPluginFromLocalFile(t *testing.T) {
 			"environment.bat": {
 				"@echo off",
 				"set ZIP_PLUGIN_LOADED=yes",
-				pluginMock.Path + " testing",
 			},
 		}
 	}
@@ -642,20 +638,11 @@ func TestZipPluginFromLocalFile(t *testing.T) {
 
 	// Create plugin JSON with zip+file:// URL
 	pluginJSON := fmt.Sprintf(`[{"zip+file:///%s": {"config": "value"}}]`,
-		strings.ReplaceAll(filepath.ToSlash(zipPath), "\\", "/"))
+		filepath.ToSlash(zipPath))
 
 	env := []string{
 		"BUILDKITE_PLUGINS=" + pluginJSON,
 	}
-
-	pluginMock.Expect("testing").Once().AndCallFunc(func(c *bintest.Call) {
-		if err := bintest.ExpectEnv(t, c.Env, "ZIP_PLUGIN_LOADED=yes"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
-			c.Exit(1)
-		} else {
-			c.Exit(0)
-		}
-	})
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "ZIP_PLUGIN_LOADED=yes"); err != nil {
@@ -687,7 +674,7 @@ func TestZipPluginMissingHooksDirectory(t *testing.T) {
 
 	// Create plugin JSON with zip+file:// URL
 	pluginJSON := fmt.Sprintf(`[{"zip+file:///%s": {}}]`,
-		strings.ReplaceAll(filepath.ToSlash(zipPath), "\\", "/"))
+		filepath.ToSlash(zipPath))
 
 	env := []string{
 		"BUILDKITE_PLUGINS=" + pluginJSON,
