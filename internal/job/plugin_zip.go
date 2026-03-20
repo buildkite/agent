@@ -276,9 +276,13 @@ func extractZipPlugin(zipPath, destPath string) error {
 		}
 	}
 
+	// Track actual bytes written to disk to guard against zip bombs that
+	// lie about their uncompressed size in the file header.
+	remainingBytes := uint64(maxZipExtractedSize)
+
 	// Extract files
 	for _, f := range r.File {
-		if err := extractZipFile(f, destPath); err != nil {
+		if err := extractZipFile(f, destPath, &remainingBytes); err != nil {
 			return err
 		}
 	}
@@ -287,7 +291,7 @@ func extractZipPlugin(zipPath, destPath string) error {
 }
 
 // extractZipFile extracts a single file from a zip archive
-func extractZipFile(f *zip.File, destPath string) error {
+func extractZipFile(f *zip.File, destPath string, remainingBytes *uint64) error {
 	// Validate path to prevent directory traversal
 	cleanPath := filepath.Clean(filepath.Join(destPath, f.Name))
 	relPath, err := filepath.Rel(destPath, cleanPath)
@@ -324,10 +328,26 @@ func extractZipFile(f *zip.File, destPath string) error {
 	}
 	defer outFile.Close()
 
-	// Copy content
-	if _, err := io.Copy(outFile, rc); err != nil {
+	// Copy content through a budget-enforcing writer
+	if _, err := io.Copy(&limitWriter{w: outFile, remainingBytes: remainingBytes}, rc); err != nil {
 		return fmt.Errorf("failed to extract file: %w", err)
 	}
 
 	return nil
+}
+
+// limitWriter enforces a budget on the total number of bytes written,
+// guarding against zip bombs that lie about their uncompressed size.
+type limitWriter struct {
+	w              io.Writer
+	remainingBytes *uint64
+}
+
+func (lw *limitWriter) Write(p []byte) (int, error) {
+	if uint64(len(p)) > *lw.remainingBytes {
+		return 0, fmt.Errorf("zip extraction exceeded %d MB limit", maxZipExtractedSize/(1024*1024))
+	}
+	n, err := lw.w.Write(p)
+	*lw.remainingBytes -= uint64(n)
+	return n, err
 }
