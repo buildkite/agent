@@ -28,9 +28,13 @@ const (
 // checkoutZipPlugin downloads and extracts a zip plugin to the plugins directory
 func (e *Executor) checkoutZipPlugin(ctx context.Context, p *plugin.Plugin, checkout *pluginCheckout, pluginDirectory string) error {
 	// Extract the SHA256 hash from the version fragment if present (format: sha256:abc123...)
-	wantSHA256 := ""
-	if strings.HasPrefix(p.Version, "sha256:") {
-		wantSHA256 = strings.TrimPrefix(p.Version, "sha256:")
+	var wantSHA256 string
+	if p.Version != "" {
+		var ok bool
+		wantSHA256, ok = strings.CutPrefix(p.Version, "sha256:")
+		if !ok {
+			return fmt.Errorf("unsupported version format %q: expected \"sha256:<hex>\"", p.Version)
+		}
 	}
 
 	// Remove existing directory if present, as of right now caching is not supported.
