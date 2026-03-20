@@ -143,13 +143,12 @@ func (e *Executor) downloadZipPlugin(ctx context.Context, downloadURL, destPath,
 		return "", fmt.Errorf("invalid download URL: %w", err)
 	}
 
-	if u.Scheme == "file" {
-		// Handle file:// URLs - copy local file
+	switch u.Scheme {
+	case "file":
 		if err := copyFile(u.Path, destPath); err != nil {
 			return "", fmt.Errorf("failed to copy local file: %w", err)
 		}
-	} else if u.Scheme == "http" || u.Scheme == "https" {
-		// For HTTP/HTTPS, download with retries
+	case "http", "https":
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(3),
 			roko.WithStrategy(roko.Constant(2*time.Second)),
@@ -159,7 +158,7 @@ func (e *Executor) downloadZipPlugin(ctx context.Context, downloadURL, destPath,
 		if err != nil {
 			return "", err
 		}
-	} else {
+	default:
 		return "", fmt.Errorf("scheme %s is not supported", u.Scheme)
 	}
 
