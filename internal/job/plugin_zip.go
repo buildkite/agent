@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
@@ -184,10 +185,7 @@ func (e *Executor) downloadZipPluginHTTP(ctx context.Context, downloadURL, destP
 
 	req.Header.Set("User-Agent", version.UserAgent())
 
-	// Create HTTP client
-	client := &http.Client{
-		Timeout: 5 * time.Minute,
-	}
+	client := agenthttp.NewClient(agenthttp.WithTimeout(5 * time.Minute))
 
 	resp, err := client.Do(req)
 	if err != nil {
