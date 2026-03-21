@@ -126,14 +126,24 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	}
 
 	var err error
-	span, ctx, stopper := e.startTracing(ctx)
-	defer stopper()
+
+	// Tracing is initialized after setUp() so that the environment hook can
+	// override tracing configuration per-pipeline. We declare the span and
+	// stopper early and defer closures that read them, so that the defers
+	// are registered in the right LIFO order: tearDown runs first (while the
+	// tracer is still alive), then the root span finishes, then the tracer
+	// shuts down.
+	var span tracetools.Span = &tracetools.NoopSpan{}
+	stop := noopStopper
+	defer func() { stop() }()
 	defer func() { span.FinishWithError(err) }()
 
 	// Listen for cancellation. Once ctx is cancelled, some tasks can run
 	// afterwards during the signal grace period. These use graceCtx.
+	// We use a closure for graceCancel so it can be reassigned after
+	// tracing starts (to rebuild graceCtx with trace context).
 	graceCtx, graceCancel := WithGracePeriod(ctx, e.SignalGracePeriod)
-	defer graceCancel()
+	defer func() { graceCancel() }()
 	go func() {
 		<-e.cancelCh
 		e.shell.Commentf("Received cancellation signal, interrupting")
@@ -193,6 +203,17 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell.Errorf("Error setting up job executor: %v", err)
 		return shell.ExitCode(err)
 	}
+
+	// Now that the environment hook has run, re-read tracing config from
+	// the shell environment (which the hook may have modified) and start
+	// tracing. This allows per-pipeline tracing opt-in/out.
+	e.readTracingConfigFromEnv()
+	span, ctx, stop = e.startTracing(ctx)
+
+	// graceCtx was derived from the pre-tracing ctx. Rebuild it so that
+	// it carries the trace context for tearDown spans.
+	graceCancel()
+	graceCtx, graceCancel = WithGracePeriod(ctx, e.SignalGracePeriod)
 
 	// Execute the job phases in order
 	var phaseErr error

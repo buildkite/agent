@@ -44,6 +44,75 @@ func TestDirForRepository(t *testing.T) {
 	}
 }
 
+func TestReadTracingConfigFromEnv(t *testing.T) {
+	t.Parallel()
+
+	t.Run("overrides backend from env", func(t *testing.T) {
+		t.Parallel()
+		e := New(ExecutorConfig{TracingBackend: ""})
+		var err error
+		e.shell, err = shell.New()
+		assert.NoError(t, err)
+
+		e.shell.Env.Set("BUILDKITE_TRACING_BACKEND", "opentelemetry")
+		e.readTracingConfigFromEnv()
+		assert.Equal(t, "opentelemetry", e.TracingBackend)
+	})
+
+	t.Run("disables tracing when env var unset", func(t *testing.T) {
+		t.Parallel()
+		e := New(ExecutorConfig{TracingBackend: "opentelemetry"})
+		var err error
+		e.shell, err = shell.New()
+		assert.NoError(t, err)
+
+		// Don't set BUILDKITE_TRACING_BACKEND in the env at all
+		e.readTracingConfigFromEnv()
+		assert.Equal(t, tracetools.BackendNone, e.TracingBackend)
+	})
+
+	t.Run("overrides propagate traceparent from env", func(t *testing.T) {
+		t.Parallel()
+		e := New(ExecutorConfig{TracingPropagateTraceparent: false})
+		var err error
+		e.shell, err = shell.New()
+		assert.NoError(t, err)
+
+		e.shell.Env.Set("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
+		e.readTracingConfigFromEnv()
+		assert.True(t, e.TracingPropagateTraceparent)
+	})
+
+	t.Run("overrides service name from env", func(t *testing.T) {
+		t.Parallel()
+		e := New(ExecutorConfig{TracingServiceName: "original"})
+		var err error
+		e.shell, err = shell.New()
+		assert.NoError(t, err)
+
+		e.shell.Env.Set("BUILDKITE_TRACING_SERVICE_NAME", "custom-service")
+		e.readTracingConfigFromEnv()
+		assert.Equal(t, "custom-service", e.TracingServiceName)
+	})
+
+	t.Run("preserves config when env matches", func(t *testing.T) {
+		t.Parallel()
+		e := New(ExecutorConfig{
+			TracingBackend:     "opentelemetry",
+			TracingServiceName: "buildkite-agent",
+		})
+		var err error
+		e.shell, err = shell.New()
+		assert.NoError(t, err)
+
+		e.shell.Env.Set("BUILDKITE_TRACING_BACKEND", "opentelemetry")
+		e.shell.Env.Set("BUILDKITE_TRACING_SERVICE_NAME", "buildkite-agent")
+		e.readTracingConfigFromEnv()
+		assert.Equal(t, "opentelemetry", e.TracingBackend)
+		assert.Equal(t, "buildkite-agent", e.TracingServiceName)
+	})
+}
+
 func TestStartTracing_NoTracingBackend(t *testing.T) {
 	var err error
 

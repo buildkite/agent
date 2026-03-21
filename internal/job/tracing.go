@@ -38,6 +38,31 @@ type stopper func()
 
 func noopStopper() {}
 
+// readTracingConfigFromEnv re-reads tracing configuration from the shell
+// environment, allowing the environment hook to override the tracing settings
+// that were originally parsed from CLI flags at bootstrap startup.
+// This enables per-pipeline tracing opt-in/out.
+func (e *Executor) readTracingConfigFromEnv() {
+	if val, ok := e.shell.Env.Get("BUILDKITE_TRACING_BACKEND"); ok {
+		e.TracingBackend = val
+	} else {
+		// The env var was unset (e.g. by the environment hook), disable tracing
+		e.TracingBackend = tracetools.BackendNone
+	}
+
+	if val, ok := e.shell.Env.Get("BUILDKITE_TRACING_SERVICE_NAME"); ok {
+		e.TracingServiceName = val
+	}
+
+	if val, ok := e.shell.Env.Get("BUILDKITE_TRACING_TRACEPARENT"); ok {
+		e.TracingTraceParent = val
+	}
+
+	if val, ok := e.shell.Env.Get("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"); ok {
+		e.TracingPropagateTraceparent = val == "true" || val == "1"
+	}
+}
+
 func (e *Executor) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	switch e.TracingBackend {
 	case tracetools.BackendDatadog:
