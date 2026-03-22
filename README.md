@@ -180,11 +180,11 @@ like systems, as well as Windows.
   - CentOS 8
 - Amazon Linux 2
 - macOS [^1]
-  - 10.15 (Catalina)
-  - 11 (Big Sur)
   - 12 (Monterey)
   - 13 (Ventura)
   - 14 (Sonoma)
+  - 15 (Sequoia)
+  - 26 (Tahoe)
 - Windows Server
   - 2016
   - 2019
