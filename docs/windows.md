@@ -11,7 +11,7 @@ Vista / Server 2008                   | [1.10][go110]              | [v3.5.4][ag
 Server 2022                           | TBC                        | [Latest release][latest]
 
 [go110]: https://go.dev/doc/go1.10#ports
-[go120]: https://go.dev/doc/go1.20#ports
+[go120]: https://go.dev/doc/go1.20#windows
 
 [agent354]: https://github.com/buildkite/agent/releases/tag/v3.5.4
 [agent3590]: https://github.com/buildkite/agent/releases/tag/v3.59.0
