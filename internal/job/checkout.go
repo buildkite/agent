@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
+	"github.com/buildkite/shellwords"
 )
 
 // configureGitCredentialHelper sets up the agent to use a git credential helper that calls the Buildkite Agent API
@@ -391,11 +392,17 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	// If we don't have a mirror, we need to clone it
 	if !osutil.FileExists(mirrorDir) {
 		e.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-		flags := "--mirror " + e.GitCloneMirrorFlags
+		flags := []string{"--mirror"}
+		mirrorFlags, err := shellwords.Split(e.GitCloneMirrorFlags)
+		if err != nil {
+			e.shell.Errorf("Invalid --git-clone-mirror-flags %q (%s)", e.GitCloneMirrorFlags, err)
+			return "", err
+		}
+		flags = append(flags, mirrorFlags...)
 		if err := gitClone(ctx, e.shell, flags, repository, mirrorDir); err != nil {
 			e.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
 			if err := os.RemoveAll(mirrorDir); err != nil {
-				e.shell.Errorf("Failed to remove \"%s\" (%s)", mirrorDir, err)
+				e.shell.Errorf("Failed to remove %q (%s)", mirrorDir, err)
 			}
 			return "", err
 		}
@@ -742,9 +749,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
-	gitCloneFlags := e.GitCloneFlags
+	gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
+	if err != nil {
+		return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
+	}
 	if mirrorDir != "" {
-		gitCloneFlags += fmt.Sprintf(" --reference %q", mirrorDir)
+		gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
 	}
 
 	// Does the git directory exist?
