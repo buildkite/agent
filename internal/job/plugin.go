@@ -11,11 +11,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -37,6 +39,123 @@ type pluginCheckout struct {
 	// HooksDir is the path within Root that contains the plugins hooks.
 	// This should be equivalent to filepath.Join(PluginDir, "hooks").
 	HooksDir string
+}
+
+// acquirePluginLock attempts to acquire a file lock for plugin cloning
+// Returns the lock file handle and an error if the lock cannot be acquired
+func acquirePluginLock(pluginPath string, timeout int, logger shell.Logger) (*os.File, error) {
+	lockPath := pluginPath + ".lock"
+
+	// Check if a stale lock file exists and remove it
+	if fileInfo, err := os.Stat(lockPath); err == nil {
+		// Check if the file is older than 5 minutes (stale)
+		if time.Since(fileInfo.ModTime()) > 5*time.Minute {
+			os.Remove(lockPath)
+		}
+	}
+
+	// Create the lock file
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create lock file %s: %w", lockPath, err)
+	}
+
+	// Try to acquire exclusive lock with timeout
+	start := time.Now()
+	timeoutDuration := time.Duration(timeout) * time.Second
+	waitingLogged := false
+
+	for {
+		err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			// Lock acquired successfully
+			if waitingLogged {
+				logger.Commentf("Plugin lock acquired, plugin was already downloaded by another job")
+			}
+			return lockFile, nil
+		}
+
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			// Lock is held by another process
+			elapsed := time.Since(start)
+
+			// Log waiting message only once
+			if !waitingLogged {
+				logger.Commentf("Waiting for plugin download to complete (another job is currently downloading the plugin)...")
+				waitingLogged = true
+			}
+
+			if elapsed > timeoutDuration {
+				lockFile.Close()
+				return nil, fmt.Errorf("timeout waiting for plugin lock after %d seconds", timeout)
+			}
+
+			// Wait a bit before retrying
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		// Other error occurred - check if it's a stale file handle
+		if errors.Is(err, syscall.ESTALE) {
+			// Remove the stale lock file and retry
+			lockFile.Close()
+			os.Remove(lockPath)
+			lockFile, err = os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0o644)
+			if err != nil {
+				return nil, fmt.Errorf("failed to recreate lock file %s: %w", lockPath, err)
+			}
+			continue
+		}
+
+		// Other error occurred
+		lockFile.Close()
+		return nil, fmt.Errorf("failed to acquire plugin lock: %w", err)
+	}
+}
+
+// releasePluginLock releases the file lock and closes the lock file
+func releasePluginLock(lockFile *os.File) error {
+	if lockFile != nil {
+		// Release the lock
+		err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+		if err != nil {
+			lockFile.Close()
+			return fmt.Errorf("failed to release plugin lock: %w", err)
+		}
+
+		// Close the lock file
+		lockFile.Close()
+
+		// Remove the lock file - ignore errors as the file might already be gone
+		// or there might be a stale file handle
+		os.Remove(lockFile.Name())
+	}
+	return nil
+}
+
+// openCachedPlugin opens an already checked out plugin and returns the checkout
+func (e *Executor) openCachedPlugin(ctx context.Context, p *plugin.Plugin, pluginDirectory string, checkout *pluginCheckout) (*pluginCheckout, error) {
+	// It'd be nice to show the current commit of the plugin, so let's figure that out.
+	headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, pluginDirectory, "--short=7", "HEAD")
+	if err != nil {
+		e.shell.Commentf("Plugin %q already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
+	} else {
+		e.shell.Commentf("Plugin %q already checked out (%s)", p.Label(), strings.TrimSpace(headCommit))
+	}
+
+	// Open the plugin directory as the checkout root.
+	pluginRoot, err := os.OpenRoot(pluginDirectory)
+	if err != nil {
+		return nil, fmt.Errorf("opening plugin directory as a root: %w", err)
+	}
+	runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
+	checkout.Root = pluginRoot
+
+	// Ensure hooks is a directory that exists within the checkout.
+	if fi, err := pluginRoot.Stat(checkout.HooksDir); err != nil || !fi.IsDir() {
+		return nil, fmt.Errorf("%q was not a directory within the %q plugin: %w", checkout.HooksDir, checkout.Plugin.Name(), err)
+	}
+	return checkout, nil
 }
 
 func (e *Executor) hasPlugins() bool {
@@ -312,7 +431,13 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		return nil, err
 	}
 
-	pluginParentDir := filepath.Join(e.PluginsPath, e.AgentName)
+	// Determine plugin parent directory based on whether we include agent name
+	var pluginParentDir string
+	if e.PluginsPathIncludesAgentName {
+		pluginParentDir = filepath.Join(e.PluginsPath, e.AgentName)
+	} else {
+		pluginParentDir = e.PluginsPath
+	}
 
 	// Ensure the parent of the plugin directory exists, otherwise we can't move the temp git repo dir
 	// into it. The actual file permissions will be reduced by umask, and won't be 0o777 unless the
@@ -366,30 +491,29 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		}
 	}
 
-	// Does the .git directory exist? (i.e. it's already checkout out?)
-	if osutil.FileExists(pluginGitDirectory) {
-		// It'd be nice to show the current commit of the plugin, so
-		// let's figure that out.
-		headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, pluginDirectory, "--short=7", "HEAD")
-		if err != nil {
-			e.shell.Commentf("Plugin %q already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
-		} else {
-			e.shell.Commentf("Plugin %q already checked out (%s)", p.Label(), strings.TrimSpace(headCommit))
-		}
+	// Does the .git directory exist? (i.e. it's already checked out?)
+	// Skip this check when using shared plugin paths - we'll handle it with file locking
+	if e.PluginsPathIncludesAgentName && osutil.FileExists(pluginGitDirectory) {
+		return e.openCachedPlugin(ctx, p, pluginDirectory, checkout)
+	}
 
-		// Open the plugin directory as the checkout root.
-		pluginRoot, err := os.OpenRoot(pluginDirectory)
-		if err != nil {
-			return nil, fmt.Errorf("opening plugin directory as a root: %w", err)
-		}
-		runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
-		checkout.Root = pluginRoot
+	// Plugin doesn't exist yet. If we're using shared plugin paths, we need to acquire a lock
+	// to prevent multiple processes from downloading the same plugin simultaneously.
+	var lockFile *os.File
+	if !e.PluginsPathIncludesAgentName {
+		e.shell.Commentf("Using shared plugin storage at %s (locking enabled)", pluginParentDir)
 
-		// Ensure hooks is a directory that exists within the checkout.
-		if fi, err := pluginRoot.Stat(checkout.HooksDir); err != nil || !fi.IsDir() {
-			return nil, fmt.Errorf("%q was not a directory within the %q plugin: %w", checkout.HooksDir, checkout.Plugin.Name(), err)
+		var err error
+		lockFile, err = acquirePluginLock(pluginDirectory, e.PluginsLockTimeout, e.shell)
+		if err != nil {
+			return nil, fmt.Errorf("failed to acquire plugin lock for %s: %w", p.Label(), err)
 		}
-		return checkout, nil
+		defer releasePluginLock(lockFile)
+
+		// Re-check if plugin exists now that we have the lock (another process might have downloaded it)
+		if osutil.FileExists(pluginGitDirectory) {
+			return e.openCachedPlugin(ctx, p, pluginDirectory, checkout)
+		}
 	}
 
 	e.shell.Commentf("Plugin %q will be checked out to %q", p.DisplayName(), pluginDirectory)
