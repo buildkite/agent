@@ -535,10 +535,10 @@ func (e ErrTimedOutAcquiringLock) Error() string {
 
 func (e ErrTimedOutAcquiringLock) Unwrap() error { return e.Err }
 
-// updateRemoteURL updates the URL for 'origin'. If gitDir == "", it assumes the
+// updateRemoteURL updates the URL for 'origin' and reports whether the
+// URL changed from something else. If gitDir == "", it assumes the
 // local repo is in the current directory, otherwise it includes --git-dir.
-// If the remote has changed, it logs some extra information. updateRemoteURL
-// reports if the remote URL changed.
+// If the remote has changed, it logs some extra information.
 func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository string) (bool, error) {
 	// Update the origin of the repository so we can gracefully handle
 	// repository renames.
@@ -749,32 +749,59 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
+	// On mirrors and dissociation:
+	//
+	// --reference makes the clone reuse objects from the mirror, using the
+	// .git/objects/info/alternates file. On its own, it won't copy the objects
+	// from the mirror, just refer to them. This becomes a problem if they
+	// disappear, which happens during routine normal use of the mirror.
+	//
+	// --dissociate makes copies of the objects from the mirror, which makes the
+	// clone robust against that failure, at the expense of disk space and extra
+	// work up front.
+	//
+	// --dissociate is safer, so it's what we want, but it can be disabled. It
+	// is important even when CleanCheckout is enabled, because auto-maintenance
+	// can happen on the mirror at any time!
+
 	// Does the git directory exist?
 	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
 	if osutil.FileExists(existingGitDir) {
-		// Update the origin of the repository so we can gracefully handle
-		// repository renames
+		// Ensure the origin matches the configured repo, so we can
+		// gracefully handle repository renames.
 		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
 			return fmt.Errorf("setting origin: %w", err)
 		}
-	} else {
+
+		if mirrorDir != "" {
+			switch e.GitMirrorCheckoutMode {
+			case "dissociate":
+				// If the existing repo is still relying on the reference, then
+				// "dissociate" it (git repack, and delete the alternates file).
+				e.dissociateIfNeeded(ctx, existingGitDir)
+			case "reference":
+				// If the existing repo does not have a reference to the mirror,
+				// create one. Existing objects don't need cleaning up.
+				e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir)
+			}
+		}
+
+	} else { // the .git directory does not already exist
+
+		// Compute the clone flags. For mirrors we need --reference, and usually
+		// --dissociate.
 		gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
 		if err != nil {
 			return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
 		}
 		if mirrorDir != "" {
-			// --reference makes the clone use objects from the mirror.
-			// On its own, it won't copy the objects in the mirror, just
-			// refer to them, which becomes a problem if they disappear.
-			// --dissociate makes copies of the objects from the mirror,
-			// which prevents gc in the mirror making this clone unusable
-			// at the expense of disk space and a little extra work.
 			gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
 			if e.GitMirrorCheckoutMode == "dissociate" {
 				gitCloneFlags = append(gitCloneFlags, "--dissociate")
 			}
 		}
 
+		// Do the clone.
 		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
 			return fmt.Errorf("cloning git repository: %w", err)
 		}
@@ -847,7 +874,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		} else {
 			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
-				submoduleArgs := slices.Clone(args)
 				// submodules might need their fingerprints verified too
 				if e.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
@@ -876,6 +902,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 					repositoryPath = repository
 				}
 
+				submoduleArgs := slices.Clone(args)
 				if mirrorDir != "" {
 					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
 					if e.GitMirrorCheckoutMode == "dissociate" {
@@ -1063,4 +1090,45 @@ func (e *Executor) resolveCommit(ctx context.Context) {
 		e.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
 		e.shell.Env.Set("BUILDKITE_COMMIT", trimmedCmdOut)
 	}
+}
+
+// This is the same thing that git does at the end of clone when it is
+// passed --dissociate:
+// https://github.com/git/git/blob/6e8d538aab8fe4dd07ba9fb87b5c7edcfa5706ad/builtin/clone.c#L843-L859
+// This kind of git surgery is acceptable, because it's how one would dissociate
+// a reference clone prior to Git 2.3.
+func (e *Executor) dissociateIfNeeded(ctx context.Context, gitDir string) error {
+	alternates := filepath.Join(gitDir, "objects", "info", "alternates")
+	if !osutil.FileExists(alternates) {
+		return nil
+	}
+	e.shell.Commentf("Dissociating existing reference clone because git mirror checkout mode is %q", e.GitMirrorCheckoutMode)
+	if err := gitRepack(ctx, e.shell, "-a", "-d"); err != nil {
+		return fmt.Errorf("cleaning up reference clone: %w", err)
+	}
+	if err := os.Remove(alternates); err != nil {
+		return fmt.Errorf("removing alternates file: %w", err)
+	}
+	return nil
+}
+
+// reassociateIfNeeded writes a new alternates file into gitDir/objects/info,
+// referring to mirrorDir/objects. This allows the repo in gitDir to reuse
+// objects from mirrorDir, but at the risk of those objects becoming unavailable
+// later on.
+func (e *Executor) reassociateIfNeeded(ctx context.Context, gitDir, mirrorDir string) error {
+	alternates := filepath.Join(gitDir, "objects", "info", "alternates")
+	if osutil.FileExists(alternates) {
+		return nil
+	}
+	e.shell.Commentf("Re-associating existing clone because git mirror checkout mode is %q", e.GitMirrorCheckoutMode)
+	objects := filepath.Join(mirrorDir, "objects")
+	if !osutil.FileExists(objects) {
+		return fmt.Errorf("objects directory missing from mirror directory %s", mirrorDir)
+	}
+	objects += "\n"
+	if err := os.WriteFile(alternates, []byte(objects), 0o644); err != nil {
+		return fmt.Errorf("writing alternates file: %w", err)
+	}
+	return nil
 }

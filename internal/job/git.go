@@ -32,6 +32,7 @@ const (
 	gitErrorFetchBadReference
 	gitErrorClean
 	gitErrorCleanSubmodules
+	gitErrorRepack
 )
 
 const (
@@ -129,6 +130,16 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 		return &gitError{error: err, Type: gitErrorCleanSubmodules}
 	}
 
+	return nil
+}
+
+func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
+	commandArgs := []string{"repack"}
+	commandArgs = append(commandArgs, args...)
+
+	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+		return &gitError{error: err, Type: gitErrorRepack}
+	}
 	return nil
 }
 
