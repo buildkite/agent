@@ -229,100 +229,34 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command (default: false)",
 			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
 		},
-		cli.BoolFlag{
-			Name:   "skip-checkout",
-			Usage:  "Skip the git checkout phase entirely",
-			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-skip-fetch-existing-commits",
-			Usage:  "Skip git fetch if the commit already exists in the local git directory",
-			EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
-		},
-		cli.StringFlag{
-			Name:   "git-checkout-flags",
-			Value:  "-f",
-			Usage:  "Flags to pass to \"git checkout\" command",
-			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to \"git clone\" command",
-			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-mirror-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to \"git clone\" command when mirroring",
-			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clean-flags",
-			Value:  "-ffxdq",
-			Usage:  "Flags to pass to \"git clean\" command",
-			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-fetch-flags",
-			Value:  "",
-			Usage:  "Flags to pass to \"git fetch\" command",
-			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
-		},
-		cli.StringSliceFlag{
-			Name:   "git-submodule-clone-config",
-			Value:  &cli.StringSlice{},
-			Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands. For example, ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead.",
-			EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
-		},
-		cli.StringFlag{
-			Name:   "git-mirrors-path",
-			Value:  "",
-			Usage:  "Path to where mirrors of git repositories are stored",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
-		},
-		cli.IntFlag{
-			Name:   "git-mirrors-lock-timeout",
-			Value:  300,
-			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror (default: false)",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-		},
+
+		// Various git related flags shared with agent start
+		SkipCheckoutFlag,
+		GitCheckoutFlagsFlag,
+		GitCloneFlagsFlag,
+		GitCloneMirrorFlagsFlag,
+		GitCleanFlagsFlag,
+		GitFetchFlagsFlag,
+		GitMirrorsPathFlag,
+		GitMirrorsLockTimeoutFlag,
+		GitMirrorsSkipUpdateFlag,
+		GitSubmoduleCloneConfigFlag,
+		GitSkipFetchExistingCommitsFlag,
+
 		cli.StringFlag{
 			Name:   "bin-path",
 			Value:  "",
 			Usage:  "Directory where the buildkite-agent binary lives",
 			EnvVar: "BUILDKITE_BIN_PATH",
 		},
-		cli.StringFlag{
-			Name:   "build-path",
-			Value:  "",
-			Usage:  "Directory where builds will be created",
-			EnvVar: "BUILDKITE_BUILD_PATH",
-		},
-		cli.StringFlag{
-			Name:   "hooks-path",
-			Value:  "",
-			Usage:  "Directory where the hook scripts are found",
-			EnvVar: "BUILDKITE_HOOKS_PATH",
-		},
-		cli.StringSliceFlag{
-			Name:   "additional-hooks-paths",
-			Value:  &cli.StringSlice{},
-			Usage:  "Any additional directories to look for agent hooks",
-			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
-		},
+
+		// Various file path flags shared with agent start
+		BuildPathFlag,
+		HooksPathFlag,
+		AdditionalHooksPathsFlag,
 		SocketsPathFlag,
-		cli.StringFlag{
-			Name:   "plugins-path",
-			Value:  "",
-			Usage:  "Directory where the plugins are saved to",
-			EnvVar: "BUILDKITE_PLUGINS_PATH",
-		},
+		PluginsPathFlag,
+
 		cli.BoolTFlag{
 			Name:   "command-eval",
 			Usage:  "Allow running of arbitrary commands (default: true)",
@@ -353,7 +287,7 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Automatically run ssh-keyscan before checkout (default: true)",
 			EnvVar: "BUILDKITE_SSH_KEYSCAN",
 		},
-		cli.BoolTFlag{
+		cli.BoolTFlag{ // no-git-submodules in agent start
 			Name:   "git-submodules",
 			Usage:  "Enable git submodules (default: true)",
 			EnvVar: "BUILDKITE_GIT_SUBMODULES",

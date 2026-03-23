@@ -44,7 +44,7 @@ func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "refs/pull/123/head"},
+		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/head"},
 		{"rev-parse", "FETCH_HEAD"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
@@ -781,7 +781,7 @@ func TestCheckingOutWithCustomRefspec_WithGitMirrors(t *testing.T) {
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)
+		{"fetch", "-v", "--prune", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
