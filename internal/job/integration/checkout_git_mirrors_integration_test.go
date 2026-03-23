@@ -42,7 +42,7 @@ func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--dissociate", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/head"},
 		{"rev-parse", "FETCH_HEAD"},
@@ -88,7 +88,7 @@ func TestWithResolvingCommitExperiment_WithGitMirrors(t *testing.T) {
 		// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--dissociate", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -127,7 +127,7 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--config", "pack.threads=35", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--dissociate", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -193,14 +193,14 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "--mirror", "-v", "--", submoduleRepo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--dissociate", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force", "--reference", submoduleRepo.Path},
+		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force", "--reference", submoduleRepo.Path, "--dissociate"},
 		{"submodule", "foreach", "--recursive", "git reset --hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -264,7 +264,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--dissociate", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
@@ -309,7 +309,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject_WithGitMirrors(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--dissociate", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "--depth=1", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -699,7 +699,7 @@ func TestGitMirrorEnv(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--dissociate", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -779,7 +779,7 @@ func TestCheckingOutWithCustomRefspec_WithGitMirrors(t *testing.T) {
 	// With the fix: the mirror should fetch the custom refspec instead of the branch
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--dissociate", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)
 		{"checkout", "-f", "FETCH_HEAD"},

@@ -94,6 +94,9 @@ type ExecutorConfig struct {
 	// Flags to pass to "git clone" command for mirroring
 	GitCloneMirrorFlags string `env:"BUILDKITE_GIT_CLONE_MIRROR_FLAGS"`
 
+	// Selects among preconfigured sets of flags for clones from a mirror
+	GitMirrorCheckoutMode string `env:"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE"`
+
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 

@@ -73,6 +73,8 @@ var (
 		agent.PingModeStreamOnly,
 	}
 
+	mirrorCheckoutModes = []string{"dissociate", "reference"}
+
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
 		regexp.MustCompile("^BUILDKITE$"),
 		regexp.MustCompile("^BUILDKITE_.*$"),
@@ -157,6 +159,7 @@ type AgentStartConfig struct {
 	GitCleanFlags               string   `cli:"git-clean-flags"`
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
@@ -517,6 +520,7 @@ var AgentStartCommand = cli.Command{
 		GitFetchFlagsFlag,
 		GitCloneMirrorFlagsFlag,
 		GitMirrorsPathFlag,
+		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
 		GitMirrorsSkipUpdateFlag,
 		GitSubmoduleCloneConfigFlag,
@@ -805,6 +809,10 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("failed to unset config from environment: %w", err)
 		}
 
+		if !slices.Contains(mirrorCheckoutModes, cfg.GitMirrorCheckoutMode) {
+			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
+		}
+
 		if !slices.Contains(pingModes, cfg.PingMode) {
 			return fmt.Errorf("invalid ping mode %q, must be one of %v", cfg.PingMode, pingModes)
 		}
@@ -1013,6 +1021,7 @@ var AgentStartCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			SocketsPath:                  cfg.SocketsPath,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			HooksPath:                    cfg.HooksPath,

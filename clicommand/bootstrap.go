@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -76,6 +77,7 @@ type BootstrapConfig struct {
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorCheckoutMode        string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
 	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config" normalize:"list"`
@@ -238,6 +240,7 @@ var BootstrapCommand = cli.Command{
 		GitCleanFlagsFlag,
 		GitFetchFlagsFlag,
 		GitMirrorsPathFlag,
+		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
 		GitMirrorsSkipUpdateFlag,
 		GitSubmoduleCloneConfigFlag,
@@ -387,6 +390,10 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
+		if !slices.Contains(mirrorCheckoutModes, cfg.GitMirrorCheckoutMode) {
+			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
+		}
+
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
@@ -427,6 +434,7 @@ var BootstrapCommand = cli.Command{
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,

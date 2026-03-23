@@ -15,6 +15,7 @@ type AgentConfiguration struct {
 	AdditionalHooksPaths        []string
 	SocketsPath                 string
 	GitMirrorsPath              string
+	GitMirrorCheckoutMode       string
 	GitMirrorsLockTimeout       int
 	GitMirrorsSkipUpdate        bool
 	PluginsPath                 string

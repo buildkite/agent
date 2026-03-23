@@ -749,14 +749,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
-	gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
-	if err != nil {
-		return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
-	}
-	if mirrorDir != "" {
-		gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
-	}
-
 	// Does the git directory exist?
 	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
 	if osutil.FileExists(existingGitDir) {
@@ -766,6 +758,23 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			return fmt.Errorf("setting origin: %w", err)
 		}
 	} else {
+		gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
+		if err != nil {
+			return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
+		}
+		if mirrorDir != "" {
+			// --reference makes the clone use objects from the mirror.
+			// On its own, it won't copy the objects in the mirror, just
+			// refer to them, which becomes a problem if they disappear.
+			// --dissociate makes copies of the objects from the mirror,
+			// which prevents gc in the mirror making this clone unusable
+			// at the expense of disk space and a little extra work.
+			gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
+			if e.GitMirrorCheckoutMode == "dissociate" {
+				gitCloneFlags = append(gitCloneFlags, "--dissociate")
+			}
+		}
+
 		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
 			return fmt.Errorf("cloning git repository: %w", err)
 		}
@@ -869,6 +878,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 				if mirrorDir != "" {
 					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
+					if e.GitMirrorCheckoutMode == "dissociate" {
+						submoduleArgs = append(submoduleArgs, "--dissociate")
+					}
 				} else {
 					// Fall back to a clean update, rather than failing the checkout and therefore the build
 					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
