@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.120.2](https://github.com/buildkite/agent/tree/v3.120.2) (2026-03-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.120.1...v3.120.2)
+
+### Fixed
+- Send HTTP/2 ping frames to keep streaming connections open [#3773](https://github.com/buildkite/agent/pull/3773) (@moskyb)
+
+### Internal
+- Update readme supported macOS versions [#3772](https://github.com/buildkite/agent/pull/3772) (@DrJosh9000)
+
 ## [v3.120.1](https://github.com/buildkite/agent/tree/v3.120.1) (2026-03-17)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.120.0...v3.120.1)
 
@@ -24,7 +33,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [v3.120.0](https://github.com/buildkite/agent/tree/v3.120.0) (2026-03-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.119.2...v3.120.0)
 
-> [!TIP] 
+> [!TIP]
 > **Streaming job dispatch (Public Preview):** This release adds opt-in support for a new streaming connection between agents and Buildkite, significantly reducing job acceptance latency for self-hosted agents. To try it, start your agent with `--endpoint https://agent-edge.buildkite.com/v3`, for example:
 >
 >     buildkite-agent start --endpoint https://agent-edge.buildkite.com/v3
