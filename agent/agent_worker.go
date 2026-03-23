@@ -168,12 +168,15 @@ func (e *errUnrecoverable) Error() string {
 	return fmt.Sprintf("%s failed with unrecoverable status: %s, mesage: %q", e.action, status, e.err)
 }
 
-// See https://connectrpc.com/docs/protocol/#http-to-error-code
+// See https://connectrpc.com/docs/protocol/#error-codes
 var codeUnrecoverable = map[connect.Code]bool{
-	connect.CodeInternal:         true, // 400
-	connect.CodeUnauthenticated:  true, // 401
-	connect.CodePermissionDenied: true, // 403
-	connect.CodeUnimplemented:    true, // 404
+	connect.CodeUnauthenticated:  true, // invalid credentials
+	connect.CodePermissionDenied: true, // not authorized
+	connect.CodeUnimplemented:    true, // RPC not supported
+	// CodeInternal is intentionally NOT here. While it semantically means
+	// "server invariant broken," it is also produced by transient HTTP/2
+	// transport errors (e.g. RST_STREAM INTERNAL_ERROR from a load balancer)
+	// that ConnectRPC maps to CodeInternal.
 	// All other codes are implicitly false, but particularly:
 	// Unavailable (429, 502, 503, 504) and Unknown (all other HTTP statuses).
 }
