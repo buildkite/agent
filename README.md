@@ -185,14 +185,20 @@ like systems, as well as Windows.
   - 14 (Sonoma)
   - 15 (Sequoia)
   - 26 (Tahoe)
-- Windows Server
-  - 2016
-  - 2019
-  - 2022
+- Windows [^2]
+  - 10
+  - 11
+  - Server 2016
+  - Server 2019
+  - Server 2022
 
 [^1]: See https://github.com/golang/go/issues/23011 for macOS / Go support and
 [Supported macOS Versions](./docs/macos.md) for the last supported version of the
 Buildkite Agent for versions of macOS prior to those listed above.
+
+[^2]: See [Go's Windows support page](https://go.dev/wiki/Windows) for Go / Windows version
+compatibility and [Supported Windows Versions](./docs/windows.md) for the last supported version
+of the Buildkite Agent for versions of Windows prior to those listed above.
 
 ## Contributing
 
