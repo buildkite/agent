@@ -299,23 +299,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	}
 
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
-		if conf.AgentConfiguration.LogFormat == "json" {
-			log := newJobLogger(
-				conf.AgentStdout, logger.StringField("org", r.conf.Job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
-				logger.StringField("pipeline", r.conf.Job.Env["BUILDKITE_PIPELINE_SLUG"]),
-				logger.StringField("branch", r.conf.Job.Env["BUILDKITE_BRANCH"]),
-				logger.StringField("queue", r.conf.Job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
-				logger.StringField("build_id", r.conf.Job.Env["BUILDKITE_BUILD_ID"]),
-				logger.StringField("build_number", r.conf.Job.Env["BUILDKITE_BUILD_NUMBER"]),
-				logger.StringField("job_url", fmt.Sprintf("%s#%s", r.conf.Job.Env["BUILDKITE_BUILD_URL"], r.conf.Job.ID)),
-				logger.StringField("build_url", r.conf.Job.Env["BUILDKITE_BUILD_URL"]),
-				logger.StringField("job_id", r.conf.Job.ID),
-				logger.StringField("step_key", r.conf.Job.Env["BUILDKITE_STEP_KEY"]),
-			)
-			allWriters = append(allWriters, log)
-		} else {
-			allWriters = append(allWriters, conf.AgentStdout)
-		}
+		allWriters = append(allWriters, NewJobLogger(conf))
 	}
 
 	// The writer that output from the process goes into
@@ -865,30 +849,6 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 	if err != nil {
 		r.agentLogger.Error("Ultimately unable to upload header times: %v", err)
 	}
-}
-
-// jobLogger is just a simple wrapper around a JSON Logger that satisfies the
-// io.Writer interface so it can be seemlessly use with existing job logging code.
-type jobLogger struct {
-	log logger.Logger
-}
-
-func newJobLogger(stdout io.Writer, fields ...logger.Field) jobLogger {
-	l := logger.NewConsoleLogger(logger.NewJSONPrinter(stdout), os.Exit)
-	l = l.WithFields(logger.StringField("source", "job"))
-	l = l.WithFields(fields...)
-	return jobLogger{log: l}
-}
-
-// Write adapts the underlying JSON logger to match the io.Writer interface to
-// easier slotting into job logger code. This will write existing fields
-// attached to the logger, the message, and write out to the INFO level.
-func (l jobLogger) Write(data []byte) (int, error) {
-	// When writing as a structured log, trailing newlines and carriage returns
-	// generally don't make sense.
-	msg := strings.TrimRight(string(data), "\r\n")
-	l.log.Info(msg)
-	return len(data), nil
 }
 
 func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shellFile, jsonFile *os.File, err error) {
