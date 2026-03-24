@@ -445,6 +445,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
+BUILDKITE_GIT_MIRROR_CHECKOUT_MODE
 BUILDKITE_GIT_FETCH_FLAGS
 BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
 BUILDKITE_GIT_MIRRORS_PATH
@@ -585,6 +586,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
 	setEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
 	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
+	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
 	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
 	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
 	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))

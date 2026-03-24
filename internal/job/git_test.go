@@ -231,11 +231,11 @@ func TestGitClone(t *testing.T) {
 		t.Fatalf("sh.AbsolutePath(git) = %v", err)
 	}
 
-	if err := gitClone(ctx, sh, "-v --references url", "repo", "dir"); err != nil {
-		t.Fatalf(`gitClone(ctx, sh, "-v --references url", "repo", "dir") = %v`, err)
+	if err := gitClone(ctx, sh, []string{"-v", "--reference", "url"}, "repo", "dir"); err != nil {
+		t.Fatalf(`gitClone(ctx, sh, [-v --reference url], "repo", "dir") = %v`, err)
 	}
 
-	wantLog := [][]string{{absoluteGit, "clone", "-v", "--references", "url", "--", "repo", "dir"}}
+	wantLog := [][]string{{absoluteGit, "clone", "-v", "--reference", "url", "--", "repo", "dir"}}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
 	}

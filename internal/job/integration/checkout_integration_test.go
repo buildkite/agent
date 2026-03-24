@@ -299,9 +299,9 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", shortCommitHash},
+		{"fetch", "-v", "--prune", "--", "origin", shortCommitHash},
 		{"config", "remote.origin.fetch"},
-		{"fetch", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
+		{"fetch", "-v", "--prune", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
 		{"checkout", "-f", shortCommitHash},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", shortCommitHash, "-s", "--no-color", gitShowFormatArg},
@@ -524,7 +524,7 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "--no-local", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "refs/pull/123/merge"},
+		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/merge"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "FETCH_HEAD"},
@@ -1029,7 +1029,7 @@ func TestGitCheckoutWithCommitResolved(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "main"},
+		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 	})
@@ -1056,7 +1056,7 @@ func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "main"},
+		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 	})
@@ -1083,7 +1083,7 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "main"},
+		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
