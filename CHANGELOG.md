@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.120.3](https://github.com/buildkite/agent/tree/v3.120.3) (2026-03-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.120.2...v3.120.3)
+
+### Fixed
+- A-1020: make connect.CodeInternal error recoverable for pings stream [#3780](https://github.com/buildkite/agent/pull/3780) (@zhming0)
+
+### Internal
+- Update/clarify supported Windows versions [#3776](https://github.com/buildkite/agent/pull/3776) (@petetomasik)
+
+### Dependency updates
+- build(deps): bump the cloud-providers group with 2 updates [#3777](https://github.com/buildkite/agent/pull/3777) (@dependabot[bot])
+- build(deps): bump the container-images group across 5 directories with 1 update [#3778](https://github.com/buildkite/agent/pull/3778) (@dependabot[bot])
+- build(deps): bump the container-images group across 1 directory with 2 updates [#3779](https://github.com/buildkite/agent/pull/3779) (@dependabot[bot])
+
 ## [v3.120.2](https://github.com/buildkite/agent/tree/v3.120.2) (2026-03-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.120.1...v3.120.2)
 
