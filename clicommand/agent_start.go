@@ -29,6 +29,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
@@ -105,6 +106,7 @@ type AgentStartConfig struct {
 
 	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
 	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
@@ -701,6 +703,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The KMS KMS key ID, or key alias used when signing and verifying the pipeline.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY",
 		},
+		cli.StringFlag{
+			Name:   "signing-gcp-kms-key",
+			Usage:  "The GCP KMS key resource name used when signing and verifying the pipeline. Format: projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
@@ -978,7 +985,14 @@ var AgentStartCommand = cli.Command{
 			// assign a crypto signer which uses the KMS key to sign the pipeline
 			verificationJWKS, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
 			if err != nil {
-				return fmt.Errorf("couldn't create KMS signer: %w", err)
+				return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+			}
+
+		case cfg.SigningGCPKMSKey != "":
+			// assign a crypto signer which uses the GCP KMS key to sign the pipeline
+			verificationJWKS, err = gcpsigner.NewKMS(ctx, cfg.SigningGCPKMSKey)
+			if err != nil {
+				return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
 			}
 
 		case cfg.VerificationJWKSFile != "":
@@ -1070,6 +1084,7 @@ var AgentStartCommand = cli.Command{
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
 			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
+			SigningGCPKMSKey: cfg.SigningGCPKMSKey,
 			DebugSigning:     cfg.DebugSigning,
 
 			VerificationJWKS:             verificationJWKS,
