@@ -15,6 +15,7 @@ type AgentConfiguration struct {
 	AdditionalHooksPaths        []string
 	SocketsPath                 string
 	GitMirrorsPath              string
+	GitMirrorCheckoutMode       string
 	GitMirrorsLockTimeout       int
 	GitMirrorsSkipUpdate        bool
 	PluginsPath                 string
@@ -24,7 +25,9 @@ type AgentConfiguration struct {
 	GitCleanFlags               string
 	GitFetchFlags               string
 	GitSubmodules               bool
+	GitSubmoduleCloneConfig     []string
 	SkipCheckout                bool
+	GitSkipFetchExistingCommits bool
 	AllowedRepositories         []*regexp.Regexp
 	AllowedPlugins              []*regexp.Regexp
 	AllowedEnvironmentVariables []*regexp.Regexp
@@ -69,4 +72,6 @@ type AgentConfiguration struct {
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
+
+	PingMode string
 }

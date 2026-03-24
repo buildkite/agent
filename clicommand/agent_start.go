@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -61,8 +62,19 @@ Example:
 
     $ buildkite-agent start --token xxx`
 
+const pingModePingOnly = "ping-only"
+
 var (
 	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
+
+	pingModes = []string{
+		agent.PingModeAuto,
+		agent.PingModePollOnly,
+		pingModePingOnly, // canonicalises to agent.PingModePollOnly
+		agent.PingModeStreamOnly,
+	}
+
+	mirrorCheckoutModes = []string{"dissociate", "reference"}
 
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
 		regexp.MustCompile("^BUILDKITE$"),
@@ -143,16 +155,19 @@ type AgentStartConfig struct {
 	WaitForECSMetaDataTimeout string   `cli:"wait-for-ecs-meta-data-timeout"`
 	WaitForGCPLabelsTimeout   string   `cli:"wait-for-gcp-labels-timeout"`
 
-	GitCheckoutFlags      string `cli:"git-checkout-flags"`
-	GitCloneFlags         string `cli:"git-clone-flags"`
-	GitCloneMirrorFlags   string `cli:"git-clone-mirror-flags"`
-	GitCleanFlags         string `cli:"git-clean-flags"`
-	GitFetchFlags         string `cli:"git-fetch-flags"`
-	GitMirrorsPath        string `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout int    `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate  bool   `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules       bool   `cli:"no-git-submodules"`
-	SkipCheckout          bool   `cli:"skip-checkout"`
+	GitCheckoutFlags            string   `cli:"git-checkout-flags"`
+	GitCloneFlags               string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
+	GitCleanFlags               string   `cli:"git-clean-flags"`
+	GitFetchFlags               string   `cli:"git-fetch-flags"`
+	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
+	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
+	NoGitSubmodules             bool     `cli:"no-git-submodules"`
+	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
+	SkipCheckout                bool     `cli:"skip-checkout"`
+	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval           bool     `cli:"no-command-eval"`
@@ -185,13 +200,15 @@ type AgentStartConfig struct {
 	TraceContextEncoding      string `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
 
+	// API + agent behaviour
+	PingMode string `cli:"ping-mode"`
+
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
 	TraceHTTP bool   `cli:"trace-http"`
 	Token     string `cli:"token" validate:"required"`
 	Endpoint  string `cli:"endpoint" validate:"required"`
 	NoHTTP2   bool   `cli:"no-http2"`
-
 	// Deprecated
 	KubernetesLogCollectionGracePeriod time.Duration `cli:"kubernetes-log-collection-grace-period"`
 	NoSSHFingerprintVerification       bool          `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -209,10 +226,16 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		return []string{}
 	}
 
-	features := make([]string, 0, 8)
+	features := make([]string, 0, 9)
 
 	if asc.GitMirrorsPath != "" {
 		features = append(features, "git-mirrors")
+	}
+
+	if endpointURL, err := url.Parse(asc.Endpoint); err == nil {
+		if endpointURL.Host == "agent-edge.buildkite.com" && asc.PingMode != agent.PingModePollOnly {
+			features = append(features, "streaming-pings")
+		}
 	}
 
 	if asc.AcquireJob != "" {
@@ -490,88 +513,35 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
 		},
-		cli.StringFlag{
-			Name:   "git-checkout-flags",
-			Value:  "-f",
-			Usage:  "Flags to pass to \"git checkout\" command",
-			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to the \"git clone\" command",
-			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clean-flags",
-			Value:  "-ffxdq",
-			Usage:  "Flags to pass to \"git clean\" command",
-			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
-			// -ff: delete files and directories, including untracked nested git repositories
-			// -x: don't use .gitignore rules
-			// -d: recurse into untracked directories
-			// -q: quiet, only report errors
-		},
-		cli.StringFlag{
-			Name:   "git-fetch-flags",
-			Value:  "-v --prune",
-			Usage:  "Flags to pass to \"git fetch\" command",
-			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-mirror-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
-			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-mirrors-path",
-			Value:  "",
-			Usage:  "Path to where mirrors of git repositories are stored",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
-		},
-		cli.IntFlag{
-			Name:   "git-mirrors-lock-timeout",
-			Value:  300,
-			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror (default: false)",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-		},
+
+		// Various git related flags shared with bootstrap
+		SkipCheckoutFlag,
+		GitCheckoutFlagsFlag,
+		GitCloneFlagsFlag,
+		GitCleanFlagsFlag,
+		GitFetchFlagsFlag,
+		GitCloneMirrorFlagsFlag,
+		GitMirrorsPathFlag,
+		GitMirrorCheckoutModeFlag,
+		GitMirrorsLockTimeoutFlag,
+		GitMirrorsSkipUpdateFlag,
+		GitSubmoduleCloneConfigFlag,
+		GitSkipFetchExistingCommitsFlag,
+
 		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
 			Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
-		cli.StringFlag{
-			Name:   "build-path",
-			Value:  "",
-			Usage:  "Path to where the builds will run from",
-			EnvVar: "BUILDKITE_BUILD_PATH",
-		},
-		cli.StringFlag{
-			Name:   "hooks-path",
-			Value:  "",
-			Usage:  "Directory where the hook scripts are found",
-			EnvVar: "BUILDKITE_HOOKS_PATH",
-		},
-		cli.StringSliceFlag{
-			Name:   "additional-hooks-paths",
-			Value:  &cli.StringSlice{},
-			Usage:  "Additional directories to look for agent hooks",
-			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
-		},
+
+		// Various file path flags shared with agent start
+		BuildPathFlag,
+		HooksPathFlag,
+		AdditionalHooksPathsFlag,
 		SocketsPathFlag,
-		cli.StringFlag{
-			Name:   "plugins-path",
-			Value:  "",
-			Usage:  "Directory where the plugins are saved to",
-			EnvVar: "BUILDKITE_PLUGINS_PATH",
-		},
+		PluginsPathFlag,
+
 		cli.BoolFlag{
 			Name:   "no-ansi-timestamps",
 			Usage:  "Do not insert ANSI timestamp codes at the start of each line of job output (default: false)",
@@ -622,15 +592,10 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow local hooks to be run from checked out repositories (default: false)",
 			EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
 		},
-		cli.BoolFlag{
+		cli.BoolFlag{ // git-submodules in bootstrap
 			Name:   "no-git-submodules",
 			Usage:  "Don't automatically checkout git submodules (default: false)",
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
-		},
-		cli.BoolFlag{
-			Name:   "skip-checkout",
-			Usage:  "Skip the git checkout phase entirely",
-			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
 		},
 		cli.BoolFlag{
 			Name:   "no-feature-reporting",
@@ -760,6 +725,14 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
 		},
 
+		// API + agent behaviour
+		cli.StringFlag{
+			Name:   "ping-mode",
+			Usage:  "Selects available protocols for dispatching work to this agent. One of auto (default, prefer streaming, but fall back to polling when necessary), poll-only, or stream-only.",
+			Value:  "auto",
+			EnvVar: "BUILDKITE_AGENT_PING_MODE",
+		},
+
 		// API Flags
 		AgentRegisterTokenFlag, // != AgentAccessToken
 		EndpointFlag,
@@ -841,6 +814,19 @@ var AgentStartCommand = cli.Command{
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
 			return fmt.Errorf("failed to unset config from environment: %w", err)
+		}
+
+		if !slices.Contains(mirrorCheckoutModes, cfg.GitMirrorCheckoutMode) {
+			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
+		}
+
+		if !slices.Contains(pingModes, cfg.PingMode) {
+			return fmt.Errorf("invalid ping mode %q, must be one of %v", cfg.PingMode, pingModes)
+		}
+		// Calling it "ping-only" was a mistake, so canonicalise it to "poll-only"
+		// on the very remote chance someone is using that.
+		if cfg.PingMode == pingModePingOnly {
+			cfg.PingMode = agent.PingModePollOnly
 		}
 
 		if cfg.VerificationJWKSFile != "" {
@@ -1049,6 +1035,7 @@ var AgentStartCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			SocketsPath:                  cfg.SocketsPath,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			HooksPath:                    cfg.HooksPath,
@@ -1060,7 +1047,9 @@ var AgentStartCommand = cli.Command{
 			GitCleanFlags:                cfg.GitCleanFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitSubmodules:                !cfg.NoGitSubmodules,
+			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                 cfg.SkipCheckout,
+			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			SSHKeyscan:                   !cfg.NoSSHKeyscan,
 			CommandEval:                  !cfg.NoCommandEval,
 			PluginsEnabled:               !cfg.NoPlugins,
@@ -1090,6 +1079,7 @@ var AgentStartCommand = cli.Command{
 			TraceContextEncoding:         cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
 			KubernetesExec:               cfg.KubernetesExec,
+			PingMode:                     cfg.PingMode,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
@@ -1319,7 +1309,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Setup the agent pool that spawns agent workers
-		pool := agent.NewAgentPool(workers)
+		pool := agent.NewAgentPool(workers, &agentConf)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
 		defer agentShutdownHook(l, cfg)
@@ -1528,6 +1518,10 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		}
 	}
 
+	if len(hooks) == 0 {
+		return nil
+	}
+
 	// pipe from hook output to logger
 	r, w := io.Pipe()
 	sh, err := shell.New(
@@ -1540,14 +1534,16 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		scan := bufio.NewScanner(r) // log each line separately
 		log = log.WithFields(logger.StringField("hook", hookName))
 		for scan.Scan() {
 			log.Info(scan.Text())
 		}
+	})
+	defer func() {
+		_ = w.Close() // closing the writer ends scan.Scan and lets wg.Wait return
+		wg.Wait()
 	}()
 
 	// run hooks
@@ -1563,10 +1559,6 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 			log.Error("%q hook: %v", hookName, err)
 			return err
 		}
-		w.Close() // goroutine scans until pipe is closed
-
-		// wait for hook to finish and output to flush to logger
-		wg.Wait()
 	}
 	return nil
 }

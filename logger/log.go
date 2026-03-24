@@ -144,7 +144,7 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 	now := time.Now().Format(DateFormat)
 
 	var line string
-	var prefix string
+	var prefix strings.Builder
 	var fieldStrs []string
 
 	if l.IsPrefixFn != nil {
@@ -155,7 +155,7 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 			}
 			// Allow some fields to be shown as prefixes
 			if l.IsPrefixFn(f) {
-				prefix += f.String()
+				prefix.WriteString(f.String())
 			}
 		}
 	}
@@ -180,9 +180,9 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 			messageColor = red
 		}
 
-		if prefix != "" {
+		if prefix.String() != "" {
 			line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m \x1b[%sm%s\x1b[0m",
-				levelColor, now, level, lightgray, prefix, messageColor, msg)
+				levelColor, now, level, lightgray, prefix.String(), messageColor, msg)
 		} else {
 			line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m",
 				levelColor, now, level, messageColor, msg)
@@ -199,8 +199,8 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 				fieldColor, field.Key(), messageColor, field.String()))
 		}
 	} else {
-		if prefix != "" {
-			line = fmt.Sprintf("%s %-6s %s %s", now, level, prefix, msg)
+		if prefix.String() != "" {
+			line = fmt.Sprintf("%s %-6s %s %s", now, level, prefix.String(), msg)
 		} else {
 			line = fmt.Sprintf("%s %-6s %s", now, level, msg)
 		}

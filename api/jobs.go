@@ -85,8 +85,8 @@ func (c *Client) AcquireJob(ctx context.Context, id string, headers ...Header) (
 // AcceptJob accepts the passed in job. Returns the job with its finalized set of
 // environment variables (when a job is accepted, the agents environment is
 // applied to the job)
-func (c *Client) AcceptJob(ctx context.Context, job *Job) (*Job, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/accept", railsPathEscape(job.ID))
+func (c *Client) AcceptJob(ctx context.Context, jobID string) (*Job, *Response, error) {
+	u := fmt.Sprintf("jobs/%s/accept", railsPathEscape(jobID))
 
 	req, err := c.newRequest(ctx, "PUT", u, nil)
 	if err != nil {
@@ -133,4 +133,27 @@ func (c *Client) FinishJob(ctx context.Context, job *Job, ignoreAgentInDispatche
 	}
 
 	return c.doRequest(req, nil)
+}
+
+// JobUpdateResponse is the response from updating a job
+type JobUpdateResponse struct {
+	ID string `json:"id"`
+}
+
+// UpdateJob updates mutable attributes on a job
+func (c *Client) UpdateJob(ctx context.Context, id string, attrs map[string]string) (*JobUpdateResponse, *Response, error) {
+	u := fmt.Sprintf("jobs/%s", railsPathEscape(id))
+
+	req, err := c.newRequest(ctx, "PUT", u, attrs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	j := new(JobUpdateResponse)
+	resp, err := c.doRequest(req, j)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return j, resp, err
 }

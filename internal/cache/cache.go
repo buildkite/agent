@@ -174,10 +174,7 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 	var wg sync.WaitGroup
 
 	for range workerCount {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				select {
 				case cacheID, open := <-cacheIDsCh:
@@ -217,7 +214,7 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 					return
 				}
 			}
-		}()
+		})
 	}
 
 sendLoop:
@@ -253,10 +250,7 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 	var wg sync.WaitGroup
 
 	for range workerCount {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				select {
 				case cacheID, open := <-cacheIDsCh:
@@ -295,7 +289,7 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 					return
 				}
 			}
-		}()
+		})
 	}
 
 sendLoop:

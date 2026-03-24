@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
+	"github.com/buildkite/shellwords"
 )
 
 // configureGitCredentialHelper sets up the agent to use a git credential helper that calls the Buildkite Agent API
@@ -391,11 +392,17 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	// If we don't have a mirror, we need to clone it
 	if !osutil.FileExists(mirrorDir) {
 		e.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-		flags := "--mirror " + e.GitCloneMirrorFlags
+		flags := []string{"--mirror"}
+		mirrorFlags, err := shellwords.Split(e.GitCloneMirrorFlags)
+		if err != nil {
+			e.shell.Errorf("Invalid --git-clone-mirror-flags %q (%s)", e.GitCloneMirrorFlags, err)
+			return "", err
+		}
+		flags = append(flags, mirrorFlags...)
 		if err := gitClone(ctx, e.shell, flags, repository, mirrorDir); err != nil {
 			e.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
 			if err := os.RemoveAll(mirrorDir); err != nil {
-				e.shell.Errorf("Failed to remove \"%s\" (%s)", mirrorDir, err)
+				e.shell.Errorf("Failed to remove %q (%s)", mirrorDir, err)
 			}
 			return "", err
 		}
@@ -528,23 +535,43 @@ func (e ErrTimedOutAcquiringLock) Error() string {
 
 func (e ErrTimedOutAcquiringLock) Unwrap() error { return e.Err }
 
-// updateRemoteURL updates the URL for 'origin'. If gitDir == "", it assumes the
+// updateRemoteURL updates the URL for 'origin' and reports whether the
+// URL changed from something else. If gitDir == "", it assumes the
 // local repo is in the current directory, otherwise it includes --git-dir.
-// If the remote has changed, it logs some extra information. updateRemoteURL
-// reports if the remote URL changed.
+// If the remote has changed, it logs some extra information.
 func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository string) (bool, error) {
 	// Update the origin of the repository so we can gracefully handle
 	// repository renames.
 
 	// First check what the existing remote is, for both logging and debugging
 	// purposes.
-	args := []string{"remote", "get-url", "origin"}
+
+	// Check if there are multiple URLs configured (e.g., via git remote set-url --add).
+	args := []string{"config", "--get-all", "remote.origin.url"}
 	if gitDir != "" {
 		args = append([]string{"--git-dir", gitDir}, args...)
 	}
-	gotURL, err := e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
+	allURLs, err := e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
 	if err != nil {
 		return false, err
+	}
+
+	var gotURL string
+	urls := strings.Split(strings.TrimSpace(allURLs), "\n")
+	if len(urls) > 1 {
+		// Multiple URLs configured - fall back to git remote get-url which
+		// handles this correctly (returns primary fetch URL).
+		args = []string{"remote", "get-url", "origin"}
+		if gitDir != "" {
+			args = append([]string{"--git-dir", gitDir}, args...)
+		}
+		gotURL, err = e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		// Single URL - use config output directly to avoid insteadOf transformation.
+		gotURL = urls[0]
 	}
 
 	if gotURL == repository {
@@ -587,69 +614,16 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 	return e.updateGitMirror(ctx, repository)
 }
 
-// defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
-// hook exists. It performs the default checkout on the Repository provided in the config
-func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
-	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
-	span.AddAttributes(map[string]string{
-		"checkout.repo_name": e.Repository,
-		"checkout.refspec":   e.RefSpec,
-		"checkout.commit":    e.Commit,
-	})
-	var err error
-	defer func() { span.FinishWithError(err) }()
-
-	if e.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
-	}
-
-	var mirrorDir string
-
-	// If we can, get a mirror of the git repository to use for reference later
-	if e.GitMirrorsPath != "" && e.Repository != "" {
-		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
-		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
-		if err != nil {
-			return fmt.Errorf("getting/updating git mirror: %w", err)
-		}
-
-		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
-	}
-
-	// Make sure the build directory exists and that we change directory into it
-	if err := e.createCheckoutDir(); err != nil {
-		return fmt.Errorf("creating checkout dir: %w", err)
-	}
-
-	gitCloneFlags := e.GitCloneFlags
-	if mirrorDir != "" {
-		gitCloneFlags += fmt.Sprintf(" --reference %q", mirrorDir)
-	}
-
-	// Does the git directory exist?
-	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
-	if osutil.FileExists(existingGitDir) {
-		// Update the origin of the repository so we can gracefully handle
-		// repository renames
-		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
-			return fmt.Errorf("setting origin: %w", err)
-		}
-	} else {
-		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
-			return fmt.Errorf("cloning git repository: %w", err)
-		}
-	}
-
-	// Git clean prior to checkout, we do this even if submodules have been
-	// disabled to ensure previous submodules are cleaned up
-	if hasGitSubmodules(e.shell) {
-		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
-			return fmt.Errorf("cleaning git submodules: %w", err)
-		}
-	}
-
-	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
-		return fmt.Errorf("cleaning git repository: %w", err)
+// fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
+// enabled and the commit already exists locally, the fetch is skipped entirely.
+func (e *Executor) fetchSource(ctx context.Context) error {
+	// If configured, skip the fetch when the commit already exists locally.
+	// This is useful when a pre-populated git mirror is used with --reference,
+	// as the commit objects are already reachable and fetching is redundant.
+	if e.GitSkipFetchExistingCommits && e.Commit != "HEAD" &&
+		hasGitCommit(ctx, e.shell, ".git", e.Commit) {
+		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
+		return nil
 	}
 
 	gitFetchFlags := e.GitFetchFlags
@@ -738,6 +712,117 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+// defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
+// hook exists. It performs the default checkout on the Repository provided in the config
+func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
+	span.AddAttributes(map[string]string{
+		"checkout.repo_name": e.Repository,
+		"checkout.refspec":   e.RefSpec,
+		"checkout.commit":    e.Commit,
+	})
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
+	if e.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
+	}
+
+	var mirrorDir string
+
+	// If we can, get a mirror of the git repository to use for reference later
+	if e.GitMirrorsPath != "" && e.Repository != "" {
+		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
+		if err != nil {
+			return fmt.Errorf("getting/updating git mirror: %w", err)
+		}
+
+		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
+	}
+
+	// Make sure the build directory exists and that we change directory into it
+	if err := e.createCheckoutDir(); err != nil {
+		return fmt.Errorf("creating checkout dir: %w", err)
+	}
+
+	// On mirrors and dissociation:
+	//
+	// --reference makes the clone reuse objects from the mirror, using the
+	// .git/objects/info/alternates file. On its own, it won't copy the objects
+	// from the mirror, just refer to them. This becomes a problem if they
+	// disappear, which happens during routine normal use of the mirror.
+	//
+	// --dissociate makes copies of the objects from the mirror, which makes the
+	// clone robust against that failure, at the expense of disk space and extra
+	// work up front.
+	//
+	// --dissociate is safer, so it's what we want, but it can be disabled. It
+	// is important even when CleanCheckout is enabled, because auto-maintenance
+	// can happen on the mirror at any time!
+
+	// Does the git directory exist?
+	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
+	if osutil.FileExists(existingGitDir) {
+		// Ensure the origin matches the configured repo, so we can
+		// gracefully handle repository renames.
+		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
+			return fmt.Errorf("setting origin: %w", err)
+		}
+
+		if mirrorDir != "" {
+			switch e.GitMirrorCheckoutMode {
+			case "dissociate":
+				// If the existing repo is still relying on the reference, then
+				// "dissociate" it (git repack, and delete the alternates file).
+				e.dissociateIfNeeded(ctx, existingGitDir)
+			case "reference":
+				// If the existing repo does not have a reference to the mirror,
+				// create one. Existing objects don't need cleaning up.
+				e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir)
+			}
+		}
+
+	} else { // the .git directory does not already exist
+
+		// Compute the clone flags. For mirrors we need --reference, and usually
+		// --dissociate.
+		gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
+		if err != nil {
+			return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
+		}
+		if mirrorDir != "" {
+			gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
+			if e.GitMirrorCheckoutMode == "dissociate" {
+				gitCloneFlags = append(gitCloneFlags, "--dissociate")
+			}
+		}
+
+		// Do the clone.
+		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
+			return fmt.Errorf("cloning git repository: %w", err)
+		}
+	}
+
+	// Git clean prior to checkout, we do this even if submodules have been
+	// disabled to ensure previous submodules are cleaned up
+	if hasGitSubmodules(e.shell) {
+		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
+			return fmt.Errorf("cleaning git submodules: %w", err)
+		}
+	}
+
+	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
+		return fmt.Errorf("cleaning git repository: %w", err)
+	}
+
+	if err := e.fetchSource(ctx); err != nil {
+		return err
+	}
+
 	gitCheckoutFlags := e.GitCheckoutFlags
 
 	if e.Commit == "HEAD" {
@@ -756,7 +841,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			e.shell.Commentf("Git submodules detected")
 			gitSubmodules = true
 		} else {
-			e.shell.OptionalWarningf("submodules-disabled", "This repository has submodules, but submodules are disabled at an agent level")
+			e.shell.OptionalWarningf("submodules-disabled", "This repository has submodules, but submodules are disabled")
 		}
 	}
 
@@ -789,7 +874,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		} else {
 			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
-				submoduleArgs := slices.Clone(args)
 				// submodules might need their fingerprints verified too
 				if e.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
@@ -818,8 +902,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 					repositoryPath = repository
 				}
 
+				submoduleArgs := slices.Clone(args)
 				if mirrorDir != "" {
 					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
+					if e.GitMirrorCheckoutMode == "dissociate" {
+						submoduleArgs = append(submoduleArgs, "--dissociate")
+					}
 				} else {
 					// Fall back to a clean update, rather than failing the checkout and therefore the build
 					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
@@ -1002,4 +1090,45 @@ func (e *Executor) resolveCommit(ctx context.Context) {
 		e.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
 		e.shell.Env.Set("BUILDKITE_COMMIT", trimmedCmdOut)
 	}
+}
+
+// This is the same thing that git does at the end of clone when it is
+// passed --dissociate:
+// https://github.com/git/git/blob/6e8d538aab8fe4dd07ba9fb87b5c7edcfa5706ad/builtin/clone.c#L843-L859
+// This kind of git surgery is acceptable, because it's how one would dissociate
+// a reference clone prior to Git 2.3.
+func (e *Executor) dissociateIfNeeded(ctx context.Context, gitDir string) error {
+	alternates := filepath.Join(gitDir, "objects", "info", "alternates")
+	if !osutil.FileExists(alternates) {
+		return nil
+	}
+	e.shell.Commentf("Dissociating existing reference clone because git mirror checkout mode is %q", e.GitMirrorCheckoutMode)
+	if err := gitRepack(ctx, e.shell, "-a", "-d"); err != nil {
+		return fmt.Errorf("cleaning up reference clone: %w", err)
+	}
+	if err := os.Remove(alternates); err != nil {
+		return fmt.Errorf("removing alternates file: %w", err)
+	}
+	return nil
+}
+
+// reassociateIfNeeded writes a new alternates file into gitDir/objects/info,
+// referring to mirrorDir/objects. This allows the repo in gitDir to reuse
+// objects from mirrorDir, but at the risk of those objects becoming unavailable
+// later on.
+func (e *Executor) reassociateIfNeeded(ctx context.Context, gitDir, mirrorDir string) error {
+	alternates := filepath.Join(gitDir, "objects", "info", "alternates")
+	if osutil.FileExists(alternates) {
+		return nil
+	}
+	e.shell.Commentf("Re-associating existing clone because git mirror checkout mode is %q", e.GitMirrorCheckoutMode)
+	objects := filepath.Join(mirrorDir, "objects")
+	if !osutil.FileExists(objects) {
+		return fmt.Errorf("objects directory missing from mirror directory %s", mirrorDir)
+	}
+	objects += "\n"
+	if err := os.WriteFile(alternates, []byte(objects), 0o644); err != nil {
+		return fmt.Errorf("writing alternates file: %w", err)
+	}
+	return nil
 }

@@ -126,6 +126,16 @@ func NewS3Client(ctx context.Context, l logger.Logger, bucket string) (*s3.Clien
 		o.UsePathStyle = usePathStyle
 	})
 
+	creds, credErr := cfg.Credentials.Retrieve(ctx)
+	if credErr == nil {
+		profile := cmp.Or(os.Getenv("BUILDKITE_S3_PROFILE"), os.Getenv("AWS_PROFILE"))
+		if creds.Source == "buildkiteEnvProvider" {
+			l.Info("S3 credentials found in Buildkite environment (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY)")
+		} else {
+			l.Info("S3 credentials loaded from the default AWS credential chain or BUILDKITE_S3_PROFILE, profile: %q", profile)
+		}
+	}
+
 	l.Debug("Testing AWS S3 credentials for bucket %q in region %q...", bucket, cfg.Region)
 
 	// Test the authentication by trying to list the first 0 objects in the bucket.

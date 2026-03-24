@@ -445,11 +445,13 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
+BUILDKITE_GIT_MIRROR_CHECKOUT_MODE
 BUILDKITE_GIT_FETCH_FLAGS
 BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
 BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
 BUILDKITE_GIT_SUBMODULES
+BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG
 BUILDKITE_CANCEL_GRACE_PERIOD
 BUILDKITE_COMMAND_EVAL
 BUILDKITE_LOCAL_HOOKS_ENABLED
@@ -558,12 +560,19 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
-	setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+	// Disable cloning submodules if specified in Agent config as precedence
+	// else allow pipeline/step env to control it via BUILDKITE_GIT_SUBMODULES
+	if !r.conf.AgentConfiguration.GitSubmodules {
+		setEnv("BUILDKITE_GIT_SUBMODULES", "false")
+	}
 	// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
 	// or by pipeline/step env
 	// This is here now to make it ready for if/when we add skip_checkout to the core app
 	if r.conf.AgentConfiguration.SkipCheckout {
 		setEnv("BUILDKITE_SKIP_CHECKOUT", "true")
+	}
+	if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
+		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
 	}
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
@@ -578,8 +587,10 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
 	setEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
 	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
+	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
 	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
 	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
+	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
 	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
@@ -766,17 +777,12 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 // jobCancellationChecker waits for the processes to start, then continuously
 // polls GetJobState to see if the job has been cancelled server-side. If so,
 // it calls r.Cancel.
-func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGroup) {
+func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Cancellation Checker")
 	defer done()
 	setStat("Starting...")
 
-	defer func() {
-		// Mark this routine as done in the wait group
-		wg.Done()
-
-		r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
-	}()
+	defer r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
 
 	select {
 	case <-r.process.Started():

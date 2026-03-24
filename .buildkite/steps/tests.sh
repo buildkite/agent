@@ -4,6 +4,11 @@ set -euo pipefail
 go version
 echo arch is "$(uname -m)"
 
+RACE=''
+if [[ $* == *-race* ]] ; then
+  RACE='-race'
+fi
+
 export BUILDKITE_TEST_ENGINE_SUITE_SLUG=buildkite-agent
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=gotest
 export BUILDKITE_TEST_ENGINE_RESULT_PATH="junit-${BUILDKITE_JOB_ID}.xml"
@@ -13,8 +18,8 @@ if [[ "$(go env GOOS)" == "windows" ]]; then
   # need a Windows VM to debug.
   export BUILDKITE_TEST_ENGINE_TEST_CMD="go tool gotestsum --junitfile={{resultPath}} -- -count=1 $* {{packages}}"
 else
-  mkdir -p coverage
-  COVERAGE_DIR="$PWD/coverage"
+  COVERAGE_DIR="${PWD}/coverage-$(go env GOOS)-$(go env GOARCH)${RACE}"
+  mkdir -p "${COVERAGE_DIR}"
   export BUILDKITE_TEST_ENGINE_TEST_CMD="go tool gotestsum --junitfile={{resultPath}} -- -count=1 -cover $* {{packages}} -test.gocoverdir=${COVERAGE_DIR}"
 fi
 

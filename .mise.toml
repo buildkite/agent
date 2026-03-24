@@ -1,0 +1,3 @@
+[tools]
+go = "1.25.8"
+golangci-lint = "2.9.0"

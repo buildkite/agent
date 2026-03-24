@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/agent"
@@ -49,6 +50,134 @@ func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("runJob() error = %v", err)
+	}
+}
+
+func TestCacheSettingsOnSelfHosted_LogsMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	jobID := "cache-self-hosted-job"
+	job := &api.Job{
+		ID:                 jobID,
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_COMPUTE_TYPE": "self-hosted",
+		},
+		Step: pipeline.CommandStep{
+			Cache: &pipeline.Cache{
+				Paths: []string{"vendor", "node_modules"},
+			},
+		},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().Once().AndExitWith(0)
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	logs := e.logsFor(t, jobID)
+	if !strings.Contains(logs, "Cache settings detected on self-hosted agent") {
+		t.Errorf("expected logs to contain cache warning for self-hosted agent, got %q", logs)
+	}
+	if !strings.Contains(logs, "vendor, node_modules") {
+		t.Errorf("expected logs to contain cache paths, got %q", logs)
+	}
+}
+
+func TestCacheSettingsOnHosted_DoesNotLogMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	jobID := "cache-hosted-job"
+	job := &api.Job{
+		ID:                 jobID,
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_COMPUTE_TYPE": "hosted",
+		},
+		Step: pipeline.CommandStep{
+			Cache: &pipeline.Cache{
+				Paths: []string{"vendor", "node_modules"},
+			},
+		},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().Once().AndExitWith(0)
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	logs := e.logsFor(t, jobID)
+	if strings.Contains(logs, "Cache settings detected on self-hosted agent") {
+		t.Errorf("expected logs to NOT contain cache warning for hosted agent, got %q", logs)
+	}
+}
+
+func TestNoCacheSettings_DoesNotLogMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	jobID := "no-cache-job"
+	job := &api.Job{
+		ID:                 jobID,
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_COMPUTE_TYPE": "self-hosted",
+		},
+		Step:  pipeline.CommandStep{},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().Once().AndExitWith(0)
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	logs := e.logsFor(t, jobID)
+	if strings.Contains(logs, "Cache settings detected on self-hosted agent") {
+		t.Errorf("expected logs to NOT contain cache warning when no cache settings, got %q", logs)
 	}
 }
 

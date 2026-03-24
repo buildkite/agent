@@ -29,6 +29,7 @@ go_library(
         "errors.go",
         "git_credentials_helper.go",
         "global.go",
+        "job_update.go",
         "kubernetes_bootstrap.go",
         "lock_acquire.go",
         "lock_common.go",
