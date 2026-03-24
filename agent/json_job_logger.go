@@ -33,6 +33,15 @@ func NewJsonJobLogger(conf JobRunnerConfig) JsonJobLogger {
 		logger.StringField("step_key", job.Env["BUILDKITE_STEP_KEY"]),
 	}
 
+	// If the job has a W3C traceparent (format: version-trace_id-span_id-flags),
+	// include trace_id and span_id in the log fields for trace correlation.
+	if parts := strings.SplitN(job.TraceParent, "-", 5); len(parts) >= 4 {
+		fields = append(fields,
+			logger.StringField("trace_id", parts[1]),
+			logger.StringField("span_id", parts[2]),
+		)
+	}
+
 	l := logger.NewConsoleLogger(logger.NewJSONPrinter(stdout), os.Exit)
 	l = l.WithFields(logger.StringField("source", "job"))
 	l = l.WithFields(fields...)
