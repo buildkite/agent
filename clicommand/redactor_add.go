@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
@@ -38,8 +40,10 @@ type RedactorAddConfig struct {
 	GlobalConfig
 	APIConfig
 
-	File   string `cli:"arg:0"`
-	Format string `cli:"format"`
+	File            string   `cli:"arg:0"`
+	Format          string   `cli:"format"`
+	ApplyVarsFilter bool     `cli:"apply-vars-filter"`
+	RedactedVars    []string `cli:"redacted-vars"`
 }
 
 var RedactorAddCommand = cli.Command{
@@ -86,6 +90,12 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 			EnvVar: "BUILDKITE_AGENT_REDACT_ADD_FORMAT",
 			Value:  FormatStringNone,
 		},
+		cli.BoolFlag{
+			Name:   "apply-vars-filter",
+			Usage:  fmt.Sprintf("When the input is in 'json' format, filters the secrets to redact using the same rules used to detect secrets from environment variables: secrets must be at least %d characters long, and names must match the patterns defined by --redacted-vars or $BUILDKITE_REDACTED_VARS.", redact.LengthMin),
+			EnvVar: "BUILDKITE_AGENT_REDACT_VARS_FILTER",
+		},
+		RedactedVars,
 	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -144,14 +154,29 @@ func ParseSecrets(
 ) ([]string, error) {
 	switch cfg.Format {
 	case FormatStringJSON:
-		secrets := &map[string]string{}
+		secrets := map[string]string{}
 		if err := json.NewDecoder(secretsReader).Decode(&secrets); err != nil {
 			return nil, fmt.Errorf("failed to parse as string valued JSON: %w", err)
 		}
 
-		parsedSecrets := make([]string, 0, len(*secrets))
-		for _, secret := range *secrets {
-			parsedSecrets = append(parsedSecrets, secret)
+		var parsedSecrets []string
+		if cfg.ApplyVarsFilter {
+			matched, short, err := redact.Vars(cfg.RedactedVars, env.FromMap(secrets).DumpPairs())
+			if err != nil {
+				return nil, fmt.Errorf("couldn't match object keys against redacted-vars: %w", err)
+			}
+			if len(short) > 0 {
+				l.Warn("Some object keys had values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+			}
+			parsedSecrets = make([]string, 0, len(matched))
+			for _, m := range matched {
+				parsedSecrets = append(parsedSecrets, m.Value)
+			}
+		} else {
+			parsedSecrets = make([]string, 0, len(secrets))
+			for _, secret := range secrets {
+				parsedSecrets = append(parsedSecrets, secret)
+			}
 		}
 
 		return parsedSecrets, nil
@@ -165,7 +190,7 @@ func ParseSecrets(
 		return []string{strings.TrimSpace(string(readSecret))}, nil
 
 	default:
-		return nil, fmt.Errorf("%s: %w", cfg.Format, errUnknownFormat)
+		return nil, fmt.Errorf("%w %q", errUnknownFormat, cfg.Format)
 	}
 }
 
