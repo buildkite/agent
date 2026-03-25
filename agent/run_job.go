@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
@@ -356,6 +357,17 @@ One or more containers connected to the agent, but then stopped communicating wi
 
 	// Collect the finished process' exit status
 	exit.Status = r.process.WaitStatus().ExitStatus()
+
+	// The executor (bootstrap subprocess) returns ExitCodeSetupFailure
+	// (125) when it fails during setUp — e.g. DNS errors fetching
+	// secrets, shell creation failures, or Job API init errors — before
+	// the user's command ever runs. Map this to -1 so it is consistent
+	// with other agent-level "command never ran" failures and can be
+	// caught with automatic_retry on exit_status -1.
+	if exit.Status == job.ExitCodeSetupFailure {
+		exit.Status = -1
+		exit.SignalReason = SignalReasonProcessRunError
+	}
 
 	if ws := r.process.WaitStatus(); ws.Signaled() {
 		exit.Signal = process.SignalString(ws.Signal())
