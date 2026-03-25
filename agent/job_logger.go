@@ -9,11 +9,11 @@ type JobLogger struct {
 }
 
 // NewJobLogger creates a JobLogger for the given config. When LogFormat is
-// "json", output is written through a JsonJobLogger with structured fields.
+// "json", output is written through a JSONJobLogger with structured fields.
 // Otherwise, output is written directly to AgentStdout.
 func NewJobLogger(conf JobRunnerConfig) JobLogger {
 	if conf.AgentConfiguration.LogFormat == "json" {
-		return JobLogger{w: NewJsonJobLogger(conf)}
+		return JobLogger{w: NewJSONJobLogger(conf)}
 	}
 	return JobLogger{w: conf.AgentStdout}
 }

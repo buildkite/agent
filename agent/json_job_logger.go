@@ -8,15 +8,15 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 )
 
-// JsonJobLogger is a wrapper around a JSON Logger that satisfies the
+// JSONJobLogger is a wrapper around a JSON Logger that satisfies the
 // io.Writer interface so it can be seamlessly used with existing job logging code.
-type JsonJobLogger struct {
+type JSONJobLogger struct {
 	log logger.Logger
 }
 
-// NewJsonJobLogger creates a JsonJobLogger for the given job config, extracting
+// NewJSONJobLogger creates a JSONJobLogger for the given job config, extracting
 // structured fields (org, pipeline, branch, etc.) from the job environment.
-func NewJsonJobLogger(conf JobRunnerConfig) JsonJobLogger {
+func NewJSONJobLogger(conf JobRunnerConfig) JSONJobLogger {
 	stdout := conf.AgentStdout
 	job := conf.Job
 
@@ -46,13 +46,13 @@ func NewJsonJobLogger(conf JobRunnerConfig) JsonJobLogger {
 	l = l.WithFields(logger.StringField("source", "job"))
 	l = l.WithFields(fields...)
 
-	return JsonJobLogger{log: l}
+	return JSONJobLogger{log: l}
 }
 
 // Write adapts the underlying JSON logger to match the io.Writer interface to
 // easier slotting into job logger code. This will write existing fields
 // attached to the logger, the message, and write out to the INFO level.
-func (l JsonJobLogger) Write(data []byte) (int, error) {
+func (l JSONJobLogger) Write(data []byte) (int, error) {
 	// When writing as a structured log, trailing newlines and carriage returns
 	// generally don't make sense.
 	msg := strings.TrimRight(string(data), "\r\n")

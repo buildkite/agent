@@ -6,9 +6,11 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/google/go-cmp/cmp"
 )
 
-func TestNewJsonJobLoggerJobFields(t *testing.T) {
+func TestJSONJobLogger_JobFields(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	job := &api.Job{
@@ -25,13 +27,16 @@ func TestNewJsonJobLoggerJobFields(t *testing.T) {
 		},
 	}
 
-	log := NewJsonJobLogger(JobRunnerConfig{AgentStdout: &buf, Job: job})
+	log := NewJSONJobLogger(JobRunnerConfig{AgentStdout: &buf, Job: job})
 	log.Write([]byte("hello\n"))
 
-	var entry map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+	var got map[string]string
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
 		t.Fatalf("failed to parse JSON log: %v", err)
 	}
+
+	// Ignore timestamp field from comparison
+	delete(got, "ts")
 
 	want := map[string]string{
 		"source":       "job",
@@ -45,15 +50,16 @@ func TestNewJsonJobLoggerJobFields(t *testing.T) {
 		"job_url":      "https://buildkite.com/my-org/my-pipeline/builds/42#job-123",
 		"job_id":       "job-123",
 		"step_key":     "my-step",
+		"level":        "INFO",
+		"msg":          "hello",
 	}
-	for field, wantVal := range want {
-		if got, ok := entry[field].(string); !ok || got != wantVal {
-			t.Errorf("%s = %q, want %q", field, got, wantVal)
-		}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("Logged JSON diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestNewJsonJobLoggerTraceparentFields(t *testing.T) {
+func TestJSONJobLogger_TraceparentFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		traceparent string
@@ -78,6 +84,7 @@ func TestNewJsonJobLoggerTraceparentFields(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var buf bytes.Buffer
 
 			job := &api.Job{
@@ -86,31 +93,19 @@ func TestNewJsonJobLoggerTraceparentFields(t *testing.T) {
 				TraceParent: tc.traceparent,
 			}
 
-			log := NewJsonJobLogger(JobRunnerConfig{AgentStdout: &buf, Job: job})
+			log := NewJSONJobLogger(JobRunnerConfig{AgentStdout: &buf, Job: job})
 			log.Write([]byte("hello\n"))
 
-			var entry map[string]any
-			if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+			var got map[string]string
+			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
 				t.Fatalf("failed to parse JSON log: %v", err)
 			}
 
-			if tc.wantTraceID != "" {
-				if got, ok := entry["trace_id"].(string); !ok || got != tc.wantTraceID {
-					t.Errorf("trace_id = %q, want %q", got, tc.wantTraceID)
-				}
-			} else {
-				if _, ok := entry["trace_id"]; ok {
-					t.Error("unexpected trace_id field in log output")
-				}
+			if got, want := got["trace_id"], tc.wantTraceID; got != want {
+				t.Errorf("logged trace_id = %q, want %q", got, want)
 			}
-			if tc.wantSpanID != "" {
-				if got, ok := entry["span_id"].(string); !ok || got != tc.wantSpanID {
-					t.Errorf("span_id = %q, want %q", got, tc.wantSpanID)
-				}
-			} else {
-				if _, ok := entry["span_id"]; ok {
-					t.Error("unexpected span_id field in log output")
-				}
+			if got, want := got["span_id"], tc.wantSpanID; got != want {
+				t.Errorf("logged span_id = %q, want %q", got, want)
 			}
 		})
 	}
