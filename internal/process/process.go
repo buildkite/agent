@@ -4,6 +4,7 @@
 package process
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -87,6 +88,8 @@ type Config struct {
 	Dir               string
 	InterruptSignal   Signal
 	SignalGracePeriod time.Duration
+	Started           chan struct{}
+	Done              chan struct{}
 }
 
 // Process is an operating system level process
@@ -106,8 +109,10 @@ type Process struct {
 // New returns a new instance of Process
 func New(l logger.Logger, c Config) *Process {
 	return &Process{
-		logger: l,
-		conf:   c,
+		logger:  l,
+		conf:    c,
+		started: c.Started,
+		done:    c.Done,
 	}
 }
 
@@ -156,15 +161,9 @@ func (p *Process) Run(ctx context.Context) error {
 		p.command.Dir = p.conf.Dir
 	}
 
-	// Create channels for signalling started and done
-	p.mu.Lock()
-	if p.done == nil {
-		p.done = make(chan struct{})
-	}
-	if p.started == nil {
-		p.started = make(chan struct{})
-	}
-	p.mu.Unlock()
+	// Ensure channels for signalling started and done are not nil
+	p.done = cmp.Or(p.done, make(chan struct{}))
+	p.started = cmp.Or(p.started, make(chan struct{}))
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -319,9 +318,7 @@ func (p *Process) Run(ctx context.Context) error {
 func (p *Process) Done() <-chan struct{} {
 	p.mu.Lock()
 	// We create this here in case this is called before Start()
-	if p.done == nil {
-		p.done = make(chan struct{})
-	}
+	p.done = cmp.Or(p.done, make(chan struct{}))
 	d := p.done
 	p.mu.Unlock()
 	return d
@@ -331,9 +328,7 @@ func (p *Process) Done() <-chan struct{} {
 func (p *Process) Started() <-chan struct{} {
 	p.mu.Lock()
 	// We create this here in case this is called before Start()
-	if p.started == nil {
-		p.started = make(chan struct{})
-	}
+	p.started = cmp.Or(p.started, make(chan struct{}))
 	d := p.started
 	p.mu.Unlock()
 	return d
