@@ -23,7 +23,6 @@ import (
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
@@ -41,19 +40,18 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}()
 
 	cmd := sh.Command(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com")
-	got, err := cmd.RunAndCaptureStdout(ctx)
+	got, err := cmd.RunAndCaptureStdout(t.Context())
 	if err != nil {
-		t.Errorf(`sh.RunAndCapture(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") error = %v`, err)
+		t.Errorf(`sh.Command(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com").RunAndCaptureStdout(t.Context()) error = %v`, err)
 	}
 
 	if want := "Llama party! 🎉"; got != want {
-		t.Errorf(`sh.RunAndCapture(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") output = %q, want %q`, got, want)
+		t.Errorf(`sh.Command(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com").RunAndCaptureStdout(t.Context()) output = %q, want %q`, got, want)
 	}
 }
 
 func TestRunAndCaptureWithExitCode(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
@@ -69,9 +67,9 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 		call.Exit(24)
 	}()
 
-	_, err = sh.Command(sshKeygen.Path).RunAndCaptureStdout(ctx)
+	_, err = sh.Command(sshKeygen.Path).RunAndCaptureStdout(t.Context())
 	if err == nil {
-		t.Errorf("sh.Command(ssh-keygen).RunAndCaptureStdout(ctx) error = %v, want non-nil error", err)
+		t.Errorf("sh.Command(ssh-keygen).RunAndCaptureStdout(t.Context()) error = %v, want non-nil error", err)
 	}
 
 	if got, want := shell.ExitCode(err), 24; got != want {
@@ -81,7 +79,6 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
@@ -104,8 +101,8 @@ func TestRun(t *testing.T) {
 	}()
 
 	cmd := sh.Command(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com")
-	if err := cmd.Run(ctx); err != nil {
-		t.Errorf(`sh.Run(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") error = %v`, err)
+	if err := cmd.Run(t.Context()); err != nil {
+		t.Errorf(`sh.Command(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com").Run(t.Context()) error = %v`, err)
 	}
 
 	promptPrefix := "$"
@@ -121,12 +118,11 @@ func TestRun(t *testing.T) {
 
 func TestRunWithStdin(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	out := &bytes.Buffer{}
 	sh := newShellForTest(t, shell.WithStdout(out), shell.WithPTY(false))
 	cmd := sh.CloneWithStdin(strings.NewReader("hello stdin")).Command("tr", "hs", "HS")
-	if err := cmd.Run(ctx); err != nil {
+	if err := cmd.Run(t.Context()); err != nil {
 		t.Fatalf(`sh.WithStdin("hello stdin").Run("tr", "hs", "HS") error = %v`, err)
 	}
 	if got, want := out.String(), "Hello Stdin"; want != got {
@@ -136,7 +132,6 @@ func TestRunWithStdin(t *testing.T) {
 
 func TestContextCancelTerminates(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	if runtime.GOOS == "windows" {
 		t.Skip("Not supported in windows")
@@ -148,7 +143,7 @@ func TestContextCancelTerminates(t *testing.T) {
 	}
 	defer sleepCmd.Close()
 
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	sh, err := shell.New()
@@ -173,7 +168,6 @@ func TestContextCancelTerminates(t *testing.T) {
 
 func TestInterrupt(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	if runtime.GOOS == "windows" {
 		t.Skip("Not supported in windows")
@@ -184,9 +178,6 @@ func TestInterrupt(t *testing.T) {
 		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
 	}
 	defer sleepCmd.Close()
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	sh, err := shell.New()
 	if err != nil {
@@ -207,7 +198,7 @@ func TestInterrupt(t *testing.T) {
 		sh.Interrupt()
 	}()
 
-	if err := sh.Command(sleepCmd.Path).Run(ctx); err == nil {
+	if err := sh.Command(sleepCmd.Path).Run(t.Context()); err == nil {
 		t.Errorf("sh.Run(ctx, sleep) = %v, want non-nil error", err)
 	}
 }
@@ -313,7 +304,6 @@ func TestWorkingDir(t *testing.T) {
 
 func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	if runtime.GOOS == "windows" {
 		t.Skip("Flakey on windows")
@@ -337,7 +327,7 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	cmd := acquireLockInOtherProcess(t, lockPath)
 	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
 
-	ctx, canc := context.WithTimeout(ctx, 2*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 2*time.Second)
 	defer canc()
 
 	lock, err := sh.LockFile(ctx, lockPath)
@@ -453,7 +443,6 @@ func TestRunWithOlfactor(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			ctx := context.Background()
 
 			out := &bytes.Buffer{}
 			sh, err := shell.New(shell.WithStdout(out))
@@ -465,7 +454,7 @@ func TestRunWithOlfactor(t *testing.T) {
 			}
 
 			err = sh.Command(test.command[0], test.command[1:]...).Run(
-				ctx,
+				t.Context(),
 				shell.WithStringSearch(smelled),
 			)
 			if eerr := new(exec.ExitError); !errors.As(err, &eerr) {
@@ -493,7 +482,6 @@ func TestRunWithOlfactor(t *testing.T) {
 
 func TestRunWithoutPrompt(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	out := &bytes.Buffer{}
 	sh, err := shell.New(shell.WithStdout(out))
@@ -501,7 +489,7 @@ func TestRunWithoutPrompt(t *testing.T) {
 		t.Fatalf("shell.New() error = %v", err)
 	}
 
-	if err := sh.Command("echo", "hi").Run(ctx, shell.ShowPrompt(false)); err != nil {
+	if err := sh.Command("echo", "hi").Run(t.Context(), shell.ShowPrompt(false)); err != nil {
 		t.Fatalf(`sh.Command("echo", "hi").Run(ctx, shell.ShowPrompt(false)) = %v`, err)
 	}
 	if got, want := out.String(), "hi\n"; got != want {
@@ -509,7 +497,7 @@ func TestRunWithoutPrompt(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := sh.Command("asdasdasdasdzxczxczxzxc").Run(ctx, shell.ShowPrompt(false)); err == nil {
+	if err := sh.Command("asdasdasdasdzxczxczxzxc").Run(t.Context(), shell.ShowPrompt(false)); err == nil {
 		t.Errorf("sh.RunWithoutPrompt(asdasdasdasdzxczxczxzxc) = %v, want non-nil error", err)
 	}
 }
