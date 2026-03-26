@@ -82,7 +82,16 @@ func newJobObject() (uintptr, error) {
 	return uintptr(handle), nil
 }
 
-func (p *Process) postStart() error {
+func (p *Process) postStart() (err error) {
+	defer func() {
+		// In the unlikely event we fail to associate the process with the job
+		// object, needed to terminate the process group, we should at least
+		// terminate _something_ when terminating. (We Tried™)
+		if err != nil {
+			p.terminateFunc = p.command.Process.Kill
+		}
+	}()
+
 	// convert the pid into a windows process handle. We need particular permissions on the handle
 	// for AssignProcessToJobObject to accept it
 	pid := uint32(p.pid())
@@ -97,6 +106,10 @@ func (p *Process) postStart() error {
 }
 
 func (p *Process) terminateProcessGroup() error {
+	if p.terminateFunc != nil {
+		p.logger.Debug("[Process] Terminating process")
+		return p.terminateFunc()
+	}
 	p.logger.Debug("[Process] Terminating process tree by destroying job")
 	return windows.CloseHandle(windows.Handle(p.winJobHandle))
 }

@@ -103,7 +103,8 @@ type Process struct {
 	command       *exec.Cmd
 	started, done chan struct{}
 
-	winJobHandle uintptr //nolint:unused // Used in signal_windows.go
+	winJobHandle  uintptr      //nolint:unused // Used in signal_windows.go
+	terminateFunc func() error //nolint:unused // Used in signal_windows.go
 }
 
 // New returns a new instance of Process
