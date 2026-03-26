@@ -35,6 +35,7 @@ const (
 	SIGHUP  Signal = 1
 	SIGINT  Signal = 2
 	SIGQUIT Signal = 3
+	SIGKILL Signal = 9
 	SIGUSR1 Signal = 10
 	SIGUSR2 Signal = 12
 	SIGTERM Signal = 15
@@ -44,6 +45,7 @@ var signalMap = map[string]Signal{
 	"SIGHUP":  SIGHUP,
 	"SIGINT":  SIGINT,
 	"SIGQUIT": SIGQUIT,
+	"SIGKILL": SIGKILL,
 	"SIGUSR1": SIGUSR1,
 	"SIGUSR2": SIGUSR2,
 	"SIGTERM": SIGTERM,

@@ -38,6 +38,7 @@ go_test(
     ],
     embed = [":shell"],
     deps = [
+        "//internal/process",
         "//internal/replacer",
         "@com_github_buildkite_bintest_v3//:bintest",
         "@com_github_google_go_cmp//cmp",

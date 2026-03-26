@@ -11,9 +11,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
@@ -130,76 +132,191 @@ func TestRunWithStdin(t *testing.T) {
 	}
 }
 
-func TestContextCancelTerminates(t *testing.T) {
+func TestContextCancelInterrupts(t *testing.T) {
 	t.Parallel()
 
-	if runtime.GOOS == "windows" {
-		t.Skip("Not supported in windows")
+	tests := []struct {
+		name              string
+		cmdWindows        string
+		newConsole        bool
+		interruptSignal   process.Signal
+		wantSignal        syscall.Signal
+		wantSignalWindows syscall.Signal
+	}{
+		{
+			name: "default",
+			// The usual timeout command should obey Ctrl-Break.
+			cmdWindows: ".\\fixtures\\sleep600.bat",
+			// The default interrupt signal is SIGTERM.
+			wantSignal:        syscall.SIGTERM,
+			wantSignalWindows: -1,
+		},
+		{
+			name: "SIGINT",
+			// SIGINT does nothing different on Windows.
+			cmdWindows:        ".\\fixtures\\sleep600.bat",
+			interruptSignal:   process.SIGINT,
+			wantSignal:        syscall.SIGINT,
+			wantSignalWindows: -1,
+		},
+		{
+			name: "SIGKILL",
+			// SIGKILL should bypass the Ctrl-Break handler in the process.
+			cmdWindows:        ".\\fixtures\\sleep600nobreak.bat",
+			interruptSignal:   process.SIGKILL,
+			wantSignal:        syscall.SIGKILL,
+			wantSignalWindows: -1,
+		},
 	}
 
-	sleepCmd, err := bintest.CompileProxy("sleep")
-	if err != nil {
-		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
-	}
-	defer sleepCmd.Close()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+			var opts []shell.NewShellOpt
+			if test.interruptSignal != 0 {
+				opts = append(opts, shell.WithInterruptSignal(test.interruptSignal))
+			}
 
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatalf("shell.New() error = %v", err)
-	}
+			sh, err := shell.New(opts...)
+			if err != nil {
+				t.Fatalf("shell.New(%v) error = %v", opts, err)
+			}
 
-	sh.Logger = shell.DiscardLogger
+			sh.Logger = shell.DiscardLogger
 
-	go func() {
-		call := <-sleepCmd.Ch
-		time.Sleep(time.Second * 60)
-		call.Exit(0)
-	}()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 
-	cancel()
+			// Wait for the process to start before cancelling the context.
+			// This is more reliable than time.Sleep.
+			started := make(chan struct{})
 
-	if err := sh.Command(sleepCmd.Path).Run(ctx); !shell.IsExitSignaled(err) {
-		t.Errorf("sh.Run(ctx, sleep) error = %v, want shell.IsExitSignaled(err) = true", err)
+			go func() {
+				select {
+				case <-time.After(1 * time.Minute):
+					t.Error("timeout waiting for process to start")
+				case <-started:
+					// Now cancel the context, which should cause the interrupt.
+					cancel()
+				}
+			}()
+
+			cmd := "fixtures/sleep600.sh"
+			if runtime.GOOS == "windows" {
+				cmd = test.cmdWindows
+			}
+
+			// The process returns an exit error, except on Windows. 🙄
+			wantSignaled := runtime.GOOS != "windows"
+
+			err = sh.Command(cmd).Run(ctx, shell.WithStarted(started))
+			if got, want := shell.IsExitSignaled(err), wantSignaled; got != want {
+				t.Errorf("sh.Command(%q).Run(ctx) = %v, want shell.IsExitSignaled(err) = %t", cmd, err, want)
+			}
+
+			status, err := sh.WaitStatus()
+			if err != nil {
+				t.Errorf("sh.WaitStatus() error = %v", err)
+			}
+			wantSignal := test.wantSignal
+			if runtime.GOOS == "windows" {
+				wantSignal = test.wantSignalWindows
+			}
+			if got, want := status.Signal(), wantSignal; got != want {
+				t.Errorf("sh.WaitStatus().Signal() = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
 func TestInterrupt(t *testing.T) {
 	t.Parallel()
 
-	if runtime.GOOS == "windows" {
-		t.Skip("Not supported in windows")
+	tests := []struct {
+		name              string
+		cmdWindows        string
+		interruptSignal   process.Signal
+		wantSignal        syscall.Signal
+		wantSignalWindows syscall.Signal
+	}{
+		{
+			name: "default",
+			// The usual timeout command should obey Ctrl-Break.
+			cmdWindows:        ".\\fixtures\\sleep600.bat",
+			wantSignal:        syscall.SIGTERM,
+			wantSignalWindows: -1,
+		},
+		{
+			name:              "SIGINT",
+			cmdWindows:        ".\\fixtures\\sleep600.bat",
+			interruptSignal:   process.SIGINT,
+			wantSignal:        syscall.SIGINT,
+			wantSignalWindows: -1,
+		},
+		{
+			name:              "SIGKILL",
+			cmdWindows:        ".\\fixtures\\sleep600nobreak.bat",
+			interruptSignal:   process.SIGKILL,
+			wantSignal:        syscall.SIGKILL,
+			wantSignalWindows: -1,
+		},
 	}
 
-	sleepCmd, err := bintest.CompileProxy("sleep")
-	if err != nil {
-		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
-	}
-	defer sleepCmd.Close()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatalf("shell.New() error = %v", err)
-	}
+			var opts []shell.NewShellOpt
+			if test.interruptSignal != 0 {
+				opts = append(opts, shell.WithInterruptSignal(test.interruptSignal))
+			}
+			sh, err := shell.New(opts...)
+			if err != nil {
+				t.Fatalf("shell.New(%v) error = %v", opts, err)
+			}
 
-	sh.Logger = shell.DiscardLogger
+			sh.Logger = shell.DiscardLogger
 
-	go func() {
-		call := <-sleepCmd.Ch
-		time.Sleep(time.Second * 10)
-		call.Exit(0)
-	}()
+			// Wait for the process to start before interrupting.
+			// This is more reliable than time.Sleep.
+			started := make(chan struct{})
 
-	// interrupt the process after 50ms
-	go func() {
-		<-time.After(time.Millisecond * 50)
-		sh.Interrupt()
-	}()
+			go func() {
+				select {
+				case <-time.After(1 * time.Minute):
+					t.Error("timeout waiting for process to start")
+				case <-started:
+					// Now interrupt the process.
+					sh.Interrupt()
+				}
+			}()
 
-	if err := sh.Command(sleepCmd.Path).Run(t.Context()); err == nil {
-		t.Errorf("sh.Run(ctx, sleep) = %v, want non-nil error", err)
+			cmd := "fixtures/sleep600.sh"
+			if runtime.GOOS == "windows" {
+				cmd = test.cmdWindows
+			}
+
+			// The process returns an exit error, except on Windows. 🙄
+			wantSignaled := runtime.GOOS != "windows"
+
+			err = sh.Command(cmd).Run(t.Context(), shell.WithStarted(started))
+			if got, want := shell.IsExitSignaled(err), wantSignaled; got != want {
+				t.Errorf("sh.Command(%q).Run(t.Context()) = %v, want shell.IsExitSignaled(err) = %t", cmd, err, want)
+			}
+
+			status, err := sh.WaitStatus()
+			if err != nil {
+				t.Errorf("sh.WaitStatus() error = %v", err)
+			}
+			wantSignal := test.wantSignal
+			if runtime.GOOS == "windows" {
+				wantSignal = test.wantSignalWindows
+			}
+			if got, want := status.Signal(), wantSignal; got != want {
+				t.Errorf("sh.WaitStatus().Signal() = %v, want %v", got, want)
+			}
+		})
 	}
 }
 

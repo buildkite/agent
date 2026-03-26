@@ -113,6 +113,16 @@ var KubernetesBootstrapCommand = cli.Command{
 			if err != nil {
 				return err
 			}
+			// CancelSignal == SIGKILL means the user wants the command to be
+			// killed instead of signaled more gracefully (SIGTERM, SIGINT,
+			// etc).
+			// We don't send SIGKILL to the bootstrap itself as a cancel signal,
+			// because that would kill the bootstrap immediately, which would
+			// prevent capturing the exit status of the command, executing
+			// various pre-exit hooks, and other cleanup.
+			if cs == process.SIGKILL {
+				cs = process.SIGTERM
+			}
 			cancelSignal = cs
 		}
 		cancelGracePeriodSecs := environ.GetInt("BUILDKITE_CANCEL_GRACE_PERIOD", defaultCancelGracePeriodSecs)

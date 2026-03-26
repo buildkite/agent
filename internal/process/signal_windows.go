@@ -115,9 +115,19 @@ func (p *Process) terminateProcessGroup() error {
 }
 
 func (p *Process) interruptProcessGroup() error {
-	// Send Ctrl-Break to the process group id, which is the same as the process PID
-	// This may return "Incorrect function" in docker for windows
-	return windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(p.pid()))
+	switch p.conf.InterruptSignal {
+	case SIGKILL:
+		return p.terminateProcessGroup()
+
+	// case SIGINT:
+	// There's a whole host of silly things we have to do to send Ctrl-C to the
+	// process properly, and I couldn't get it working, so...we don't.
+
+	default:
+		// Send Ctrl-Break to the process group id, which is the same as the process PID
+		// This may return "Incorrect function" in docker for windows
+		return windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(p.pid()))
+	}
 }
 
 func GetPgid(pid int) (int, error) {

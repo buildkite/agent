@@ -340,6 +340,17 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			return nil, fmt.Errorf("splitting bootstrap-script (%q) into tokens: %w", conf.AgentConfiguration.BootstrapScript, err)
 		}
 
+		// CancelSignal == SIGKILL means the user wants the command to be killed
+		// instead of signaled more gracefully (SIGTERM, SIGINT, etc).
+		// We don't send SIGKILL to the bootstrap itself as a cancel signal,
+		// because that would kill the bootstrap immediately, which would
+		// prevent capturing the exit status of the command, executing various
+		// pre-exit hooks, and other cleanup.
+		cancelSignal := conf.CancelSignal
+		if cancelSignal == process.SIGKILL {
+			cancelSignal = process.SIGTERM
+		}
+
 		r.process = process.New(r.agentLogger, process.Config{
 			Path:              cmd[0],
 			Args:              cmd[1:],
@@ -348,7 +359,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			PTY:               conf.AgentConfiguration.RunInPty,
 			Stdout:            r.jobLogs,
 			Stderr:            r.jobLogs,
-			InterruptSignal:   conf.CancelSignal,
+			InterruptSignal:   cancelSignal,
 			SignalGracePeriod: conf.AgentConfiguration.SignalGracePeriod,
 		})
 	}
