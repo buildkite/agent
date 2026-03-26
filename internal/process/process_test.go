@@ -32,7 +32,7 @@ func TestProcessOutput(t *testing.T) {
 	})
 
 	// wait for the process to finish
-	if err := p.Run(context.Background()); err != nil {
+	if err := p.Run(t.Context()); err != nil {
 		t.Fatalf("p.Run(ctx) = %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestProcessOutputPTY(t *testing.T) {
 	})
 
 	// wait for the process to finish
-	if err := p.Run(context.Background()); err != nil {
+	if err := p.Run(t.Context()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestProcessOutputPTY(t *testing.T) {
 }
 
 func TestProcessOutputPTY_PTYRawExperiment(t *testing.T) {
-	ctx, _ := experiments.Enable(context.Background(), experiments.PTYRaw)
+	ctx, _ := experiments.Enable(t.Context(), experiments.PTYRaw)
 
 	t.Parallel()
 
@@ -168,7 +168,7 @@ func TestProcessInput(t *testing.T) {
 		Stdout: stdout,
 	})
 	// wait for the process to finish
-	if err := p.Run(context.Background()); err != nil {
+	if err := p.Run(t.Context()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 	if got, want := stdout.String(), "Hello World"; got != want {
@@ -198,7 +198,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	})
 
 	// wait for the process to finish
-	if err := p.Run(context.Background()); err != nil {
+	if err := p.Run(t.Context()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -218,7 +218,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 func TestProcessTerminatesWhenContextDone(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	stdoutr, stdoutw := io.Pipe()
@@ -260,7 +260,7 @@ func TestProcessTerminatesWhenContextDone(t *testing.T) {
 func TestProcessWithSlowHandlerKilledWhenContextDone(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	stdoutr, stdoutw := io.Pipe()
@@ -306,7 +306,7 @@ func TestProcessInterrupts(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stdoutr, stdoutw := io.Pipe()
 
@@ -355,7 +355,7 @@ func TestProcessInterruptsAfterDone(t *testing.T) {
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
 
-	if err := p.Run(context.Background()); err != nil {
+	if err := p.Run(t.Context()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -373,7 +373,7 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	stdoutr, stdoutw := io.Pipe()
 
@@ -423,7 +423,7 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
 
-	if err := p.Run(context.Background()); err != nil {
+	if err := p.Run(t.Context()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -448,7 +448,7 @@ func BenchmarkProcess(b *testing.B) {
 			Path: os.Args[0],
 			Env:  []string{"TEST_MAIN=output"},
 		})
-		if err := proc.Run(context.Background()); err != nil {
+		if err := proc.Run(b.Context()); err != nil {
 			b.Fatalf("proc.Run() = %v", err)
 		}
 	}
