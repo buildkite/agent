@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.121.0](https://github.com/buildkite/agent/tree/v3.121.0) (2026-03-25)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.120.3...v3.121.0)
+
+> [!NOTE]
+> In order to make Git Mirrors more reliable, checkouts using a mirror will now be *dissociated* from the mirror. This approach still avoids fetching objects from the remote if they are present the mirror, but stores a copy of the objects in the checkout, preventing the checkout from becoming corrupted through entirely normal operation of the mirror.
+> To use to the previous behaviour (no dissociation, but at a risk of checkout corruption), set the flag `--git-mirror-checkout-mode=reference` or agent environment variable `BUILDKITE_GIT_MIRROR_CHECKOUT_MODE=reference`.
+
+### Added
+- Add GCP KMS Signing [#3660](https://github.com/buildkite/agent/pull/3660) (@tomowatt)
+
+### Changed
+- Job logger trace correlation [#3782](https://github.com/buildkite/agent/pull/3782) (@aapzu)
+- Dissociate clones of git mirrors by default [#3775](https://github.com/buildkite/agent/pull/3775) (@DrJosh9000)
+
 ## [v3.120.3](https://github.com/buildkite/agent/tree/v3.120.3) (2026-03-24)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.120.2...v3.120.3)
 
