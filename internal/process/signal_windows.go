@@ -80,7 +80,7 @@ func (p *Process) terminateProcessGroup() error {
 func (p *Process) interruptProcessGroup() error {
 	// Sends a CTRL-BREAK signal to the process group id, which is the same as the process PID
 	// For some reason I cannot fathom, this returns "Incorrect function" in docker for windows
-	err := windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(p.pid))
+	err := windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(p.pid()))
 	if err != nil {
 		return err
 	}

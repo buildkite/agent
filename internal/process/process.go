@@ -95,10 +95,9 @@ type Process struct {
 	status     syscall.WaitStatus
 	conf       Config
 	logger     logger.Logger
-	command    *exec.Cmd
 
 	mu            sync.Mutex
-	pid           int
+	command       *exec.Cmd
 	started, done chan struct{}
 
 	winJobHandle uintptr //nolint:unused // Used in signal_windows.go
@@ -112,12 +111,18 @@ func New(l logger.Logger, c Config) *Process {
 	}
 }
 
-// Pid is the pid of the running process
+// Pid is the pid of the running process, or 0 if it is not running.
 func (p *Process) Pid() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.pid
+	if p.command == nil || p.command.Process == nil {
+		return 0
+	}
+	return p.pid()
 }
+
+// unguarded version of Pid, only safe to call after process has started
+func (p *Process) pid() int { return p.command.Process.Pid }
 
 // WaitResult returns the raw error returned by Wait()
 func (p *Process) WaitResult() error {
@@ -193,10 +198,6 @@ func (p *Process) Run(ctx context.Context) error {
 			p.logger.Debug("[Process] Setting raw mode for PTY %s (fd:%d)", pty.Name(), pty.Fd())
 		}
 
-		p.mu.Lock()
-		p.pid = p.command.Process.Pid
-		p.mu.Unlock()
-
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
 
@@ -238,10 +239,6 @@ func (p *Process) Run(ctx context.Context) error {
 			p.logger.Error("[Process] postStart failed: %v", err)
 		}
 
-		p.mu.Lock()
-		p.pid = p.command.Process.Pid
-		p.mu.Unlock()
-
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
 	}
@@ -256,7 +253,7 @@ func (p *Process) Run(ctx context.Context) error {
 		case <-p.Done(): // process exited of it's own accord
 			return
 		case <-ctx.Done():
-			p.logger.Debug("[Process] Context done, terminating. pid=%d", p.pid)
+			p.logger.Debug("[Process] Context done, terminating. pid=%d", p.pid())
 			if err := p.Interrupt(); err != nil {
 				p.logger.Warn("[Process] Failed termination: %v", err)
 			}
@@ -265,7 +262,7 @@ func (p *Process) Run(ctx context.Context) error {
 			case <-p.Done(): // process exited after being interrupted
 				return
 			case <-time.After(p.conf.SignalGracePeriod):
-				p.logger.Warn("[Process] Has not terminated in time, killing. pid=%d", p.pid)
+				p.logger.Warn("[Process] Has not terminated in time, killing. pid=%d", p.pid())
 				if err := p.Terminate(); err != nil {
 					p.logger.Error("[Process] error sending SIGKILL: %s", err)
 					return
@@ -274,7 +271,7 @@ func (p *Process) Run(ctx context.Context) error {
 		}
 	}()
 
-	p.logger.Info("[Process] Process is running with PID: %d", p.pid)
+	p.logger.Info("[Process] Process is running with PID: %d", p.pid())
 
 	// Wait until the process has finished. The returned error is nil if the
 	// command runs, has no problems copying stdin, stdout, and stderr, and
@@ -305,7 +302,7 @@ func (p *Process) Run(ctx context.Context) error {
 		exitSignal = SignalString(p.status.Signal())
 	}
 	p.logger.Info("Process with PID: %d finished with Exit Status: %d, Signal: %s",
-		p.pid, p.status.ExitStatus(), exitSignal)
+		p.pid(), p.status.ExitStatus(), exitSignal)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
@@ -360,11 +357,11 @@ func (p *Process) Interrupt() error {
 	if err := p.interruptProcessGroup(); err != nil {
 		//  No process or process group can be found corresponding to that specified by pid.
 		if errors.Is(err, syscall.ESRCH) {
-			p.logger.Warn("[Process] Process %d has already exited", p.pid)
+			p.logger.Warn("[Process] Process %d has already exited", p.pid())
 			return nil
 		}
 
-		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.pid, err)
+		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.pid(), err)
 
 		// Fallback to terminating if we get an error
 		if termErr := p.terminateProcessGroup(); termErr != nil {
