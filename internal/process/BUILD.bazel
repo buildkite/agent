@@ -12,7 +12,7 @@ go_library(
         "pty_windows.go",
         "run.go",
         "scanner.go",
-        "signal.go",
+        "signal_notwindows.go",
         "signal_windows.go",
         "timestamper.go",
     ],
