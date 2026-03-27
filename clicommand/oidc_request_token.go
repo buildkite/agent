@@ -26,6 +26,7 @@ type OIDCTokenConfig struct {
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
 	Claims         []string `cli:"claim"           normalize:"list"`
 	AWSSessionTags []string `cli:"aws-session-tag" normalize:"list"`
+	SubjectClaim   string   `cli:"subject-claim"`
 }
 
 const (
@@ -66,6 +67,12 @@ var OIDCRequestTokenCommand = cli.Command{
 			Name:   "job",
 			Usage:  "Buildkite Job Id to claim in the OIDC token",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+
+		cli.StringFlag{
+			Name:   "subject-claim",
+			Usage:  "An immutable claim to use as the token's subject (e.g. pipeline_id, cluster_id). If omitted, the default compound subject is used.",
+			EnvVar: "BUILDKITE_OIDC_TOKEN_SUBJECT_CLAIM",
 		},
 
 		cli.StringSliceFlag{
@@ -122,6 +129,7 @@ var OIDCRequestTokenCommand = cli.Command{
 				Lifetime:       cfg.Lifetime,
 				Claims:         cfg.Claims,
 				AWSSessionTags: cfg.AWSSessionTags,
+				SubjectClaim:   cfg.SubjectClaim,
 			}
 
 			token, resp, err := client.OIDCToken(ctx, req)
