@@ -299,7 +299,7 @@ func (s *Shell) Command(command string, args ...string) Command {
 // executed directly, or some kind of intepreter is executed in order to
 // interpret it (loosely: powershell.exe for .ps1 files, bash(.exe) for shell
 // scripts without shebang lines).
-func (s *Shell) Script(path string) (Command, error) {
+func (s *Shell) Script(path string, commandOverride string) (Command, error) {
 	var command string
 	var args []string
 
@@ -309,6 +309,20 @@ func (s *Shell) Script(path string) (Command, error) {
 	isSh := filepath.Ext(path) == "" || filepath.Ext(path) == ".sh"
 	isWindows := runtime.GOOS == "windows"
 	isPwsh := filepath.Ext(path) == ".ps1"
+
+	if commandOverride != "" {
+		// first element is the command, all others are args to which we append path
+		commandParts, err := shellwords.Split(commandOverride)
+		if err != nil {
+			return Command{}, fmt.Errorf("splitting hooks shell %q: %w", commandOverride, err)
+		}
+
+		return Command{
+			shell:   s,
+			command: commandParts[0],
+			args:    append(commandParts[1:], path),
+		}, nil
+	}
 
 	switch {
 	case isWindows && isSh:
@@ -326,9 +340,17 @@ func (s *Shell) Script(path string) (Command, error) {
 
 	case isWindows && isPwsh:
 		if s.debug {
-			s.Commentf("Attempting to run %s with Powershell", path)
+			s.Commentf("Attempting to run %s with PowerShell", path)
 		}
 		command = "powershell.exe"
+		args = []string{"-file", path}
+
+	case !isWindows && isPwsh:
+		// If Pwsh on non-Windows platform, use cross-platform PowerShell 7
+		if s.debug {
+			s.Commentf("Attempting to run %s with PowerShell 7", path)
+		}
+		command = "pwsh"
 		args = []string{"-file", path}
 
 	case !isWindows && isSh:

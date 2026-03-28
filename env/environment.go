@@ -363,6 +363,7 @@ var ProtectedEnv = map[string]struct{}{
 	"BUILDKITE_PLUGINS_ENABLED":          {},
 	"BUILDKITE_PLUGINS_PATH":             {},
 	"BUILDKITE_SHELL":                    {},
+	"BUILDKITE_HOOKS_SHELL":              {},
 	"BUILDKITE_SSH_KEYSCAN":              {},
 }
 
