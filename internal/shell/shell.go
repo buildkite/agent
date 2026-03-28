@@ -312,7 +312,11 @@ func (s *Shell) Script(path string, commandOverride string) (Command, error) {
 
 	if commandOverride != "" {
 		// first element is the command, all others are args to which we append path
-		commandParts := strings.Fields(commandOverride)
+		commandParts, err := shellwords.Split(commandOverride)
+		if err != nil {
+			return Command{}, fmt.Errorf("splitting hooks shell %q: %w", commandOverride, err)
+		}
+
 		return Command{
 			shell:   s,
 			command: commandParts[0],
