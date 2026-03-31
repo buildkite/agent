@@ -9,7 +9,7 @@ go_library(
         "level.go",
         "log.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/logger",
+    importpath = "github.com/buildkite/agent/v4/logger",
     visibility = ["//visibility:public"],
     deps = [
         "//version",

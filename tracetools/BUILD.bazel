@@ -7,7 +7,7 @@ go_library(
         "propagate.go",
         "span.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/tracetools",
+    importpath = "github.com/buildkite/agent/v4/tracetools",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_opentracing_opentracing_go//:opentracing-go",

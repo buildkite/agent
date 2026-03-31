@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/process"
 )
 
 func TestProcessOutput(t *testing.T) {

@@ -7,7 +7,7 @@ go_library(
         "version_dump.go",
         "version_dump_windows.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/system",
+    importpath = "github.com/buildkite/agent/v4/internal/system",
     visibility = ["//:__subpackages__"],
     deps = select({
         "@rules_go//go/platform:aix": [

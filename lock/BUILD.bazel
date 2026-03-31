@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "lock",
     srcs = ["lock.go"],
-    importpath = "github.com/buildkite/agent/v3/lock",
+    importpath = "github.com/buildkite/agent/v4/lock",
     visibility = ["//visibility:public"],
     deps = ["//internal/agentapi"],
 )

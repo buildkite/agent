@@ -31,7 +31,7 @@ go_library(
         "tags.go",
         "verify_job.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/agent",
+    importpath = "github.com/buildkite/agent/v4/agent",
     visibility = ["//visibility:public"],
     deps = [
         "//api",

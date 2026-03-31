@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "integration",
     srcs = ["test_helpers.go"],
-    importpath = "github.com/buildkite/agent/v3/agent/integration",
+    importpath = "github.com/buildkite/agent/v4/agent/integration",
     visibility = ["//visibility:public"],
     deps = [
         "//agent",

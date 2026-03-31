@@ -3,7 +3,7 @@ package agent_test
 import (
 	"testing"
 
-	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v4/agent"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
