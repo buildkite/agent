@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/gowebpki/jcs"
 )
