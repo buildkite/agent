@@ -4,8 +4,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/job"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/job"
 )
 
 // AgentConfiguration is the run-time configuration for an agent that

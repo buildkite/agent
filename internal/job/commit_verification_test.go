@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/job/githttptest"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/job/githttptest"
+	"github.com/buildkite/agent/v4/internal/shell"
 )
 
 // newFileBackedRepo creates an empty bare git repository served over file://

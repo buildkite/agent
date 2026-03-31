@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/agenthttp"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-querystring/query"
 )
 

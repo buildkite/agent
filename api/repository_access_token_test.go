@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestGenerateRepositoryAccessToken(t *testing.T) {

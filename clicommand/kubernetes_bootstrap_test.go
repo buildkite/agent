@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v4/env"
 )
 
 func TestRebaseJobContextPaths(t *testing.T) {

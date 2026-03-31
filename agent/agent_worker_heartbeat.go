@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/status"
 )
 
 func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
