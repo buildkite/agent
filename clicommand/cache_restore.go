@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/buildkite/agent/v3/internal/cache"
+	"github.com/buildkite/agent/v4/internal/cache"
 	"github.com/urfave/cli"
 	"go.opentelemetry.io/otel"
 )

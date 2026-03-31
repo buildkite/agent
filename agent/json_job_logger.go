@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // JSONJobLogger is a wrapper around a JSON Logger that satisfies the

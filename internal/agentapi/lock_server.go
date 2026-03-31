@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/buildkite/agent/v3/internal/socket"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/socket"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/go-chi/chi/v5"
 )
 

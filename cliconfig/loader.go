@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
 )

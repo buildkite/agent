@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/kubernetes"
 	"github.com/urfave/cli"
 )
 
