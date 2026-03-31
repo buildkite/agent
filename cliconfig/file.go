@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/osutil"
 )
 
 type File struct {

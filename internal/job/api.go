@@ -3,9 +3,9 @@ package job
 import (
 	"fmt"
 
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/socket"
-	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/socket"
+	"github.com/buildkite/agent/v4/jobapi"
 )
 
 // startJobAPI starts the job API server, iff the OS of the box supports it otherwise it returns a

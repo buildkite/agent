@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/job/githttptest"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/job/githttptest"
+	"github.com/buildkite/agent/v4/internal/shell"
 )
 
 func TestVerifyCommit(t *testing.T) {

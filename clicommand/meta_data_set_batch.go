@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
