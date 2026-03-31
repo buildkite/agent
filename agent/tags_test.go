@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )

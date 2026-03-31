@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/logger"
 	"golang.org/x/term"
 )
 

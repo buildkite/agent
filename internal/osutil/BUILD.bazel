@@ -10,7 +10,7 @@ go_library(
         "umask.go",
         "umask_unix.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/osutil",
+    importpath = "github.com/buildkite/agent/v4/internal/osutil",
     visibility = ["//:__subpackages__"],
     deps = select({
         "@rules_go//go/platform:aix": [

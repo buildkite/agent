@@ -9,10 +9,10 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/internal/tempfile"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/internal/tempfile"
 	"gotest.tools/v3/assert"
 )
 

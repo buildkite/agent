@@ -17,7 +17,7 @@ go_library(
         "ssh.go",
         "tracing.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/job",
+    importpath = "github.com/buildkite/agent/v4/internal/job",
     visibility = ["//:__subpackages__"],
     deps = [
         "//agent/plugin",

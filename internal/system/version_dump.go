@@ -5,8 +5,8 @@ package system
 import (
 	"runtime"
 
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/process"
 )
 
 // Returns a dump of the raw operating system information

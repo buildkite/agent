@@ -12,7 +12,7 @@ go_library(
         "routes.go",
         "server.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/agentapi",
+    importpath = "github.com/buildkite/agent/v4/internal/agentapi",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/socket",

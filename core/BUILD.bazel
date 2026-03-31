@@ -11,7 +11,7 @@ go_library(
         "options.go",
         "process_exit.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/core",
+    importpath = "github.com/buildkite/agent/v4/core",
     visibility = ["//visibility:public"],
     deps = [
         "//api",
