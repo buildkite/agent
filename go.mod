@@ -1,4 +1,4 @@
-module github.com/buildkite/agent/v3
+module github.com/buildkite/agent/v4
 
 go 1.25.0
 

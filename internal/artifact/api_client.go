@@ -3,7 +3,7 @@ package artifact
 import (
 	"context"
 
-	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v4/api"
 )
 
 // APIClient describes the Agent REST API methods used by the artifact package.

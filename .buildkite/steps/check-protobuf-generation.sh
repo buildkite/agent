@@ -14,6 +14,6 @@ buf generate
 if ! git diff --no-ext-diff --exit-code; then
   echo ^^^ +++
   echo "Generated protobuf files are out of sync with the source code"
-  echo "Please run \`buf generate\` in the internal/proto directory locally, and commit the result."
+  echo "Please run \`buf generate\` in the api/proto directory locally, and commit the result."
   exit 1
 fi

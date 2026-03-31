@@ -3,7 +3,7 @@ package agent
 import (
 	"strings"
 
-	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v4/env"
 )
 
 const k8sEnvVarPrefix = "BUILDKITE_K8S_"
