@@ -16,7 +16,7 @@ var (
 	baseVersion string
 
 	// buildNumber is filled in by scripts/build-binary.sh by passing -ldflags
-	// "-X github.com/buildkite/agent/v3/version.buildNumber=${BUILDKITE_BUILD_NUMBER}"
+	// "-X github.com/buildkite/agent/v4/version.buildNumber=${BUILDKITE_BUILD_NUMBER}"
 	buildNumber = "x"
 )
 
@@ -27,11 +27,11 @@ func Version() string {
 // BuildNumber returns the build number of the CI pipeline that built the agent.
 // You can override buildVersion at compile time by using the ldflag:
 //
-// "-X github.com/buildkite/agent/v3/version.buildNumber=abc"
+// "-X github.com/buildkite/agent/v4/version.buildNumber=abc"
 //
 // An easy way to test this is:
 //
-// $ go run -buildvcs=true -ldflags "-X github.com/buildkite/agent/v3/version.buildNumber=abc" . --version
+// $ go run -buildvcs=true -ldflags "-X github.com/buildkite/agent/v4/version.buildNumber=abc" . --version
 //
 // On CI, the binaries are always built with the buildVersion variable set.
 func BuildNumber() string {

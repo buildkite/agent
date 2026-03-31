@@ -10,7 +10,7 @@ digraph {
 
     subgraph cluster_clicommand {
         label="clicommand"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/clicommand"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v4/clicommand"
 
         "AgentStartCommand.Action"
         "handlePoolSignals"
@@ -21,7 +21,7 @@ digraph {
 
     subgraph cluster_agent {
         label="agent"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/agent"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v4/agent"
 
         "AgentPool.Start"
         "AgentPool.Start.<wait>"
@@ -55,7 +55,7 @@ digraph {
 
     subgraph cluster_api {
         label="api"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/api"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v4/api"
 
         "Client.AcceptJob"
         "Client.GetJobStatus"
@@ -68,7 +68,7 @@ digraph {
 
     subgraph cluster_process {
         label="process"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/internal/process"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v4/internal/process"
 
         "Scanner.ScanLines"
         "Process.Run"

@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
 )

@@ -17,9 +17,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/agenthttp"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 type ArtifactoryUploaderConfig struct {

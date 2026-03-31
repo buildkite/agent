@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/self"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/self"
+	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/shellwords"
 )
 

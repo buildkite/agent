@@ -10,11 +10,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
