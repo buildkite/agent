@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/socket"
-	"github.com/buildkite/agent/v3/jobapi"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/socket"
+	"github.com/buildkite/agent/v4/jobapi"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/version"
 )
 
 // startJobAPI starts the job API server, iff the OS of the box supports it otherwise it returns a

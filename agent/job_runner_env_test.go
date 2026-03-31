@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/api"
-	envutil "github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // controlPlaneTestRunner builds the minimal JobRunner that createEnvironment

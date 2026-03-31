@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/version"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	otellog "go.opentelemetry.io/otel/log"

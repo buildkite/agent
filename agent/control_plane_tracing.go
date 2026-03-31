@@ -8,10 +8,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/buildkite/agent/v3/api"
-	envutil "github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/api"
+	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/tracetools"
 )
 
 // LocalTracingConfig captures the operator's explicit local tracing choices,

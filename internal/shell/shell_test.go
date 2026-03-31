@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/internal/replacer"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 )

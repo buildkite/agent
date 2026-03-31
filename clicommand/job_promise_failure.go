@@ -9,10 +9,10 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/jobapi"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/jobapi"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli"
 )
 

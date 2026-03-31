@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"text/template"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/shellscript"
-	"github.com/buildkite/agent/v3/internal/tempfile"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/shellscript"
+	"github.com/buildkite/agent/v4/internal/tempfile"
 )
 
 type TemplateType int

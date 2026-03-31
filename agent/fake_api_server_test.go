@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/buildkite/agent/v3/api"
-	agentedgev1 "github.com/buildkite/agent/v3/api/proto/gen"
-	"github.com/buildkite/agent/v3/api/proto/gen/agentedgev1connect"
+	"github.com/buildkite/agent/v4/api"
+	agentedgev1 "github.com/buildkite/agent/v4/api/proto/gen"
+	"github.com/buildkite/agent/v4/api/proto/gen/agentedgev1connect"
 	"github.com/google/uuid"
 )
 

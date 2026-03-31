@@ -6,9 +6,9 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/cache/configuration"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/configuration"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/dustin/go-humanize"
 )
 
