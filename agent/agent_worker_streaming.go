@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	agentedgev1 "github.com/buildkite/agent/v3/api/proto/gen"
-	"github.com/buildkite/agent/v3/status"
+	agentedgev1 "github.com/buildkite/agent/v4/api/proto/gen"
+	"github.com/buildkite/agent/v4/status"
 )
 
 // runStreamingPingLoop runs the streaming loop. It is best-effort

@@ -12,7 +12,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/buildkite/agent/v3/api/proto/gen
+      value: github.com/buildkite/agent/v4/api/proto/gen
   disable:
     - file_option: go_package
       module: buf.build/bufbuild/protovalidate

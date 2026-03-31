@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/buildkite/agent/v3/internal/socket"
+	"github.com/buildkite/agent/v4/internal/socket"
 )
 
 // promiseFailure tracks one attempt to declare a given exit status to the

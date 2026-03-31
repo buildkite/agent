@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/artifact"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/artifact"
 	"github.com/urfave/cli"
 	"go.opentelemetry.io/otel"
 )
