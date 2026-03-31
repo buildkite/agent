@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/ptr"
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/ptr"
+	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/roko"
 )
 

@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/socket"
+	"github.com/buildkite/agent/v4/internal/socket"
 )
 
 const lockAPIPrefix = "http://agent/api/leader/v0/lock/"

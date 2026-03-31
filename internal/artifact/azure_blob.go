@@ -9,7 +9,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // The domain suffix for Azure Blob storage.

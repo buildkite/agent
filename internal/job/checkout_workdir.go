@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/shell"
 )
 
 // prepareCheckoutWorkdir reconciles an existing checkout or clones a fresh one.

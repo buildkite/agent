@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/urfave/cli"
 )
 

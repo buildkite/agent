@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	metadata "github.com/brunoscheufler/aws-ecs-metadata-go"
-	"github.com/buildkite/agent/v3/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
 )
 
 type ECSMetadata struct {

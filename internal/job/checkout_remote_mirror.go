@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
 )
 

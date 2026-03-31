@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/agentapi"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/agentapi"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 var testSocketCounter uint32
