@@ -6,8 +6,8 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/status"
 )
 
 // runPingLoop runs the (classical) loop that pings Buildkite for work.
