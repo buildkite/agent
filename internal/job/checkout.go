@@ -353,7 +353,7 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) b
 	return true
 }
 
-func (e *Executor) updateGitMirror(ctx context.Context, repository string) (string, error) {
+func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir string, finalErr error) {
 	// Create a unique directory for the repository mirror
 	mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 	isMainRepository := repository == e.Repository
@@ -392,7 +392,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	// If we don't have a mirror, we need to clone it
 	if !osutil.FileExists(mirrorDir) {
 		e.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-		flags := []string{"--mirror"}
+		flags := []string{"--mirror"} // note --mirror implies --bare
 		mirrorFlags, err := shellwords.Split(e.GitCloneMirrorFlags)
 		if err != nil {
 			e.shell.Errorf("Invalid --git-clone-mirror-flags %q (%s)", e.GitCloneMirrorFlags, err)
@@ -437,8 +437,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 		return "", fmt.Errorf("unable to acquire update lock: %w", err)
 	}
-	defer mirrorUpdateLock.Unlock() //nolint:errcheck // Best-effort cleanup - primary unlock checked below.
-
+	defer func() {
+		if err := mirrorUpdateLock.Unlock(); err != nil {
+			finalErr = errors.Join(finalErr, fmt.Errorf("unable to release update lock: %w", err))
+		}
+	}()
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
 		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
@@ -517,11 +520,50 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 	}
 
-	if err := mirrorUpdateLock.Unlock(); err != nil {
-		return "", fmt.Errorf("unable to release update lock: %w", err)
+	// Clean checkout is highly recommended for use with mirrors.
+	// If it is disabled, we don't know when we'll be able to clean up the
+	// snapshot. So, don't make any snapshots. Return the mirror directly for
+	// the checkout to reference.
+	if !e.CleanCheckout {
+		return mirrorDir, nil
 	}
 
-	return mirrorDir, nil
+	// Create a snapshot of the mirror for this specific agent. This is another
+	// clone, but on a sensible filesystem, the git objects in this clone will
+	// be hardlinks into the mirror, quick to create and taking up negligible
+	// extra space.
+	// Doing this ensures that any object changes in the mirror (due to, say,
+	// git gc) won't corrupt the downstream reference clone (the checkout).
+	// Like the (clean) checkout, the snapshot only needs to exist as long as
+	// the current job.
+
+	snapshotDir := filepath.Join(e.GitMirrorsPath, "snapshots", dirForAgentName(e.AgentName), dirForRepository(repository))
+	// Create the snapshots path if it doesn't exist
+	if baseDir := filepath.Dir(mirrorDir); !osutil.FileExists(baseDir) {
+		e.shell.Commentf("Creating %q", baseDir)
+		// See comment above about umask
+		if err := os.MkdirAll(baseDir, 0o777); err != nil {
+			return "", err
+		}
+	}
+
+	if osutil.FileExists(snapshotDir) {
+		// Clean up the old snapshot. A previous job didn't clean it up.
+		// This is safe since a clean checkout removes any dependency on objects
+		// in the existing snapshot.
+		e.shell.Commentf("Deleting old mirror snapshot %q", snapshotDir)
+		if err := os.RemoveAll(snapshotDir); err != nil {
+			return "", err
+		}
+	}
+
+	// Finally, clone the snapshot. Yes, it's a --mirror of a --mirror.
+	e.shell.Commentf("Creating mirror snapshot in %q", snapshotDir)
+	if err := gitClone(ctx, e.shell, []string{"--mirror"}, mirrorDir, snapshotDir); err != nil {
+		return "", err
+	}
+
+	return snapshotDir, nil
 }
 
 type ErrTimedOutAcquiringLock struct {
@@ -608,6 +650,9 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
 			mirrorDir = ""
 		}
+
+		// If git mirror updates are skipped, we assume there's no change
+		// to the mirror objects, so no need for snapshotting.
 		return mirrorDir, nil
 	}
 
