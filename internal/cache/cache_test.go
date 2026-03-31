@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/zstash"
 	"github.com/buildkite/zstash/cache"
 	"github.com/google/go-cmp/cmp"

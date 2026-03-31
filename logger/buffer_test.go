@@ -3,7 +3,7 @@ package logger_test
 import (
 	"testing"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 

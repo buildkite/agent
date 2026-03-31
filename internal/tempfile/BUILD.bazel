@@ -6,7 +6,7 @@ go_library(
         "doc.go",
         "tempfile.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/tempfile",
+    importpath = "github.com/buildkite/agent/v4/internal/tempfile",
     visibility = ["//:__subpackages__"],
 )
 

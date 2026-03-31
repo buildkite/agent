@@ -18,11 +18,11 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/buildkite/agent/v3/api"
-	agentedgev1 "github.com/buildkite/agent/v3/api/proto/gen"
-	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/metrics"
+	"github.com/buildkite/agent/v4/api"
+	agentedgev1 "github.com/buildkite/agent/v4/api/proto/gen"
+	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/metrics"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 )

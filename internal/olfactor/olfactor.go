@@ -3,8 +3,8 @@ package olfactor
 import (
 	"io"
 
-	"github.com/buildkite/agent/v3/internal/replacer"
-	"github.com/buildkite/agent/v3/internal/trie"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/trie"
 )
 
 // Olfactor may be used for 'sniffing' an io stream for strings. In other

@@ -1,8 +1,8 @@
 package agentapi
 
 import (
-	"github.com/buildkite/agent/v3/internal/socket"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/socket"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // Server hosts the Unix domain socket used for implementing the Agent API.

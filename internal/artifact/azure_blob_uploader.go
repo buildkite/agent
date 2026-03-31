@@ -9,8 +9,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // AzureBlobUploaderConfig configures AzureBlobUploader.

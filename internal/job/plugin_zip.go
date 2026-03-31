@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/agent/plugin"
-	"github.com/buildkite/agent/v3/internal/agenthttp"
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/agent/plugin"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/roko"
 )
 

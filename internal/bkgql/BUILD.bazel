@@ -6,7 +6,7 @@ go_library(
         "client.go",
         "generated.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/bkgql",
+    importpath = "github.com/buildkite/agent/v4/internal/bkgql",
     visibility = ["//:__subpackages__"],
     deps = [
         "//internal/agenthttp",

@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/awslib"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/awslib"
+	"github.com/buildkite/agent/v4/logger"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
