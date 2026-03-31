@@ -6,7 +6,7 @@ go_library(
         "mux.go",
         "replacer.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/replacer",
+    importpath = "github.com/buildkite/agent/v4/internal/replacer",
     visibility = ["//:__subpackages__"],
 )
 

@@ -53,7 +53,7 @@ go_library(
         "tool_sign.go",
     ],
     embedsrcs = ["dummy.md.gz"],
-    importpath = "github.com/buildkite/agent/v3/clicommand",
+    importpath = "github.com/buildkite/agent/v4/clicommand",
     visibility = ["//visibility:public"],
     deps = [
         "//agent",

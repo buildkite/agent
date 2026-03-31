@@ -7,7 +7,7 @@ go_library(
         "client.go",
         "do.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/agenthttp",
+    importpath = "github.com/buildkite/agent/v4/internal/agenthttp",
     visibility = ["//:__subpackages__"],
     deps = [
         "//logger",

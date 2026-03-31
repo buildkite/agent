@@ -418,7 +418,7 @@ const file_agentedge_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id2j\n" +
 	"\x10AgentEdgeService\x12V\n" +
 	"\vStreamPings\x12 .agentedge.v1.StreamPingsRequest\x1a!.agentedge.v1.StreamPingsResponse\"\x000\x01B\xac\x01\n" +
-	"\x10com.agentedge.v1B\x0eAgentedgeProtoP\x01Z7github.com/buildkite/agent/v3/api/proto/gen;agentedgev1\xa2\x02\x03AXX\xaa\x02\fAgentedge.V1\xca\x02\fAgentedge\\V1\xe2\x02\x18Agentedge\\V1\\GPBMetadata\xea\x02\rAgentedge::V1b\x06proto3"
+	"\x10com.agentedge.v1B\x0eAgentedgeProtoP\x01Z7github.com/buildkite/agent/v4/api/proto/gen;agentedgev1\xa2\x02\x03AXX\xaa\x02\fAgentedge.V1\xca\x02\fAgentedge\\V1\xe2\x02\x18Agentedge\\V1\\GPBMetadata\xea\x02\rAgentedge::V1b\x06proto3"
 
 var (
 	file_agentedge_proto_rawDescOnce sync.Once

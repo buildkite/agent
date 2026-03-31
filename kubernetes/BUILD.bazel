@@ -9,7 +9,7 @@ go_library(
         "umask.go",
         "umask_windows.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/kubernetes",
+    importpath = "github.com/buildkite/agent/v4/kubernetes",
     visibility = ["//visibility:public"],
     deps = [
         "//internal/process",

@@ -18,11 +18,11 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/buildkite/agent/v3/clicommand"
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/clicommand"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/internal/shell"
 	"gotest.tools/v3/assert"
 
 	"github.com/buildkite/bintest/v3"

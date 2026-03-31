@@ -6,7 +6,7 @@ go_library(
         "file.go",
         "loader.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/cliconfig",
+    importpath = "github.com/buildkite/agent/v4/cliconfig",
     visibility = ["//visibility:public"],
     deps = [
         "//internal/osutil",
