@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/socket"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/socket"
 )
 
 func (s *Server) getEnv(w http.ResponseWriter, _ *http.Request) {

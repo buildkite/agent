@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 
-	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v4/api"
 )
 
 // APIClient defines the subset of client methods needed by core.

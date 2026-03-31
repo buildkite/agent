@@ -4,7 +4,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/olfactor"
+	"github.com/buildkite/agent/v4/internal/olfactor"
 )
 
 func TestOlfactor(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"net/url"
 
 	"connectrpc.com/connect"
-	agentedgev1 "github.com/buildkite/agent/v3/api/proto/gen"
-	"github.com/buildkite/agent/v3/api/proto/gen/agentedgev1connect"
+	agentedgev1 "github.com/buildkite/agent/v4/api/proto/gen"
+	"github.com/buildkite/agent/v4/api/proto/gen/agentedgev1connect"
 )
 
 // StreamPings opens a ConnectRPC channel for streaming pings. It returns an

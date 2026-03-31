@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/internal/self"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/self"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/urfave/cli"
 )
 

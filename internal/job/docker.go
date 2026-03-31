@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/shell"
 )
 
 var dockerEnv = []string{
