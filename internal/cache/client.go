@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/cache/api"
-	"github.com/buildkite/agent/v3/internal/cache/configuration"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/internal/cache/api"
+	"github.com/buildkite/agent/v4/internal/cache/configuration"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/version"
 )
 
 // Sentinel errors for common scenarios.

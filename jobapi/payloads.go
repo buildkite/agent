@@ -3,7 +3,7 @@ package jobapi
 import (
 	"sort"
 
-	"github.com/buildkite/agent/v3/internal/socket"
+	"github.com/buildkite/agent/v4/internal/socket"
 )
 
 // ErrorResponse is the response body for any errors that occur.

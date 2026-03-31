@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/agent"
-	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v4/agent"
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/signature"

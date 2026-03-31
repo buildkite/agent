@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
+	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
 	"github.com/google/go-querystring/query"
 	"github.com/klauspost/compress/gzhttp"
 	otel "go.opentelemetry.io/otel/trace"

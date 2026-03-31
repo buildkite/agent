@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/cache/api"
-	"github.com/buildkite/agent/v3/internal/cache/archive"
-	"github.com/buildkite/agent/v3/internal/cache/store"
+	"github.com/buildkite/agent/v4/internal/cache/api"
+	"github.com/buildkite/agent/v4/internal/cache/archive"
+	"github.com/buildkite/agent/v4/internal/cache/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -58,7 +58,7 @@ import (
 //	    log.Printf("Cache hit: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
 func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
-	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
+	tracer := otel.Tracer("github.com/buildkite/agent/v4/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.Restore")
 	defer span.End()
 
@@ -218,7 +218,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 
 // downloadCache downloads a cache archive from storage
 func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheRetrieveResp, bucketURL string) (tmpDir, archiveFile string, transferInfo *store.TransferInfo, err error) {
-	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
+	tracer := otel.Tracer("github.com/buildkite/agent/v4/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.downloadCache")
 	defer span.End()
 
@@ -267,7 +267,7 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheRetrie
 
 // extractCache extracts files from a cache archive
 func (c *client) extractCache(ctx context.Context, archiveFile string, archiveSize int64, paths []string) (*archive.ArchiveInfo, error) {
-	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
+	tracer := otel.Tracer("github.com/buildkite/agent/v4/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.extractCache")
 	defer span.End()
 
