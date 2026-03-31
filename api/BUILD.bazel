@@ -25,7 +25,7 @@ go_library(
         "token.go",
         "uuid.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/api",
+    importpath = "github.com/buildkite/agent/v4/api",
     visibility = ["//visibility:public"],
     deps = [
         "//api/proto/gen",

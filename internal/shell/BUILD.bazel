@@ -10,7 +10,7 @@ go_library(
         "shell.go",
         "test.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/shell",
+    importpath = "github.com/buildkite/agent/v4/internal/shell",
     visibility = ["//:__subpackages__"],
     deps = [
         "//env",

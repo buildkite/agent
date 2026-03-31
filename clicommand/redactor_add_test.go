@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/clicommand"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/clicommand"
+	"github.com/buildkite/agent/v4/logger"
 	"gotest.tools/v3/assert"
 )
 

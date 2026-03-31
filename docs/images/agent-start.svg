@@ -41,7 +41,7 @@
 <g id="clust2" class="cluster">
 <title>cluster_clicommand</title>
 <g id="a_clust2"><a
-                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v3/clicommand"
+                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v4/clicommand"
                     xlink:title="clicommand"
                 >
 <polygon
@@ -62,7 +62,7 @@
 <g id="clust3" class="cluster">
 <title>cluster_agent</title>
 <g id="a_clust3"><a
-                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v3/agent"
+                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v4/agent"
                     xlink:title="agent"
                 >
 <polygon
@@ -83,7 +83,7 @@
 <g id="clust4" class="cluster">
 <title>cluster_api</title>
 <g id="a_clust4"><a
-                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v3/api"
+                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v4/api"
                     xlink:title="api"
                 >
 <polygon
@@ -104,7 +104,7 @@
 <g id="clust5" class="cluster">
 <title>cluster_process</title>
 <g id="a_clust5"><a
-                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v3/internal/process"
+                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v4/internal/process"
                     xlink:title="process"
                 >
 <polygon
@@ -169,7 +169,7 @@
 <g id="node2" class="node">
 <title>AgentStartCommand.Action</title>
 <g id="a_node2"><a
-                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v3/clicommand#AgentStartCommand"
+                    xlink:href="https://pkg.go.dev/github.com/buildkite/agent/v4/clicommand#AgentStartCommand"
                     xlink:title="AgentStartCommand.Action"
                 >
 <path

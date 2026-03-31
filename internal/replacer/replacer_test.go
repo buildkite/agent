@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/google/go-cmp/cmp"
 	"gotest.tools/v3/assert"
 )

@@ -6,7 +6,7 @@ go_library(
         "environment.go",
         "protected.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/env",
+    importpath = "github.com/buildkite/agent/v4/env",
     visibility = ["//visibility:public"],
     deps = ["@com_github_puzpuzpuz_xsync_v2//:xsync"],
 )

@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "mime",
     srcs = ["mime.go"],
-    importpath = "github.com/buildkite/agent/v3/internal/mime",
+    importpath = "github.com/buildkite/agent/v4/internal/mime",
     visibility = ["//:__subpackages__"],
 )
 

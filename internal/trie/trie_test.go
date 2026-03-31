@@ -3,7 +3,7 @@ package trie_test
 import (
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/trie"
+	"github.com/buildkite/agent/v4/internal/trie"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
