@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/clicommand"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/clicommand"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/urfave/cli"
 )
 

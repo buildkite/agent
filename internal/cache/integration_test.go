@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/cache/configuration"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/configuration"
 )
 
 // mockAPIClient implements api.CacheClient for integration testing

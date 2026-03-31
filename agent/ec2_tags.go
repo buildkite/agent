@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/buildkite/agent/v3/internal/awslib"
+	"github.com/buildkite/agent/v4/internal/awslib"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"

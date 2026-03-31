@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/cache/archive"
-	"github.com/buildkite/agent/v3/internal/cache/store"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/archive"
+	"github.com/buildkite/agent/v4/internal/cache/store"
 	"github.com/buildkite/roko"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -55,7 +55,7 @@ import (
 //	    log.Printf("Cache saved: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
 func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
-	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
+	tracer := otel.Tracer("github.com/buildkite/agent/v4/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.Save")
 	defer span.End()
 

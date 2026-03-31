@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v4/env"
 )
 
 var (

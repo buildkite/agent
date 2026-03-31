@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
 	"github.com/google/go-querystring/query"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -30,7 +30,7 @@ const (
 // (resp, exists, err) return shape; this value is exported for parity.
 var ErrCacheEntryNotFound = errors.New("cache entry not found")
 
-var cacheTracer = otel.Tracer("github.com/buildkite/agent/v3/api/cache")
+var cacheTracer = otel.Tracer("github.com/buildkite/agent/v4/api/cache")
 
 // CacheEntryCreateReq is the request body for creating a cache entry.
 type CacheEntryCreateReq struct {
