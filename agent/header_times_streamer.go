@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/status"
 )
 
 // If you change header parsing here make sure to change it in the

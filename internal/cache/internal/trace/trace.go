@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var tracerName = "github.com/buildkite/agent/v3/internal/cache"
+var tracerName = "github.com/buildkite/agent/v4/internal/cache"
 
 func NewProvider(ctx context.Context, exporter, name, version string) (*sdktrace.TracerProvider, error) {
 	res, err := newResource(ctx, name, version)

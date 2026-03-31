@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v4/api"
 )
 
 func TestJobLoggerJSONFormat(t *testing.T) {
