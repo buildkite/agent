@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/dustin/go-humanize"
 )
@@ -86,7 +87,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 	// os.CreateTemp uses 0o600 permissions, but in the past we used os.Create
 	// which uses 0x666. Since these are set at open time, they are restricted
 	// by umask.
-	if err := temp.Chmod(0o666 &^ umask); err != nil {
+	if err := temp.Chmod(0o666 &^ osutil.Umask); err != nil {
 		return fmt.Errorf("setting file permissions (%T: %w)", err, err)
 	}
 

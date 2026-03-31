@@ -200,7 +200,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force", "--reference", submoduleRepo.Path},
+		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force", "--reference", matchSubDir(tester.GitMirrorsDir)},
 		{"submodule", "foreach", "--recursive", "git reset --hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},

@@ -359,7 +359,16 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) b
 	return true
 }
 
-func (e *Executor) updateGitMirror(ctx context.Context, repository string) (string, error) {
+// updateGitMirror clones a new git mirror (git clone --mirror ...), or updates
+// an existing git mirror to ensure relevant refs are available. It returns a
+// directory path that a checkout can use for the --reference flag. If clean
+// checkouts are enabled, dir will be a path to a snapshot of the mirror,
+// otherwise it will be the mirror.
+//
+// For efficiency reasons, updating an existing mirror is done by fetching
+// specific refspecs rather than using `git remote update` to fetch everything
+// (see https://github.com/buildkite/agent/pull/1112).
+func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir string, finalErr error) {
 	// Create a unique directory for the repository mirror
 	mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 	isMainRepository := repository == e.Repository
@@ -398,7 +407,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 	// If we don't have a mirror, we need to clone it
 	if !osutil.FileExists(mirrorDir) {
 		e.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-		flags := []string{"--mirror"}
+		flags := []string{"--mirror"} // note --mirror implies --bare
 		mirrorFlags, err := shellwords.Split(e.GitCloneMirrorFlags)
 		if err != nil {
 			e.shell.Errorf("Invalid --git-clone-mirror-flags %q (%s)", e.GitCloneMirrorFlags, err)
@@ -413,20 +422,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 			return "", err
 		}
 
-		return mirrorDir, nil
+		return e.snapshotMirror(ctx, repository, mirrorDir)
 	}
 
 	// If it exists, immediately release the clone lock.
 	if err := mirrorCloneLock.Unlock(); err != nil {
 		return "", fmt.Errorf("unable to release clone lock: %w", err)
-	}
-
-	// Check if the mirror has a commit, this is atomic so should be safe to do
-	if isMainRepository {
-		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
-			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
-			return mirrorDir, nil
-		}
 	}
 
 	if e.Debug {
@@ -443,13 +444,16 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 		return "", fmt.Errorf("unable to acquire update lock: %w", err)
 	}
-	defer mirrorUpdateLock.Unlock() //nolint:errcheck // Best-effort cleanup - primary unlock checked below.
-
+	defer func() {
+		if err := mirrorUpdateLock.Unlock(); err != nil {
+			finalErr = errors.Join(finalErr, fmt.Errorf("unable to release update lock: %w", err))
+		}
+	}()
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
 		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
 			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
-			return mirrorDir, nil
+			return e.snapshotMirror(ctx, repository, mirrorDir)
 		}
 	}
 
@@ -523,11 +527,80 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (stri
 		}
 	}
 
-	if err := mirrorUpdateLock.Unlock(); err != nil {
-		return "", fmt.Errorf("unable to release update lock: %w", err)
+	return e.snapshotMirror(ctx, repository, mirrorDir)
+}
+
+// snapshotMirror creates a snapshot of the mirror. It returns the directory for
+// the rest of the checkout to use as --reference, which will be the path to a
+// snapshot, unless clean checkout is disabled, in which case it will simply
+// return mirrorDir.
+//
+// This "snapshot" is a clone of the *mirror* in a nearby directory, but on a
+// filesystem that supports hardlinks (most modern filesystems), the git objects
+// in this clone will be hardlinks into the mirror - quick to create and taking
+// up negligible extra space. Doing this ensures that any object changes in the
+// mirror (due to, say, git gc) won't corrupt the downstream reference clone
+// (the checkout). When the mirror updates, it may write new object files and
+// unlink old object files, but the snapshot continues to have access to the old
+// files via its hardlinks. (At that point, the snapshot takes up more space.)
+//
+// Like the (clean) checkout, the snapshot only needs to exist as long as the
+// current job, but we specifically remove the snapshot at the end of the job,
+// since the filesystem containing mirrors (typically) persists across jobs -
+// leaving them will let them accumulate and drift from the mirror, taking up
+// space. (In contrast, the checkout may cease to exist if the agent is
+// ephemeral, so cleaning up the checkout at the end of the job might or might
+// not be wasted effort.) Ephemeral agents can flag that they don't keep
+// their checkouts by just enabling clean checkout.
+//
+// Why no snapshots if clean checkout is disabled:
+// Disabling clean checkout is how checkouts are reused (for efficiency), so
+// the checkout can exist with its dependency on the snapshot forever, so
+// we can't delete the snapshot (otherwise we will corrupt the checkout), so
+// the mirror volume will gradually fill up with snapshots.
+// And while the mirror is updated with new objects in each job, the snapshots
+// are not updated, so the non-clean checkout will probably redundantly fetch
+// its update from the remote, so we would need extra logic to disable the
+// mirror update unless the checkout turns out to be a fresh clone.
+// It's not impossible (perhaps we need a process to age-out existing checkouts)
+// but something to think about, and when we have a good implementation enable
+// it for more cases.
+func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir string) (string, error) {
+	if !e.CleanCheckout {
+		return mirrorDir, nil
 	}
 
-	return mirrorDir, nil
+	snapshotBaseDir := filepath.Join(e.GitMirrorsPath, "snapshots")
+
+	// Create the snapshots base dir if it doesn't exist
+	if !osutil.FileExists(snapshotBaseDir) {
+		e.shell.Commentf("Creating %q", snapshotBaseDir)
+		// See comment above about umask
+		if err := os.MkdirAll(snapshotBaseDir, 0o777); err != nil {
+			return "", fmt.Errorf("creating base directory for snapshots: %w", err)
+		}
+	}
+
+	// Create a unique directory for this snapshot.
+	// MkdirTemp ensures the new dir won't collide with other agents.
+	snapshotDir, err := os.MkdirTemp(snapshotBaseDir, dirForRepository(repository))
+	if err != nil {
+		return "", fmt.Errorf("creating snapshot directory: %w", err)
+	}
+	if err := os.Chmod(snapshotDir, 0o777&^osutil.Umask); err != nil {
+		return "", fmt.Errorf("changing permissions on snapshot directory: %w", err)
+	}
+
+	// Automatically remove it during teardown
+	e.cleanupDirs = append(e.cleanupDirs, snapshotDir)
+
+	// Finally, clone the snapshot. Yes, it's a --mirror of a --mirror.
+	e.shell.Commentf("Creating mirror snapshot in %q", snapshotDir)
+	if err := gitClone(ctx, e.shell, []string{"--mirror"}, mirrorDir, snapshotDir); err != nil {
+		return "", err
+	}
+
+	return snapshotDir, nil
 }
 
 type ErrTimedOutAcquiringLock struct {
@@ -614,6 +687,9 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
 			mirrorDir = ""
 		}
+
+		// If git mirror updates are skipped, we assume there's no change
+		// to the mirror objects, so no need for snapshotting.
 		return mirrorDir, nil
 	}
 
@@ -900,17 +976,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 					return fmt.Errorf("creating checkout dir: %w", err)
 				}
 
-				// Tests use a local temp path for the repository, real repositories don't. Handle both.
-				var repositoryPath string
-				if !osutil.FileExists(repository) {
-					repositoryPath = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
-				} else {
-					repositoryPath = repository
-				}
-
 				submoduleArgs := slices.Clone(args)
 				if mirrorDir != "" {
-					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
+					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
 					if e.GitMirrorCheckoutMode == "dissociate" {
 						submoduleArgs = append(submoduleArgs, "--dissociate")
 					}
