@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/bintest/v3"
 )
 
