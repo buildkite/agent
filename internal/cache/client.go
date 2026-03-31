@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/cache/configuration"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/configuration"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // cacheAPI is the subset of *api.Client that the cache package depends on.

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/replacer"
-	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/jobapi"
 )
 
 func TestSetWorkdir(t *testing.T) {

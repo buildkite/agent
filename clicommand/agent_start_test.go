@@ -7,10 +7,10 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/v3/agent"
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/agent"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli"
 )

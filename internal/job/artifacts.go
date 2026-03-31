@@ -3,8 +3,8 @@ package job
 import (
 	"context"
 
-	"github.com/buildkite/agent/v3/internal/self"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/internal/self"
+	"github.com/buildkite/agent/v4/tracetools"
 )
 
 func (e *Executor) artifactPhase(ctx context.Context) error {

@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli"
 )
 

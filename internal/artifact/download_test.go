@@ -5,7 +5,7 @@ package artifact
 import (
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/experiments"
 )
 
 func TestTargetPath(t *testing.T) {
