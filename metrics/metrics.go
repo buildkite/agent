@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 const (

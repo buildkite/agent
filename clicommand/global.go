@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/cliconfig"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
 )

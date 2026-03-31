@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v4/process"
 	"github.com/google/go-cmp/cmp"
 )
 

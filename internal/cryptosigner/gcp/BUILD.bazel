@@ -1,0 +1,22 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gcp",
+    srcs = ["kms.go"],
+    importpath = "github.com/buildkite/agent/v4/internal/cryptosigner/gcp",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_lestrrat_go_jwx_v2//jwa",
+        "@com_google_cloud_go_kms//apiv1",
+        "@com_google_cloud_go_kms//apiv1/kmspb",
+        "@org_golang_google_api//option",
+        "@org_golang_google_protobuf//types/known/wrapperspb",
+    ],
+)
+
+go_test(
+    name = "gcp_test",
+    srcs = ["kms_test.go"],
+    embed = [":gcp"],
+    deps = ["@com_github_lestrrat_go_jwx_v2//jwa"],
+)

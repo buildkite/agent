@@ -6,7 +6,7 @@ go_library(
         "is_opened.go",
         "opened_by.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/file",
+    importpath = "github.com/buildkite/agent/v4/internal/file",
     visibility = ["//:__subpackages__"],
     deps = ["//internal/shell"],
 )

@@ -8,8 +8,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/buildkite/agent/v3/internal/agenthttp"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 type S3DownloaderConfig struct {

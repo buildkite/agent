@@ -8,7 +8,7 @@ go_library(
         "type.go",
         "wrapper.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/job/hook",
+    importpath = "github.com/buildkite/agent/v4/internal/job/hook",
     visibility = ["//:__subpackages__"],
     deps = [
         "//env",

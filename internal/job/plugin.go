@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/agent/plugin"
-	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v4/agent/plugin"
+	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )

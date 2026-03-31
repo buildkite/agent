@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_binary", "go_library")
 go_library(
     name = "hook_lib",
     srcs = ["main.go"],
-    importpath = "github.com/buildkite/agent/v3/test/fixtures/hook",
+    importpath = "github.com/buildkite/agent/v4/test/fixtures/hook",
     visibility = ["//visibility:private"],
 )
 

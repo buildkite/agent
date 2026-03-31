@@ -8,7 +8,7 @@ go_library(
         "homedir.go",
         "path.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/osutil",
+    importpath = "github.com/buildkite/agent/v4/internal/osutil",
     visibility = ["//:__subpackages__"],
 )
 

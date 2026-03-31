@@ -1,7 +1,7 @@
 load("@gazelle//:def.bzl", "gazelle")
 load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
-# gazelle:prefix github.com/buildkite/agent/v3
+# gazelle:prefix github.com/buildkite/agent/v4
 gazelle(name = "gazelle")
 
 go_binary(
@@ -14,7 +14,7 @@ go_binary(
 go_library(
     name = "agent_lib",
     srcs = ["main.go"],
-    importpath = "github.com/buildkite/agent/v3",
+    importpath = "github.com/buildkite/agent/v4",
     visibility = ["//visibility:private"],
     deps = [
         "//clicommand",

@@ -3,6 +3,6 @@ load("@rules_go//go:def.bzl", "go_library")
 go_library(
     name = "self",
     srcs = ["self.go"],
-    importpath = "github.com/buildkite/agent/v3/internal/self",
+    importpath = "github.com/buildkite/agent/v4/internal/self",
     visibility = ["//:__subpackages__"],
 )

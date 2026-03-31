@@ -7,7 +7,7 @@ go_library(
         "error.go",
         "plugin.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/agent/plugin",
+    importpath = "github.com/buildkite/agent/v4/agent/plugin",
     visibility = ["//visibility:public"],
     deps = [
         "//env",
