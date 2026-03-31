@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v4/api"
 )
 
 // JobController provides simple functionality to a job runner - the ability to

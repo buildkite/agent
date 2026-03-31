@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/agenthttp"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
 )

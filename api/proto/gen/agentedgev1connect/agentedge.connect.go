@@ -8,7 +8,7 @@ import (
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
-	gen "github.com/buildkite/agent/v3/api/proto/gen"
+	gen "github.com/buildkite/agent/v4/api/proto/gen"
 	http "net/http"
 	strings "strings"
 )

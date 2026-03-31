@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v4/jobapi"
 )
 
 // This file gets built and commited to this repo, then used as part of the hooks integration test to ensure that the

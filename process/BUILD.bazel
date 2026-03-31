@@ -16,7 +16,7 @@ go_library(
         "signal_windows.go",
         "timestamper.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/process",
+    importpath = "github.com/buildkite/agent/v4/process",
     visibility = ["//visibility:public"],
     deps = [
         "//internal/experiments",
