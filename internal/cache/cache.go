@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/zstash"
 	"github.com/buildkite/zstash/api"
 	"github.com/buildkite/zstash/cache"

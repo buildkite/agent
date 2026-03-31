@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/tracetools"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/tracetools"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/opentracing/opentracing-go"
 	"go.opentelemetry.io/contrib/propagators/aws/xray"
 	"go.opentelemetry.io/contrib/propagators/b3"
