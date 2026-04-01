@@ -241,7 +241,7 @@ var (
 
 	GitMirrorCheckoutModeFlag = cli.StringFlag{
 		Name:   "git-mirror-checkout-mode",
-		Value:  "dissociate",
+		Value:  "reference",
 		Usage:  fmt.Sprintf("Changes how clones of a mirror are made; available modes are %v. In ′dissociate′ mode, clones from a mirror uses the git clone ′--dissociate′ flag, which copies underlying objects from the mirror, making the clone robust to changes in the mirror such as garbage collection, at the expense of additional disk usage and setup time. ′reference′ mode does not pass ′--dissociate′, which causes the clone to directly use objects from the mirror, which is more fragile and can cause the clone to break under entirely normal operation of the mirror, but is slightly faster to clone and uses less disk space.", mirrorCheckoutModes),
 		EnvVar: "BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
 	}
