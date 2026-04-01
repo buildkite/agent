@@ -45,6 +45,7 @@ var commandConfigPairs = []configCommandPair{
 	{Config: MetaDataGetConfig{}, Command: MetaDataGetCommand},
 	{Config: MetaDataKeysConfig{}, Command: MetaDataKeysCommand},
 	{Config: MetaDataSetConfig{}, Command: MetaDataSetCommand},
+	{Config: MetaDataSetBatchConfig{}, Command: MetaDataSetBatchCommand},
 	{Config: OIDCTokenConfig{}, Command: OIDCRequestTokenCommand},
 	{Config: PipelineUploadConfig{}, Command: PipelineUploadCommand},
 	{Config: RedactorAddConfig{}, Command: RedactorAddCommand},
