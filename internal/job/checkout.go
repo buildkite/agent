@@ -1024,6 +1024,10 @@ const CommitMetadataKey = "buildkite:git:commit"
 // to buildkite, which uses this info to display commit info in the UI eg in the title for the build
 // note that we bail early if the key already exists, as we don't want to overwrite it
 func (e *Executor) sendCommitToBuildkite(ctx context.Context) error {
+	if e.SkipCheckout {
+		return nil
+	}
+
 	e.shell.Commentf("Checking to see if git commit information needs to be sent to Buildkite...")
 
 	commitResolved, _ := e.shell.Env.Get("BUILDKITE_COMMIT_RESOLVED")
