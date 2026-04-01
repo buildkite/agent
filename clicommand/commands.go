@@ -99,6 +99,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Usage:    "Get/set metadata from Buildkite jobs",
 		Subcommands: []cli.Command{
 			MetaDataSetCommand,
+			MetaDataSetBatchCommand,
 			MetaDataGetCommand,
 			MetaDataExistsCommand,
 			MetaDataKeysCommand,
