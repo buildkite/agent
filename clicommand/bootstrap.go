@@ -97,6 +97,7 @@ type BootstrapConfig struct {
 	LogLevel                     string   `cli:"log-level"`
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
+	HooksShell                   string   `cli:"hooks-shell"`
 	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
@@ -306,6 +307,11 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_SHELL",
 			Value:  DefaultShell(),
 		},
+		cli.StringFlag{
+			Name:   "hooks-shell",
+			Usage:  "The shell to use to interpret hooks commands",
+			EnvVar: "BUILDKITE_HOOKS_SHELL",
+		},
 		cli.StringSliceFlag{
 			Name:   "phases",
 			Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
@@ -460,6 +466,7 @@ var BootstrapCommand = cli.Command{
 			RunInPty:                     runInPty,
 			SSHKeyscan:                   cfg.SSHKeyscan,
 			Shell:                        cfg.Shell,
+			HooksShell:                   cfg.HooksShell,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,

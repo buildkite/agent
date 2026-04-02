@@ -63,6 +63,7 @@ type AgentConfiguration struct {
 	WriteJobLogsToStdout         bool
 	LogFormat                    string
 	Shell                        string
+	HooksShell                   string
 	Profile                      string
 	RedactedVars                 []string
 	AcquireJob                   string

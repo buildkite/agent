@@ -531,7 +531,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		// (which acquires open file descriptors of the parent process) and
 		// writing an executable (the script wrapper).
 		// See https://github.com/golang/go/issues/22315.
-		script, err := e.shell.Script(script.Path())
+		script, err := e.shell.Script(script.Path(), e.HooksShell)
 		if err != nil {
 			r.Break()
 			return err
