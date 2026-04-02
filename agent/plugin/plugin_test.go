@@ -599,3 +599,184 @@ func duplicatePluginFromConfig(cfgJSON1, cfgJSON2 string) ([]*Plugin, error) {
 
 	return plugins, nil
 }
+
+func TestZipPluginParsing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		jsonText string
+		plugin   *Plugin
+	}{
+		{
+			`["zip+https://example.com/plugins/my-plugin.zip"]`,
+			&Plugin{
+				Location:      "example.com/plugins/my-plugin.zip",
+				Scheme:        "zip+https",
+				Configuration: map[string]any{},
+			},
+		},
+		{
+			`["zip+https://example.com/plugins/my-plugin.zip#v1.0.0"]`,
+			&Plugin{
+				Location:      "example.com/plugins/my-plugin.zip",
+				Version:       "v1.0.0",
+				Scheme:        "zip+https",
+				Configuration: map[string]any{},
+			},
+		},
+		{
+			`["zip+https://example.com/plugins/my-plugin.zip#sha256:abc123def456"]`,
+			&Plugin{
+				Location:      "example.com/plugins/my-plugin.zip",
+				Version:       "sha256:abc123def456",
+				Scheme:        "zip+https",
+				Configuration: map[string]any{},
+			},
+		},
+		{
+			`["zip+http://example.com/plugins/my-plugin.zip"]`,
+			&Plugin{
+				Location:      "example.com/plugins/my-plugin.zip",
+				Scheme:        "zip+http",
+				Configuration: map[string]any{},
+			},
+		},
+		{
+			`["zip+file:///opt/plugins/docker-compose.zip"]`,
+			&Plugin{
+				Location:      "/opt/plugins/docker-compose.zip",
+				Scheme:        "zip+file",
+				Configuration: map[string]any{},
+			},
+		},
+		{
+			`["zip+https://user:pass@example.com/plugin.zip"]`,
+			&Plugin{
+				Location:       "example.com/plugin.zip",
+				Scheme:         "zip+https",
+				Authentication: "user:pass",
+				Configuration:  map[string]any{},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.jsonText, func(t *testing.T) {
+			t.Parallel()
+
+			plugins, err := CreateFromJSON(tc.jsonText)
+			if err != nil {
+				t.Errorf("CreateFromJSON(%q) error = %v", tc.jsonText, err)
+			}
+
+			if len(plugins) != 1 {
+				t.Fatalf("CreateFromJSON(%q) returned %d plugins, want 1", tc.jsonText, len(plugins))
+			}
+
+			if diff := cmp.Diff(tc.plugin, plugins[0]); diff != "" {
+				t.Errorf("CreateFromJSON(%q) diff (-want +got)\n%s", tc.jsonText, diff)
+			}
+		})
+	}
+}
+
+func TestIsZipPlugin(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		scheme    string
+		wantIsZip bool
+		wantBase  string
+	}{
+		{
+			scheme:    "zip+https",
+			wantIsZip: true,
+			wantBase:  "https",
+		},
+		{
+			scheme:    "zip+http",
+			wantIsZip: true,
+			wantBase:  "http",
+		},
+		{
+			scheme:    "zip+file",
+			wantIsZip: true,
+			wantBase:  "file",
+		},
+		{
+			scheme:    "https",
+			wantIsZip: false,
+			wantBase:  "https",
+		},
+		{
+			scheme:    "ssh",
+			wantIsZip: false,
+			wantBase:  "ssh",
+		},
+		{
+			scheme:    "",
+			wantIsZip: false,
+			wantBase:  "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.scheme, func(t *testing.T) {
+			t.Parallel()
+
+			p := &Plugin{Scheme: tc.scheme}
+
+			if got := p.IsZipPlugin(); got != tc.wantIsZip {
+				t.Errorf("Plugin{Scheme: %q}.IsZipPlugin() = %v, want %v", tc.scheme, got, tc.wantIsZip)
+			}
+
+			if got := p.ZipBaseScheme(); got != tc.wantBase {
+				t.Errorf("Plugin{Scheme: %q}.ZipBaseScheme() = %q, want %q", tc.scheme, got, tc.wantBase)
+			}
+		})
+	}
+}
+
+func TestZipPluginIdentifier(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		location, version, wantID string
+	}{
+		{
+			location: "example.com/plugins/my-plugin.zip",
+			version:  "v1.0.0",
+			wantID:   "example-com-plugins-my-plugin-zip-v1-0-0",
+		},
+		{
+			location: "example.com/plugins/my-plugin.zip",
+			version:  "sha256:abc123",
+			wantID:   "example-com-plugins-my-plugin-zip-sha256-abc123",
+		},
+		{
+			location: "/opt/plugins/docker-compose.zip",
+			wantID:   "opt-plugins-docker-compose-zip",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.location, func(t *testing.T) {
+			t.Parallel()
+
+			p := &Plugin{
+				Location: tc.location,
+				Version:  tc.version,
+			}
+
+			id, err := p.Identifier()
+			if err != nil {
+				t.Errorf("Plugin.Identifier() error = %v", err)
+			}
+
+			if got, want := id, tc.wantID; got != want {
+				t.Errorf("Plugin{Location: %q, Version: %q}.Identifier() = %q, want %q",
+					tc.location, tc.version, got, want)
+			}
+		})
+	}
+}
