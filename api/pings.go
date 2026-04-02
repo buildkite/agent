@@ -4,11 +4,13 @@ import "context"
 
 // Ping represents a Buildkite Agent API Ping
 type Ping struct {
-	Action         string            `json:"action,omitempty"`
-	Message        string            `json:"message,omitempty"`
-	Job            *Job              `json:"job,omitempty"`
-	Endpoint       string            `json:"endpoint,omitempty"`
-	RequestHeaders map[string]string `json:"request_headers,omitzero"` // omit nil, keep empty map
+	Action                     string            `json:"action,omitempty"`
+	Message                    string            `json:"message,omitempty"`
+	Job                        *Job              `json:"job,omitempty"`
+	Endpoint                   string            `json:"endpoint,omitempty"`
+	RequestHeaders             map[string]string `json:"request_headers,omitzero"` // omit nil, keep empty map
+	ArtifactCreateBatchSize    int               `json:"artifact_create_batch_size,omitempty"`
+	ArtifactUpdateBatchSizeMax int               `json:"artifact_update_batch_size_max,omitempty"`
 }
 
 // Pings the API and returns any work the client needs to perform

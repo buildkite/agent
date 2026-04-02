@@ -82,6 +82,8 @@ type ArtifactUploadConfig struct {
 	GlobResolveFollowSymlinks bool   `cli:"glob-resolve-follow-symlinks"`
 	UploadSkipSymlinks        bool   `cli:"upload-skip-symlinks"`
 	NoMultipartUpload         bool   `cli:"no-multipart-artifact-upload"`
+	CreateBatchSize           int    `cli:"artifact-create-batch-size"`
+	UpdateBatchSizeMax        int    `cli:"artifact-update-batch-size-max"`
 
 	// deprecated
 	FollowSymlinks bool `cli:"follow-symlinks" deprecated-and-renamed-to:"GlobResolveFollowSymlinks"`
@@ -125,6 +127,16 @@ var ArtifactUploadCommand = cli.Command{
 			Usage:  "After the glob has been resolved to a list of files to upload, skip uploading those that are symlinks to files (default: false)",
 			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_SKIP_SYMLINKS",
 		},
+		cli.IntFlag{
+			Name:   "artifact-create-batch-size",
+			Usage:  "Maximum number of artifacts to include in each create-artifacts API request (default: 30)",
+			EnvVar: "BUILDKITE_ARTIFACT_CREATE_BATCH_SIZE",
+		},
+		cli.IntFlag{
+			Name:   "artifact-update-batch-size-max",
+			Usage:  "Maximum number of artifact states to include in each update-artifacts API request (default: unlimited)",
+			EnvVar: "BUILDKITE_ARTIFACT_UPDATE_BATCH_SIZE_MAX",
+		},
 		cli.BoolFlag{ // Deprecated
 			Name:   "follow-symlinks",
 			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead (default: false)",
@@ -157,6 +169,8 @@ var ArtifactUploadCommand = cli.Command{
 			// this works as long as the user only sets one of the two flags
 			GlobResolveFollowSymlinks: (cfg.GlobResolveFollowSymlinks || cfg.FollowSymlinks),
 			UploadSkipSymlinks:        cfg.UploadSkipSymlinks,
+			CreateBatchSize:           cfg.CreateBatchSize,
+			UpdateBatchSizeMax:        cfg.UpdateBatchSizeMax,
 		})
 
 		// Upload the artifacts
