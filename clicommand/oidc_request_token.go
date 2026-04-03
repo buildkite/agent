@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -114,6 +116,16 @@ var OIDCRequestTokenCommand = cli.Command{
 			return fmt.Errorf("format %q is not valid. Supported values are 'jwt' and 'gcp'", cfg.Format)
 		}
 
+		lifetime := cfg.Lifetime
+		const envOIDCTokenMaxLifetimeSeconds = "BUILDKITE_AGENT_OIDC_TOKEN_MAX_LIFETIME_SECONDS"
+
+		if maxSec := parseNonNegativeIntEnv(envOIDCTokenMaxLifetimeSeconds); maxSec > 0 {
+			if eff, clamped := clampOIDCTokenLifetimeSeconds(lifetime, maxSec); clamped {
+				l.Debug("OIDC token lifetime clamped from %ds to %ds (%s=%d)", lifetime, eff, envOIDCTokenMaxLifetimeSeconds, maxSec)
+				lifetime = eff
+			}
+		}
+
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
@@ -126,7 +138,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			req := &api.OIDCTokenRequest{
 				Job:            cfg.Job,
 				Audience:       cfg.Audience,
-				Lifetime:       cfg.Lifetime,
+				Lifetime:       lifetime,
 				Claims:         cfg.Claims,
 				AWSSessionTags: cfg.AWSSessionTags,
 				SubjectClaim:   cfg.SubjectClaim,
@@ -201,4 +213,29 @@ var OIDCRequestTokenCommand = cli.Command{
 
 		return nil
 	},
+}
+
+// parseNonNegativeIntEnv returns 0 if the variable is unset, invalid, or negative.
+func parseNonNegativeIntEnv(key string) int {
+	s := os.Getenv(key)
+	if s == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+// clampOIDCTokenLifetimeSeconds returns the effective lifetime and whether
+// clamping occurred. When requested is 0 (API default), it is not changed.
+func clampOIDCTokenLifetimeSeconds(requested, maxLifetime int) (effective int, clamped bool) {
+	if maxLifetime <= 0 || requested <= 0 {
+		return requested, false
+	}
+	if requested > maxLifetime {
+		return maxLifetime, true
+	}
+	return requested, false
 }
