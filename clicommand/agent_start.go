@@ -195,11 +195,11 @@ type AgentStartConfig struct {
 	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
 	// Other shared flags
-	StrictSingleHooks             bool   `cli:"strict-single-hooks"`
-	KubernetesExec                bool   `cli:"kubernetes-exec"`
-	TraceContextEncoding          string `cli:"trace-context-encoding"`
-	NoMultipartArtifactUpload     bool   `cli:"no-multipart-artifact-upload"`
-	OIDCTokenMaxLifetimeSeconds   int    `cli:"oidc-token-max-lifetime-seconds"`
+	StrictSingleHooks           bool   `cli:"strict-single-hooks"`
+	KubernetesExec              bool   `cli:"kubernetes-exec"`
+	TraceContextEncoding        string `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload   bool   `cli:"no-multipart-artifact-upload"`
+	OIDCTokenMaxLifetimeSeconds int    `cli:"oidc-token-max-lifetime-seconds"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -1089,7 +1089,7 @@ var AgentStartCommand = cli.Command{
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			TraceContextEncoding:         cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
-			OIDCTokenMaxLifetimeSeconds:   cfg.OIDCTokenMaxLifetimeSeconds,
+			OIDCTokenMaxLifetimeSeconds:  cfg.OIDCTokenMaxLifetimeSeconds,
 			KubernetesExec:               cfg.KubernetesExec,
 			PingMode:                     cfg.PingMode,
 

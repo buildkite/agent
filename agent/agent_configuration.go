@@ -72,6 +72,6 @@ type AgentConfiguration struct {
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
-	OIDCTokenMaxLifetimeSeconds int
-	PingMode string
+	OIDCTokenMaxLifetimeSeconds  int
+	PingMode                     string
 }
