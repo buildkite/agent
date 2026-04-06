@@ -82,6 +82,9 @@ type ExecutorConfig struct {
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
 
+	// Timeout in seconds for the git checkout phase (0 means no timeout)
+	GitCheckoutTimeout int `env:"BUILDKITE_GIT_CHECKOUT_TIMEOUT"`
+
 	// Flags to pass to "git checkout" command
 	GitCheckoutFlags string `env:"BUILDKITE_GIT_CHECKOUT_FLAGS"`
 
@@ -237,6 +240,18 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 					break
 				}
 				v.SetBool(newBool)
+				changed[tag] = newStr
+
+			case reflect.Int:
+				newInt, err := strconv.Atoi(newStr)
+				if err != nil {
+					log.Printf("warning: cannot parse %s=%q as int, ignoring", tag, newStr)
+					break
+				}
+				if int64(newInt) == v.Int() {
+					break
+				}
+				v.SetInt(int64(newInt))
 				changed[tag] = newStr
 
 			case reflect.Slice:

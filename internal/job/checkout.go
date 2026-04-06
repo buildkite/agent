@@ -172,7 +172,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 		return err
 	}
 
-	if err := e.checkout(ctx); err != nil {
+	if err := e.checkoutWithTimeout(ctx); err != nil {
 		return err
 	}
 
@@ -214,6 +214,26 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// checkoutWithTimeout wraps checkout with a timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set.
+func (e *Executor) checkoutWithTimeout(ctx context.Context) error {
+	if e.GitCheckoutTimeout <= 0 {
+		return e.checkout(ctx)
+	}
+
+	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
+	e.shell.Commentf("Running checkout with a timeout of %s", timeout)
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	err := e.checkout(ctx)
+	if err != nil && ctx.Err() == context.DeadlineExceeded {
+		e.shell.Errorf("Checkout exceeded the configured timeout of %s (BUILDKITE_GIT_CHECKOUT_TIMEOUT=%d)", timeout, e.GitCheckoutTimeout)
+		return &shell.ExitError{Code: 95, Err: fmt.Errorf("git checkout timed out after %s", timeout)}
+	}
+	return err
 }
 
 // checkout runs checkout hook or default checkout logic

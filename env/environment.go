@@ -349,6 +349,7 @@ var ProtectedEnv = map[string]struct{}{
 	"BUILDKITE_COMMAND_EVAL":             {},
 	"BUILDKITE_CONFIG_PATH":              {},
 	"BUILDKITE_CONTAINER_COUNT":          {},
+	"BUILDKITE_GIT_CHECKOUT_TIMEOUT":     {},
 	"BUILDKITE_GIT_CLEAN_FLAGS":          {},
 	"BUILDKITE_GIT_CLONE_FLAGS":          {},
 	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":   {},
