@@ -151,6 +151,7 @@ type AgentStartConfig struct {
 	TagsFromGCPMetaDataPaths  []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
 	TagsFromGCPLabels         bool     `cli:"tags-from-gcp-labels"`
 	TagsFromHost              bool     `cli:"tags-from-host"`
+	FailOnMissingTags         bool     `cli:"fail-on-missing-tags"`
 	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
 	WaitForEC2MetaDataTimeout string   `cli:"wait-for-ec2-meta-data-timeout"`
 	WaitForECSMetaDataTimeout string   `cli:"wait-for-ecs-meta-data-timeout"`
@@ -520,6 +521,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The amount of time to wait for labels from GCP before proceeding",
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
+		},
+		cli.BoolFlag{
+			Name:   "fail-on-missing-tags",
+			Usage:  "Exit the agent with an error if any enabled cloud tag source (EC2, ECS, GCP) fails to return tags (default: false)",
+			EnvVar: "BUILDKITE_AGENT_FAIL_ON_MISSING_TAGS",
 		},
 
 		// Various git related flags shared with bootstrap
@@ -1211,7 +1217,7 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
-		tags := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
+		tags, err := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 			Tags:                      cfg.Tags,
 			TagsFromK8s:               cfg.KubernetesExec,
 			TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
@@ -1222,11 +1228,15 @@ var AgentStartCommand = cli.Command{
 			TagsFromGCPMetaDataPaths:  cfg.TagsFromGCPMetaDataPaths,
 			TagsFromGCPLabels:         cfg.TagsFromGCPLabels,
 			TagsFromHost:              cfg.TagsFromHost,
+			FailOnMissingTags:         cfg.FailOnMissingTags,
 			WaitForEC2TagsTimeout:     ec2TagTimeout,
 			WaitForEC2MetaDataTimeout: ec2MetaDataTimeout,
 			WaitForECSMetaDataTimeout: ecsMetaDataTimeout,
 			WaitForGCPLabelsTimeout:   gcpLabelsTimeout,
 		})
+		if err != nil {
+			l.Fatal("%v", err)
+		}
 
 		// Munge the value from --queue (if it exists) into the tags slice
 		if cfg.Queue != "" {
