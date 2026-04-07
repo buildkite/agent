@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+for arg in "$@"; do
+  if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+    exec go run ./benchmarks/git-benchmark "$@"
+  fi
+done
+
+workdir="$(mktemp -d /tmp/git-benchmark-bin.XXXXXX)"
+trap 'rm -rf "$workdir"' EXIT
+
+binary="$workdir/buildkite-agent"
+echo "Building buildkite-agent into $binary..."
+go build -o "$binary" .
+
+exec go run ./benchmarks/git-benchmark --agent-binary "$binary" "$@"
