@@ -6,8 +6,11 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +31,87 @@ func (r *stubBenchmarkRunner) run(context.Context) (*report, error) {
 
 func (r *stubBenchmarkRunner) cleanup() {
 	r.cleaned = true
+}
+
+func TestNewBenchmarkHarnessCleansUpWhenStartUpstreamFails(t *testing.T) {
+	goPath, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatalf("exec.LookPath(go) error = %v", err)
+	}
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("exec.LookPath(git) error = %v", err)
+	}
+
+	binDir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll(binDir) error = %v", err)
+	}
+	writeGitWrapper(t, binDir, gitPath)
+	t.Setenv("PATH", binDir)
+
+	sourceRepo := createBenchmarkSourceRepo(t, gitPath)
+	workDir := filepath.Join(t.TempDir(), "workdir")
+
+	_, err = newBenchmarkHarness(context.Background(), config{
+		agentBinary: goPath,
+		sourceRepo:  sourceRepo,
+		workDir:     workDir,
+		toxiproxy: toxiproxyConfig{
+			enabled: true,
+		},
+	})
+	if err == nil {
+		t.Fatal("newBenchmarkHarness() error = nil, want error")
+	}
+	if _, statErr := os.Stat(workDir); !os.IsNotExist(statErr) {
+		t.Fatalf("os.Stat(workDir) error = %v, want workdir removed after partial startup failure", statErr)
+	}
+}
+
+func createBenchmarkSourceRepo(t *testing.T, gitPath string) string {
+	t.Helper()
+
+	repoDir := t.TempDir()
+	runCommand(t, gitPath, "init", repoDir)
+	runCommand(t, gitPath, "-C", repoDir, "config", "user.name", "Person Example")
+	runCommand(t, gitPath, "-C", repoDir, "config", "user.email", "person@example.com")
+	if err := os.WriteFile(filepath.Join(repoDir, "README.md"), []byte("benchmark repo\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	runCommand(t, gitPath, "-C", repoDir, "add", "README.md")
+	runCommand(t, gitPath, "-C", repoDir, "commit", "-m", "initial commit")
+
+	return repoDir
+}
+
+func writeGitWrapper(t *testing.T, binDir, gitPath string) {
+	t.Helper()
+
+	var (
+		wrapperPath string
+		content     string
+	)
+	if runtime.GOOS == "windows" {
+		wrapperPath = filepath.Join(binDir, "git.cmd")
+		content = "@echo off\r\n\"" + gitPath + "\" %*\r\n"
+	} else {
+		wrapperPath = filepath.Join(binDir, "git")
+		content = "#!/bin/sh\nexec " + strconv.Quote(gitPath) + " \"$@\"\n"
+	}
+	if err := os.WriteFile(wrapperPath, []byte(content), 0o755); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v", wrapperPath, err)
+	}
+}
+
+func runCommand(t *testing.T, name string, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command(name, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s %s error = %v: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
 }
 
 func TestRunBenchmarkCleansUpWhenWriteReportFails(t *testing.T) {

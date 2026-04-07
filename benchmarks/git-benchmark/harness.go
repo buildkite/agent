@@ -64,7 +64,7 @@ type toxiproxyCreateToxicRequest struct {
 	Attributes map[string]any `json:"attributes"`
 }
 
-func newBenchmarkHarness(ctx context.Context, cfg config) (*benchmarkHarness, error) {
+func newBenchmarkHarness(ctx context.Context, cfg config) (_ *benchmarkHarness, err error) {
 	rootDir, err := filepath.Abs(cfg.workDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve workdir: %w", err)
@@ -74,6 +74,11 @@ func newBenchmarkHarness(ctx context.Context, cfg config) (*benchmarkHarness, er
 	}
 
 	h := &benchmarkHarness{cfg: cfg, rootDir: rootDir}
+	defer func() {
+		if err != nil {
+			h.cleanup()
+		}
+	}()
 
 	h.agentVersion, err = h.commandOutput(ctx, "", nil, cfg.agentBinary, "--version")
 	if err != nil {
