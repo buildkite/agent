@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -315,6 +317,32 @@ func TestParseConfigFromArgsRejectsOverlappingLocalSourceRepoAndWorkDir(t *testi
 	}
 }
 
+func TestParseConfigFromArgsRemovesTempWorkdirWhenNormalisationFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink-loop normalisation failure is not reliable on Windows")
+	}
+
+	rootDir := t.TempDir()
+	loopPath := filepath.Join(rootDir, "loop")
+	if err := os.Symlink(loopPath, loopPath); err != nil {
+		t.Skipf("os.Symlink() unavailable: %v", err)
+	}
+
+	cfg, err := parseConfigFromArgs([]string{
+		"--agent-binary", filepath.Join(t.TempDir(), "agent-bin"),
+		"--source-repo", loopPath,
+	}, rootDir)
+	if err == nil {
+		t.Fatal("parseConfigFromArgs() error = nil, want error")
+	}
+	if cfg.workDir == "" {
+		t.Fatal("parseConfigFromArgs() workDir = empty, want temp workdir for cleanup assertion")
+	}
+	if _, statErr := os.Stat(cfg.workDir); !os.IsNotExist(statErr) {
+		t.Fatalf("os.Stat(cfg.workDir) error = %v, want temp workdir removed after failure", statErr)
+	}
+}
+
 func TestParseConfigFromArgsRejectsUnknownVariant(t *testing.T) {
 	t.Parallel()
 
@@ -531,5 +559,28 @@ func TestParseGitTraceTimings(t *testing.T) {
 	}
 	if timings.CleanMS != 30 {
 		t.Fatalf("timings.CleanMS = %v, want %v", timings.CleanMS, 30.0)
+	}
+}
+
+func TestWaitForToxiproxyReturnsPromptlyWhenContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	started := time.Now()
+	err := (&benchmarkHarness{}).waitForToxiproxy(ctx, server.URL)
+	elapsed := time.Since(started)
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("waitForToxiproxy() error = %v, want context deadline exceeded", err)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("waitForToxiproxy() took %v, want prompt return after context cancellation", elapsed)
 	}
 }

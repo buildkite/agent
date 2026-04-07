@@ -88,7 +88,7 @@ func parseConfig() (config, error) {
 	return parseConfigFromArgs(os.Args[1:], cwd)
 }
 
-func parseConfigFromArgs(args []string, cwd string) (config, error) {
+func parseConfigFromArgs(args []string, cwd string) (_ config, err error) {
 	var cfg config
 	var variants string
 	var scenarios string
@@ -126,7 +126,6 @@ func parseConfigFromArgs(args []string, cwd string) (config, error) {
 		}
 	}
 
-	var err error
 	cfg.variants, err = splitCSV(variants)
 	if err != nil {
 		return cfg, fmt.Errorf("parse variants: %w", err)
@@ -143,18 +142,23 @@ func parseConfigFromArgs(args []string, cwd string) (config, error) {
 			return cfg, fmt.Errorf("parse scenarios: %w", err)
 		}
 	}
+	if cfg.agentBinary == "" {
+		return cfg, errors.New("--agent-binary is required")
+	}
 
 	if cfg.workDir == "" {
 		cfg.workDir, err = os.MkdirTemp("", "gcb-")
 		if err != nil {
 			return cfg, fmt.Errorf("create temp workdir: %w", err)
 		}
+		defer func() {
+			if err != nil {
+				_ = os.RemoveAll(cfg.workDir)
+			}
+		}()
 	}
 	if cfg.sourceRepo == "" {
 		cfg.sourceRepo = cwd
-	}
-	if cfg.agentBinary == "" {
-		return cfg, errors.New("--agent-binary is required")
 	}
 	if cfg.outputPath == "" {
 		cfg.outputPath = filepath.Join(cfg.workDir, "report.json")

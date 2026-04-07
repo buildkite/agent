@@ -544,16 +544,11 @@ func (h *benchmarkHarness) startUpstream(ctx context.Context) error {
 	h.upstreamCmd = cmd
 	h.upstreamURL = fmt.Sprintf("git://127.0.0.1:%d/%s.git", port, h.repoName)
 
-	deadline := time.Now().Add(10 * time.Second)
-	for {
+	if err := waitForReadiness(ctx, 10*time.Second, func(ctx context.Context) error {
 		_, err := h.commandOutput(ctx, "", nil, "git", "ls-remote", h.upstreamURL, "HEAD")
-		if err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("wait for git daemon readiness: %w", err)
-		}
-		time.Sleep(100 * time.Millisecond)
+		return err
+	}); err != nil {
+		return fmt.Errorf("wait for git daemon readiness: %w", err)
 	}
 
 	tap, err := newCountingProxy(fmt.Sprintf("127.0.0.1:%d", port))
@@ -677,23 +672,66 @@ func (h *benchmarkHarness) startDockerToxiproxy(ctx context.Context, upstreamPor
 }
 
 func (h *benchmarkHarness) waitForToxiproxy(ctx context.Context, adminURL string) error {
-	deadline := time.Now().Add(15 * time.Second)
-	for {
+	err := waitForReadiness(ctx, 15*time.Second, func(ctx context.Context) error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, adminURL+"/version", nil)
-		if err == nil {
-			resp, err := http.DefaultClient.Do(req)
-			if err == nil {
-				_ = resp.Body.Close()
-				if resp.StatusCode/100 == 2 {
-					return nil
-				}
-			}
+		if err != nil {
+			return err
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("wait for toxiproxy readiness at %s", adminURL)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
 		}
-		time.Sleep(100 * time.Millisecond)
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode/100 != 2 {
+			return fmt.Errorf("status %d", resp.StatusCode)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("wait for toxiproxy readiness at %s: %w", adminURL, err)
 	}
+	return nil
+}
+
+func waitForReadiness(ctx context.Context, timeout time.Duration, check func(context.Context) error) error {
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastErr error
+	for {
+		if waitCtx.Err() != nil {
+			break
+		}
+
+		err := check(waitCtx)
+		if err == nil {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if waitCtx.Err() != nil {
+			break
+		}
+		lastErr = err
+
+		select {
+		case <-waitCtx.Done():
+		case <-ticker.C:
+		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+	return waitCtx.Err()
 }
 
 func (h *benchmarkHarness) configureToxiproxy(ctx context.Context, tproxy *toxiproxyRuntime, upstream string, dockerMode bool) error {

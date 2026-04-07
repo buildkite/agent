@@ -187,6 +187,20 @@ mise run git-benchmark \
   --concurrency 8
 ```
 
+```bash
+mise run git-benchmark \
+  --source-repo https://github.com/rails/rails.git \
+  --iterations 3 \
+  --concurrency 8 \
+  --toxiproxy \
+  --toxiproxy-latency-ms 100 \
+  --output /tmp/git-benchmark-toxiproxy.json
+```
+
+When `--toxiproxy` is enabled, the harness starts `toxiproxy-server` if it is available on `PATH`, otherwise it falls back to Docker using the configured Toxiproxy image.
+
+Use `--toxiproxy-latency-ms` to add a fixed downstream delay. If you also want to shape bandwidth, set `--toxiproxy-downstream-kb-per-second`.
+
 ## Metrics To Keep
 
 Each report should keep:
