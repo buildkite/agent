@@ -250,6 +250,10 @@ func resolvePathRelativeToCWD(path, cwd string) (string, error) {
 }
 
 func resolveExistingLocalPath(path, cwd string) (string, bool, error) {
+	if looksLikeRemoteRepo(path) {
+		return "", false, nil
+	}
+
 	resolved, err := resolvePathRelativeToCWD(path, cwd)
 	if err != nil {
 		return "", false, err
@@ -261,6 +265,28 @@ func resolveExistingLocalPath(path, cwd string) (string, bool, error) {
 		return "", false, err
 	}
 	return resolved, true, nil
+}
+
+func looksLikeRemoteRepo(path string) bool {
+	if strings.Contains(path, "://") {
+		return true
+	}
+
+	if volume := filepath.VolumeName(path); volume != "" {
+		return false
+	}
+
+	colon := strings.Index(path, ":")
+	if colon <= 0 {
+		return false
+	}
+
+	prefix := path[:colon]
+	if strings.Contains(prefix, "/") || strings.Contains(prefix, `\`) {
+		return false
+	}
+
+	return strings.Contains(prefix, "@") || strings.Contains(prefix, ".")
 }
 
 func canonicalComparablePath(path string) (string, error) {
