@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,6 +12,68 @@ import (
 	"testing"
 	"time"
 )
+
+type stubBenchmarkRunner struct {
+	report  *report
+	err     error
+	cleaned bool
+}
+
+func (r *stubBenchmarkRunner) run(context.Context) (*report, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return r.report, nil
+}
+
+func (r *stubBenchmarkRunner) cleanup() {
+	r.cleaned = true
+}
+
+func TestRunBenchmarkCleansUpWhenWriteReportFails(t *testing.T) {
+	t.Parallel()
+
+	rootDir := t.TempDir()
+	blockingPath := filepath.Join(rootDir, "reports")
+	if err := os.WriteFile(blockingPath, []byte("not a directory\n"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	runner := &stubBenchmarkRunner{
+		report: &report{
+			RepoName: "agent",
+			Branch:   "main",
+		},
+	}
+
+	err := runBenchmark(context.Background(), config{outputPath: filepath.Join(blockingPath, "report.json")}, runner, io.Discard, false)
+	if err == nil {
+		t.Fatal("runBenchmark() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "create output directory") {
+		t.Fatalf("runBenchmark() error = %q, want create output directory error", err)
+	}
+	if !runner.cleaned {
+		t.Fatal("runBenchmark() did not clean up after write failure")
+	}
+}
+
+func TestRunBenchmarkCleansUpWhenRunFails(t *testing.T) {
+	t.Parallel()
+
+	runner := &stubBenchmarkRunner{err: errors.New("boom")}
+
+	err := runBenchmark(context.Background(), config{outputPath: filepath.Join(t.TempDir(), "report.json")}, runner, io.Discard, false)
+	if err == nil {
+		t.Fatal("runBenchmark() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "run benchmark: boom") {
+		t.Fatalf("runBenchmark() error = %q, want wrapped run error", err)
+	}
+	if !runner.cleaned {
+		t.Fatal("runBenchmark() did not clean up after run failure")
+	}
+}
 
 func TestCleanupPreservesReportInsideWorkdir(t *testing.T) {
 	t.Parallel()
@@ -109,6 +174,60 @@ func TestParseConfigFromArgsPreservesExplicitValues(t *testing.T) {
 	}
 	if cfg.outputPath != outputPath {
 		t.Fatalf("cfg.outputPath = %q, want %q", cfg.outputPath, outputPath)
+	}
+}
+
+func TestParseConfigFromArgsNormalisesRelativeLocalPaths(t *testing.T) {
+	t.Parallel()
+
+	cwd := t.TempDir()
+	repoDir := filepath.Join(cwd, "repo")
+	workDir := filepath.Join(t.TempDir(), "benchmark-workdir")
+	agentBinary := filepath.Join(t.TempDir(), "agent-bin")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll(repoDir) error = %v", err)
+	}
+
+	cfg, err := parseConfigFromArgs([]string{
+		"--workdir", workDir,
+		"--agent-binary", agentBinary,
+		"--source-repo", "repo",
+		"--output", "report.json",
+	}, cwd)
+	if err != nil {
+		t.Fatalf("parseConfigFromArgs() error = %v", err)
+	}
+
+	if cfg.sourceRepo != repoDir {
+		t.Fatalf("cfg.sourceRepo = %q, want %q", cfg.sourceRepo, repoDir)
+	}
+	if cfg.outputPath != filepath.Join(cwd, "report.json") {
+		t.Fatalf("cfg.outputPath = %q, want %q", cfg.outputPath, filepath.Join(cwd, "report.json"))
+	}
+	if cfg.workDir != workDir {
+		t.Fatalf("cfg.workDir = %q, want %q", cfg.workDir, workDir)
+	}
+}
+
+func TestParseConfigFromArgsRejectsOverlappingLocalSourceRepoAndWorkDir(t *testing.T) {
+	t.Parallel()
+
+	cwd := t.TempDir()
+	repoDir := filepath.Join(cwd, "repo")
+	if err := os.MkdirAll(filepath.Join(repoDir, "bench-workdir"), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+
+	_, err := parseConfigFromArgs([]string{
+		"--agent-binary", filepath.Join(t.TempDir(), "agent-bin"),
+		"--source-repo", repoDir,
+		"--workdir", filepath.Join(repoDir, "bench-workdir"),
+	}, cwd)
+	if err == nil {
+		t.Fatal("parseConfigFromArgs() error = nil, want error")
+	}
+	if got, want := err.Error(), "source repo and workdir must not overlap"; got != want {
+		t.Fatalf("parseConfigFromArgs() error = %q, want %q", got, want)
 	}
 }
 
@@ -227,7 +346,7 @@ func TestPrintSummaryToSortsRowsAndShowsDeltas(t *testing.T) {
 	if mirrorIdx == -1 || shallowIdx == -1 || directIdx == -1 {
 		t.Fatalf("summary missing expected variant rows:\n%s", got)
 	}
-	if !(mirrorIdx < shallowIdx && shallowIdx < directIdx) {
+	if mirrorIdx >= shallowIdx || shallowIdx >= directIdx {
 		t.Fatalf("summary rows not sorted by latency:\n%s", got)
 	}
 	if !strings.Contains(got, "-70.0%") || !strings.Contains(got, "-60.0%") {
@@ -258,6 +377,36 @@ func TestPrintSummaryToUsesANSIColourWhenEnabled(t *testing.T) {
 	printSummaryTo(&out, rep, true)
 	if !strings.Contains(out.String(), "\x1b[") {
 		t.Fatalf("summary missing ANSI colour output:\n%q", out.String())
+	}
+}
+
+func TestPrintSummaryToSkipsBrokenDirectBaseline(t *testing.T) {
+	t.Parallel()
+
+	rep := &report{
+		RepoName: "agent",
+		Branch:   "main",
+		Scenarios: []scenarioReport{{
+			Name: "warm-single",
+			Summaries: []variantSummary{
+				{Name: "direct", Failures: 1, RoundP50MS: 1000, RoundP95MS: 1000, MeanUpstreamRequests: 2, MeanUpstreamBytes: 10 * (1 << 20)},
+				{Name: "mirror-reference", RoundP50MS: 300, RoundP95MS: 450, MeanUpstreamRequests: 2, MeanUpstreamBytes: 1 * (1 << 20)},
+			},
+		}},
+	}
+
+	var out bytes.Buffer
+	printSummaryTo(&out, rep, false)
+	got := out.String()
+
+	if strings.Contains(got, "faster than direct") || strings.Contains(got, "less MiB than direct") {
+		t.Fatalf("summary should not compare against a failing direct baseline:\n%s", got)
+	}
+	if !strings.Contains(got, "Best latency: mirror-reference (300.0ms)") {
+		t.Fatalf("summary missing absolute latency headline:\n%s", got)
+	}
+	if !strings.Contains(got, "         —") {
+		t.Fatalf("summary missing em-dash delta cells when direct baseline is unavailable:\n%s", got)
 	}
 }
 
