@@ -1004,11 +1004,6 @@ func (e *Executor) tearDown(ctx context.Context) error {
 		}
 	}
 
-	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDeprecatedDockerIntegration(e.shell) {
-		return tearDownDeprecatedDockerIntegration(ctx, e.shell)
-	}
-
 	for _, dir := range e.cleanupDirs {
 		if err = os.RemoveAll(dir); err != nil {
 			e.shell.Warningf("Failed to remove dir %s: %v", dir, err)
@@ -1239,15 +1234,6 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	} else {
 		e.shell.Headerf("Running commands")
 		cmdToExec = e.Command
-	}
-
-	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDeprecatedDockerIntegration(e.shell) {
-		if e.Debug {
-			e.shell.Commentf("Detected deprecated docker environment variables")
-		}
-		err = runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
-		return err
 	}
 
 	var cmd []string
