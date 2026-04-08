@@ -424,13 +424,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envShellFile != nil {
-		if experiments.IsEnabled(ctx, experiments.PropagateAgentConfigVars) {
-			// Note that some variables in this list might not be defined later,
-			// when something comes to read the file. See below where they are
-			// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
-			// Docker in particular tolerates undefined vars in an env file
-			// without complaints.
-			const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
+		// Note that some variables in this list might not be defined later,
+		// when something comes to read the file. See below where they are
+		// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
+		// Docker in particular tolerates undefined vars in an env file
+		// without complaints.
+		const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
@@ -460,9 +459,8 @@ BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
 BUILDKITE_AGENT_JWKS_KEY_ID`
-			if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
-				return nil, err
-			}
+		if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
+			return nil, err
 		}
 
 		for key, value := range env {
