@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VERSION_FILE="${REPO_ROOT}/version/VERSION"
+CHANGELOG_FILE="${REPO_ROOT}/CHANGELOG.md"
+
+# ── Step 1: Check dependencies ──────────────────────────────────────────────
+echo "==> Checking dependencies..."
+
+missing=()
+
+if ! command -v gh &>/dev/null; then
+  missing+=("gh")
+  echo "  ✗ gh (GitHub CLI) is not installed."
+  echo "    Install: https://cli.github.com/ or 'brew install gh'"
+fi
+
+if ! command -v ghch &>/dev/null; then
+  missing+=("ghch")
+  echo "  ✗ ghch is not installed."
+  echo "    Install: go install github.com/buildkite/ghch/cmd/ghch@master"
+fi
+
+if [[ ${#missing[@]} -gt 0 ]]; then
+  echo ""
+  echo "ERROR: Missing requirements: ${missing[*]}"
+  exit 1
+fi
+
+echo "  ✓ All requirements met."
+
+# ── Step 2: Read current version ─────────────────────────────────────────────
+current_version="$(tr -d '[:space:]' < "${VERSION_FILE}")"
+echo ""
+echo "==> Current agent version: v${current_version}"
+
+# ── Step 3: Prompt for new version ───────────────────────────────────────────
+echo ""
+read -e -r -p "==> Enter new version (without 'v' prefix): " -i "${current_version}" new_version
+
+if [[ -z "${new_version}" ]]; then
+  echo "ERROR: Version cannot be empty."
+  exit 1
+fi
+
+if [[ "${new_version}" == "${current_version}" ]]; then
+  echo "ERROR: New version must differ from the current version (${current_version})."
+  exit 1
+fi
+
+echo "  Releasing: v${current_version} → v${new_version}"
+
+# ── Step 4: Create release branch ────────────────────────────────────────────
+echo ""
+echo "==> Determining GitHub user..."
+gh_user="$(gh api user --jq '.login')"
+echo "  GitHub user: ${gh_user}"
+
+branch_name="${gh_user}/release/${new_version}"
+echo ""
+echo "==> Creating release branch: ${branch_name}"
+git fetch origin main
+git checkout -b "${branch_name}" origin/main
+echo "  ✓ On branch ${branch_name}"
+
+# ── Step 5: Update version file ──────────────────────────────────────────────
+echo ""
+echo "==> Updating ${VERSION_FILE} to ${new_version}"
+echo "${new_version}" > "${VERSION_FILE}"
+echo "  ✓ Version file updated."
+
+# ── Step 6: Generate changelog entry ─────────────────────────────────────────
+echo ""
+echo "==> Generating changelog with ghch (v${current_version} → v${new_version})..."
+changes="$(ghch --format=markdown --from="v${current_version}" --next-version="v${new_version}" | tail -n +3 | sed 's/^\* /- /')"
+
+today="$(date +%Y-%m-%d)"
+
+changelog_header="## [v${new_version}](https://github.com/buildkite/agent/tree/v${new_version}) (${today})
+[Full Changelog](https://github.com/buildkite/agent/compare/v${current_version}...v${new_version})
+
+### Added
+### Changed
+### Fixed
+### Security
+### Internal
+### Dependency updates"
+
+# Build the entry: header + ghch output
+changelog_entry="${changelog_header}
+
+${changes}"
+
+# Insert after line 7 (the blank line following the preamble)
+{
+  head -n 7 "${CHANGELOG_FILE}"
+  echo "${changelog_entry}"
+  echo ""
+  tail -n +8 "${CHANGELOG_FILE}"
+} > "${CHANGELOG_FILE}.tmp"
+mv "${CHANGELOG_FILE}.tmp" "${CHANGELOG_FILE}"
+
+echo "  ✓ Changelog updated."
+
+# ── Step 7: Open changelog in editor ─────────────────────────────────────────
+echo ""
+editor="${VISUAL:-${EDITOR:-vi}}"
+echo "==> Opening CHANGELOG.md in ${editor}..."
+echo "  Please review and edit the changelog, then save and close to continue."
+"${editor}" "${CHANGELOG_FILE}"
+
+# ── Step 8: Commit changes ──────────────────────────────────────────────────
+echo ""
+echo "==> Committing changes..."
+git add "${VERSION_FILE}" "${CHANGELOG_FILE}"
+git commit -m "Bump version and CHANGELOG for v${new_version}"
+echo ""
+echo "  ✓ Changes committed."
+echo ""
+echo "Next steps:"
+echo "  1. Push your branch:  git push origin ${branch_name}"
+echo "  2. Create a pull request and merge it."
+echo "  3. Unblock the release steps in Buildkite."
