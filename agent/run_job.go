@@ -15,7 +15,6 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/process"
@@ -386,9 +385,7 @@ One or more containers connected to the agent, but then stopped communicating wi
 		if exit.Status == 0 {
 			// On Windows, a signalled process exits 0 rather than non-zero.
 			// This is inconsistent with cancellation on other platforms.
-			if experiments.IsEnabled(ctx, experiments.OverrideZeroExitOnCancel) {
-				exit.Status = 1
-			}
+			exit.Status = 1
 		}
 	}
 

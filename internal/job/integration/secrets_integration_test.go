@@ -814,6 +814,7 @@ func TestSecretsIntegration_CheckoutScopedSecretReachesCheckout(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
