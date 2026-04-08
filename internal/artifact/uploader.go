@@ -20,7 +20,6 @@ import (
 
 	"drjosh.dev/zzglob"
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/mime"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
@@ -330,10 +329,8 @@ func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) e
 			return fmt.Errorf("resolving relative path for file %s: %w", file, err)
 		}
 
-		if experiments.IsEnabled(ctx, experiments.NormalisedUploadPaths) {
-			// Convert any Windows paths to Unix/URI form
-			path = filepath.ToSlash(path)
-		}
+		// Convert any Windows paths to Unix/URI form
+		path = filepath.ToSlash(path)
 
 		// Build an artifact object using the paths we have.
 		artifact, err := c.build(path, absolutePath)
