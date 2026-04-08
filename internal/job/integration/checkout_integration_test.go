@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/bintest/v3"
 )
@@ -83,41 +82,6 @@ func requireCheckoutPath(t *testing.T, checkoutDir, name string, exists bool) {
 	}
 }
 
-func TestWithResolvingCommitExperiment(t *testing.T) {
-	t.Parallel()
-
-	ctx, _ := experiments.Enable(mainCtx, experiments.ResolveCommitAfterCheckout)
-	tester, err := NewExecutorTester(ctx)
-	if err != nil {
-		t.Fatalf("NewExecutorTester() error = %v", err)
-	}
-	defer tester.Close()
-
-	env := []string{
-		"BUILDKITE_GIT_CLONE_FLAGS=-v",
-		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
-		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
-		"BUILDKITE_GIT_FETCH_FLAGS=-v",
-	}
-
-	// Actually execute git commands, but with expectations
-	git := tester.
-		MustMock(t, "git").
-		PassthroughToLocalCommand()
-
-	// But assert which ones are called
-	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
-		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
-		{"clean", "-fdq"},
-		{"rev-parse", "HEAD"},
-	})
-
-	tester.RunAndCheck(t, env...)
-}
-
 func TestCheckingOutLocalGitProject(t *testing.T) {
 	t.Parallel()
 
@@ -146,6 +110,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -187,6 +152,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -228,7 +194,7 @@ func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
 				return fmt.Errorf("GIT_SSH_COMMAND not set for git %q", i.Args[0])
 			}
 
-			const prefix = existingGitSSHCommand + " -i "
+			const prefix = existingGitSSHCommand + " -o StrictHostKeyChecking=accept-new -i "
 			const suffix = " -o IdentitiesOnly=yes"
 			if !strings.HasPrefix(gitSSHCommand, prefix) || !strings.HasSuffix(gitSSHCommand, suffix) {
 				return fmt.Errorf("unexpected GIT_SSH_COMMAND %q", gitSSHCommand)
@@ -314,6 +280,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 		{"sparse-checkout", "set", "--cone", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -333,6 +300,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 		{"sparse-checkout", "set", "--cone", ".buildkite/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 	})
 
 	tester.RunAndCheck(t, env...)
@@ -352,6 +320,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 		{"config", "--worktree", "--list"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 	})
 
 	tester.RunAndCheck(t, env...)
@@ -419,6 +388,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		{"submodule", "foreach", "--recursive", "git reset --hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -482,6 +452,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.
 		{"sparse-checkout", "set", "--cone", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -545,6 +516,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -584,6 +556,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 		{"fetch", "--depth=1", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -635,6 +608,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 		{"fetch", "-v", "--prune", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", shortCommitHash},
 		{"clean", "-ffxdq"},
+		{"rev-parse", shortCommitHash},
 		{"--no-pager", "log", "-1", shortCommitHash, "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -909,6 +883,7 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "FETCH_HEAD"},
+		{"rev-parse", "HEAD"},
 	})
 
 	tester.RunAndCheck(t, env...)
@@ -1017,6 +992,7 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -1079,6 +1055,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -1430,6 +1407,7 @@ func TestGitCheckoutWithCommitResolved(t *testing.T) {
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
+		{"rev-parse", "HEAD"},
 	})
 
 	agent := tester.MockAgent(t)
@@ -1457,6 +1435,7 @@ func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
+		{"rev-parse", "HEAD"},
 	})
 
 	agent := tester.MockAgent(t)
@@ -1484,6 +1463,7 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -1540,6 +1520,7 @@ func TestMultipleRemoteURLsFallsBackToGetURL(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
@@ -1589,6 +1570,7 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 		{"merge-base", "--is-ancestor", commitHash, "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},
 		{"clean", "-fdq"},
+		{"rev-parse", commitHash},
 		{"--no-pager", "log", "-1", commitHash, "-s", "--no-color", gitShowFormatArg},
 	})
 
