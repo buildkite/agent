@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.121.1](https://github.com/buildkite/agent/tree/v3.121.1) (2026-04-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.121.0...v3.121.1)
+
+### Change
+
+- Map executor setup failures to exit_status -1 [#3769](https://github.com/buildkite/agent/pull/3769) ([kainanpeace666](https://github.com/kainanpeace666))
+
+### Fix
+
+- Don't send commit metadata when BUILDKITE_SKIP_CHECKOUT is set [#3790](https://github.com/buildkite/agent/pull/3790) ([swebb](https://github.com/swebb))
+
+### Security
+
+- Go 1.25.9 [#3805](https://github.com/buildkite/agent/pull/3805) ([swebb](https://github.com/swebb))
+
+### Dependency updates
+
+- build(deps): bump docker/library/golang from 1.25.8 to 1.25.9 in /.buildkite in the container-images group across 1 directory [#3804](https://github.com/buildkite/agent/pull/3804) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump cloud.google.com/go/kms from 1.26.0 to 1.27.0 [#3799](https://github.com/buildkite/agent/pull/3799) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the cloud-providers group across 1 directory with 6 updates [#3797](https://github.com/buildkite/agent/pull/3797) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump github.com/buildkite/go-buildkite/v4 from 4.17.0 to 4.18.0 [#3798](https://github.com/buildkite/agent/pull/3798) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the container-images group across 5 directories with 1 update [#3796](https://github.com/buildkite/agent/pull/3796) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the otel group with 5 updates [#3795](https://github.com/buildkite/agent/pull/3795) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump github.com/buildkite/go-buildkite/v4 from 4.16.0 to 4.17.0 [#3787](https://github.com/buildkite/agent/pull/3787) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the cloud-providers group with 8 updates [#3786](https://github.com/buildkite/agent/pull/3786) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the container-images group across 3 directories with 1 update [#3785](https://github.com/buildkite/agent/pull/3785) ([dependabot[bot]](https://github.com/apps/dependabot))
+
 ## [v3.121.0](https://github.com/buildkite/agent/tree/v3.121.0) (2026-03-25)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.120.3...v3.121.0)
 
