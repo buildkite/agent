@@ -17,7 +17,6 @@ import (
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -285,7 +284,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 func TestJobRunnerPassesCheckoutOverrideModeToBootstrapAndEnvFile(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := experiments.Enable(t.Context(), experiments.PropagateAgentConfigVars)
+	ctx := t.Context()
 
 	j := &api.Job{
 		ID:                 "my-job-id",

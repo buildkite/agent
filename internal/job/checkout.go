@@ -10,7 +10,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -607,10 +606,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	// resolve BUILDKITE_COMMIT based on the local git repo
-	if experiments.IsEnabled(ctx, experiments.ResolveCommitAfterCheckout) {
-		e.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
-		e.resolveCommit(ctx)
-	}
+	e.resolveCommit(ctx)
 
 	return nil
 }
