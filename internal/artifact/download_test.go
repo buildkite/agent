@@ -5,8 +5,6 @@ package artifact
 import (
 	"context"
 	"testing"
-
-	"github.com/buildkite/agent/v4/internal/experiments"
 )
 
 func TestTargetPath(t *testing.T) {
@@ -57,29 +55,6 @@ func TestTargetPath(t *testing.T) {
 	}
 
 	ctx := context.Background()
-
-	for _, test := range tests {
-		got := targetPath(ctx, test.dlPath, test.destPath)
-		if got != test.want {
-			t.Errorf("targetPath(%q, %q) = %q, want %q", test.dlPath, test.destPath, got, test.want)
-		}
-	}
-}
-
-func TestTargetPath_AllowPathTraversal(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		dlPath, destPath, want string
-	}{
-		// artifact_download documentation examples
-		{dlPath: "app/logs/a.log", destPath: "foo/app/", want: "foo/app/app/logs/a.log"},
-		{dlPath: "app/logs/a.log", destPath: "foo/app", want: "foo/app/logs/a.log"},
-		{dlPath: "app/logs/a.log", destPath: ".", want: "app/logs/a.log"},
-
-		// The download path _can_ walk up the destination path
-		{dlPath: "../../../../etc/passwd", destPath: "dist/foo", want: "../../etc/passwd"},
-	}
-	ctx, _ := experiments.Enable(context.Background(), experiments.AllowArtifactPathTraversal)
 
 	for _, test := range tests {
 		got := targetPath(ctx, test.dlPath, test.destPath)
