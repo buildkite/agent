@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	DefaultEndpoint = "https://agent.buildkite.com/v3"
+	DefaultEndpoint = "https://agent-edge.buildkite.com/v3"
 )
 
 var (
