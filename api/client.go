@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	defaultEndpoint  = "https://agent.buildkite.com/v3"
+	defaultEndpoint  = "https://agent-edge.buildkite.com/v3"
 	defaultUserAgent = "buildkite-agent/api"
 )
 
