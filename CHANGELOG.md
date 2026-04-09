@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.122.0](https://github.com/buildkite/agent/tree/v3.122.0) (2026-04-09)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.121.1...v3.122.0)
+
+### Changed
+- Streaming Job Dispatch is now enabled by default: the default agent API endpoint has been changed from `https://agent.buildkite.com/v3` to `https://agent-edge.buildkite.com/v3` [#3808](https://github.com/buildkite/agent/pull/3808) (@zhming0)
+
 ## [v3.121.1](https://github.com/buildkite/agent/tree/v3.121.1) (2026-04-08)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.121.0...v3.121.1)
 
