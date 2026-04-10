@@ -299,23 +299,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	}
 
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
-		if conf.AgentConfiguration.LogFormat == "json" {
-			log := newJobLogger(
-				conf.AgentStdout, logger.StringField("org", r.conf.Job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
-				logger.StringField("pipeline", r.conf.Job.Env["BUILDKITE_PIPELINE_SLUG"]),
-				logger.StringField("branch", r.conf.Job.Env["BUILDKITE_BRANCH"]),
-				logger.StringField("queue", r.conf.Job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
-				logger.StringField("build_id", r.conf.Job.Env["BUILDKITE_BUILD_ID"]),
-				logger.StringField("build_number", r.conf.Job.Env["BUILDKITE_BUILD_NUMBER"]),
-				logger.StringField("job_url", fmt.Sprintf("%s#%s", r.conf.Job.Env["BUILDKITE_BUILD_URL"], r.conf.Job.ID)),
-				logger.StringField("build_url", r.conf.Job.Env["BUILDKITE_BUILD_URL"]),
-				logger.StringField("job_id", r.conf.Job.ID),
-				logger.StringField("step_key", r.conf.Job.Env["BUILDKITE_STEP_KEY"]),
-			)
-			allWriters = append(allWriters, log)
-		} else {
-			allWriters = append(allWriters, conf.AgentStdout)
-		}
+		allWriters = append(allWriters, NewJobLogger(conf))
 	}
 
 	// The writer that output from the process goes into
@@ -445,6 +429,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
+BUILDKITE_GIT_MIRROR_CHECKOUT_MODE
 BUILDKITE_GIT_FETCH_FLAGS
 BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
 BUILDKITE_GIT_MIRRORS_PATH
@@ -466,6 +451,7 @@ BUILDKITE_TRACING_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
 BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
 BUILDKITE_AGENT_AWS_KMS_KEY
+BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
 BUILDKITE_AGENT_JWKS_KEY_ID`
 			if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
@@ -585,6 +571,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
 	setEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
 	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
+	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
 	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
 	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
 	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
@@ -620,6 +607,11 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// pass through the KMS key ID for signing
 	if r.conf.AgentConfiguration.SigningAWSKMSKey != "" {
 		setEnv("BUILDKITE_AGENT_AWS_KMS_KEY", r.conf.AgentConfiguration.SigningAWSKMSKey)
+	}
+
+	// pass through the GCP KMS key for signing
+	if r.conf.AgentConfiguration.SigningGCPKMSKey != "" {
+		setEnv("BUILDKITE_AGENT_GCP_KMS_KEY", r.conf.AgentConfiguration.SigningGCPKMSKey)
 	}
 
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
@@ -857,30 +849,6 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 	if err != nil {
 		r.agentLogger.Error("Ultimately unable to upload header times: %v", err)
 	}
-}
-
-// jobLogger is just a simple wrapper around a JSON Logger that satisfies the
-// io.Writer interface so it can be seemlessly use with existing job logging code.
-type jobLogger struct {
-	log logger.Logger
-}
-
-func newJobLogger(stdout io.Writer, fields ...logger.Field) jobLogger {
-	l := logger.NewConsoleLogger(logger.NewJSONPrinter(stdout), os.Exit)
-	l = l.WithFields(logger.StringField("source", "job"))
-	l = l.WithFields(fields...)
-	return jobLogger{log: l}
-}
-
-// Write adapts the underlying JSON logger to match the io.Writer interface to
-// easier slotting into job logger code. This will write existing fields
-// attached to the logger, the message, and write out to the INFO level.
-func (l jobLogger) Write(data []byte) (int, error) {
-	// When writing as a structured log, trailing newlines and carriage returns
-	// generally don't make sense.
-	msg := strings.TrimRight(string(data), "\r\n")
-	l.log.Info(msg)
-	return len(data), nil
 }
 
 func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shellFile, jsonFile *os.File, err error) {

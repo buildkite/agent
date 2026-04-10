@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.122.0](https://github.com/buildkite/agent/tree/v3.122.0) (2026-04-09)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.121.1...v3.122.0)
+
+### Changed
+- Streaming Job Dispatch is now enabled by default: the default agent API endpoint has been changed from `https://agent.buildkite.com/v3` to `https://agent-edge.buildkite.com/v3` [#3808](https://github.com/buildkite/agent/pull/3808) (@zhming0)
+
+## [v3.121.1](https://github.com/buildkite/agent/tree/v3.121.1) (2026-04-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.121.0...v3.121.1)
+
+### Change
+
+- Map executor setup failures to exit_status -1 [#3769](https://github.com/buildkite/agent/pull/3769) ([kainanpeace666](https://github.com/kainanpeace666))
+
+### Fix
+
+- Don't send commit metadata when BUILDKITE_SKIP_CHECKOUT is set [#3790](https://github.com/buildkite/agent/pull/3790) ([swebb](https://github.com/swebb))
+
+### Security
+
+- Go 1.25.9 [#3805](https://github.com/buildkite/agent/pull/3805) ([swebb](https://github.com/swebb))
+
+### Dependency updates
+
+- build(deps): bump docker/library/golang from 1.25.8 to 1.25.9 in /.buildkite in the container-images group across 1 directory [#3804](https://github.com/buildkite/agent/pull/3804) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump cloud.google.com/go/kms from 1.26.0 to 1.27.0 [#3799](https://github.com/buildkite/agent/pull/3799) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the cloud-providers group across 1 directory with 6 updates [#3797](https://github.com/buildkite/agent/pull/3797) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump github.com/buildkite/go-buildkite/v4 from 4.17.0 to 4.18.0 [#3798](https://github.com/buildkite/agent/pull/3798) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the container-images group across 5 directories with 1 update [#3796](https://github.com/buildkite/agent/pull/3796) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the otel group with 5 updates [#3795](https://github.com/buildkite/agent/pull/3795) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump github.com/buildkite/go-buildkite/v4 from 4.16.0 to 4.17.0 [#3787](https://github.com/buildkite/agent/pull/3787) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the cloud-providers group with 8 updates [#3786](https://github.com/buildkite/agent/pull/3786) ([dependabot[bot]](https://github.com/apps/dependabot))
+- build(deps): bump the container-images group across 3 directories with 1 update [#3785](https://github.com/buildkite/agent/pull/3785) ([dependabot[bot]](https://github.com/apps/dependabot))
+
+## [v3.121.0](https://github.com/buildkite/agent/tree/v3.121.0) (2026-03-25)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.120.3...v3.121.0)
+
+> [!TIP]
+> In order to make Git Mirrors more reliable, checkouts using a mirror can now be *dissociated* from the mirror. This approach still avoids fetching objects from the remote if they are present the mirror, but stores a copy of the objects in the checkout, preventing the checkout from becoming corrupted through entirely normal operation of the mirror.
+> To opt into this behaviour set the flag `--git-mirror-checkout-mode=dissociate` or agent environment variable `BUILDKITE_GIT_MIRROR_CHECKOUT_MODE=dissociate`.
+
+### Added
+- Add GCP KMS Signing [#3660](https://github.com/buildkite/agent/pull/3660) (@tomowatt)
+- Support for dissociated clones of git mirrors [#3775](https://github.com/buildkite/agent/pull/3775), [#3788](https://github.com/buildkite/agent/pull/3788) (@DrJosh9000)
+- Add `--subject-claim` flag to `oidc request-token` [#3784](https://github.com/buildkite/agent/pull/3784) (@zero51)
+
+### Changed
+- Job logger trace correlation [#3782](https://github.com/buildkite/agent/pull/3782) (@aapzu)
+
+## [v3.120.3](https://github.com/buildkite/agent/tree/v3.120.3) (2026-03-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.120.2...v3.120.3)
+
+### Fixed
+- A-1020: make connect.CodeInternal error recoverable for pings stream [#3780](https://github.com/buildkite/agent/pull/3780) (@zhming0)
+
+### Internal
+- Update/clarify supported Windows versions [#3776](https://github.com/buildkite/agent/pull/3776) (@petetomasik)
+
+### Dependency updates
+- build(deps): bump the cloud-providers group with 2 updates [#3777](https://github.com/buildkite/agent/pull/3777) (@dependabot[bot])
+- build(deps): bump the container-images group across 5 directories with 1 update [#3778](https://github.com/buildkite/agent/pull/3778) (@dependabot[bot])
+- build(deps): bump the container-images group across 1 directory with 2 updates [#3779](https://github.com/buildkite/agent/pull/3779) (@dependabot[bot])
+
+## [v3.120.2](https://github.com/buildkite/agent/tree/v3.120.2) (2026-03-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.120.1...v3.120.2)
+
+### Fixed
+- Send HTTP/2 ping frames to keep streaming connections open [#3773](https://github.com/buildkite/agent/pull/3773) (@moskyb)
+
+### Internal
+- Update readme supported macOS versions [#3772](https://github.com/buildkite/agent/pull/3772) (@DrJosh9000)
+
 ## [v3.120.1](https://github.com/buildkite/agent/tree/v3.120.1) (2026-03-17)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.120.0...v3.120.1)
 
@@ -24,7 +95,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [v3.120.0](https://github.com/buildkite/agent/tree/v3.120.0) (2026-03-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.119.2...v3.120.0)
 
-> [!TIP] 
+> [!TIP]
 > **Streaming job dispatch (Public Preview):** This release adds opt-in support for a new streaming connection between agents and Buildkite, significantly reducing job acceptance latency for self-hosted agents. To try it, start your agent with `--endpoint https://agent-edge.buildkite.com/v3`, for example:
 >
 >     buildkite-agent start --endpoint https://agent-edge.buildkite.com/v3

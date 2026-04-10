@@ -85,6 +85,15 @@ func New(conf ExecutorConfig) *Executor {
 	}
 }
 
+const (
+	// ExitCodeSetupFailure is used internally by the executor subprocess
+	// to signal that it failed during setUp (e.g. secret-fetch DNS errors,
+	// shell creation failures) before the user's command ran. The parent
+	// job runner maps this to exit_status -1 so that it is consistent
+	// with other "command never ran" agent-level failures.
+	ExitCodeSetupFailure = 125
+)
+
 // Run the job and return the exit code
 func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Create a context to use for cancelation of the job
@@ -188,10 +197,19 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 	}
 
-	// Initialize the environment, a failure here will still call the tearDown
+	// Initialize the environment, a failure here will still call the tearDown.
+	// setUp can fail due to infrastructure errors (secret fetch, env init)
+	// or due to a user hook (environment hook) returning non-zero.
 	if err = e.setUp(ctx); err != nil {
 		e.shell.Errorf("Error setting up job executor: %v", err)
-		return shell.ExitCode(err)
+
+		// If the error is a typed ExitError (e.g. from a hook), preserve
+		// the hook's exit code. Otherwise it's an infra error — return
+		// ExitCodeSetupFailure so the parent can map it to -1.
+		if exitErr := new(shell.ExitError); errors.As(err, &exitErr) {
+			return exitErr.Code
+		}
+		return ExitCodeSetupFailure
 	}
 
 	// Execute the job phases in order

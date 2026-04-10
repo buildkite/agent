@@ -142,6 +142,15 @@ func TestOIDCToken(t *testing.T) {
 			ExpectedBody: []byte(`{"aws_session_tags":["organization_id","pipeline_id"]}` + "\n"),
 			OIDCToken:    &api.OIDCToken{Token: oidcToken},
 		},
+		{
+			AccessToken: accessToken,
+			OIDCTokenRequest: &api.OIDCTokenRequest{
+				Job:          jobID,
+				SubjectClaim: "cluster_id",
+			},
+			ExpectedBody: []byte(`{"subject_claim":"cluster_id"}` + "\n"),
+			OIDCToken:    &api.OIDCToken{Token: oidcToken},
+		},
 	}
 
 	for _, test := range tests {

@@ -180,19 +180,25 @@ like systems, as well as Windows.
   - CentOS 8
 - Amazon Linux 2
 - macOS [^1]
-  - 10.15 (Catalina)
-  - 11 (Big Sur)
   - 12 (Monterey)
   - 13 (Ventura)
   - 14 (Sonoma)
-- Windows Server
-  - 2016
-  - 2019
-  - 2022
+  - 15 (Sequoia)
+  - 26 (Tahoe)
+- Windows [^2]
+  - 10
+  - 11
+  - Server 2016
+  - Server 2019
+  - Server 2022
 
 [^1]: See https://github.com/golang/go/issues/23011 for macOS / Go support and
 [Supported macOS Versions](./docs/macos.md) for the last supported version of the
 Buildkite Agent for versions of macOS prior to those listed above.
+
+[^2]: See [Go's Windows support page](https://go.dev/wiki/Windows) for Go / Windows version
+compatibility and [Supported Windows Versions](./docs/windows.md) for the last supported version
+of the Buildkite Agent for versions of Windows prior to those listed above.
 
 ## Contributing
 

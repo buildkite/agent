@@ -29,6 +29,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
@@ -73,6 +74,8 @@ var (
 		agent.PingModeStreamOnly,
 	}
 
+	mirrorCheckoutModes = []string{"dissociate", "reference"}
+
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
 		regexp.MustCompile("^BUILDKITE$"),
 		regexp.MustCompile("^BUILDKITE_.*$"),
@@ -103,6 +106,7 @@ type AgentStartConfig struct {
 
 	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
 	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
@@ -157,6 +161,7 @@ type AgentStartConfig struct {
 	GitCleanFlags               string   `cli:"git-clean-flags"`
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
@@ -508,94 +513,35 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
 		},
-		cli.StringFlag{
-			Name:   "git-checkout-flags",
-			Value:  "-f",
-			Usage:  "Flags to pass to \"git checkout\" command",
-			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to the \"git clone\" command",
-			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clean-flags",
-			Value:  "-ffxdq",
-			Usage:  "Flags to pass to \"git clean\" command",
-			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
-			// -ff: delete files and directories, including untracked nested git repositories
-			// -x: don't use .gitignore rules
-			// -d: recurse into untracked directories
-			// -q: quiet, only report errors
-		},
-		cli.StringFlag{
-			Name:   "git-fetch-flags",
-			Value:  "-v --prune",
-			Usage:  "Flags to pass to \"git fetch\" command",
-			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-mirror-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
-			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-mirrors-path",
-			Value:  "",
-			Usage:  "Path to where mirrors of git repositories are stored",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
-		},
-		cli.IntFlag{
-			Name:   "git-mirrors-lock-timeout",
-			Value:  300,
-			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror (default: false)",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-		},
-		cli.StringSliceFlag{
-			Name:   "git-submodule-clone-config",
-			Value:  &cli.StringSlice{},
-			Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands such as ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead",
-			EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
-		},
+
+		// Various git related flags shared with bootstrap
+		SkipCheckoutFlag,
+		GitCheckoutFlagsFlag,
+		GitCloneFlagsFlag,
+		GitCleanFlagsFlag,
+		GitFetchFlagsFlag,
+		GitCloneMirrorFlagsFlag,
+		GitMirrorsPathFlag,
+		GitMirrorCheckoutModeFlag,
+		GitMirrorsLockTimeoutFlag,
+		GitMirrorsSkipUpdateFlag,
+		GitSubmoduleCloneConfigFlag,
+		GitSkipFetchExistingCommitsFlag,
+
 		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
 			Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
-		cli.StringFlag{
-			Name:   "build-path",
-			Value:  "",
-			Usage:  "Path to where the builds will run from",
-			EnvVar: "BUILDKITE_BUILD_PATH",
-		},
-		cli.StringFlag{
-			Name:   "hooks-path",
-			Value:  "",
-			Usage:  "Directory where the hook scripts are found",
-			EnvVar: "BUILDKITE_HOOKS_PATH",
-		},
-		cli.StringSliceFlag{
-			Name:   "additional-hooks-paths",
-			Value:  &cli.StringSlice{},
-			Usage:  "Additional directories to look for agent hooks",
-			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
-		},
+
+		// Various file path flags shared with agent start
+		BuildPathFlag,
+		HooksPathFlag,
+		AdditionalHooksPathsFlag,
 		SocketsPathFlag,
-		cli.StringFlag{
-			Name:   "plugins-path",
-			Value:  "",
-			Usage:  "Directory where the plugins are saved to",
-			EnvVar: "BUILDKITE_PLUGINS_PATH",
-		},
+		PluginsPathFlag,
+
 		cli.BoolFlag{
 			Name:   "no-ansi-timestamps",
 			Usage:  "Do not insert ANSI timestamp codes at the start of each line of job output (default: false)",
@@ -646,20 +592,10 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow local hooks to be run from checked out repositories (default: false)",
 			EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
 		},
-		cli.BoolFlag{
+		cli.BoolFlag{ // git-submodules in bootstrap
 			Name:   "no-git-submodules",
 			Usage:  "Don't automatically checkout git submodules (default: false)",
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
-		},
-		cli.BoolFlag{
-			Name:   "skip-checkout",
-			Usage:  "Skip the git checkout phase entirely",
-			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-skip-fetch-existing-commits",
-			Usage:  "Skip git fetch if the commit already exists in the local git directory (default: false)",
-			EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 		},
 		cli.BoolFlag{
 			Name:   "no-feature-reporting",
@@ -767,6 +703,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The KMS KMS key ID, or key alias used when signing and verifying the pipeline.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY",
 		},
+		cli.StringFlag{
+			Name:   "signing-gcp-kms-key",
+			Usage:  "The GCP KMS key resource name used when signing and verifying the pipeline. Format: projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
@@ -873,6 +814,10 @@ var AgentStartCommand = cli.Command{
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
 			return fmt.Errorf("failed to unset config from environment: %w", err)
+		}
+
+		if !slices.Contains(mirrorCheckoutModes, cfg.GitMirrorCheckoutMode) {
+			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
 		}
 
 		if !slices.Contains(pingModes, cfg.PingMode) {
@@ -1040,7 +985,14 @@ var AgentStartCommand = cli.Command{
 			// assign a crypto signer which uses the KMS key to sign the pipeline
 			verificationJWKS, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
 			if err != nil {
-				return fmt.Errorf("couldn't create KMS signer: %w", err)
+				return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+			}
+
+		case cfg.SigningGCPKMSKey != "":
+			// assign a crypto signer which uses the GCP KMS key to sign the pipeline
+			verificationJWKS, err = gcpsigner.NewKMS(ctx, cfg.SigningGCPKMSKey)
+			if err != nil {
+				return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
 			}
 
 		case cfg.VerificationJWKSFile != "":
@@ -1083,6 +1035,7 @@ var AgentStartCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			SocketsPath:                  cfg.SocketsPath,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			HooksPath:                    cfg.HooksPath,
@@ -1131,6 +1084,7 @@ var AgentStartCommand = cli.Command{
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
 			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
+			SigningGCPKMSKey: cfg.SigningGCPKMSKey,
 			DebugSigning:     cfg.DebugSigning,
 
 			VerificationJWKS:             verificationJWKS,
