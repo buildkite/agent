@@ -146,7 +146,14 @@ func (e *Executor) downloadZipPlugin(ctx context.Context, downloadURL, destPath,
 
 	switch u.Scheme {
 	case "file":
-		if err := copyFile(u.Path, destPath); err != nil {
+		localPath := u.Path
+		// On Windows, file:///C:/path produces u.Path="/C:/path".
+		// The leading slash is not a valid Windows path component and must
+		// be stripped when followed by a drive letter (e.g. "/C:/" → "C:/").
+		if runtime.GOOS == "windows" && filepath.VolumeName(localPath[1:]) != "" {
+			localPath = localPath[1:]
+		}
+		if err := copyFile(localPath, destPath); err != nil {
 			return "", fmt.Errorf("failed to copy local file: %w", err)
 		}
 	case "http", "https":
