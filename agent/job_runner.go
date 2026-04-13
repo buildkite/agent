@@ -660,6 +660,10 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
 
+	if r.conf.AgentConfiguration.OIDCTokenMaxLifetimeSeconds > 0 {
+		setEnv("BUILDKITE_AGENT_OIDC_TOKEN_MAX_LIFETIME_SECONDS", strconv.Itoa(r.conf.AgentConfiguration.OIDCTokenMaxLifetimeSeconds))
+	}
+
 	// see documentation for BuildkiteMessageMax
 	if err := truncateEnv(r.agentLogger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
 		r.agentLogger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)

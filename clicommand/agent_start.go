@@ -196,10 +196,11 @@ type AgentStartConfig struct {
 	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
 	// Other shared flags
-	StrictSingleHooks         bool   `cli:"strict-single-hooks"`
-	KubernetesExec            bool   `cli:"kubernetes-exec"`
-	TraceContextEncoding      string `cli:"trace-context-encoding"`
-	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
+	StrictSingleHooks           bool   `cli:"strict-single-hooks"`
+	KubernetesExec              bool   `cli:"kubernetes-exec"`
+	TraceContextEncoding        string `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload   bool   `cli:"no-multipart-artifact-upload"`
+	OIDCTokenMaxLifetimeSeconds int    `cli:"oidc-token-max-lifetime-seconds"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -760,6 +761,12 @@ var AgentStartCommand = cli.Command{
 		StrictSingleHooksFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
+		cli.IntFlag{
+			Name:   "oidc-token-max-lifetime-seconds",
+			Value:  0,
+			Usage:  "Maximum lifetime (seconds) for OIDC tokens requested via `buildkite-agent oidc request-token` in jobs. When greater than 0, `--lifetime` cannot exceed this value. 0 means no agent-side limit.",
+			EnvVar: "BUILDKITE_AGENT_OIDC_TOKEN_MAX_LIFETIME_SECONDS",
+		},
 
 		// Deprecated flags which will be removed in v4
 		KubernetesLogCollectionGracePeriodFlag,
@@ -942,6 +949,10 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
 
+		if cfg.OIDCTokenMaxLifetimeSeconds < 0 {
+			return fmt.Errorf("oidc-token-max-lifetime-seconds must be a non-negative integer")
+		}
+
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
 			Datadog:              cfg.MetricsDatadog,
 			DatadogHost:          cfg.MetricsDatadogHost,
@@ -1085,6 +1096,7 @@ var AgentStartCommand = cli.Command{
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			TraceContextEncoding:         cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
+			OIDCTokenMaxLifetimeSeconds:  cfg.OIDCTokenMaxLifetimeSeconds,
 			KubernetesExec:               cfg.KubernetesExec,
 			PingMode:                     cfg.PingMode,
 
