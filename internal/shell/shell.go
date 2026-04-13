@@ -299,7 +299,7 @@ func (s *Shell) Command(command string, args ...string) Command {
 // executed directly, or some kind of intepreter is executed in order to
 // interpret it (loosely: powershell.exe for .ps1 files, bash(.exe) for shell
 // scripts without shebang lines).
-func (s *Shell) Script(path string, commandOverride string) (Command, error) {
+func (s *Shell) Script(path, commandOverride string) (Command, error) {
 	var command string
 	var args []string
 
