@@ -442,6 +442,7 @@ BUILDKITE_LOCAL_HOOKS_ENABLED
 BUILDKITE_PLUGINS_ENABLED
 BUILDKITE_REDACTED_VARS
 BUILDKITE_SHELL
+BUILDKITE_HOOKS_SHELL
 BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
@@ -577,6 +578,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
+	setEnv("BUILDKITE_HOOKS_SHELL", r.conf.AgentConfiguration.HooksShell)
 	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
 	setEnv("BUILDKITE_REDACTED_VARS", strings.Join(r.conf.AgentConfiguration.RedactedVars, ","))
 	setEnv("BUILDKITE_STRICT_SINGLE_HOOKS", fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks))
@@ -745,7 +747,7 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	environ.Set("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
 	environ.Set("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
 
-	script, err := sh.Script(hook)
+	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
 	if err != nil {
 		r.agentLogger.Error("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
 		return false, err

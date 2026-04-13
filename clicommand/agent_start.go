@@ -134,6 +134,7 @@ type AgentStartConfig struct {
 	PluginsPath          string   `cli:"plugins-path" normalize:"filepath"`
 
 	Shell           string `cli:"shell"`
+	HooksShell      string `cli:"hooks-shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
 	NoPTY           bool   `cli:"no-pty"`
 
@@ -306,7 +307,7 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 }
 
 func DefaultShell() string {
-	// https://github.com/golang/go/blob/master/src/go/build/syslist.go#L7
+	// https://github.com/golang/go/blob/master/src/internal/syslist/syslist.go#L17
 	switch runtime.GOOS {
 	case "windows":
 		return `C:\Windows\System32\CMD.exe /S /C`
@@ -433,6 +434,11 @@ var AgentStartCommand = cli.Command{
 			Value:  DefaultShell(),
 			Usage:  "The shell command used to interpret build commands, e.g /bin/bash -e -c",
 			EnvVar: "BUILDKITE_SHELL",
+		},
+		cli.StringFlag{
+			Name:   "hooks-shell",
+			Usage:  "The shell command used to interpret hooks commands, e.g pwsh -Command",
+			EnvVar: "BUILDKITE_HOOKS_SHELL",
 		},
 		cli.StringFlag{
 			Name:   "queue",
@@ -1071,6 +1077,7 @@ var AgentStartCommand = cli.Command{
 			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
 			LogFormat:                    cfg.LogFormat,
 			Shell:                        cfg.Shell,
+			HooksShell:                   cfg.HooksShell,
 			RedactedVars:                 cfg.RedactedVars,
 			AcquireJob:                   cfg.AcquireJob,
 			TracingBackend:               cfg.TracingBackend,
@@ -1548,7 +1555,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 
 	// run hooks
 	for _, p = range hooks {
-		script, err := sh.Script(p)
+		script, err := sh.Script(p, cfg.HooksShell)
 		if err != nil {
 			log.Error("%q hook: %v", hookName, err)
 			return err

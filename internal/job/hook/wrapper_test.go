@@ -78,7 +78,7 @@ echo "hello world"
 
 			sh := shell.NewTestShell(t)
 
-			script, err := sh.Script(wrapper.Path())
+			script, err := sh.Script(wrapper.Path(), "")
 			if err != nil {
 				t.Fatalf("sh.Script(%q) = %v", wrapper.Path(), err)
 			}
@@ -177,7 +177,7 @@ echo hello world
 			err = sh.Chdir(hookWorkingDir)
 			assert.NilError(t, err, "sh.Chdir(%q) = %v", hookWorkingDir, err)
 
-			script, err := sh.Script(wrapper.Path())
+			script, err := sh.Script(wrapper.Path(), "")
 			if err != nil {
 				t.Fatalf("sh.Script(%q) = %v", wrapper.Path(), err)
 			}

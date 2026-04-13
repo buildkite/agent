@@ -163,6 +163,9 @@ type ExecutorConfig struct {
 	// The shell used to execute commands
 	Shell string
 
+	// The shell used to execute agent hooks
+	HooksShell string
+
 	// Phases to execute, defaults to all phases
 	Phases []string
 
