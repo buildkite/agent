@@ -807,14 +807,14 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	})
 }
 
+var badCharsRE = regexp.MustCompile("[[:^alnum:]]")
+
 func dirForAgentName(agentName string) string {
-	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
-	return badCharsPattern.ReplaceAllString(agentName, "-")
+	return badCharsRE.ReplaceAllString(agentName, "-")
 }
 
 func dirForRepository(repository string) string {
-	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
-	return badCharsPattern.ReplaceAllString(repository, "-")
+	return badCharsRE.ReplaceAllString(repository, "-")
 }
 
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
