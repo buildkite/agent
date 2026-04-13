@@ -48,7 +48,7 @@ mkdir -p "$DESTINATION_PATH"
 
 info "Installing dependencies"
 
-bundle check || bundle
+bundle check || bundle install
 which rpmbuild || (apt update && apt install -y rpm)
 
 info "Building rpm package $PACKAGE_NAME to $DESTINATION_PATH"

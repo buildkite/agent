@@ -1,12 +1,10 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    addressable (2.9.0)
-      public_suffix (>= 2.0.2, < 8.0)
     arr-pm (0.0.12)
     aws-eventstream (1.4.0)
-    aws-partitions (1.1213.0)
-    aws-sdk-core (3.242.0)
+    aws-partitions (1.1237.0)
+    aws-sdk-core (3.244.0)
       aws-eventstream (~> 1, >= 1.3.0)
       aws-partitions (~> 1, >= 1.992.0)
       aws-sigv4 (~> 1.9)
@@ -14,54 +12,46 @@ GEM
       bigdecimal
       jmespath (~> 1, >= 1.6.1)
       logger
-    aws-sdk-kms (1.121.0)
-      aws-sdk-core (~> 3, >= 3.241.4)
+    aws-sdk-kms (1.123.0)
+      aws-sdk-core (~> 3, >= 3.244.0)
       aws-sigv4 (~> 1.5)
-    aws-sdk-s3 (1.208.0)
-      aws-sdk-core (~> 3, >= 3.234.0)
+    aws-sdk-s3 (1.219.0)
+      aws-sdk-core (~> 3, >= 3.244.0)
       aws-sdk-kms (~> 1)
       aws-sigv4 (~> 1.5)
     aws-sigv4 (1.12.1)
       aws-eventstream (~> 1, >= 1.0.2)
-    backports (3.23.0)
+    backports (3.25.3)
     base64 (0.3.0)
-    bigdecimal (4.0.1)
-    cabin (0.9.0)
-    clamp (1.0.1)
-    deb-s3 (24.6.0)
+    bigdecimal (4.1.1)
+    cabin (0.9.1)
+    clamp (1.5.2)
+    deb-s3 (26.1.0)
       aws-sdk-s3 (~> 1)
       thor (~> 1)
     dotenv (2.8.1)
-    fpm (1.14.2)
+    fpm (1.17.0)
       arr-pm (~> 0.0.11)
       backports (>= 2.6.2)
-      cabin (>= 0.6.0)
-      clamp (~> 1.0.0)
-      git (>= 1.3.0, < 2.0)
-      json (>= 1.7.7, < 3.0)
+      cabin (>= 0.9.1)
+      clamp (>= 1.0.0)
       pleaserun (~> 0.0.29)
       rexml
       stud
-    git (1.13.2)
-      addressable (~> 2.8)
-      rchardet (~> 1.8)
     insist (1.0.0)
     jmespath (1.6.2)
-    json (2.6.2)
     logger (1.7.0)
     mustache (0.99.8)
-    pleaserun (0.0.32)
+    pleaserun (0.0.33)
       cabin (> 0)
       clamp
-      dotenv
+      dotenv (~> 2)
       insist
       mustache (= 0.99.8)
       stud
-    public_suffix (7.0.5)
-    rchardet (1.8.0)
-    rexml (3.4.2)
+    rexml (3.4.4)
     stud (0.0.23)
-    thor (1.4.0)
+    thor (1.5.0)
 
 PLATFORMS
   ruby
@@ -71,4 +61,4 @@ DEPENDENCIES
   fpm
 
 BUNDLED WITH
-   2.3.14
+   2.6.9
