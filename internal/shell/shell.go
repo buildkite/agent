@@ -346,12 +346,23 @@ func (s *Shell) Script(path string, commandOverride string) (Command, error) {
 		args = []string{"-file", path}
 
 	case !isWindows && isPwsh:
-		// If Pwsh on non-Windows platform, use cross-platform PowerShell 7
-		if s.debug {
-			s.Commentf("Attempting to run %s with PowerShell 7", path)
+		// First check the PowerShell script for a shebang line
+		sb, err := shellscript.ShebangLine(path)
+		if err != nil || sb == "" {
+			// No shebang, assume cross-platform PowerShell 7
+			if s.debug {
+				s.Commentf("Attempting to run %s with PowerShell 7", path)
+			}
+			pwshPath, err := s.AbsolutePath("pwsh")
+			if err != nil {
+				return Command{}, fmt.Errorf("error finding pwsh, needed to run .ps1 scripts: %w", err)
+			}
+			command = pwshPath
+			args = []string{"-file", path}
+			break
 		}
-		command = "pwsh"
-		args = []string{"-file", path}
+		command = path
+		args = nil
 
 	case !isWindows && isSh:
 		// If the script contains a shebang line, it can be run directly,
