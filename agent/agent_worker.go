@@ -519,16 +519,17 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 
 	// Now that we've got a job to do, we can start it.
 	jr, err := NewJobRunner(ctx, a.logger, a.apiClient, JobRunnerConfig{
-		Job:                acceptResponse,
-		JWKS:               a.agentConfiguration.VerificationJWKS,
-		Debug:              a.debug,
-		DebugHTTP:          a.debugHTTP,
-		CancelSignal:       a.cancelSig,
-		MetricsScope:       jobMetricsScope,
-		JobStatusInterval:  time.Duration(a.agent.JobStatusInterval) * time.Second,
-		AgentConfiguration: a.agentConfiguration,
-		AgentStdout:        a.agentStdout,
-		KubernetesExec:     a.agentConfiguration.KubernetesExec,
+		Job:                             acceptResponse,
+		JWKS:                            a.agentConfiguration.VerificationJWKS,
+		Debug:                           a.debug,
+		DebugHTTP:                       a.debugHTTP,
+		CancelSignal:                    a.cancelSig,
+		MetricsScope:                    jobMetricsScope,
+		JobStatusInterval:               time.Duration(a.agent.JobStatusInterval) * time.Second,
+		AgentConfiguration:              a.agentConfiguration,
+		AgentStdout:                     a.agentStdout,
+		KubernetesExec:                  a.agentConfiguration.KubernetesExec,
+		KubernetesContainerStartTimeout: a.agentConfiguration.KubernetesContainerStartTimeout,
 	})
 	if err != nil {
 		return fmt.Errorf("Failed to initialize job: %w", err)

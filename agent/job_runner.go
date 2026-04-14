@@ -85,6 +85,11 @@ type JobRunnerConfig struct {
 	// environment variables, and executes the bootstrap phases.
 	KubernetesExec bool
 
+	// KubernetesContainerStartTimeout is the maximum duration to wait for all
+	// containers in a Kubernetes pod to connect before the job is considered failed.
+	// It's useful to be configured in situations like huge container image cold download.
+	KubernetesContainerStartTimeout time.Duration
+
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	AgentStdout io.Writer
 }
@@ -323,7 +328,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			Stderr:             r.jobLogs,
 			ClientCount:        containerCount,
 			Env:                processEnv,
-			ClientStartTimeout: 5 * time.Minute,
+			ClientStartTimeout: conf.KubernetesContainerStartTimeout,
 			ClientLostTimeout:  30 * time.Second,
 		})
 	} else { // not Kubernetes
