@@ -98,7 +98,7 @@ type AgentStartConfig struct {
 	Priority          string   `cli:"priority"`
 	Spawn             int      `cli:"spawn"`
 	SpawnPerCPU       int      `cli:"spawn-per-cpu"`
-	SpawnWithPriority bool     `cli:"spawn-with-priority"`
+	SpawnWithPriority string   `cli:"spawn-with-priority"`
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
@@ -673,9 +673,10 @@ var AgentStartCommand = cli.Command{
 			Value:  0,
 			EnvVar: "BUILDKITE_AGENT_SPAWN_PER_CPU",
 		},
-		cli.BoolFlag{
+		cli.StringFlag{
 			Name:   "spawn-with-priority",
-			Usage:  "Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu) equal to the agent's index (default: false)",
+			Usage:  `Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu). Pass "static" (1, 1, 1, ...), "ascending" (1, 2, 3, ...), or "descending" (-1, -2, -3, ...). Descending helps jobs be assigned across all hosts when the value of --spawn varies between hosts`,
+			Value:  "static",
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
 		},
 		cancelSignalFlag,
@@ -847,6 +848,11 @@ var AgentStartCommand = cli.Command{
 		// on the very remote chance someone is using that.
 		if cfg.PingMode == pingModePingOnly {
 			cfg.PingMode = agent.PingModePollOnly
+		}
+
+		validSpawnWithPriorities := []string{"static", "ascending", "descending"}
+		if !slices.Contains(validSpawnWithPriorities, cfg.SpawnWithPriority) {
+			return fmt.Errorf("invalid spawn-with-priority, must be one of %v", validSpawnWithPriorities)
 		}
 
 		if cfg.VerificationJWKSFile != "" {
@@ -1300,16 +1306,22 @@ var AgentStartCommand = cli.Command{
 			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
-			if cfg.SpawnWithPriority {
-				p := i
-				if experiments.IsEnabled(ctx, experiments.DescendingSpawnPriority) {
-					// This experiment helps jobs be assigned across all hosts
-					// in cases where the value of --spawn varies between hosts.
-					p = -i
-				}
-				l.Info("Assigning priority %d for agent %d", p, i)
-				registerReq.Priority = strconv.Itoa(p)
+			var priority string
+			switch cfg.SpawnWithPriority {
+			case "static":
+				priority = cfg.Priority
+
+			case "ascending":
+				priority = strconv.Itoa(i)
+
+			case "descending":
+				priority = strconv.Itoa(-i)
+
+			default:
+				return fmt.Errorf("unknown spawn-with-priority value %s", cfg.SpawnWithPriority)
 			}
+
+			registerReq.Priority = priority
 
 			// Register the agent with the buildkite API
 			reg, err := client.Register(ctx, registerReq)
