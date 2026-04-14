@@ -565,8 +565,17 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 // It's not impossible (perhaps we need a process to age-out existing checkouts)
 // but something to think about, and when we have a good implementation enable
 // it for more cases.
+//
+// Why no snapshots if the command phase isn't included:
+// The cleanup mechanism happens when this instance of the executor tears down,
+// not when the last executor among many tears down. In a split-phase setup
+// (such as in agent-stack-k8s) where one container runs the checkout phase and
+// another runs the command phase, the snapshot would be deleted after the
+// checkout phase, which could break many git operations in the command phase.
+// Presently we have no way to pass cleanup instructions between containers,
+// which would enable this case.
 func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir string) (string, error) {
-	if !e.CleanCheckout {
+	if !e.CleanCheckout || !e.includePhase("command") {
 		return mirrorDir, nil
 	}
 
