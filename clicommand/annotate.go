@@ -153,7 +153,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 	}
 
 	if bodySize := len(body); bodySize > maxBodySize {
-		return fmt.Errorf("annotation body size (%dB) exceeds maximum (%dB)", bodySize, maxBodySize)
+		return annotationTooBigError{bodySize}
 	}
 
 	// Create the API client
@@ -197,4 +197,12 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 	l.Debug("Successfully annotated build")
 
 	return nil
+}
+
+type annotationTooBigError struct {
+	bodySize int
+}
+
+func (e annotationTooBigError) Error() string {
+	return fmt.Sprintf("annotation body size (%dB) exceeds maximum (%dB)", e.bodySize, maxBodySize)
 }
