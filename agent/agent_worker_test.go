@@ -488,6 +488,121 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 	}
 }
 
+// TestAgentWorker_PauseAfterJob tests that with PauseAfterJob enabled, the
+// agent self-pauses via the API after completing a job, then resumes and
+// accepts a new job when unpaused (unlike DisconnectAfterJob which exits).
+func TestAgentWorker_PauseAfterJob(t *testing.T) {
+	t.Parallel()
+
+	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
+	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
+	if err := errors.Join(os.MkdirAll(buildPath, 0o777), os.MkdirAll(hooksPath, 0o777)); err != nil {
+		t.Fatalf("Couldn't create directories: %v", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name())) //nolint:errcheck // Best-effort cleanup
+	})
+
+	server := NewFakeAPIServer()
+	defer server.Close()
+
+	job := server.AddJob(map[string]string{
+		"BUILDKITE_COMMAND": "echo hello",
+	})
+
+	// Pre-register the agent.
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+
+	// Ping sequence:
+	// 0: dispatch job
+	// 1: empty → agent self-pauses (calls POST /pause) because ranJob=true
+	// 2: empty → agent resumes (not a "pause" action), resets ranJob
+	// 3: disconnect → agent exits cleanly
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		switch agent.Pings {
+		case 0:
+			return api.Ping{
+				Job: job.Job,
+			}, nil
+
+		case 1:
+			// Agent finished the job and will self-pause on the next
+			// empty ping (the pause-after-job code path).
+			return api.Ping{}, nil
+
+		case 2:
+			// Agent is paused. Send an empty (non-"pause") action to
+			// resume it. This tests that ranJob is reset on resume.
+			return api.Ping{}, nil
+
+		case 3:
+			// The agent is now idle with ranJob=false (was reset on resume).
+			// Disconnect to end the test.
+			return api.Ping{
+				Action: "disconnect",
+			}, nil
+
+		default:
+			return api.Ping{}, errors.New("too many pings")
+		}
+	}
+
+	server.Assign(agent, job)
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       "alpacas",
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 1,
+			HeartbeatInterval: 10,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{
+			SpawnIndex: 1,
+			AgentConfiguration: AgentConfiguration{
+				BootstrapScript: dummyBootstrap,
+				BuildPath:       buildPath,
+				HooksPath:       hooksPath,
+				PauseAfterJob:   true,
+			},
+		},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(t.Context(), nil); err != nil {
+		t.Errorf("worker.Start() = %v", err)
+	}
+
+	// Verify the agent went through all expected pings.
+	if got, want := agent.Pings, 4; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+	// Verify the agent called POST /pause exactly once (after the job).
+	if got, want := agent.PauseCalls, 1; got != want {
+		t.Errorf("agent.PauseCalls = %d, want %d", got, want)
+	}
+	// Verify ignoreAgentInDispatches was set during the job.
+	if got, want := agent.IgnoreInDispatches, true; got != want {
+		t.Errorf("agent.IgnoreInDispatches = %t, want %t", got, want)
+	}
+	if got, want := job.State, JobStateFinished; got != want {
+		t.Errorf("job.State = %q, want %q", got, want)
+	}
+}
+
 func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 	t.Parallel()
 
