@@ -47,10 +47,6 @@ We previously made this the default behaviour of the agent (as of v3.63.0) but h
 
 **Status:** Available as an experiment to allow users who have since depended on this behaviour to re-enable it. If you use this feature please let us know so we may better understand your use case.
 
-### `descending-spawn-priority`
-
-When using `--spawn` with `--spawn-with-priority`, the agent assigns ascending priorities to each spawned agent (1, 2, 3, ...). This experiment changes the priorities to be descending (-1, -2, -3, ...) instead. This helps jobs be assigned across all hosts in cases where the value of `--spawn` varies between hosts.
-
 ### `zip-plugins`
 
 Allows plugins to be downloaded as zip archives instead of being cloned from a Git repository. This is useful for plugins hosted as zip files on HTTP(S) URLs.
