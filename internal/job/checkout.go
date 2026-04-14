@@ -239,9 +239,15 @@ func (e *Executor) checkout(ctx context.Context) error {
 			break
 		}
 
+		maxAttempts := e.CheckoutAttempts
+		if maxAttempts <= 0 {
+			maxAttempts = 6
+		}
+
 		if err := roko.NewRetrier(
-			roko.WithMaxAttempts(3),
-			roko.WithStrategy(roko.Constant(2*time.Second)),
+			roko.WithMaxAttempts(maxAttempts),
+			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			err := e.defaultCheckoutPhase(ctx)
 			if err == nil {

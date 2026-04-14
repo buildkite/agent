@@ -202,6 +202,10 @@ type ExecutorConfig struct {
 
 	// Secrets definition for the job step
 	Secrets string
+
+	// Number of checkout attempts (including the initial attempt).
+	// Uses exponential backoff with jitter between retries.
+	CheckoutAttempts int
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map

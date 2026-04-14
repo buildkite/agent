@@ -112,6 +112,7 @@ type BootstrapConfig struct {
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
+	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -246,6 +247,7 @@ var BootstrapCommand = cli.Command{
 		GitMirrorsSkipUpdateFlag,
 		GitSubmoduleCloneConfigFlag,
 		GitSkipFetchExistingCommitsFlag,
+		CheckoutAttemptsFlag,
 
 		cli.StringFlag{
 			Name:   "bin-path",
@@ -477,6 +479,7 @@ var BootstrapCommand = cli.Command{
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			Secrets:                      cfg.Secrets,
+			CheckoutAttempts:             cfg.CheckoutAttempts,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)

@@ -28,6 +28,7 @@ type AgentConfiguration struct {
 	GitSubmoduleCloneConfig         []string
 	SkipCheckout                    bool
 	GitSkipFetchExistingCommits     bool
+	CheckoutAttempts                int
 	AllowedRepositories             []*regexp.Regexp
 	AllowedPlugins                  []*regexp.Regexp
 	AllowedEnvironmentVariables     []*regexp.Regexp
