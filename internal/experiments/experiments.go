@@ -24,13 +24,13 @@ const (
 const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
-	DescendingSpawnPriority        = "descending-spawn-priority"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	PTYRaw                         = "pty-raw"
 	ZipPlugins                     = "zip-plugins"
 
 	// Promoted or removed experiments - un-export these to ensure no new code
 	// can depend on them.
+	descendingSpawnPriority    = "descending-spawn-priority"
 	allowArtifactPathTraversal = "allow-artifact-path-traversal"
 	ansiTimestamps             = "ansi-timestamps"
 	avoidRecursiveTrap         = "avoid-recursive-trap"
@@ -51,13 +51,13 @@ const (
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
-		DescendingSpawnPriority:        {},
 		InterpolationPrefersRuntimeEnv: {},
 		PTYRaw:                         {},
 		ZipPlugins:                     {},
 	}
 
 	Promoted = map[string]string{
+		descendingSpawnPriority:    "The `descending-spawn-priority` has been replaced with `--spawn-with-priority descending` as of agent v4",
 		ansiTimestamps:             standardPromotionMsg(ansiTimestamps, "v3.48.0"),
 		allowArtifactPathTraversal: "The allow-artifact-path-traversal escape-hatch experiment has been removed as of agent v4, because the path traversal behaviour was insecure",
 		avoidRecursiveTrap:         standardPromotionMsg(avoidRecursiveTrap, "v3.66.0"),
