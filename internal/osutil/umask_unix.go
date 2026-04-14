@@ -1,6 +1,6 @@
 //go:build unix
 
-package artifact
+package osutil
 
 import (
 	"os"
@@ -10,6 +10,6 @@ import (
 
 func init() {
 	// Can't read the current umask(2) without changing it.
-	umask = os.FileMode(unix.Umask(int(umask)))
-	unix.Umask(int(umask))
+	Umask = os.FileMode(unix.Umask(int(Umask)))
+	unix.Umask(int(Umask))
 }

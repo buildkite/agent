@@ -41,6 +41,7 @@ go_library(
         "//internal/agenthttp",
         "//internal/awslib",
         "//internal/experiments",
+        "//internal/job",
         "//internal/job/hook",
         "//internal/ptr",
         "//internal/shell",
