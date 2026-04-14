@@ -169,6 +169,7 @@ type AgentStartConfig struct {
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
 	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
+	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval           bool     `cli:"no-command-eval"`
@@ -534,6 +535,7 @@ var AgentStartCommand = cli.Command{
 		GitMirrorsSkipUpdateFlag,
 		GitSubmoduleCloneConfigFlag,
 		GitSkipFetchExistingCommitsFlag,
+		CheckoutAttemptsFlag,
 
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -1063,6 +1065,7 @@ var AgentStartCommand = cli.Command{
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,
 			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
+			CheckoutAttempts:                cfg.CheckoutAttempts,
 			SSHKeyscan:                      !cfg.NoSSHKeyscan,
 			CommandEval:                     !cfg.NoCommandEval,
 			PluginsEnabled:                  !cfg.NoPlugins,
