@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"github.com/buildkite/roko"
 )
 
-var retrableErrorSuffixes = []string{
+var retriableErrorSuffixes = []string{
 	syscall.ECONNREFUSED.Error(),
 	syscall.ECONNRESET.Error(),
 	syscall.ETIMEDOUT.Error(),
@@ -37,22 +38,16 @@ func IsRetryableStatus(r *Response) bool {
 // Looks at a bunch of connection related errors, and returns true if the error
 // matches one of them.
 func IsRetryableError(err error) bool {
-	if neterr, ok := err.(net.Error); ok {
-		if neterr.Temporary() {
+	var neterr net.Error
+	if errors.As(err, &neterr) {
+		if neterr.Timeout() {
 			return true
 		}
 	}
 
-	if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-		return true
-	}
-
-	if urlerr, ok := err.(*url.Error); ok {
+	var urlerr *url.Error
+	if errors.As(err, &urlerr) {
 		if strings.Contains(urlerr.Error(), "use of closed network connection") {
-			return true
-		}
-
-		if neturlerr, ok := urlerr.Err.(net.Error); ok && neturlerr.Timeout() {
 			return true
 		}
 	}
@@ -62,7 +57,7 @@ func IsRetryableError(err error) bool {
 	}
 
 	s := err.Error()
-	for _, suffix := range retrableErrorSuffixes {
+	for _, suffix := range retriableErrorSuffixes {
 		if strings.HasSuffix(s, suffix) {
 			return true
 		}
