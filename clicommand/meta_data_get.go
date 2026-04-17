@@ -80,9 +80,7 @@ var MetaDataGetCommand = cli.Command{
 		)
 		metaData, resp, err := roko.DoFunc2(ctx, r, func(r *roko.Retrier) (*api.MetaData, *api.Response, error) {
 			metaData, resp, err := client.GetMetaData(ctx, scope, id, cfg.Key)
-			// Don't bother retrying if the response was one of these statuses
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
 				return nil, resp, err
 			}
 			if err != nil {

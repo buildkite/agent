@@ -127,8 +127,8 @@ var StepUpdateCommand = cli.Command{
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			resp, err := client.StepUpdate(ctx, cfg.StepOrKey, update)
-			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)

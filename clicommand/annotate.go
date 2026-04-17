@@ -178,13 +178,9 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		// Attempt to create the annotation
 		resp, err := client.Annotate(ctx, cfg.Job, annotation)
 
-		// Don't bother retrying if the response was one of these statuses
-		if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
-			r.Break()
+		if api.BreakOnNonRetryable(r, resp, err) {
 			return err
 		}
-
-		// Show the unexpected error
 		if err != nil {
 			l.Warn("%s (%s)", err, r)
 			return err

@@ -70,13 +70,9 @@ func stop(ctx context.Context, cfg AgentStopConfig, l logger.Logger) error {
 			Force: cfg.Force,
 		})
 
-		// Don't bother retrying if the response was one of these statuses
-		if resp != nil && (resp.StatusCode == 422) {
-			r.Break()
+		if api.BreakOnNonRetryable(r, resp, err) {
 			return err
 		}
-
-		// Show the unexpected error
 		if err != nil {
 			l.Warn("%s (%s)", err, r)
 			return err

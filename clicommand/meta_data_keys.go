@@ -73,8 +73,8 @@ var MetaDataKeysCommand = cli.Command{
 		)
 		keys, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) ([]string, error) {
 			keys, resp, err := client.MetaDataKeys(ctx, scope, id)
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return keys, err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)

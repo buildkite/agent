@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"syscall"
+
+	"github.com/buildkite/roko"
 )
 
 var retrableErrorSuffixes = []string{
@@ -19,17 +21,17 @@ var retrableErrorSuffixes = []string{
 	io.EOF.Error(),
 }
 
-var retryableStatuses = map[int]bool{
-	http.StatusTooManyRequests:     true, // 429
-	http.StatusInternalServerError: true, // 500
-	http.StatusBadGateway:          true, // 502
-	http.StatusServiceUnavailable:  true, // 503
-	http.StatusGatewayTimeout:      true, // 504
-}
-
 // IsRetryableStatus returns true if the response's StatusCode is one that we should retry.
+// Success statuses (2xx) are not considered retryable — they are not errors.
 func IsRetryableStatus(r *Response) bool {
-	return retryableStatuses[r.StatusCode]
+	switch {
+	case r.StatusCode == http.StatusTooManyRequests:
+		return true
+	case r.StatusCode >= 500:
+		return true
+	default:
+		return false
+	}
 }
 
 // Looks at a bunch of connection related errors, and returns true if the error
@@ -66,5 +68,34 @@ func IsRetryableError(err error) bool {
 		}
 	}
 
+	return false
+}
+
+// BreakOnNonRetryable calls r.Break() if the error from an API call is not
+// worth retrying. An error is retryable if the response has a retryable status
+// code (429, 5xx) or if there was no response and the error is a retryable
+// network-level error (connection reset, timeout, etc.). All other errors
+// — including all non-429 4xx status codes — cause a break.
+//
+// This should be called inside roko retry callbacks after every API call.
+// If err is nil, this is a no-op.
+// BreakOnNonRetryable returns true if it called r.Break() (i.e. the error is
+// non-retryable). Callers can use this to avoid logging misleading retry
+// information when the retrier is about to give up.
+func BreakOnNonRetryable(r *roko.Retrier, resp *Response, err error) (broke bool) {
+	if err == nil {
+		return false
+	}
+	if resp != nil {
+		if !IsRetryableStatus(resp) {
+			r.Break()
+			return true
+		}
+		return false
+	}
+	if !IsRetryableError(err) {
+		r.Break()
+		return true
+	}
 	return false
 }

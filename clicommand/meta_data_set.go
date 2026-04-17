@@ -109,8 +109,8 @@ var MetaDataSetCommand = cli.Command{
 			roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			resp, err := client.SetMetaData(ctx, cfg.Job, metaData)
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)

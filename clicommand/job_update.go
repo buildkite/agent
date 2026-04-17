@@ -84,8 +84,8 @@ var JobUpdateCommand = cli.Command{
 			roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			_, resp, err := client.UpdateJob(ctx, cfg.Job, attrs)
-			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 422) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
