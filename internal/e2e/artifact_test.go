@@ -69,6 +69,21 @@ func TestArtifactUploadMany(t *testing.T) {
 	}
 }
 
+// Test that artifact upload with --glob-resolve-follow-symlinks follows symlinked directories.
+// Regression test for https://github.com/buildkite/agent/issues/3826
+func TestArtifactUploadFollowSymlinks(t *testing.T) {
+	ctx := t.Context()
+
+	tc := newTestCase(t, "artifact_upload_symlink_glob.yaml")
+
+	tc.startAgent()
+	build := tc.triggerBuild()
+	state := tc.waitForBuild(ctx, build)
+	if got, want := state, "passed"; got != want {
+		t.Errorf("Build state = %q, want %q", got, want)
+	}
+}
+
 // Test that we can upload/downdload artifact using a custom Azure Blob storage
 // container.
 // Everything that gets uploaded here gets auto removed in 30 days.
