@@ -39,11 +39,9 @@ trigger_step() {
 YAML
 }
 
-block_step() {
-  local label="$1"
+wait_step() {
   cat <<YAML
   - wait
-  - block: "${label}"
 YAML
 }
 
@@ -56,15 +54,13 @@ edge_steps_yaml() {
 }
 
 output_steps_yaml() {
-  block_step "beta?"
+  wait_step
 
-  trigger_step \
-    "beta ${agent_version}" \
-    "agent-release-beta"
-
-  if [[ ! "$agent_version" =~ (beta|rc) ]] ; then
-    block_step "stable?"
-
+  if [[ "$agent_version" =~ (beta|rc) ]] ; then
+    trigger_step \
+      "beta ${agent_version}" \
+      "agent-release-beta"
+  else
     trigger_step \
       "stable ${agent_version}" \
       "agent-release-stable"
