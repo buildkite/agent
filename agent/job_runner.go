@@ -195,6 +195,8 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			logUploadDurations.Observe(time.Since(startUpload).Seconds())
 			logChunksUploaded.Inc()
 			logBytesUploaded.Add(float64(chunk.Size))
+			logCompressedBytesUploaded.Add(float64(chunk.CompressedBytes))
+			logChunkSizeBytes.Observe(float64(chunk.Size))
 			return nil
 		},
 		LogStreamerConfig{

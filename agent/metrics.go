@@ -102,4 +102,17 @@ var (
 		// Log chunk upload can be retried for a while.
 		Buckets: prometheus.ExponentialBuckets(0.015625, 2, 16),
 	})
+	logCompressedBytesUploaded = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: metricsNamespace,
+		Subsystem: "logs",
+		Name:      "compressed_bytes_uploaded_total",
+		Help:      "Count of compressed log bytes sent over the wire",
+	})
+	logChunkSizeBytes = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: metricsNamespace,
+		Subsystem: "logs",
+		Name:      "chunk_size_bytes",
+		Help:      "Distribution of log chunk sizes in bytes at upload time",
+		Buckets:   prometheus.ExponentialBuckets(256, 4, 10), // 256B to ~64MB
+	})
 )
