@@ -41,6 +41,7 @@ require (
 	github.com/google/go-querystring v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/gowebpki/jcs v1.0.1
+	github.com/klauspost/compress v1.18.5
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/oleiade/reflections v1.1.0
 	github.com/opentracing/opentracing-go v1.2.0
@@ -149,7 +150,6 @@ require (
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
