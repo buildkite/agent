@@ -1,6 +1,4 @@
 version: 1
-repository:
-  enabled: false
 backends:
   darwin-vz:
     memory_mib: 12288
