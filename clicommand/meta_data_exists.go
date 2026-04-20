@@ -74,8 +74,8 @@ var MetaDataExistsCommand = cli.Command{
 		)
 		exists, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.MetaDataExists, error) {
 			exists, resp, err := client.ExistsMetaData(ctx, scope, id, cfg.Key)
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return nil, err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)

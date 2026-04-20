@@ -98,12 +98,9 @@ func cancelStep(ctx context.Context, cfg StepCancelConfig, l logger.Logger) erro
 		// Attempt to cancel the step
 		stepCancelResponse, resp, err := client.StepCancel(ctx, cfg.StepOrKey, cancel)
 
-		// Don't bother retrying if the response was one of these statuses
-		if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
-			r.Break()
+		if api.BreakOnNonRetryable(r, resp, err) {
+			return err
 		}
-
-		// Show the unexpected error
 		if err != nil {
 			l.Warn("%s (%s)", err, r)
 			return err

@@ -130,22 +130,15 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 			},
 		)
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
-
+			// JSON marshaling errors are permanent — the pipeline data itself is bad.
 			if jsonerr := new(json.MarshalerError); errors.As(err, &jsonerr) {
-				l.Error("Unrecoverable error, skipping retries")
 				r.Break()
 				return nil, err
 			}
 
-			// 422 responses will always fail no need to retry
-			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
-				l.Error("Unrecoverable error, skipping retries")
-				r.Break()
-				return nil, err
+			if !api.BreakOnNonRetryable(r, resp, err) {
+				l.Warn("%s (%s)", err, r)
 			}
-
-			// 529 or other non 2xx
 			return nil, err
 		}
 
