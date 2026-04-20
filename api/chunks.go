@@ -2,9 +2,10 @@ package api
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"fmt"
+
+	"github.com/klauspost/compress/gzip"
 )
 
 // Chunk represents a Buildkite Agent API Chunk
