@@ -1,4 +1,0 @@
-[tools]
-go = "1.25.9"
-golangci-lint = "2.9.0"
-ruby = "3.4.9"
