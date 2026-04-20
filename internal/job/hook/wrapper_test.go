@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
@@ -214,6 +215,22 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 		hook.WithOS("linux"),
 	)
 	assert.Error(t, err, `scriptwrapper tried to wrap hook with invalid shebang: "#!/usr/bin/env ruby"`)
+}
+
+func TestWrapperUsesOverrideSelfForExecutorTester(t *testing.T) {
+	t.Setenv("BUILDKITE_JOB_ID", "1111-1111-1111-1111")
+	t.Setenv("BUILDKITE_OVERRIDE_SELF", "mock-buildkite-agent")
+
+	hookFilename := writeTestHook(t, "hook", "#!/bin/sh\ntrue\n")
+	wrapper, err := hook.NewWrapper(
+		hook.WithPath(hookFilename),
+		hook.WithOS("linux"),
+	)
+	assert.NilError(t, err, "failed to create hook wrapper: %v", err)
+
+	wrapperContents, err := os.ReadFile(wrapper.Path())
+	assert.NilError(t, err, "failed to read wrapper %q: %v", wrapper.Path(), err)
+	assert.Assert(t, strings.Contains(string(wrapperContents), `"mock-buildkite-agent" env dump`))
 }
 
 func writeTestHook(t *testing.T, fileName, content string) string {

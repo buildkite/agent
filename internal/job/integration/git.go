@@ -2,18 +2,46 @@ package integration
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type gitRepository struct {
 	Path string
 }
 
+var testGitRepositoryTemplate = sync.OnceValues(func() (string, error) {
+	repo, err := createSeedTestGitRepository()
+	if err != nil {
+		return "", err
+	}
+	return repo.Path, nil
+})
+
 func createTestGitRespository() (*gitRepository, error) {
+	templatePath, err := testGitRepositoryTemplate()
+	if err != nil {
+		return nil, err
+	}
+
+	repoPath, err := newGitRepositoryPath()
+	if err != nil {
+		return nil, err
+	}
+	if err := copyDirectory(templatePath, repoPath); err != nil {
+		_ = os.RemoveAll(repoPath)
+		return nil, fmt.Errorf("copying git repo template: %w", err)
+	}
+
+	return &gitRepository{Path: repoPath}, nil
+}
+
+func createSeedTestGitRepository() (*gitRepository, error) {
 	repo, err := newGitRepository()
 	if err != nil {
 		return nil, err
@@ -95,9 +123,25 @@ func createTestGitRespository() (*gitRepository, error) {
 }
 
 func newGitRepository() (*gitRepository, error) {
+	tempDir, err := newGitRepositoryPath()
+	if err != nil {
+		return nil, err
+	}
+
+	gr := &gitRepository{Path: tempDir}
+	gitErr := gr.ExecuteAll([][]string{
+		{"init"},
+		{"config", "user.email", "you@example.com"},
+		{"config", "user.name", "Your Name"},
+	})
+
+	return gr, gitErr
+}
+
+func newGitRepositoryPath() (string, error) {
 	tempDirRaw, err := os.MkdirTemp("", "git-repo")
 	if err != nil {
-		return nil, fmt.Errorf("Error creating temp dir: %w", err)
+		return "", fmt.Errorf("Error creating temp dir: %w", err)
 	}
 
 	// io.TempDir on Windows tilde-shortens (8.3 style?) long filenames in the path.
@@ -118,17 +162,68 @@ func newGitRepository() (*gitRepository, error) {
 	// EvalSymlinks seems best? Maybe there's a better way?
 	tempDir, err := filepath.EvalSymlinks(tempDirRaw)
 	if err != nil {
-		return nil, fmt.Errorf("EvalSymlinks for temp dir: %w", err)
+		return "", fmt.Errorf("EvalSymlinks for temp dir: %w", err)
+	}
+	return tempDir, nil
+}
+
+func copyDirectory(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if relPath == "." {
+			return nil
+		}
+
+		targetPath := filepath.Join(dst, relPath)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+
+		switch mode := info.Mode(); {
+		case mode.IsDir():
+			return os.MkdirAll(targetPath, mode.Perm())
+		case mode.IsRegular():
+			return copyFile(path, targetPath, mode)
+		case mode&os.ModeSymlink != 0:
+			linkTarget, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(linkTarget, targetPath)
+		default:
+			return fmt.Errorf("unsupported file mode %s for %s", mode, path)
+		}
+	})
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	reader, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	writer, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode.Perm())
+	if err != nil {
+		return err
 	}
 
-	gr := &gitRepository{Path: tempDir}
-	gitErr := gr.ExecuteAll([][]string{
-		{"init"},
-		{"config", "user.email", "you@example.com"},
-		{"config", "user.name", "Your Name"},
-	})
-
-	return gr, gitErr
+	if _, err := io.Copy(writer, reader); err != nil {
+		writer.Close()
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+	return os.Chmod(dst, mode.Perm())
 }
 
 func (gr *gitRepository) Add(path string) error {

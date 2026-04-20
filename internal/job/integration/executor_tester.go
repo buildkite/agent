@@ -42,10 +42,11 @@ type ExecutorTester struct {
 	Repo          *gitRepository
 	Output        string
 
-	cmd      *exec.Cmd
-	cmdLock  sync.Mutex
-	hookMock *bintest.Mock
-	mocks    []*bintest.Mock
+	pendingLocalHooks bool
+	cmd               *exec.Cmd
+	cmdLock           sync.Mutex
+	hookMock          *bintest.Mock
+	mocks             []*bintest.Mock
 }
 
 func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
@@ -239,19 +240,30 @@ func (e *ExecutorTester) ExpectLocalHook(name string) *bintest.Expectation {
 		panic(err)
 	}
 
-	hookPath, err := e.writeHookScript(e.hookMock, name, hooksDir, "local", name)
+	_, err := e.writeHookScript(e.hookMock, name, hooksDir, "local", name)
 	if err != nil {
 		panic(err)
 	}
 
-	if err = e.Repo.Add(hookPath); err != nil {
-		panic(err)
-	}
-	if err = e.Repo.Commit("Added local hook file %s", name); err != nil {
-		panic(err)
-	}
+	e.pendingLocalHooks = true
 
 	return e.hookMock.Expect("local", name)
+}
+
+func (e *ExecutorTester) flushPendingLocalHooks() error {
+	if !e.pendingLocalHooks {
+		return nil
+	}
+
+	if err := e.Repo.Add(filepath.Join(".buildkite", "hooks")); err != nil {
+		return fmt.Errorf("adding local hooks: %w", err)
+	}
+	if err := e.Repo.Commit("Added local hook files"); err != nil {
+		return fmt.Errorf("committing local hooks: %w", err)
+	}
+
+	e.pendingLocalHooks = false
+	return nil
 }
 
 // ExpectGlobalHook creates a mock object and a script in the global buildkite hooks dir
@@ -268,6 +280,10 @@ func (e *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
 // Run the bootstrap and return any errors
 func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 	t.Helper()
+
+	if err := e.flushPendingLocalHooks(); err != nil {
+		return err
+	}
 
 	// Mock out the meta-data calls to the agent after checkout
 	if !e.HasMock("buildkite-agent") {
