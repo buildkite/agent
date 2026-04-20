@@ -51,7 +51,9 @@ func TestANSIParser(t *testing.T) {
 
 	for _, test := range tests {
 		var p ansiParser
-		p.Write([]byte(test.input))
+		if _, err := p.Write([]byte(test.input)); err != nil {
+			t.Fatalf("p.Write(%q) = %v", test.input, err)
+		}
 		if got := p.insideCode(); got != test.want {
 			t.Errorf("after p.feed(%q...): p.insideCode() = %t, want %t", test.input, got, test.want)
 		}
@@ -66,6 +68,8 @@ func BenchmarkANSIParser(b *testing.B) {
 
 	for b.Loop() {
 		var p ansiParser
-		p.Write(npm)
+		if _, err := p.Write(npm); err != nil {
+			b.Fatalf("p.Write(npm) = %v", err)
+		}
 	}
 }

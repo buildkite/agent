@@ -86,7 +86,7 @@ var MetaDataKeysCommand = cli.Command{
 		}
 
 		for _, key := range keys {
-			fmt.Fprintf(c.App.Writer, "%s\n", key)
+			_, _ = fmt.Fprintf(c.App.Writer, "%s\n", key)
 		}
 
 		return nil

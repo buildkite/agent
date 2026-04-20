@@ -18,7 +18,7 @@ func newArtifactTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
 		case "/builds/buildid/artifacts/search?query=foo.%2A&state=finished":
-			io.WriteString(rw, `[{"path": "foo.txt", "sha1sum": "theshastring", "sha256sum": "thesha256string"}]`)
+			_, _ = io.WriteString(rw, `[{"path": "foo.txt", "sha1sum": "theshastring", "sha256sum": "thesha256string"}]`)
 		default:
 			t.Errorf("unexpected HTTP request: %s %v", req.Method, req.URL.RequestURI())
 		}
@@ -44,7 +44,9 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintShaSum(ctx, cfg, l, stdout)
+	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
+		t.Fatalf("searchAndPrintShaSum() error = %v", err)
+	}
 
 	assert.Equal(t, "theshastring\n", stdout.String())
 
@@ -72,7 +74,9 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintShaSum(ctx, cfg, l, stdout)
+	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
+		t.Fatalf("searchAndPrintShaSum() error = %v", err)
+	}
 
 	assert.Equal(t, "thesha256string\n", stdout.String())
 

@@ -275,7 +275,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 			// If the job acquisition was rejected, we can exit with an error
 			// so that supervisor knows that the job was not acquired due to the job being rejected.
 			if errors.Is(err, core.ErrJobAcquisitionRejected) {
-				return fmt.Errorf("Failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
+				return fmt.Errorf("failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
 			}
 
 			// If the job itself exited with nonzero code, then we want to exit
@@ -532,17 +532,17 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 		KubernetesContainerStartTimeout: a.agentConfiguration.KubernetesContainerStartTimeout,
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to initialize job: %w", err)
+		return fmt.Errorf("failed to initialize job: %w", err)
 	}
 	if !a.jobRunner.CompareAndSwap(nil, jr) {
-		return fmt.Errorf("Agent worker already has a job running")
+		return fmt.Errorf("agent worker already has a job running")
 	}
 	// No more job, no more runner.
 	defer a.jobRunner.Store(nil)
 
 	// Start running the job
 	if err := jr.Run(ctx, ignoreAgentInDispatches); err != nil {
-		return fmt.Errorf("Failed to run job: %w", err)
+		return fmt.Errorf("failed to run job: %w", err)
 	}
 
 	return nil
@@ -562,12 +562,12 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 
 		if a.stats.lastHeartbeatError != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "ERROR: last heartbeat failed: %v. last successful was %v ago", a.stats.lastHeartbeatError, time.Since(a.stats.lastHeartbeat))
+			_, _ = fmt.Fprintf(w, "ERROR: last heartbeat failed: %v. last successful was %v ago", a.stats.lastHeartbeatError, time.Since(a.stats.lastHeartbeat))
 		} else {
 			if a.stats.lastHeartbeat.IsZero() {
-				fmt.Fprintf(w, "OK: no heartbeat yet")
+				_, _ = fmt.Fprintf(w, "OK: no heartbeat yet")
 			} else {
-				fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat))
+				_, _ = fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat))
 			}
 		}
 	}
@@ -575,12 +575,12 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 
 // Internal error values that should not escape to the user.
 var (
-	// internalStop is used when stopping.
-	internalStop = errors.New("stop")
+	// errInternalStop is used when stopping.
+	errInternalStop = errors.New("stop")
 
-	// internalBreak is used to stop an inner loop but continue
+	// errInternalBreak is used to stop an inner loop but continue
 	// an outer loop.
-	internalBreak = errors.New("break")
+	errInternalBreak = errors.New("break")
 )
 
 const (

@@ -101,9 +101,9 @@ var GitCredentialsHelperCommand = cli.Command{
 			return handleAuthError(c, l, fmt.Errorf("failed to get github app credentials: %w", err))
 		}
 
-		fmt.Fprintln(c.App.Writer, "username=token")
-		fmt.Fprintln(c.App.Writer, "password="+tok)
-		fmt.Fprintln(c.App.Writer, "")
+		_, _ = fmt.Fprintln(c.App.Writer, "username=token")
+		_, _ = fmt.Fprintln(c.App.Writer, "password="+tok)
+		_, _ = fmt.Fprintln(c.App.Writer, "")
 
 		l.Debug("Authentication successful!")
 
@@ -117,9 +117,9 @@ var GitCredentialsHelperCommand = cli.Command{
 // this function always returns a cli.ExitError
 func handleAuthError(c *cli.Context, l logger.Logger, err error) error {
 	l.Error("Error: %v. Authentication will proceed, but will fail.", err)
-	fmt.Fprintln(c.App.Writer, "username=fail")
-	fmt.Fprintln(c.App.Writer, "password=fail")
-	fmt.Fprintln(c.App.Writer, "")
+	_, _ = fmt.Fprintln(c.App.Writer, "username=fail")
+	_, _ = fmt.Fprintln(c.App.Writer, "password=fail")
+	_, _ = fmt.Fprintln(c.App.Writer, "")
 
 	return cli.NewExitError("", 1)
 }

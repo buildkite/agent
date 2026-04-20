@@ -218,11 +218,11 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 
 	// Make sure we're only outputting a line one at a time
 	mutex.Lock()
-	fmt.Fprint(l.Writer, line)
+	_, _ = fmt.Fprint(l.Writer, line)
 	if len(fields) > 0 {
-		fmt.Fprintf(l.Writer, " %s", strings.Join(fieldStrs, " "))
+		_, _ = fmt.Fprintf(l.Writer, " %s", strings.Join(fieldStrs, " "))
 	}
-	fmt.Fprint(l.Writer, "\n")
+	_, _ = fmt.Fprint(l.Writer, "\n")
 	mutex.Unlock()
 }
 
@@ -265,7 +265,7 @@ func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 
 	// Make sure we're only outputting a line one at a time
 	mutex.Lock()
-	fmt.Fprintf(p.Writer, "{%s}\n", strings.TrimSuffix(b.String(), ","))
+	_, _ = fmt.Fprintf(p.Writer, "{%s}\n", strings.TrimSuffix(b.String(), ","))
 	mutex.Unlock()
 }
 

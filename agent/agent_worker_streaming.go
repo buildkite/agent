@@ -88,7 +88,7 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 		}
 
 		err := state.startStream(ctx, streamCtx)
-		if err == internalStop {
+		if err == errInternalStop {
 			return nil
 		}
 		if err != nil {
@@ -150,7 +150,7 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 			// sent!
 		case <-a.stop:
 			a.logger.Debug("[runStreamingPingLoop] Stopping due to agent stop")
-			return internalStop
+			return errInternalStop
 		case <-ctx.Done():
 			a.logger.Debug("[runStreamingPingLoop] Stopping due to context cancel")
 			return ctx.Err()
@@ -164,11 +164,11 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 	a.logger.Debug("[runStreamingPingLoop] Waiting for a message...")
 	for msg, streamErr := range stream {
 		err := a.handle(ctx, msg, streamErr)
-		if err == internalBreak {
+		if err == errInternalBreak {
 			break
 		}
-		if err == internalStop {
-			return internalStop
+		if err == errInternalStop {
+			return errInternalStop
 		}
 		if err != nil {
 			return err
@@ -194,7 +194,7 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 		// (The connection timed out, which we want to happen every so often).
 		if connect.CodeOf(streamErr) == connect.CodeDeadlineExceeded {
 			a.logger.Debug("[runStreamingPingLoop] Breaking stream loop to reconnect following deadline-exceeded")
-			return internalBreak
+			return errInternalBreak
 		}
 		// It's some other error. Go unhealthy, which unblocks the ping loop.
 		a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
@@ -244,7 +244,7 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 		// sent!
 	case <-a.stop:
 		a.logger.Debug("[runStreamingPingLoop] Stopping due to agent stop")
-		return internalStop
+		return errInternalStop
 	case <-ctx.Done():
 		a.logger.Debug("[runStreamingPingLoop] Stopping due to context cancel")
 		return ctx.Err()
@@ -255,12 +255,12 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 	if amsg.action == "disconnect" {
 		a.logger.Debug("[runStreamingPingLoop] Stopping due to disconnect action")
 		a.internalStop()
-		return internalStop
+		return errInternalStop
 	}
 
 	if amsg.unhealthy {
 		a.logger.Debug("[runStreamingPingLoop] Breaking stream loop to reconnect because the stream is unhealthy")
-		return internalBreak
+		return errInternalBreak
 	}
 	// Stream is healthy, reset the retry counter
 	a.attempts = 0

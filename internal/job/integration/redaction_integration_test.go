@@ -20,7 +20,7 @@ func TestRedactorRedactsAgentToken(t *testing.T) {
 	defer tester.Close()
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		_, _ = fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
 		c.Exit(0)
 	})
 
@@ -44,7 +44,7 @@ func TestRedactorDoesNotRedactAgentToken_WhenNotInRedactedVars(t *testing.T) {
 	defer tester.Close()
 
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-		fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		_, _ = fmt.Fprintf(c.Stderr, "The agent token is: %s\n", c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
 		c.Exit(0)
 	})
 
@@ -142,7 +142,7 @@ func redactionTestCommandHook(t *testing.T, secret string) func(c *bintest.Call)
 			return
 		}
 
-		fmt.Fprintf(c.Stderr, "The secret is: %s\n", secret)
+		_, _ = fmt.Fprintf(c.Stderr, "The secret is: %s\n", secret)
 		time.Sleep(time.Second) // let the log line be written before we add it to the redactor
 
 		_, err = client.RedactionCreate(mainCtx, secret)
@@ -152,7 +152,7 @@ func redactionTestCommandHook(t *testing.T, secret string) func(c *bintest.Call)
 			return
 		}
 
-		fmt.Fprintf(c.Stderr, "There should be a redacted here: %s\n", secret)
+		_, _ = fmt.Fprintf(c.Stderr, "There should be a redacted here: %s\n", secret)
 		c.Exit(0)
 	}
 }

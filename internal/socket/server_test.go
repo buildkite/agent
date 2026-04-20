@@ -31,9 +31,9 @@ func (yesNoServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.URL.Path {
 	case "/yes":
-		w.Write([]byte("Yes!\n"))
+		_, _ = w.Write([]byte("Yes!\n"))
 	case "/no":
-		w.Write([]byte("No.\n"))
+		_, _ = w.Write([]byte("No.\n"))
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
@@ -72,7 +72,9 @@ func TestServerStartStop(t *testing.T) {
 		t.Fatalf("socket test connection: %v", err)
 	}
 
-	test.Close()
+	if err := test.Close(); err != nil {
+		t.Fatalf("test.Close() = %v", err)
+	}
 
 	if err := svr.Close(); err != nil {
 		t.Fatalf("svr.Close() = %v", err)
@@ -100,7 +102,11 @@ func TestServerHandler(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("svr.Start() = %v", err)
 	}
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	cli := &http.Client{
 		Transport: &http.Transport{
@@ -152,7 +158,7 @@ func TestServerHandler(t *testing.T) {
 			if err != nil {
 				t.Fatalf("cli.Do(req) = error %v", err)
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if got, want := resp.StatusCode, test.wantStatus; got != want {
 				t.Errorf("resp.Status = %v, want %v", got, want)
 			}

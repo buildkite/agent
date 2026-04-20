@@ -122,7 +122,11 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
-	defer submoduleRepo.Close()
+	defer func() {
+		if err := submoduleRepo.CloseErr(); err != nil {
+			t.Errorf("submoduleRepo.Close() = %v", err)
+		}
+	}()
 
 	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
@@ -969,9 +973,9 @@ func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		counter := atomic.AddInt32(&checkoutCounter, 1)
-		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
+		_, _ = fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
 		if counter == 1 {
-			fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
+			_, _ = fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
 			c.Exit(1)
 		} else {
 			c.Exit(0)

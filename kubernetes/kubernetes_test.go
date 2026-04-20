@@ -269,12 +269,12 @@ func TestTerminateAfterStart(t *testing.T) {
 
 func newRunner(t *testing.T, clientCount int) *Runner {
 	tempDir, err := os.MkdirTemp("", t.Name())
-	if err := err; err != nil {
+	if err != nil {
 		t.Errorf("err error = %v", err)
 	}
 	socketPath := filepath.Join(tempDir, "bk.sock")
 	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 	runner := NewRunner(logger.Discard, RunnerConfig{
 		SocketPath:         socketPath,
@@ -283,8 +283,16 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 		ClientLostTimeout:  2 * time.Second,
 	})
 	runnerCtx, cancelRunner := context.WithCancel(context.Background())
-	go runner.Run(runnerCtx)
-	t.Cleanup(cancelRunner)
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- runner.Run(runnerCtx)
+	}()
+	t.Cleanup(func() {
+		cancelRunner()
+		if err := <-runErrCh; err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("runner.Run(runnerCtx) = %v", err)
+		}
+	})
 
 	// wait for runner to listen
 	timeout := time.After(10 * time.Second)

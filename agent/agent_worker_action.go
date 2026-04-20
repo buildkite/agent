@@ -214,7 +214,7 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
-		return fmt.Errorf("Failed to accept job: %w", err)
+		return fmt.Errorf("failed to accept job: %w", err)
 	}
 
 	// If we're disconnecting-after-job, signal back to Buildkite that we're not

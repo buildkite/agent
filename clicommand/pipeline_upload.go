@@ -211,7 +211,7 @@ var PipelineUploadCommand = cli.Command{
 				if err != nil {
 					return fmt.Errorf("failed to read file: %w", err)
 				}
-				defer file.Close()
+				defer func() { _ = file.Close() }()
 				inputs = append(inputs, input{file, filepath.Base(fn)})
 			}
 
@@ -247,10 +247,10 @@ var PipelineUploadCommand = cli.Command{
 			// If more than 1 of the config files exist, throw an
 			// error. There can only be one!!
 			if len(exists) > 1 {
-				return fmt.Errorf("found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
+				return fmt.Errorf("found multiple configuration files: %s; please keep only 1 configuration file present", strings.Join(exists, ", "))
 			}
 			if len(exists) == 0 {
-				return fmt.Errorf("could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
+				return fmt.Errorf("could not find a default pipeline configuration file; see `buildkite-agent pipeline upload --help` for more information")
 			}
 
 			found := exists[0]
@@ -262,7 +262,7 @@ var PipelineUploadCommand = cli.Command{
 			if err != nil {
 				return fmt.Errorf("failed to read file %q: %w", found, err)
 			}
-			defer file.Close()
+			defer func() { _ = file.Close() }()
 			inputs = []input{{file, filepath.Base(found)}}
 		}
 
@@ -409,12 +409,12 @@ var PipelineUploadCommand = cli.Command{
 
 				// Check we have a job id set if not in dry run
 				if cfg.Job == "" {
-					return errors.New("missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
+					return errors.New("missing job parameter; this is usually set in the environment for a Buildkite job via BUILDKITE_JOB_ID")
 				}
 
 				// Check we have an agent access token if not in dry run
 				if cfg.AgentAccessToken == "" {
-					return errors.New("missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
+					return errors.New("missing agent-access-token parameter; this is usually set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN")
 				}
 
 				uploader := &agent.PipelineUploader{
@@ -464,7 +464,7 @@ func allEnvVars(o any, f func(p env.Pair)) {
 	switch x := o.(type) {
 	case *pipeline.Pipeline:
 		// First iterate through all pipeline env vars.
-		x.Env.Range(func(k, v string) error {
+		_ = x.Env.Range(func(k, v string) error {
 			f(env.Pair{Name: k, Value: v})
 			return nil
 		})

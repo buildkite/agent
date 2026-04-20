@@ -240,7 +240,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 		if root != nil {
 			e.checkoutRoot = root
-			runtime.AddCleanup(e, func(r *os.Root) { r.Close() }, root)
+			runtime.AddCleanup(e, func(r *os.Root) { _ = r.Close() }, root)
 		}
 	}
 
@@ -510,7 +510,11 @@ func logMissingHookInfo(l shell.Logger, hookName, wrapperPath string) {
 }
 
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
-	defer e.redactors.Flush()
+	defer func() {
+		if err := e.redactors.Flush(); err != nil {
+			e.shell.Errorf("Error flushing redactors: %v", err)
+		}
+	}()
 
 	script, err := hook.NewWrapper(hook.WithPath(hookCfg.Path))
 	if err != nil {
@@ -570,7 +574,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
 				Code: exitCode,
-				Err:  fmt.Errorf("The %s hook exited with status %d", hookName, exitCode),
+				Err:  fmt.Errorf("the %s hook exited with status %d", hookName, exitCode),
 			}
 		}
 
@@ -607,7 +611,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 			break
 		default:
 			// ...because something else happened, report it and stop the job
-			return fmt.Errorf("Failed to get environment: %w", err)
+			return fmt.Errorf("failed to get environment: %w", err)
 		}
 	} else {
 		// Hook exited successfully (and not early!) We have an environment and
@@ -812,7 +816,7 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	if !localHooksEnabled {
-		return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
+		return fmt.Errorf("refusing to run %s, local hooks are disabled", localHookPath)
 	}
 
 	return e.executeHook(ctx, HookConfig{
@@ -868,7 +872,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// so that the environment will have a checkout path to work with
 	if _, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"); !exists {
 		if e.BuildPath == "" {
-			return fmt.Errorf("Must set either a BUILDKITE_BUILD_PATH or a BUILDKITE_BUILD_CHECKOUT_PATH")
+			return fmt.Errorf("must set either a BUILDKITE_BUILD_PATH or a BUILDKITE_BUILD_CHECKOUT_PATH")
 		}
 		e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
 			filepath.Join(e.BuildPath, dirForAgentName(e.AgentName), e.OrganizationSlug, e.PipelineSlug))
@@ -1145,7 +1149,11 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (e *Executor) defaultCommandPhase(ctx context.Context) error {
-	defer e.redactors.Flush()
+	defer func() {
+		if err := e.redactors.Flush(); err != nil {
+			e.shell.Errorf("Error flushing redactors: %v", err)
+		}
+	}()
 
 	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
@@ -1158,7 +1166,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(e.Command) == "" {
-		return fmt.Errorf("The command phase has no `command` to execute. Provide a `command` field in your step configuration, or define a `command` hook in a step plug-in, your repository `.buildkite/hooks`, or agent `hooks-path`.")
+		return fmt.Errorf("the command phase has no `command` to execute; provide a `command` field in your step configuration or define a `command` hook in a step plugin, your repository `.buildkite/hooks`, or the agent `hooks-path`")
 	}
 
 	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
@@ -1171,14 +1179,14 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	// check that the agent is allowed to eval commands.
 	if !commandIsScript && !e.CommandEval {
 		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
+		return fmt.Errorf("this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
 	}
 
 	// Also make sure that the script we've resolved is definitely within this
 	// repository checkout and isn't elsewhere on the system.
 	if commandIsScript && !e.CommandEval && !strings.HasPrefix(pathToCommand, e.shell.Getwd()+string(os.PathSeparator)) {
 		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
+		return fmt.Errorf("this agent is only allowed to run scripts within your repository; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
 	}
 
 	var cmdToExec string
@@ -1186,11 +1194,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	// The interpreter gets parsed based on the operating system
 	interpreter, err := shellwords.Split(e.Shell)
 	if err != nil {
-		return fmt.Errorf("Failed to split shell (%q) into tokens: %w", e.Shell, err)
+		return fmt.Errorf("failed to split shell (%q) into tokens: %w", e.Shell, err)
 	}
 
 	if len(interpreter) == 0 {
-		return fmt.Errorf("No shell set for job")
+		return fmt.Errorf("no shell set for job")
 	}
 
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
@@ -1200,7 +1208,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		defer os.Remove(batchScript)
+		defer func() { _ = os.Remove(batchScript) }()
 
 		e.shell.Headerf("Running batch script")
 		if e.Debug {
@@ -1314,7 +1322,6 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer scriptFile.Close()
 
 	scriptContents := []string{"@echo off"}
 
@@ -1331,6 +1338,11 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 
 	_, err = io.WriteString(scriptFile, strings.Join(scriptContents, "\n"))
 	if err != nil {
+		_ = scriptFile.Close()
+		return "", err
+	}
+
+	if err := scriptFile.Close(); err != nil {
 		return "", err
 	}
 

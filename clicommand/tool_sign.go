@@ -267,7 +267,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		input = file
 		filename = cfg.PipelineFile

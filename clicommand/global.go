@@ -444,7 +444,7 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 		// split comma delimited env
 		if envVars := f.String(); envVars != "" {
 			for env := range strings.SplitSeq(envVars, ",") {
-				os.Unsetenv(env)
+				_ = os.Unsetenv(env)
 			}
 		}
 	}
@@ -518,7 +518,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 
 	warnings, err := loader.Load()
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
+		_, _ = fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
 		os.Exit(1)
 	}
 
