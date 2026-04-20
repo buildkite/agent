@@ -16,7 +16,7 @@ func StartPTY(c *exec.Cmd, raw bool) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = tty.Close() }()
+	defer tty.Close() //nolint:errcheck // Best-effort cleanup.
 
 	if err := pty.Setsize(ptmx, &pty.Winsize{
 		Rows: 100,
@@ -24,13 +24,13 @@ func StartPTY(c *exec.Cmd, raw bool) (*os.File, error) {
 		X:    0, // unused
 		Y:    0, // unused
 	}); err != nil {
-		_ = ptmx.Close()
+		ptmx.Close() //nolint:errcheck // Best-effort cleanup.
 		return nil, err
 	}
 
 	if raw {
 		if _, err := term.MakeRaw(int(ptmx.Fd())); err != nil {
-			_ = ptmx.Close()
+			ptmx.Close() //nolint:errcheck // Best-effort cleanup.
 			return nil, err
 		}
 	}
@@ -52,7 +52,7 @@ func StartPTY(c *exec.Cmd, raw bool) (*os.File, error) {
 	c.SysProcAttr.Setctty = true
 
 	if err := c.Start(); err != nil {
-		_ = ptmx.Close()
+		ptmx.Close() //nolint:errcheck // Best-effort cleanup.
 		return nil, err
 	}
 
