@@ -105,15 +105,14 @@ var MetaDataGetCommand = cli.Command{
 					cfg.Key,
 					cfg.Default,
 				)
-				_, _ = fmt.Fprint(c.App.Writer, cfg.Default)
+				_, _ = fmt.Fprintln(c.App.Writer, cfg.Default)
 				return nil
 			}
 
 			return fmt.Errorf("failed to get meta-data: %w", err)
 		}
 
-		// TODO: in the next agent magor version, we should terminate with a newline using fmt.FPrintln
-		_, err = fmt.Fprint(c.App.Writer, metaData.Value)
+		_, err = fmt.Fprintln(c.App.Writer, metaData.Value)
 		return err
 	},
 }
