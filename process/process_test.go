@@ -116,6 +116,46 @@ func TestProcessOutputPTY_PTYRawExperiment(t *testing.T) {
 	assertProcessDoesntExist(t, p)
 }
 
+func TestProcessOutputPTY_PTYRawExperimentWritesBeforeRawMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PTY not supported on windows")
+	}
+
+	ctx, _ := experiments.Enable(context.Background(), experiments.PTYRaw)
+
+	originalHook := processAfterPTYStartHookSwap(func() {
+		time.Sleep(50 * time.Millisecond)
+	})
+	t.Cleanup(func() {
+		processAfterPTYStartHookSwap(originalHook)
+	})
+
+	stdout := &bytes.Buffer{}
+	logger := logger.NewBuffer()
+	p := process.New(logger, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=output-slow-exit"},
+		PTY:    true,
+		Stdout: stdout,
+	})
+
+	if err := p.Run(ctx); err != nil {
+		t.Fatalf("p.Run() = %v", err)
+	}
+
+	if got, want := stdout.String(), "llamas1\nalpacas1\rllamas2\r\nalpacas2\n"; got != want {
+		t.Fatalf("stdout.String() = %q, want %q", got, want)
+	}
+
+	assertProcessDoesntExist(t, p)
+}
+
+func processAfterPTYStartHookSwap(next func()) func() {
+	prev := process.AfterPTYStartHookGet()
+	process.AfterPTYStartHookSet(next)
+	return prev
+}
+
 func TestProcessInput(t *testing.T) {
 	t.Parallel()
 
