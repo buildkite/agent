@@ -18,12 +18,15 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
-	"golang.org/x/term"
 )
 
 const (
 	termType = "xterm-256color"
 )
+
+// afterPTYStartHook lets tests force work to happen after the PTY helper
+// returns so they can verify raw-mode ordering around process startup.
+var afterPTYStartHook = func() {}
 
 type Signal int
 
@@ -174,21 +177,20 @@ func (p *Process) Run(ctx context.Context) error {
 		// Commands like tput expect a TERM value for a PTY
 		p.command.Env = append(p.command.Env, "TERM="+termType)
 
-		pty, err := StartPTY(p.command)
+		rawPTY := experiments.IsEnabled(ctx, experiments.PTYRaw)
+
+		pty, err := StartPTY(p.command, rawPTY)
 		if err != nil {
 			return fmt.Errorf("error starting pty: %w", err)
 		}
 
+		afterPTYStartHook()
+
 		// Make sure to close the pty at the end.
 		defer func() { _ = pty.Close() }()
 
-		if experiments.IsEnabled(ctx, experiments.PTYRaw) {
+		if rawPTY {
 			p.logger.Debug("[Process] Setting raw mode for PTY %s (fd:%d)", pty.Name(), pty.Fd())
-			// No need to capture/restore old state, because we close the PTY when we're done.
-			_, err = term.MakeRaw(int(pty.Fd()))
-			if err != nil {
-				return fmt.Errorf("error putting PTY into raw mode: %w", err)
-			}
 		}
 
 		p.mu.Lock()
