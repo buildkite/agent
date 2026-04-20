@@ -105,13 +105,6 @@ var (
 		EnvVar: "BUILDKITE_CONTAINER_ID",
 	}
 
-	KubernetesLogCollectionGracePeriodFlag = cli.DurationFlag{
-		Name:   "kubernetes-log-collection-grace-period",
-		Usage:  "Deprecated, do not use",
-		EnvVar: "BUILDKITE_KUBERNETES_LOG_COLLECTION_GRACE_PERIOD",
-		Value:  50 * time.Second,
-	}
-
 	NoMultipartArtifactUploadFlag = cli.BoolFlag{
 		Name:   "no-multipart-artifact-upload",
 		Usage:  "For Buildkite-hosted artifacts, disables the use of multipart uploads. Has no effect on uploads to other destinations such as custom cloud buckets (default: false)",
