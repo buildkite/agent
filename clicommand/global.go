@@ -7,7 +7,6 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/cliconfig"
@@ -99,13 +98,6 @@ var (
 			"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
 			"used to identify this container within the pod",
 		EnvVar: "BUILDKITE_CONTAINER_ID",
-	}
-
-	KubernetesLogCollectionGracePeriodFlag = cli.DurationFlag{
-		Name:   "kubernetes-log-collection-grace-period",
-		Usage:  "Deprecated, do not use",
-		EnvVar: "BUILDKITE_KUBERNETES_LOG_COLLECTION_GRACE_PERIOD",
-		Value:  50 * time.Second,
 	}
 
 	NoMultipartArtifactUploadFlag = cli.BoolFlag{
