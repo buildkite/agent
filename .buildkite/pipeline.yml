@@ -451,6 +451,7 @@ steps:
       - build-rpm-packages
       - check-code-committed
       - check-version-string
+      - e2e-tests
       - test-bk-cli
       - test-docker-amd64
       - test-docker-arm64
