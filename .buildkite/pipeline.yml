@@ -457,4 +457,4 @@ steps:
       - test-docker-arm64
       - test-windows
     command: ".buildkite/steps/upload-release-steps.sh"
-    if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable)$$/
+    if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable|v\d+)$$/
