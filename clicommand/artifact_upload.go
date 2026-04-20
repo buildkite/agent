@@ -83,9 +83,6 @@ type ArtifactUploadConfig struct {
 	GlobResolveFollowSymlinks bool   `cli:"glob-resolve-follow-symlinks"`
 	UploadSkipSymlinks        bool   `cli:"upload-skip-symlinks"`
 	NoMultipartUpload         bool   `cli:"no-multipart-artifact-upload"`
-
-	// deprecated
-	FollowSymlinks bool `cli:"follow-symlinks" deprecated-and-renamed-to:"GlobResolveFollowSymlinks"`
 }
 
 var ArtifactUploadCommand = cli.Command{
@@ -126,11 +123,6 @@ var ArtifactUploadCommand = cli.Command{
 			Usage:  "After the glob has been resolved to a list of files to upload, skip uploading those that are symlinks to files (default: false)",
 			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_SKIP_SYMLINKS",
 		},
-		cli.BoolFlag{ // Deprecated
-			Name:   "follow-symlinks",
-			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead (default: false)",
-			EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
-		},
 		NoMultipartArtifactUploadFlag,
 	}),
 	Action: func(c *cli.Context) error {
@@ -157,9 +149,7 @@ var ArtifactUploadCommand = cli.Command{
 			Literal:        cfg.Literal,
 			Delimiter:      cfg.Delimiter,
 
-			// If the deprecated flag was set to true, pretend its replacement was set to true too
-			// this works as long as the user only sets one of the two flags
-			GlobResolveFollowSymlinks: (cfg.GlobResolveFollowSymlinks || cfg.FollowSymlinks),
+			GlobResolveFollowSymlinks: cfg.GlobResolveFollowSymlinks,
 			UploadSkipSymlinks:        cfg.UploadSkipSymlinks,
 		})
 
