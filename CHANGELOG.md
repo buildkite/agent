@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v4.0.0-beta.1](https://github.com/buildkite/agent/tree/v4.0.0-beta.1) (2026-04-22)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.123.1...v4.0.0-beta.1)
+
+### Changed
+- The following experiments are now default behaviour (promoted):
+	- `normalised-upload-paths`
+	- `override-zero-exit-on-cancel`
+	- `resolve-commit-after-checkout`
+	- `propagate-agent-config-vars`
+- Remove `allow-artifact-path-traversal` experiment
+- Remove deprecated Docker support
+- `spawn-with-priority` is now a string, removing the `descending-spawn-priority` experiment [#3821](https://github.com/buildkite/agent/pull/3821) (@moskyb)
+- Newline after meta data get [#3835](https://github.com/buildkite/agent/pull/3835) (@moskyb)
+- Remove deprecated CLI flags [#3834](https://github.com/buildkite/agent/pull/3834) (@moskyb)
+- Remove deprecated plugin env vars [#3852](https://github.com/buildkite/agent/pull/3852) (@DrJosh9000)
+
 ## [v3.124.0](https://github.com/buildkite/agent/tree/v3.124.0) (2026-04-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.123.1...v3.124.0)
 
