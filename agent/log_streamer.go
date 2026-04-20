@@ -66,6 +66,30 @@ type LogStreamer struct {
 	// Counts workers that are still running
 	workerWG sync.WaitGroup
 
+	// Normally storing a context in a struct is a bad idea. It's explicitly
+	// called out in pkg.go.dev/context as something to avoid, because it can
+	// blur ownership and make it unclear which context should govern a given
+	// unit of work.
+	//
+	// Here the ownership boundary is explicit:
+	//
+	//   - workerCtx applies only to uploader worker lifetime
+	//   - it is independent of the job/run context passed to Start
+	//   - the job/run context controls normal timed flushing
+	//   - Stop controls final draining and worker shutdown
+	//
+	// The reason for separating those concerns is that the job context may be
+	// cancelled before cleanup runs. If uploader workers inherited that context,
+	// they could exit before Stop flushes pending chunks, which would risk
+	// dropped logs or deadlock while enqueueing final chunks.
+	//
+	// workerCtx therefore keeps uploader workers alive until Stop finishes
+	// draining the queue, even if the job context has already been cancelled.
+	workerCtx context.Context
+
+	// workerCancel cancels workerCtx after shutdown has completed.
+	workerCancel context.CancelFunc
+
 	// Only allow processing one at a time
 	processMutex sync.Mutex
 
@@ -89,12 +113,15 @@ func NewLogStreamer(
 	callback func(context.Context, *api.Chunk) error,
 	conf LogStreamerConfig,
 ) *LogStreamer {
+	workerCtx, workerCancel := context.WithCancel(context.Background())
 	return &LogStreamer{
-		logger:   agentLogger,
-		conf:     conf,
-		callback: callback,
-		queue:    make(chan *api.Chunk, 1024),
-		stopCh:   make(chan struct{}),
+		logger:       agentLogger,
+		conf:         conf,
+		callback:     callback,
+		queue:        make(chan *api.Chunk, 1024),
+		stopCh:       make(chan struct{}),
+		workerCtx:    workerCtx,
+		workerCancel: workerCancel,
 	}
 }
 
@@ -109,7 +136,7 @@ func (ls *LogStreamer) Start(ctx context.Context) error {
 	}
 
 	for i := range ls.conf.Concurrency {
-		ls.workerWG.Go(func() { ls.worker(ctx, i) })
+		ls.workerWG.Go(func() { ls.worker(ls.workerCtx, i) })
 	}
 
 	if ls.conf.MaxChunkAge > 0 {
@@ -176,6 +203,7 @@ func (ls *LogStreamer) Stop() {
 
 	ls.logger.Debug("[LogStreamer] Waiting for workers to shut down")
 	ls.workerWG.Wait()
+	ls.workerCancel()
 }
 
 // flushAllPending enqueues all pending data as chunks. Must be called with
