@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
 )
 
 func init() {

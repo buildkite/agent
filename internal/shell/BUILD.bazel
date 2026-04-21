@@ -15,9 +15,9 @@ go_library(
     deps = [
         "//env",
         "//internal/olfactor",
+        "//internal/process",
         "//internal/shellscript",
         "//logger",
-        "//process",
         "//tracetools",
         "@com_github_buildkite_shellwords//:shellwords",
         "@com_github_gofrs_flock//:flock",
