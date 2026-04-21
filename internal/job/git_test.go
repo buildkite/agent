@@ -202,7 +202,7 @@ func TestGitCheckout(t *testing.T) {
 		t.Fatalf(`gitCheckout(ctx, sh, "-f -q", "main") = %v`, err)
 	}
 
-	wantLog := [][]string{{absoluteGit, "checkout", "-f", "-q", "main"}}
+	wantLog := [][]string{{absoluteGit, "-c", "advice.detachedHead=false", "checkout", "-f", "-q", "main"}}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
 	}

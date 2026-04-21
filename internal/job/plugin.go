@@ -458,7 +458,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// Switch to the version if we need to
 	if p.Version != "" {
 		e.shell.Commentf("Checking out `%s`", p.Version)
-		if err = e.shell.Command("git", "checkout", "-f", p.Version).Run(ctx); err != nil {
+		if err = e.shell.Command("git", "-c", "advice.detachedHead=false", "checkout", "-f", p.Version).Run(ctx); err != nil {
 			return nil, err
 		}
 	}
