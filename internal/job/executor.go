@@ -628,6 +628,21 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 		}
 	}
 
+	// Prevent any changes to vars that are protected even within the job.
+	// This is a courtesy to hook/plugin authors that write a hook that mutates
+	// an env var only to find out that the change has no effect, or perhaps
+	// breaks the rest of the job.
+	var protected []string
+	for k := range changes.Diff.Keys {
+		if env.IsProtectedFromWithinJob(k) {
+			protected = append(protected, k)
+			changes.Diff.Remove(k)
+		}
+	}
+	if len(protected) > 0 {
+		e.shell.Commentf("Changes to some env vars were blocked; the affected vars are: %v", protected)
+	}
+
 	e.shell.Env.Apply(changes.Diff)
 	e.addOutputRedactors()
 

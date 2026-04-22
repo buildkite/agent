@@ -20,6 +20,7 @@ import (
 // To add a new config option that is mapped from an environment variable, add a
 // struct tag, then don't forget to add a corresponding CLI flag over in the
 // clicommand/bootstrap.go(BootstrapConfig) struct, otherwise it won't work.
+// Also check the protectedEnv map in env/protected.go.
 
 type ExecutorConfig struct {
 	// The command to run

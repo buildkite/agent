@@ -141,7 +141,9 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 func checkProtected(candidates []string) []string {
 	protected := make([]string, 0, len(candidates))
 	for _, c := range candidates {
-		if _, ok := env.ProtectedEnv[c]; ok {
+		// The Job API is only accessible from within the job, so allow writes
+		// to vars that allow write from within job.
+		if env.IsProtectedFromWithinJob(c) {
 			protected = append(protected, c)
 		}
 	}
