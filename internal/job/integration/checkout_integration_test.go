@@ -57,7 +57,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
 	})
@@ -91,7 +91,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -152,7 +152,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
 		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force"},
@@ -218,7 +218,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -257,7 +257,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 		{"clone", "--depth=1", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "--depth=1", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -302,7 +302,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 		{"fetch", "-v", "--prune", "--", "origin", shortCommitHash},
 		{"config", "remote.origin.fetch"},
 		{"fetch", "-v", "--prune", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
-		{"checkout", "-f", shortCommitHash},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", shortCommitHash},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", shortCommitHash, "-s", "--no-color", gitShowFormatArg},
 	})
@@ -525,7 +525,7 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 		{"clone", "--no-local", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/merge"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "FETCH_HEAD"},
 	})
@@ -618,11 +618,11 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -684,7 +684,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 		{"clone", "-v", "--depth=1", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -1035,7 +1035,7 @@ func TestGitCheckoutWithCommitResolved(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 	})
 
@@ -1062,7 +1062,7 @@ func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 	})
 
@@ -1089,7 +1089,7 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -1145,7 +1145,7 @@ func TestMultipleRemoteURLsFallsBackToGetURL(t *testing.T) {
 		{"remote", "get-url", "origin"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
