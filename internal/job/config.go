@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/tracetools"
 )
 

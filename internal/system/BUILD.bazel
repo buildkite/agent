@@ -11,64 +11,64 @@ go_library(
     visibility = ["//:__subpackages__"],
     deps = select({
         "@rules_go//go/platform:aix": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:android": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:darwin": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:dragonfly": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:freebsd": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:illumos": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:ios": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:js": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:linux": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:netbsd": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:openbsd": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:osx": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:plan9": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:qnx": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:solaris": [
+            "//internal/process",
             "//logger",
-            "//process",
         ],
         "@rules_go//go/platform:windows": [
             "//logger",

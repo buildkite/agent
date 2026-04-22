@@ -21,9 +21,9 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/olfactor"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
@@ -482,6 +482,9 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 		}()
 	}
 
+	cmdCfg.Started = cfg.started
+	cmdCfg.Done = cfg.done
+
 	return c.shell.executeCommand(ctx, cmdCfg, stdout, stderr, pty)
 }
 
@@ -501,6 +504,8 @@ type runConfig struct {
 	captureStdout *string
 	showPrompt    bool
 	showStderr    bool
+	started       chan struct{}
+	done          chan struct{}
 	extraEnv      *env.Environment
 	smells        map[string]bool
 }
@@ -524,6 +529,16 @@ func ShowPrompt(show bool) RunCommandOpt { return func(c *runConfig) { c.showPro
 
 // WithExtraEnv can be used to set additional env vars for this run.
 func WithExtraEnv(e *env.Environment) RunCommandOpt { return func(c *runConfig) { c.extraEnv = e } }
+
+// WithStarted provides a channel that is closed after the command has started.
+func WithStarted(started chan struct{}) RunCommandOpt {
+	return func(c *runConfig) { c.started = started }
+}
+
+// WithDone provides a channel that is closed after the command has ended.
+func WithDone(done chan struct{}) RunCommandOpt {
+	return func(c *runConfig) { c.done = done }
+}
 
 // WithStringSearch causes both the stdout and stderr streams of the process to
 // be searched for strings. (This does not require capturing either stream in

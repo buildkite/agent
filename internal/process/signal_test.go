@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/stretchr/testify/assert"
 )
 

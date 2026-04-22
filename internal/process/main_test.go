@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/internal/process"
 )
 
 // Invoked by `go test`, switch between helper and running tests based on env
