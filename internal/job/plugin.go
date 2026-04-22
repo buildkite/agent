@@ -162,6 +162,10 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 	// Store the checkouts for future use
 	e.pluginCheckouts = checkouts
 
+	// Create a reversed copy of the slice
+	e.pluginCheckoutsReversed = slices.Clone(e.pluginCheckouts)
+	slices.Reverse(e.pluginCheckoutsReversed)
+
 	// Now we can run plugin environment hooks too
 	return e.executePluginHook(ctx, "environment", checkouts)
 }
@@ -208,6 +212,10 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 
 	// Finally append our vendored checkouts to the rest for subsequent hooks
 	e.pluginCheckouts = append(e.pluginCheckouts, vendoredCheckouts...)
+
+	// Create a reversed copy of the slice
+	e.pluginCheckoutsReversed = slices.Clone(e.pluginCheckouts)
+	slices.Reverse(e.pluginCheckoutsReversed)
 
 	// Now we can run plugin environment hooks too
 	return e.executePluginHook(ctx, "environment", vendoredCheckouts)
