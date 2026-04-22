@@ -52,3 +52,61 @@ We previously made this the default behaviour of the agent (as of v3.63.0) but h
 Allows plugins to be downloaded as zip archives instead of being cloned from a Git repository. This is useful for plugins hosted as zip files on HTTP(S) URLs.
 
 **Status:** Experimental while we test zip archive support for plugins.
+
+### `legacy-post-hook-order`
+
+This experiment is an escape hatch that reverts to the v3 execution order of `post-checkout` and `post-command` hooks.
+
+In Agent v3, hooks of any kind would run in the same order as one another (for plugins, the order in which plugins are specified for a step). In v4, multiple `post-checkout`, `post-command`, or `pre-exit` hooks execute in _reverse_ order. This change makes it easier for multiple plugins and hooks to compose.
+
+For example, suppose a step specifies two plugins A and B, and there are also agent and repository hooks. Under version 3, each hook type would execute in the same order:
+
+- agent pre-checkout
+- (pre-checkout is not possible for repository hooks)
+- plugin A pre-checkout
+- plugin B pre-checkout
+- (checkout)
+- agent post-checkout
+- repository post-checkout
+- plugin A post-checkout
+- plugin B post-checkout
+- agent pre-command
+- repository pre-command
+- plugin A pre-command
+- plugin B pre-command
+- (command)
+- agent post-command
+- repository post-command
+- plugin A post-command
+- plugin B post-command
+- agent pre-exit
+- repository pre-exit
+- plugin A pre-exit
+- plugin B pre-exit
+
+Under version 4, the execution order is (key differences in bold):
+
+- agent pre-checkout
+- (pre-checkout is not possible for repository hooks)
+- plugin A pre-checkout
+- plugin B pre-checkout
+- (checkout)
+- plugin **B** post-checkout
+- plugin **A** post-checkout
+- **repository** post-checkout
+- **agent** post-checkout
+- agent pre-command
+- repository pre-command
+- plugin A pre-command
+- plugin B pre-command
+- (command)
+- plugin **B** post-command
+- plugin **A** post-command
+- **repository** post-command
+- **agent** post-command
+- plugin **B** pre-exit
+- plugin **A** pre-exit
+- **repository** pre-exit
+- **agent** pre-exit
+
+**Status:** This escape-hatch experiment will be removed in a future release, once we are confident that it isn't needed.
