@@ -1,6 +1,7 @@
 package job
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -188,16 +190,24 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	}
 
 	// Run post-checkout hooks
-	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
-		return err
+	if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+		// Legacy order = same order as pre-checkout
+		if err := cmp.Or(
+			e.executeGlobalHook(ctx, "post-checkout"),
+			e.executeLocalHook(ctx, "post-checkout"),
+			e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts),
+		); err != nil {
+			return err
+		}
+	} else {
+		// Modern order = reverse, to make composition easier
+		if err := cmp.Or(
+			e.executePluginHook(ctx, "post-checkout", e.pluginCheckoutsReversed),
+			e.executeLocalHook(ctx, "post-checkout"),
+			e.executeGlobalHook(ctx, "post-checkout"),
+		); err != nil {
+			return err
+		}
 	}
 
 	// Capture the new checkout path so we can see if it's changed.
