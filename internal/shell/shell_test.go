@@ -146,7 +146,7 @@ func TestContextCancelInterrupts(t *testing.T) {
 		{
 			name: "default",
 			// The usual timeout command should obey Ctrl-Break.
-			cmdWindows: ".\\fixtures\\sleep600.bat",
+			cmdWindows: ".\\fixtures\\sleep60.bat",
 			// The default interrupt signal is SIGTERM.
 			wantSignal:        syscall.SIGTERM,
 			wantSignalWindows: -1,
@@ -154,7 +154,7 @@ func TestContextCancelInterrupts(t *testing.T) {
 		{
 			name: "SIGINT",
 			// SIGINT does nothing different on Windows.
-			cmdWindows:        ".\\fixtures\\sleep600.bat",
+			cmdWindows:        ".\\fixtures\\sleep60.bat",
 			interruptSignal:   process.SIGINT,
 			wantSignal:        syscall.SIGINT,
 			wantSignalWindows: -1,
@@ -162,7 +162,7 @@ func TestContextCancelInterrupts(t *testing.T) {
 		{
 			name: "SIGKILL",
 			// SIGKILL should bypass the Ctrl-Break handler in the process.
-			cmdWindows:        ".\\fixtures\\sleep600nobreak.bat",
+			cmdWindows:        ".\\fixtures\\sleep60nobreak.bat",
 			interruptSignal:   process.SIGKILL,
 			wantSignal:        syscall.SIGKILL,
 			wantSignalWindows: -1,
@@ -173,7 +173,9 @@ func TestContextCancelInterrupts(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			var opts []shell.NewShellOpt
+			opts := []shell.NewShellOpt{
+				shell.WithSignalGracePeriod(10 * time.Second),
+			}
 			if test.interruptSignal != 0 {
 				opts = append(opts, shell.WithInterruptSignal(test.interruptSignal))
 			}
@@ -202,7 +204,7 @@ func TestContextCancelInterrupts(t *testing.T) {
 				}
 			}()
 
-			cmd := "fixtures/sleep600.sh"
+			cmd := "fixtures/sleep60.sh"
 			if runtime.GOOS == "windows" {
 				cmd = test.cmdWindows
 			}
@@ -243,20 +245,20 @@ func TestInterrupt(t *testing.T) {
 		{
 			name: "default",
 			// The usual timeout command should obey Ctrl-Break.
-			cmdWindows:        ".\\fixtures\\sleep600.bat",
+			cmdWindows:        ".\\fixtures\\sleep60.bat",
 			wantSignal:        syscall.SIGTERM,
 			wantSignalWindows: -1,
 		},
 		{
 			name:              "SIGINT",
-			cmdWindows:        ".\\fixtures\\sleep600.bat",
+			cmdWindows:        ".\\fixtures\\sleep60.bat",
 			interruptSignal:   process.SIGINT,
 			wantSignal:        syscall.SIGINT,
 			wantSignalWindows: -1,
 		},
 		{
 			name:              "SIGKILL",
-			cmdWindows:        ".\\fixtures\\sleep600nobreak.bat",
+			cmdWindows:        ".\\fixtures\\sleep60nobreak.bat",
 			interruptSignal:   process.SIGKILL,
 			wantSignal:        syscall.SIGKILL,
 			wantSignalWindows: -1,
@@ -267,7 +269,9 @@ func TestInterrupt(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			var opts []shell.NewShellOpt
+			opts := []shell.NewShellOpt{
+				shell.WithSignalGracePeriod(10 * time.Second),
+			}
 			if test.interruptSignal != 0 {
 				opts = append(opts, shell.WithInterruptSignal(test.interruptSignal))
 			}
@@ -292,7 +296,7 @@ func TestInterrupt(t *testing.T) {
 				}
 			}()
 
-			cmd := "fixtures/sleep600.sh"
+			cmd := "fixtures/sleep60.sh"
 			if runtime.GOOS == "windows" {
 				cmd = test.cmdWindows
 			}
