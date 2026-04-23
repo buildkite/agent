@@ -360,7 +360,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			Stdout:            r.jobLogs,
 			Stderr:            r.jobLogs,
 			InterruptSignal:   cancelSignal,
-			SignalGracePeriod: conf.AgentConfiguration.SignalGracePeriod,
+			SignalGracePeriod: conf.AgentConfiguration.CancelSignalTimeout,
 		})
 	}
 
@@ -599,8 +599,8 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
 	setEnv("BUILDKITE_REDACTED_VARS", strings.Join(r.conf.AgentConfiguration.RedactedVars, ","))
 	setEnv("BUILDKITE_STRICT_SINGLE_HOOKS", fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks))
-	setEnv("BUILDKITE_CANCEL_GRACE_PERIOD", strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod))
-	setEnv("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod/time.Second)))
+	setEnv("BUILDKITE_CANCEL_SIGNAL_TIMEOUT", r.conf.AgentConfiguration.CancelSignalTimeout.String())
+	setEnv("BUILDKITE_CANCEL_CLEANUP_TIMEOUT", r.conf.AgentConfiguration.CancelCleanupTimeout.String())
 	setEnv("BUILDKITE_TRACE_CONTEXT_ENCODING", r.conf.AgentConfiguration.TraceContextEncoding)
 
 	if !r.conf.AgentConfiguration.AllowMultipartArtifactUpload {
