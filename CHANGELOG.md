@@ -9,8 +9,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.123.1...v4.0.0-beta.1)
 
 ### Changed in v4
+- The following experiments are now default behaviour (promoted):
+	- `normalised-upload-paths`
+	- `override-zero-exit-on-cancel`
+	- `resolve-commit-after-checkout`
+	- `propagate-agent-config-vars`
+- Remove `allow-artifact-path-traversal` experiment
+- Remove deprecated Docker support
+- `spawn-with-priority` is now a string, removing the `descending-spawn-priority` experiment [#3821](https://github.com/buildkite/agent/pull/3821) (@moskyb)
 - Newline after meta data get [#3835](https://github.com/buildkite/agent/pull/3835) (@moskyb)
 - Remove deprecated CLI flags [#3834](https://github.com/buildkite/agent/pull/3834) (@moskyb)
+- Remove deprecated plugin env vars [#3852](https://github.com/buildkite/agent/pull/3852) (@DrJosh9000)
 
 ### Changed in v3 since v3.123.1
 
