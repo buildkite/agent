@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -75,16 +76,16 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	// Run post-checkout hooks
-	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
-		return err
+	if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+		// Legacy order = same order as pre-checkout
+		if err := e.executeHooksForward(ctx, "post-checkout"); err != nil {
+			return err
+		}
+	} else {
+		// Modern order = reverse, to make composition easier
+		if err := e.executeHooksReverse(ctx, "post-checkout"); err != nil {
+			return err
+		}
 	}
 
 	// Capture the new checkout path so we can see if it's changed.
