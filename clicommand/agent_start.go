@@ -114,13 +114,13 @@ type AgentStartConfig struct {
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
 	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
 
-	AcquireJob                 string `cli:"acquire-job"`
-	DisconnectAfterJob         bool   `cli:"disconnect-after-job"`
-	DisconnectAfterIdleTimeout int    `cli:"disconnect-after-idle-timeout"`
-	DisconnectAfterUptime      int    `cli:"disconnect-after-uptime"`
-	CancelGracePeriod          int    `cli:"cancel-grace-period"`
-	SignalGracePeriodSeconds   int    `cli:"signal-grace-period-seconds"`
-	ReflectExitStatus          bool   `cli:"reflect-exit-status"`
+	AcquireJob                 string        `cli:"acquire-job"`
+	DisconnectAfterJob         bool          `cli:"disconnect-after-job"`
+	DisconnectAfterIdleTimeout int           `cli:"disconnect-after-idle-timeout"`
+	DisconnectAfterUptime      int           `cli:"disconnect-after-uptime"`
+	CancelSignalTimeout        time.Duration `cli:"cancel-signal-timeout"`
+	CancelCleanupTimeout       time.Duration `cli:"cancel-cleanup-timeout"`
+	ReflectExitStatus          bool          `cli:"reflect-exit-status"`
 
 	EnableJobLogTmpfile bool   `cli:"enable-job-log-tmpfile"`
 	JobLogPath          string `cli:"job-log-path" normalize:"filepath"`
@@ -420,7 +420,7 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The maximum uptime in seconds before the agent stops accepting new jobs and shuts down after any running jobs complete. The default of 0 means no timeout",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_UPTIME",
 		},
-		cancelGracePeriodFlag,
+		cancelSignalTimeoutFlag,
 		cli.BoolFlag{
 			Name:   "enable-job-log-tmpfile",
 			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job (default: false)",
@@ -688,7 +688,7 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
 		},
 		cancelSignalFlag,
-		signalGracePeriodSecondsFlag,
+		cancelCleanupTimeoutFlag,
 		cli.StringFlag{
 			Name:   "tracing-backend",
 			Usage:  `Enable tracing for build jobs by specifying a backend, "datadog" or "opentelemetry"`,
@@ -941,11 +941,6 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		signalGracePeriod, err := signalGracePeriod(cfg.CancelGracePeriod, cfg.SignalGracePeriodSeconds)
-		if err != nil {
-			return err
-		}
-
 		if _, err := tracetools.ParseEncoding(cfg.TraceContextEncoding); err != nil {
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
@@ -1083,8 +1078,8 @@ var AgentStartCommand = cli.Command{
 			DisconnectAfterJob:              cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout:      time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
 			DisconnectAfterUptime:           time.Duration(cfg.DisconnectAfterUptime) * time.Second,
-			CancelGracePeriod:               cfg.CancelGracePeriod,
-			SignalGracePeriod:               signalGracePeriod,
+			CancelSignalTimeout:             cfg.CancelSignalTimeout,
+			CancelCleanupTimeout:            cfg.CancelCleanupTimeout,
 			EnableJobLogTmpfile:             cfg.EnableJobLogTmpfile,
 			JobLogPath:                      cfg.JobLogPath,
 			WriteJobLogsToStdout:            cfg.WriteJobLogsToStdout,
@@ -1344,7 +1339,7 @@ var AgentStartCommand = cli.Command{
 				agent.AgentWorkerConfig{
 					AgentConfiguration: agentConf,
 					CancelSignal:       cancelSig,
-					SignalGracePeriod:  signalGracePeriod,
+					SignalGracePeriod:  cfg.CancelSignalTimeout,
 					Debug:              cfg.Debug,
 					DebugHTTP:          cfg.DebugHTTP,
 					SpawnIndex:         i + 1,
@@ -1371,7 +1366,7 @@ var AgentStartCommand = cli.Command{
 		poolSigs := &poolSignals{
 			log:               l,
 			pool:              pool,
-			cancelGracePeriod: time.Duration(cfg.CancelGracePeriod) * time.Second,
+			cancelGracePeriod: cfg.CancelSignalTimeout + cfg.CancelCleanupTimeout,
 			// Under Kubernetes, there is no user interactively signalling us,
 			// so on SIGTERM, stop un-gracefully.
 			skipGraceful: cfg.KubernetesExec,
