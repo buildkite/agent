@@ -58,8 +58,8 @@ type AgentConfiguration struct {
 	DisconnectAfterJob           bool
 	DisconnectAfterIdleTimeout   time.Duration
 	DisconnectAfterUptime        time.Duration
-	CancelGracePeriod            int
-	SignalGracePeriod            time.Duration
+	CancelSignalTimeout          time.Duration
+	CancelCleanupTimeout         time.Duration
 	EnableJobLogTmpfile          bool
 	JobLogPath                   string
 	WriteJobLogsToStdout         bool
