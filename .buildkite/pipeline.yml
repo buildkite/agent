@@ -31,11 +31,11 @@ steps:
       - api/proto/**
       - .buildkite/steps/check-protobuf-generation.sh
     plugins:
-    - docker-compose#v4.14.0:
-        config: .buildkite/docker-compose.yml
-        cli-version: 2
-        mount-buildkite-agent: true
-        run: lint
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          mount-buildkite-agent: true
+          run: lint
 
   - group: ":go::scientist: Tests and Coverage"
     if_changed:
@@ -44,150 +44,150 @@ steps:
       - "**/fixtures/**"
       - .buildkite/steps/{tests,test-coverage-report}.sh
     steps:
-    - name: ":linux: Linux AMD64 Tests"
-      key: test-linux-amd64
-      command: ".buildkite/steps/tests.sh"
-      parallelism: 2
-      artifact_paths:
-        - junit-*.xml
-        - "coverage-*/**"
-      plugins:
-        - docker-compose#v4.14.0:
-            config: .buildkite/docker-compose.yml
-            cli-version: 2
-            propagate-environment: true
-            run: agent
-        - test-collector#v1.11.0:
-            files: "junit-*.xml"
-            format: "junit"
-            tags:
-              - "os=linux"
-              - "arch=amd64"
-              - "race=false"
+      - name: ":linux: Linux AMD64 Tests"
+        key: test-linux-amd64
+        command: ".buildkite/steps/tests.sh"
+        parallelism: 2
+        artifact_paths:
+          - junit-*.xml
+          - "coverage-*/**"
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              propagate-environment: true
+              run: agent
+          - test-collector#v1.11.0:
+              files: "junit-*.xml"
+              format: "junit"
+              tags:
+                - "os=linux"
+                - "arch=amd64"
+                - "race=false"
 
-    - name: ":linux: Linux ARM64 Tests"
-      key: test-linux-arm64
-      command: ".buildkite/steps/tests.sh"
-      parallelism: 2
-      artifact_paths:
-        - junit-*.xml
-        - "coverage-*/**"
-      agents:
-        queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
-      plugins:
-        - docker-compose#v4.14.0:
-            config: .buildkite/docker-compose.yml
-            cli-version: 2
-            propagate-environment: true
-            run: agent
-        - test-collector#v1.11.0:
-            files: "junit-*.xml"
-            format: "junit"
-            tags:
-              - "os=linux"
-              - "arch=arm64"
-              - "race=false"
+      - name: ":linux: Linux ARM64 Tests"
+        key: test-linux-arm64
+        command: ".buildkite/steps/tests.sh"
+        parallelism: 2
+        artifact_paths:
+          - junit-*.xml
+          - "coverage-*/**"
+        agents:
+          queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              propagate-environment: true
+              run: agent
+          - test-collector#v1.11.0:
+              files: "junit-*.xml"
+              format: "junit"
+              tags:
+                - "os=linux"
+                - "arch=arm64"
+                - "race=false"
 
-    - name: ":windows: Windows AMD64 Tests"
-      key: test-windows
-      command: "bash .buildkite\\steps\\tests.sh"
-      parallelism: 2
-      artifact_paths:
-        - junit-*.xml
-        - "coverage-*/**"
-      agents:
-        queue: $AGENT_RUNNERS_WINDOWS_QUEUE
-      plugins:
-        - test-collector#v1.11.0:
-            files: "junit-*.xml"
-            format: "junit"
-            tags:
-              - "os=windows"
-              - "arch=arm64"
-              - "race=false"
+      - name: ":windows: Windows AMD64 Tests"
+        key: test-windows
+        command: "bash .buildkite\\steps\\tests.sh"
+        parallelism: 2
+        artifact_paths:
+          - junit-*.xml
+          - "coverage-*/**"
+        agents:
+          queue: $AGENT_RUNNERS_WINDOWS_QUEUE
+        plugins:
+          - test-collector#v1.11.0:
+              files: "junit-*.xml"
+              format: "junit"
+              tags:
+                - "os=windows"
+                - "arch=arm64"
+                - "race=false"
 
-    - name: ":satellite: Detect Data Races"
-      key: test-race-linux-arm64
-      command: ".buildkite/steps/tests.sh -race"
-      # Extra parallelism because this data race test is slow
-      parallelism: 3
-      artifact_paths:
-        - junit-*.xml
-        - "coverage-*/**"
-      agents:
-        queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
-      plugins:
-        - docker-compose#v4.14.0:
-            config: .buildkite/docker-compose.yml
-            cli-version: 2
-            propagate-environment: true
-            run: agent
-        - test-collector#v1.11.0:
-            files: "junit-*.xml"
-            format: "junit"
-            tags:
-              - "os=linux"
-              - "arch=arm64"
-              - "race=true"
+      - name: ":satellite: Detect Data Races"
+        key: test-race-linux-arm64
+        command: ".buildkite/steps/tests.sh -race"
+        # Extra parallelism because this data race test is slow
+        parallelism: 3
+        artifact_paths:
+          - junit-*.xml
+          - "coverage-*/**"
+        agents:
+          queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              propagate-environment: true
+              run: agent
+          - test-collector#v1.11.0:
+              files: "junit-*.xml"
+              format: "junit"
+              tags:
+                - "os=linux"
+                - "arch=arm64"
+                - "race=true"
 
-    - name: ":coverage: Test coverage report Linux ARM64"
-      key: test-coverage-linux-arm64
-      command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64"
-      artifact_paths:
-        - "cover.html"
-        - "cover.out"
-      depends_on:
-        - test-linux-arm64
-      plugins:
-        - docker-compose#v4.14.0:
-            config: .buildkite/docker-compose.yml
-            cli-version: 2
-            run: agent
-        - artifacts#v1.9.4:
-            download: "coverage-linux-arm64/**"
+      - name: ":coverage: Test coverage report Linux ARM64"
+        key: test-coverage-linux-arm64
+        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64"
+        artifact_paths:
+          - "cover.html"
+          - "cover.out"
+        depends_on:
+          - test-linux-arm64
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              run: agent
+          - artifacts#v1.9.4:
+              download: "coverage-linux-arm64/**"
 
-    - name: ":coverage: Test coverage report Linux AMD64"
-      key: test-coverage-linux-amd64
-      command: ".buildkite/steps/test-coverage-report.sh coverage-linux-amd64"
-      artifact_paths:
-        - "cover.html"
-        - "cover.out"
-      depends_on:
-        - test-linux-amd64
-      plugins:
-        - docker-compose#v4.14.0:
-            config: .buildkite/docker-compose.yml
-            cli-version: 2
-            run: agent
-        - artifacts#v1.9.4:
-            download: "coverage-linux-amd64/**"
+      - name: ":coverage: Test coverage report Linux AMD64"
+        key: test-coverage-linux-amd64
+        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-amd64"
+        artifact_paths:
+          - "cover.html"
+          - "cover.out"
+        depends_on:
+          - test-linux-amd64
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              run: agent
+          - artifacts#v1.9.4:
+              download: "coverage-linux-amd64/**"
 
-    - name: ":coverage: Test coverage report Linux ARM64 Race"
-      key: test-coverage-linux-arm64-race
-      command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64-race"
-      artifact_paths:
-        - "cover.html"
-        - "cover.out"
-      depends_on:
-        - test-race-linux-arm64
-      plugins:
-        - docker-compose#v4.14.0:
-            config: .buildkite/docker-compose.yml
-            cli-version: 2
-            run: agent
-        - artifacts#v1.9.4:
-            download: "coverage-linux-arm64-race/**"
+      - name: ":coverage: Test coverage report Linux ARM64 Race"
+        key: test-coverage-linux-arm64-race
+        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64-race"
+        artifact_paths:
+          - "cover.html"
+          - "cover.out"
+        depends_on:
+          - test-race-linux-arm64
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              run: agent
+          - artifacts#v1.9.4:
+              download: "coverage-linux-arm64-race/**"
 
-    - label: ":writing_hand: Annotate with Test Failures"
-      depends_on:
-        - test-linux-amd64
-        - test-race-linux-arm64
-        - test-linux-arm64
-        - test-windows
-      allow_dependency_failure: true
-      plugins:
-        - junit-annotate#v1.6.0:
-            artifacts: junit-*.xml
+      - label: ":writing_hand: Annotate with Test Failures"
+        depends_on:
+          - test-linux-amd64
+          - test-race-linux-arm64
+          - test-linux-arm64
+          - test-windows
+        allow_dependency_failure: true
+        plugins:
+          - junit-annotate#v1.6.0:
+              artifacts: junit-*.xml
 
   # --- end Tests and Coverage ---
 
@@ -421,14 +421,15 @@ steps:
   - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
     depends_on:
+      - build-debian-packages
+      - build-github-release
+      - build-rpm-packages
       - check-code-committed
       - check-version-string
-      - test-windows
+      - e2e-tests
       - test-bk-cli
       - test-docker-amd64
       - test-docker-arm64
-      - build-rpm-packages
-      - build-debian-packages
-      - build-github-release
+      - test-windows
     command: ".buildkite/steps/upload-release-steps.sh"
-    if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable)$$/
+    if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable|v\d+)$$/

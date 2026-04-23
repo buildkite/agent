@@ -3,6 +3,6 @@ load("@rules_go//go:def.bzl", "go_library")
 go_library(
     name = "githttptest",
     srcs = ["githttptest.go"],
-    importpath = "github.com/buildkite/agent/v3/internal/job/githttptest",
+    importpath = "github.com/buildkite/agent/v4/internal/job/githttptest",
     visibility = ["//:__subpackages__"],
 )

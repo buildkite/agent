@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "cache",
     srcs = ["cache.go"],
-    importpath = "github.com/buildkite/agent/v3/internal/cache",
+    importpath = "github.com/buildkite/agent/v4/internal/cache",
     visibility = ["//:__subpackages__"],
     deps = [
         "//logger",

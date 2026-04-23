@@ -11,7 +11,7 @@ go_library(
         "server.go",
         "utils.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/socket",
+    importpath = "github.com/buildkite/agent/v4/internal/socket",
     visibility = ["//:__subpackages__"],
     deps = select({
         "@rules_go//go/platform:windows": [

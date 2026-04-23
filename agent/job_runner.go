@@ -16,16 +16,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/core"
-	envutil "github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/kubernetes"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/core"
+	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/kubernetes"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/metrics"
+	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -437,13 +437,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envShellFile != nil {
-		if experiments.IsEnabled(ctx, experiments.PropagateAgentConfigVars) {
-			// Note that some variables in this list might not be defined later,
-			// when something comes to read the file. See below where they are
-			// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
-			// Docker in particular tolerates undefined vars in an env file
-			// without complaints.
-			const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
+		// Note that some variables in this list might not be defined later,
+		// when something comes to read the file. See below where they are
+		// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
+		// Docker in particular tolerates undefined vars in an env file
+		// without complaints.
+		const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
@@ -473,9 +472,8 @@ BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
 BUILDKITE_AGENT_JWKS_KEY_ID`
-			if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
-				return nil, err
-			}
+		if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
+			return nil, err
 		}
 
 		for key, value := range env {

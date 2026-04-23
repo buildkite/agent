@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/socket"
+	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/google/go-cmp/cmp"
 	"gotest.tools/v3/assert"
 )

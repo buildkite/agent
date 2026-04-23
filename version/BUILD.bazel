@@ -5,7 +5,7 @@ go_library(
     srcs = ["version.go"],
     data = ["VERSION"],
     embedsrcs = ["VERSION"],
-    importpath = "github.com/buildkite/agent/v3/version",
+    importpath = "github.com/buildkite/agent/v4/version",
     visibility = ["//visibility:public"],
 )
 

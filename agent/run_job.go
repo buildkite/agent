@@ -13,16 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/kubernetes"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/kubernetes"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/metrics"
+	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/go-pipeline"
 )
 
@@ -386,9 +385,7 @@ One or more containers connected to the agent, but then stopped communicating wi
 		if exit.Status == 0 {
 			// On Windows, a signalled process exits 0 rather than non-zero.
 			// This is inconsistent with cancellation on other platforms.
-			if experiments.IsEnabled(ctx, experiments.OverrideZeroExitOnCancel) {
-				exit.Status = 1
-			}
+			exit.Status = 1
 		}
 	}
 

@@ -21,7 +21,7 @@ go_library(
         "searcher.go",
         "uploader.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/artifact",
+    importpath = "github.com/buildkite/agent/v4/internal/artifact",
     visibility = ["//:__subpackages__"],
     deps = [
         "//api",

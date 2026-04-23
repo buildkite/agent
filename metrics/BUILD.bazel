@@ -3,7 +3,7 @@ load("@rules_go//go:def.bzl", "go_library")
 go_library(
     name = "metrics",
     srcs = ["metrics.go"],
-    importpath = "github.com/buildkite/agent/v3/metrics",
+    importpath = "github.com/buildkite/agent/v4/metrics",
     visibility = ["//visibility:public"],
     deps = [
         "//logger",

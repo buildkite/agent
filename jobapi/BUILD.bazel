@@ -12,7 +12,7 @@ go_library(
         "server.go",
         "socket.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/jobapi",
+    importpath = "github.com/buildkite/agent/v4/jobapi",
     visibility = ["//visibility:public"],
     deps = [
         "//env",

@@ -7,7 +7,7 @@ go_library(
         "executor_tester.go",
         "git.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/internal/job/integration",
+    importpath = "github.com/buildkite/agent/v4/internal/job/integration",
     visibility = ["//:__subpackages__"],
     deps = [
         "//clicommand",

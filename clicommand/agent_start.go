@@ -23,23 +23,23 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
-	"github.com/buildkite/agent/v3/agent"
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/internal/agentapi"
-	"github.com/buildkite/agent/v3/internal/awslib"
-	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
-	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/status"
-	"github.com/buildkite/agent/v3/tracetools"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/agent"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/internal/agentapi"
+	"github.com/buildkite/agent/v4/internal/awslib"
+	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/metrics"
+	"github.com/buildkite/agent/v4/status"
+	"github.com/buildkite/agent/v4/tracetools"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/shellwords"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/urfave/cli"
@@ -98,7 +98,7 @@ type AgentStartConfig struct {
 	Priority          string   `cli:"priority"`
 	Spawn             int      `cli:"spawn"`
 	SpawnPerCPU       int      `cli:"spawn-per-cpu"`
-	SpawnWithPriority bool     `cli:"spawn-with-priority"`
+	SpawnWithPriority string   `cli:"spawn-with-priority"`
 	RedactedVars      []string `cli:"redacted-vars" normalize:"list"`
 	CancelSignal      string   `cli:"cancel-signal"`
 
@@ -212,16 +212,6 @@ type AgentStartConfig struct {
 	Token     string `cli:"token" validate:"required"`
 	Endpoint  string `cli:"endpoint" validate:"required"`
 	NoHTTP2   bool   `cli:"no-http2"`
-	// Deprecated
-	KubernetesLogCollectionGracePeriod time.Duration `cli:"kubernetes-log-collection-grace-period"`
-	NoSSHFingerprintVerification       bool          `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
-	MetaData                           []string      `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
-	MetaDataEC2                        bool          `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
-	MetaDataEC2Tags                    bool          `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
-	MetaDataGCP                        bool          `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
-	TagsFromEC2                        bool          `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
-	TagsFromGCP                        bool          `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
-	DisconnectAfterJobTimeout          int           `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
@@ -668,9 +658,10 @@ var AgentStartCommand = cli.Command{
 			Value:  0,
 			EnvVar: "BUILDKITE_AGENT_SPAWN_PER_CPU",
 		},
-		cli.BoolFlag{
+		cli.StringFlag{
 			Name:   "spawn-with-priority",
-			Usage:  "Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu) equal to the agent's index (default: false)",
+			Usage:  `Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu). Pass "static" (1, 1, 1, ...), "ascending" (1, 2, 3, ...), or "descending" (-1, -2, -3, ...). Descending helps jobs be assigned across all hosts when the value of --spawn varies between hosts`,
+			Value:  "static",
 			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
 		},
 		cancelSignalFlag,
@@ -769,51 +760,6 @@ var AgentStartCommand = cli.Command{
 		StrictSingleHooksFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
-
-		// Deprecated flags which will be removed in v4
-		KubernetesLogCollectionGracePeriodFlag,
-		cli.StringSliceFlag{
-			Name:   "meta-data",
-			Value:  &cli.StringSlice{},
-			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_META_DATA",
-		},
-		cli.BoolFlag{
-			Name:   "meta-data-ec2",
-			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
-		},
-		cli.BoolFlag{
-			Name:   "meta-data-ec2-tags",
-			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2_TAGS",
-		},
-		cli.BoolFlag{
-			Name:   "meta-data-gcp",
-			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
-		},
-		cli.BoolFlag{
-			Name:   "no-automatic-ssh-fingerprint-verification",
-			Hidden: true,
-			EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
-		},
-		cli.BoolFlag{
-			Name:   "tags-from-ec2",
-			Usage:  "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2",
-		},
-		cli.BoolFlag{
-			Name:   "tags-from-gcp",
-			Usage:  "Include the host's Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
-		},
-		cli.IntFlag{
-			Name:   "disconnect-after-job-timeout",
-			Hidden: true,
-			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
-			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
-		},
 	),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -842,6 +788,11 @@ var AgentStartCommand = cli.Command{
 		// on the very remote chance someone is using that.
 		if cfg.PingMode == pingModePingOnly {
 			cfg.PingMode = agent.PingModePollOnly
+		}
+
+		validSpawnWithPriorities := []string{"static", "ascending", "descending"}
+		if !slices.Contains(validSpawnWithPriorities, cfg.SpawnWithPriority) {
+			return fmt.Errorf("invalid spawn-with-priority, must be one of %v", validSpawnWithPriorities)
 		}
 
 		if cfg.VerificationJWKSFile != "" {
@@ -899,11 +850,6 @@ var AgentStartCommand = cli.Command{
 		// Guess the shell if none is provided
 		if cfg.Shell == "" {
 			cfg.Shell = DefaultShell()
-		}
-
-		// Handle deprecated DisconnectAfterJobTimeout
-		if cfg.DisconnectAfterJobTimeout > 0 {
-			cfg.DisconnectAfterIdleTimeout = cfg.DisconnectAfterJobTimeout
 		}
 
 		var ec2TagTimeout time.Duration
@@ -1214,11 +1160,11 @@ var AgentStartCommand = cli.Command{
 		tags := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 			Tags:                      cfg.Tags,
 			TagsFromK8s:               cfg.KubernetesExec,
-			TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
+			TagsFromEC2MetaData:       cfg.TagsFromEC2MetaData,
 			TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
 			TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
 			TagsFromECSMetaData:       cfg.TagsFromECSMetaData,
-			TagsFromGCPMetaData:       (cfg.TagsFromGCPMetaData || cfg.TagsFromGCP),
+			TagsFromGCPMetaData:       cfg.TagsFromGCPMetaData,
 			TagsFromGCPMetaDataPaths:  cfg.TagsFromGCPMetaDataPaths,
 			TagsFromGCPLabels:         cfg.TagsFromGCPLabels,
 			TagsFromHost:              cfg.TagsFromHost,
@@ -1291,16 +1237,22 @@ var AgentStartCommand = cli.Command{
 			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
-			if cfg.SpawnWithPriority {
-				p := i
-				if experiments.IsEnabled(ctx, experiments.DescendingSpawnPriority) {
-					// This experiment helps jobs be assigned across all hosts
-					// in cases where the value of --spawn varies between hosts.
-					p = -i
-				}
-				l.Info("Assigning priority %d for agent %d", p, i)
-				registerReq.Priority = strconv.Itoa(p)
+			var priority string
+			switch cfg.SpawnWithPriority {
+			case "static":
+				priority = cfg.Priority
+
+			case "ascending":
+				priority = strconv.Itoa(i)
+
+			case "descending":
+				priority = strconv.Itoa(-i)
+
+			default:
+				return fmt.Errorf("unknown spawn-with-priority value %s", cfg.SpawnWithPriority)
 			}
+
+			registerReq.Priority = priority
 
 			// Register the agent with the buildkite API
 			reg, err := client.Register(ctx, registerReq)

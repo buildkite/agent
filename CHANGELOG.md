@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v4.0.0-beta.1](https://github.com/buildkite/agent/tree/v4.0.0-beta.1) (2026-04-22)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.123.1...v4.0.0-beta.1)
+
+### Changed in v4
+- The following experiments are now default behaviour (promoted):
+	- `normalised-upload-paths`
+	- `override-zero-exit-on-cancel`
+	- `resolve-commit-after-checkout`
+	- `propagate-agent-config-vars`
+- Remove `allow-artifact-path-traversal` experiment
+- Remove deprecated Docker support
+- `spawn-with-priority` is now a string, removing the `descending-spawn-priority` experiment [#3821](https://github.com/buildkite/agent/pull/3821) (@moskyb)
+- Newline after meta data get [#3835](https://github.com/buildkite/agent/pull/3835) (@moskyb)
+- Remove deprecated CLI flags [#3834](https://github.com/buildkite/agent/pull/3834) (@moskyb)
+- Remove deprecated plugin env vars [#3852](https://github.com/buildkite/agent/pull/3852) (@DrJosh9000)
+
+### Changed in v3 since v3.123.1
+
+#### Added
+- `SIGKILL` is now supported as a cancel signal, and can be used to interrupt processes on Windows that absorb Ctrl-Break without exiting 
+   [#3814](https://github.com/buildkite/agent/pull/3814) (@DrJosh9000)
+- feat: add metrics to record histogram of chunk sizes and compressed size [#3833](https://github.com/buildkite/agent/pull/3833) (@wolfeidau)
+- feat: migrate to github.com/klauspost/compress/gzip for optimized deflate [#3832](https://github.com/buildkite/agent/pull/3832) (@wolfeidau)
+
+#### Fixed
+- fix: More consistent protected env vars [#3838](https://github.com/buildkite/agent/pull/3838) (@DrJosh9000)
+- fix: Hide detached-HEAD advice [#3851](https://github.com/buildkite/agent/pull/3851) (@DrJosh9000)
+- fix: set PTY raw mode before process start [#3837](https://github.com/buildkite/agent/pull/3837) (@lox)
+
+#### Internal
+- fix: Make TestChunksIntervalSeconds less flaky [#3850](https://github.com/buildkite/agent/pull/3850) (@DrJosh9000)
+- chore: rename mise config and add tasks [#3839](https://github.com/buildkite/agent/pull/3839) (@lox)
+- Removal manual gates from deployment process [#3830](https://github.com/buildkite/agent/pull/3830) (@zhming0)
+- Normalise HTTP status-based retry policies across the agent [#3827](https://github.com/buildkite/agent/pull/3827) (@moskyb)
+
+
 ## [v3.123.1](https://github.com/buildkite/agent/tree/v3.123.1) (2026-04-17)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.123.0...v3.123.1)
 

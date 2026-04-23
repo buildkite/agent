@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 type State string
@@ -24,54 +24,57 @@ const (
 const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
-	AllowArtifactPathTraversal     = "allow-artifact-path-traversal"
-	DescendingSpawnPriority        = "descending-spawn-priority"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
-	NormalisedUploadPaths          = "normalised-upload-paths"
-	OverrideZeroExitOnCancel       = "override-zero-exit-on-cancel"
 	PTYRaw                         = "pty-raw"
-	ResolveCommitAfterCheckout     = "resolve-commit-after-checkout"
-	PropagateAgentConfigVars       = "propagate-agent-config-vars"
+	LegacyPostHookOrder            = "legacy-post-hook-order"
 	ZipPlugins                     = "zip-plugins"
 
-	// Promoted experiments
-	ANSITimestamps         = "ansi-timestamps"
-	AvoidRecursiveTrap     = "avoid-recursive-trap"
-	FlockFileLocks         = "flock-file-locks"
-	GitMirrors             = "git-mirrors"
-	InbuiltStatusPage      = "inbuilt-status-page"
-	IsolatedPluginCheckout = "isolated-plugin-checkout"
-	JobAPI                 = "job-api"
-	KubernetesExec         = "kubernetes-exec"
-	PolyglotHooks          = "polyglot-hooks"
-	UseZZGlob              = "use-zzglob"
+	// Promoted or removed experiments - un-export these to ensure no new code
+	// can depend on them.
+	descendingSpawnPriority    = "descending-spawn-priority"
+	allowArtifactPathTraversal = "allow-artifact-path-traversal"
+	ansiTimestamps             = "ansi-timestamps"
+	avoidRecursiveTrap         = "avoid-recursive-trap"
+	flockFileLocks             = "flock-file-locks"
+	gitMirrors                 = "git-mirrors"
+	inbuiltStatusPage          = "inbuilt-status-page"
+	isolatedPluginCheckout     = "isolated-plugin-checkout"
+	jobAPI                     = "job-api"
+	kubernetesExec             = "kubernetes-exec"
+	normalisedUploadPaths      = "normalised-upload-paths"
+	overrideZeroExitOnCancel   = "override-zero-exit-on-cancel"
+	polyglotHooks              = "polyglot-hooks"
+	propagateAgentConfigVars   = "propagate-agent-config-vars"
+	resolveCommitAfterCheckout = "resolve-commit-after-checkout"
+	useZZGlob                  = "use-zzglob"
 )
 
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
-		AllowArtifactPathTraversal:     {},
-		DescendingSpawnPriority:        {},
 		InterpolationPrefersRuntimeEnv: {},
-		NormalisedUploadPaths:          {},
-		OverrideZeroExitOnCancel:       {},
+		LegacyPostHookOrder:            {},
 		PTYRaw:                         {},
-		ResolveCommitAfterCheckout:     {},
-		PropagateAgentConfigVars:       {},
 		ZipPlugins:                     {},
 	}
 
 	Promoted = map[string]string{
-		ANSITimestamps:         standardPromotionMsg(ANSITimestamps, "v3.48.0"),
-		AvoidRecursiveTrap:     standardPromotionMsg(AvoidRecursiveTrap, "v3.66.0"),
-		FlockFileLocks:         standardPromotionMsg(FlockFileLocks, "v3.48.0"),
-		GitMirrors:             standardPromotionMsg(GitMirrors, "v3.47.0"),
-		InbuiltStatusPage:      standardPromotionMsg(InbuiltStatusPage, "v3.48.0"),
-		IsolatedPluginCheckout: standardPromotionMsg(IsolatedPluginCheckout, "v3.67.0"),
-		JobAPI:                 standardPromotionMsg(JobAPI, "v3.64.0"),
-		KubernetesExec:         "The kubernetes-exec experiment has been replaced with the --kubernetes-exec flag as of agent v3.74.0",
-		PolyglotHooks:          standardPromotionMsg(PolyglotHooks, "v3.85.0"),
-		UseZZGlob:              standardPromotionMsg(UseZZGlob, "v3.104.0"),
+		descendingSpawnPriority:    "The `descending-spawn-priority` has been replaced with `--spawn-with-priority descending` as of agent v4",
+		ansiTimestamps:             standardPromotionMsg(ansiTimestamps, "v3.48.0"),
+		allowArtifactPathTraversal: "The allow-artifact-path-traversal escape-hatch experiment has been removed as of agent v4, because the path traversal behaviour was insecure",
+		avoidRecursiveTrap:         standardPromotionMsg(avoidRecursiveTrap, "v3.66.0"),
+		flockFileLocks:             standardPromotionMsg(flockFileLocks, "v3.48.0"),
+		gitMirrors:                 standardPromotionMsg(gitMirrors, "v3.47.0"),
+		inbuiltStatusPage:          standardPromotionMsg(inbuiltStatusPage, "v3.48.0"),
+		isolatedPluginCheckout:     standardPromotionMsg(isolatedPluginCheckout, "v3.67.0"),
+		jobAPI:                     standardPromotionMsg(jobAPI, "v3.64.0"),
+		kubernetesExec:             "The kubernetes-exec experiment has been replaced with the --kubernetes-exec flag as of agent v3.74.0",
+		normalisedUploadPaths:      standardPromotionMsg(normalisedUploadPaths, "v4"),
+		overrideZeroExitOnCancel:   standardPromotionMsg(overrideZeroExitOnCancel, "v4"),
+		polyglotHooks:              standardPromotionMsg(polyglotHooks, "v3.85.0"),
+		propagateAgentConfigVars:   standardPromotionMsg(propagateAgentConfigVars, "v4"),
+		resolveCommitAfterCheckout: standardPromotionMsg(resolveCommitAfterCheckout, "v4"),
+		useZZGlob:                  standardPromotionMsg(useZZGlob, "v3.104.0"),
 	}
 
 	// Used to track experiments possibly in use.
