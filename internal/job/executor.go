@@ -24,6 +24,7 @@ import (
 	"github.com/buildkite/agent/v4/agent/plugin"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/file"
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/osutil"
@@ -60,7 +61,8 @@ type Executor struct {
 	plugins []*plugin.Plugin
 
 	// Plugin checkouts from the plugin phases
-	pluginCheckouts []*pluginCheckout
+	pluginCheckouts         []*pluginCheckout
+	pluginCheckoutsReversed []*pluginCheckout
 
 	// Directories to clean up at end of job execution
 	cleanupDirs []string
@@ -1023,16 +1025,16 @@ func (e *Executor) tearDown(ctx context.Context) (retErr error) {
 	// Unfortunately pre-exit hooks are often not written with this split in
 	// mind.
 	if e.includePhase("command") {
-		if err := e.executeGlobalHook(ctx, "pre-exit"); err != nil {
-			return err
-		}
-
-		if err := e.executeLocalHook(ctx, "pre-exit"); err != nil {
-			return err
-		}
-
-		if err := e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts); err != nil {
-			return err
+		if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+			// Legacy order = same order as pre-checkout
+			if err := e.executeHooksForward(ctx, "pre-exit"); err != nil {
+				return err
+			}
+		} else {
+			// Modern order = reverse, to make composition easier
+			if err := e.executeHooksReverse(ctx, "pre-exit"); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1051,13 +1053,7 @@ func (e *Executor) runPreCommandHooks(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(retErr) }()
 
-	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
-		return err
-	}
-	if err := e.executeLocalHook(ctx, "pre-command"); err != nil {
-		return err
-	}
-	return e.executePluginHook(ctx, "pre-command", e.pluginCheckouts)
+	return e.executeHooksForward(ctx, "pre-command")
 }
 
 // runCommand runs the command and adds tracing spans.
@@ -1081,13 +1077,18 @@ func (e *Executor) runPostCommandHooks(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(retErr) }()
 
-	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
-		return err
+	if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+		// Legacy order = same order as pre-checkout
+		if err := e.executeHooksForward(ctx, "post-command"); err != nil {
+			return err
+		}
+	} else {
+		// Modern order = reverse, to make composition easier
+		if err := e.executeHooksReverse(ctx, "post-command"); err != nil {
+			return err
+		}
 	}
-	if err := e.executeLocalHook(ctx, "post-command"); err != nil {
-		return err
-	}
-	return e.executePluginHook(ctx, "post-command", e.pluginCheckouts)
+	return nil
 }
 
 // CommandPhase determines how to run the build, and then runs it

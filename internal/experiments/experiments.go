@@ -26,6 +26,7 @@ const (
 	AgentAPI                       = "agent-api"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	PTYRaw                         = "pty-raw"
+	LegacyPostHookOrder            = "legacy-post-hook-order"
 	ZipPlugins                     = "zip-plugins"
 
 	// Promoted or removed experiments - un-export these to ensure no new code
@@ -52,6 +53,7 @@ var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
 		InterpolationPrefersRuntimeEnv: {},
+		LegacyPostHookOrder:            {},
 		PTYRaw:                         {},
 		ZipPlugins:                     {},
 	}
