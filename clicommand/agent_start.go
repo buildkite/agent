@@ -459,9 +459,8 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Include tags from the host (hostname, machine-id, os) (default: false)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_HOST",
 		},
-		cli.StringSliceFlag{
+		cli.BoolFlag{
 			Name:   "tags-from-ec2-meta-data",
-			Value:  &cli.StringSlice{},
 			Usage:  "Include the default set of host EC2 meta-data as tags (instance-id, instance-type, ami-id, and instance-life-cycle)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA",
 		},
