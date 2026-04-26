@@ -107,7 +107,10 @@ func (a *Uploader) Upload(ctx context.Context) error {
 		artifact.URL = uploader.URL(artifact)
 	}
 
-	// Batch-create the artifact records on Buildkite
+	// Batch-create artifact records on Buildkite and upload each batch
+	// immediately. This keeps presigned upload URLs fresh — if all
+	// artifacts were were created upfront in a single batch, URLs for artifacts near the
+	// end of the queue could expire before the agent gets to them.
 	batchCreator := NewArtifactBatchCreator(a.logger, a.apiClient, BatchCreatorConfig{
 		JobID:                  a.conf.JobID,
 		Artifacts:              artifacts,
@@ -115,13 +118,13 @@ func (a *Uploader) Upload(ctx context.Context) error {
 		CreateArtifactsTimeout: 10 * time.Second,
 		AllowMultipart:         a.conf.AllowMultipart,
 	})
-	artifacts, err = batchCreator.Create(ctx)
-	if err != nil {
-		return err
-	}
-
-	if err := a.upload(ctx, artifacts, uploader); err != nil {
-		return fmt.Errorf("uploading artifacts: %w", err)
+	for chunk, err := range batchCreator.Batches(ctx) {
+		if err != nil {
+			return err
+		}
+		if err := a.upload(ctx, chunk, uploader); err != nil {
+			return fmt.Errorf("uploading artifacts: %w", err)
+		}
 	}
 
 	return nil

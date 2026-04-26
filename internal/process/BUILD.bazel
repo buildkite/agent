@@ -12,76 +12,90 @@ go_library(
         "pty_windows.go",
         "run.go",
         "scanner.go",
-        "signal.go",
+        "signal_notwindows.go",
         "signal_windows.go",
         "timestamper.go",
     ],
-    importpath = "github.com/buildkite/agent/v3/process",
+    importpath = "github.com/buildkite/agent/v3/internal/process",
     visibility = ["//visibility:public"],
     deps = [
         "//internal/experiments",
         "//logger",
-        "@org_golang_x_term//:term",
     ] + select({
         "@rules_go//go/platform:aix": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:android": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:darwin": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:dragonfly": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:freebsd": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:illumos": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:ios": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:js": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:linux": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:netbsd": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:openbsd": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:osx": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:plan9": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:qnx": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:solaris": [
             "@com_github_creack_pty//:pty",
             "@org_golang_x_sys//unix",
+            "@org_golang_x_term//:term",
         ],
         "@rules_go//go/platform:windows": [
             "@org_golang_x_sys//windows",
@@ -95,6 +109,7 @@ go_test(
     srcs = [
         "ansi_test.go",
         "buffer_test.go",
+        "export_test.go",
         "main_test.go",
         "process_test.go",
         "scanner_test.go",

@@ -20,11 +20,11 @@ import (
 	"github.com/buildkite/agent/v3/core"
 	envutil "github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
@@ -84,6 +84,11 @@ type JobRunnerConfig struct {
 	// containers run `kubernetes-bootstrap` which connects to this socket, receives
 	// environment variables, and executes the bootstrap phases.
 	KubernetesExec bool
+
+	// KubernetesContainerStartTimeout is the maximum duration to wait for all
+	// containers in a Kubernetes pod to connect before the job is considered failed.
+	// It's useful to be configured in situations like huge container image cold download.
+	KubernetesContainerStartTimeout time.Duration
 
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	AgentStdout io.Writer
@@ -190,6 +195,8 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			logUploadDurations.Observe(time.Since(startUpload).Seconds())
 			logChunksUploaded.Inc()
 			logBytesUploaded.Add(float64(chunk.Size))
+			logCompressedBytesUploaded.Add(float64(chunk.CompressedBytes))
+			logChunkSizeBytes.Observe(float64(chunk.Size))
 			return nil
 		},
 		LogStreamerConfig{
@@ -323,7 +330,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			Stderr:             r.jobLogs,
 			ClientCount:        containerCount,
 			Env:                processEnv,
-			ClientStartTimeout: 5 * time.Minute,
+			ClientStartTimeout: conf.KubernetesContainerStartTimeout,
 			ClientLostTimeout:  30 * time.Second,
 		})
 	} else { // not Kubernetes
@@ -331,6 +338,17 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
 		if err != nil {
 			return nil, fmt.Errorf("splitting bootstrap-script (%q) into tokens: %w", conf.AgentConfiguration.BootstrapScript, err)
+		}
+
+		// CancelSignal == SIGKILL means the user wants the command to be killed
+		// instead of signaled more gracefully (SIGTERM, SIGINT, etc).
+		// We don't send SIGKILL to the bootstrap itself as a cancel signal,
+		// because that would kill the bootstrap immediately, which would
+		// prevent capturing the exit status of the command, executing various
+		// pre-exit hooks, and other cleanup.
+		cancelSignal := conf.CancelSignal
+		if cancelSignal == process.SIGKILL {
+			cancelSignal = process.SIGTERM
 		}
 
 		r.process = process.New(r.agentLogger, process.Config{
@@ -341,7 +359,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			PTY:               conf.AgentConfiguration.RunInPty,
 			Stdout:            r.jobLogs,
 			Stderr:            r.jobLogs,
-			InterruptSignal:   conf.CancelSignal,
+			InterruptSignal:   cancelSignal,
 			SignalGracePeriod: conf.AgentConfiguration.SignalGracePeriod,
 		})
 	}
@@ -442,6 +460,7 @@ BUILDKITE_LOCAL_HOOKS_ENABLED
 BUILDKITE_PLUGINS_ENABLED
 BUILDKITE_REDACTED_VARS
 BUILDKITE_SHELL
+BUILDKITE_HOOKS_SHELL
 BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
@@ -558,6 +577,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
 		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
 	}
+	setEnv("BUILDKITE_CHECKOUT_ATTEMPTS", strconv.Itoa(r.conf.AgentConfiguration.CheckoutAttempts))
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
 	// Allow BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH to be enabled either by config
@@ -580,6 +600,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
+	setEnv("BUILDKITE_HOOKS_SHELL", r.conf.AgentConfiguration.HooksShell)
 	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
 	setEnv("BUILDKITE_REDACTED_VARS", strings.Join(r.conf.AgentConfiguration.RedactedVars, ","))
 	setEnv("BUILDKITE_STRICT_SINGLE_HOOKS", fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks))
@@ -748,7 +769,7 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	environ.Set("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
 	environ.Set("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
 
-	script, err := sh.Script(hook)
+	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
 	if err != nil {
 		r.agentLogger.Error("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
 		return false, err

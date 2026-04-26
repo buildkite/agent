@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/internal/process"
 )
 
 // Invoked by `go test`, switch between helper and running tests based on env
@@ -28,6 +28,14 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "alpacas1\r")
 		fmt.Fprintf(os.Stdout, "llamas2\r\n")
 		fmt.Fprintf(os.Stderr, "alpacas2\n")
+		os.Exit(0)
+
+	case "output-slow-exit":
+		fmt.Fprintf(os.Stdout, "llamas1\n")
+		fmt.Fprintf(os.Stderr, "alpacas1\r")
+		fmt.Fprintf(os.Stdout, "llamas2\r\n")
+		fmt.Fprintf(os.Stderr, "alpacas2\n")
+		time.Sleep(100 * time.Millisecond)
 		os.Exit(0)
 
 	// don't handle the signals so that we can detect the process was signaled

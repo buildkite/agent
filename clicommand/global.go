@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	DefaultEndpoint = "https://agent.buildkite.com/v3"
+	DefaultEndpoint = "https://agent-edge.buildkite.com/v3"
 )
 
 var (
@@ -277,6 +277,13 @@ var (
 		Name:   "git-skip-fetch-existing-commits",
 		Usage:  "Skip git fetch if the commit already exists in the local git directory (default: false)",
 		EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+	}
+
+	CheckoutAttemptsFlag = cli.IntFlag{
+		Name:   "checkout-attempts",
+		Value:  6,
+		Usage:  "Number of checkout attempts (including the initial attempt). Failed attempts are retried with exponential backoff (factor of 2, starting at 1s: 1s, 2s, 4s, ...)",
+		EnvVar: "BUILDKITE_CHECKOUT_ATTEMPTS",
 	}
 )
 

@@ -77,13 +77,9 @@ var AnnotationRemoveCommand = cli.Command{
 			// Attempt to remove the annotation
 			resp, err := client.AnnotationRemove(ctx, cfg.Job, cfg.Context, cfg.Scope)
 
-			// Don't bother retrying if the response was one of these statuses
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400 || resp.StatusCode == 410) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
 				return err
 			}
-
-			// Show the unexpected error
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
 				return err

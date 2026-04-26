@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/job"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/urfave/cli"
 )
@@ -98,6 +98,7 @@ type BootstrapConfig struct {
 	LogLevel                     string   `cli:"log-level"`
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
+	HooksShell                   string   `cli:"hooks-shell"`
 	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
@@ -112,6 +113,7 @@ type BootstrapConfig struct {
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
+	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -247,6 +249,7 @@ var BootstrapCommand = cli.Command{
 		GitSubmoduleCloneConfigFlag,
 		GitCheckoutTimeoutFlag,
 		GitSkipFetchExistingCommitsFlag,
+		CheckoutAttemptsFlag,
 
 		cli.StringFlag{
 			Name:   "bin-path",
@@ -307,6 +310,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The shell to use to interpret build commands",
 			EnvVar: "BUILDKITE_SHELL",
 			Value:  DefaultShell(),
+		},
+		cli.StringFlag{
+			Name:   "hooks-shell",
+			Usage:  "The shell to use to interpret hooks commands",
+			EnvVar: "BUILDKITE_HOOKS_SHELL",
 		},
 		cli.StringSliceFlag{
 			Name:   "phases",
@@ -463,6 +471,7 @@ var BootstrapCommand = cli.Command{
 			RunInPty:                     runInPty,
 			SSHKeyscan:                   cfg.SSHKeyscan,
 			Shell:                        cfg.Shell,
+			HooksShell:                   cfg.HooksShell,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
@@ -473,6 +482,7 @@ var BootstrapCommand = cli.Command{
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			Secrets:                      cfg.Secrets,
+			CheckoutAttempts:             cfg.CheckoutAttempts,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)

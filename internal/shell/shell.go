@@ -21,9 +21,9 @@ import (
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/olfactor"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
@@ -299,7 +299,7 @@ func (s *Shell) Command(command string, args ...string) Command {
 // executed directly, or some kind of intepreter is executed in order to
 // interpret it (loosely: powershell.exe for .ps1 files, bash(.exe) for shell
 // scripts without shebang lines).
-func (s *Shell) Script(path string) (Command, error) {
+func (s *Shell) Script(path, commandOverride string) (Command, error) {
 	var command string
 	var args []string
 
@@ -309,6 +309,20 @@ func (s *Shell) Script(path string) (Command, error) {
 	isSh := filepath.Ext(path) == "" || filepath.Ext(path) == ".sh"
 	isWindows := runtime.GOOS == "windows"
 	isPwsh := filepath.Ext(path) == ".ps1"
+
+	if commandOverride != "" {
+		// first element is the command, all others are args to which we append path
+		commandParts, err := shellwords.Split(commandOverride)
+		if err != nil {
+			return Command{}, fmt.Errorf("splitting hooks shell %q: %w", commandOverride, err)
+		}
+
+		return Command{
+			shell:   s,
+			command: commandParts[0],
+			args:    append(commandParts[1:], path),
+		}, nil
+	}
 
 	switch {
 	case isWindows && isSh:
@@ -326,10 +340,29 @@ func (s *Shell) Script(path string) (Command, error) {
 
 	case isWindows && isPwsh:
 		if s.debug {
-			s.Commentf("Attempting to run %s with Powershell", path)
+			s.Commentf("Attempting to run %s with PowerShell", path)
 		}
 		command = "powershell.exe"
 		args = []string{"-file", path}
+
+	case !isWindows && isPwsh:
+		// First check the PowerShell script for a shebang line
+		sb, err := shellscript.ShebangLine(path)
+		if err != nil || sb == "" {
+			// No shebang, assume cross-platform PowerShell 7
+			if s.debug {
+				s.Commentf("Attempting to run %s with PowerShell 7", path)
+			}
+			pwshPath, err := s.AbsolutePath("pwsh")
+			if err != nil {
+				return Command{}, fmt.Errorf("error finding pwsh, needed to run .ps1 scripts: %w", err)
+			}
+			command = pwshPath
+			args = []string{"-file", path}
+			break
+		}
+		command = path
+		args = nil
 
 	case !isWindows && isSh:
 		// If the script contains a shebang line, it can be run directly,
@@ -449,6 +482,9 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 		}()
 	}
 
+	cmdCfg.Started = cfg.started
+	cmdCfg.Done = cfg.done
+
 	return c.shell.executeCommand(ctx, cmdCfg, stdout, stderr, pty)
 }
 
@@ -468,6 +504,8 @@ type runConfig struct {
 	captureStdout *string
 	showPrompt    bool
 	showStderr    bool
+	started       chan struct{}
+	done          chan struct{}
 	extraEnv      *env.Environment
 	smells        map[string]bool
 }
@@ -491,6 +529,16 @@ func ShowPrompt(show bool) RunCommandOpt { return func(c *runConfig) { c.showPro
 
 // WithExtraEnv can be used to set additional env vars for this run.
 func WithExtraEnv(e *env.Environment) RunCommandOpt { return func(c *runConfig) { c.extraEnv = e } }
+
+// WithStarted provides a channel that is closed after the command has started.
+func WithStarted(started chan struct{}) RunCommandOpt {
+	return func(c *runConfig) { c.started = started }
+}
+
+// WithDone provides a channel that is closed after the command has ended.
+func WithDone(done chan struct{}) RunCommandOpt {
+	return func(c *runConfig) { c.done = done }
+}
 
 // WithStringSearch causes both the stdout and stderr streams of the process to
 // be searched for strings. (This does not require capturing either stream in

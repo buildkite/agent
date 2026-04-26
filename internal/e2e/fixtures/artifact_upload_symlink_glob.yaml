@@ -1,0 +1,15 @@
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: upload
+    commands:
+      - mkdir -p a/b/other_path/c
+      - echo "<testsuite/>" > a/b/other_path/c/result.xml
+      - ln -s other_path a/b/c
+      - {{ .buildkite_agent_binary }} artifact upload --glob-resolve-follow-symlinks "**/*"
+  - key: download
+    depends_on: upload
+    commands:
+      - {{ .buildkite_agent_binary }} artifact download "a/b/c/c/result.xml" .
+      - test -f a/b/c/c/result.xml
+      - grep -q testsuite a/b/c/c/result.xml

@@ -45,7 +45,7 @@ mkdir -p deb
 buildkite-agent artifact download --build "$artifacts_build" "deb/*.deb" deb/
 
 echo '--- Installing dependencies'
-bundle
+bundle install
 
 # Loop over all the .deb files and publish them
 for file in deb/*.deb; do

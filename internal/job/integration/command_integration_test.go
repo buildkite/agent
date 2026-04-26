@@ -37,6 +37,7 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	env := []string{
 		"BUILDKITE_COMMAND=Setup.cmd\nset LLAMAS=COOL\nBuildProject.cmd",
 		`BUILDKITE_SHELL=C:\Windows\System32\CMD.exe /S /C`,
+		`BUILDKITE_HOOKS_SHELL=C:\Program Files\PowerShell\7\pwsh.exe`,
 	}
 
 	tester.RunAndCheck(t, env...)

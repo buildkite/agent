@@ -8,9 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -362,21 +363,15 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 
 	runTestWithInterval := func(t *testing.T, intervalSeconds int) int {
 		t.Helper()
-		ctx := context.Background()
 
-		var (
-			chunkCount int
-			mu         sync.Mutex
-		)
+		var chunkCount atomic.Int64
 
 		e := createTestAgentEndpoint()
 		server := e.server(route{
 			Method: "POST",
 			Path:   "/jobs/{id}/chunks",
 			HandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
-				mu.Lock()
-				chunkCount++
-				mu.Unlock()
+				chunkCount.Add(1)
 				e.chunksHandler()(rw, req)
 			},
 		})
@@ -394,13 +389,13 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 		mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 			start := time.Now()
 			for time.Since(start) < 4*time.Second {
-				fmt.Fprintf(c.Stdout, "Log output at %v\n", time.Now())
+				fmt.Fprintf(c.Stdout, "Log output at start+%v\n", time.Since(start))
 				time.Sleep(100 * time.Millisecond)
 			}
 			c.Exit(0)
 		})
 
-		if err := runJob(t, ctx, testRunJobConfig{
+		if err := runJob(t, t.Context(), testRunJobConfig{
 			job:           j,
 			server:        server,
 			agentCfg:      agent.AgentConfiguration{},
@@ -411,39 +406,33 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 
 		mb.CheckAndClose(t) //nolint:errcheck
 
-		mu.Lock()
-		defer mu.Unlock()
-
-		t.Logf("Interval %ds: %d chunks uploaded", intervalSeconds, chunkCount)
-		return chunkCount
+		t.Logf("Interval %ds: %d chunks uploaded", intervalSeconds, chunkCount.Load())
+		return int(chunkCount.Load())
 	}
 
-	t.Run("2s interval should upload fewer chunks than 1s interval", func(t *testing.T) {
-		var count1s, count2s int
-
-		var wg sync.WaitGroup
-
-		// these run for 4 seconds, so we run them in parallel to not quite so much wall-clock time
-		wg.Go(func() {
-			count1s = runTestWithInterval(t, 1)
-		})
-
-		wg.Go(func() {
-			count2s = runTestWithInterval(t, 2)
-		})
-
-		wg.Wait()
-
-		t.Logf("1s interval: %d chunks, 2s interval: %d chunks", count1s, count2s)
+	t.Run("1s interval", func(t *testing.T) {
+		t.Parallel()
 
 		// With a 4s job:
-		// 1s interval: first chunk + chunks at ~1s, ~2s, ~3s, ~4s = 5 chunks
-		// 2s interval: first chunk + chunks at ~2s, ~4s = 3 chunks
-		if count1s != 5 {
-			t.Errorf("1s interval: got %d chunks, expected 5", count1s)
+		// 1s interval:
+		//   first chunk + (chunks at +1s, +2s, +3s) + final chunk = 5 chunks
+		// Except if the first chunk is made at 1s, in which case there could be
+		// only 4 chunks (at around 1s, 2s, 3s, and a final chunk after 4s).
+		if got, want := runTestWithInterval(t, 1), []int{4, 5}; !slices.Contains(want, got) {
+			t.Errorf("runTestWithInterval(t, 1) = %d chunks, want one of %v", got, want)
 		}
-		if count2s != 3 {
-			t.Errorf("2s interval: got %d chunks, expected 3", count2s)
+	})
+
+	t.Run("2s interval", func(t *testing.T) {
+		t.Parallel()
+
+		// With a 4s job:
+		// 2s interval:
+		//   first chunk + chunk at +2s + final chunk around 4s = 3 chunks
+		// Except if the first chunk is made at 2s, in which case there could be
+		// only 2 chunks (at around 2s and a final chunk after 4s).
+		if got, want := runTestWithInterval(t, 2), []int{2, 3}; !slices.Contains(want, got) {
+			t.Errorf("runTestWithInterval(t, 2) = %d chunks, want one of %v", got, want)
 		}
 	})
 }

@@ -428,7 +428,8 @@ var PipelineUploadCommand = cli.Command{
 					RetrySleepFunc: time.Sleep,
 				}
 				if err := uploader.Upload(ctx, l); err != nil {
-					return err
+					l.Error(err.Error())
+					return NewSilentExitError(1)
 				}
 
 				l.Info("Successfully parsed and uploaded pipeline #%d from %q", count, input.name)

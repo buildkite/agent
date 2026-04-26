@@ -28,6 +28,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/file"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/secrets"
@@ -35,7 +36,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/roko"
@@ -84,6 +84,15 @@ func New(conf ExecutorConfig) *Executor {
 		redactors:      replacer.NewMux(),
 	}
 }
+
+const (
+	// ExitCodeSetupFailure is used internally by the executor subprocess
+	// to signal that it failed during setUp (e.g. secret-fetch DNS errors,
+	// shell creation failures) before the user's command ran. The parent
+	// job runner maps this to exit_status -1 so that it is consistent
+	// with other "command never ran" agent-level failures.
+	ExitCodeSetupFailure = 125
+)
 
 // Run the job and return the exit code
 func (e *Executor) Run(ctx context.Context) (exitCode int) {
@@ -188,10 +197,19 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 	}
 
-	// Initialize the environment, a failure here will still call the tearDown
+	// Initialize the environment, a failure here will still call the tearDown.
+	// setUp can fail due to infrastructure errors (secret fetch, env init)
+	// or due to a user hook (environment hook) returning non-zero.
 	if err = e.setUp(ctx); err != nil {
 		e.shell.Errorf("Error setting up job executor: %v", err)
-		return shell.ExitCode(err)
+
+		// If the error is a typed ExitError (e.g. from a hook), preserve
+		// the hook's exit code. Otherwise it's an infra error — return
+		// ExitCodeSetupFailure so the parent can map it to -1.
+		if exitErr := new(shell.ExitError); errors.As(err, &exitErr) {
+			return exitErr.Code
+		}
+		return ExitCodeSetupFailure
 	}
 
 	// Execute the job phases in order
@@ -531,7 +549,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		// (which acquires open file descriptors of the parent process) and
 		// writing an executable (the script wrapper).
 		// See https://github.com/golang/go/issues/22315.
-		script, err := e.shell.Script(script.Path())
+		script, err := e.shell.Script(script.Path(), e.HooksShell)
 		if err != nil {
 			r.Break()
 			return err
@@ -608,6 +626,21 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 		if afterWd != e.shell.Getwd() {
 			_ = e.shell.Chdir(afterWd)
 		}
+	}
+
+	// Prevent any changes to vars that are protected even within the job.
+	// This is a courtesy to hook/plugin authors that write a hook that mutates
+	// an env var only to find out that the change has no effect, or perhaps
+	// breaks the rest of the job.
+	var protected []string
+	for k := range changes.Diff.Keys {
+		if env.IsProtectedFromWithinJob(k) {
+			protected = append(protected, k)
+			changes.Diff.Remove(k)
+		}
+	}
+	if len(protected) > 0 {
+		e.shell.Commentf("Changes to some env vars were blocked; the affected vars are: %v", protected)
 	}
 
 	e.shell.Env.Apply(changes.Diff)
@@ -789,14 +822,14 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	})
 }
 
+var badCharsRE = regexp.MustCompile("[[:^alnum:]]")
+
 func dirForAgentName(agentName string) string {
-	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
-	return badCharsPattern.ReplaceAllString(agentName, "-")
+	return badCharsRE.ReplaceAllString(agentName, "-")
 }
 
 func dirForRepository(repository string) string {
-	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
-	return badCharsPattern.ReplaceAllString(repository, "-")
+	return badCharsRE.ReplaceAllString(repository, "-")
 }
 
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/roko"
@@ -345,6 +346,15 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		e.shell.Commentf("Plugin checkout paths - PluginDir: %q, HooksDir: %q", checkout.PluginDir, checkout.HooksDir)
 	}
 
+	// Route zip plugins to zip handler
+	if p.IsZipPlugin() {
+		if !experiments.IsEnabled(ctx, experiments.ZipPlugins) {
+			return nil, fmt.Errorf("zip plugins require the %q experiment to be enabled", experiments.ZipPlugins)
+		}
+		e.shell.Commentf("Plugin %q will be downloaded as zip archive", p.DisplayName())
+		return checkout, e.checkoutZipPlugin(ctx, p, checkout, pluginDirectory)
+	}
+
 	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
 	// BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true).
 	//
@@ -448,7 +458,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// Switch to the version if we need to
 	if p.Version != "" {
 		e.shell.Commentf("Checking out `%s`", p.Version)
-		if err = e.shell.Command("git", "checkout", "-f", p.Version).Run(ctx); err != nil {
+		if err = e.shell.Command("git", "-c", "advice.detachedHead=false", "checkout", "-f", p.Version).Run(ctx); err != nil {
 			return nil, err
 		}
 	}

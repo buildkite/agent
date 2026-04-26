@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"slices"
 	"time"
 
@@ -133,15 +132,9 @@ var OIDCRequestTokenCommand = cli.Command{
 			}
 
 			token, resp, err := client.OIDCToken(ctx, req)
-			if resp != nil {
-				switch resp.StatusCode {
-				// Don't bother retrying if the response was one of these statuses
-				case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusUnprocessableEntity:
-					r.Break()
-					return nil, err
-				}
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return nil, err
 			}
-
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
 			}

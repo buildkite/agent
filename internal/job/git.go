@@ -65,7 +65,7 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 		return fmt.Errorf("%q %w", reference, errInvalidRef)
 	}
 
-	commandArgs := []string{"checkout"}
+	commandArgs := []string{"-c", "advice.detachedHead=false", "checkout"}
 	commandArgs = append(commandArgs, individualCheckoutFlags...)
 	commandArgs = append(commandArgs, reference)
 

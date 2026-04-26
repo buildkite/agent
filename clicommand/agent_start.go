@@ -33,10 +33,10 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
@@ -134,6 +134,7 @@ type AgentStartConfig struct {
 	PluginsPath          string   `cli:"plugins-path" normalize:"filepath"`
 
 	Shell           string `cli:"shell"`
+	HooksShell      string `cli:"hooks-shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
 	NoPTY           bool   `cli:"no-pty"`
 
@@ -169,6 +170,7 @@ type AgentStartConfig struct {
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
 	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
+	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval           bool     `cli:"no-command-eval"`
@@ -196,10 +198,11 @@ type AgentStartConfig struct {
 	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
 	// Other shared flags
-	StrictSingleHooks         bool   `cli:"strict-single-hooks"`
-	KubernetesExec            bool   `cli:"kubernetes-exec"`
-	TraceContextEncoding      string `cli:"trace-context-encoding"`
-	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
+	StrictSingleHooks               bool          `cli:"strict-single-hooks"`
+	KubernetesExec                  bool          `cli:"kubernetes-exec"`
+	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
+	TraceContextEncoding            string        `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -307,7 +310,7 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 }
 
 func DefaultShell() string {
-	// https://github.com/golang/go/blob/master/src/go/build/syslist.go#L7
+	// https://github.com/golang/go/blob/master/src/internal/syslist/syslist.go#L17
 	switch runtime.GOOS {
 	case "windows":
 		return `C:\Windows\System32\CMD.exe /S /C`
@@ -436,6 +439,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_SHELL",
 		},
 		cli.StringFlag{
+			Name:   "hooks-shell",
+			Usage:  "The shell command used to interpret hooks commands, e.g pwsh -Command",
+			EnvVar: "BUILDKITE_HOOKS_SHELL",
+		},
+		cli.StringFlag{
 			Name:   "queue",
 			Usage:  "The queue the agent will listen to for jobs. If not set, the agent will use the default queue. Overwrites the queue tag in the agent's tags",
 			EnvVar: "BUILDKITE_AGENT_QUEUE",
@@ -529,6 +537,7 @@ var AgentStartCommand = cli.Command{
 		GitCheckoutTimeoutFlag,
 		GitSubmoduleCloneConfigFlag,
 		GitSkipFetchExistingCommitsFlag,
+		CheckoutAttemptsFlag,
 
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -749,6 +758,12 @@ var AgentStartCommand = cli.Command{
 				"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
 				"logs and exit statuses between containers in a pod (default: false)",
 			EnvVar: "BUILDKITE_KUBERNETES_EXEC",
+		},
+		cli.DurationFlag{
+			Name:   "kubernetes-container-start-timeout",
+			Usage:  "Timeout for waiting for all containers to start in a Kubernetes pod (default: 5m)",
+			EnvVar: "BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT",
+			Value:  5 * time.Minute,
 		},
 
 		// Other shared flags
@@ -1033,56 +1048,59 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:              cfg.BootstrapScript,
-			BuildPath:                    cfg.BuildPath,
-			SocketsPath:                  cfg.SocketsPath,
-			GitMirrorsPath:               cfg.GitMirrorsPath,
-			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
-			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
-			GitCheckoutTimeout:           cfg.GitCheckoutTimeout,
-			HooksPath:                    cfg.HooksPath,
-			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
-			PluginsPath:                  cfg.PluginsPath,
-			GitCheckoutFlags:             cfg.GitCheckoutFlags,
-			GitCloneFlags:                cfg.GitCloneFlags,
-			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
-			GitCleanFlags:                cfg.GitCleanFlags,
-			GitFetchFlags:                cfg.GitFetchFlags,
-			GitSubmodules:                !cfg.NoGitSubmodules,
-			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
-			SkipCheckout:                 cfg.SkipCheckout,
-			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
-			SSHKeyscan:                   !cfg.NoSSHKeyscan,
-			CommandEval:                  !cfg.NoCommandEval,
-			PluginsEnabled:               !cfg.NoPlugins,
-			PluginValidation:             !cfg.NoPluginValidation,
-			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
-			LocalHooksEnabled:            !cfg.NoLocalHooks,
-			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
-			StrictSingleHooks:            cfg.StrictSingleHooks,
-			RunInPty:                     !cfg.NoPTY,
-			ANSITimestamps:               !cfg.NoANSITimestamps,
-			TimestampLines:               cfg.TimestampLines,
-			DisconnectAfterJob:           cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:   time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
-			DisconnectAfterUptime:        time.Duration(cfg.DisconnectAfterUptime) * time.Second,
-			CancelGracePeriod:            cfg.CancelGracePeriod,
-			SignalGracePeriod:            signalGracePeriod,
-			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
-			JobLogPath:                   cfg.JobLogPath,
-			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
-			LogFormat:                    cfg.LogFormat,
-			Shell:                        cfg.Shell,
-			RedactedVars:                 cfg.RedactedVars,
-			AcquireJob:                   cfg.AcquireJob,
-			TracingBackend:               cfg.TracingBackend,
-			TracingServiceName:           cfg.TracingServiceName,
-			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
-			TraceContextEncoding:         cfg.TraceContextEncoding,
-			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
-			KubernetesExec:               cfg.KubernetesExec,
-			PingMode:                     cfg.PingMode,
+			BootstrapScript:                 cfg.BootstrapScript,
+			BuildPath:                       cfg.BuildPath,
+			SocketsPath:                     cfg.SocketsPath,
+			GitMirrorsPath:                  cfg.GitMirrorsPath,
+			GitMirrorCheckoutMode:           cfg.GitMirrorCheckoutMode,
+			GitMirrorsLockTimeout:           cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:            cfg.GitMirrorsSkipUpdate,
+			HooksPath:                       cfg.HooksPath,
+			AdditionalHooksPaths:            cfg.AdditionalHooksPaths,
+			PluginsPath:                     cfg.PluginsPath,
+			GitCheckoutFlags:                cfg.GitCheckoutFlags,
+			GitCheckoutTimeout:           	 cfg.GitCheckoutTimeout,
+			GitCloneFlags:                   cfg.GitCloneFlags,
+			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                   cfg.GitCleanFlags,
+			GitFetchFlags:                   cfg.GitFetchFlags,
+			GitSubmodules:                   !cfg.NoGitSubmodules,
+			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
+			SkipCheckout:                    cfg.SkipCheckout,
+			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
+			CheckoutAttempts:                cfg.CheckoutAttempts,
+			SSHKeyscan:                      !cfg.NoSSHKeyscan,
+			CommandEval:                     !cfg.NoCommandEval,
+			PluginsEnabled:                  !cfg.NoPlugins,
+			PluginValidation:                !cfg.NoPluginValidation,
+			PluginsAlwaysCloneFresh:         cfg.PluginsAlwaysCloneFresh,
+			LocalHooksEnabled:               !cfg.NoLocalHooks,
+			AllowedEnvironmentVariables:     allowedEnvironmentVariables,
+			StrictSingleHooks:               cfg.StrictSingleHooks,
+			RunInPty:                        !cfg.NoPTY,
+			ANSITimestamps:                  !cfg.NoANSITimestamps,
+			TimestampLines:                  cfg.TimestampLines,
+			DisconnectAfterJob:              cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:      time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
+			DisconnectAfterUptime:           time.Duration(cfg.DisconnectAfterUptime) * time.Second,
+			CancelGracePeriod:               cfg.CancelGracePeriod,
+			SignalGracePeriod:               signalGracePeriod,
+			EnableJobLogTmpfile:             cfg.EnableJobLogTmpfile,
+			JobLogPath:                      cfg.JobLogPath,
+			WriteJobLogsToStdout:            cfg.WriteJobLogsToStdout,
+			LogFormat:                       cfg.LogFormat,
+			Shell:                           cfg.Shell,
+			HooksShell:                      cfg.HooksShell,
+			RedactedVars:                    cfg.RedactedVars,
+			AcquireJob:                      cfg.AcquireJob,
+			TracingBackend:                  cfg.TracingBackend,
+			TracingServiceName:              cfg.TracingServiceName,
+			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
+			TraceContextEncoding:            cfg.TraceContextEncoding,
+			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
+			KubernetesExec:                  cfg.KubernetesExec,
+			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
+			PingMode:                        cfg.PingMode,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
@@ -1551,7 +1569,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 
 	// run hooks
 	for _, p = range hooks {
-		script, err := sh.Script(p)
+		script, err := sh.Script(p, cfg.HooksShell)
 		if err != nil {
 			log.Error("%q hook: %v", hookName, err)
 			return err

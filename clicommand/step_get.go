@@ -85,9 +85,8 @@ var StepGetCommand = cli.Command{
 		)
 		stepExportResponse, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.StepExportResponse, error) {
 			stepExportResponse, resp, err := client.StepExport(ctx, cfg.StepOrKey, stepExportRequest)
-			// Don't bother retrying if the response was one of these statuses
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return stepExportResponse, err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/kubernetes"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
 )
 
@@ -112,6 +112,16 @@ var KubernetesBootstrapCommand = cli.Command{
 			cs, err := process.ParseSignal(sig)
 			if err != nil {
 				return err
+			}
+			// CancelSignal == SIGKILL means the user wants the command to be
+			// killed instead of signaled more gracefully (SIGTERM, SIGINT,
+			// etc).
+			// We don't send SIGKILL to the bootstrap itself as a cancel signal,
+			// because that would kill the bootstrap immediately, which would
+			// prevent capturing the exit status of the command, executing
+			// various pre-exit hooks, and other cleanup.
+			if cs == process.SIGKILL {
+				cs = process.SIGTERM
 			}
 			cancelSignal = cs
 		}

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/tracetools"
 )
 
@@ -20,6 +20,7 @@ import (
 // To add a new config option that is mapped from an environment variable, add a
 // struct tag, then don't forget to add a corresponding CLI flag over in the
 // clicommand/bootstrap.go(BootstrapConfig) struct, otherwise it won't work.
+// Also check the protectedEnv map in env/protected.go.
 
 type ExecutorConfig struct {
 	// The command to run
@@ -166,6 +167,9 @@ type ExecutorConfig struct {
 	// The shell used to execute commands
 	Shell string
 
+	// The shell used to execute agent hooks
+	HooksShell string
+
 	// Phases to execute, defaults to all phases
 	Phases []string
 
@@ -202,6 +206,10 @@ type ExecutorConfig struct {
 
 	// Secrets definition for the job step
 	Secrets string
+
+	// Number of checkout attempts (including the initial attempt).
+	// Uses exponential backoff with jitter between retries.
+	CheckoutAttempts int
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
