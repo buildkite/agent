@@ -172,7 +172,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 		return err
 	}
 
-	if err := e.checkoutWithTimeout(ctx); err != nil {
+	if err := e.checkout(ctx); err != nil {
 		return err
 	}
 
@@ -216,22 +216,27 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
-// checkoutWithTimeout wraps checkout with a timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set.
-func (e *Executor) checkoutWithTimeout(ctx context.Context) error {
+// errCheckoutAttemptTimeout is returned when a single checkout attempt exceeds
+// BUILDKITE_GIT_CHECKOUT_TIMEOUT. It is wrapped so the retry loop can recognize
+// it via errors.Is and decide whether to retry.
+var errCheckoutAttemptTimeout = errors.New("checkout attempt timed out")
+
+// runDefaultCheckoutAttempt runs defaultCheckoutPhase, applying a per-attempt
+// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. If the per-attempt timeout
+// fires (and the outer context is still alive), it returns a wrapped
+// errCheckoutAttemptTimeout so the retry loop can decide what to do.
+func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 	if e.GitCheckoutTimeout <= 0 {
-		return e.checkout(ctx)
+		return e.defaultCheckoutPhase(ctx)
 	}
 
 	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
-	e.shell.Commentf("Running checkout with a timeout of %s", timeout)
-
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	err := e.checkout(ctx)
-	if err != nil && ctx.Err() == context.DeadlineExceeded {
-		e.shell.Errorf("Checkout exceeded the configured timeout of %s (BUILDKITE_GIT_CHECKOUT_TIMEOUT=%d)", timeout, e.GitCheckoutTimeout)
-		return &shell.ExitError{Code: 95, Err: fmt.Errorf("git checkout timed out after %s", timeout)}
+	err := e.defaultCheckoutPhase(attemptCtx)
+	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimeout, timeout, err)
 	}
 	return err
 }
@@ -269,7 +274,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			err := e.defaultCheckoutPhase(ctx)
+			err := e.runDefaultCheckoutAttempt(ctx)
 			if err == nil {
 				return nil
 			}
@@ -287,6 +292,19 @@ func (e *Executor) checkout(ctx context.Context) error {
 				r.Break()
 				// 94 chosen by fair die roll
 				return &shell.ExitError{Code: 94, Err: err}
+
+			case errors.Is(err, errCheckoutAttemptTimeout):
+				// Per-attempt timeout (BUILDKITE_GIT_CHECKOUT_TIMEOUT) fired. Let
+				// the retrier decide whether to retry; clean the checkout dir so
+				// the next attempt starts fresh in case git left things in a bad
+				// state when killed.
+				e.shell.Warningf("Checkout attempt timed out (%s)", r)
+				if err := e.removeCheckoutDir(); err != nil {
+					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout timeout: %v", err)
+				}
+				if err := e.createCheckoutDir(); err != nil {
+					return err
+				}
 
 			case errors.Is(err, context.Canceled):
 				e.shell.Warningf("Checkout was cancelled")
@@ -346,6 +364,10 @@ func (e *Executor) checkout(ctx context.Context) error {
 
 			return err
 		}); err != nil {
+			if errors.Is(err, errCheckoutAttemptTimeout) {
+				e.shell.Errorf("Checkout failed: every attempt exceeded the configured timeout of %ds (BUILDKITE_GIT_CHECKOUT_TIMEOUT)", e.GitCheckoutTimeout)
+				return &shell.ExitError{Code: 95, Err: err}
+			}
 			return err
 		}
 	}

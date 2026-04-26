@@ -1059,7 +1059,7 @@ var AgentStartCommand = cli.Command{
 			AdditionalHooksPaths:            cfg.AdditionalHooksPaths,
 			PluginsPath:                     cfg.PluginsPath,
 			GitCheckoutFlags:                cfg.GitCheckoutFlags,
-			GitCheckoutTimeout:           	 cfg.GitCheckoutTimeout,
+			GitCheckoutTimeout:              cfg.GitCheckoutTimeout,
 			GitCloneFlags:                   cfg.GitCloneFlags,
 			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                   cfg.GitCleanFlags,

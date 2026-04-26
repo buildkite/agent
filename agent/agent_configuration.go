@@ -20,7 +20,7 @@ type AgentConfiguration struct {
 	GitMirrorsSkipUpdate            bool
 	PluginsPath                     string
 	GitCheckoutFlags                string
-	GitCheckoutTimeout          	int
+	GitCheckoutTimeout              int
 	GitCloneFlags                   string
 	GitCloneMirrorFlags             string
 	GitCleanFlags                   string
