@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/secrets"
 	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
 )
 
@@ -84,67 +86,74 @@ Examples:
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[SecretGetConfig](ctx, c)
 		defer done()
-
-		if len(cfg.Keys) == 0 {
-			return errors.New("at least one secret key must be provided")
-		}
-
-		if !slices.Contains([]string{"default", "json", "env"}, cfg.Format) {
-			return fmt.Errorf("invalid format %q: must be one of 'default', 'json', or 'env'", cfg.Format)
-		}
-
-		agentClient := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-		secrets, errs := secrets.FetchSecrets(ctx, l, agentClient, cfg.Job, cfg.Keys, 10)
-		if len(errs) > 0 {
-			sb := &strings.Builder{}
-			sb.WriteString("Failed to fetch some secrets:\n")
-			for _, err := range errs {
-				_, _ = fmt.Fprintf(sb, " - %v\n", err)
-			}
-			return errors.New(sb.String())
-		}
-
-		if !cfg.SkipRedaction {
-			jobClient, err := jobapi.NewDefaultClient(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to create Job API client: %w", err)
-			}
-
-			for _, secret := range secrets {
-				if err := AddToRedactor(ctx, l, jobClient, secret.Value); err != nil {
-					if cfg.Debug {
-						return err
-					}
-					return errSecretRedact
-				}
-			}
-		}
-
-		// Otherwise, print in the requested format
-		secretsMap := make(map[string]string, len(secrets))
-		for _, secret := range secrets {
-			secretsMap[secret.Key] = secret.Value
-		}
-
-		switch {
-		case len(cfg.Keys) == 1 && cfg.Format == "default":
-			_, _ = fmt.Fprintln(c.App.Writer, secrets[0].Value)
-			return nil
-
-		case cfg.Format == "json" || (cfg.Format == "default" && len(cfg.Keys) > 1):
-			if err := json.NewEncoder(c.App.Writer).Encode(secretsMap); err != nil {
-				return fmt.Errorf("failed to write JSON response: %w", err)
-			}
-
-		case cfg.Format == "env":
-			for _, key := range slices.Sorted(maps.Keys(secretsMap)) {
-				fmt.Fprintf(c.App.Writer, "%s=%q\n", strings.ToUpper(key), secretsMap[key])
-			}
-
-		default:
-			return fmt.Errorf("unsupported format %q", cfg.Format)
-		}
-
-		return nil
+		return secretGet(ctx, cfg, c.App.Writer, l)
 	},
+}
+
+func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.Logger) error {
+	if len(cfg.Keys) == 0 {
+		return errors.New("at least one secret key must be provided")
+	}
+
+	if !slices.Contains([]string{"default", "json", "env"}, cfg.Format) {
+		return fmt.Errorf("invalid format %q: must be one of 'default', 'json', or 'env'", cfg.Format)
+	}
+
+	agentClient := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
+	fetchedSecrets, errs := secrets.FetchSecrets(ctx, l, agentClient, cfg.Job, cfg.Keys, 10)
+	if len(errs) > 0 {
+		sb := &strings.Builder{}
+		sb.WriteString("Failed to fetch some secrets:\n")
+		for _, err := range errs {
+			_, _ = fmt.Fprintf(sb, " - %v\n", err)
+		}
+		return errors.New(sb.String())
+	}
+
+	if !cfg.SkipRedaction {
+		jobClient, err := jobapi.NewDefaultClient(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create Job API client: %w", err)
+		}
+
+		for _, secret := range fetchedSecrets {
+			if err := AddToRedactor(ctx, l, jobClient, secret.Value); err != nil {
+				if cfg.Debug {
+					return err
+				}
+				return errSecretRedact
+			}
+		}
+	}
+	// Otherwise, print in the requested format
+	secretsMap := make(map[string]string, len(fetchedSecrets))
+	for _, secret := range fetchedSecrets {
+		secretsMap[secret.Key] = secret.Value
+	}
+
+	switch {
+	case len(cfg.Keys) == 1 && cfg.Format == "default":
+		_, _ = fmt.Fprintln(w, fetchedSecrets[0].Value)
+		return nil
+
+	case cfg.Format == "json" || (cfg.Format == "default" && len(cfg.Keys) > 1):
+		if err := json.NewEncoder(w).Encode(secretsMap); err != nil {
+			return fmt.Errorf("failed to write JSON response: %w", err)
+		}
+
+	case cfg.Format == "env":
+		for _, key := range slices.Sorted(maps.Keys(secretsMap)) {
+			_, _ = fmt.Fprintf(w, "%s=%s\n", strings.ToUpper(key), shellQuote(secretsMap[key]))
+		}
+
+	default:
+		return fmt.Errorf("unsupported format %q", cfg.Format)
+	}
+
+	return nil
+}
+
+// shellQuote wraps the string in single quotes, which suppresses all shell expansions
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
