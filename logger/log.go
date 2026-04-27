@@ -249,15 +249,15 @@ func NewJSONPrinter(w io.Writer) *JSONPrinter {
 func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 	var b strings.Builder
 
-	b.WriteString(fmt.Sprintf(`"ts":%q,`, time.Now().Format(time.RFC3339)))
-	b.WriteString(fmt.Sprintf(`"level":%q,`, level.String()))
+	_, _ = fmt.Fprintf(&b, `"ts":%q,`, time.Now().Format(time.RFC3339))
+	_, _ = fmt.Fprintf(&b, `"level":%q,`, level.String())
 
 	// Serialize msg to JSON so we're not producing invalid JSON
 	jsonMsg, err := json.Marshal(msg)
 	if err != nil {
 		jsonMsg = []byte(`"error marshaling message"`)
 	}
-	b.WriteString(fmt.Sprintf(`"msg":%s,`, jsonMsg))
+	_, _ = fmt.Fprintf(&b, `"msg":%s,`, jsonMsg)
 
 	for _, field := range fields {
 		b.WriteString(fmt.Sprintf("%q:%q,", field.Key(), field.String()))
