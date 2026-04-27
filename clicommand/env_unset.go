@@ -67,7 +67,7 @@ var EnvUnsetCommand = cli.Command{
 
 func envUnsetAction(c *cli.Context) error {
 	ctx := context.Background()
-	ctx, cfg, l, _, done := setupLoggerAndConfig[EnvUnsetConfig](ctx, c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[EnvUnsetConfig](ctx, c)
 	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)
@@ -120,7 +120,7 @@ func envUnsetAction(c *cli.Context) error {
 
 	unset, err := client.EnvDelete(ctx, del)
 	if err != nil {
-		l.Error("couldn't unset the job executor environment variables: %v", err)
+		return fmt.Errorf("couldn't unset the job executor environment variables: %w", err)
 	}
 
 	switch cfg.OutputFormat {

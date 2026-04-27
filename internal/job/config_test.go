@@ -93,6 +93,46 @@ func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 	}
 }
 
+func TestReadFromEnvironmentDoesNotRefreshNoCheckoutOverride(t *testing.T) {
+	t.Parallel()
+
+	config := &ExecutorConfig{NoCheckoutOverride: true}
+	environ := env.FromSlice([]string{"BUILDKITE_NO_CHECKOUT_OVERRIDE=false"})
+
+	changes := config.ReadFromEnvironment(environ)
+	if len(changes) != 0 {
+		t.Errorf("changes = %v, want none", changes)
+	}
+	if got, want := config.NoCheckoutOverride, true; got != want {
+		t.Errorf("config.NoCheckoutOverride = %t, want %t", got, want)
+	}
+}
+
+func TestReadFromEnvironmentSkipsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+	t.Parallel()
+
+	config := &ExecutorConfig{
+		NoCheckoutOverride: true,
+		SkipCheckout:       false,
+		GitCloneFlags:      "-v",
+	}
+	environ := env.FromSlice([]string{
+		"BUILDKITE_SKIP_CHECKOUT=true",
+		"BUILDKITE_GIT_CLONE_FLAGS=--mirror",
+	})
+
+	changes := config.ReadFromEnvironment(environ)
+	if len(changes) != 0 {
+		t.Errorf("changes = %v, want none", changes)
+	}
+	if got, want := config.SkipCheckout, false; got != want {
+		t.Errorf("config.SkipCheckout = %t, want %t", got, want)
+	}
+	if got, want := config.GitCloneFlags, "-v"; got != want {
+		t.Errorf("config.GitCloneFlags = %q, want %q", got, want)
+	}
+}
+
 func TestGitSubmodulesBidirectionalControl(t *testing.T) {
 	t.Parallel()
 

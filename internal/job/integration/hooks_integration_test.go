@@ -120,6 +120,78 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
 }
 
+func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		noCheckoutOverride  bool
+		wantSkipCheckoutEnv string
+		wantBlockedWarning  bool
+	}{
+		{
+			name:                "disabled_allows_mutation",
+			wantSkipCheckoutEnv: "true",
+		},
+		{
+			name:               "enabled_blocks_mutation",
+			noCheckoutOverride: true,
+			wantBlockedWarning: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("NewExecutorTester() error = %v", err)
+			}
+			defer tester.Close()
+
+			filename := "environment"
+			script := []string{
+				"#!/usr/bin/env bash",
+				"export BUILDKITE_SKIP_CHECKOUT=true",
+			}
+			if runtime.GOOS == "windows" {
+				filename = "environment.bat"
+				script = []string{
+					"@echo off",
+					"set BUILDKITE_SKIP_CHECKOUT=true",
+				}
+			}
+
+			if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+				t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+			}
+
+			tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got, want := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"), tc.wantSkipCheckoutEnv; got != want {
+					fmt.Fprintf(c.Stderr, "Expected BUILDKITE_SKIP_CHECKOUT=%q, got %q\n", want, got)
+					c.Exit(1)
+					return
+				}
+				c.Exit(0)
+			})
+
+			env := []string{}
+			if tc.noCheckoutOverride {
+				env = append(env, "BUILDKITE_NO_CHECKOUT_OVERRIDE=true")
+			}
+
+			tester.RunAndCheck(t, env...)
+
+			containsWarning := strings.Contains(tester.Output, "env vars were blocked") &&
+				strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT")
+			if containsWarning != tc.wantBlockedWarning {
+				t.Fatalf("blocked warning presence = %t, want %t\noutput: %s", containsWarning, tc.wantBlockedWarning, tester.Output)
+			}
+		})
+	}
+}
+
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	t.Parallel()
 
