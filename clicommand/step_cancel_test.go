@@ -4,10 +4,11 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestStepCancel(t *testing.T) {
@@ -33,8 +34,12 @@ func TestStepCancel(t *testing.T) {
 
 		l := logger.NewBuffer()
 		err := cancelStep(ctx, cfg, l)
-		assert.Nil(t, err)
-		assert.Contains(t, l.Messages, "[info] Successfully cancelled step: b0db1550-e68c-428f-9b4d-edf5599b2cff")
+		if got := err; got != nil {
+			t.Errorf("cancelStep(ctx, cfg, l) = %v, want nil", got)
+		}
+		if got, want := l.Messages, "[info] Successfully cancelled step: b0db1550-e68c-428f-9b4d-edf5599b2cff"; !slices.Contains(got, want) {
+			t.Errorf("l.Messages = %v, want containing %q", got, want)
+		}
 	})
 
 	t.Run("failed", func(t *testing.T) {
@@ -54,6 +59,8 @@ func TestStepCancel(t *testing.T) {
 
 		l := logger.NewBuffer()
 		err := cancelStep(ctx, cfg, l)
-		assert.Contains(t, err.Error(), "failed to cancel step")
+		if got, want := err.Error(), "failed to cancel step"; !strings.Contains(got, want) {
+			t.Errorf("err.Error() = %q, want containing %q", got, want)
+		}
 	})
 }

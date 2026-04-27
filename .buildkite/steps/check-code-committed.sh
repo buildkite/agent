@@ -36,6 +36,18 @@ if ! git diff --no-ext-diff --exit-code; then
   exit 1
 fi
 
+echo --- :go: Running assertzapper...
+if ! lint_out="$(go tool assertzapper ./...)" ; then
+  echo ^^^ +++
+  echo "assertzapper found uses of an assert library:"
+  echo ""
+  echo "${lint_out}"
+  echo "Run"
+  echo "  go tool assertzapper -fix ./..."
+  echo "then refine any changes it makes, and make a commit."
+  exit 1
+fi
+
 echo +++ :go: Running golangci-lint...
 if ! lint_out="$(golangci-lint run --color=always)" ; then
   echo ^^^ +++

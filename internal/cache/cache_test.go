@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/zstash"
 	"github.com/buildkite/zstash/cache"
-	"github.com/stretchr/testify/require"
+	"github.com/google/go-cmp/cmp"
 )
 
 // mockCacheClient is a mock implementation of the CacheClient interface for testing
@@ -49,7 +51,9 @@ func createTempCacheConfig(t *testing.T, content string) string {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "cache.yml")
 	err := os.WriteFile(configFile, []byte(content), 0o600)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("os.WriteFile(%q, []byte(content), %d) error = %v, want nil", configFile, 0o600, err)
+	}
 	return configFile
 }
 
@@ -78,7 +82,9 @@ func TestSaveWithClient_CacheCreated(t *testing.T) {
 	}
 
 	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
+	}
 }
 
 func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
@@ -95,7 +101,9 @@ func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 	}
 
 	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
+	}
 }
 
 func TestSaveWithClient_MultipleCaches(t *testing.T) {
@@ -123,8 +131,12 @@ func TestSaveWithClient_MultipleCaches(t *testing.T) {
 	}
 
 	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1)
-	require.NoError(t, err)
-	require.Equal(t, 3, callCount, "Expected Save to be called 3 times")
+	if err != nil {
+		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\", \"cache2\", \"cache3\"}, %d) error = %v, want nil", 1, err)
+	}
+	if got, want := callCount, 3; got != want {
+		t.Fatalf("Expected Save to be called 3 times")
+	}
 }
 
 func TestSaveWithClient_Error(t *testing.T) {
@@ -139,9 +151,15 @@ func TestSaveWithClient_Error(t *testing.T) {
 	}
 
 	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "failed to save cache")
-	require.ErrorContains(t, err, "save failed")
+	if err == nil {
+		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want non-nil error", 1, err)
+	}
+	if want := "failed to save cache"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want error containing %q", 1, err, want)
+	}
+	if want := "save failed"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want error containing %q", 1, err, want)
+	}
 }
 
 func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
@@ -156,7 +174,9 @@ func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 	}
 
 	err := saveWithClient(ctx, logger.Discard, mock, []string{}, 1)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{}, %d) error = %v, want nil", 1, err)
+	}
 }
 
 // Tests for restoreWithClient
@@ -186,7 +206,9 @@ func TestRestoreWithClient_CacheHit(t *testing.T) {
 	}
 
 	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
+	}
 }
 
 func TestRestoreWithClient_FallbackUsed(t *testing.T) {
@@ -214,7 +236,9 @@ func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 	}
 
 	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
+	}
 }
 
 func TestRestoreWithClient_CacheMiss(t *testing.T) {
@@ -233,7 +257,9 @@ func TestRestoreWithClient_CacheMiss(t *testing.T) {
 	}
 
 	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
+	}
 }
 
 func TestRestoreWithClient_MultipleCaches(t *testing.T) {
@@ -253,8 +279,12 @@ func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 	}
 
 	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1)
-	require.NoError(t, err)
-	require.Equal(t, 3, callCount, "Expected Restore to be called 3 times")
+	if err != nil {
+		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\", \"cache2\", \"cache3\"}, %d) error = %v, want nil", 1, err)
+	}
+	if got, want := callCount, 3; got != want {
+		t.Fatalf("Expected Restore to be called 3 times")
+	}
 }
 
 func TestRestoreWithClient_Error(t *testing.T) {
@@ -269,9 +299,15 @@ func TestRestoreWithClient_Error(t *testing.T) {
 	}
 
 	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "failed to restore cache")
-	require.ErrorContains(t, err, "restore failed")
+	if err == nil {
+		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want non-nil error", 1, err)
+	}
+	if want := "failed to restore cache"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want error containing %q", 1, err, want)
+	}
+	if want := "restore failed"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want error containing %q", 1, err, want)
+	}
 }
 
 func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
@@ -286,7 +322,9 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 	}
 
 	err := restoreWithClient(ctx, logger.Discard, mock, []string{}, 1)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{}, %d) error = %v, want nil", 1, err)
+	}
 }
 
 // Tests for loadCacheConfiguration
@@ -307,10 +345,18 @@ func TestLoadCacheConfiguration_Valid(t *testing.T) {
 	configFile := createTempCacheConfig(t, config)
 
 	fileConfig, err := loadCacheConfiguration(configFile)
-	require.NoError(t, err)
-	require.Len(t, fileConfig.Dependencies, 2)
-	require.Equal(t, "node", fileConfig.Dependencies[0].ID)
-	require.Equal(t, "ruby", fileConfig.Dependencies[1].ID)
+	if err != nil {
+		t.Fatalf("loadCacheConfiguration(%q) error = %v, want nil", configFile, err)
+	}
+	if got, want := len(fileConfig.Dependencies), 2; got != want {
+		t.Fatalf("len(fileConfig.Dependencies) = %d, want %d", got, want)
+	}
+	if got, want := fileConfig.Dependencies[0].ID, "node"; got != want {
+		t.Fatalf("fileConfig.Dependencies[0].ID = %q, want %q", got, want)
+	}
+	if got, want := fileConfig.Dependencies[1].ID, "ruby"; got != want {
+		t.Fatalf("fileConfig.Dependencies[1].ID = %q, want %q", got, want)
+	}
 }
 
 func TestLoadCacheConfiguration_InvalidYAML(t *testing.T) {
@@ -326,16 +372,24 @@ func TestLoadCacheConfiguration_InvalidYAML(t *testing.T) {
 	configFile := createTempCacheConfig(t, config)
 
 	_, err := loadCacheConfiguration(configFile)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "failed to unmarshal cache config file")
+	if err == nil {
+		t.Fatalf("loadCacheConfiguration(%q) error = %v, want non-nil error", configFile, err)
+	}
+	if want := "failed to unmarshal cache config file"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("loadCacheConfiguration(%q) error = %v, want error containing %q", configFile, err, want)
+	}
 }
 
 func TestLoadCacheConfiguration_FileNotFound(t *testing.T) {
 	t.Parallel()
 
 	_, err := loadCacheConfiguration("/nonexistent/path/to/cache.yml")
-	require.Error(t, err)
-	require.ErrorContains(t, err, "failed to read cache config file")
+	if err == nil {
+		t.Fatalf("loadCacheConfiguration(%q) error = %v, want non-nil error", "/nonexistent/path/to/cache.yml", err)
+	}
+	if want := "failed to read cache config file"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("loadCacheConfiguration(%q) error = %v, want error containing %q", "/nonexistent/path/to/cache.yml", err, want)
+	}
 }
 
 func TestLoadCacheConfiguration_EmptyFile(t *testing.T) {
@@ -344,8 +398,12 @@ func TestLoadCacheConfiguration_EmptyFile(t *testing.T) {
 	configFile := createTempCacheConfig(t, "")
 
 	fileConfig, err := loadCacheConfiguration(configFile)
-	require.NoError(t, err)
-	require.Empty(t, fileConfig.Dependencies)
+	if err != nil {
+		t.Fatalf("loadCacheConfiguration(%q) error = %v, want nil", configFile, err)
+	}
+	if got := len(fileConfig.Dependencies); got != 0 {
+		t.Fatalf("len(fileConfig.Dependencies) = %d, want 0", got)
+	}
 }
 
 // Tests for setupCacheClient
@@ -378,10 +436,18 @@ func TestSetupCacheClient_InvalidCacheIDs(t *testing.T) {
 	}
 
 	_, _, err := setupCacheClient(ctx, logger.Discard, cfg)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "cache IDs not found in configuration")
-	require.ErrorContains(t, err, "invalid1")
-	require.ErrorContains(t, err, "invalid2")
+	if err == nil {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want non-nil error", err)
+	}
+	if want := "cache IDs not found in configuration"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+	}
+	if want := "invalid1"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+	}
+	if want := "invalid2"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+	}
 }
 
 func TestSetupCacheClient_ValidCacheIDs(t *testing.T) {
@@ -412,9 +478,15 @@ func TestSetupCacheClient_ValidCacheIDs(t *testing.T) {
 	}
 
 	client, cacheIDs, err := setupCacheClient(ctx, logger.Discard, cfg)
-	require.NoError(t, err)
-	require.NotNil(t, client)
-	require.Equal(t, []string{"cache1", "cache2"}, cacheIDs)
+	if err != nil {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
+	}
+	if got := client; got == nil {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
+	}
+	if diff := cmp.Diff(cacheIDs, []string{"cache1", "cache2"}); diff != "" {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestSetupCacheClient_AllCaches(t *testing.T) {
@@ -445,7 +517,13 @@ func TestSetupCacheClient_AllCaches(t *testing.T) {
 	}
 
 	client, cacheIDs, err := setupCacheClient(ctx, logger.Discard, cfg)
-	require.NoError(t, err)
-	require.NotNil(t, client)
-	require.ElementsMatch(t, []string{"cache1", "cache2"}, cacheIDs)
+	if err != nil {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
+	}
+	if got := client; got == nil {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
+	}
+	if diff := cmp.Diff(slices.Sorted(slices.Values(cacheIDs)), slices.Sorted(slices.Values([]string{"cache1", "cache2"}))); diff != "" {
+		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) sorted diff (-got +want):\n%s", diff)
+	}
 }
