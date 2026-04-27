@@ -31,10 +31,10 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 
 	case "output-slow-exit":
-		fmt.Fprintf(os.Stdout, "llamas1\n")
-		fmt.Fprintf(os.Stderr, "alpacas1\r")
-		fmt.Fprintf(os.Stdout, "llamas2\r\n")
-		fmt.Fprintf(os.Stderr, "alpacas2\n")
+		_, _ = fmt.Fprintf(os.Stdout, "llamas1\n")
+		_, _ = fmt.Fprintf(os.Stderr, "alpacas1\r")
+		_, _ = fmt.Fprintf(os.Stdout, "llamas2\r\n")
+		_, _ = fmt.Fprintf(os.Stderr, "alpacas2\n")
 		time.Sleep(100 * time.Millisecond)
 		os.Exit(0)
 

@@ -133,7 +133,7 @@ func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 		},
 		{
 			`["github.com/buildkite-plugins/ping#main#lololo"]`,
-			"Too many '#'s in \"github.com/buildkite-plugins/ping#main#lololo\"",
+			"too many '#'s in \"github.com/buildkite-plugins/ping#main#lololo\"",
 		},
 	}
 
@@ -341,15 +341,15 @@ func TestRespositoryAndSubdirectoryErrors(t *testing.T) {
 	}{
 		{
 			location: "github.com/buildkite",
-			wantErr:  `Incomplete plugin path "github.com/buildkite"`,
+			wantErr:  `incomplete plugin path "github.com/buildkite"`,
 		},
 		{
 			location: "bitbucket.org/buildkite",
-			wantErr:  `Incomplete plugin path "bitbucket.org/buildkite"`,
+			wantErr:  `incomplete plugin path "bitbucket.org/buildkite"`,
 		},
 		{
 			location: "",
-			wantErr:  "Missing plugin location",
+			wantErr:  "missing plugin location",
 		},
 	}
 	for _, tc := range tests {

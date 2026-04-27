@@ -54,6 +54,6 @@ func TestStepCancel(t *testing.T) {
 
 		l := logger.NewBuffer()
 		err := cancelStep(ctx, cfg, l)
-		assert.Contains(t, err.Error(), "Failed to cancel step")
+		assert.Contains(t, err.Error(), "failed to cancel step")
 	})
 }

@@ -116,8 +116,12 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	<-r.done
-	return nil
+	select {
+	case <-r.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // startupCheck blocks until all containers have connected, or times out.

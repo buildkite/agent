@@ -36,7 +36,7 @@ func TestAsyncPipelineUpload(t *testing.T) {
 		{
 			state:          "rejected",
 			expectedSleeps: []time.Duration{},
-			err:            errors.New("Failed to upload and process pipeline: Pipeline upload rejected: "),
+			err:            errors.New("failed to upload and process pipeline: pipeline upload rejected: "),
 		},
 		{
 			state: "pending",
@@ -47,7 +47,7 @@ func TestAsyncPipelineUpload(t *testing.T) {
 				}
 				return sleeps
 			}(),
-			err: errors.New("Failed to upload and process pipeline: Pipeline upload not yet applied: pending"),
+			err: errors.New("failed to upload and process pipeline: pipeline upload not yet applied: pending"),
 		},
 	} {
 		t.Run(test.state, func(t *testing.T) {

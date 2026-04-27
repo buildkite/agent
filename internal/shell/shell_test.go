@@ -30,7 +30,11 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer func() {
+		if err := sshKeygen.Close(); err != nil {
+			t.Errorf("sshKeygen.Close() = %v", err)
+		}
+	}()
 
 	// WithPTY(true) should be overriden by RunAndCapture.
 	sh := newShellForTest(t, shell.WithPTY(true))
@@ -59,7 +63,11 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer func() {
+		if err := sshKeygen.Close(); err != nil {
+			t.Errorf("sshKeygen.Close() = %v", err)
+		}
+	}()
 
 	sh := newShellForTest(t, shell.WithPTY(false))
 
@@ -86,7 +94,11 @@ func TestRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer func() {
+		if err := sshKeygen.Close(); err != nil {
+			t.Errorf("sshKeygen.Close() = %v", err)
+		}
+	}()
 
 	out := &bytes.Buffer{}
 
@@ -98,7 +110,7 @@ func TestRun(t *testing.T) {
 
 	go func() {
 		call := <-sshKeygen.Ch
-		fmt.Fprintln(call.Stdout, "Llama party! 🎉")
+		_, _ = fmt.Fprintln(call.Stdout, "Llama party! 🎉")
 		call.Exit(0)
 	}()
 
@@ -292,7 +304,9 @@ func TestInterrupt(t *testing.T) {
 					t.Error("timeout waiting for process to start")
 				case <-started:
 					// Now interrupt the process.
-					sh.Interrupt()
+					if err := sh.Interrupt(); err != nil {
+						t.Errorf("sh.Interrupt() = %v", err)
+					}
 				}
 			}()
 
