@@ -594,6 +594,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
 	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
 	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
+	if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
+		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
+	}
 	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)

@@ -165,6 +165,7 @@ type AgentStartConfig struct {
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
+	GitCheckoutTimeout          int      `cli:"git-checkout-timeout"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
@@ -533,6 +534,7 @@ var AgentStartCommand = cli.Command{
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
 		GitMirrorsSkipUpdateFlag,
+		GitCheckoutTimeoutFlag,
 		GitSubmoduleCloneConfigFlag,
 		GitSkipFetchExistingCommitsFlag,
 		CheckoutAttemptsFlag,
@@ -1057,6 +1059,7 @@ var AgentStartCommand = cli.Command{
 			AdditionalHooksPaths:            cfg.AdditionalHooksPaths,
 			PluginsPath:                     cfg.PluginsPath,
 			GitCheckoutFlags:                cfg.GitCheckoutFlags,
+			GitCheckoutTimeout:              cfg.GitCheckoutTimeout,
 			GitCloneFlags:                   cfg.GitCloneFlags,
 			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                   cfg.GitCleanFlags,
