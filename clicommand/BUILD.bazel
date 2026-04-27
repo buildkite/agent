@@ -41,6 +41,7 @@ go_library(
         "meta_data_get.go",
         "meta_data_keys.go",
         "meta_data_set.go",
+        "meta_data_set_batch.go",
         "oidc_request_token.go",
         "pipeline_upload.go",
         "profiler.go",
@@ -119,6 +120,7 @@ go_test(
         "artifact_shasum_test.go",
         "build_cancel_test.go",
         "config_completeness_test.go",
+        "meta_data_set_batch_test.go",
         "git_credentials_helper_test.go",
         "pipeline_upload_test.go",
         "redactor_add_test.go",
@@ -126,6 +128,7 @@ go_test(
     ],
     embed = [":clicommand"],
     deps = [
+        "//api",
         "//core",
         "//env",
         "//internal/experiments",
