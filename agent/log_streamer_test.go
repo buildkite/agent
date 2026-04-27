@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
@@ -93,4 +94,86 @@ func TestLogStreamer(t *testing.T) {
 	if err := ls.Process(ctx, []byte(input)); !errors.Is(err, errStreamerStopped) {
 		t.Errorf("after Stop: LogStreamer.Process(ctx, %q) err = %v, want %v", input, err, errStreamerStopped)
 	}
+}
+
+func TestLogStreamerStopFlushesPendingAfterContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	logger := logger.NewConsoleLogger(
+		logger.NewTextPrinter(os.Stderr),
+		func(c int) { t.Errorf("exit(%d)", c) },
+	)
+
+	var mu sync.Mutex
+	var got []*api.Chunk
+	callback := func(ctx context.Context, chunk *api.Chunk) error {
+		mu.Lock()
+		got = append(got, chunk)
+		mu.Unlock()
+		return nil
+	}
+
+	ls := NewLogStreamer(logger, callback, LogStreamerConfig{
+		Concurrency:       1,
+		MaxChunkSizeBytes: 10,
+		MaxChunkAge:       time.Hour,
+	})
+
+	if err := ls.Start(ctx); err != nil {
+		t.Fatalf("LogStreamer.Start(ctx) = %v", err)
+	}
+
+	input := "hello world"
+	if err := ls.Process(ctx, []byte(input)); err != nil {
+		t.Fatalf("LogStreamer.Process(ctx, %q) = %v", input, err)
+	}
+
+	cancel()
+	ls.Stop()
+
+	want := []*api.Chunk{
+		{
+			Data:     []byte("hello worl"),
+			Sequence: 1,
+			Offset:   0,
+			Size:     10,
+		},
+		{
+			Data:     []byte("d"),
+			Sequence: 2,
+			Offset:   10,
+			Size:     1,
+		},
+	}
+	sort.Slice(got, func(i, j int) bool {
+		return got[i].Sequence < got[j].Sequence
+	})
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("LogStreamer chunks diff after cancellation (-got +want):\n%s", diff)
+	}
+}
+
+func TestLogStreamerStopIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	logger := logger.NewConsoleLogger(
+		logger.NewTextPrinter(os.Stderr),
+		func(c int) { t.Errorf("exit(%d)", c) },
+	)
+
+	ls := NewLogStreamer(logger, func(ctx context.Context, chunk *api.Chunk) error {
+		return nil
+	}, LogStreamerConfig{
+		Concurrency:       1,
+		MaxChunkSizeBytes: 10,
+	})
+
+	if err := ls.Start(ctx); err != nil {
+		t.Fatalf("LogStreamer.Start(ctx) = %v", err)
+	}
+
+	ls.Stop()
+	ls.Stop()
 }

@@ -77,4 +77,10 @@ type AgentConfiguration struct {
 	AllowMultipartArtifactUpload bool
 
 	PingMode string
+
+	// LogStreamingInterval controls how frequently accumulated log output is
+	// uploaded as a chunk. Larger values reduce API calls and improve
+	// compression, at the cost of slightly delayed log rendering in the UI.
+	// When 0 the agent flushes on every poll tick (original behaviour).
+	LogStreamingInterval time.Duration
 }
