@@ -5,11 +5,11 @@ import (
 	"errors"
 	"os"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestFetchingTags(t *testing.T) {
@@ -28,16 +28,24 @@ func TestFetchingTagsWithHostTags(t *testing.T) {
 		TagsFromHost: true,
 	})
 
-	assert.Contains(t, tags, "llamas")
-	assert.Contains(t, tags, "rock")
+	if got, want := tags, "llamas"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "rock"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
 
 	hostname, err := os.Hostname()
 	if err != nil {
 		t.Fatalf("os.Hostname() error = %v", err)
 	}
 
-	assert.Contains(t, tags, "hostname="+hostname)
-	assert.Contains(t, tags, "os="+runtime.GOOS)
+	if got, want := tags, "hostname="+hostname; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "os="+runtime.GOOS; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
 }
 
 func TestFetchingTagsFromEC2(t *testing.T) {
@@ -61,8 +69,10 @@ func TestFetchingTagsFromEC2(t *testing.T) {
 		TagsFromEC2Tags:     true,
 	})
 
-	assert.ElementsMatch(t, tags,
-		[]string{"llamas", "rock", "aws:instance-id=i-blahblah", "aws:instance-type=t2.small", "custom_tag=true"})
+	slices.Sort(tags)
+	if diff := cmp.Diff(tags, slices.Sorted(slices.Values([]string{"llamas", "rock", "aws:instance-id=i-blahblah", "aws:instance-type=t2.small", "custom_tag=true"}))); diff != "" {
+		t.Errorf("tags diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestFetchingTagsFromEC2Tags(t *testing.T) {
@@ -78,8 +88,10 @@ func TestFetchingTagsFromEC2Tags(t *testing.T) {
 		TagsFromEC2Tags: true,
 	})
 
-	assert.ElementsMatch(t, tags,
-		[]string{"custom_tag=true"})
+	slices.Sort(tags)
+	if diff := cmp.Diff(tags, slices.Sorted(slices.Values([]string{"custom_tag=true"}))); diff != "" {
+		t.Errorf("tags diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestFetchingTagsFromECS(t *testing.T) {
@@ -98,14 +110,16 @@ func TestFetchingTagsFromECS(t *testing.T) {
 		TagsFromECSMetaData: true,
 	})
 
-	assert.ElementsMatch(t, tags,
-		[]string{
-			"llamas",
-			"rock",
-			"ecs:container-name=ecs-buildkite-agent-blahblah",
-			"ecs:image=buildkite/agent",
-			"ecs:task-arn=arn:aws:ecs:us-east-1:123456789012:task/MyCluster/4d590253bb114126b7afa7b58EXAMPLE",
-		})
+	slices.Sort(tags)
+	if diff := cmp.Diff(tags, slices.Sorted(slices.Values([]string{
+		"llamas",
+		"rock",
+		"ecs:container-name=ecs-buildkite-agent-blahblah",
+		"ecs:image=buildkite/agent",
+		"ecs:task-arn=arn:aws:ecs:us-east-1:123456789012:task/MyCluster/4d590253bb114126b7afa7b58EXAMPLE",
+	}))); diff != "" {
+		t.Errorf("tags diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestFetchingTagsFromGCP(t *testing.T) {
@@ -136,8 +150,10 @@ func TestFetchingTagsFromGCP(t *testing.T) {
 		TagsFromGCPLabels:   true,
 	})
 
-	assert.ElementsMatch(t, tags,
-		[]string{"llamas", "rock", "gcp:instance-id=my-instance", "gcp:zone=blah", "custom_tag=true"})
+	slices.Sort(tags)
+	if diff := cmp.Diff(tags, slices.Sorted(slices.Values([]string{"llamas", "rock", "gcp:instance-id=my-instance", "gcp:zone=blah", "custom_tag=true"}))); diff != "" {
+		t.Errorf("tags diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestFetchingTagsFromAllSources(t *testing.T) {
@@ -146,7 +162,9 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 			return map[string]string{`gcp_metadata`: "true"}, nil
 		},
 		gcpMetaDataPaths: func(paths map[string]string) (map[string]string, error) {
-			assert.Equal(t, paths, map[string]string{"tag": "some/gcp/value"})
+			if diff := cmp.Diff(paths, map[string]string{"tag": "some/gcp/value"}); diff != "" {
+				t.Errorf("paths diff (-got +want):\n%s", diff)
+			}
 			return map[string]string{`gcp_metadata_paths`: "true"}, nil
 		},
 		gcpLabels: func() (map[string]string, error) {
@@ -162,7 +180,9 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 			return map[string]string{`ecs_metadata`: "true"}, nil
 		},
 		ec2MetaDataPaths: func(paths map[string]string) (map[string]string, error) {
-			assert.Equal(t, paths, map[string]string{"tag": "some/ec2/value"})
+			if diff := cmp.Diff(paths, map[string]string{"tag": "some/ec2/value"}); diff != "" {
+				t.Errorf("paths diff (-got +want):\n%s", diff)
+			}
 			return map[string]string{`ec2_metadata_paths`: "true"}, nil
 		},
 	}
@@ -184,15 +204,37 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 		t.Fatalf("os.Hostname() error = %v", err)
 	}
 
-	assert.Contains(t, tags, "llamas")
-	assert.Contains(t, tags, "rock")
-	assert.Contains(t, tags, "gcp_metadata=true")
-	assert.Contains(t, tags, "gcp_metadata_paths=true")
-	assert.Contains(t, tags, "gcp_labels=true")
-	assert.Contains(t, tags, "ec2_tags=true")
-	assert.Contains(t, tags, "ec2_metadata=true")
-	assert.Contains(t, tags, "ecs_metadata=true")
-	assert.Contains(t, tags, "ec2_metadata_paths=true")
-	assert.Contains(t, tags, "hostname="+hostname)
-	assert.Contains(t, tags, "os="+runtime.GOOS)
+	if got, want := tags, "llamas"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "rock"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "gcp_metadata=true"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "gcp_metadata_paths=true"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "gcp_labels=true"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "ec2_tags=true"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "ec2_metadata=true"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "ecs_metadata=true"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "ec2_metadata_paths=true"; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "hostname="+hostname; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
+	if got, want := tags, "os="+runtime.GOOS; !slices.Contains(got, want) {
+		t.Errorf("tags = %v, want containing %q", got, want)
+	}
 }

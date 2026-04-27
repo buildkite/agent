@@ -8,7 +8,6 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
-	"github.com/stretchr/testify/assert"
 )
 
 func init() {
@@ -50,8 +49,12 @@ func TestSSHKeyscanReturnsOutput(t *testing.T) {
 
 	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
 
-	assert.Equal(t, keyScanOutput, "github.com ssh-rsa xxx=")
-	assert.NoError(t, err)
+	if got, want := keyScanOutput, "github.com ssh-rsa xxx="; got != want {
+		t.Errorf("keyScanOutput = %q, want %q", got, want)
+	}
+	if err != nil {
+		t.Errorf("err error = %v, want nil", err)
+	}
 }
 
 func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
@@ -74,8 +77,12 @@ func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
 
 	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com:123")
 
-	assert.Equal(t, keyScanOutput, "github.com ssh-rsa xxx=")
-	assert.NoError(t, err)
+	if got, want := keyScanOutput, "github.com ssh-rsa xxx="; got != want {
+		t.Errorf("keyScanOutput = %q, want %q", got, want)
+	}
+	if err != nil {
+		t.Errorf("err error = %v, want nil", err)
+	}
 }
 
 func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
@@ -99,8 +106,12 @@ func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
 
 	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
 
-	assert.Equal(t, keyScanOutput, "")
-	assert.EqualError(t, err, "`ssh-keyscan \"github.com\"` failed")
+	if got, want := keyScanOutput, ""; got != want {
+		t.Errorf("keyScanOutput = %q, want %q", got, want)
+	}
+	if want := "`ssh-keyscan \"github.com\"` failed"; err == nil || err.Error() != want {
+		t.Errorf("err error = %v, want error with message %q", err, want)
+	}
 }
 
 func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
@@ -128,6 +139,10 @@ func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
 
 	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
 
-	assert.Equal(t, keyScanOutput, "")
-	assert.EqualError(t, err, "`ssh-keyscan \"github.com\"` returned nothing")
+	if got, want := keyScanOutput, ""; got != want {
+		t.Errorf("keyScanOutput = %q, want %q", got, want)
+	}
+	if want := "`ssh-keyscan \"github.com\"` returned nothing"; err == nil || err.Error() != want {
+		t.Errorf("err error = %v, want error with message %q", err, want)
+	}
 }

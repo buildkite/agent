@@ -15,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
-	"gotest.tools/v3/assert"
 )
 
 func TestRunningPlugins(t *testing.T) {
@@ -326,7 +325,9 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	// You may be surprised that we're creating a branch here.  This is so we can test the behaviour
 	// when a branch has had new commits added to it.
 	err = p.CreateBranch("something-fixed")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	// To test this, we also set our testPlugin to version "something-fixed", so that the agent will
 	// check out that ref.

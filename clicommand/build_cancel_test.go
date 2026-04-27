@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildCancel(t *testing.T) {
@@ -31,8 +31,12 @@ func TestBuildCancel(t *testing.T) {
 
 		l := logger.NewBuffer()
 		err := cancelBuild(ctx, cfg, l)
-		assert.Nil(t, err)
-		assert.Contains(t, l.Messages, fmt.Sprintf("[info] Successfully cancelled build %s", cfg.Build))
+		if got := err; got != nil {
+			t.Errorf("err = %v, want nil", err)
+		}
+		if got, want := l.Messages, fmt.Sprintf("[info] Successfully cancelled build %s", cfg.Build); !slices.Contains(got, want) {
+			t.Errorf("l.Messages = %v, want containing %q", got, want)
+		}
 	})
 
 	t.Run("failed", func(t *testing.T) {
@@ -50,6 +54,8 @@ func TestBuildCancel(t *testing.T) {
 
 		l := logger.NewBuffer()
 		err := cancelBuild(ctx, cfg, l)
-		assert.NotNil(t, err)
+		if got := err; got == nil {
+			t.Errorf("err = %v, want non-nil value", err)
+		}
 	})
 }

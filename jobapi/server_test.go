@@ -21,7 +21,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/google/go-cmp/cmp"
-	"gotest.tools/v3/assert"
 )
 
 func pt(s string) *string {
@@ -68,7 +67,9 @@ func testAPI[Req, Resp any](t *testing.T, env *env.Environment, req *http.Reques
 
 	if testCase.expectedResponseBody != nil {
 		var got Resp
-		assert.NilError(t, json.NewDecoder(resp.Body).Decode(&got))
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatalf("json.NewDecoder(resp.Body).Decode(&got) error = %v, want nil", err)
+		}
 		if !cmp.Equal(testCase.expectedResponseBody, &got) {
 			t.Fatalf("\n\texpected response: % #v\n\tgot: % #v\n\tdiff = %s)", *testCase.expectedResponseBody, got, cmp.Diff(testCase.expectedResponseBody, &got))
 		}
@@ -76,7 +77,9 @@ func testAPI[Req, Resp any](t *testing.T, env *env.Environment, req *http.Reques
 
 	if testCase.expectedError != nil {
 		var got jobapi.ErrorResponse
-		assert.NilError(t, json.NewDecoder(resp.Body).Decode(&got))
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatalf("json.NewDecoder(resp.Body).Decode(&got) error = %v, want nil", err)
+		}
 		if got.Error != testCase.expectedError.Error {
 			t.Fatalf("expected error %q (got %q)", testCase.expectedError.Error, got.Error)
 		}
@@ -420,15 +423,23 @@ func TestCreateRedaction(t *testing.T) {
 
 	env := testEnviron()
 	srv, token, err := testServer(t, env, mux)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	// write some stuff that won't be redacted
 	_, err = rdc.Write([]byte("Go from Guayaquil, until you get to Quito.\n"))
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
-	assert.NilError(t, srv.Start())
+	if err := srv.Start(); err != nil {
+		t.Fatalf("srv.Start() error = %v, want nil", err)
+	}
 	t.Cleanup(func() {
-		assert.NilError(t, srv.Stop())
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("srv.Stop() error = %v, want nil", err)
+		}
 	})
 
 	client := testSocketClient(srv.SocketPath)
@@ -440,27 +451,31 @@ func TestCreateRedaction(t *testing.T) {
 	}
 
 	buf := &bytes.Buffer{}
-	assert.NilError(t, json.NewEncoder(buf).Encode(tc.requestBody))
+	if err := json.NewEncoder(buf).Encode(tc.requestBody); err != nil {
+		t.Fatalf("json.NewEncoder(buf).Encode(tc.requestBody) error = %v, want nil", err)
+	}
 
 	req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/redactions", buf)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	testAPI(t, env, req, client, tc)
 
 	// now when we write it, it should be redacted
 	_, err = rdc.Write([]byte("From Quito, go back to Guayaquil.\n"))
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	if err := mux.Flush(); err != nil {
 		t.Fatalf("mux.Flush() = %v", err)
 	}
 
-	assert.Equal(
-		t,
-		writeBuf.String(),
-		"Go from [REDACTED], until you get to Quito.\nFrom [REDACTED], go back to [REDACTED].\n",
-	)
+	if got, want := writeBuf.String(), "Go from [REDACTED], until you get to Quito.\nFrom [REDACTED], go back to [REDACTED].\n"; got != want {
+		t.Fatalf("writeBuf.String() = %q, want %q", got, want)
+	}
 }
 
 func TestDebugLogging(t *testing.T) {
@@ -469,14 +484,20 @@ func TestDebugLogging(t *testing.T) {
 	env := testEnviron()
 
 	sockName, err := jobapi.NewSocketPath(os.TempDir())
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	logBuf := &bytes.Buffer{}
 	logger := shell.NewWriterLogger(logBuf, true, nil)
 	srv, token, err := jobapi.NewServer(logger, sockName, env, nil, jobapi.WithDebug())
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
-	assert.NilError(t, srv.Start())
+	if err := srv.Start(); err != nil {
+		t.Fatalf("srv.Start() error = %v, want nil", err)
+	}
 	t.Cleanup(func() { _ = srv.Stop() }) // ignore error that server is already stopped
 
 	client := testSocketClient(srv.SocketPath)
@@ -492,21 +513,35 @@ func TestDebugLogging(t *testing.T) {
 	}
 
 	buf := &bytes.Buffer{}
-	assert.NilError(t, json.NewEncoder(buf).Encode(tc.requestBody))
+	if err := json.NewEncoder(buf).Encode(tc.requestBody); err != nil {
+		t.Fatalf("json.NewEncoder(buf).Encode(tc.requestBody) error = %v, want nil", err)
+	}
 
 	req, err := http.NewRequest(http.MethodGet, "http://job/api/current-job/v0/env", buf)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	testAPI(t, env, req, client, tc)
 
-	assert.NilError(t, srv.Stop())
+	if err := srv.Stop(); err != nil {
+		t.Fatalf("srv.Stop() error = %v, want nil", err)
+	}
 
 	logs := logBuf.String()
-	assert.Check(t, strings.Contains(logs, "~~~ Job API"), "logs: %q", logs)
-	assert.Check(t, strings.Contains(logs, "Server listening on"), "logs: %q", logs)
-	assert.Check(t, strings.Contains(logs, "/api/current-job/v0/env"), "logs: %q", logs)
-	assert.Check(t, strings.Contains(logs, "Successfully shut down Job API server"), "logs: %q", logs)
+	if got := strings.Contains(logs, "~~~ Job API"); !got {
+		t.Errorf("logs: %q", logs)
+	}
+	if got := strings.Contains(logs, "Server listening on"); !got {
+		t.Errorf("logs: %q", logs)
+	}
+	if got := strings.Contains(logs, "/api/current-job/v0/env"); !got {
+		t.Errorf("logs: %q", logs)
+	}
+	if got := strings.Contains(logs, "Successfully shut down Job API server"); !got {
+		t.Errorf("logs: %q", logs)
+	}
 }
 
 func TestNoLogging(t *testing.T) {
@@ -515,14 +550,20 @@ func TestNoLogging(t *testing.T) {
 	env := testEnviron()
 
 	sockName, err := jobapi.NewSocketPath(os.TempDir())
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	logBuf := &bytes.Buffer{}
 	logger := shell.NewWriterLogger(logBuf, true, nil)
 	srv, token, err := jobapi.NewServer(logger, sockName, env, nil)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
-	assert.NilError(t, srv.Start())
+	if err := srv.Start(); err != nil {
+		t.Fatalf("srv.Start() error = %v, want nil", err)
+	}
 	t.Cleanup(func() { _ = srv.Stop() }) // ignore error that server is already stopped
 
 	client := testSocketClient(srv.SocketPath)
@@ -538,16 +579,24 @@ func TestNoLogging(t *testing.T) {
 	}
 
 	buf := &bytes.Buffer{}
-	assert.NilError(t, json.NewEncoder(buf).Encode(tc.requestBody))
+	if err := json.NewEncoder(buf).Encode(tc.requestBody); err != nil {
+		t.Fatalf("json.NewEncoder(buf).Encode(tc.requestBody) error = %v, want nil", err)
+	}
 
 	req, err := http.NewRequest(http.MethodGet, "http://job/api/current-job/v0/env", buf)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	testAPI(t, env, req, client, tc)
 
-	assert.NilError(t, srv.Stop())
+	if err := srv.Stop(); err != nil {
+		t.Fatalf("srv.Stop() error = %v, want nil", err)
+	}
 
 	logs := logBuf.String()
-	assert.Assert(t, logs == "", "logs: %q", logs)
+	if got := logs == ""; !got {
+		t.Errorf("logs: %q", logs)
+	}
 }

@@ -4,8 +4,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/agent"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestK8sTags(t *testing.T) {
@@ -44,8 +43,12 @@ func TestK8sTags(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			actualTags, err := agent.K8sTagsFromEnv(test.env)
-			require.NoError(t, err)
-			assert.Equal(t, test.expectedTags, actualTags)
+			if err != nil {
+				t.Fatalf("err error = %v, want nil", err)
+			}
+			if diff := cmp.Diff(test.expectedTags, actualTags); diff != "" {
+				t.Errorf("test.expectedTags diff (-got +want):\n%s", diff)
+			}
 		})
 	}
 }

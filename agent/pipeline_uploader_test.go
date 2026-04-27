@@ -14,7 +14,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/go-pipeline"
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestAsyncPipelineUpload(t *testing.T) {
@@ -77,12 +77,16 @@ steps:
       queue: xxx`
 
 			pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr))
-			assert.NoError(t, err)
+			if err != nil {
+				t.Errorf("err error = %v, want nil", err)
+			}
 
 			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 				switch req.URL.Path {
 				case fmt.Sprintf("/jobs/%s/pipelines", jobID):
-					assert.Equal(t, req.URL.Query().Get("async"), "true")
+					if got, want := req.URL.Query().Get("async"), "true"; got != want {
+						t.Errorf("req.URL.Query().Get(\"async\") = %q, want %q", got, want)
+					}
 					if req.Method == "POST" {
 						rw.Header().Add("Retry-After", "5")
 						rw.Header().Add("Location", fmt.Sprintf("/jobs/%s/pipelines/%s", jobID, stepUploadUUID))
@@ -119,11 +123,17 @@ steps:
 
 			err = uploader.Upload(ctx, l)
 			if test.err == nil {
-				assert.NoError(t, err)
+				if err != nil {
+					t.Errorf("err error = %v, want nil", err)
+				}
 			} else {
-				assert.ErrorContains(t, err, test.err.Error())
+				if want := test.err.Error(); err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("err error = %v, want error containing %q", err, want)
+				}
 			}
-			assert.Equal(t, test.expectedSleeps, retrySleeps)
+			if diff := cmp.Diff(test.expectedSleeps, retrySleeps); diff != "" {
+				t.Errorf("test.expectedSleeps diff (-got +want):\n%s", diff)
+			}
 		})
 	}
 }
@@ -202,7 +212,9 @@ steps:
       queue: xxx`
 
 			pipeline, err := pipeline.Parse(strings.NewReader(pipelineStr))
-			assert.NoError(t, err)
+			if err != nil {
+				t.Errorf("err error = %v, want nil", err)
+			}
 
 			countUploadCalls := 0
 			server := httptest.NewServer(
@@ -227,7 +239,8 @@ steps:
 							return
 						}
 					case fmt.Sprintf("/jobs/%s/pipelines/%s", jobID, stepUploadUUID):
-						assert.Fail(t, "should not call the status route")
+						t.Error("should not call the status route")
+
 						http.Error(
 							rw,
 							"This route should not have been called",
@@ -259,16 +272,17 @@ steps:
 
 			err = uploader.Upload(ctx, l)
 			if test.errStatus == 0 {
-				assert.NoError(t, err)
+				if err != nil {
+					t.Errorf("err error = %v, want nil", err)
+				}
 			} else {
-				assert.True(
-					t,
-					api.IsErrHavingStatus(err, test.errStatus),
-					"expected api error with status: %d, received: %v",
-					test.errStatus, err,
-				)
+				if got := api.IsErrHavingStatus(err, test.errStatus); !got {
+					t.Errorf("expected api error with status: %d, received: %v", test.errStatus, err)
+				}
 			}
-			assert.Equal(t, test.expectedSleeps, retrySleeps)
+			if diff := cmp.Diff(test.expectedSleeps, retrySleeps); diff != "" {
+				t.Errorf("test.expectedSleeps diff (-got +want):\n%s", diff)
+			}
 		})
 	}
 }
