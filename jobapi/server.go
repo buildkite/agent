@@ -22,6 +22,12 @@ func WithDebug() ServerOpts {
 	}
 }
 
+func WithNoCheckoutOverride(enabled bool) ServerOpts {
+	return func(s *Server) {
+		s.noCheckoutOverride = enabled
+	}
+}
+
 // Server is a Job API server. It provides an HTTP API with which to interact with the job currently running in the buildkite agent
 // and allows jobs to introspect and mutate their own state
 type Server struct {
@@ -30,9 +36,10 @@ type Server struct {
 	Logger     shell.Logger
 	debug      bool
 
-	mtx       sync.RWMutex
-	environ   *env.Environment
-	redactors *replacer.Mux
+	mtx                sync.RWMutex
+	environ            *env.Environment
+	redactors          *replacer.Mux
+	noCheckoutOverride bool
 
 	token   string
 	sockSvr *socket.Server

@@ -193,6 +193,12 @@ var (
 		EnvVar: "BUILDKITE_SKIP_CHECKOUT",
 	}
 
+	NoCheckoutOverrideFlag = cli.BoolFlag{
+		Name:   "no-checkout-override",
+		Usage:  "Prevent hooks, plugins, Job API, and secrets from overriding scoped checkout settings (default: false)",
+		EnvVar: "BUILDKITE_NO_CHECKOUT_OVERRIDE",
+	}
+
 	GitCheckoutFlagsFlag = cli.StringFlag{
 		Name:   "git-checkout-flags",
 		Value:  "-f",

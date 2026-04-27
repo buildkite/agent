@@ -454,6 +454,7 @@ BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
 BUILDKITE_GIT_SUBMODULES
 BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG
+BUILDKITE_NO_CHECKOUT_OVERRIDE
 BUILDKITE_CANCEL_GRACE_PERIOD
 BUILDKITE_COMMAND_EVAL
 BUILDKITE_LOCAL_HOOKS_ENABLED
@@ -577,6 +578,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
 		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
 	}
+	setEnv("BUILDKITE_NO_CHECKOUT_OVERRIDE", fmt.Sprint(r.conf.AgentConfiguration.NoCheckoutOverride))
 	setEnv("BUILDKITE_CHECKOUT_ATTEMPTS", strconv.Itoa(r.conf.AgentConfiguration.CheckoutAttempts))
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))

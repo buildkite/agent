@@ -83,6 +83,9 @@ type ExecutorConfig struct {
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
 
+	// This intentionally has no env tag so hooks cannot disable it at runtime.
+	NoCheckoutOverride bool
+
 	// Flags to pass to "git checkout" command
 	GitCheckoutFlags string `env:"BUILDKITE_GIT_CHECKOUT_FLAGS"`
 

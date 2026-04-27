@@ -169,6 +169,7 @@ type AgentStartConfig struct {
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
 	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
+	NoCheckoutOverride          bool     `cli:"no-checkout-override"`
 	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
@@ -524,6 +525,7 @@ var AgentStartCommand = cli.Command{
 
 		// Various git related flags shared with bootstrap
 		SkipCheckoutFlag,
+		NoCheckoutOverrideFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCleanFlagsFlag,
@@ -1065,6 +1067,7 @@ var AgentStartCommand = cli.Command{
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,
 			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
+			NoCheckoutOverride:              cfg.NoCheckoutOverride,
 			CheckoutAttempts:                cfg.CheckoutAttempts,
 			SSHKeyscan:                      !cfg.NoSSHKeyscan,
 			CommandEval:                     !cfg.NoCommandEval,
