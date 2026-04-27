@@ -60,6 +60,7 @@ go_test(
         "azure_blob_test.go",
         "bk_uploader_test.go",
         "download_test.go",
+        "metrics_test.go",
         "downloader_test.go",
         "gs_uploader_test.go",
         "s3_downloader_test.go",
@@ -77,6 +78,7 @@ go_test(
         "@com_github_aws_aws_sdk_go_v2_service_s3//types",
         "@com_github_google_go_cmp//cmp",
         "@com_github_google_go_cmp//cmp/cmpopts",
+        "@com_github_prometheus_client_golang//prometheus/testutil",
         "@com_github_stretchr_testify//assert",
     ],
 )
