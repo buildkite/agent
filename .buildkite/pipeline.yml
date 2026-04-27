@@ -227,9 +227,6 @@ steps:
 
             - with: { os: dragonflybsd, arch: amd64 }
 
-            - with: { os: freebsd, arch: arm64 }
-              skip: "arm64 FreeBSD is not currently supported"
-
             - with: { os: linux, arch: arm }
             - with: { os: linux, arch: armhf }
             - with: { os: linux, arch: ppc64 }
