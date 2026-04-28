@@ -225,6 +225,12 @@ type AgentStartConfig struct {
 	DisconnectAfterJobTimeout          int           `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
+func (cfg *AgentStartConfig) lockCheckoutWhenCommandEvalDisabled() {
+	if cfg.NoCommandEval {
+		cfg.NoCheckoutOverride = true
+	}
+}
+
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
 	if asc.NoFeatureReporting {
 		return []string{}
@@ -897,6 +903,8 @@ var AgentStartCommand = cli.Command{
 		if (cfg.NoCommandEval || cfg.NoLocalHooks) && !isSetNoPlugins {
 			cfg.NoPlugins = true
 		}
+
+		cfg.lockCheckoutWhenCommandEvalDisabled()
 
 		// Guess the shell if none is provided
 		if cfg.Shell == "" {

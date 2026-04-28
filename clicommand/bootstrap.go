@@ -116,6 +116,12 @@ type BootstrapConfig struct {
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
 
+func (cfg *BootstrapConfig) lockCheckoutWhenCommandEvalDisabled() {
+	if !cfg.CommandEval {
+		cfg.NoCheckoutOverride = true
+	}
+}
+
 var BootstrapCommand = cli.Command{
 	Name:        "bootstrap",
 	Usage:       "Harness used internally by the agent to run jobs as subprocesses",
@@ -418,6 +424,8 @@ var BootstrapCommand = cli.Command{
 		if err != nil {
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
+
+		cfg.lockCheckoutWhenCommandEvalDisabled()
 
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
