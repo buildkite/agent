@@ -9,7 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli"
 )
 
@@ -18,7 +18,7 @@ func setupHooksPath(t *testing.T) (string, func()) {
 
 	hooksPath, err := os.MkdirTemp("", "")
 	if err != nil {
-		assert.FailNow(t, "failed to create temp file: %v", err)
+		t.Fatalf("failed to create temp file: %v", err)
 	}
 	return hooksPath, func() { _ = os.RemoveAll(hooksPath) }
 }
@@ -37,7 +37,7 @@ func writeAgentHook(t *testing.T, dir, hookName, msg string) string {
 	filepath := filepath.Join(dir, filename)
 	t.Logf("Creating %q with %q content", filepath, msg)
 	if err := os.WriteFile(filepath, []byte(script), 0o755); err != nil {
-		assert.FailNow(t, "failed to write %q hook: %v", hookName, err)
+		t.Fatalf("%+v", err)
 	}
 	t.Log("Providing the path with file created")
 	return filepath
@@ -65,12 +65,14 @@ func TestAgentStartupHook(t *testing.T) {
 		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello world")
 		log := logger.NewBuffer()
 		err := agentStartupHook(log, cfg(hooksPath))
-
-		if assert.NoError(t, err, log.Messages) {
-			assert.Equal(t, []string{
-				"[info] " + prompt + " " + filepath, // prompt
-				"[info] hello world",                // output
-			}, log.Messages)
+		if err != nil {
+			t.Fatalf("%+v", log.Messages)
+		}
+		if diff := cmp.Diff(log.Messages, []string{
+			"[info] " + prompt + " " + filepath,
+			"[info] hello world",
+		}); diff != "" {
+			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
 	})
 
@@ -82,8 +84,11 @@ func TestAgentStartupHook(t *testing.T) {
 
 		log := logger.NewBuffer()
 		err := agentStartupHook(log, cfg(hooksPath))
-		if assert.NoError(t, err, log.Messages) {
-			assert.Equal(t, []string{}, log.Messages)
+		if err != nil {
+			t.Fatalf("%+v", log.Messages)
+		}
+		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
+			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
 	})
 
@@ -92,9 +97,11 @@ func TestAgentStartupHook(t *testing.T) {
 
 		log := logger.NewBuffer()
 		err := agentStartupHook(log, cfg("zxczxczxc"))
-
-		if assert.NoError(t, err, log.Messages) {
-			assert.Equal(t, []string{}, log.Messages)
+		if err != nil {
+			t.Fatalf("%+v", log.Messages)
+		}
+		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
+			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
 	})
 }
@@ -127,14 +134,16 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 
 		log := logger.NewBuffer()
 		err := agentStartupHook(log, cfg(hooksPath, additionalHooksPath))
-
-		if assert.NoError(t, err, log.Messages) {
-			assert.Equal(t, []string{
-				"[info] " + prompt + " " + filepath,    // prompt
-				"[info] hello new world",               // output
-				"[info] " + prompt + " " + addFilepath, // prompt
-				"[info] hello additional world",        // output
-			}, log.Messages)
+		if err != nil {
+			t.Fatalf("%+v", log.Messages)
+		}
+		if diff := cmp.Diff(log.Messages, []string{
+			"[info] " + prompt + " " + filepath,
+			"[info] hello new world",
+			"[info] " + prompt + " " + addFilepath,
+			"[info] hello additional world",
+		}); diff != "" {
+			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
 	})
 }
@@ -162,10 +171,12 @@ func TestAgentShutdownHook(t *testing.T) {
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg(hooksPath))
 
-		assert.Equal(t, []string{
-			"[info] " + prompt + " " + filepath, // prompt
-			"[info] hello world",                // output
-		}, log.Messages)
+		if diff := cmp.Diff(log.Messages, []string{
+			"[info] " + prompt + " " + filepath,
+			"[info] hello world",
+		}); diff != "" {
+			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		}
 	})
 
 	t.Run("with no agent-shutdown hook", func(t *testing.T) {
@@ -176,7 +187,9 @@ func TestAgentShutdownHook(t *testing.T) {
 
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg(hooksPath))
-		assert.Equal(t, []string{}, log.Messages)
+		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
+			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		}
 	})
 
 	t.Run("with bad hooks path", func(t *testing.T) {
@@ -184,7 +197,9 @@ func TestAgentShutdownHook(t *testing.T) {
 
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg("zxczxczxc"))
-		assert.Equal(t, []string{}, log.Messages)
+		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
+			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		}
 	})
 }
 
@@ -202,8 +217,12 @@ func TestAgentStartJobLocked_ExitCode28(t *testing.T) {
 	}
 
 	var exitErr *cli.ExitError
-	assert.True(t, errors.As(cliErr, &exitErr), "Expected cli.ExitError, got: %v", cliErr)
-	assert.Equal(t, 28, exitErr.ExitCode(), "Expected exit code 28 for job locked, got: %d", exitErr.ExitCode())
+	if got := errors.As(cliErr, &exitErr); !got {
+		t.Errorf("Expected cli.ExitError, got: %v", cliErr)
+	}
+	if got, want := exitErr.ExitCode(), 28; got != want {
+		t.Errorf("Expected exit code 28 for job locked, got: %d", exitErr.ExitCode())
+	}
 }
 
 func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
@@ -220,6 +239,10 @@ func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
 	}
 
 	var exitErr *cli.ExitError
-	assert.True(t, errors.As(cliErr, &exitErr), "Expected cli.ExitError, got: %v", cliErr)
-	assert.Equal(t, 27, exitErr.ExitCode(), "Expected exit code 27 for job acquisition rejected, got: %d", exitErr.ExitCode())
+	if got := errors.As(cliErr, &exitErr); !got {
+		t.Errorf("Expected cli.ExitError, got: %v", cliErr)
+	}
+	if got, want := exitErr.ExitCode(), 27; got != want {
+		t.Errorf("Expected exit code 27 for job acquisition rejected, got: %d", exitErr.ExitCode())
+	}
 }

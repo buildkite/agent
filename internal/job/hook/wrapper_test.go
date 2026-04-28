@@ -13,7 +13,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/tempfile"
-	"gotest.tools/v3/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 type hookTestCase struct {
@@ -74,7 +74,9 @@ echo "hello world"
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
 			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
-			assert.NilError(t, err, "failed to create hook wrapper: %v", err)
+			if err != nil {
+				t.Fatalf("failed to create hook wrapper: %v", err)
+			}
 
 			sh := shell.NewTestShell(t)
 
@@ -87,7 +89,9 @@ echo "hello world"
 			}
 
 			changes, err := wrapper.Changes()
-			assert.NilError(t, err, "wrapper.Changes() = %v", err)
+			if err != nil {
+				t.Fatalf("wrapper.Changes() = %v", err)
+			}
 
 			// Windows’ batch 'SET >' normalises environment variables case so we apply
 			// the 'expected' and 'actual' diffs to a blank Environment which handles
@@ -108,7 +112,9 @@ echo "hello world"
 			// The strict equals check here also ensures we aren't bubbling up the
 			// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
 			// environment variables
-			assert.DeepEqual(t, expected.Dump(), actual.Dump())
+			if diff := cmp.Diff(expected.Dump(), actual.Dump()); diff != "" {
+				t.Fatalf("expected.Dump() diff (-got +want):\n%s", diff)
+			}
 		})
 	}
 }
@@ -167,15 +173,21 @@ echo hello world
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
 			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
-			assert.NilError(t, err, "failed to create hook wrapper: %v", err)
+			if err != nil {
+				t.Fatalf("failed to create hook wrapper: %v", err)
+			}
 
 			sh := shell.NewTestShell(t)
 
 			hookWorkingDir, err := os.MkdirTemp("", "test-hook-working-dir")
-			assert.NilError(t, err, `os.MkdirTemp("", "test-hook-working-dir") error = %v`, err)
+			if err != nil {
+				t.Fatalf(`os.MkdirTemp("", "test-hook-working-dir") error = %v`, err)
+			}
 
 			err = sh.Chdir(hookWorkingDir)
-			assert.NilError(t, err, "sh.Chdir(%q) = %v", hookWorkingDir, err)
+			if err != nil {
+				t.Fatalf("sh.Chdir(%q) = %v", hookWorkingDir, err)
+			}
 
 			script, err := sh.Script(wrapper.Path(), "")
 			if err != nil {
@@ -186,20 +198,30 @@ echo hello world
 			}
 
 			changes, err := wrapper.Changes()
-			assert.NilError(t, err, "wrapper.Changes() = %v", err)
+			if err != nil {
+				t.Fatalf("wrapper.Changes() = %v", err)
+			}
 
 			absWorkingDir := filepath.Join(hookWorkingDir, "changed-working-dir")
 
 			expectedWorkingDir, err := filepath.EvalSymlinks(absWorkingDir)
-			assert.NilError(t, err, "filepath.EvalSymlinks(%q) error = %v", absWorkingDir, err)
+			if err != nil {
+				t.Fatalf("filepath.EvalSymlinks(%q) error = %v", absWorkingDir, err)
+			}
 
 			afterWd, err := changes.GetAfterWd()
-			assert.NilError(t, err, "changes.GetAfterWd() = %v", err)
+			if err != nil {
+				t.Fatalf("changes.GetAfterWd() = %v", err)
+			}
 
 			actualWorkingDir, err := filepath.EvalSymlinks(afterWd)
-			assert.NilError(t, err, "filepath.EvalSymlinks(%q) error = %v", afterWd, err)
+			if err != nil {
+				t.Fatalf("filepath.EvalSymlinks(%q) error = %v", afterWd, err)
+			}
 
-			assert.Equal(t, expectedWorkingDir, actualWorkingDir)
+			if got, want := expectedWorkingDir, actualWorkingDir; got != want {
+				t.Fatalf("expectedWorkingDir = %q, want %q", got, want)
+			}
 		})
 	}
 }
@@ -213,7 +235,9 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 		hook.WithPath(hookFilename),
 		hook.WithOS("linux"),
 	)
-	assert.Error(t, err, `scriptwrapper tried to wrap hook with invalid shebang: "#!/usr/bin/env ruby"`)
+	if want := `scriptwrapper tried to wrap hook with invalid shebang: "#!/usr/bin/env ruby"`; err == nil || err.Error() != want {
+		t.Fatalf("err error = %v, want error with message %q", err, want)
+	}
 }
 
 func writeTestHook(t *testing.T, fileName, content string) string {
@@ -224,7 +248,9 @@ func writeTestHook(t *testing.T, fileName, content string) string {
 		tempfile.KeepingExtension(),
 		tempfile.WithPerms(0o700),
 	)
-	assert.NilError(t, err, "failed to create temp file with name %q", fileName)
+	if err != nil {
+		t.Fatalf("failed to create temp file with name %q", fileName)
+	}
 
 	t.Cleanup(func() {
 		if tempFile == nil {
@@ -233,18 +259,26 @@ func writeTestHook(t *testing.T, fileName, content string) string {
 
 		cerr := tempFile.Close()
 		if !errors.Is(cerr, os.ErrClosed) {
-			assert.Check(t, cerr == nil, "failed to close temp file %q: %v", tempFile.Name(), cerr)
+			if got := cerr == nil; !got {
+				t.Errorf("failed to close temp file %q: %v", tempFile.Name(), cerr)
+			}
 		}
 
 		rerr := os.Remove(tempFile.Name())
-		assert.Check(t, rerr == nil, "failed to remove temp file %q: %v", tempFile.Name(), rerr)
+		if got := rerr == nil; !got {
+			t.Errorf("failed to remove temp file %q: %v", tempFile.Name(), rerr)
+		}
 	})
 
 	_, err = io.WriteString(tempFile, content)
-	assert.NilError(t, err, "failed to write to temp file %q", tempFile.Name())
+	if err != nil {
+		t.Fatalf("failed to write to temp file %q", tempFile.Name())
+	}
 
 	err = tempFile.Close()
-	assert.NilError(t, err, "failed to close temp file %q", tempFile.Name())
+	if err != nil {
+		t.Fatalf("failed to close temp file %q", tempFile.Name())
+	}
 
 	return tempFile.Name()
 }

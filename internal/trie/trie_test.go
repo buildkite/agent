@@ -4,8 +4,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/trie"
-	"gotest.tools/v3/assert"
-	"gotest.tools/v3/assert/cmp"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestTrieExists(t *testing.T) {
@@ -76,7 +75,9 @@ func TestTrieExists(t *testing.T) {
 			}
 
 			for _, check := range test.checks {
-				assert.Check(t, check.expected == tr.Exists(check.value), "value: %q", check.value)
+				if got := check.expected == tr.Exists(check.value); !got {
+					t.Errorf("value: %q", check.value)
+				}
 			}
 		})
 	}
@@ -145,7 +146,9 @@ func TestTriePrefixExists(t *testing.T) {
 			}
 
 			for _, check := range test.checks {
-				assert.Check(t, check.expected == tr.PrefixExists(check.value), "value: %q", check.value)
+				if got := check.expected == tr.PrefixExists(check.value); !got {
+					t.Errorf("value: %q", check.value)
+				}
 			}
 		})
 	}
@@ -191,13 +194,17 @@ func TestTrieSizeAndContent(t *testing.T) {
 			}
 
 			containedSlice := tr.Contents()
-			assert.Check(t, cmp.Equal(tr.Size(), len(containedSlice)))
+			if got, want := tr.Size(), len(containedSlice); got != want {
+				t.Errorf("tr.Size() = %d, want %d", got, want)
+			}
 
 			containedSet := make(map[string]struct{}, tr.Size())
 			for _, s := range containedSlice {
 				containedSet[s] = struct{}{}
 			}
-			assert.DeepEqual(t, insertedSet, containedSet)
+			if diff := cmp.Diff(insertedSet, containedSet); diff != "" {
+				t.Fatalf("insertedSet diff (-got +want):\n%s", diff)
+			}
 		})
 	}
 }

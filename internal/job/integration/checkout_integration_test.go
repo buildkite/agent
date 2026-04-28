@@ -15,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/bintest/v3"
-	"gotest.tools/v3/assert"
 )
 
 // Example commit info:
@@ -278,7 +277,9 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewExecutorTester(mainCtx)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 	defer tester.Close()
 
 	// Do one checkout
@@ -288,10 +289,14 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	err = tester.Repo.ExecuteAll([][]string{
 		{"commit", "--allow-empty", "-m", "Another commit"},
 	})
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	commitHash, err := tester.Repo.RevParse("HEAD")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 	shortCommitHash := commitHash[:7]
 
 	git := tester.
@@ -324,9 +329,13 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if got, want := checkoutRepoCommit, commitHash; got != want {
+		t.Fatalf("checkoutRepoCommit = %q, want %q", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
@@ -339,7 +348,9 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -354,8 +365,12 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
+	if got, want := checkoutRepoCommit, commitHash; got != want {
+		t.Fatalf("checkoutRepoCommit = %q, want %q", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
@@ -368,7 +383,9 @@ func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local",                               // Disable the fast local clone method, which automatically copies all refs
@@ -384,13 +401,21 @@ func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
+	if got, want := checkoutRepoCommit, commitHash; got != want {
+		t.Fatalf("checkoutRepoCommit = %q, want %q", got, want)
+	}
 
 	// This local ref should match remote refs/pull/123/head
 	localPullRefCommit, err := checkoutRepo.RevParse("refs/pull/origin/123/head")
-	assert.NilError(t, err)
-	assert.Equal(t, localPullRefCommit, commitHash)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
+	if got, want := localPullRefCommit, commitHash; got != want {
+		t.Fatalf("localPullRefCommit = %q, want %q", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) {
@@ -403,7 +428,9 @@ func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) 
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -415,31 +442,45 @@ func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) 
 
 	// Amend the pull request, so commitHash is no longer reachable from refs/pull/123/head
 	err = tester.Repo.CheckoutBranch("update-test-txt")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	err = os.WriteFile(
 		filepath.Join(tester.Repo.Path, "test.txt"),
 		[]byte("This is an amended test pull request"),
 		0o600,
 	)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	err = tester.Repo.Add("test.txt")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	_, err = tester.Repo.Execute("commit", "--amend", "-m", "Amended PR Commit")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	_, err = tester.Repo.Execute("update-ref", "refs/pull/123/head", "HEAD")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	tester.RunAndCheck(t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
+	if got, want := checkoutRepoCommit, commitHash; got != want {
+		t.Fatalf("checkoutRepoCommit = %q, want %q", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
@@ -452,7 +493,9 @@ func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 	shortCommitHash := commitHash[:7]
 
 	env := []string{
@@ -468,8 +511,12 @@ func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
+	if got, want := checkoutRepoCommit, commitHash; got != want {
+		t.Fatalf("checkoutRepoCommit = %q, want %q", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
@@ -482,7 +529,9 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -497,8 +546,12 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
+	if got, want := checkoutRepoCommit, commitHash; got != want {
+		t.Fatalf("checkoutRepoCommit = %q, want %q", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
@@ -511,7 +564,9 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/merge")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -539,8 +594,12 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
+	if got, want := checkoutRepoCommit, commitHash; got != want {
+		t.Fatalf("checkoutRepoCommit = %q, want %q", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
@@ -553,11 +612,15 @@ func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	// Remove the branch ref to simulate this being a PR from a fork
 	_, err = tester.Repo.Execute("branch", "-D", "update-test-txt")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -572,8 +635,12 @@ func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
+	if got, want := checkoutRepoCommit, commitHash; got != want {
+		t.Fatalf("checkoutRepoCommit = %q, want %q", got, want)
+	}
 }
 
 func TestCheckoutErrorIsRetried(t *testing.T) {

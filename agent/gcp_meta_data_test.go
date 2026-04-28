@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestGCPMetaDataGetPaths(t *testing.T) {
@@ -55,9 +55,11 @@ func TestGCPMetaDataGetPaths(t *testing.T) {
 		t.Fatalf("GCPMetadata{}.GetPaths(%v) error = %v", paths, err)
 	}
 
-	assert.Equal(t, values, map[string]string{
+	if diff := cmp.Diff(values, map[string]string{
 		"truth":     "I could live on only burritos for the rest of my life",
 		"scary":     "Velociraptors are terrifying",
 		"weird key": "I could live on only burritos for the rest of my life",
-	})
+	}); diff != "" {
+		t.Errorf("values diff (-got +want):\n%s", diff)
+	}
 }

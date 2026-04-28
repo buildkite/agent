@@ -7,7 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/logger"
-	"gotest.tools/v3/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestParseSecrets(t *testing.T) {
@@ -45,14 +45,20 @@ func TestParseSecrets(t *testing.T) {
 			input := strings.NewReader(tc.inputData)
 			secrets, err := clicommand.ParseSecrets(logger.Discard, clicommand.RedactorAddConfig{Format: tc.formatString}, input)
 			if tc.errorTextContains != "" {
-				assert.ErrorContains(t, err, tc.errorTextContains)
+				if want := tc.errorTextContains; err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("err error = %v, want error containing %q", err, want)
+				}
 				return
 			}
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("err error = %v, want nil", err)
+			}
 
 			slices.Sort(secrets)
 			slices.Sort(tc.expectedSecrets)
-			assert.DeepEqual(t, secrets, tc.expectedSecrets)
+			if diff := cmp.Diff(secrets, tc.expectedSecrets); diff != "" {
+				t.Fatalf("secrets diff (-got +want):\n%s", diff)
+			}
 		})
 	}
 }

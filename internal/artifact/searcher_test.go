@@ -10,7 +10,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
@@ -49,11 +49,13 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 		t.Fatalf(`s.Search("llamas.txt", "my-build", false, false) error = %v`, err)
 	}
 
-	assert.Equal(t, []*api.Artifact{{
+	if diff := cmp.Diff(artifacts, []*api.Artifact{{
 		ID:           "4600ac5c-5a13-4e92-bb83-f86f218f7b32",
 		Path:         "llamas.txt",
 		AbsolutePath: "llamas.txt",
 		FileSize:     3,
 		URL:          "http://example.com/download",
-	}}, artifacts)
+	}}); diff != "" {
+		t.Errorf("artifacts diff (-got +want):\n%s", diff)
+	}
 }

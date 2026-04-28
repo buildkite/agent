@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/job/hook"
-	"gotest.tools/v3/assert"
 )
 
 type testCase struct {
@@ -46,7 +45,9 @@ func TestHookType(t *testing.T) {
 	// The test working dir is at $REPO_ROOT/internal/job/hook, but the fixtures are in
 	// $REPO_ROOT/test/fixtures/hook, so we need to go up to get to the root
 	wd, err := os.Getwd()
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	rootDir := filepath.Join(wd, "..", "..", "..")
 

@@ -9,15 +9,15 @@ import (
 	"github.com/buildkite/agent/v3/internal/job/githttptest"
 	"github.com/buildkite/agent/v3/internal/race"
 	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDefaultCheckoutPhase(t *testing.T) {
-	assert := require.New(t)
 	ctx := context.Background()
 
 	shell, err := shell.New()
-	assert.NoError(err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -91,8 +91,6 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := require.New(t)
-
 			// configure a global user name and email
 			// this is to avoid the git config file being created in the home directory
 			// which is not needed for the test
@@ -105,7 +103,9 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			defer s.Close()
 
 			err = s.CreateRepository(tt.projectName)
-			assert.NoError(err)
+			if err != nil {
+				t.Fatalf("err error = %v, want nil", err)
+			}
 
 			out, err := s.InitRepository(tt.projectName)
 			if err != nil {
@@ -125,7 +125,9 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			}
 
 			buildDir, err := os.MkdirTemp("", "build-path-")
-			assert.NoError(err)
+			if err != nil {
+				t.Fatalf("err error = %v, want nil", err)
+			}
 			t.Cleanup(func() {
 				os.RemoveAll(buildDir) //nolint:errcheck // Best-effort cleanup.
 			})
@@ -134,7 +136,9 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			tt.executor.Repository = s.RepoURL(tt.projectName)
 
 			checkoutDir, err := os.MkdirTemp("", "checkout-path-")
-			assert.NoError(err)
+			if err != nil {
+				t.Fatalf("err error = %v, want nil", err)
+			}
 			t.Cleanup(func() {
 				os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
 			})
@@ -142,7 +146,9 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
 
 			err = tt.executor.defaultCheckoutPhase(ctx)
-			assert.NoError(err)
+			if err != nil {
+				t.Fatalf("err error = %v, want nil", err)
+			}
 		})
 	}
 }
@@ -153,7 +159,9 @@ func TestSkipCheckout(t *testing.T) {
 	ctx := context.Background()
 
 	sh, err := shell.New()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	executor := &Executor{
 		shell: sh,
@@ -164,7 +172,9 @@ func TestSkipCheckout(t *testing.T) {
 	}
 
 	err = executor.checkout(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 }
 
 func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
@@ -172,11 +182,12 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 		t.Skip("this test simulates the agent recovering from a race condition, and needs to create one to test it.")
 	}
 
-	assert := require.New(t)
 	ctx := t.Context()
 
 	shell, err := shell.New()
-	assert.NoError(err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	tt := struct {
 		executor    *Executor
@@ -211,7 +222,9 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	defer s.Close()
 
 	err = s.CreateRepository(tt.projectName)
-	assert.NoError(err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 
 	out, err := s.InitRepository(tt.projectName)
 	if err != nil {
@@ -224,7 +237,9 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	}
 
 	buildDir, err := os.MkdirTemp("", "build-path-")
-	assert.NoError(err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 	t.Cleanup(func() {
 		os.RemoveAll(buildDir) //nolint:errcheck // Best-effort cleanup.
 	})
@@ -233,7 +248,9 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	tt.executor.Repository = s.RepoURL(tt.projectName)
 
 	checkoutDir, err := os.MkdirTemp("", "checkout-path-")
-	assert.NoError(err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 	t.Cleanup(func() {
 		os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
 	})
@@ -255,5 +272,7 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
 
 	err = tt.executor.defaultCheckoutPhase(ctx)
-	assert.NoError(err)
+	if err != nil {
+		t.Fatalf("err error = %v, want nil", err)
+	}
 }

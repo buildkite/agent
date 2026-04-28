@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
 )
 
 func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
@@ -103,13 +103,17 @@ func TestCollect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
-	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
+	if got, want := len(artifactsWithoutExperimentEnabled), 5; got != want {
+		t.Errorf("len(artifactsWithoutExperimentEnabled) = %d, want %d", got, want)
+	}
 
 	artifactsWithExperimentEnabled, err := uploader.collect(ctxExpEnabled)
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)
 	}
-	assert.Equal(t, 5, len(artifactsWithExperimentEnabled))
+	if got, want := len(artifactsWithExperimentEnabled), 5; got != want {
+		t.Errorf("len(artifactsWithExperimentEnabled) = %d, want %d", got, want)
+	}
 
 	// These test cases use filepath.Join, which uses per-OS path separators;
 	// this is the behaviour without normalised-upload-paths.
@@ -121,11 +125,21 @@ func TestCollect(t *testing.T) {
 				t.Fatalf("findArtifact(%q) == nil", tc.Name)
 			}
 
-			assert.Equal(t, filepath.Join(tc.Path...), a.Path)
-			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
-			assert.Equal(t, tc.FileSize, int(a.FileSize))
-			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
-			assert.Equal(t, tc.Sha256Sum, a.Sha256Sum)
+			if got, want := filepath.Join(tc.Path...), a.Path; got != want {
+				t.Errorf("filepath.Join(tc.Path...) = %q, want %q", got, want)
+			}
+			if got, want := tc.AbsolutePath, a.AbsolutePath; got != want {
+				t.Errorf("tc.AbsolutePath = %q, want %q", got, want)
+			}
+			if got, want := tc.FileSize, int(a.FileSize); got != want {
+				t.Errorf("tc.FileSize = %d, want %d", got, want)
+			}
+			if got, want := tc.Sha1Sum, a.Sha1Sum; got != want {
+				t.Errorf("tc.Sha1Sum = %q, want %q", got, want)
+			}
+			if got, want := tc.Sha256Sum, a.Sha256Sum; got != want {
+				t.Errorf("tc.Sha256Sum = %q, want %q", got, want)
+			}
 		})
 	}
 
@@ -145,11 +159,21 @@ func TestCollect(t *testing.T) {
 			// So forward-slash joining them with path.Join(tc.Path...} isn't enough.
 			forwardSlashed := filepath.ToSlash(filepath.Join(tc.Path...))
 
-			assert.Equal(t, forwardSlashed, a.Path)
-			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
-			assert.Equal(t, tc.FileSize, int(a.FileSize))
-			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
-			assert.Equal(t, tc.Sha256Sum, a.Sha256Sum)
+			if got, want := forwardSlashed, a.Path; got != want {
+				t.Errorf("forwardSlashed = %q, want %q", got, want)
+			}
+			if got, want := tc.AbsolutePath, a.AbsolutePath; got != want {
+				t.Errorf("tc.AbsolutePath = %q, want %q", got, want)
+			}
+			if got, want := tc.FileSize, int(a.FileSize); got != want {
+				t.Errorf("tc.FileSize = %d, want %d", got, want)
+			}
+			if got, want := tc.Sha1Sum, a.Sha1Sum; got != want {
+				t.Errorf("tc.Sha1Sum = %q, want %q", got, want)
+			}
+			if got, want := tc.Sha256Sum, a.Sha256Sum; got != want {
+				t.Errorf("tc.Sha256Sum = %q, want %q", got, want)
+			}
 		})
 	}
 }
@@ -173,7 +197,9 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
-	assert.Equal(t, len(artifacts), 0)
+	if got, want := len(artifacts), 0; got != want {
+		t.Errorf("len(artifacts) = %d, want %d", got, want)
+	}
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
@@ -245,16 +271,15 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 	for _, a := range artifacts {
 		paths = append(paths, a.Path)
 	}
-	assert.ElementsMatch(
-		t,
-		[]string{
-			filepath.Join("fixtures", "Mr Freeze.jpg"),
-			filepath.Join("fixtures", "folder", "Commando.jpg"),
-			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
-			filepath.Join("fixtures", "links", "terminator", "terminator2.jpg"),
-		},
-		paths,
-	)
+	slices.Sort(paths)
+	if diff := cmp.Diff(paths, slices.Sorted(slices.Values([]string{
+		filepath.Join("fixtures", "Mr Freeze.jpg"),
+		filepath.Join("fixtures", "folder", "Commando.jpg"),
+		filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
+		filepath.Join("fixtures", "links", "terminator", "terminator2.jpg"),
+	}))); diff != "" {
+		t.Errorf("paths diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
@@ -279,17 +304,16 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 	for _, a := range artifacts {
 		paths = append(paths, a.Path)
 	}
-	assert.ElementsMatch(
-		t,
-		[]string{
-			filepath.Join("fixtures", "Mr Freeze.jpg"),
-			filepath.Join("fixtures", "folder", "Commando.jpg"),
-			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
-			filepath.Join("fixtures", "links", "terminator", "terminator2.jpg"),
-			filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
-		},
-		paths,
-	)
+	slices.Sort(paths)
+	if diff := cmp.Diff(paths, slices.Sorted(slices.Values([]string{
+		filepath.Join("fixtures", "Mr Freeze.jpg"),
+		filepath.Join("fixtures", "folder", "Commando.jpg"),
+		filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
+		filepath.Join("fixtures", "links", "terminator", "terminator2.jpg"),
+		filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
+	}))); diff != "" {
+		t.Errorf("paths diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestCollectMatchesUploadSymlinks(t *testing.T) {
@@ -313,15 +337,14 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 	for _, a := range artifacts {
 		paths = append(paths, a.Path)
 	}
-	assert.ElementsMatch(
-		t,
-		[]string{
-			filepath.Join("fixtures", "Mr Freeze.jpg"),
-			filepath.Join("fixtures", "folder", "Commando.jpg"),
-			filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
-		},
-		paths,
-	)
+	slices.Sort(paths)
+	if diff := cmp.Diff(paths, slices.Sorted(slices.Values([]string{
+		filepath.Join("fixtures", "Mr Freeze.jpg"),
+		filepath.Join("fixtures", "folder", "Commando.jpg"),
+		filepath.Join("fixtures", "this is a folder with a space", "The Terminator.jpg"),
+	}))); diff != "" {
+		t.Errorf("paths diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestCollect_Literal(t *testing.T) {
