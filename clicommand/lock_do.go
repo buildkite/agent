@@ -62,7 +62,7 @@ var LockDoCommand = cli.Command{
 
 func lockDoAction(c *cli.Context) error {
 	if c.NArg() != 1 {
-		fmt.Fprint(c.App.ErrWriter, lockDoHelpDescription)
+		_, _ = fmt.Fprint(c.App.ErrWriter, lockDoHelpDescription)
 		return &SilentExitError{code: 1}
 	}
 	key := c.Args()[0]
@@ -71,7 +71,7 @@ func lockDoAction(c *cli.Context) error {
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		return errors.New("only 'machine' scope for locks is supported in this version.")
+		return errors.New("only 'machine' scope for locks is supported in this version")
 	}
 
 	if cfg.LockWaitTimeout != 0 {

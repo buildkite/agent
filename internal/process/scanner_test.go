@@ -27,11 +27,18 @@ func TestScanLines(t *testing.T) {
 	pr, pw := io.Pipe()
 
 	go func() {
+		defer func() {
+			if err := pw.Close(); err != nil {
+				t.Errorf("pw.Close() = %v", err)
+			}
+		}()
 		for line := range strings.SplitSeq(strings.TrimSuffix(longTestOutput, "\n"), "\n") {
-			fmt.Fprintf(pw, "%s\n", line)
+			if _, err := fmt.Fprintf(pw, "%s\n", line); err != nil {
+				t.Errorf("fmt.Fprintf(pw, %q) error = %v", line, err)
+				return
+			}
 			time.Sleep(time.Millisecond * 10)
 		}
-		pw.Close()
 	}()
 
 	scanner := process.NewScanner(logger.Discard)

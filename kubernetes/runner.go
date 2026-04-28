@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -81,7 +82,9 @@ type Runner struct {
 
 // Run runs the socket server.
 func (r *Runner) Run(ctx context.Context) error {
-	r.server.Register(r)
+	if err := r.server.Register(r); err != nil {
+		return fmt.Errorf("registering kubernetes RPC server: %w", err)
+	}
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
 
 	oldUmask, err := Umask(0) // set umask of socket file to 0o777 (world read-write-executable)
@@ -92,12 +95,18 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
-	defer l.Close()
-	defer os.Remove(r.conf.SocketPath)
+	defer func() { _ = l.Close() }()
+	defer func() { _ = os.Remove(r.conf.SocketPath) }()
 
-	Umask(oldUmask) // change back to regular umask
+	if _, err := Umask(oldUmask); err != nil { // change back to regular umask
+		return fmt.Errorf("failed to restore socket umask: %w", err)
+	}
 	r.listener = l
-	go http.Serve(l, r.mux)
+	go func() {
+		if err := http.Serve(l, r.mux); err != nil && !errors.Is(err, net.ErrClosed) {
+			r.logger.Error("kubernetes runner HTTP server stopped: %v", err)
+		}
+	}()
 
 	if r.conf.ClientLostTimeout > 0 {
 		go r.livenessCheck(ctx)
@@ -107,8 +116,12 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	<-r.done
-	return nil
+	select {
+	case <-r.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // startupCheck blocks until all containers have connected, or times out.
@@ -164,7 +177,9 @@ func (r *Runner) livenessCheck(ctx context.Context) {
 				if client.State == StateConnected && lhf > r.conf.ClientLostTimeout {
 					r.logger.Error("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf)
 					client.State = StateLost
-					r.Terminate()
+					if err := r.Terminate(); err != nil {
+						r.logger.Error("terminating lost kubernetes runner: %v", err)
+					}
 				}
 				client.mu.Unlock()
 			}
@@ -261,7 +276,9 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	client.mu.Unlock()
 
 	if args.ExitStatus != 0 {
-		r.Terminate()
+		if err := r.Terminate(); err != nil {
+			return fmt.Errorf("terminating runner after non-zero exit: %w", err)
+		}
 	}
 
 	allTerminal := true
@@ -276,7 +293,9 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 		}
 	}
 	if allTerminal {
-		r.Terminate()
+		if err := r.Terminate(); err != nil {
+			return fmt.Errorf("terminating runner after all clients exited: %w", err)
+		}
 	}
 	return nil
 }

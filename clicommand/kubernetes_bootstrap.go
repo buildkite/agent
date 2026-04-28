@@ -195,7 +195,7 @@ var KubernetesBootstrapCommand = cli.Command{
 		}
 
 		phases := environ.GetString("BUILDKITE_BOOTSTRAP_PHASES", "(unknown)")
-		fmt.Fprintf(socket, "~~~ Bootstrapping phases %s\n", phases)
+		_, _ = fmt.Fprintf(socket, "~~~ Bootstrapping phases %s\n", phases)
 
 		// Now we can run the real `buildkite-agent bootstrap`.
 		// Compare with the setup in [agent.NewJobRunner].
@@ -245,11 +245,11 @@ var KubernetesBootstrapCommand = cli.Command{
 		}()
 
 		exitCode := -1
-		defer func() { socket.Exit(exitCode) }()
+		defer func() { _ = socket.Exit(exitCode) }()
 
 		// NB: Run blocks until the subprocess exits.
 		if err := proc.Run(ctx); err != nil {
-			fmt.Fprintf(socket, "Couldn't execute bootstrap: %v\n", err)
+			_, _ = fmt.Fprintf(socket, "Couldn't execute bootstrap: %v\n", err)
 			return &ExitError{1, err}
 		}
 

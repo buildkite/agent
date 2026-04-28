@@ -50,7 +50,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -101,7 +101,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("LLAMAS_ROCK") != "absolutely" {
-			fmt.Fprintf(c.Stderr, "Expected command hook to have environment variable LLAMAS_ROCK be %q, got %q\n", "absolutely", c.GetEnv("LLAMAS_ROCK"))
+			_, _ = fmt.Fprintf(c.Stderr, "Expected command hook to have environment variable LLAMAS_ROCK be %q, got %q\n", "absolutely", c.GetEnv("LLAMAS_ROCK"))
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -110,7 +110,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 
 	tester.ExpectGlobalHook("pre-exit").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("LLAMAS_ROCK") != "" {
-			fmt.Fprintf(c.Stderr, "Expected pre-exit hook to have environment variable LLAMAS_ROCK be empty, got %q\n", c.GetEnv("LLAMAS_ROCK"))
+			_, _ = fmt.Fprintf(c.Stderr, "Expected pre-exit hook to have environment variable LLAMAS_ROCK be empty, got %q\n", c.GetEnv("LLAMAS_ROCK"))
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -146,7 +146,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("MY_CUSTOM_SUBDIR") != c.Dir {
-			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("MY_CUSTOM_SUBDIR"), c.Dir)
+			_, _ = fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("MY_CUSTOM_SUBDIR"), c.Dir)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -181,7 +181,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH") != c.Dir {
-			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"), c.Dir)
+			_, _ = fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"), c.Dir)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -233,7 +233,7 @@ func TestReplacingCheckoutHook(t *testing.T) {
 	// run a checkout in our checkout hook, otherwise we won't have local hooks to run
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"))
-		fmt.Fprint(c.Stderr, out)
+		_, _ = fmt.Fprint(c.Stderr, out)
 		if err != nil {
 			c.Exit(1)
 		} else {
@@ -550,7 +550,9 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 	})
 
 	time.Sleep(time.Millisecond * 500)
-	tester.Cancel()
+	if err := tester.Cancel(); err != nil {
+		t.Errorf("tester.Cancel() = %v", err)
+	}
 
 	t.Logf("Waiting for command to finish")
 	wg.Wait()
@@ -629,7 +631,7 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 	tester.ExpectGlobalHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		// Set via ./test-binary-hook/main.go
 		if c.GetEnv("OCEAN") != "Pacífico" {
-			fmt.Fprintf(c.Stderr, "Expected OCEAN to be Pacífico, got %q", c.GetEnv("OCEAN"))
+			_, _ = fmt.Fprintf(c.Stderr, "Expected OCEAN to be Pacífico, got %q", c.GetEnv("OCEAN"))
 			c.Exit(1)
 		} else {
 			c.Exit(0)

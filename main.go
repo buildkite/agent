@@ -49,7 +49,7 @@ Options:
 `
 
 func printVersion(c *cli.Context) {
-	fmt.Fprintf(c.App.Writer, "%s version %s\n", c.App.Name, version.FullVersion())
+	_, _ = fmt.Fprintf(c.App.Writer, "%s version %s\n", c.App.Name, version.FullVersion())
 }
 
 func main() {
@@ -66,8 +66,8 @@ func main() {
 
 	// When a sub command can't be found
 	app.CommandNotFound = func(c *cli.Context, command string) {
-		fmt.Fprintf(app.ErrWriter, "buildkite-agent: unknown subcommand %q\n", command)
-		fmt.Fprintf(app.ErrWriter, "Run '%s --help' for usage.\n", c.App.Name)
+		_, _ = fmt.Fprintf(app.ErrWriter, "buildkite-agent: unknown subcommand %q\n", command)
+		_, _ = fmt.Fprintf(app.ErrWriter, "Run '%s --help' for usage.\n", c.App.Name)
 		os.Exit(1)
 	}
 

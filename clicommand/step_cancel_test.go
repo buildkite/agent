@@ -17,7 +17,7 @@ func TestStepCancel(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			rw.WriteHeader(http.StatusOK)
-			rw.Write([]byte(`{"uuid": "b0db1550-e68c-428f-9b4d-edf5599b2cff"}`))
+			_, _ = rw.Write([]byte(`{"uuid": "b0db1550-e68c-428f-9b4d-edf5599b2cff"}`))
 		}))
 
 		cfg := StepCancelConfig{
@@ -54,6 +54,6 @@ func TestStepCancel(t *testing.T) {
 
 		l := logger.NewBuffer()
 		err := cancelStep(ctx, cfg, l)
-		assert.Contains(t, err.Error(), "Failed to cancel step")
+		assert.Contains(t, err.Error(), "failed to cancel step")
 	})
 }

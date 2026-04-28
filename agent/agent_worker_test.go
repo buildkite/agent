@@ -43,7 +43,7 @@ func TestDisconnect(t *testing.T) {
 		switch req.URL.Path {
 		case "/disconnect":
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprintf(rw, `{"id": "fakeuuid", "connection_state": "disconnected"}`)
+			_, _ = fmt.Fprintf(rw, `{"id": "fakeuuid", "connection_state": "disconnected"}`)
 		default:
 			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
 			http.Error(rw, "Not found", http.StatusNotFound)
@@ -195,7 +195,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 
 			rw.Header().Set("Retry-After", fmt.Sprintf("%f", delay))
 			rw.WriteHeader(http.StatusLocked)
-			fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assigned"}`)
+			_, _ = fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assigned"}`)
 		default:
 			http.Error(rw, "Not found", http.StatusNotFound)
 		}
@@ -871,12 +871,11 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 	t.Parallel()
 
 	const agentSessionToken = "alpacas"
+	const headerKey = "Buildkite-Hello"
+	const headerValue = "world"
 
 	server := NewFakeAPIServer()
 	defer server.Close()
-
-	const headerKey = "Buildkite-Hello"
-	const headerValue = "world"
 
 	agent := server.AddAgent(agentSessionToken)
 	agent.PingHandler = func(req *http.Request) (api.Ping, error) {
@@ -959,9 +958,6 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 
 	server := NewFakeAPIServer()
 	defer server.Close()
-
-	const headerKey = "Buildkite-Hello"
-	const headerValue = "world"
 
 	agent := server.AddAgent(agentSessionToken)
 	agent.PingHandler = func(req *http.Request) (api.Ping, error) {

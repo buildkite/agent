@@ -25,8 +25,8 @@ func (s *Server) getEnv(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	var req EnvUpdateRequestPayload
+	defer func() { _ = r.Body.Close() }()
 	err := json.NewDecoder(r.Body).Decode(&req)
-	defer r.Body.Close()
 	if err != nil {
 		if err := socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest); err != nil {
 			s.Logger.Errorf("Job API: couldn't write error: %v", err)
@@ -96,8 +96,8 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	var req EnvDeleteRequest
+	defer func() { _ = r.Body.Close() }()
 	err := json.NewDecoder(r.Body).Decode(&req)
-	defer r.Body.Close()
 	if err != nil {
 		err := socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest)
 		if err != nil {

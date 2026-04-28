@@ -138,19 +138,19 @@ func envSetAction(c *cli.Context) error {
 
 	case "plain":
 		if len(resp.Added) > 0 {
-			fmt.Fprintln(c.App.Writer, "Added:")
+			_, _ = fmt.Fprintln(c.App.Writer, "Added:")
 			for _, a := range resp.Added {
-				fmt.Fprintf(c.App.Writer, "+ %s\n", a)
+				_, _ = fmt.Fprintf(c.App.Writer, "+ %s\n", a)
 			}
 		}
 		if len(resp.Updated) > 0 {
-			fmt.Fprintln(c.App.Writer, "Updated:")
+			_, _ = fmt.Fprintln(c.App.Writer, "Updated:")
 			for _, u := range resp.Updated {
-				fmt.Fprintf(c.App.Writer, "~ %s\n", u)
+				_, _ = fmt.Fprintf(c.App.Writer, "~ %s\n", u)
 			}
 		}
 		if len(resp.Added) == 0 && len(resp.Updated) == 0 {
-			fmt.Fprintln(c.App.Writer, "No variables added or updated.")
+			_, _ = fmt.Fprintln(c.App.Writer, "No variables added or updated.")
 		}
 
 	case "json", "json-pretty":

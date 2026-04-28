@@ -82,7 +82,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		pingWaitDurations.Observe(time.Since(startWait).Seconds())
 
 		err := state.pingLoopInner(ctx)
-		if err == internalStop {
+		if err == errInternalStop {
 			return nil
 		}
 		if err != nil {
@@ -122,7 +122,7 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 
 	case <-a.stop:
 		a.logger.Debug("[runPingLoop] Stopping due to agent stop")
-		return internalStop
+		return errInternalStop
 	case <-ctx.Done():
 		a.logger.Debug("[runPingLoop] Stopping due to context cancel")
 		return ctx.Err()
@@ -157,7 +157,7 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 		// sent!
 	case <-a.stop:
 		a.logger.Debug("[runPingLoop] Stopping due to agent stop")
-		return internalStop
+		return errInternalStop
 	case <-ctx.Done():
 		a.logger.Debug("[runPingLoop] Stopping due to context cancel")
 		return ctx.Err()
@@ -194,7 +194,7 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 		return nil
 	case <-a.stop:
 		a.logger.Debug("[runPingLoop] Stopping due to agent stop")
-		return internalStop
+		return errInternalStop
 	case <-ctx.Done():
 		a.logger.Debug("[runPingLoop] Stopping due to context cancel")
 		return ctx.Err()
@@ -234,9 +234,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		if a.stats.lastPing.IsZero() {
-			return "", action, fmt.Errorf("Failed to ping: %w (No successful ping yet)", pingErr)
+			return "", action, fmt.Errorf("failed to ping: %w (no successful ping yet)", pingErr)
 		} else {
-			return "", action, fmt.Errorf("Failed to ping: %w (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
+			return "", action, fmt.Errorf("failed to ping: %w (last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
 		}
 	}
 

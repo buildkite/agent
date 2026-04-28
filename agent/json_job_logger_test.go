@@ -28,7 +28,9 @@ func TestJSONJobLogger_JobFields(t *testing.T) {
 	}
 
 	log := NewJSONJobLogger(JobRunnerConfig{AgentStdout: &buf, Job: job})
-	log.Write([]byte("hello\n"))
+	if _, err := log.Write([]byte("hello\n")); err != nil {
+		t.Fatalf("log.Write() = %v", err)
+	}
 
 	var got map[string]string
 	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
@@ -94,7 +96,9 @@ func TestJSONJobLogger_TraceparentFields(t *testing.T) {
 			}
 
 			log := NewJSONJobLogger(JobRunnerConfig{AgentStdout: &buf, Job: job})
-			log.Write([]byte("hello\n"))
+			if _, err := log.Write([]byte("hello\n")); err != nil {
+				t.Fatalf("log.Write() = %v", err)
+			}
 
 			var got map[string]string
 			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {

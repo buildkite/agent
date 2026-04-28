@@ -57,7 +57,11 @@ func TestLockUnlock(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	// Lock it
 	token, err := cli.Lock(ctx, "llama")
@@ -90,7 +94,11 @@ func TestLocker(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	// This constitutes a test by virtue of Lock/Unlock panicking on any
 	// internal error.
@@ -119,7 +127,11 @@ func TestDoOnce(t *testing.T) {
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	var wg sync.WaitGroup
 	var calls atomic.Int32

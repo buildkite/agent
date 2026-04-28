@@ -895,8 +895,8 @@ func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shel
 
 	jsonFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", jobID))
 	if err != nil {
-		shellFile.Close()
-		os.Remove(shellFile.Name())
+		_ = shellFile.Close()
+		_ = os.Remove(shellFile.Name())
 		return nil, nil, err
 	}
 	l.Debug("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())

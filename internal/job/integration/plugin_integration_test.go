@@ -60,7 +60,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	pluginMock.Expect("testing").Once().AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -69,7 +69,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -343,7 +343,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -357,7 +357,11 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester2.Close()
+	defer func() {
+		if err := tester2.CloseErr(); err != nil {
+			t.Errorf("tester2.Close() = %v", err)
+		}
+	}()
 
 	// Same modification of BUILDKITE_PLUGINS_PATH.
 	tester2.PluginsDir = pluginsDir
@@ -381,7 +385,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -433,7 +437,9 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	p := createTestPlugin(t, hooks)
 
 	// Same branch-name jiggery pokery as in the previous integration test
-	p.CreateBranch("something-fixed")
+	if err := p.CreateBranch("something-fixed"); err != nil {
+		t.Fatalf("p.CreateBranch(something-fixed) = %v", err)
+	}
 	p.versionTag = "something-fixed"
 
 	json, err := p.ToJSON()
@@ -447,7 +453,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -460,7 +466,11 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester2.Close()
+	defer func() {
+		if err := tester2.CloseErr(); err != nil {
+			t.Errorf("tester2.Close() = %v", err)
+		}
+	}()
 
 	tester2.PluginsDir = pluginsDir
 	tester2.Env = replacePluginPathInEnv(tester2.Env, pluginsDir)
@@ -488,7 +498,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	// run.
 	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=huge_actually"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -634,7 +644,7 @@ func TestZipPluginFromLocalFile(t *testing.T) {
 
 	// Create a zip plugin
 	zipPath := createTestZipPlugin(t, hooks)
-	defer os.Remove(zipPath)
+	defer func() { _ = os.Remove(zipPath) }()
 
 	// Create plugin JSON with zip+file:// URL
 	pluginJSON := fmt.Sprintf(`[{"zip+file:///%s": {"config": "value"}}]`,
@@ -646,7 +656,7 @@ func TestZipPluginFromLocalFile(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, "ZIP_PLUGIN_LOADED=yes"); err != nil {
-			fmt.Fprintf(c.Stderr, "%v\n", err)
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -670,7 +680,7 @@ func TestZipPluginMissingHooksDirectory(t *testing.T) {
 
 	// Create a zip file without hooks directory
 	zipPath := createInvalidZipPlugin(t)
-	defer os.Remove(zipPath)
+	defer func() { _ = os.Remove(zipPath) }()
 
 	// Create plugin JSON with zip+file:// URL
 	pluginJSON := fmt.Sprintf(`[{"zip+file:///%s": {}}]`,
@@ -758,14 +768,12 @@ func createZipArchive(sourceDir, zipPath string) error {
 	if err != nil {
 		return err
 	}
-	defer zipFile.Close()
 
 	// Create zip writer
 	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
 
 	// Walk through source directory and add files to zip
-	return filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -811,9 +819,18 @@ func createZipArchive(sourceDir, zipPath string) error {
 		if err != nil {
 			return err
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		_, err = io.Copy(writer, file)
 		return err
-	})
+	}); err != nil {
+		_ = zipWriter.Close()
+		_ = zipFile.Close()
+		return err
+	}
+	if err := zipWriter.Close(); err != nil {
+		_ = zipFile.Close()
+		return err
+	}
+	return zipFile.Close()
 }

@@ -1133,7 +1133,7 @@ var AgentStartCommand = cli.Command{
 			}
 		} else if cfg.LogFormat != "json" {
 			// TODO If/when cli is upgraded to v2, choice validation can be done with per-argument Actions.
-			return fmt.Errorf("invalid log format %q. Only 'text' or 'json' are allowed.", cfg.LogFormat)
+			return fmt.Errorf("invalid log format %q; only 'text' or 'json' are allowed", cfg.LogFormat)
 		}
 
 		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), strconv.Itoa(os.Getpid()))
@@ -1268,7 +1268,7 @@ var AgentStartCommand = cli.Command{
 
 		if cfg.SpawnPerCPU > 0 {
 			if cfg.Spawn > 1 {
-				return errors.New("You can't specify spawn and spawn-per-cpu at the same time")
+				return errors.New("you can't specify spawn and spawn-per-cpu at the same time")
 			}
 			cfg.Spawn = runtime.NumCPU() * cfg.SpawnPerCPU
 		}
@@ -1276,7 +1276,7 @@ var AgentStartCommand = cli.Command{
 		// Spawning multiple agents doesn't work if the agent is being
 		// booted in acquisition mode
 		if cfg.Spawn > 1 && cfg.AcquireJob != "" {
-			return errors.New("You can't spawn multiple agents and acquire a job at the same time")
+			return errors.New("you can't spawn multiple agents and acquire a job at the same time")
 		}
 
 		var workers []*agent.AgentWorker
@@ -1392,16 +1392,16 @@ var AgentStartCommand = cli.Command{
 func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set, error) {
 	jwksBytes, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read job %s keyset: %w", keysetType, err)
+		return nil, fmt.Errorf("failed to read job %s keyset: %w", keysetType, err)
 	}
 
 	jwks, err := jwk.Parse(jwksBytes)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse job %s keyset: %w", keysetType, err)
+		return nil, fmt.Errorf("failed to parse job %s keyset: %w", keysetType, err)
 	}
 
 	if jwks.Len() == 0 {
-		return nil, fmt.Errorf("Job %s keyset is empty", keysetType)
+		return nil, fmt.Errorf("job %s keyset is empty", keysetType)
 	}
 
 	iter := jwks.Keys(ctx)
@@ -1409,11 +1409,11 @@ func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set
 		keyI := iter.Pair().Value
 		key, ok := keyI.(jwk.Key)
 		if !ok {
-			return nil, fmt.Errorf("Job %s keyset contains a non-key at index %d", keysetType, iter.Pair().Index)
+			return nil, fmt.Errorf("job %s keyset contains a non-key at index %d", keysetType, iter.Pair().Index)
 		}
 
 		if _, ok = key.Get(jwk.AlgorithmKey); !ok {
-			return nil, fmt.Errorf("Job %s keyset contains a key without an algorithm at index %d. All keys used for signing and verification in the agent must have their `alg` key set", keysetType, iter.Pair().Index)
+			return nil, fmt.Errorf("job %s keyset contains a key without an algorithm at index %d. all keys used for signing and verification in the agent must have their `alg` key set", keysetType, iter.Pair().Index)
 		}
 	}
 
@@ -1597,7 +1597,7 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 	// There should be only one Agent API socket per agent process.
 	// If a previous agent crashed and left behind a socket, we can
 	// remove it.
-	os.Remove(path)
+	_ = os.Remove(path)
 
 	svr, err := agentapi.NewServer(path, l)
 	if err != nil {
@@ -1618,9 +1618,11 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 	go leaderPinger(ctx, l, path, leaderPath)
 
 	return func() {
-		svr.Shutdown(ctx)
+		if err := svr.Shutdown(ctx); err != nil {
+			l.Warn("Agent API: error shutting down server: %v", err)
+		}
 		if d, err := os.Readlink(leaderPath); err == nil && d == path {
-			os.Remove(leaderPath)
+			_ = os.Remove(leaderPath)
 		}
 	}, nil
 }
@@ -1653,8 +1655,10 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 		if err := pingLeader(); err != nil {
 			l.Warn("Agent API: Leader ping failed, staging coup: %v", err)
 			l.Warn("Agent API: Leader state (locks) has been lost!")
-			os.Remove(leaderPath)
-			os.Symlink(path, leaderPath)
+			_ = os.Remove(leaderPath)
+			if err := os.Symlink(path, leaderPath); err != nil {
+				l.Warn("Agent API: Failed to become leader: %v", err)
+			}
 		}
 	}
 }

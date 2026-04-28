@@ -347,23 +347,6 @@ var (
 		},
 		Token: "bkaj_job-token",
 	}
-
-	jobWithMismatchedSecrets = api.Job{
-		ChunksMaxSizeBytes: 1024,
-		ID:                 defaultJobID,
-		Step: pipeline.CommandStep{
-			Command: "echo hello world",
-			Secrets: pipeline.Secrets{
-				pipeline.Secret{Key: "DATABASE_URL", EnvironmentVariable: "DATABASE_URL"},
-			},
-		},
-		Env: map[string]string{
-			"BUILDKITE_COMMAND": "echo hello world",
-			"BUILDKITE_REPO":    defaultRepositoryURL,
-			"DEPLOY":            "0",
-		},
-		Token: "bkaj_job-token",
-	}
 )
 
 func TestJobVerification(t *testing.T) {

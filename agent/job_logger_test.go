@@ -20,7 +20,9 @@ func TestJobLoggerJSONFormat(t *testing.T) {
 	}
 
 	log := NewJobLogger(conf)
-	log.Write([]byte("hello\n"))
+	if _, err := log.Write([]byte("hello\n")); err != nil {
+		t.Fatalf("log.Write() = %v", err)
+	}
 
 	var entry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
@@ -43,7 +45,9 @@ func TestJobLoggerTextFormat(t *testing.T) {
 	}
 
 	log := NewJobLogger(conf)
-	log.Write([]byte("hello\n"))
+	if _, err := log.Write([]byte("hello\n")); err != nil {
+		t.Fatalf("log.Write() = %v", err)
+	}
 
 	if err := json.Unmarshal(buf.Bytes(), &map[string]any{}); err == nil {
 		t.Error("expected non-JSON output for text format, but got valid JSON")

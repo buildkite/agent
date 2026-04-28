@@ -165,19 +165,23 @@ func (i *templatedItem) Eval(ctx context.Context) template.HTML {
 
 	data, err := i.cb(ctx)
 	if err != nil {
-		errorTmpl.Execute(&sb, errorData{
+		if execErr := errorTmpl.Execute(&sb, errorData{
 			Operation: "Error from item callback",
 			Error:     err,
 			Item:      data,
-		})
+		}); execErr != nil {
+			return template.HTML(template.HTMLEscapeString(execErr.Error()))
+		}
 		return template.HTML(sb.String())
 	}
 	if err := i.tmpl.Execute(&sb, data); err != nil {
-		errorTmpl.Execute(&sb, errorData{
+		if execErr := errorTmpl.Execute(&sb, errorData{
 			Operation: "Error while executing item template",
 			Error:     err,
 			Item:      data,
-		})
+		}); execErr != nil {
+			return template.HTML(template.HTMLEscapeString(execErr.Error()))
+		}
 	}
 	return template.HTML(sb.String())
 }
@@ -208,11 +212,13 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 	rootItem.mu.RLock()
 	defer rootItem.mu.RUnlock()
 	if err := statusTmpl.Execute(w, data); err != nil {
-		errorTmpl.Execute(w, errorData{
+		if execErr := errorTmpl.Execute(w, errorData{
 			Operation: "Error while executing main template",
 			Error:     err,
 			Item:      data,
-		})
+		}); execErr != nil {
+			http.Error(w, execErr.Error(), http.StatusInternalServerError)
+		}
 	}
 }
 

@@ -126,7 +126,7 @@ var ArtifactSearchCommand = cli.Command{
 		// Handling all escape sequences, like \n, \t etc
 		unquoted, err := strconv.Unquote(`"` + printFormat + `"`)
 		if err != nil {
-			return fmt.Errorf("Unable to parse format %q", printFormat)
+			return fmt.Errorf("unable to parse format %q", printFormat)
 		}
 		printFormat = unquoted
 
