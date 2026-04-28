@@ -10,12 +10,14 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFetchingTags(t *testing.T) {
-	tags := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags: []string{"llamas", "rock"},
 	})
+	require.NoError(t, err)
 
 	if diff := cmp.Diff(tags, []string{"llamas", "rock"}); diff != "" {
 		t.Errorf("(*tagFetcher).Fetch() diff (-got +want):\n%v", diff)
@@ -23,10 +25,11 @@ func TestFetchingTags(t *testing.T) {
 }
 
 func TestFetchingTagsWithHostTags(t *testing.T) {
-	tags := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:         []string{"llamas", "rock"},
 		TagsFromHost: true,
 	})
+	require.NoError(t, err)
 
 	assert.Contains(t, tags, "llamas")
 	assert.Contains(t, tags, "rock")
@@ -55,11 +58,12 @@ func TestFetchingTagsFromEC2(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:                []string{"llamas", "rock"},
 		TagsFromEC2MetaData: true,
 		TagsFromEC2Tags:     true,
 	})
+	require.NoError(t, err)
 
 	assert.ElementsMatch(t, tags,
 		[]string{"llamas", "rock", "aws:instance-id=i-blahblah", "aws:instance-type=t2.small", "custom_tag=true"})
@@ -74,9 +78,10 @@ func TestFetchingTagsFromEC2Tags(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		TagsFromEC2Tags: true,
 	})
+	require.NoError(t, err)
 
 	assert.ElementsMatch(t, tags,
 		[]string{"custom_tag=true"})
@@ -93,10 +98,11 @@ func TestFetchingTagsFromECS(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:                []string{"llamas", "rock"},
 		TagsFromECSMetaData: true,
 	})
+	require.NoError(t, err)
 
 	assert.ElementsMatch(t, tags,
 		[]string{
@@ -130,11 +136,12 @@ func TestFetchingTagsFromGCP(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:                []string{"llamas", "rock"},
 		TagsFromGCPMetaData: true,
 		TagsFromGCPLabels:   true,
 	})
+	require.NoError(t, err)
 
 	assert.ElementsMatch(t, tags,
 		[]string{"llamas", "rock", "gcp:instance-id=my-instance", "gcp:zone=blah", "custom_tag=true"})
@@ -167,7 +174,7 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:                     []string{"llamas", "rock"},
 		TagsFromGCPMetaData:      true,
 		TagsFromGCPMetaDataPaths: []string{"tag=some/gcp/value"},
@@ -178,6 +185,7 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 		TagsFromEC2MetaDataPaths: []string{"tag=some/ec2/value"},
 		TagsFromEC2Tags:          true,
 	})
+	require.NoError(t, err)
 
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -194,5 +202,217 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 	assert.Contains(t, tags, "ecs_metadata=true")
 	assert.Contains(t, tags, "ec2_metadata_paths=true")
 	assert.Contains(t, tags, "hostname="+hostname)
+	assert.Contains(t, tags, "os="+runtime.GOOS)
+}
+
+// Tests for --fail-on-missing-tags behavior
+
+func TestFailOnMissingTags_EC2MetaData(t *testing.T) {
+	fetcher := &tagFetcher{
+		ec2MetaDataDefault: func() (map[string]string, error) {
+			return nil, errors.New("IMDS unavailable")
+		},
+	}
+
+	// With FailOnMissingTags=false (default), should soft-fail
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                []string{"llamas"},
+		TagsFromEC2MetaData: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"llamas"}, tags)
+
+	// With FailOnMissingTags=true, should return error
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                []string{"llamas"},
+		TagsFromEC2MetaData: true,
+		FailOnMissingTags:   true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch EC2 meta-data")
+}
+
+func TestFailOnMissingTags_EC2MetaDataPaths(t *testing.T) {
+	fetcher := &tagFetcher{
+		ec2MetaDataPaths: func(paths map[string]string) (map[string]string, error) {
+			return nil, errors.New("IMDS unavailable")
+		},
+	}
+
+	// With FailOnMissingTags=false (default), should soft-fail
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                     []string{"llamas"},
+		TagsFromEC2MetaDataPaths: []string{"tag=some/path"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"llamas"}, tags)
+
+	// With FailOnMissingTags=true, should return error
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                     []string{"llamas"},
+		TagsFromEC2MetaDataPaths: []string{"tag=some/path"},
+		FailOnMissingTags:        true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch EC2 meta-data from paths")
+}
+
+func TestFailOnMissingTags_EC2Tags(t *testing.T) {
+	fetcher := &tagFetcher{
+		ec2Tags: func() (map[string]string, error) {
+			return nil, errors.New("RequestLimitExceeded")
+		},
+	}
+
+	// With FailOnMissingTags=false (default), should soft-fail
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:            []string{"llamas"},
+		TagsFromEC2Tags: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"llamas"}, tags)
+
+	// With FailOnMissingTags=true, should return error
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:              []string{"llamas"},
+		TagsFromEC2Tags:   true,
+		FailOnMissingTags: true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch EC2 tags")
+}
+
+func TestFailOnMissingTags_ECSMetaData(t *testing.T) {
+	fetcher := &tagFetcher{
+		ecsMetaDataDefault: func() (map[string]string, error) {
+			return nil, errors.New("ECS metadata unavailable")
+		},
+	}
+
+	// With FailOnMissingTags=false (default), should soft-fail
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                []string{"llamas"},
+		TagsFromECSMetaData: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"llamas"}, tags)
+
+	// With FailOnMissingTags=true, should return error
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                []string{"llamas"},
+		TagsFromECSMetaData: true,
+		FailOnMissingTags:   true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch ECS meta-data")
+}
+
+func TestFailOnMissingTags_GCPMetaData(t *testing.T) {
+	fetcher := &tagFetcher{
+		gcpMetaDataDefault: func() (map[string]string, error) {
+			return nil, errors.New("GCP metadata unavailable")
+		},
+	}
+
+	// With FailOnMissingTags=false (default), should soft-fail
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                []string{"llamas"},
+		TagsFromGCPMetaData: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"llamas"}, tags)
+
+	// With FailOnMissingTags=true, should return error
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                []string{"llamas"},
+		TagsFromGCPMetaData: true,
+		FailOnMissingTags:   true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch GCP meta-data")
+}
+
+func TestFailOnMissingTags_GCPMetaDataPaths(t *testing.T) {
+	fetcher := &tagFetcher{
+		gcpMetaDataPaths: func(paths map[string]string) (map[string]string, error) {
+			return nil, errors.New("GCP metadata unavailable")
+		},
+	}
+
+	// With FailOnMissingTags=false (default), should soft-fail
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                     []string{"llamas"},
+		TagsFromGCPMetaDataPaths: []string{"tag=some/path"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"llamas"}, tags)
+
+	// With FailOnMissingTags=true, should return error
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                     []string{"llamas"},
+		TagsFromGCPMetaDataPaths: []string{"tag=some/path"},
+		FailOnMissingTags:        true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch GCP meta-data from paths")
+}
+
+func TestFailOnMissingTags_GCPLabels(t *testing.T) {
+	fetcher := &tagFetcher{
+		gcpLabels: func() (map[string]string, error) {
+			return nil, errors.New("GCP labels unavailable")
+		},
+	}
+
+	// With FailOnMissingTags=false (default), should soft-fail
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:              []string{"llamas"},
+		TagsFromGCPLabels: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"llamas"}, tags)
+
+	// With FailOnMissingTags=true, should return error
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:              []string{"llamas"},
+		TagsFromGCPLabels: true,
+		FailOnMissingTags: true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to fetch GCP instance labels")
+}
+
+// Verify that FailOnMissingTags has no effect when cloud sources succeed
+func TestFailOnMissingTags_NoErrorWhenSourcesSucceed(t *testing.T) {
+	fetcher := &tagFetcher{
+		ec2MetaDataDefault: func() (map[string]string, error) {
+			return map[string]string{"aws:instance-id": "i-1234"}, nil
+		},
+		ec2Tags: func() (map[string]string, error) {
+			return map[string]string{"env": "prod"}, nil
+		},
+	}
+
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                []string{"llamas"},
+		TagsFromEC2MetaData: true,
+		TagsFromEC2Tags:     true,
+		FailOnMissingTags:   true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, tags, "llamas")
+	assert.Contains(t, tags, "aws:instance-id=i-1234")
+	assert.Contains(t, tags, "env=prod")
+}
+
+// Verify that FailOnMissingTags does not affect non-cloud sources (host, k8s)
+func TestFailOnMissingTags_DoesNotAffectHostTags(t *testing.T) {
+	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:              []string{"llamas"},
+		TagsFromHost:      true,
+		FailOnMissingTags: true,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, tags, "llamas")
 	assert.Contains(t, tags, "os="+runtime.GOOS)
 }
