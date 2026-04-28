@@ -49,9 +49,7 @@ golangci-lint found the following issues:
 ${lint_out}
 \`\`\`
 EOF
-  # While we're cleaning up things found by golangci-lint, don't fail if it
-  # finds things.
-  exit 0
+  exit 1
 fi
 
 echo +++ Everything is clean and tidy! 🎉
