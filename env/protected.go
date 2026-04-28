@@ -63,6 +63,11 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_SHELL":                       {},
 }
 
+// checkoutOverrideScope contains checkout-related vars that remain mutable in
+// hooks, plugins, Job API, and secrets by default so jobs can tailor checkout
+// behavior. When checkout override is enabled, those same vars become locked so
+// agent checkout config wins and git flags cannot be used to undermine
+// no-command-eval.
 var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_CHECKOUT_FLAGS":              {},
 	"BUILDKITE_GIT_CLEAN_FLAGS":                 {},
