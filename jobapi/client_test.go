@@ -3,6 +3,7 @@ package jobapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/google/go-cmp/cmp"
-	"gotest.tools/v3/assert"
 )
 
 type fakeServer struct {
@@ -133,7 +133,9 @@ func TestClient_NoSocket(t *testing.T) {
 
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "") // This may be set if the test is being run by a buildkite agent!
 	_, err := NewDefaultClient(ctx)
-	assert.ErrorIs(t, err, errNoJobAPISocketEnv, "NewDefaultClient() error = %v, want %v", err, errNoJobAPISocketEnv)
+	if want := errNoJobAPISocketEnv; !errors.Is(err, want) {
+		t.Fatalf("NewDefaultClient() error = %v, want %v", err, errNoJobAPISocketEnv)
+	}
 }
 
 func TestClient_NoToken(t *testing.T) {
@@ -146,7 +148,9 @@ func TestClient_NoToken(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")                  // This may be set if the test is being run by a buildkite agent!
 
 	_, err := NewDefaultClient(ctx)
-	assert.ErrorIs(t, err, errNoJobAPITokenEnv, "NewDefaultClient() error = %v, want %v", err, errNoJobAPITokenEnv)
+	if want := errNoJobAPITokenEnv; !errors.Is(err, want) {
+		t.Fatalf("NewDefaultClient() error = %v, want %v", err, errNoJobAPITokenEnv)
+	}
 }
 
 func TestClientEnvGet(t *testing.T) {

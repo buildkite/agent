@@ -8,51 +8,74 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/tempfile"
-	"gotest.tools/v3/assert"
 )
 
 func TestNew(t *testing.T) {
 	t.Parallel()
 
 	f, err := tempfile.New()
-	assert.NilError(t, err, `New() = %v`, err)
+	if err != nil {
+		t.Fatalf(`New() = %v`, err)
+	}
 
 	t.Cleanup(func() {
-		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+		if got := f.Close() == nil; !got {
+			t.Errorf("failed to close file: %s", f.Name())
+		}
+		if got := os.Remove(f.Name()) == nil; !got {
+			t.Errorf("failed to remove file: %s", f.Name())
+		}
 	})
 
-	assert.Assert(t, strings.HasPrefix(f.Name(), os.TempDir()))
+	if got := strings.HasPrefix(f.Name(), os.TempDir()); !got {
+		t.Fatalf("strings.HasPrefix(f.Name(), os.TempDir()) = %t, want true", got)
+	}
 }
 
 func TestNewWithFilename(t *testing.T) {
 	t.Parallel()
 
 	f, err := tempfile.New(tempfile.WithName("foo.txt"))
-	assert.NilError(t, err, `New(WithName("foo.txt")) = %v`, err)
+	if err != nil {
+		t.Fatalf(`New(WithName("foo.txt")) = %v`, err)
+	}
 
 	t.Cleanup(func() {
-		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+		if got := f.Close() == nil; !got {
+			t.Errorf("failed to close file: %s", f.Name())
+		}
+		if got := os.Remove(f.Name()) == nil; !got {
+			t.Errorf("failed to remove file: %s", f.Name())
+		}
 	})
 
-	assert.Assert(t, strings.HasPrefix(f.Name(), os.TempDir()))
+	if got := strings.HasPrefix(f.Name(), os.TempDir()); !got {
+		t.Fatalf("strings.HasPrefix(f.Name(), os.TempDir()) = %t, want true", got)
+	}
 }
 
 func TestNewWithDir(t *testing.T) {
 	t.Parallel()
 
 	f, err := tempfile.New(tempfile.WithDir("TestNewWithDir"))
-	assert.NilError(t, err, `New(WithDir("TestNewWithDir")) = %v`, err)
+	if err != nil {
+		t.Fatalf(`New(WithDir("TestNewWithDir")) = %v`, err)
+	}
 
 	dir := filepath.Join(os.TempDir(), "TestNewWithDir")
 
 	t.Cleanup(func() {
-		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-		assert.Check(t, os.RemoveAll(dir) == nil, "failed to remove dir: %s", dir)
+		if got := f.Close() == nil; !got {
+			t.Errorf("failed to close file: %s", f.Name())
+		}
+		if got := os.RemoveAll(dir) == nil; !got {
+			t.Errorf("failed to remove dir: %s", dir)
+		}
 	})
 
-	assert.Assert(t, strings.HasPrefix(f.Name(), dir))
+	if got := strings.HasPrefix(f.Name(), dir); !got {
+		t.Fatalf("strings.HasPrefix(f.Name(), dir) = %t, want true", got)
+	}
 }
 
 func TestNewWithPerms(t *testing.T) {
@@ -63,82 +86,124 @@ func TestNewWithPerms(t *testing.T) {
 	}
 
 	f, err := tempfile.New(tempfile.WithPerms(0o600))
-	assert.NilError(t, err, `New(WithPerms(0o600)) = %v`, err)
+	if err != nil {
+		t.Fatalf(`New(WithPerms(0o600)) = %v`, err)
+	}
 
 	t.Cleanup(func() {
-		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+		if got := f.Close() == nil; !got {
+			t.Errorf("failed to close file: %s", f.Name())
+		}
+		if got := os.Remove(f.Name()) == nil; !got {
+			t.Errorf("failed to remove file: %s", f.Name())
+		}
 	})
 
 	fi, err := os.Stat(f.Name())
-	assert.NilError(t, err, "os.Stat(%q) = %s", f.Name(), err)
+	if err != nil {
+		t.Fatalf("os.Stat(%q) = %s", f.Name(), err)
+	}
 
-	assert.Assert(t, fi.Mode().Perm() == os.FileMode(0o600))
+	if got := fi.Mode().Perm() == os.FileMode(0o600); !got {
+		t.Fatalf("fi.Mode().Perm() == os.FileMode(0o600) = %t, want true", got)
+	}
 }
 
 func TestNewWithFilenameAndKeepExtension(t *testing.T) {
 	t.Parallel()
 
 	f, err := tempfile.New(tempfile.WithName("foo.txt"), tempfile.KeepingExtension())
-	assert.NilError(t, err, `New(WithName("foo.txt"), KeepingExtension()) = %v`, err)
+	if err != nil {
+		t.Fatalf(`New(WithName("foo.txt"), KeepingExtension()) = %v`, err)
+	}
 
 	t.Cleanup(func() {
-		assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-		assert.Check(t, os.Remove(f.Name()) == nil, "failed to remove file: %s", f.Name())
+		if got := f.Close() == nil; !got {
+			t.Errorf("failed to close file: %s", f.Name())
+		}
+		if got := os.Remove(f.Name()) == nil; !got {
+			t.Errorf("failed to remove file: %s", f.Name())
+		}
 	})
 
-	assert.Assert(t, filepath.Ext(f.Name()) == ".txt")
+	if got := filepath.Ext(f.Name()) == ".txt"; !got {
+		t.Fatalf("filepath.Ext(f.Name()) == \".txt\" = %t, want true", got)
+	}
 }
 
 func TestNewWithoutFilenameAndKeepExtension(t *testing.T) {
 	t.Parallel()
 
 	f, err := tempfile.New(tempfile.KeepingExtension())
-	assert.NilError(t, err, `New(KeepingExtension()) = %v`, err)
+	if err != nil {
+		t.Fatalf(`New(KeepingExtension()) = %v`, err)
+	}
 
-	assert.Check(t, f.Close() == nil, "failed to close file: %s", f.Name())
-	assert.NilError(t, os.Remove(f.Name()), "failed to remove file: %s", f.Name())
+	if got := f.Close() == nil; !got {
+		t.Errorf("failed to close file: %s", f.Name())
+	}
+	if err := os.Remove(f.Name()); err != nil {
+		t.Fatalf("failed to remove file: %s", f.Name())
+	}
 }
 
 func TestNewClosed(t *testing.T) {
 	t.Parallel()
 
 	filename, err := tempfile.NewClosed()
-	assert.NilError(t, err, `NewClosed() = %v`, err)
+	if err != nil {
+		t.Fatalf(`NewClosed() = %v`, err)
+	}
 
 	t.Cleanup(func() {
-		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+		if got := os.Remove(filename) == nil; !got {
+			t.Errorf("failed to remove file: %s", filename)
+		}
 	})
 
-	assert.Assert(t, strings.HasPrefix(filename, os.TempDir()))
+	if got := strings.HasPrefix(filename, os.TempDir()); !got {
+		t.Fatalf("strings.HasPrefix(filename, os.TempDir()) = %t, want true", got)
+	}
 }
 
 func TestNewClosedWithFilename(t *testing.T) {
 	t.Parallel()
 
 	filename, err := tempfile.NewClosed(tempfile.WithName("foo.txt"))
-	assert.NilError(t, err, `NewClosed(WithName("foo.txt")) = %v`, err)
+	if err != nil {
+		t.Fatalf(`NewClosed(WithName("foo.txt")) = %v`, err)
+	}
 
 	t.Cleanup(func() {
-		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+		if got := os.Remove(filename) == nil; !got {
+			t.Errorf("failed to remove file: %s", filename)
+		}
 	})
 
-	assert.Assert(t, strings.HasPrefix(filename, os.TempDir()))
+	if got := strings.HasPrefix(filename, os.TempDir()); !got {
+		t.Fatalf("strings.HasPrefix(filename, os.TempDir()) = %t, want true", got)
+	}
 }
 
 func TestNewClosedWithDir(t *testing.T) {
 	t.Parallel()
 
 	filename, err := tempfile.NewClosed(tempfile.WithDir("TestNewClosedWithDir"))
-	assert.NilError(t, err, `NewClosed(WithDir("TestNewClosedWithDir")) = %v`, err)
+	if err != nil {
+		t.Fatalf(`NewClosed(WithDir("TestNewClosedWithDir")) = %v`, err)
+	}
 
 	dir := filepath.Join(os.TempDir(), "TestNewClosedWithDir")
 
 	t.Cleanup(func() {
-		assert.Check(t, os.RemoveAll(dir) == nil, "failed to remove dir: %s", dir)
+		if got := os.RemoveAll(dir) == nil; !got {
+			t.Errorf("failed to remove dir: %s", dir)
+		}
 	})
 
-	assert.Assert(t, strings.HasPrefix(filename, dir))
+	if got := strings.HasPrefix(filename, dir); !got {
+		t.Fatalf("strings.HasPrefix(filename, dir) = %t, want true", got)
+	}
 }
 
 func TestNewClosedWithPerms(t *testing.T) {
@@ -149,36 +214,54 @@ func TestNewClosedWithPerms(t *testing.T) {
 	}
 
 	filename, err := tempfile.NewClosed(tempfile.WithPerms(0o600))
-	assert.NilError(t, err, `NewClosed(WithPerms(0o600)) = %v`, err)
+	if err != nil {
+		t.Fatalf(`NewClosed(WithPerms(0o600)) = %v`, err)
+	}
 
 	t.Cleanup(func() {
-		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+		if got := os.Remove(filename) == nil; !got {
+			t.Errorf("failed to remove file: %s", filename)
+		}
 	})
 
 	fi, err := os.Stat(filename)
-	assert.NilError(t, err, "os.Stat(%q) = %s", filename, err)
+	if err != nil {
+		t.Fatalf("os.Stat(%q) = %s", filename, err)
+	}
 
-	assert.Assert(t, fi.Mode().Perm() == os.FileMode(0o600))
+	if got := fi.Mode().Perm() == os.FileMode(0o600); !got {
+		t.Fatalf("fi.Mode().Perm() == os.FileMode(0o600) = %t, want true", got)
+	}
 }
 
 func TestNewClosedWithFilenameAndKeepExtension(t *testing.T) {
 	t.Parallel()
 
 	filename, err := tempfile.NewClosed(tempfile.WithName("foo.txt"), tempfile.KeepingExtension())
-	assert.NilError(t, err, `NewClosed(WithName("foo.txt"), KeepingExtension()) = %v`, err)
+	if err != nil {
+		t.Fatalf(`NewClosed(WithName("foo.txt"), KeepingExtension()) = %v`, err)
+	}
 
 	t.Cleanup(func() {
-		assert.Check(t, os.Remove(filename) == nil, "failed to remove file: %s", filename)
+		if got := os.Remove(filename) == nil; !got {
+			t.Errorf("failed to remove file: %s", filename)
+		}
 	})
 
-	assert.Assert(t, filepath.Ext(filename) == ".txt")
+	if got := filepath.Ext(filename) == ".txt"; !got {
+		t.Fatalf("filepath.Ext(filename) == \".txt\" = %t, want true", got)
+	}
 }
 
 func TestNewClosedWithoutFilenameAndKeepExtension(t *testing.T) {
 	t.Parallel()
 
 	filename, err := tempfile.NewClosed(tempfile.KeepingExtension())
-	assert.NilError(t, err, `NewClosed(KeepingExtension()) = %v`, err)
+	if err != nil {
+		t.Fatalf(`NewClosed(KeepingExtension()) = %v`, err)
+	}
 
-	assert.NilError(t, os.Remove(filename), "failed to remove file: %s", filename)
+	if err := os.Remove(filename); err != nil {
+		t.Fatalf("failed to remove file: %s", filename)
+	}
 }

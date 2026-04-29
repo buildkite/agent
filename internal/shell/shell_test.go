@@ -20,7 +20,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
-	"gotest.tools/v3/assert"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
@@ -460,14 +459,22 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	lockPath := filepath.Join(dir, "my.lock")
 
 	cmd := acquireLockInOtherProcess(t, lockPath)
-	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
+	defer func() {
+		if err := cmd.Process.Kill(); err != nil {
+			t.Fatalf("cmd.Process.Kill() error = %v, want nil", err)
+		}
+	}()
 
 	ctx, canc := context.WithTimeout(t.Context(), 2*time.Second)
 	defer canc()
 
 	lock, err := sh.LockFile(ctx, lockPath)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Equal(t, lock, nil)
+	if want := context.DeadlineExceeded; !errors.Is(err, want) {
+		t.Fatalf("sh.LockFile(ctx, %q) error = %v, want %v", lockPath, err, want)
+	}
+	if lock != nil {
+		t.Fatalf("sh.LockFile(ctx, %q) = %v, want nil", lockPath, lock)
+	}
 }
 
 func acquireLockInOtherProcess(t *testing.T, lockfile string) *exec.Cmd {
@@ -488,7 +495,9 @@ func acquireLockInOtherProcess(t *testing.T, lockfile string) *exec.Cmd {
 	cmd.Stderr = search
 
 	err := cmd.Start()
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("cmd.Start() error = %v, want nil", err)
+	}
 
 	// wait for the above process to get a lock
 	// This used to be a stat loop, checking for the existence of the lock file.
@@ -581,7 +590,9 @@ func TestRunWithOlfactor(t *testing.T) {
 
 			out := &bytes.Buffer{}
 			sh, err := shell.New(shell.WithStdout(out))
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("shell.New(shell.WithStdout(out)) error = %v, want nil", err)
+			}
 
 			smelled := make(map[string]bool)
 			for _, s := range test.smellsToSniff {
@@ -593,7 +604,9 @@ func TestRunWithOlfactor(t *testing.T) {
 				shell.WithStringSearch(smelled),
 			)
 			if eerr := new(exec.ExitError); !errors.As(err, &eerr) {
-				assert.NilError(t, err)
+				if err != nil {
+					t.Fatalf("sh.Command(test.command[0], test.command[1:]...).Run(t.Context(), shell.WithStringSearch(smelled)) error = %v, want nil", err)
+				}
 			}
 
 			if diff := cmp.Diff(out.String(), test.output); diff != "" {

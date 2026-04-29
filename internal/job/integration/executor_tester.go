@@ -23,7 +23,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/shell"
-	"gotest.tools/v3/assert"
 
 	"github.com/buildkite/bintest/v3"
 )
@@ -344,7 +343,9 @@ func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
 	if err := e.Run(t, env...); shell.ExitCode(err) != 0 {
-		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
+		if err != nil {
+			t.Fatalf("bootstrap output:\n%s", e.Output)
+		}
 	}
 
 	e.CheckMocks(t)

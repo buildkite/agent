@@ -18,7 +18,6 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/bintest/v3"
-	"gotest.tools/v3/assert"
 )
 
 func TestPreBootstrapHookScripts(t *testing.T) {
@@ -82,18 +81,24 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 			ctx := context.Background()
 
 			hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
-			assert.NilError(t, err, "making bootstrap-hooks directory: %v", err)
+			if err != nil {
+				t.Fatalf("making bootstrap-hooks directory: %v", err)
+			}
 			t.Cleanup(func() { _ = os.RemoveAll(hooksDir) })
 
 			hookPath := filepath.Join(hooksDir, "pre-bootstrap"+tc.ext)
 			testMainPath, err := os.Executable()
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("os.Executable() error = %v, want nil", err)
+			}
 
 			// Write pre-bootstrap hook in a subprocess to avoid intermittent ETXTBSY errors on Linux
 			cmd := exec.Command(testMainPath, "write-exec", hookPath)
 			cmd.Stdin = strings.NewReader(tc.contents)
 			err = cmd.Run()
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("cmd.Run() error = %v, want nil", err)
+			}
 
 			// Creates a mock agent API
 			e := createTestAgentEndpoint()
