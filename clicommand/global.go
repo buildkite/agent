@@ -12,10 +12,14 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
@@ -537,5 +541,32 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 
 	// Setup any global configuration options
 	ctx, done = HandleGlobalFlags(ctx, l, cfg)
+
+	// If this process is a subcommand running inside a traced job, initialize
+	// a TracerProvider so spans emitted here appear under the parent job's trace.
+	if os.Getenv("BUILDKITE_TRACING_BACKEND") == tracetools.BackendOpenTelemetry {
+		if traceParent := os.Getenv("TRACEPARENT"); traceParent != "" {
+			serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
+			traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, nil)
+			if err != nil {
+				l.Warn("Failed to initialize tracing: %v", err)
+			} else {
+				carrier := propagation.MapCarrier{"traceparent": traceParent}
+				if traceState := os.Getenv("TRACESTATE"); traceState != "" {
+					carrier["tracestate"] = traceState
+				}
+				ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+				prevDone := done
+				done = func() {
+					prevDone()
+					flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					_ = traceProvider.ForceFlush(flushCtx)
+					_ = traceProvider.Shutdown(flushCtx)
+				}
+			}
+		}
+	}
+
 	return ctx, cfg, l, loader.File, done
 }

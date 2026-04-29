@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const metaDataSetHelpDescription = `Usage:
@@ -63,6 +64,8 @@ var MetaDataSetCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-set")
+		defer span.End()
 
 		// Read the value from STDIN if argument omitted entirely
 		if len(c.Args()) < 2 {

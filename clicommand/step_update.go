@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const stepUpdateHelpDescription = `Usage:
@@ -82,6 +83,8 @@ var StepUpdateCommand = cli.Command{
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](context.Background(), c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "step-update")
+		defer span.End()
 
 		// Read the value from STDIN if argument omitted entirely
 		if len(c.Args()) < 2 {

@@ -127,8 +127,10 @@ func (e *Executor) otRootSpanName() string {
 	return base + "job"
 }
 
-func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	// Set up trace exporter based on protocol
+// initOTelTracerProvider creates and globally registers an OpenTelemetry TracerProvider
+// and text map propagator. Caller must call ForceFlush and Shutdown
+// on the returned provider before the process exits.
+func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs []attribute.KeyValue) (*sdktrace.TracerProvider, error) {
 	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
 	// default to grpc to avoid breaking change
 	if protocol == "" {
@@ -143,27 +145,18 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	case "http/protobuf", "http":
 		exporter, err = otlptracehttp.New(ctx)
 	default:
-		e.shell.Errorf("Unsupported OTLP protocol: %s. Disabling tracing.", protocol)
-		return &tracetools.NoopSpan{}, ctx, noopStopper
+		return nil, fmt.Errorf("unsupported OTLP protocol: %s", protocol)
 	}
 	if err != nil {
-		e.shell.Errorf("Error creating OTLP trace exporter %s. Disabling tracing.", err)
-		return &tracetools.NoopSpan{}, ctx, noopStopper
+		return nil, fmt.Errorf("creating OTLP trace exporter: %w", err)
 	}
 
 	attributes := []attribute.KeyValue{
-		semconv.ServiceNameKey.String(e.TracingServiceName),
+		semconv.ServiceNameKey.String(serviceName),
 		semconv.ServiceVersionKey.String(version.Version()),
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
-
-	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(e, e.shell.Env))
-	for k, v := range warnings {
-		e.shell.Warningf("Unknown attribute type (key: %v, value: %v (%T)) passed when initialising OpenTelemetry. This is a bug, submit this error message at https://github.com/buildkite/agent/issues", k, v, v)
-		e.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", v)
-	}
-
-	attributes = append(attributes, extras...)
+	attributes = append(attributes, extraAttrs...)
 
 	resources := resource.NewWithAttributes(semconv.SchemaURL, attributes...)
 	tracerProvider := sdktrace.NewTracerProvider(
@@ -180,6 +173,22 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 		&ot.OT{},
 		&xray.Propagator{},
 	))
+
+	return tracerProvider, nil
+}
+
+func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(e, e.shell.Env))
+	for k, v := range warnings {
+		e.shell.Warningf("Unknown attribute type (key: %v, value: %v (%T)) passed when initialising OpenTelemetry. This is a bug, submit this error message at https://github.com/buildkite/agent/issues", k, v, v)
+		e.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", v)
+	}
+
+	tracerProvider, err := InitOTelTracerProvider(ctx, e.TracingServiceName, extras)
+	if err != nil {
+		e.shell.Errorf("Error initialising OpenTelemetry tracing: %s. Disabling tracing.", err)
+		return &tracetools.NoopSpan{}, ctx, noopStopper
+	}
 
 	tracer := tracerProvider.Tracer(
 		"buildkite-agent",

@@ -37,6 +37,7 @@ import (
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/buildkite/interpolate"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 	"gopkg.in/yaml.v3"
 )
 
@@ -194,6 +195,8 @@ var PipelineUploadCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "pipeline-upload")
+		defer span.End()
 
 		// Find the pipeline either from STDIN or the non-flag arguments
 		type input struct {

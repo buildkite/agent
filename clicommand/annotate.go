@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const (
@@ -115,6 +116,8 @@ var AnnotateCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotateConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "annotate")
+		defer span.End()
 
 		if err := annotate(ctx, cfg, l); err != nil {
 			return err
