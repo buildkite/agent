@@ -44,6 +44,13 @@ You can use Amazon IAM assumed roles by specifying the session token:
 
     $ export BUILDKITE_S3_SESSION_TOKEN=zzz
 
+To pick a named profile from your shared AWS config or credentials file
+(~/.aws/config, ~/.aws/credentials), set BUILDKITE_S3_PROFILE. It takes
+precedence over AWS_PROFILE, so you can override an AWS_PROFILE that the
+agent's environment already has set for an unrelated purpose:
+
+    $ export BUILDKITE_S3_PROFILE=name-of-your-aws-profile
+
 Or upload directly to Google Cloud Storage:
 
     $ export BUILDKITE_GS_ACL=private
