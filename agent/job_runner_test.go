@@ -2,6 +2,8 @@ package agent
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -57,6 +59,41 @@ func TestValidateJobValue(t *testing.T) {
 		err := validateJobValue(tc.allowedTargets, tc.pipelineTarget)
 		if (err != nil) != tc.wantErr {
 			t.Errorf("validateJobValue() error = %v, wantErr = %v", err, tc.wantErr)
+		}
+	}
+}
+
+func TestJobTimeoutFilePath(t *testing.T) {
+	t.Parallel()
+
+	got := jobTimeoutFilePath("abc123", false)
+	want := filepath.Join(os.TempDir(), "job-timeout-abc123")
+	if got != want {
+		t.Errorf("jobTimeoutFilePath(%q, false) = %q, want %q", "abc123", got, want)
+	}
+
+	if got, want := jobTimeoutFilePath("abc123", true), "/workspace/job-timeout-abc123"; got != want {
+		t.Errorf("jobTimeoutFilePath(%q, true) = %q, want %q", "abc123", got, want)
+	}
+}
+
+func TestCancelReasonString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		reason CancelReason
+		want   string
+	}{
+		{CancelReasonJobState, "job cancelled on Buildkite"},
+		{CancelReasonAgentStopping, "agent is stopping"},
+		{CancelReasonInvalidToken, "access token is invalid"},
+		{CancelReasonJobTimeout, "job timed out on Buildkite"},
+		{CancelReason(99), "unknown"},
+	}
+
+	for _, tc := range tests {
+		if got := tc.reason.String(); got != tc.want {
+			t.Errorf("CancelReason(%d).String() = %q, want %q", tc.reason, got, tc.want)
 		}
 	}
 }

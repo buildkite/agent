@@ -432,6 +432,14 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 		r.agentLogger.Debug("[JobRunner] Deleted env file: %s", f.Name())
 	}
 
+	// Remove the job timeout marker file if it was created. It is fine if
+	// the file does not exist — Cancel only writes it on a job-level timeout.
+	if r.jobTimeoutFilePath != "" {
+		if err := os.Remove(r.jobTimeoutFilePath); err != nil && !os.IsNotExist(err) {
+			r.agentLogger.Warn("[JobRunner] Error cleaning up job timeout file: %s", err)
+		}
+	}
+
 	// Write some metrics about the job run
 	jobMetrics := r.conf.MetricsScope.With(metrics.Tags{"exit_code": strconv.Itoa(exit.Status)})
 
@@ -604,6 +612,18 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 		reason,
 	)
 
+	// If we are cancelling because of a Buildkite job-level timeout, write the
+	// marker file before sending the signal. The bootstrap's signal handler
+	// reads the file from the path in BUILDKITE_AGENT_JOB_TIMEOUT_FILE and uses
+	// its presence to set BUILDKITE_JOB_TIMED_OUT=true for the post-command
+	// hook. Failing to write the marker is non-fatal: the cancellation still
+	// proceeds and the hook will simply see BUILDKITE_JOB_CANCELLED only.
+	if reason == CancelReasonJobTimeout && r.jobTimeoutFilePath != "" {
+		if err := os.WriteFile(r.jobTimeoutFilePath, []byte("true"), 0o644); err != nil {
+			r.agentLogger.Warn("Failed to write job timeout marker file %s: %v", r.jobTimeoutFilePath, err)
+		}
+	}
+
 	// First we interrupt the process with the configured CancelSignal.
 	// At some point in the past, for subprocesses, the default was intended to
 	// be SIGINT, but you will find that the cancel-signal flag default and
@@ -640,6 +660,7 @@ const (
 	CancelReasonJobState CancelReason = iota
 	CancelReasonAgentStopping
 	CancelReasonInvalidToken
+	CancelReasonJobTimeout
 )
 
 func (r CancelReason) String() string {
@@ -650,6 +671,8 @@ func (r CancelReason) String() string {
 		return "agent is stopping"
 	case CancelReasonInvalidToken:
 		return "access token is invalid"
+	case CancelReasonJobTimeout:
+		return "job timed out on Buildkite"
 	}
 	return "unknown"
 }

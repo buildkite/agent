@@ -327,6 +327,14 @@ func (e *Executor) Cancel() error {
 	}
 	e.cancelled = true
 	e.shell.Env.Set("BUILDKITE_JOB_CANCELLED", "true")
+	// If the agent dropped a timeout marker before signaling us, surface that
+	// to the post-command hook as BUILDKITE_JOB_TIMED_OUT=true so users can
+	// distinguish a job-level timeout from other cancellations.
+	if path, ok := e.shell.Env.Get("BUILDKITE_AGENT_JOB_TIMEOUT_FILE"); ok && path != "" {
+		if _, err := os.Stat(path); err == nil {
+			e.shell.Env.Set("BUILDKITE_JOB_TIMED_OUT", "true")
+		}
+	}
 	close(e.cancelCh)
 	return nil
 }
