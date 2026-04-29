@@ -138,6 +138,12 @@ type JobRunner struct {
 	// Files containing a copy of the job env
 	envShellFile *os.File
 	envJSONFile  *os.File
+
+	// jobTimeoutFilePath is the path to a marker file that, if present at
+	// post-command hook time, signals to the executor that the job was
+	// cancelled because of a Buildkite job-level timeout. The path is passed
+	// to the bootstrap subprocess via BUILDKITE_AGENT_JOB_TIMEOUT_FILE.
+	jobTimeoutFilePath string
 }
 
 // jobProcess is either a *process.Process, or a *kubernetes.Runner.
@@ -210,6 +216,12 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	if err != nil {
 		return nil, err
 	}
+
+	// Reserve a path for the job timeout marker file. It is only created on
+	// disk if the job is cancelled because of a Buildkite job-level timeout
+	// (see Cancel). The bootstrap subprocess reads this path from the
+	// BUILDKITE_AGENT_JOB_TIMEOUT_FILE env var.
+	r.jobTimeoutFilePath = jobTimeoutFilePath(r.conf.Job.ID, conf.KubernetesExec)
 
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
@@ -502,6 +514,14 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	if r.envJSONFile != nil {
 		setEnv("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
+	}
+
+	// Tell the bootstrap where to look for the job timeout marker. Cancel
+	// writes to this path only when cancellation is caused by a Buildkite
+	// job-level timeout, allowing the executor to expose
+	// BUILDKITE_JOB_TIMED_OUT=true to the post-command hook.
+	if r.jobTimeoutFilePath != "" {
+		setEnv("BUILDKITE_AGENT_JOB_TIMEOUT_FILE", r.jobTimeoutFilePath)
 	}
 
 	cache := r.conf.Job.Step.Cache
@@ -842,9 +862,14 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 			}
 			continue // the loop
 		}
-		if jobState.State == "canceling" || jobState.State == "canceled" {
+		switch jobState.State {
+		case "canceling", "canceled":
 			if err := r.Cancel(CancelReasonJobState); err != nil {
 				r.agentLogger.Errorf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
+			}
+		case "timing_out", "timed_out":
+			if err := r.Cancel(CancelReasonJobTimeout); err != nil {
+				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}
 	}
@@ -902,4 +927,17 @@ func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shel
 	l.Debugf("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())
 
 	return shellFile, jsonFile, nil
+}
+
+// jobTimeoutFilePath returns a deterministic path within the job temp
+// directory used to signal to the bootstrap that the job was cancelled
+// because of a Buildkite job-level timeout. The file is not created until
+// the timeout actually fires; the bootstrap detects the timeout by checking
+// whether the file exists.
+func jobTimeoutFilePath(jobID string, kubernetesExec bool) string {
+	tempDir := os.TempDir()
+	if kubernetesExec {
+		tempDir = "/workspace"
+	}
+	return filepath.Join(tempDir, fmt.Sprintf("job-timeout-%s", jobID))
 }
