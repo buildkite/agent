@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/agent/v4/version"
-	"github.com/opentracing/opentracing-go"
 	"go.opentelemetry.io/contrib/propagators/aws/xray"
 	"go.opentelemetry.io/contrib/propagators/b3"
 	"go.opentelemetry.io/contrib/propagators/jaeger"
@@ -26,90 +24,28 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
-	ddext "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
-// stopper lets us abstract the tracer wrap up code so we can plug in different tracing
-// library implementations that are opentracing compatible. Opentracing itself
-// doesn't have a Stop function on its Tracer interface.
+// stopper lets us abstract the tracer wrap up code.
 type stopper func()
 
 func noopStopper() {}
 
-func (e *Executor) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+func (e *Executor) startTracing(ctx context.Context) (trace.Span, context.Context, stopper) {
 	switch e.TracingBackend {
-	case tracetools.BackendDatadog:
-		// Newer versions of the tracing libs print out diagnostic info which spams the
-		// Buildkite agent logs. Disable it by default unless it's been explicitly set.
-		if _, has := os.LookupEnv("DD_TRACE_STARTUP_LOGS"); !has {
-			if err := os.Setenv("DD_TRACE_STARTUP_LOGS", "false"); err != nil {
-				e.shell.Warningf("Couldn't set DD_TRACE_STARTUP_LOGS: %v", err)
-			}
-		}
-
-		return e.startTracingDatadog(ctx)
-
 	case tracetools.BackendOpenTelemetry:
 		return e.startTracingOpenTelemetry(ctx)
 
 	case tracetools.BackendNone:
-		return &tracetools.NoopSpan{}, ctx, noopStopper
+		span, ctx := tracetools.StartSpanFromContext(ctx, "noop", tracetools.BackendNone)
+		return span, ctx, noopStopper
 
 	default:
 		e.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", e.TracingBackend)
 		e.TracingBackend = tracetools.BackendNone // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the job's tracking backend
-		return &tracetools.NoopSpan{}, ctx, noopStopper
+		span, ctx := tracetools.StartSpanFromContext(ctx, "noop", tracetools.BackendNone)
+		return span, ctx, noopStopper
 	}
-}
-
-func (e *Executor) ddResourceName() string {
-	label, ok := e.shell.Env.Get("BUILDKITE_LABEL")
-	if !ok {
-		label = "job"
-	}
-
-	return e.OrganizationSlug + "/" + e.PipelineSlug + "/" + label
-}
-
-// startTracingDatadog sets up tracing based on the config values. It uses opentracing as an
-// abstraction so the agent can support multiple libraries if needbe.
-func (e *Executor) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	opts := []tracer.StartOption{
-		tracer.WithService(e.TracingServiceName),
-		tracer.WithSampler(tracer.NewAllSampler()),
-		tracer.WithAnalytics(true),
-	}
-
-	tags := Merge(GenericTracingExtras(e, e.shell.Env), DDTracingExtras())
-	opts = slices.Grow(opts, len(tags))
-	for k, v := range tags {
-		opts = append(opts, tracer.WithGlobalTag(k, v))
-	}
-
-	opentracing.SetGlobalTracer(opentracer.New(opts...))
-
-	wireContext := e.extractDDTraceCtx()
-
-	span := opentracing.StartSpan("job.run",
-		opentracing.ChildOf(wireContext),
-		opentracing.Tag{Key: ddext.ResourceName, Value: e.ddResourceName()},
-	)
-	ctx = opentracing.ContextWithSpan(ctx, span)
-
-	return tracetools.NewOpenTracingSpan(span), ctx, tracer.Stop
-}
-
-// extractTraceCtx pulls encoded distributed tracing information from the env vars.
-// Note: This should match the injectTraceCtx code in shell.
-func (e *Executor) extractDDTraceCtx() opentracing.SpanContext {
-	sctx, err := tracetools.DecodeTraceContext(e.shell.Env.Dump(), e.TraceContextCodec)
-	if err != nil {
-		// Return nil so a new span will be created
-		return nil
-	}
-	return sctx
 }
 
 func (e *Executor) otRootSpanName() string {
@@ -127,7 +63,7 @@ func (e *Executor) otRootSpanName() string {
 	return base + "job"
 }
 
-func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (trace.Span, context.Context, stopper) {
 	// Set up trace exporter based on protocol
 	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
 	// default to grpc to avoid breaking change
@@ -144,11 +80,13 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 		exporter, err = otlptracehttp.New(ctx)
 	default:
 		e.shell.Errorf("Unsupported OTLP protocol: %s. Disabling tracing.", protocol)
-		return &tracetools.NoopSpan{}, ctx, noopStopper
+		span, ctx := tracetools.StartSpanFromContext(ctx, "noop", tracetools.BackendNone)
+		return span, ctx, noopStopper
 	}
 	if err != nil {
 		e.shell.Errorf("Error creating OTLP trace exporter %s. Disabling tracing.", err)
-		return &tracetools.NoopSpan{}, ctx, noopStopper
+		span, ctx := tracetools.StartSpanFromContext(ctx, "noop", tracetools.BackendNone)
+		return span, ctx, noopStopper
 	}
 
 	attributes := []attribute.KeyValue{
@@ -200,7 +138,7 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 		_ = tracerProvider.Shutdown(ctx)
 	}
 
-	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
+	return span, ctx, stop
 }
 
 // accepting traceparent from Buildkite control plane is an opt-in feature as its
@@ -297,13 +235,6 @@ func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
 	return result
 }
 
-func DDTracingExtras() map[string]any {
-	return map[string]any{
-		ddext.AnalyticsEvent:   true,
-		ddext.SamplingPriority: ddext.PriorityUserKeep,
-	}
-}
-
 func Merge(ms ...map[string]any) map[string]any {
 	fullCap := 0
 	for _, m := range ms {
@@ -335,15 +266,4 @@ func toOpenTelemetryAttributes(extras map[string]any) ([]attribute.KeyValue, map
 	}
 
 	return attrs, unknownAttrTypes
-}
-
-func (e *Executor) implementationSpecificSpanName(otelName, ddName string) string {
-	switch e.TracingBackend {
-	case tracetools.BackendDatadog:
-		return ddName
-	case tracetools.BackendOpenTelemetry:
-		fallthrough
-	default:
-		return otelName
-	}
 }

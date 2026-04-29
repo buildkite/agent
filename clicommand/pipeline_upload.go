@@ -29,7 +29,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/stdin"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/ordered"
@@ -618,14 +617,6 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 				// yield below
 
 			default: // yes, interpolation
-				// Pass the trace context from our environment to the pipeline.
-				if tracing, has := environ.Get(tracetools.EnvVarTraceContextKey); has {
-					if result.Env == nil {
-						result.Env = ordered.NewMap[string, string](1)
-					}
-					result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
-				}
-
 				// Do the interpolation.
 				preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
 				err = result.Interpolate(environ, preferRuntimeEnv)
