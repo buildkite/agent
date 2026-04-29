@@ -223,3 +223,69 @@ func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
 	assert.True(t, errors.As(cliErr, &exitErr), "Expected cli.ExitError, got: %v", cliErr)
 	assert.Equal(t, 27, exitErr.ExitCode(), "Expected exit code 27 for job acquisition rejected, got: %d", exitErr.ExitCode())
 }
+
+func TestNoCheckoutOverrideEnabled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  AgentStartConfig
+		bCfg BootstrapConfig
+		kind string
+		want bool
+	}{
+		{
+			name: "agent_start_explicit_flag",
+			cfg:  AgentStartConfig{NoCheckoutOverride: true},
+			kind: "agent",
+			want: true,
+		},
+		{
+			name: "agent_start_no_command_eval_forces_lock",
+			cfg:  AgentStartConfig{NoCommandEval: true},
+			kind: "agent",
+			want: true,
+		},
+		{
+			name: "agent_start_defaults_unlocked",
+			cfg:  AgentStartConfig{},
+			kind: "agent",
+			want: false,
+		},
+		{
+			name: "bootstrap_explicit_flag",
+			bCfg: BootstrapConfig{NoCheckoutOverride: true, CommandEval: true},
+			kind: "bootstrap",
+			want: true,
+		},
+		{
+			name: "bootstrap_command_eval_disabled_forces_lock",
+			bCfg: BootstrapConfig{CommandEval: false},
+			kind: "bootstrap",
+			want: true,
+		},
+		{
+			name: "bootstrap_defaults_unlocked",
+			bCfg: BootstrapConfig{CommandEval: true},
+			kind: "bootstrap",
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			switch tc.kind {
+			case "agent":
+				tc.cfg.lockCheckoutWhenCommandEvalDisabled()
+				assert.Equal(t, tc.want, tc.cfg.NoCheckoutOverride)
+			case "bootstrap":
+				tc.bCfg.lockCheckoutWhenCommandEvalDisabled()
+				assert.Equal(t, tc.want, tc.bCfg.NoCheckoutOverride)
+			default:
+				t.Fatalf("unknown test kind %q", tc.kind)
+			}
+		})
+	}
+}
