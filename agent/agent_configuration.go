@@ -92,7 +92,6 @@ type AgentConfiguration struct {
 	// which is why it is injected after the job env files are written (kept
 	// off disk) and skipped when the job env chose its own OTLP destination.
 	ControlPlaneTracingExporter  *api.TracingExporter
-	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
 	ArtifactUploadConcurrency    int
