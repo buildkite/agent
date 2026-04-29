@@ -271,7 +271,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		// an error from the hook/job logic. These are both good to report but
 		// shouldn't override each other in reporting.
 		if commandErr != nil {
-			e.shell.Printf("user command error: %v", commandErr)
+			e.shell.Printf("user command error: %s", FormatJobError(commandErr))
 			span.RecordError(commandErr)
 		}
 
@@ -1140,7 +1140,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 		return nil, commandErr
 
 	default:
-		e.shell.Errorf("%s", commandErr)
+		e.shell.Errorf("%s", FormatJobError(commandErr))
 
 		// error is not an exit error, we don't want to return it
 		return nil, nil
