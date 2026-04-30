@@ -597,7 +597,7 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	r.agentLogger.Infof(
 		"Canceling job %s with a signal grace period of %v (%s)",
 		r.conf.Job.ID,
-		r.conf.AgentConfiguration.SignalGracePeriod,
+		r.conf.AgentConfiguration.CancelSignalTimeout,
 		reason,
 	)
 
@@ -614,11 +614,11 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	// Extra time between the end of the signal grace period and the end of the
 	// cancel grace period is the time we (agent side) need to upload logs and
 	// disconnect (if the agent is exiting).
-	case <-time.After(r.conf.AgentConfiguration.SignalGracePeriod):
+	case <-time.After(r.conf.AgentConfiguration.CancelSignalTimeout):
 		r.agentLogger.Infof(
 			"Job %s hasn't stopped within %v, terminating",
 			r.conf.Job.ID,
-			r.conf.AgentConfiguration.SignalGracePeriod,
+			r.conf.AgentConfiguration.CancelSignalTimeout,
 		)
 
 		// Terminate the process as we've exceeded our context
