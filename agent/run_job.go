@@ -431,14 +431,8 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 	// Write some metrics about the job run
 	jobMetrics := r.conf.MetricsScope.With(metrics.Tags{"exit_code": strconv.Itoa(exit.Status)})
-
-	if exit.Status == 0 {
-		jobMetrics.Timing("jobs.duration.success", finishedAt.Sub(r.startedAt))
-		jobMetrics.Count("jobs.success", 1)
-	} else {
-		jobMetrics.Timing("jobs.duration.error", finishedAt.Sub(r.startedAt))
-		jobMetrics.Count("jobs.failed", 1)
-	}
+	jobMetrics.Timing("jobs.duration", finishedAt.Sub(r.startedAt))
+	jobMetrics.Count("jobs.finished", 1)
 
 	// Finish the build in the Buildkite Agent API
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.

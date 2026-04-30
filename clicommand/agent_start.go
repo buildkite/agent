@@ -187,10 +187,8 @@ type AgentStartConfig struct {
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
-	// Datadog statsd metrics config
-	MetricsDatadog              bool   `cli:"metrics-datadog"`
-	MetricsDatadogHost          string `cli:"metrics-datadog-host"`
-	MetricsDatadogDistributions bool   `cli:"metrics-datadog-distributions"`
+	// Metrics config
+	OpenTelemetryMetrics bool `cli:"opentelemetry-metrics"`
 
 	// Tracing config
 	TracingBackend              string `cli:"tracing-backend"`
@@ -287,8 +285,8 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "env-godebug")
 	}
 
-	if asc.MetricsDatadog {
-		features = append(features, "datadog-metrics")
+	if asc.OpenTelemetryMetrics {
+		features = append(features, "opentelemetry-metrics")
 	}
 
 	return features
@@ -625,20 +623,9 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_ALLOWED_PLUGINS",
 		},
 		cli.BoolFlag{
-			Name:   "metrics-datadog",
-			Usage:  "Send metrics to DogStatsD for Datadog (default: false)",
-			EnvVar: "BUILDKITE_METRICS_DATADOG",
-		},
-		cli.StringFlag{
-			Name:   "metrics-datadog-host",
-			Usage:  "The dogstatsd instance to send metrics to using udp",
-			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
-			Value:  "127.0.0.1:8125",
-		},
-		cli.BoolFlag{
-			Name:   "metrics-datadog-distributions",
-			Usage:  "Use Datadog Distributions for Timing metrics (default: false)",
-			EnvVar: "BUILDKITE_METRICS_DATADOG_DISTRIBUTIONS",
+			Name:   "opentelemetry-metrics",
+			Usage:  "Enable agent metrics export over OpenTelemetry OTLP. Configure OTLP with standard OTEL_EXPORTER_OTLP_* env vars (default: false)",
+			EnvVar: "BUILDKITE_OPENTELEMETRY_METRICS",
 		},
 		cli.StringFlag{
 			Name:   "log-format",
@@ -679,7 +666,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "tracing-service-name",
-			Usage:  "Service name to use when reporting traces.",
+			Usage:  "Service name to use when reporting telemetry.",
 			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
 			Value:  "buildkite-agent",
 		},
@@ -888,9 +875,8 @@ var AgentStartCommand = cli.Command{
 		}
 
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
-			Datadog:              cfg.MetricsDatadog,
-			DatadogHost:          cfg.MetricsDatadogHost,
-			DatadogDistributions: cfg.MetricsDatadogDistributions,
+			Enabled:     cfg.OpenTelemetryMetrics,
+			ServiceName: cfg.TracingServiceName,
 		})
 
 		// Sense check supported tracing backends, we don't want bootstrapped jobs to silently have no tracing
