@@ -439,7 +439,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if r.envShellFile != nil {
 		// Note that some variables in this list might not be defined later,
 		// when something comes to read the file. See below where they are
-		// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
+		// added conditionally, e.g. BUILDKITE_OPENTELEMETRY_TRACING.
 		// Docker in particular tolerates undefined vars in an env file
 		// without complaints.
 		const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
@@ -463,7 +463,7 @@ BUILDKITE_HOOKS_SHELL
 BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
-BUILDKITE_TRACING_BACKEND
+BUILDKITE_OPENTELEMETRY_TRACING
 BUILDKITE_TRACING_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
 BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
@@ -657,8 +657,8 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	setEnv("BUILDKITE_PLUGIN_VALIDATION", fmt.Sprint(enablePluginValidation))
 
-	if r.conf.AgentConfiguration.TracingBackend != "" {
-		setEnv("BUILDKITE_TRACING_BACKEND", r.conf.AgentConfiguration.TracingBackend)
+	if r.conf.AgentConfiguration.OpenTelemetryTracing {
+		setEnv("BUILDKITE_OPENTELEMETRY_TRACING", "true")
 		setEnv("BUILDKITE_TRACING_SERVICE_NAME", r.conf.AgentConfiguration.TracingServiceName)
 
 		// Buildkite backend can provide a traceparent property on the job

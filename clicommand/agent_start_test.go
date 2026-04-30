@@ -1,10 +1,12 @@
 package clicommand
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/buildkite/agent/v4/core"
@@ -12,6 +14,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli"
 )
+
+func TestAgentStartFeatures_OpenTelemetryTracing(t *testing.T) {
+	t.Parallel()
+
+	features := AgentStartConfig{OpenTelemetryTracing: true}.Features(context.Background())
+	if !slices.Contains(features, "opentelemetry-tracing") {
+		t.Fatalf("Features() = %v, want opentelemetry-tracing", features)
+	}
+}
 
 func setupHooksPath(t *testing.T) (string, func()) {
 	t.Helper()
