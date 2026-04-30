@@ -60,6 +60,12 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 		AgentWorker: a,
 		outCh:       outCh,
 		setStat:     setStat,
+		// firstMsg starts true so the very first successful connection logs
+		// "Ping stream connection established". It is only re-armed on a mode
+		// switch (i.e. when the stream goes unhealthy and the ping loop takes
+		// over), so routine reconnects (e.g. after deadline-exceeded) don't
+		// log again.
+		firstMsg: true,
 	}
 
 	for {
@@ -144,6 +150,9 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 		}
 		// Fast fallback to the ping loop
 		a.logger.Debug("[runStreamingPingLoop] Becoming unhealthy")
+		// Re-arm the "connection established" log so the next successful
+		// connection (after this mode switch to the ping loop) logs.
+		a.firstMsg = true
 		select {
 		case a.outCh <- actionMessage{unhealthy: true}:
 			a.logger.Debug("[runStreamingPingLoop] Unhealthy message sent to debouncer")
@@ -157,8 +166,6 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 		}
 		return nil // continue outer streaming loop
 	}
-
-	a.firstMsg = true // used for the "connection established" log
 
 	a.setStat("🏞️ Streaming actions from Buildkite")
 	a.logger.Debug("[runStreamingPingLoop] Waiting for a message...")
@@ -260,6 +267,9 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 
 	if amsg.unhealthy {
 		a.logger.Debug("[runStreamingPingLoop] Breaking stream loop to reconnect because the stream is unhealthy")
+		// Re-arm the "connection established" log so the next successful
+		// connection (after this mode switch to the ping loop) logs.
+		a.firstMsg = true
 		return errInternalBreak
 	}
 	// Stream is healthy, reset the retry counter
