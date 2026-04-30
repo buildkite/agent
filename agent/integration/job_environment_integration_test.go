@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -227,5 +228,128 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("runJob() error = %v", err)
+	}
+}
+
+func TestCheckoutScopedJobEnvOverrideHonorsNoCheckoutOverride(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		varName            string
+		jobEnv             map[string]string
+		agentCfg           agent.AgentConfiguration
+		wantEnvValue       string
+		wantIgnoredEnvVars []string
+	}{
+		{
+			name:    "disabled_allows_job_env_to_override_clone_flags",
+			varName: "BUILDKITE_GIT_CLONE_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CLONE_FLAGS": "--no-tags",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCloneFlags: "--mirror",
+			},
+			wantEnvValue: "--no-tags",
+		},
+		{
+			name:    "enabled_locks_clone_flags_to_agent_config",
+			varName: "BUILDKITE_GIT_CLONE_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CLONE_FLAGS": "--no-tags",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCloneFlags:      "--mirror",
+				NoCheckoutOverride: true,
+			},
+			wantEnvValue:       "--mirror",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_FLAGS"},
+		},
+		{
+			name:    "disabled_allows_job_env_to_enable_submodules",
+			varName: "BUILDKITE_GIT_SUBMODULES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SUBMODULES": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSubmodules: false,
+			},
+			wantEnvValue: "true",
+		},
+		{
+			name:    "enabled_locks_submodules_to_agent_config",
+			varName: "BUILDKITE_GIT_SUBMODULES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SUBMODULES": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSubmodules:      false,
+				NoCheckoutOverride: true,
+			},
+			wantEnvValue:       "false",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SUBMODULES"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			jobEnv := map[string]string{
+				"BUILDKITE_COMMAND": "echo hello world",
+			}
+			for k, v := range tc.jobEnv {
+				jobEnv[k] = v
+			}
+
+			job := &api.Job{
+				ID:                 "my-job-id",
+				ChunksMaxSizeBytes: 1024,
+				Env:                jobEnv,
+				Token:              "bkaj_job-token",
+			}
+
+			mb := mockBootstrap(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+			mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got, want := c.GetEnv(tc.varName), tc.wantEnvValue; got != want {
+					t.Errorf("c.GetEnv(%s) = %q, want %q", tc.varName, got, want)
+					c.Exit(1)
+					return
+				}
+
+				ignored := strings.Split(strings.TrimSpace(c.GetEnv("BUILDKITE_IGNORED_ENV")), ",")
+				for _, wantIgnored := range tc.wantIgnoredEnvVars {
+					if !slices.Contains(ignored, wantIgnored) {
+						t.Errorf("BUILDKITE_IGNORED_ENV = %q, want it to contain %q", c.GetEnv("BUILDKITE_IGNORED_ENV"), wantIgnored)
+						c.Exit(1)
+						return
+					}
+				}
+				if len(tc.wantIgnoredEnvVars) == 0 && c.GetEnv("BUILDKITE_IGNORED_ENV") != "" {
+					t.Errorf("BUILDKITE_IGNORED_ENV = %q, want empty", c.GetEnv("BUILDKITE_IGNORED_ENV"))
+					c.Exit(1)
+					return
+				}
+
+				c.Exit(0)
+			})
+
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+
+			if err := runJob(t, ctx, testRunJobConfig{
+				job:           job,
+				server:        server,
+				agentCfg:      tc.agentCfg,
+				mockBootstrap: mb,
+			}); err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
+		})
 	}
 }
