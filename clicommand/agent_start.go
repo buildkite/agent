@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/url"
 	"os"
 	"os/signal"
@@ -40,7 +39,6 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
-	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/shellwords"
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -194,7 +192,7 @@ type AgentStartConfig struct {
 	OpenTelemetryMetrics bool `cli:"opentelemetry-metrics"`
 
 	// Tracing config
-	TracingBackend              string `cli:"tracing-backend"`
+	OpenTelemetryTracing        bool   `cli:"opentelemetry-tracing"`
 	TracingServiceName          string `cli:"tracing-service-name"`
 	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
@@ -243,7 +241,7 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "acquire-job")
 	}
 
-	if asc.TracingBackend == tracetools.BackendOpenTelemetry {
+	if asc.OpenTelemetryTracing {
 		features = append(features, "opentelemetry-tracing")
 	}
 
@@ -658,15 +656,14 @@ var AgentStartCommand = &cli.Command{
 		},
 		cancelSignalFlag,
 		cancelCleanupTimeoutFlag,
-		&cli.StringFlag{
-			Name:    "tracing-backend",
-			Usage:   `Enable tracing for build jobs by specifying a backend. Currently only "opentelemetry" (or empty) is supported`,
-			Sources: cli.EnvVars("BUILDKITE_TRACING_BACKEND"),
-			Value:   "",
+		&cli.BoolFlag{
+			Name:    "opentelemetry-tracing",
+			Usage:   "Enable tracing for build jobs with OpenTelemetry OTLP. Configure OTLP with standard OTEL_EXPORTER_OTLP_* env vars (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_OPENTELEMETRY_TRACING"),
 		},
 		&cli.BoolFlag{
 			Name:    "tracing-propagate-traceparent",
-			Usage:   `Enable accepting traceparent context from Buildkite control plane (only supported for OpenTelemetry backend) (default: false)`,
+			Usage:   "Enable accepting traceparent context from Buildkite control plane. Requires --opentelemetry-tracing (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"),
 		},
 		&cli.StringFlag{
@@ -879,15 +876,6 @@ var AgentStartCommand = &cli.Command{
 			ServiceName: cfg.TracingServiceName,
 		})
 
-		// Sense check supported tracing backends, we don't want bootstrapped jobs to silently have no tracing
-		if _, has := tracetools.ValidTracingBackends[cfg.TracingBackend]; !has {
-			return fmt.Errorf(
-				"the given tracing backend %q is not supported. Valid backends are: %q",
-				cfg.TracingBackend,
-				slices.Collect(maps.Keys(tracetools.ValidTracingBackends)),
-			)
-		}
-
 		if experiments.IsEnabled(ctx, experiments.AgentAPI) {
 			shutdown, err := runAgentAPI(ctx, l, cfg.SocketsPath)
 			if err != nil {
@@ -1014,7 +1002,7 @@ var AgentStartCommand = &cli.Command{
 			HooksShell:                      cfg.HooksShell,
 			RedactedVars:                    cfg.RedactedVars,
 			AcquireJob:                      cfg.AcquireJob,
-			TracingBackend:                  cfg.TracingBackend,
+			OpenTelemetryTracing:            cfg.OpenTelemetryTracing,
 			TracingServiceName:              cfg.TracingServiceName,
 			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
