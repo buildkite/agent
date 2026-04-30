@@ -52,11 +52,12 @@ type ArtifactDownloadConfig struct {
 	GlobalConfig
 	APIConfig
 
-	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
-	Destination        string `cli:"arg:1" label:"artifact download path" validate:"required"`
-	Step               string `cli:"step"`
-	Build              string `cli:"build" validate:"required"`
-	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
+	Query                 string `cli:"arg:0" label:"artifact search query" validate:"required"`
+	Destination           string `cli:"arg:1" label:"artifact download path" validate:"required"`
+	Step                  string `cli:"step"`
+	Build                 string `cli:"build" validate:"required"`
+	IncludeRetriedJobs    bool   `cli:"include-retried-jobs"`
+	NoS3MultipartDownload bool   `cli:"no-s3-multipart-download"`
 }
 
 var ArtifactDownloadCommand = cli.Command{
@@ -80,6 +81,11 @@ var ArtifactDownloadCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
 			Usage:  "Include artifacts from retried jobs in the search (default: false)",
 		},
+		cli.BoolFlag{
+			Name:   "no-s3-multipart-download",
+			EnvVar: "BUILDKITE_NO_S3_MULTIPART_DOWNLOAD",
+			Usage:  "Disable multipart download for custom s3 bucket",
+		},
 	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -101,6 +107,7 @@ var ArtifactDownloadCommand = cli.Command{
 			DebugHTTP:          cfg.DebugHTTP,
 			TraceHTTP:          cfg.TraceHTTP,
 			DisableHTTP2:       cfg.NoHTTP2,
+			AllowS3Multipart:   !cfg.NoS3MultipartDownload,
 		})
 
 		// Download the artifacts

@@ -1,0 +1,51 @@
+env:
+  BUILDKITE_S3_DEFAULT_REGION: us-west-2
+  BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: s3://buildkite-agent-e2e-tests-custom-artifacts
+  BUILDKITE_S3_ACL: bucket-owner-full-control
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: upload
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      # Generate a deterministic 20 MiB artifact (20 MiB of zero bytes). The
+      # SHA-256 of this content is fixed across runs, so the upload-side and
+      # download-side hashes match for free. 20 MiB forces 3 ranged GETs at
+      # the 8 MiB part size, exercising the multipart fan-out for real.
+      - dd if=/dev/zero bs=1M count=20 of=artifact-$${BUILDKITE_PIPELINE_SLUG}.bin
+      - sha256sum artifact-$${BUILDKITE_PIPELINE_SLUG}.bin | tee expected-sha256.txt
+      - {{ .buildkite_agent_binary }} artifact upload "artifact-$${BUILDKITE_PIPELINE_SLUG}.bin;expected-sha256.txt"
+  - key: download-multipart
+    depends_on: upload
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - {{ .buildkite_agent_binary }} artifact download "artifact-$${BUILDKITE_PIPELINE_SLUG}.bin" .
+      - {{ .buildkite_agent_binary }} artifact download "expected-sha256.txt" .
+      - sha256sum -c expected-sha256.txt
+  - key: download-no-multipart
+    depends_on: upload
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    env:
+      BUILDKITE_NO_S3_MULTIPART_DOWNLOAD: "true"
+    commands:
+      - {{ .buildkite_agent_binary }} artifact download "artifact-$${BUILDKITE_PIPELINE_SLUG}.bin" .
+      - {{ .buildkite_agent_binary }} artifact download "expected-sha256.txt" .
+      - sha256sum -c expected-sha256.txt
