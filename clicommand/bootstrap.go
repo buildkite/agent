@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/urfave/cli/v3"
 )
 
@@ -109,7 +110,7 @@ type BootstrapConfig struct {
 	CancelSignalTimeout          time.Duration `cli:"cancel-signal-timeout"`
 	CancelCleanupTimeout         time.Duration `cli:"cancel-cleanup-timeout"`
 	RedactedVars                 []string      `cli:"redacted-vars" normalize:"list"`
-	TracingBackend               string        `cli:"tracing-backend"`
+	OpenTelemetryTracing         bool          `cli:"opentelemetry-tracing"`
 	TracingServiceName           string        `cli:"tracing-service-name"`
 	TracingTraceParent           string        `cli:"tracing-traceparent"`
 	TracingTraceState            string        `cli:"tracing-tracestate"`
@@ -342,11 +343,10 @@ var BootstrapCommand = &cli.Command{
 			Usage:   "The specific phases to execute. The order they're defined is irrelevant.",
 			Sources: cli.EnvVars("BUILDKITE_BOOTSTRAP_PHASES"),
 		},
-		&cli.StringFlag{
-			Name:    "tracing-backend",
-			Usage:   "The name of the tracing backend to use.",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_BACKEND"),
-			Value:   "",
+		&cli.BoolFlag{
+			Name:    "opentelemetry-tracing",
+			Usage:   "Enable tracing for build jobs with OpenTelemetry OTLP. Configure OTLP with standard OTEL_EXPORTER_OTLP_* env vars (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_OPENTELEMETRY_TRACING"),
 		},
 		&cli.StringFlag{
 			Name:    "tracing-service-name",
@@ -368,7 +368,7 @@ var BootstrapCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "tracing-propagate-traceparent",
-			Usage:   "Accept traceparent from Buildkite control plane (default: false)",
+			Usage:   "Accept traceparent from Buildkite control plane. Requires --opentelemetry-tracing (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"),
 		},
 
@@ -434,6 +434,11 @@ var BootstrapCommand = &cli.Command{
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
+		tracingBackend := tracetools.BackendNone
+		if cfg.OpenTelemetryTracing {
+			tracingBackend = tracetools.BackendOpenTelemetry
+		}
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
 			AgentName:                    cfg.AgentName,
@@ -493,7 +498,7 @@ var BootstrapCommand = &cli.Command{
 			HooksShell:                   cfg.HooksShell,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			Tag:                          cfg.Tag,
-			TracingBackend:               cfg.TracingBackend,
+			TracingBackend:               tracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
 			TracingTraceParent:           cfg.TracingTraceParent,
 			TracingTraceState:            cfg.TracingTraceState,
