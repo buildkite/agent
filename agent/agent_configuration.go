@@ -78,7 +78,7 @@ type AgentConfiguration struct {
 	Profile                     string
 	RedactedVars                []string
 	AcquireJob                  string
-	TracingBackend              string
+	OpenTelemetryTracing        bool
 	TracingServiceName          string
 	TracingPropagateTraceparent bool
 	// ControlPlaneTracingExporter is an OTLP trace exporter destination

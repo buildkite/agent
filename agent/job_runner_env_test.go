@@ -47,7 +47,7 @@ func controlPlaneTestRunner(t *testing.T, jobEnv map[string]string, agentConf Ag
 
 func controlPlaneTestAgentConf() AgentConfiguration {
 	return AgentConfiguration{
-		TracingBackend: "opentelemetry",
+		OpenTelemetryTracing: true,
 		ControlPlaneTracingExporter: &api.TracingExporter{
 			Endpoint: "https://collector.example/v1/traces",
 			Protocol: "http/protobuf",

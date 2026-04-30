@@ -54,11 +54,6 @@ func ApplyControlPlaneTracing(l logger.Logger, conf *AgentConfiguration, tracing
 		return
 	}
 
-	if conf.TracingBackend != "" && conf.TracingBackend != tracetools.BackendOpenTelemetry {
-		l.Infof("Ignoring control-plane tracing configuration: local tracing-backend %q takes precedence", conf.TracingBackend)
-		return
-	}
-
 	// Validate the server policy regardless of local backend: a policy for an
 	// unsupported backend is ignored in full, even when the local backend is
 	// already OpenTelemetry (its exporter and propagation settings were meant
@@ -67,7 +62,7 @@ func ApplyControlPlaneTracing(l logger.Logger, conf *AgentConfiguration, tracing
 		l.Warnf("Ignoring control-plane tracing configuration: unsupported backend %q", tracing.Backend)
 		return
 	}
-	conf.TracingBackend = tracetools.BackendOpenTelemetry
+	conf.OpenTelemetryTracing = true
 	// From here on, the effective backend is OpenTelemetry.
 
 	if tracing.PropagateTraceparent && !local.PropagateTraceparentSet {
@@ -75,7 +70,7 @@ func ApplyControlPlaneTracing(l logger.Logger, conf *AgentConfiguration, tracing
 	}
 
 	parts := []string{
-		"backend=" + conf.TracingBackend,
+		"backend=" + tracing.Backend,
 		fmt.Sprintf("propagate_traceparent=%t", conf.TracingPropagateTraceparent),
 	}
 

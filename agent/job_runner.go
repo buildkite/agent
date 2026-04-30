@@ -26,7 +26,6 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
-	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
 )
 
@@ -460,7 +459,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if r.envShellFile != nil {
 		// Note that some variables in this list might not be defined later,
 		// when something comes to read the file. See below where they are
-		// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
+		// added conditionally, e.g. BUILDKITE_OPENTELEMETRY_TRACING.
 		// Docker in particular tolerates undefined vars in an env file
 		// without complaints.
 		const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
@@ -486,7 +485,7 @@ BUILDKITE_SHELL
 BUILDKITE_HOOKS_SHELL
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
-BUILDKITE_TRACING_BACKEND
+BUILDKITE_OPENTELEMETRY_TRACING
 BUILDKITE_TRACING_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
 BUILDKITE_TRACING_TRACESTATE
@@ -729,8 +728,8 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	setEnv("BUILDKITE_PLUGIN_VALIDATION", fmt.Sprint(enablePluginValidation))
 
-	if r.conf.AgentConfiguration.TracingBackend != "" {
-		setEnv("BUILDKITE_TRACING_BACKEND", r.conf.AgentConfiguration.TracingBackend)
+	if r.conf.AgentConfiguration.OpenTelemetryTracing {
+		setEnv("BUILDKITE_OPENTELEMETRY_TRACING", "true")
 		setEnv("BUILDKITE_TRACING_SERVICE_NAME", r.conf.AgentConfiguration.TracingServiceName)
 
 		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
@@ -766,7 +765,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// Skipped entirely when the pipeline chose its own OTLP destination: its
 	// values are left untouched (endpoint and headers must travel together,
 	// so there is no partial merge).
-	if exp := r.conf.AgentConfiguration.ControlPlaneTracingExporter; exp != nil && r.conf.AgentConfiguration.TracingBackend == tracetools.BackendOpenTelemetry {
+	if exp := r.conf.AgentConfiguration.ControlPlaneTracingExporter; exp != nil && r.conf.AgentConfiguration.OpenTelemetryTracing {
 		if jobEnvHasOTLPDestination {
 			r.agentLogger.Infof("Not delivering control-plane OTLP exporter to job %s: the job env already sets an OTEL_EXPORTER_OTLP_* destination, which takes precedence", r.conf.Job.ID)
 		} else {
