@@ -127,7 +127,6 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			shell.WithPTY(e.RunInPty),
 			shell.WithStdout(preRedactedStdout), // shell -> redactor -> real stdout
 			shell.WithSignalGracePeriod(e.SignalGracePeriod),
-			shell.WithTraceContextCodec(e.TraceContextCodec),
 		)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
@@ -139,7 +138,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	var err error
 	span, ctx, stopper := e.startTracing(ctx)
 	defer stopper()
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	// Listen for cancellation. Once ctx is cancelled, some tasks can run
 	// afterwards during the signal grace period. These use graceCtx.
@@ -274,7 +273,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		// shouldn't override each other in reporting.
 		if commandErr != nil {
 			e.shell.Printf("user command error: %v", commandErr)
-			span.RecordError(commandErr)
+			tracetools.RecordError(span, commandErr)
 		}
 
 		// Only upload artifacts as part of the command phase.
@@ -348,36 +347,18 @@ type HookConfig struct {
 	PluginName     string
 }
 
-func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
-	if e.TracingBackend != tracetools.BackendDatadog {
-		return scope
-	}
-
-	// In olden times, when the datadog tracing backend was written, these hook scopes were named "local" and "global"
-	// We need to maintain backwards compatibility with the old names for span attribute reasons, so we map them here
-	switch scope {
-	case HookScopeRepository:
-		return "local"
-	case HookScopeAgent:
-		return "global"
-	default:
-		return scope
-	}
-}
-
 // executeHook runs a hook script with the hookRunner
 func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
-	scopeName := e.tracingImplementationSpecificHookScope(hookCfg.Scope)
-	spanName := e.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
+	spanName := fmt.Sprintf("%s %s hook", hookCfg.Scope, hookCfg.Name)
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
-	span.AddAttributes(map[string]string{
-		"hook.type":    scopeName,
+	defer func() { tracetools.FinishWithError(span, err) }()
+	tracetools.AddAttributes(span, map[string]string{
+		"hook.type":    hookCfg.Scope,
 		"hook.name":    hookCfg.Name,
 		"hook.command": hookCfg.Path,
 	})
-	span.AddAttributes(hookCfg.SpanAttributes)
+	tracetools.AddAttributes(span, hookCfg.SpanAttributes)
 
 	hookName := hookCfg.Scope
 	if hookCfg.PluginName != "" {
@@ -861,7 +842,7 @@ func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repo
 func (e *Executor) setUp(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if e.BinPath != "" {
@@ -1003,7 +984,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 func (e *Executor) tearDown(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	// In vanilla agent usage, there's always a command phase.
 	// But over in agent-stack-k8s, which splits the agent phases among
@@ -1044,9 +1025,8 @@ func (e *Executor) tearDown(ctx context.Context) error {
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
 func (e *Executor) runPreCommandHooks(ctx context.Context) (err error) {
-	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-command", e.TracingBackend)
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
@@ -1074,9 +1054,8 @@ func (e *Executor) runCommand(ctx context.Context) error {
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
 func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
-	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
+	span, ctx := tracetools.StartSpanFromContext(ctx, "post-command", e.TracingBackend)
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
 		// Legacy order = same order as pre-command
@@ -1100,7 +1079,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 
 	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.TracingBackend)
 	defer func() {
-		span.FinishWithError(hookErr)
+		tracetools.FinishWithError(span, hookErr)
 	}()
 
 	// Run postCommandHooks, even if there is an error from the command, but not if there is an
@@ -1167,11 +1146,10 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		}
 	}()
 
-	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "default command hook", e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
-	span.AddAttributes(map[string]string{
+	defer func() { tracetools.FinishWithError(span, err) }()
+	tracetools.AddAttributes(span, map[string]string{
 		"hook.name": "command",
 		"hook.type": "default",
 	})
@@ -1184,7 +1162,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
 	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && osutil.FileExists(pathToCommand)
-	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
+	tracetools.AddAttributes(span, map[string]string{"hook.command": pathToCommand})
 
 	// If the command isn't a script, then it's something we need
 	// to eval. But before we even try running it, we should double

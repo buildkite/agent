@@ -15,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/urfave/cli"
 )
 
@@ -109,7 +108,6 @@ type BootstrapConfig struct {
 	TracingServiceName           string        `cli:"tracing-service-name"`
 	TracingTraceParent           string        `cli:"tracing-traceparent"`
 	TracingPropagateTraceparent  bool          `cli:"tracing-propagate-traceparent"`
-	TraceContextEncoding         string        `cli:"trace-context-encoding"`
 	NoJobAPI                     bool          `cli:"no-job-api"`
 	DisableWarningsFor           []string      `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts             int           `cli:"checkout-attempts"`
@@ -364,7 +362,6 @@ var BootstrapCommand = cli.Command{
 		ProfileFlag,
 		RedactedVars,
 		StrictSingleHooksFlag,
-		TraceContextEncodingFlag,
 	},
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
@@ -405,11 +402,6 @@ var BootstrapCommand = cli.Command{
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
-		}
-
-		traceContextCodec, err := tracetools.ParseEncoding(cfg.TraceContextEncoding)
-		if err != nil {
-			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
 
 		// Configure the bootstraper
@@ -468,7 +460,6 @@ var BootstrapCommand = cli.Command{
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
-			TraceContextCodec:            traceContextCodec,
 			TracingTraceParent:           cfg.TracingTraceParent,
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
