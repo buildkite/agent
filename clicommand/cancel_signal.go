@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	defaultCancelSignalTimeout  = 9 * time.Second
-	defaultCancelCleanupTimeout = 1 * time.Second
+	defaultCancelSignalTimeout  = 10 * time.Second
+	defaultCancelCleanupTimeout = 5 * time.Second
 )
 
 var (
