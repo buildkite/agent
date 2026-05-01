@@ -584,8 +584,8 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 	}
 
 	if tracingBackend == tracetools.BackendOpenTelemetry {
-		serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
-		if sn, err := reflections.GetField(cfg, "TracingServiceName"); err == nil {
+		serviceName := os.Getenv("BUILDKITE_TELEMETRY_SERVICE_NAME")
+		if sn, err := reflections.GetField(cfg, "TelemetryServicename"); err == nil {
 			if snStr, ok := sn.(string); ok && snStr != "" {
 				serviceName = snStr
 			}
