@@ -181,7 +181,7 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(e, e.shell.Env))
 	for k, v := range warnings {
 		e.shell.Warningf("Unknown attribute type (key: %v, value: %v (%T)) passed when initialising OpenTelemetry. This is a bug, submit this error message at https://github.com/buildkite/agent/issues", k, v, v)
-		e.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", v)
+		e.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", k)
 	}
 
 	tracerProvider, err := InitOTelTracerProvider(ctx, e.TracingServiceName, extras)
