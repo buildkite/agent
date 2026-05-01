@@ -74,8 +74,7 @@ type AgentConfiguration struct {
 	RedactedVars                 []string
 	AcquireJob                   string
 	OpenTelemetryTracing         bool
-	TracingServiceName           string
-	TracingPropagateTraceparent  bool
+	TelemetryServiceName         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
 	ArtifactUploadConcurrency    int
