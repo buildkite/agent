@@ -203,6 +203,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			Concurrency:       3,
 			MaxChunkSizeBytes: r.conf.Job.ChunksMaxSizeBytes,
 			MaxSizeBytes:      r.conf.Job.LogMaxSizeBytes,
+			MaxChunkAge:       r.conf.AgentConfiguration.LogStreamingInterval,
 		},
 	)
 

@@ -187,6 +187,8 @@ type AgentStartConfig struct {
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
+	LogStreamingInterval time.Duration `cli:"log-streaming-interval"`
+
 	// Datadog statsd metrics config
 	MetricsDatadog              bool   `cli:"metrics-datadog"`
 	MetricsDatadogHost          string `cli:"metrics-datadog-host"`
@@ -570,6 +572,12 @@ var AgentStartCommand = cli.Command{
 			Name:   "health-check-addr",
 			Usage:  "Start an HTTP server on this addr:port that returns whether the agent is healthy, disabled by default",
 			EnvVar: "BUILDKITE_AGENT_HEALTH_CHECK_ADDR",
+		},
+		cli.DurationFlag{
+			Name:   "log-streaming-interval",
+			Usage:  "How long to accumulate log output before uploading a chunk. Larger values reduce API calls and improve compression for agents behind proxies or with high egress costs. The first chunk is always uploaded within 1s regardless of this setting. Set to 0 to disable and upload on every poll tick.",
+			EnvVar: "BUILDKITE_LOG_STREAMING_INTERVAL",
+			Value:  3 * time.Second,
 		},
 		cli.BoolFlag{
 			Name:   "no-pty",
@@ -1103,6 +1111,7 @@ var AgentStartCommand = cli.Command{
 			KubernetesExec:                  cfg.KubernetesExec,
 			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
 			PingMode:                        cfg.PingMode,
+			LogStreamingInterval:            cfg.LogStreamingInterval,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
