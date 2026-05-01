@@ -127,7 +127,7 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (trace.Span, c
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
-	ctx = e.contextWithTraceparentIfEnabled(ctx)
+	ctx = e.contextWithTraceparentIfPresent(ctx)
 	spanAttrs := append(extras, attribute.String("analytics.event", "true"))
 	ctx, span := tracer.Start(ctx, e.otRootSpanName(),
 		trace.WithAttributes(spanAttrs...),
@@ -148,13 +148,8 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (trace.Span, c
 // accepting traceparent from Buildkite control plane is an opt-in feature as its
 // technically a breaking change to the behaviour, and if the server-side tracing
 // isn't set up correctly, agent traces may end up without root spans to link to
-func (e *Executor) contextWithTraceparentIfEnabled(ctx context.Context) context.Context {
-	if !e.TracingPropagateTraceparent {
-		return ctx
-	}
-
+func (e *Executor) contextWithTraceparentIfPresent(ctx context.Context) context.Context {
 	if e.TracingTraceParent == "" {
-		e.shell.Warningf("tracing-propagate-traceparent enabled, but no traceparent provided by server")
 		return ctx
 	}
 
