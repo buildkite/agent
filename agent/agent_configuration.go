@@ -71,7 +71,6 @@ type AgentConfiguration struct {
 	AcquireJob                   string
 	OpenTelemetryTracing         bool
 	TracingServiceName           string
-	TracingPropagateTraceparent  bool
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
 

@@ -108,7 +108,6 @@ type BootstrapConfig struct {
 	OpenTelemetryTracing         bool          `cli:"opentelemetry-tracing"`
 	TracingServiceName           string        `cli:"tracing-service-name"`
 	TracingTraceParent           string        `cli:"tracing-traceparent"`
-	TracingPropagateTraceparent  bool          `cli:"tracing-propagate-traceparent"`
 	NoJobAPI                     bool          `cli:"no-job-api"`
 	DisableWarningsFor           []string      `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts             int           `cli:"checkout-attempts"`
@@ -336,12 +335,6 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 		},
 		cli.BoolFlag{
-			Name:   "tracing-propagate-traceparent",
-			Usage:  "Accept traceparent from Buildkite control plane. Requires --opentelemetry-tracing (default: false)",
-			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
-		},
-
-		cli.BoolFlag{
 			Name:   "no-job-api",
 			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job (default: false)",
 			EnvVar: "BUILDKITE_AGENT_NO_JOB_API",
@@ -466,7 +459,6 @@ var BootstrapCommand = cli.Command{
 			TracingBackend:               tracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
 			TracingTraceParent:           cfg.TracingTraceParent,
-			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			Secrets:                      cfg.Secrets,

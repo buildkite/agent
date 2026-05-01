@@ -668,9 +668,6 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		if r.conf.Job.TraceParent != "" {
 			setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
 		}
-		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
-			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
-		}
 	}
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))

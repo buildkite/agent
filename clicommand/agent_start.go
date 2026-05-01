@@ -189,9 +189,8 @@ type AgentStartConfig struct {
 	OpenTelemetryMetrics bool `cli:"opentelemetry-metrics"`
 
 	// Tracing config
-	OpenTelemetryTracing        bool   `cli:"opentelemetry-tracing"`
-	TracingServiceName          string `cli:"tracing-service-name"`
-	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
+	OpenTelemetryTracing bool   `cli:"opentelemetry-tracing"`
+	TracingServiceName   string `cli:"tracing-service-name"`
 
 	// Other shared flags
 	StrictSingleHooks               bool          `cli:"strict-single-hooks"`
@@ -233,10 +232,6 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 
 	if asc.OpenTelemetryTracing {
 		features = append(features, "opentelemetry-tracing")
-	}
-
-	if asc.TracingPropagateTraceparent {
-		features = append(features, "propagate-traceparent")
 	}
 
 	if asc.DisconnectAfterJob {
@@ -656,11 +651,6 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Enable tracing for build jobs with OpenTelemetry OTLP. Configure OTLP with standard OTEL_EXPORTER_OTLP_* env vars (default: false)",
 			EnvVar: "BUILDKITE_OPENTELEMETRY_TRACING",
 		},
-		cli.BoolFlag{
-			Name:   "tracing-propagate-traceparent",
-			Usage:  "Enable accepting traceparent context from Buildkite control plane. Requires --opentelemetry-tracing (default: false)",
-			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
-		},
 		cli.StringFlag{
 			Name:   "tracing-service-name",
 			Usage:  "Service name to use when reporting telemetry.",
@@ -1005,7 +995,6 @@ var AgentStartCommand = cli.Command{
 			AcquireJob:                      cfg.AcquireJob,
 			OpenTelemetryTracing:            cfg.OpenTelemetryTracing,
 			TracingServiceName:              cfg.TracingServiceName,
-			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
 			KubernetesExec:                  cfg.KubernetesExec,
 			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
