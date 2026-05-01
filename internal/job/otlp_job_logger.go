@@ -79,7 +79,7 @@ func newOTLPJobLogger(ctx context.Context, e *Executor) (*otlpJobLogger, error) 
 		return nil, fmt.Errorf("creating OTLP log exporter: %w", err)
 	}
 
-	serviceName := e.TracingServiceName
+	serviceName := e.TelemetryServiceName
 	if serviceName == "" {
 		serviceName = "buildkite-agent"
 	}
