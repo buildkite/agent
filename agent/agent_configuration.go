@@ -62,25 +62,24 @@ type AgentConfiguration struct {
 	VerificationJWKS             any    // The set of keys to verify jobs with
 	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
 
-	HealthCheckAddr             string
-	DisconnectAfterJob          bool
-	DisconnectAfterIdleTimeout  time.Duration
-	DisconnectAfterUptime       time.Duration
-	CancelSignalTimeout         time.Duration
-	CancelCleanupTimeout        time.Duration
-	EnableJobLogTmpfile         bool
-	JobLogPath                  string
-	WriteJobLogsToStdout        bool
-	JobLogsOTLP                 bool
-	LogFormat                   string
-	Shell                       string
-	HooksShell                  string
-	Profile                     string
-	RedactedVars                []string
-	AcquireJob                  string
-	OpenTelemetryTracing        bool
-	TracingServiceName          string
-	TracingPropagateTraceparent bool
+	HealthCheckAddr            string
+	DisconnectAfterJob         bool
+	DisconnectAfterIdleTimeout time.Duration
+	DisconnectAfterUptime      time.Duration
+	CancelSignalTimeout        time.Duration
+	CancelCleanupTimeout       time.Duration
+	EnableJobLogTmpfile        bool
+	JobLogPath                 string
+	WriteJobLogsToStdout       bool
+	JobLogsOTLP                bool
+	LogFormat                  string
+	Shell                      string
+	HooksShell                 string
+	Profile                    string
+	RedactedVars               []string
+	AcquireJob                 string
+	OpenTelemetryTracing       bool
+	TelemetryServiceName       string
 	// ControlPlaneTracingExporter is an OTLP trace exporter destination
 	// supplied by the control plane at registration (see
 	// ApplyControlPlaneTracing). It is delivered to the bootstrap process

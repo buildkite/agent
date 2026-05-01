@@ -32,7 +32,6 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 		tracing         *api.AgentTracing
 		local           LocalTracingConfig
 		wantOTelTracing bool
-		wantPropagate   bool
 		wantExporter    bool
 	}{
 		{
@@ -43,7 +42,6 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			name:            "no local config applies backend, propagation and exporter",
 			tracing:         serverTracing(),
 			wantOTelTracing: true,
-			wantPropagate:   true,
 			wantExporter:    true,
 		},
 		{
@@ -51,7 +49,6 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			conf:            AgentConfiguration{OpenTelemetryTracing: true},
 			tracing:         serverTracing(),
 			wantOTelTracing: true,
-			wantPropagate:   true,
 			wantExporter:    true,
 		},
 		{
@@ -59,16 +56,7 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			tracing:         serverTracing(),
 			local:           LocalTracingConfig{OTLPDestinationSet: true},
 			wantOTelTracing: true,
-			wantPropagate:   true,
 			wantExporter:    false,
-		},
-		{
-			name:            "explicit local propagate_traceparent=false wins",
-			tracing:         serverTracing(),
-			local:           LocalTracingConfig{PropagateTraceparentSet: true},
-			wantOTelTracing: true,
-			wantPropagate:   false,
-			wantExporter:    true,
 		},
 		{
 			name: "unsupported server backend is ignored entirely",
@@ -98,9 +86,6 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 
 			if got, want := conf.OpenTelemetryTracing, tc.wantOTelTracing; got != want {
 				t.Errorf("conf.OpenTelemetryTracing = %t, want %t", got, want)
-			}
-			if got, want := conf.TracingPropagateTraceparent, tc.wantPropagate; got != want {
-				t.Errorf("conf.TracingPropagateTraceparent = %t, want %t", got, want)
 			}
 			if got, want := conf.ControlPlaneTracingExporter != nil, tc.wantExporter; got != want {
 				t.Errorf("conf.ControlPlaneTracingExporter set = %t, want %t", got, want)

@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"maps"
 	"net/url"
 	"os"
@@ -65,13 +64,8 @@ func ApplyControlPlaneTracing(l logger.Logger, conf *AgentConfiguration, tracing
 	conf.OpenTelemetryTracing = true
 	// From here on, the effective backend is OpenTelemetry.
 
-	if tracing.PropagateTraceparent && !local.PropagateTraceparentSet {
-		conf.TracingPropagateTraceparent = true
-	}
-
 	parts := []string{
 		"backend=" + tracing.Backend,
-		fmt.Sprintf("propagate_traceparent=%t", conf.TracingPropagateTraceparent),
 	}
 
 	switch {
