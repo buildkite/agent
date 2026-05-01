@@ -97,7 +97,7 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 	stopper()
 }
 
-func TestContextWithTraceparentIfEnabledDoesNotAcceptServerTraceparentWithoutPropagation(t *testing.T) {
+func TestContextWithTraceparentIfPresentAcceptsServerTraceparent(t *testing.T) {
 	t.Parallel()
 
 	sh, err := shell.New(shell.WithLogger(shell.DiscardLogger))
@@ -109,26 +109,7 @@ func TestContextWithTraceparentIfEnabledDoesNotAcceptServerTraceparentWithoutPro
 	})
 	e.shell = sh
 
-	ctx := e.contextWithTraceparentIfEnabled(t.Context())
-	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
-		t.Fatalf("SpanContextFromContext(ctx).IsValid() = true, want false")
-	}
-}
-
-func TestContextWithTraceparentIfEnabledAcceptsServerTraceparentWithPropagation(t *testing.T) {
-	t.Parallel()
-
-	sh, err := shell.New(shell.WithLogger(shell.DiscardLogger))
-	if err != nil {
-		t.Fatalf("shell.New() error = %v", err)
-	}
-	e := New(ExecutorConfig{
-		TracingPropagateTraceparent: true,
-		TracingTraceParent:          "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
-	})
-	e.shell = sh
-
-	ctx := e.contextWithTraceparentIfEnabled(t.Context())
+	ctx := e.contextWithTraceparentIfPresent(t.Context())
 	sc := trace.SpanContextFromContext(ctx)
 	if !sc.IsValid() {
 		t.Fatalf("SpanContextFromContext(ctx).IsValid() = false, want true")
