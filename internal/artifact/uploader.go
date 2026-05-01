@@ -675,6 +675,9 @@ selectLoop:
 			if result.err != nil {
 				// The work unit failed, so the whole artifact upload has failed.
 				errs = append(errs, result.err)
+				if tracker.State != "error" {
+					artifactUploadFailures.Inc()
+				}
 				tracker.State = "error"
 				a.logger.Debug("Artifact %s has entered state %s", tracker.ID, tracker.State)
 				continue
@@ -693,6 +696,8 @@ selectLoop:
 			// No pending units remain, so the whole artifact is complete.
 			// Add it to the next batch of states to upload.
 			tracker.State = "finished"
+			artifactsUploaded.Inc()
+			artifactBytesUploaded.Add(float64(artifact.FileSize))
 			a.logger.Debug("Artifact %s has entered state %s", tracker.ID, tracker.State)
 		}
 	}
