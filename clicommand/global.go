@@ -6,6 +6,7 @@ import (
 	"iter"
 	"os"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -14,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli/v3"
@@ -597,16 +597,16 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 
 	// When OpenTelemetry tracing is enabled, always initialize a TracerProvider
 	// so that every command (bootstrap or standalone subcommand) can emit spans.
-	tracingBackend := os.Getenv("BUILDKITE_TRACING_BACKEND")
-	if tb, err := reflections.GetField(cfg, "TracingBackend"); err == nil {
-		if tbStr, ok := tb.(string); ok && tbStr != "" {
-			tracingBackend = tbStr
+	tracingEnabled, _ := strconv.ParseBool(os.Getenv("BUILDKITE_OPENTELEMETRY_TRACING"))
+	if tb, err := reflections.GetField(cfg, "OpenTelemetryTracing"); err == nil {
+		if te, ok := tb.(bool); ok {
+			tracingEnabled = te
 		}
 	}
 
-	if tracingBackend == tracetools.BackendOpenTelemetry {
-		serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
-		if sn, err := reflections.GetField(cfg, "TracingServiceName"); err == nil {
+	if tracingEnabled {
+		serviceName := os.Getenv("BUILDKITE_TELEMETRY_SERVICE_NAME")
+		if sn, err := reflections.GetField(cfg, "TelemetryServiceName"); err == nil {
 			if snStr, ok := sn.(string); ok && snStr != "" {
 				serviceName = snStr
 			}
