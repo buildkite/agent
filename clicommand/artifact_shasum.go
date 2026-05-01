@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const shasumHelpDescription = `Usage:
@@ -91,6 +92,8 @@ var ArtifactShasumCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactShasumConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "artifact-shasum")
+		defer span.End()
 		return searchAndPrintShaSum(ctx, cfg, l, os.Stdout)
 	},
 }

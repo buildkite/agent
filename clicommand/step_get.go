@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const stepGetHelpDescription = `Usage:
@@ -67,6 +68,8 @@ var StepGetCommand = cli.Command{
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](context.Background(), c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "step-get")
+		defer span.End()
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))

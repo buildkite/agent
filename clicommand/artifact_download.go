@@ -8,6 +8,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const downloadHelpDescription = `Usage:
@@ -84,6 +85,8 @@ var ArtifactDownloadCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactDownloadConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "artifact-download")
+		defer span.End()
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
