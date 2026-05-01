@@ -110,10 +110,9 @@ type BootstrapConfig struct {
 	CancelCleanupTimeout         time.Duration `cli:"cancel-cleanup-timeout"`
 	RedactedVars                 []string      `cli:"redacted-vars" normalize:"list"`
 	OpenTelemetryTracing         bool          `cli:"opentelemetry-tracing"`
-	TracingServiceName           string        `cli:"tracing-service-name"`
+	TelemetryServiceName         string        `cli:"telemetry-service-name"`
 	TracingTraceParent           string        `cli:"tracing-traceparent"`
 	TracingTraceState            string        `cli:"tracing-tracestate"`
-	TracingPropagateTraceparent  bool          `cli:"tracing-propagate-traceparent"`
 	NoJobAPI                     bool          `cli:"no-job-api"`
 	DisableWarningsFor           []string      `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts             int           `cli:"checkout-attempts"`
@@ -343,9 +342,9 @@ var BootstrapCommand = &cli.Command{
 			Sources: cli.EnvVars("BUILDKITE_OPENTELEMETRY_TRACING"),
 		},
 		&cli.StringFlag{
-			Name:    "tracing-service-name",
+			Name:    "telemetry-service-name",
 			Usage:   "Service name to use when reporting traces.",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_SERVICE_NAME"),
+			Sources: cli.EnvVars("BUILDKITE_TELEMETRY_SERVICE_NAME"),
 			Value:   "buildkite-agent",
 		},
 		&cli.StringFlag{
@@ -359,11 +358,6 @@ var BootstrapCommand = &cli.Command{
 			Usage:   "W3C Trace State for tracing",
 			Sources: cli.EnvVars("BUILDKITE_TRACING_TRACESTATE"),
 			Value:   "",
-		},
-		&cli.BoolFlag{
-			Name:    "tracing-propagate-traceparent",
-			Usage:   "Accept traceparent from Buildkite control plane. Requires --opentelemetry-tracing (default: false)",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"),
 		},
 
 		&cli.BoolFlag{
@@ -492,10 +486,9 @@ var BootstrapCommand = &cli.Command{
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			Tag:                          cfg.Tag,
 			TracingBackend:               tracingBackend,
-			TracingServiceName:           cfg.TracingServiceName,
+			TelemetryServiceName:         cfg.TelemetryServiceName,
 			TracingTraceParent:           cfg.TracingTraceParent,
 			TracingTraceState:            cfg.TracingTraceState,
-			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			Secrets:                      cfg.Secrets,
