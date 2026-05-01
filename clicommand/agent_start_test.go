@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -20,7 +19,7 @@ import (
 func TestAgentStartFeatures_OpenTelemetryTracing(t *testing.T) {
 	t.Parallel()
 
-	features := AgentStartConfig{OpenTelemetryTracing: true}.Features(context.Background())
+	features := AgentStartConfig{OpenTelemetryTracing: true}.Features(t.Context())
 	if !slices.Contains(features, "opentelemetry-tracing") {
 		t.Fatalf("Features() = %v, want opentelemetry-tracing", features)
 	}

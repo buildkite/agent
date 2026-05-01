@@ -417,10 +417,9 @@ BUILDKITE_HOOKS_SHELL
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
 BUILDKITE_OPENTELEMETRY_TRACING
-BUILDKITE_TRACING_SERVICE_NAME
+BUILDKITE_TELEMETRY_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
 BUILDKITE_TRACING_TRACESTATE
-BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
 BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
@@ -643,7 +642,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 	if r.conf.AgentConfiguration.OpenTelemetryTracing {
 		setEnv("BUILDKITE_OPENTELEMETRY_TRACING", "true")
-		setEnv("BUILDKITE_TRACING_SERVICE_NAME", r.conf.AgentConfiguration.TracingServiceName)
+		setEnv("BUILDKITE_TELEMETRY_SERVICE_NAME", r.conf.AgentConfiguration.TelemetryServiceName)
 
 		// Buildkite backend can provide a traceparent property on the job
 		// which can be propagated to the job tracing if OpenTelemetry is used
@@ -658,9 +657,6 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		// https://www.w3.org/TR/trace-context/#tracestate-header
 		if r.conf.Job.TraceState != "" {
 			setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
-		}
-		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
-			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
 		}
 	}
 

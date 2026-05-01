@@ -191,9 +191,8 @@ type AgentStartConfig struct {
 	OpenTelemetryMetrics bool `cli:"opentelemetry-metrics"`
 
 	// Tracing config
-	OpenTelemetryTracing        bool   `cli:"opentelemetry-tracing"`
-	TracingServiceName          string `cli:"tracing-service-name"`
-	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
+	OpenTelemetryTracing bool   `cli:"opentelemetry-tracing"`
+	TelemetryServiceName string `cli:"telemetry-service-name"`
 
 	// Other shared flags
 	StrictSingleHooks               bool          `cli:"strict-single-hooks"`
@@ -236,10 +235,6 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 
 	if asc.OpenTelemetryTracing {
 		features = append(features, "opentelemetry-tracing")
-	}
-
-	if asc.TracingPropagateTraceparent {
-		features = append(features, "propagate-traceparent")
 	}
 
 	if asc.DisconnectAfterJob {
@@ -653,15 +648,10 @@ var AgentStartCommand = &cli.Command{
 			Usage:   "Enable tracing for build jobs with OpenTelemetry OTLP. Configure OTLP with standard OTEL_EXPORTER_OTLP_* env vars (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_OPENTELEMETRY_TRACING"),
 		},
-		&cli.BoolFlag{
-			Name:    "tracing-propagate-traceparent",
-			Usage:   "Enable accepting traceparent context from Buildkite control plane. Requires --opentelemetry-tracing (default: false)",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"),
-		},
 		&cli.StringFlag{
-			Name:    "tracing-service-name",
+			Name:    "telemetry-service-name",
 			Usage:   "Service name to use when reporting telemetry.",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_SERVICE_NAME"),
+			Sources: cli.EnvVars("BUILDKITE_TELEMETRY_SERVICE_NAME"),
 			Value:   "buildkite-agent",
 		},
 		&cli.StringFlag{
@@ -841,7 +831,7 @@ var AgentStartCommand = &cli.Command{
 
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
 			Enabled:     cfg.OpenTelemetryMetrics,
-			ServiceName: cfg.TracingServiceName,
+			ServiceName: cfg.TelemetryServiceName,
 		})
 
 		if experiments.IsEnabled(ctx, experiments.AgentAPI) {
@@ -973,8 +963,7 @@ var AgentStartCommand = &cli.Command{
 			RedactedVars:                    cfg.RedactedVars,
 			AcquireJob:                      cfg.AcquireJob,
 			OpenTelemetryTracing:            cfg.OpenTelemetryTracing,
-			TracingServiceName:              cfg.TracingServiceName,
-			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
+			TelemetryServiceName:            cfg.TelemetryServiceName,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
 			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
 			KubernetesExec:                  cfg.KubernetesExec,
