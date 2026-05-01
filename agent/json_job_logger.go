@@ -56,6 +56,6 @@ func (l JSONJobLogger) Write(data []byte) (int, error) {
 	// When writing as a structured log, trailing newlines and carriage returns
 	// generally don't make sense.
 	msg := strings.TrimRight(string(data), "\r\n")
-	l.log.Info(msg)
+	l.log.Info("%s", msg)
 	return len(data), nil
 }
