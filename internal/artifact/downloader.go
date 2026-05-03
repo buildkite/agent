@@ -81,7 +81,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 		return errors.New("no artifacts found for downloading")
 	}
 
-	a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
+	a.logger.Infof("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
 
 	s3Clients, err := a.generateS3Clients(ctx, artifacts)
 	if err != nil {
@@ -134,7 +134,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 				dler := a.createDownloader(artifact, path, destination, s3Clients)
 
 				if err := dler.Start(ctx); err != nil {
-					a.logger.Error("Failed to download artifact: %s", err)
+					a.logger.Errorf("Failed to download artifact: %s", err)
 					select {
 					case errorsCh <- err:
 						// error sent

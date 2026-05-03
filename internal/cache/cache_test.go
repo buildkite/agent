@@ -168,7 +168,7 @@ func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 
 	mock := &mockCacheClient{
 		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
-			t.Fatal("Save should not be called with empty cache IDs")
+			t.Fatalf("Save should not be called with empty cache IDs")
 			return zstash.SaveResult{}, nil
 		},
 	}
@@ -316,7 +316,7 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 
 	mock := &mockCacheClient{
 		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			t.Fatal("Restore should not be called with empty cache IDs")
+			t.Fatalf("Restore should not be called with empty cache IDs")
 			return zstash.RestoreResult{}, nil
 		},
 	}

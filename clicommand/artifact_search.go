@@ -147,7 +147,7 @@ var ArtifactSearchCommand = cli.Command{
 			if !cfg.AllowEmptyResults {
 				return fmt.Errorf("no matches found for %q", cfg.Query)
 			}
-			l.Info("No matches found for %q", cfg.Query)
+			l.Infof("No matches found for %q", cfg.Query)
 		}
 
 		for _, artifact := range artifacts {

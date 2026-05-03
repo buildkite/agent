@@ -87,7 +87,7 @@ var MetaDataGetCommand = cli.Command{
 				return nil, resp, err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 				return nil, resp, err
 			}
 			return metaData, resp, nil
@@ -100,7 +100,7 @@ var MetaDataGetCommand = cli.Command{
 			// We also use `IsSet` instead of `cfg.Default != ""`
 			// to allow people to use a default of a blank string.
 			if resp != nil && resp.StatusCode == 404 && c.IsSet("default") {
-				l.Warn(
+				l.Warnf(
 					"No meta-data value exists with key %q, returning the supplied default %q",
 					cfg.Key,
 					cfg.Default,

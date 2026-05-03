@@ -60,7 +60,7 @@ func TestDisconnect(t *testing.T) {
 		APIClient: apiClient,
 		Logger:    l,
 		RetrySleepFunc: func(time.Duration) {
-			t.Error("unexpected retrier sleep")
+			t.Errorf("unexpected retrier sleep")
 		},
 	}
 

@@ -82,11 +82,11 @@ func pause(ctx context.Context, cfg AgentPauseConfig, l logger.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return err
 		}
 
-		l.Info("Successfully paused agent")
+		l.Infof("Successfully paused agent")
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to pause agent: %w", err)

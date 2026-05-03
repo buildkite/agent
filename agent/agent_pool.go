@@ -47,10 +47,10 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 		defer done()
 		setStatus("👂 Listening")
 
-		l.Notice("Starting HTTP health check server on %v", addr)
+		l.Noticef("Starting HTTP health check server on %v", addr)
 		err := http.ListenAndServe(addr, mux)
 		if err != nil {
-			l.Error("Could not start health check server: %v", err)
+			l.Errorf("Could not start health check server: %v", err)
 		}
 	}()
 }
@@ -155,14 +155,14 @@ func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
 			Workers:         statuses,
 		})
 		if err != nil {
-			l.Error("Could not encode status.json response: %v", err)
+			l.Errorf("Could not encode status.json response: %v", err)
 		}
 	}
 }
 
 func healthHandler(l logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		l.Debug("agent_pool.go/healthHandler: %s %s", r.Method, r.URL.Path)
+		l.Debugf("agent_pool.go/healthHandler: %s %s", r.Method, r.URL.Path)
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 		} else {
