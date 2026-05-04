@@ -342,7 +342,7 @@ func CreateLogger(cfg any) logger.Logger {
 
 		l = logger.NewConsoleLogger(printer, os.Exit)
 	case "json":
-		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
+		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stderr), os.Exit)
 	default:
 		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
 		os.Exit(1)
