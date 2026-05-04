@@ -5,13 +5,13 @@ package metrics
 
 import (
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/DataDog/datadog-go/v5/statsd"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 const (
@@ -25,7 +25,7 @@ const (
 
 type Collector struct {
 	config CollectorConfig
-	logger logger.Logger
+	logger *slog.Logger
 	client *statsd.Client
 }
 
@@ -35,7 +35,7 @@ type CollectorConfig struct {
 	DatadogDistributions bool
 }
 
-func NewCollector(l logger.Logger, c CollectorConfig) *Collector {
+func NewCollector(l *slog.Logger, c CollectorConfig) *Collector {
 	return &Collector{
 		config: c,
 		logger: l,
@@ -50,7 +50,7 @@ func (c *Collector) Start() error {
 			c.config.DatadogHost += fmt.Sprintf(":%d", defaultDogStatsdPort)
 		}
 
-		c.logger.Info("Starting datadog metrics collection to %s", c.config.DatadogHost)
+		c.logger.Info(fmt.Sprintf("Starting datadog metrics collection to %s", c.config.DatadogHost))
 
 		var err error
 		c.client, err = statsd.New(c.config.DatadogHost,
@@ -91,7 +91,7 @@ func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
 	}
 
 	mergedTags := s.mergeTags(tags...).StringSlice()
-	s.c.logger.Debug("Metrics timing %s=%v %v", name, value, mergedTags)
+	s.c.logger.Debug(fmt.Sprintf("Metrics timing %s=%v %v", name, value, mergedTags))
 
 	var err error
 	if s.c.config.DatadogDistributions {
@@ -106,7 +106,7 @@ func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
 		err = s.c.client.Timing(name, value, mergedTags, 1)
 	}
 	if err != nil {
-		s.c.logger.Error("Metrics timing failed: %v", err)
+		s.c.logger.Error(fmt.Sprintf("Metrics timing failed: %v", err))
 	}
 }
 
@@ -125,10 +125,10 @@ func (s *Scope) Count(name string, value int64, tags ...Tags) {
 	}
 
 	mergedTags := s.mergeTags(tags...).StringSlice()
-	s.c.logger.Debug("Metrics count %s=%v %v", name, value, mergedTags)
+	s.c.logger.Debug(fmt.Sprintf("Metrics count %s=%v %v", name, value, mergedTags))
 
 	if err := s.c.client.Count(name, value, mergedTags, 1); err != nil {
-		s.c.logger.Error("Metrics count failed: %v", err)
+		s.c.logger.Error(fmt.Sprintf("Metrics count failed: %v", err))
 	}
 }
 

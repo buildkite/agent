@@ -45,7 +45,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	ctx := context.Background()
 
 	// Initial client with a registration token
-	c := api.NewClient(logger.Discard, api.Config{
+	c := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint:  server.URL,
 		Token:     "llamas",
 		TLSConfig: &tls.Config{InsecureSkipVerify: true},

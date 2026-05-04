@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/agenthttp"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/dustin/go-humanize"
 )
@@ -46,11 +46,11 @@ type BKUploader struct {
 	conf BKUploaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 }
 
 // NewBKUploader creates a new Buildkite uploader.
-func NewBKUploader(l logger.Logger, c BKUploaderConfig) *BKUploader {
+func NewBKUploader(l *slog.Logger, c BKUploaderConfig) *BKUploader {
 	return &BKUploader{
 		logger: l,
 		conf:   c,
@@ -177,7 +177,7 @@ func (u *bkMultipartUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, 
 	}
 
 	etag := resp.Header.Get("Etag")
-	u.logger.Debug("Artifact %s part %d has ETag = %s", u.artifact.ID, u.action.PartNumber, etag)
+	u.logger.Debug(fmt.Sprintf("Artifact %s part %d has ETag = %s", u.artifact.ID, u.action.PartNumber, etag))
 	if etag == "" {
 		return nil, errors.New("response missing ETag header")
 	}
@@ -241,7 +241,7 @@ func (u *bkFormUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, error
 }
 
 // Creates a new file upload http request with optional extra params
-func createFormUploadRequest(ctx context.Context, _ logger.Logger, artifact *api.Artifact) (_ *http.Request, err error) {
+func createFormUploadRequest(ctx context.Context, _ *slog.Logger, artifact *api.Artifact) (_ *http.Request, err error) {
 	streamer := newMultipartStreamer()
 	action := artifact.UploadInstructions.Action
 

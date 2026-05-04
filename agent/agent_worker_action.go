@@ -60,7 +60,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 				fromPingLoop = nil
 				continue
 			}
-			a.logger.Debug("[runActionLoop] Got action %q, jobID %q from ping loop", m.action, m.jobID)
+			a.logger.Debug(fmt.Sprintf("[runActionLoop] Got action %q, jobID %q from ping loop", m.action, m.jobID))
 			msg = m
 			// continue below
 
@@ -69,7 +69,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 				fromDebouncer = nil
 				continue
 			}
-			a.logger.Debug("[runActionLoop] Got action %q, jobID %q from streaming loop debouncer", m.action, m.jobID)
+			a.logger.Debug(fmt.Sprintf("[runActionLoop] Got action %q, jobID %q from streaming loop debouncer", m.action, m.jobID))
 			msg = m
 			// continue below
 
@@ -82,7 +82,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 			return nil
 
 		case <-disconnectAfterUptime:
-			a.logger.Info("Agent has exceeded max uptime of %v", maxUptime)
+			a.logger.Info(fmt.Sprintf("Agent has exceeded max uptime of %v", maxUptime))
 			if paused {
 				// Wait to be unpaused before exiting
 				a.logger.Info("Awaiting resume before disconnecting...")
@@ -95,12 +95,12 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 		case <-idleMon.Exiting():
 			// This should only happen if the agent isn't paused.
 			// (Pausedness is a kind of non-idleness.)
-			a.logger.Info("All agents have been idle for at least %v. Disconnecting...", idleMon.idleTimeout)
+			a.logger.Info(fmt.Sprintf("All agents have been idle for at least %v. Disconnecting...", idleMon.idleTimeout))
 			return nil
 		}
 
 		// Let's handle the action!
-		a.logger.Debug("[runActionLoop] Performing action %q, jobID %q", msg.action, msg.jobID)
+		a.logger.Debug(fmt.Sprintf("[runActionLoop] Performing action %q, jobID %q", msg.action, msg.jobID))
 		setStat(fmt.Sprintf("🧑‍🍳 Performing %q action...", msg.action))
 		pingActions.WithLabelValues(msg.action).Inc()
 
@@ -142,7 +142,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 		// so jobID should be empty. If not, complain.
 		if a.agentConfiguration.AcquireJob != "" {
 			if msg.jobID != "" {
-				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in acquire-job mode! Ignoring the new job", msg.jobID)
+				a.logger.Error(fmt.Sprintf("Agent ping dispatched a job (id %q) but agent is in acquire-job mode! Ignoring the new job", msg.jobID))
 			}
 			// Disconnect after acquire-job.
 			return nil
@@ -152,7 +152,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 		// ignore-in-dispatches=true. So jobID should be empty. If not, complain.
 		if ranJob && a.agentConfiguration.DisconnectAfterJob {
 			if msg.jobID != "" {
-				a.logger.Error("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)! Ignoring the new job", msg.jobID)
+				a.logger.Error(fmt.Sprintf("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)! Ignoring the new job", msg.jobID))
 			}
 			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
 			return nil
@@ -171,7 +171,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 
 		// Runs the job, only errors if something goes wrong
 		if err := a.AcceptAndRunJob(ctx, msg.jobID, idleMon); err != nil {
-			a.logger.Error("%v", err)
+			a.logger.Error(fmt.Sprintf("%v", err))
 			setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
 			msg.errCh <- err // so the ping loop can do something special
 			close(msg.errCh)
@@ -185,7 +185,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 
 // Accepts a job and runs it, only returns an error if something goes wrong
 func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon *idleMonitor) error {
-	a.logger.Info("Assigned job %s. Accepting...", jobID)
+	a.logger.Info(fmt.Sprintf("Assigned job %s. Accepting...", jobID))
 
 	// An agent is busy during a job, and idle when the job is done.
 	idleMon.MarkBusy(a)
@@ -203,9 +203,9 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon
 		accepted, _, err := a.apiClient.AcceptJob(ctx, jobID)
 		if err != nil {
 			if api.IsRetryableError(err) {
-				a.logger.Warn("%s (%s)", err, r)
+				a.logger.Warn(fmt.Sprintf("%s (%s)", err, r))
 			} else {
-				a.logger.Warn("Buildkite rejected the call to accept the job (%s)", err)
+				a.logger.Warn(fmt.Sprintf("Buildkite rejected the call to accept the job (%s)", err))
 				r.Break()
 			}
 		}

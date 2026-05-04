@@ -11,7 +11,7 @@ import (
 func TestHeaderTimesStreamerScanAfterStopDoesNotPanic(t *testing.T) {
 	t.Parallel()
 
-	h := newHeaderTimesStreamer(logger.Discard, func(context.Context, int, int, map[string]string) {})
+	h := newHeaderTimesStreamer(logger.SlogDiscard, func(context.Context, int, int, map[string]string) {})
 
 	runDone := make(chan struct{})
 	go func() {

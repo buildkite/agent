@@ -21,7 +21,7 @@ func TestAsyncPipelineUpload(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	l := logger.NewBuffer()
+	l := logger.SlogDiscard
 
 	for _, test := range []struct {
 		replace        bool
@@ -106,7 +106,7 @@ steps:
 
 			retrySleeps := []time.Duration{}
 			uploader := &agent.PipelineUploader{
-				Client: api.NewClient(logger.Discard, api.Config{
+				Client: api.NewClient(logger.SlogDiscard, api.Config{
 					Endpoint: server.URL,
 					Token:    "llamas",
 				}),
@@ -142,7 +142,7 @@ func TestFallbackPipelineUpload(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	l := logger.NewBuffer()
+	l := logger.SlogDiscard
 
 	genSleeps := func(n int, s time.Duration) []time.Duration {
 		sleeps := make([]time.Duration, 0, n)
@@ -256,7 +256,7 @@ steps:
 
 			retrySleeps := []time.Duration{}
 			uploader := &agent.PipelineUploader{
-				Client: api.NewClient(logger.Discard, api.Config{
+				Client: api.NewClient(logger.SlogDiscard, api.Config{
 					Endpoint: server.URL,
 					Token:    "llamas",
 				}),

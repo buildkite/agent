@@ -41,7 +41,7 @@ func TestScanLines(t *testing.T) {
 		}
 	}()
 
-	scanner := process.NewScanner(logger.Discard)
+	scanner := process.NewScanner(logger.SlogDiscard)
 
 	scanFunc := func(l string) {
 		lineNumber := atomic.AddInt32(&lineCounter, 1)

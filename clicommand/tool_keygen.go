@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline/jwkutil"
 	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/lestrrat-go/jwx/v2/jwa"
@@ -69,23 +70,23 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 
 		if cfg.Alg == "" {
 			cfg.Alg = "EdDSA"
-			l.Info("No algorithm provided, using %s", cfg.Alg)
+			l.Info(fmt.Sprintf("No algorithm provided, using %s", cfg.Alg))
 		}
 
 		if cfg.KeyID == "" {
 			cfg.KeyID = petname.Generate(2, "-")
-			l.Info("No key ID provided, using a randomly generated one: %s", cfg.KeyID)
+			l.Info(fmt.Sprintf("No key ID provided, using a randomly generated one: %s", cfg.KeyID))
 		}
 
 		sigAlg := jwa.SignatureAlgorithm(cfg.Alg)
 
 		if !slices.Contains(jwkutil.ValidSigningAlgorithms, sigAlg) {
-			l.Fatal("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
+			logger.Fatal(l, fmt.Sprintf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms))
 		}
 
 		priv, pub, err := jwkutil.NewKeyPair(cfg.KeyID, sigAlg)
 		if err != nil {
-			l.Fatal("Failed to generate key pair: %v", err)
+			logger.Fatal(l, fmt.Sprintf("Failed to generate key pair: %v", err))
 		}
 
 		if cfg.PrivateJWKSFile == "" {
@@ -96,26 +97,26 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 			cfg.PublicJWKSFile = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
 		}
 
-		l.Info("Writing private key set to %s...", cfg.PrivateJWKSFile)
+		l.Info(fmt.Sprintf("Writing private key set to %s...", cfg.PrivateJWKSFile))
 		pKey, err := json.Marshal(priv)
 		if err != nil {
-			l.Fatal("Failed to marshal private key: %v", err)
+			logger.Fatal(l, fmt.Sprintf("Failed to marshal private key: %v", err))
 		}
 
 		err = writeIfNotExists(cfg.PrivateJWKSFile, pKey)
 		if err != nil {
-			l.Fatal("Failed to write private key file: %v", err)
+			logger.Fatal(l, fmt.Sprintf("Failed to write private key file: %v", err))
 		}
 
-		l.Info("Writing public key set to %s...", cfg.PublicJWKSFile)
+		l.Info(fmt.Sprintf("Writing public key set to %s...", cfg.PublicJWKSFile))
 		pubKey, err := json.Marshal(pub)
 		if err != nil {
-			l.Fatal("Failed to marshal private key: %v", err)
+			logger.Fatal(l, fmt.Sprintf("Failed to marshal private key: %v", err))
 		}
 
 		err = writeIfNotExists(cfg.PublicJWKSFile, pubKey)
 		if err != nil {
-			l.Fatal("Failed to write private key file: %v", err)
+			logger.Fatal(l, fmt.Sprintf("Failed to write private key file: %v", err))
 		}
 
 		l.Info("Done! Enjoy your new keys ^_^")

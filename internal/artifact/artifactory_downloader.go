@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -12,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v4/internal/agenthttp"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type ArtifactoryDownloaderConfig struct {
@@ -40,10 +40,10 @@ type ArtifactoryDownloader struct {
 	conf ArtifactoryDownloaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 }
 
-func NewArtifactoryDownloader(l logger.Logger, c ArtifactoryDownloaderConfig) *ArtifactoryDownloader {
+func NewArtifactoryDownloader(l *slog.Logger, c ArtifactoryDownloaderConfig) *ArtifactoryDownloader {
 	return &ArtifactoryDownloader{
 		conf:   c,
 		logger: l,

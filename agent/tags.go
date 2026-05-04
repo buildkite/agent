@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"github.com/denisbrodbeck/machineid"
 )
@@ -37,7 +37,7 @@ type FetchTagsConfig struct {
 // FetchTags loads tags from a variety of sources.
 // If conf.FailOnMissingTags is true, an error is returned when any enabled
 // cloud tag source (EC2, ECS, GCP) fails to provide tags.
-func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) ([]string, error) {
+func FetchTags(ctx context.Context, l *slog.Logger, conf FetchTagsConfig) ([]string, error) {
 	f := &tagFetcher{
 		k8s: func() (map[string]string, error) {
 			return K8sTagsFromEnv(os.Environ())
@@ -78,13 +78,13 @@ type tagFetcher struct {
 	gcpLabels          func() (map[string]string, error)
 }
 
-func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsConfig) ([]string, error) {
+func (t *tagFetcher) Fetch(ctx context.Context, l *slog.Logger, conf FetchTagsConfig) ([]string, error) {
 	tags := conf.Tags
 
 	if conf.TagsFromK8s {
 		k8sTags, err := t.k8s()
 		if err != nil {
-			l.Warn("Could not fetch tags from k8s: %s", err)
+			l.Warn(fmt.Sprintf("Could not fetch tags from k8s: %s", err))
 		}
 		for tag, value := range k8sTags {
 			tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
@@ -95,7 +95,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 	if conf.TagsFromHost {
 		hostname, err := os.Hostname()
 		if err != nil {
-			l.Warn("Failed to find hostname: %v", err)
+			l.Warn(fmt.Sprintf("Failed to find hostname: %v", err))
 		}
 
 		tags = append(tags,
@@ -121,7 +121,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			ec2Tags, err := t.ec2MetaDataDefault()
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			} else {
 				l.Info("Successfully fetched EC2 meta-data")
 				for tag, value := range ec2Tags {
@@ -176,7 +176,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 				err = errors.New("EC2 tags are empty")
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			} else {
 				l.Info("Successfully fetched EC2 tags")
 				for tag, value := range ec2Tags {
@@ -205,7 +205,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 		).Do(func(r *roko.Retrier) error {
 			ecsTags, err := t.ecsMetaDataDefault()
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			} else {
 				l.Info("Successfully fetched ECS meta-data")
 				for tag, value := range ecsTags {
@@ -287,7 +287,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 				err = errors.New("GCP instance labels are empty")
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			} else {
 				l.Info("Successfully fetched GCP instance labels")
 				for label, value := range labels {

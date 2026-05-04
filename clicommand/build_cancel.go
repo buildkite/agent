@@ -3,11 +3,11 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -53,7 +53,7 @@ var BuildCancelCommand = cli.Command{
 	},
 }
 
-func cancelBuild(ctx context.Context, cfg BuildCancelConfig, l logger.Logger) error {
+func cancelBuild(ctx context.Context, cfg BuildCancelConfig, l *slog.Logger) error {
 	// Create the API client
 	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
@@ -70,11 +70,11 @@ func cancelBuild(ctx context.Context, cfg BuildCancelConfig, l logger.Logger) er
 			return err
 		}
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			return err
 		}
 
-		l.Info("Successfully cancelled build %s", build.UUID)
+		l.Info(fmt.Sprintf("Successfully cancelled build %s", build.UUID))
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to cancel build: %w", err)

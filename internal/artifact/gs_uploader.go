@@ -3,6 +3,7 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
@@ -35,13 +35,13 @@ type GSUploader struct {
 	conf GSUploaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// The GS service
 	service *storage.Service
 }
 
-func NewGSUploader(ctx context.Context, l logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
+func NewGSUploader(ctx context.Context, l *slog.Logger, c GSUploaderConfig) (*GSUploader, error) {
 	client, err := newGoogleClient(ctx, storage.DevstorageFullControlScope)
 	if err != nil {
 		return nil, fmt.Errorf("creating Google Cloud Storage client: %w", err)
@@ -149,11 +149,11 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 	}
 
 	if permission == "" {
-		u.logger.Debug("Uploading \"%s\" to bucket \"%s\" with default permission",
-			u.artifactPath(u.artifact), u.BucketName)
+		u.logger.Debug(fmt.Sprintf("Uploading \"%s\" to bucket \"%s\" with default permission",
+			u.artifactPath(u.artifact), u.BucketName))
 	} else {
-		u.logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
-			u.artifactPath(u.artifact), u.BucketName, permission)
+		u.logger.Debug(fmt.Sprintf("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
+			u.artifactPath(u.artifact), u.BucketName, permission))
 	}
 	object := &storage.Object{
 		Name:               u.artifactPath(u.artifact),
@@ -169,7 +169,7 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 		call = call.PredefinedAcl(permission)
 	}
 	if res, err := call.Media(file, googleapi.ContentType("")).Do(); err == nil {
-		u.logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
+		u.logger.Debug(fmt.Sprintf("Created object %v at location %v\n\n", res.Name, res.SelfLink))
 	} else {
 		return nil, fmt.Errorf("failed to PUT file %q: %w", u.artifactPath(u.artifact), err)
 	}

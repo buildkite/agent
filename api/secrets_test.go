@@ -122,7 +122,7 @@ func TestGetSecret(t *testing.T) {
 			t.Cleanup(buildkiteAPI.Close)
 
 			// Initial client with a registration token
-			client := api.NewClient(logger.Discard, api.Config{
+			client := api.NewClient(logger.SlogDiscard, api.Config{
 				UserAgent: "Test",
 				Endpoint:  buildkiteAPI.URL,
 				Token:     test.accessToken,

@@ -73,7 +73,7 @@ func (a *AgentWorker) runStreamingPingLoop(ctx context.Context, outCh chan<- act
 		// spontaneous synchronisation across agents.
 		jitter := rand.N(window)
 		setStat(fmt.Sprintf("🫨 Jittering for %v (max %v)", jitter, window))
-		a.logger.Debug("[runStreamingPingLoop] Waiting for jitter %v (max %v)", jitter, window)
+		a.logger.Debug(fmt.Sprintf("[runStreamingPingLoop] Waiting for jitter %v (max %v)", jitter, window))
 		select {
 		case <-skipWait:
 			// continue below
@@ -132,12 +132,12 @@ type streamLoopState struct {
 // startStream attempts 1 connection to the stream and handles its messages.
 func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 	a.setStat(fmt.Sprintf("📱 Connecting to ping stream (attempt %d)...", a.attempts))
-	a.logger.Debug("[runStreamingPingLoop] Connecting (attempt %d)", a.attempts)
+	a.logger.Debug(fmt.Sprintf("[runStreamingPingLoop] Connecting (attempt %d)", a.attempts))
 	stream, err := a.apiClient.StreamPings(streamCtx, a.agent.UUID)
 	if err != nil {
 		// TODO: after we've made streaming endpoints generally available,
 		// think about making some of these logs error or warning level.
-		a.logger.Debug("[runStreamingPingLoop] Connection to ping stream failed: %v", err)
+		a.logger.Debug(fmt.Sprintf("[runStreamingPingLoop] Connection to ping stream failed: %v", err))
 		if isUnrecoverable(err) {
 			a.logger.Debug("[runStreamingPingLoop] Stopping because the error is unrecoverable")
 			return err
@@ -178,14 +178,14 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 }
 
 func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPingsResponse, streamErr error) error {
-	a.logger.Debug("[runStreamingPingLoop] Received msg %v, err %v", msg, streamErr)
+	a.logger.Debug(fmt.Sprintf("[runStreamingPingLoop] Received msg %v, err %v", msg, streamErr))
 
 	var amsg actionMessage
 	switch {
 	case streamErr != nil:
 		// TODO: after we've made streaming endpoints generally available,
 		// think about making some of these logs error or warning level.
-		a.logger.Debug("[runStreamingPingLoop] Connection to ping stream failed or ended: %v", streamErr)
+		a.logger.Debug(fmt.Sprintf("[runStreamingPingLoop] Connection to ping stream failed or ended: %v", streamErr))
 		if isUnrecoverable(streamErr) {
 			a.logger.Debug("[runStreamingPingLoop] Stopping because the error is unrecoverable")
 			return streamErr
@@ -217,13 +217,13 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 
 		case *agentedgev1.StreamPingsResponse_Pause:
 			if reason := act.Pause.GetReason(); reason != "" {
-				a.logger.Info("Pause reason: %s", reason)
+				a.logger.Info(fmt.Sprintf("Pause reason: %s", reason))
 			}
 			amsg.action = "pause"
 
 		case *agentedgev1.StreamPingsResponse_Disconnect:
 			if reason := act.Disconnect.GetReason(); reason != "" {
-				a.logger.Info("Disconnect reason: %s", reason)
+				a.logger.Info(fmt.Sprintf("Disconnect reason: %s", reason))
 			}
 			amsg.action = "disconnect"
 

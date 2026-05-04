@@ -3,12 +3,12 @@ package cache
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
 
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/zstash"
 	"github.com/buildkite/zstash/api"
@@ -53,7 +53,7 @@ type CacheClient interface {
 }
 
 // Save saves caches based on the provided configuration and logs results as each cache is processed
-func Save(ctx context.Context, l logger.Logger, cfg Config) error {
+func Save(ctx context.Context, l *slog.Logger, cfg Config) error {
 	cacheClient, cacheIDs, err := setupCacheClient(ctx, l, cfg)
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func Save(ctx context.Context, l logger.Logger, cfg Config) error {
 }
 
 // Restore restores caches based on the provided configuration and logs results as each cache is processed
-func Restore(ctx context.Context, l logger.Logger, cfg Config) error {
+func Restore(ctx context.Context, l *slog.Logger, cfg Config) error {
 	cacheClient, cacheIDs, err := setupCacheClient(ctx, l, cfg)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func loadCacheConfiguration(cacheConfigFile string) (*FileConfig, error) {
 }
 
 // setupCacheClient creates a cache client and determines which cache IDs to process
-func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash.Cache, []string, error) {
+func setupCacheClient(ctx context.Context, l *slog.Logger, cfg Config) (*zstash.Cache, []string, error) {
 	client := api.NewClient(ctx, version.Version(), cfg.APIEndpoint, cfg.APIToken)
 
 	fileConfig, err := loadCacheConfiguration(cfg.CacheConfigFile)
@@ -119,10 +119,10 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 		Organization: cfg.Organization,
 		Caches:       fileConfig.Dependencies,
 		OnProgress: func(cacheID, stage, message string, _, _ int) {
-			l.WithFields(
-				logger.StringField("cache_id", cacheID),
-				logger.StringField("stage", stage),
-				logger.StringField("message", message),
+			l.With(
+				"cache_id", cacheID,
+				"stage", stage,
+				"message", message,
 			).Info("Cache progress")
 		},
 	})
@@ -161,7 +161,7 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 }
 
 // restoreWithClient performs the restore operation for the given cache IDs using the provided client
-func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient, cacheIDs []string, concurrency int) error {
+func restoreWithClient(ctx context.Context, l *slog.Logger, client CacheClient, cacheIDs []string, concurrency int) error {
 	if concurrency <= 0 {
 		concurrency = runtime.GOMAXPROCS(0)
 	}
@@ -182,7 +182,7 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 						return
 					}
 
-					l.Info("Restoring cache: %s", cacheID)
+					l.Info(fmt.Sprintf("Restoring cache: %s", cacheID))
 					result, err := client.Restore(wctx, cacheID)
 					if err != nil {
 						cancel(fmt.Errorf("failed to restore cache %q: %w", cacheID, err))
@@ -191,22 +191,22 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 
 					switch {
 					case result.CacheHit, result.FallbackUsed:
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("cache_key", result.Key),
-							logger.StringField("fallback_used", fmt.Sprintf("%t", result.FallbackUsed)),
-							logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
-							logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
-							logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
-							logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
-							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
-							logger.IntField("part_count", result.Transfer.PartCount),
-							logger.IntField("concurrency", result.Transfer.Concurrency),
+						l.With(
+							"cache_id", cacheID,
+							"cache_key", result.Key,
+							"fallback_used", fmt.Sprintf("%t", result.FallbackUsed),
+							"archive_size", humanize.Bytes(uint64(result.Archive.Size)),
+							"written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes)),
+							"written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries),
+							"compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio),
+							"transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed),
+							"part_count", result.Transfer.PartCount,
+							"concurrency", result.Transfer.Concurrency,
 						).Info("Cache restored")
 					default:
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("cache_key", result.Key),
+						l.With(
+							"cache_id", cacheID,
+							"cache_key", result.Key,
 						).Info("Cache not restored (not found)")
 					}
 
@@ -237,7 +237,7 @@ sendLoop:
 }
 
 // saveWithClient performs the save operation for the given cache IDs using the provided client
-func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, cacheIDs []string, concurrency int) error {
+func saveWithClient(ctx context.Context, l *slog.Logger, client CacheClient, cacheIDs []string, concurrency int) error {
 	if concurrency <= 0 {
 		concurrency = runtime.GOMAXPROCS(0)
 	}
@@ -258,7 +258,7 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 						return
 					}
 
-					l.Info("Saving cache: %s", cacheID)
+					l.Info(fmt.Sprintf("Saving cache: %s", cacheID))
 					result, err := client.Save(wctx, cacheID)
 					if err != nil {
 						cancel(fmt.Errorf("failed to save cache %q: %w", cacheID, err))
@@ -267,21 +267,21 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 
 					switch {
 					case result.CacheCreated:
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("cache_key", result.Key),
-							logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
-							logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
-							logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
-							logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
-							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
-							logger.IntField("part_count", result.Transfer.PartCount),
-							logger.IntField("concurrency", result.Transfer.Concurrency),
+						l.With(
+							"cache_id", cacheID,
+							"cache_key", result.Key,
+							"archive_size", humanize.Bytes(uint64(result.Archive.Size)),
+							"written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes)),
+							"written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries),
+							"compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio),
+							"transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed),
+							"part_count", result.Transfer.PartCount,
+							"concurrency", result.Transfer.Concurrency,
 						).Info("Cache created")
 					default:
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("cache_key", result.Key),
+						l.With(
+							"cache_id", cacheID,
+							"cache_key", result.Key,
 						).Info("Cache already exists, not saving")
 					}
 

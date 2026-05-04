@@ -3,11 +3,11 @@ package secrets
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"golang.org/x/sync/semaphore"
 )
@@ -56,7 +56,7 @@ func WithRetrySleepFunc(f func(time.Duration)) FetchSecretsOpt {
 // Each individual secret fetch is retried up to 3 times with exponential
 // backoff on retryable errors (TLS handshake failures, timeouts, 5xx, 429).
 // If any secret fails after retries, returns error with details of all failed secrets.
-func FetchSecrets(ctx context.Context, l logger.Logger, client APIClient, jobID string, keys []string, concurrency int, opts ...FetchSecretsOpt) ([]Secret, []error) {
+func FetchSecrets(ctx context.Context, l *slog.Logger, client APIClient, jobID string, keys []string, concurrency int, opts ...FetchSecretsOpt) ([]Secret, []error) {
 	var cfg fetchSecretsConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -92,12 +92,12 @@ func FetchSecrets(ctx context.Context, l logger.Logger, client APIClient, jobID 
 				secret, resp, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: key, JobID: jobID})
 				if err != nil {
 					if resp != nil && api.IsRetryableStatus(resp) {
-						l.Warn("Retrying secret %q fetch after retryable HTTP status %d (%s)", key, resp.StatusCode, r)
+						l.Warn(fmt.Sprintf("Retrying secret %q fetch after retryable HTTP status %d (%s)", key, resp.StatusCode, r))
 						return nil, err
 					}
 
 					if api.IsRetryableError(err) {
-						l.Warn("Retrying secret %q fetch after retryable error: %v (%s)", key, err, r)
+						l.Warn(fmt.Sprintf("Retrying secret %q fetch after retryable error: %v (%s)", key, err, r))
 						return nil, err
 					}
 

@@ -63,16 +63,16 @@ func TestAgentStartupHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello world")
-		log := logger.NewBuffer()
+		log, rec := logger.Test(t, logger.QuietTb())
 		err := agentStartupHook(log, cfg(hooksPath))
 		if err != nil {
-			t.Fatalf("%+v", log.Messages)
+			t.Fatalf("%+v", rec.Messages())
 		}
-		if diff := cmp.Diff(log.Messages, []string{
-			"[info] " + prompt + " " + filepath,
-			"[info] hello world",
+		if diff := cmp.Diff(rec.Messages(), []string{
+			"" + prompt + " " + filepath,
+			"hello world",
 		}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+			t.Errorf("rec.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
@@ -82,26 +82,26 @@ func TestAgentStartupHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
-		log := logger.NewBuffer()
+		log, rec := logger.Test(t, logger.QuietTb())
 		err := agentStartupHook(log, cfg(hooksPath))
 		if err != nil {
-			t.Fatalf("%+v", log.Messages)
+			t.Fatalf("%+v", rec.Messages())
 		}
-		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(rec.Messages(), []string{}); diff != "" {
+			t.Errorf("rec.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
 	t.Run("with bad hooks path", func(t *testing.T) {
 		t.Parallel()
 
-		log := logger.NewBuffer()
+		log, rec := logger.Test(t, logger.QuietTb())
 		err := agentStartupHook(log, cfg("zxczxczxc"))
 		if err != nil {
-			t.Fatalf("%+v", log.Messages)
+			t.Fatalf("%+v", rec.Messages())
 		}
-		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(rec.Messages(), []string{}); diff != "" {
+			t.Errorf("rec.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 }
@@ -132,18 +132,18 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 		addFilepath := writeAgentHook(t, additionalHooksPath, "agent-startup", "hello additional world")
 		defer additionalCloser()
 
-		log := logger.NewBuffer()
+		log, rec := logger.Test(t, logger.QuietTb())
 		err := agentStartupHook(log, cfg(hooksPath, additionalHooksPath))
 		if err != nil {
-			t.Fatalf("%+v", log.Messages)
+			t.Fatalf("%+v", rec.Messages())
 		}
-		if diff := cmp.Diff(log.Messages, []string{
-			"[info] " + prompt + " " + filepath,
-			"[info] hello new world",
-			"[info] " + prompt + " " + addFilepath,
-			"[info] hello additional world",
+		if diff := cmp.Diff(rec.Messages(), []string{
+			"" + prompt + " " + filepath,
+			"hello new world",
+			"" + prompt + " " + addFilepath,
+			"hello additional world",
 		}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+			t.Errorf("rec.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 }
@@ -168,14 +168,14 @@ func TestAgentShutdownHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-shutdown", "hello world")
-		log := logger.NewBuffer()
+		log, rec := logger.Test(t, logger.QuietTb())
 		agentShutdownHook(log, cfg(hooksPath))
 
-		if diff := cmp.Diff(log.Messages, []string{
-			"[info] " + prompt + " " + filepath,
-			"[info] hello world",
+		if diff := cmp.Diff(rec.Messages(), []string{
+			"" + prompt + " " + filepath,
+			"hello world",
 		}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+			t.Errorf("rec.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
@@ -185,20 +185,20 @@ func TestAgentShutdownHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
-		log := logger.NewBuffer()
+		log, rec := logger.Test(t, logger.QuietTb())
 		agentShutdownHook(log, cfg(hooksPath))
-		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(rec.Messages(), []string{}); diff != "" {
+			t.Errorf("rec.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
 	t.Run("with bad hooks path", func(t *testing.T) {
 		t.Parallel()
 
-		log := logger.NewBuffer()
+		log, rec := logger.Test(t, logger.QuietTb())
 		agentShutdownHook(log, cfg("zxczxczxc"))
-		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(rec.Messages(), []string{}); diff != "" {
+			t.Errorf("rec.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 }

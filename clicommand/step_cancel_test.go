@@ -32,13 +32,13 @@ func TestStepCancel(t *testing.T) {
 			},
 		}
 
-		l := logger.NewBuffer()
+		l, rec := logger.Test(t, logger.QuietTb())
 		err := cancelStep(ctx, cfg, l)
 		if got := err; got != nil {
 			t.Errorf("cancelStep(ctx, cfg, l) = %v, want nil", got)
 		}
-		if got, want := l.Messages, "[info] Successfully cancelled step: b0db1550-e68c-428f-9b4d-edf5599b2cff"; !slices.Contains(got, want) {
-			t.Errorf("l.Messages = %v, want containing %q", got, want)
+		if got, want := rec.Messages(), "Successfully cancelled step: b0db1550-e68c-428f-9b4d-edf5599b2cff"; !slices.Contains(got, want) {
+			t.Errorf("rec.Messages() = %v, want containing %q", got, want)
 		}
 	})
 
@@ -57,7 +57,7 @@ func TestStepCancel(t *testing.T) {
 			},
 		}
 
-		l := logger.NewBuffer()
+		l, _ := logger.Test(t, logger.QuietTb())
 		err := cancelStep(ctx, cfg, l)
 		if got, want := err.Error(), "failed to cancel step"; !strings.Contains(got, want) {
 			t.Errorf("err.Error() = %q, want containing %q", got, want)

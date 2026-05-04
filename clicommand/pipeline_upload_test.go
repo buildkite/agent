@@ -135,7 +135,7 @@ func TestSearchForSecrets(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
-			l := logger.NewBuffer()
+			l := logger.SlogDiscard
 			err := searchForSecrets(l, cfg, env.FromMap(test.environ), test.pipeline, "cat-o-matic.yaml")
 			if len(test.wantLog) == 0 {
 				if err != nil {
@@ -630,7 +630,7 @@ func TestIfChangedApplicator(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(i int) { t.Errorf("exitFn(%d) invoked", i) })
+			l, _ := logger.Test(t)
 
 			steps := makeInput()
 			test.ica.apply(l, steps)
@@ -729,7 +729,7 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 		},
 	}
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(i int) { t.Errorf("exitFn(%d) invoked", i) })
+	l, _ := logger.Test(t)
 
 	ica := &ifChangedApplicator{
 		enabled:      true,
@@ -800,7 +800,7 @@ func TestReadChangedFilesFromPath(t *testing.T) {
 				t.Fatalf("tmpFile.Close() = %v", err)
 			}
 
-			l := logger.NewBuffer()
+			l := logger.SlogDiscard
 			got, err := readChangedFilesFromPath(l, tmpFile.Name())
 			if err != nil {
 				t.Fatalf("readChangedFilesFromPath() error = %v", err)
@@ -858,7 +858,7 @@ func TestIfChangedApplicator_WithChangedFilesPath(t *testing.T) {
 		},
 	}
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(i int) { t.Errorf("exitFn(%d) invoked", i) })
+	l, _ := logger.Test(t)
 
 	ica := &ifChangedApplicator{
 		enabled:          true,

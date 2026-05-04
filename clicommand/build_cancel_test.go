@@ -29,13 +29,13 @@ func TestBuildCancel(t *testing.T) {
 			},
 		}
 
-		l := logger.NewBuffer()
+		l, rec := logger.Test(t, logger.QuietTb())
 		err := cancelBuild(ctx, cfg, l)
 		if got := err; got != nil {
 			t.Errorf("cancelBuild(ctx, cfg, l) = %v, want nil", got)
 		}
-		if got, want := l.Messages, fmt.Sprintf("[info] Successfully cancelled build %s", cfg.Build); !slices.Contains(got, want) {
-			t.Errorf("l.Messages = %v, want containing %q", got, want)
+		if got, want := rec.Messages(), fmt.Sprintf("Successfully cancelled build %s", cfg.Build); !slices.Contains(got, want) {
+			t.Errorf("rec.Messages() = %v, want containing %q", got, want)
 		}
 	})
 
@@ -52,7 +52,7 @@ func TestBuildCancel(t *testing.T) {
 			},
 		}
 
-		l := logger.NewBuffer()
+		l, _ := logger.Test(t, logger.QuietTb())
 		err := cancelBuild(ctx, cfg, l)
 		if got := err; got == nil {
 			t.Errorf("cancelBuild(ctx, cfg, l) = %v, want non-nil value", got)

@@ -3,11 +3,11 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -45,7 +45,7 @@ var AgentResumeCommand = cli.Command{
 	},
 }
 
-func resume(ctx context.Context, cfg AgentResumeConfig, l logger.Logger) error {
+func resume(ctx context.Context, cfg AgentResumeConfig, l *slog.Logger) error {
 	// Create the API client
 	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
@@ -62,7 +62,7 @@ func resume(ctx context.Context, cfg AgentResumeConfig, l logger.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			return err
 		}
 

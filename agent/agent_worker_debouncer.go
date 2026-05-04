@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 )
 
 // runDebouncer is an event debouncing loop between the streaming loop and the
@@ -115,7 +116,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 		if !healthy || !bat.HeldBy(actorDebouncer) || actionInProgress || pending == nil {
 			continue
 		}
-		a.logger.Debug("[runDebouncer] Sending action %q, jobID %q", pending.action, pending.jobID)
+		a.logger.Debug(fmt.Sprintf("[runDebouncer] Sending action %q, jobID %q", pending.action, pending.jobID))
 		lastActionResult = make(chan error)
 		pending.errCh = lastActionResult
 		select {

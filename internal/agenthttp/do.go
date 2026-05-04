@@ -3,6 +3,7 @@ package agenthttp
 import (
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptrace"
 	"net/http/httputil"
@@ -10,12 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // Do wraps the http.Client's Do method with debug logging and tracing options.
-func Do(l logger.Logger, client *http.Client, req *http.Request, opts ...DoOption) (*http.Response, error) {
+func Do(l *slog.Logger, client *http.Client, req *http.Request, opts ...DoOption) (*http.Response, error) {
 	var cfg doConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -29,13 +28,13 @@ func Do(l logger.Logger, client *http.Client, req *http.Request, opts ...DoOptio
 		dumpBody := !strings.Contains(req.Header.Get("Content-Type"), "multipart/form-data")
 		requestDump, err := httputil.DumpRequestOut(req, dumpBody)
 		if err != nil {
-			l.Debug("ERR: %s\n%s", err, string(requestDump))
+			l.Debug(fmt.Sprintf("ERR: %s\n%s", err, string(requestDump)))
 		} else {
-			l.Debug("%s", string(requestDump))
+			l.Debug(string(requestDump))
 		}
 	}
 
-	tracer := &tracer{Logger: l}
+	tracer := &tracer{l: l}
 	if cfg.traceHTTP {
 		// Inject a custom http tracer
 		req = traceHTTPRequest(req, tracer)
@@ -44,32 +43,32 @@ func Do(l logger.Logger, client *http.Client, req *http.Request, opts ...DoOptio
 
 	ts := time.Now()
 
-	l.Debug("%s %s", req.Method, req.URL)
+	l.Debug(fmt.Sprintf("%s %s", req.Method, req.URL))
 
 	resp, err := client.Do(req)
 	if err != nil {
 		if cfg.traceHTTP {
-			tracer.EmitTraceToLog(logger.ERROR)
+			tracer.EmitTraceToLog(slog.LevelError)
 		}
 		return nil, err
 	}
 
-	l.WithFields(
-		logger.StringField("proto", resp.Proto),
-		logger.IntField("status", resp.StatusCode),
-		logger.DurationField("Δ", time.Since(ts)),
-	).Debug("↳ %s %s", req.Method, req.URL)
+	l.With(
+		"proto", resp.Proto,
+		"status", resp.StatusCode,
+		"Δ", time.Since(ts),
+	).Debug(fmt.Sprintf("↳ %s %s", req.Method, req.URL))
 
 	if cfg.debugHTTP {
 		responseDump, err := httputil.DumpResponse(resp, true)
 		if err != nil {
-			l.Debug("\nERR: %s\n%s", err, string(responseDump))
+			l.Debug(fmt.Sprintf("\nERR: %s\n%s", err, string(responseDump)))
 		} else {
-			l.Debug("\n%s", string(responseDump))
+			l.Debug(fmt.Sprintf("\n%s", string(responseDump)))
 		}
 	}
 	if cfg.traceHTTP {
-		tracer.EmitTraceToLog(logger.DEBUG)
+		tracer.EmitTraceToLog(slog.LevelDebug)
 	}
 
 	return resp, err
@@ -87,7 +86,7 @@ func WithTraceHTTP(t bool) DoOption { return func(c *doConfig) { c.traceHTTP = t
 
 type tracer struct {
 	startTime time.Time
-	logger.Logger
+	l         *slog.Logger
 }
 
 func (t *tracer) Start() {
@@ -95,30 +94,21 @@ func (t *tracer) Start() {
 }
 
 func (t *tracer) LogTiming(event string) {
-	t.Logger = t.WithFields(logger.DurationField(event, time.Since(t.startTime)))
+	t.l = t.l.With(event, time.Since(t.startTime))
 }
 
 func (t *tracer) LogField(key, value string) {
-	t.Logger = t.WithFields(logger.StringField(key, value))
+	t.l = t.l.With(key, value)
 }
 
 func (t *tracer) LogDuration(event string, d time.Duration) {
-	t.Logger = t.WithFields(logger.DurationField(event, d))
+	t.l = t.l.With(event, d)
 }
 
-// Currently logger.Logger doesn't give us a way to set the level we want to emit logs at dynamically
-func (t *tracer) EmitTraceToLog(level logger.Level) {
-	msg := "HTTP Timing Trace"
-	switch level {
-	case logger.DEBUG:
-		t.Debug(msg)
-	case logger.INFO:
-		t.Info(msg)
-	case logger.WARN:
-		t.Warn(msg)
-	case logger.ERROR:
-		t.Error(msg)
-	}
+// EmitTraceToLog emits the accumulated trace as a single log record at the
+// given level.
+func (t *tracer) EmitTraceToLog(level slog.Level) {
+	t.l.Log(nil, level, "HTTP Timing Trace") //nolint:staticcheck // SA1012: nil context is intentional for non-context-aware tracer
 }
 
 func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {

@@ -5,6 +5,7 @@ package cliconfig
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"reflect"
 	"regexp"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/osutil"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
 )
@@ -26,7 +26,7 @@ type Loader struct {
 	Config any
 
 	// The logger used
-	Logger logger.Logger
+	Logger *slog.Logger
 
 	// A slice of paths to files that should be used as config files
 	DefaultConfigFilePaths []string

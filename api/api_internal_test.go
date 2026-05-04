@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewRequestBuildkiteTimeoutMilliseconds(t *testing.T) {
-	c := NewClient(logger.NewBuffer(), Config{})
+	c := NewClient(logger.SlogDiscard, Config{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -33,7 +33,7 @@ func TestNewRequestBuildkiteTimeoutMilliseconds(t *testing.T) {
 }
 
 func TestNewRequestWithoutBuildkiteTimeoutMilliseconds(t *testing.T) {
-	c := NewClient(logger.NewBuffer(), Config{})
+	c := NewClient(logger.SlogDiscard, Config{})
 
 	ctx := context.Background() // no timeout/deadline
 

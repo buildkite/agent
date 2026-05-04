@@ -32,13 +32,13 @@ func TestAgentStop(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, rec := logger.Test(t, logger.QuietTb())
 
 	err := stop(ctx, cfg, l)
 	if err != nil {
 		t.Errorf("stop(ctx, cfg, l) error = %v, want nil", err)
 	}
-	if got, want := l.Messages, "[info] Successfully stopped agent"; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := rec.Messages(), "Successfully stopped agent"; !slices.Contains(got, want) {
+		t.Errorf("rec.Messages() = %v, want containing %q", got, want)
 	}
 }

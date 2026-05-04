@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -26,6 +27,7 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
+	"github.com/lmittmann/tint"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -608,8 +610,8 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		cmdCfg.Stderr = io.Discard
 	}
 
-	var processLogger logger.Logger
-	processLogger = logger.Discard
+	var processLogger *slog.Logger
+	processLogger = logger.SlogDiscard
 
 	if s.debug {
 		// Display normally-hidden output streams using log streamer.
@@ -626,7 +628,10 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		}
 
 		// This should respect the log format we set for the agent
-		processLogger = logger.NewConsoleLogger(logger.NewTextPrinter(cmdCfg.Stderr), os.Exit)
+		processLogger = slog.New(tint.NewHandler(cmdCfg.Stderr, &tint.Options{
+			Level:   logger.LevelVar,
+			NoColor: !logger.ColorSupported(),
+		}))
 	}
 
 	if s.commandLog != nil {

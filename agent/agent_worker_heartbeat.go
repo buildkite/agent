@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/buildkite/agent/v4/status"
@@ -22,7 +23,7 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
 			setStat("❤️ Sending heartbeat")
 			if err := a.Heartbeat(ctx); err != nil {
 				if isUnrecoverable(err) {
-					a.logger.Error("%s", err)
+					a.logger.Error(fmt.Sprintf("%s", err))
 					// unrecoverable heartbeat failure also stops everything else
 					a.StopUngracefully()
 					return err
@@ -31,11 +32,11 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
 				// Get the last heartbeat time to the nearest microsecond
 				a.stats.Lock()
 				if a.stats.lastHeartbeat.IsZero() {
-					a.logger.Error("Failed to heartbeat %s. Will try again in %v. (No heartbeat yet)",
-						err, heartbeatInterval)
+					a.logger.Error(fmt.Sprintf("Failed to heartbeat %s. Will try again in %v. (No heartbeat yet)",
+						err, heartbeatInterval))
 				} else {
-					a.logger.Error("Failed to heartbeat %s. Will try again in %v. (Last successful was %v ago)",
-						err, heartbeatInterval, time.Since(a.stats.lastHeartbeat))
+					a.logger.Error(fmt.Sprintf("Failed to heartbeat %s. Will try again in %v. (Last successful was %v ago)",
+						err, heartbeatInterval, time.Since(a.stats.lastHeartbeat)))
 				}
 				a.stats.Unlock()
 			}

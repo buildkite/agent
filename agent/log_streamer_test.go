@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"os"
 	"sort"
 	"sync"
 	"testing"
@@ -17,10 +16,7 @@ func TestLogStreamer(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	logger := logger.NewConsoleLogger(
-		logger.NewTextPrinter(os.Stderr),
-		func(c int) { t.Errorf("exit(%d)", c) },
-	)
+	l, _ := logger.Test(t)
 
 	var mu sync.Mutex
 	var got []*api.Chunk
@@ -31,7 +27,7 @@ func TestLogStreamer(t *testing.T) {
 		return nil
 	}
 
-	ls := NewLogStreamer(logger, callback, LogStreamerConfig{
+	ls := NewLogStreamer(l, callback, LogStreamerConfig{
 		Concurrency:       3,
 		MaxChunkSizeBytes: 10,
 		MaxSizeBytes:      30,

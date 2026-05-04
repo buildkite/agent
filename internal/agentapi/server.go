@@ -1,8 +1,9 @@
 package agentapi
 
 import (
+	"log/slog"
+
 	"github.com/buildkite/agent/v4/internal/socket"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // Server hosts the Unix domain socket used for implementing the Agent API.
@@ -14,7 +15,7 @@ type Server struct {
 
 // NewServer creates a new Agent API server that, when started, listens on the
 // socketPath.
-func NewServer(socketPath string, log logger.Logger) (*Server, error) {
+func NewServer(socketPath string, log *slog.Logger) (*Server, error) {
 	s := &Server{
 		lockSvr: newLockServer(log),
 	}

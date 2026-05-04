@@ -7,12 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"slices"
 	"strings"
 
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli"
 )
 
@@ -111,7 +111,7 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 			secretsReader = bufio.NewReader(secretsFile)
 		}
 
-		l.Info("Reading secrets from %s for redaction", fileName)
+		l.Info(fmt.Sprintf("Reading secrets from %s for redaction", fileName))
 
 		secrets, err := ParseSecrets(l, cfg, secretsReader)
 		if err != nil {
@@ -138,7 +138,7 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 }
 
 func ParseSecrets(
-	l logger.Logger,
+	l *slog.Logger,
 	cfg RedactorAddConfig,
 	secretsReader io.Reader,
 ) ([]string, error) {
@@ -171,7 +171,7 @@ func ParseSecrets(
 
 func AddToRedactor(
 	ctx context.Context,
-	l logger.Logger,
+	l *slog.Logger,
 	client *jobapi.Client,
 	secrets ...string,
 ) error {

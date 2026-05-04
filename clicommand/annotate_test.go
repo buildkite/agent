@@ -36,14 +36,14 @@ func TestAnnotate(t *testing.T) {
 		},
 		Priority: 1,
 	}
-	l := logger.NewBuffer()
+	l, rec := logger.Test(t, logger.QuietTb())
 
 	err := annotate(t.Context(), cfg, l)
 	if err != nil {
 		t.Errorf("annotate(ctx, %v, l) error = %v", cfg, err)
 	}
-	if want := "[debug] Successfully annotated build"; !slices.Contains(l.Messages, want) {
-		t.Errorf("annotate(ctx, %v, l) logged messages = %q, missing %q", cfg, l.Messages, want)
+	if want := "Successfully annotated build"; !slices.Contains(rec.Messages(), want) {
+		t.Errorf("annotate(ctx, %v, l) logged messages = %q, missing %q", cfg, rec.Messages(), want)
 	}
 }
 
@@ -51,7 +51,7 @@ func TestAnnotateMaxBodySize(t *testing.T) {
 	cfg := AnnotateConfig{
 		Body: strings.Repeat("a", 1048577),
 	}
-	l := logger.NewBuffer()
+	l, _ := logger.Test(t, logger.QuietTb())
 
 	err := annotate(t.Context(), cfg, l)
 	wantErr := annotationTooBigError{bodySize: 1048577}

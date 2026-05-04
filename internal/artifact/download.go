@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/buildkite/agent/v4/internal/agenthttp"
 	"github.com/buildkite/agent/v4/internal/osutil"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
@@ -58,13 +58,13 @@ type Download struct {
 	conf DownloadConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// The HTTP client to use for downloading
 	client *http.Client
 }
 
-func NewDownload(l logger.Logger, client *http.Client, c DownloadConfig) *Download {
+func NewDownload(l *slog.Logger, client *http.Client, c DownloadConfig) *Download {
 	return &Download{
 		logger: l,
 		client: client,
@@ -78,7 +78,7 @@ func (d Download) Start(ctx context.Context) error {
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		if err := d.try(ctx); err != nil {
-			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, r)
+			d.logger.Warn(fmt.Sprintf("Error trying to download %s (%s) %s", d.conf.URL, err, r))
 			return err
 		}
 		return nil
@@ -123,7 +123,7 @@ func (d Download) try(ctx context.Context) error {
 	targetDirectory, targetFile := filepath.Split(targetPath)
 
 	// Show a nice message that we're starting to download the file
-	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetPath)
+	d.logger.Debug(fmt.Sprintf("Downloading %s to %s", d.conf.URL, targetPath))
 
 	method := cmp.Or(d.conf.Method, http.MethodGet)
 
@@ -208,7 +208,7 @@ func (d Download) try(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
 	}
 
-	d.logger.Info("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
+	d.logger.Info(fmt.Sprintf("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256))
 
 	return nil
 }

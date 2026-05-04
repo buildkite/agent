@@ -81,7 +81,7 @@ var AnnotationRemoveCommand = cli.Command{
 				return err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warn(fmt.Sprintf("%s (%s)", err, r))
 				return err
 			}
 			return nil

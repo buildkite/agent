@@ -37,12 +37,12 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 
 	ctx := context.Background()
 
-	ac := api.NewClient(logger.Discard, api.Config{
+	ac := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamasforever",
 	})
 
-	s := NewSearcher(logger.Discard, ac, "my-build")
+	s := NewSearcher(logger.SlogDiscard, ac, "my-build")
 
 	artifacts, err := s.Search(ctx, "llamas.txt", "my-build", false, false)
 	if err != nil {

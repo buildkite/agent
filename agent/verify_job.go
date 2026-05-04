@@ -52,14 +52,14 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 		return ErrNoSignature
 	}
 	if err != nil {
-		r.agentLogger.Debug("failed to verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
+		r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err))
 		return newInvalidSignatureError(ErrVerificationFailed)
 	}
 
 	// Interpolate the matrix permutation (validating the permutation in the
 	// process).
 	if err := step.InterpolateMatrixPermutation(r.conf.Job.MatrixPermutation); err != nil {
-		r.agentLogger.Debug("failed to verifyJob: step.InterpolateMatrixPermutation(% #v) = %v", r.conf.Job.MatrixPermutation, err)
+		r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: step.InterpolateMatrixPermutation(% #v) = %v", r.conf.Job.MatrixPermutation, err))
 		return newInvalidSignatureError(ErrInvalidJob)
 	}
 
@@ -111,7 +111,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 		case "command": // compare directly
 			jobCommand := r.conf.Job.Env["BUILDKITE_COMMAND"]
 			if step.Command != jobCommand {
-				r.agentLogger.Debug("failed to verifyJob: BUILDKITE_COMMAND = %q != %q = step.Command", jobCommand, step.Command)
+				r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: BUILDKITE_COMMAND = %q != %q = step.Command", jobCommand, step.Command))
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
@@ -121,11 +121,11 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			for name, stepEnvValue := range step.Env {
 				jobEnvValue, has := r.conf.Job.Env[name]
 				if !has {
-					r.agentLogger.Debug("failed to verifyJob: %q missing from Job.Env; step.Env[%q] = %q", name, name, stepEnvValue)
+					r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: %q missing from Job.Env; step.Env[%q] = %q", name, name, stepEnvValue))
 					return newInvalidSignatureError(ErrInvalidJob)
 				}
 				if jobEnvValue != stepEnvValue {
-					r.agentLogger.Debug("failed to verifyJob: Job.Env[%q] = %q != %q = step.Env[%q]", name, jobEnvValue, stepEnvValue, name)
+					r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: Job.Env[%q] = %q != %q = step.Env[%q]", name, jobEnvValue, stepEnvValue, name))
 					return newInvalidSignatureError(ErrInvalidJob)
 				}
 			}
@@ -144,28 +144,28 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			}
 			if emptyStepPlugins != emptyJobPlugins {
 				// one is empty but the other is not
-				r.agentLogger.Debug("failed to verifyJob: emptyJobPlugins = %t != %t = emptyStepPlugins", emptyJobPlugins, emptyStepPlugins)
+				r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: emptyJobPlugins = %t != %t = emptyStepPlugins", emptyJobPlugins, emptyStepPlugins))
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
 			stepPluginsJSON, err := json.Marshal(step.Plugins)
 			if err != nil {
-				r.agentLogger.Debug("failed to verifyJob: json.Marshal(step.Plugins) = %v", err)
+				r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: json.Marshal(step.Plugins) = %v", err))
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 			stepPluginsNorm, err := jcs.Transform(stepPluginsJSON)
 			if err != nil {
-				r.agentLogger.Debug("failed to verifyJob: jcs.Transform(stepPluginsJSON) = %v", err)
+				r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: jcs.Transform(stepPluginsJSON) = %v", err))
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 			jobPluginsNorm, err := jcs.Transform([]byte(jobPluginsJSON))
 			if err != nil {
-				r.agentLogger.Debug("failed to verifyJob: jcs.Transform(jobPluginsJSON) = %v", err)
+				r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: jcs.Transform(jobPluginsJSON) = %v", err))
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
 			if !bytes.Equal(jobPluginsNorm, stepPluginsNorm) {
-				r.agentLogger.Debug("failed to verifyJob: jobPluginsNorm = %q != %q = stepPluginsNorm", jobPluginsNorm, stepPluginsNorm)
+				r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: jobPluginsNorm = %q != %q = stepPluginsNorm", jobPluginsNorm, stepPluginsNorm))
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
@@ -186,7 +186,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			}
 
 			if len(step.Secrets) != len(jobSecrets) {
-				r.agentLogger.Debug("failed to verifyJob: step.Secrets length %d != jobSecrets length %d", len(step.Secrets), len(jobSecrets))
+				r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: step.Secrets length %d != jobSecrets length %d", len(step.Secrets), len(jobSecrets)))
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 
@@ -194,12 +194,12 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 				jobSecret := jobSecrets[i]
 
 				if stepSecret.Key != jobSecret.Key {
-					r.agentLogger.Debug("failed to verifyJob: secret at index %d - Step key %q did not match job key %q", i, stepSecret.Key, jobSecret.Key)
+					r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: secret at index %d - Step key %q did not match job key %q", i, stepSecret.Key, jobSecret.Key))
 					return newInvalidSignatureError(ErrInvalidJob)
 				}
 
 				if stepSecret.EnvironmentVariable != jobSecret.EnvironmentVariable {
-					r.agentLogger.Debug("failed to verifyJob: secret at index %d - Step environment variable %q did not match job environment variable %q", i, stepSecret.EnvironmentVariable, jobSecret.EnvironmentVariable)
+					r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: secret at index %d - Step environment variable %q did not match job environment variable %q", i, stepSecret.EnvironmentVariable, jobSecret.EnvironmentVariable))
 					return newInvalidSignatureError(ErrInvalidJob)
 				}
 			}
@@ -209,7 +209,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			if name, isEnv := strings.CutPrefix(field, signature.EnvNamespacePrefix); isEnv {
 				if _, has := r.conf.Job.Env[name]; !has {
 					// A pipeline env var that is now missing.
-					r.agentLogger.Debug("failed to verifyJob: %q missing from Job.Env", name)
+					r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: %q missing from Job.Env", name))
 					return newInvalidSignatureError(ErrInvalidJob)
 				}
 				// The env var is present. Signature.Verify used the value from
@@ -219,7 +219,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 
 			// We don't know this field, so we cannot ensure it is consistent
 			// with the job.
-			r.agentLogger.Debug("failed to verifyJob: mystery signed field %q", field)
+			r.agentLogger.Debug(fmt.Sprintf("failed to verifyJob: mystery signed field %q", field))
 			return newInvalidSignatureError(ErrInvalidJob)
 		}
 	}

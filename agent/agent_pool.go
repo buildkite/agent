@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/status"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -30,7 +30,7 @@ func NewAgentPool(workers []*AgentWorker, config *AgentConfiguration) *AgentPool
 	}
 }
 
-func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, addr string) {
+func (ap *AgentPool) StartStatusServer(ctx context.Context, l *slog.Logger, addr string) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", healthHandler(l))
@@ -47,10 +47,10 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 		defer done()
 		setStatus("👂 Listening")
 
-		l.Notice("Starting HTTP health check server on %v", addr)
+		l.Info(fmt.Sprintf("Starting HTTP health check server on %v", addr))
 		err := http.ListenAndServe(addr, mux)
 		if err != nil {
-			l.Error("Could not start health check server: %v", err)
+			l.Error(fmt.Sprintf("Could not start health check server: %v", err))
 		}
 	}()
 }
@@ -120,7 +120,7 @@ func (r *AgentPool) StopUngracefully() {
 	wg.Wait()
 }
 
-func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
+func (ap *AgentPool) statusJSONHandler(l *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		type agentWorkerStatus struct {
 			Status       agentWorkerState `json:"status"`
@@ -155,14 +155,14 @@ func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
 			Workers:         statuses,
 		})
 		if err != nil {
-			l.Error("Could not encode status.json response: %v", err)
+			l.Error(fmt.Sprintf("Could not encode status.json response: %v", err))
 		}
 	}
 }
 
-func healthHandler(l logger.Logger) http.HandlerFunc {
+func healthHandler(l *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		l.Debug("agent_pool.go/healthHandler: %s %s", r.Method, r.URL.Path)
+		l.Debug(fmt.Sprintf("agent_pool.go/healthHandler: %s %s", r.Method, r.URL.Path))
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 		} else {

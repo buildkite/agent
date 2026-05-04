@@ -3,6 +3,7 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // AzureBlobUploaderConfig configures AzureBlobUploader.
@@ -32,11 +32,11 @@ type AzureBlobUploader struct {
 	conf AzureBlobUploaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 }
 
 // NewAzureBlobUploader creates a new AzureBlobUploader.
-func NewAzureBlobUploader(l logger.Logger, c AzureBlobUploaderConfig) (*AzureBlobUploader, error) {
+func NewAzureBlobUploader(l *slog.Logger, c AzureBlobUploaderConfig) (*AzureBlobUploader, error) {
 	loc, err := ParseAzureBlobLocation(c.Destination)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func (u *AzureBlobUploader) URL(artifact *api.Artifact) string {
 
 	dur, err := time.ParseDuration(sasDur)
 	if err != nil {
-		u.logger.Error("BUILDKITE_AZURE_BLOB_SAS_TOKEN_DURATION is not a valid duration: %v", err)
+		u.logger.Error(fmt.Sprintf("BUILDKITE_AZURE_BLOB_SAS_TOKEN_DURATION is not a valid duration: %v", err))
 		return outURL
 	}
 
@@ -80,11 +80,11 @@ func (u *AzureBlobUploader) URL(artifact *api.Artifact) string {
 
 	sasURL, err := blobClient.GetSASURL(perms, expiry, nil)
 	if err != nil {
-		u.logger.Error("Couldn't generate SAS URL for container: %v", err)
+		u.logger.Error(fmt.Sprintf("Couldn't generate SAS URL for container: %v", err))
 		return outURL
 	}
 
-	u.logger.Debug("Generated Azure Blob SAS URL %q", sasURL)
+	u.logger.Debug(fmt.Sprintf("Generated Azure Blob SAS URL %q", sasURL))
 	return sasURL
 }
 
@@ -108,7 +108,7 @@ func (u *azureBlobUploaderWork) Description() string {
 
 // DoWork uploads an artifact file.
 func (u *azureBlobUploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, error) {
-	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	u.logger.Debug(fmt.Sprintf("Reading file %q", u.artifact.AbsolutePath))
 	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
@@ -117,7 +117,7 @@ func (u *azureBlobUploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartET
 
 	blobName := path.Join(u.loc.BlobPath, u.artifact.Path)
 
-	u.logger.Debug("Uploading %s to %s", u.artifact.Path, u.loc.URL(blobName))
+	u.logger.Debug(fmt.Sprintf("Uploading %s to %s", u.artifact.Path, u.loc.URL(blobName)))
 
 	bbc := u.client.NewContainerClient(u.loc.ContainerName).NewBlockBlobClient(blobName)
 	_, err = bbc.UploadFile(ctx, f, nil)

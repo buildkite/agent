@@ -2,6 +2,7 @@ package artifact
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path"
@@ -9,14 +10,13 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // The domain suffix for Azure Blob storage.
 const azureBlobHostSuffix = ".blob.core.windows.net"
 
 // NewAzureBlobClient creates a new Azure Blob Storage client.
-func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Client, error) {
+func NewAzureBlobClient(l *slog.Logger, storageAccountName string) (*service.Client, error) {
 	// TODO: Other credential types?
 	// https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#readme-credential-types
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -15,7 +16,6 @@ import (
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v4/internal/stdin"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/signature"
@@ -248,7 +248,7 @@ func validateNoInterpolations(pipelineString string) error {
 	return nil
 }
 
-func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
+func signOffline(ctx context.Context, c *cli.Context, l *slog.Logger, key signature.Key, cfg *ToolSignConfig) error {
 	if cfg.Repository == "" {
 		return ErrUseGraphQL
 	}
@@ -261,7 +261,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 
 	switch {
 	case cfg.PipelineFile != "":
-		l.Info("Reading pipeline config from %q", cfg.PipelineFile)
+		l.Info(fmt.Sprintf("Reading pipeline config from %q", cfg.PipelineFile))
 
 		file, err := os.Open(cfg.PipelineFile)
 		if err != nil {
@@ -298,7 +298,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		if w == nil {
 			return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
 		}
-		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
+		l.Warn(fmt.Sprintf("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w))
 	}
 
 	if cfg.Debug {
@@ -307,7 +307,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		if err := enc.Encode(parsedPipeline); err != nil {
 			return fmt.Errorf("couldn't encode pipeline: %w", err)
 		}
-		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
+		l.Debug(fmt.Sprintf("Pipeline parsed successfully:\n%v", parsedPipeline))
 	}
 
 	// Merge pipeline-level secrets with step-level secrets before signing
@@ -335,9 +335,9 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 	return enc.Encode(parsedPipeline)
 }
 
-func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
+func signWithGraphQL(ctx context.Context, c *cli.Context, l *slog.Logger, key signature.Key, cfg *ToolSignConfig) error {
 	orgPipelineSlug := fmt.Sprintf("%s/%s", cfg.OrganizationSlug, cfg.PipelineSlug)
-	debugL := l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
+	debugL := l.With("orgPipelineSlug", orgPipelineSlug)
 
 	l.Info("Retrieving pipeline from the GraphQL API")
 
@@ -357,7 +357,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 		)
 	}
 
-	debugL.Debug("Pipeline retrieved successfully: %#v", resp)
+	debugL.Debug(fmt.Sprintf("Pipeline retrieved successfully: %#v", resp))
 
 	pipelineString := resp.Pipeline.Steps.Yaml
 	err = validateNoInterpolations(pipelineString)
@@ -371,7 +371,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 		if w == nil {
 			return fmt.Errorf("pipeline parsing failed: %w", err)
 		}
-		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
+		l.Warn(fmt.Sprintf("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w))
 	}
 
 	if cfg.Debug {
@@ -380,7 +380,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 		if err := enc.Encode(parsedPipeline); err != nil {
 			return fmt.Errorf("couldn't encode pipeline: %w", err)
 		}
-		debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
+		debugL.Debug(fmt.Sprintf("Pipeline parsed successfully: %v", parsedPipeline))
 	}
 
 	if err := signature.SignSteps(ctx, parsedPipeline.Steps, key, resp.Pipeline.Repository.Url, signature.WithEnv(parsedPipeline.Env.ToMap()), signature.WithLogger(debugL), signature.WithDebugSigning(cfg.DebugSigning)); err != nil {
@@ -401,7 +401,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 	}
 
 	signedPipelineYaml := strings.TrimSpace(signedPipelineYamlBuilder.String())
-	l.Info("Replacing pipeline with signed version:\n%s", signedPipelineYaml)
+	l.Info(fmt.Sprintf("Replacing pipeline with signed version:\n%s", signedPipelineYaml))
 
 	updatePipeline, err := promptConfirm(
 		c, cfg, "\n\x1b[1mAre you sure you want to update the pipeline? This may break your builds!\x1b[0m",

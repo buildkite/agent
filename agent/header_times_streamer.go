@@ -3,12 +3,12 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/status"
 )
 
@@ -23,7 +23,7 @@ var (
 
 type headerTimesStreamer struct {
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// The callback that will be called when a header time is ready for
 	// upload
@@ -44,7 +44,7 @@ type headerTimesStreamer struct {
 	timesCh chan string
 }
 
-func newHeaderTimesStreamer(l logger.Logger, upload func(context.Context, int, int, map[string]string)) *headerTimesStreamer {
+func newHeaderTimesStreamer(l *slog.Logger, upload func(context.Context, int, int, map[string]string)) *headerTimesStreamer {
 	return &headerTimesStreamer{
 		logger:         l,
 		uploadCallback: upload,
@@ -99,7 +99,7 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 				break batchLoop
 
 			case <-ctx.Done(): // pack it all up
-				h.logger.Debug("[HeaderTimesStreamer] %v", ctx.Err())
+				h.logger.Debug(fmt.Sprintf("[HeaderTimesStreamer] %v", ctx.Err()))
 				return
 			}
 		}
@@ -120,9 +120,9 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 		// Call our callback with the times for upload
 		setStatus(fmt.Sprintf("📡 Uploading %d header times", len(times)))
 
-		h.logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", startIdx, nextIndex-1)
+		h.logger.Debug(fmt.Sprintf("[HeaderTimesStreamer] Uploading header times %d..%d", startIdx, nextIndex-1))
 		h.uploadCallback(ctx, startIdx, nextIndex, payload)
-		h.logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", startIdx, nextIndex-1)
+		h.logger.Debug(fmt.Sprintf("[HeaderTimesStreamer] Finished uploading header times %d..%d", startIdx, nextIndex-1))
 	}
 
 	setStatus("👋 Finished!")
@@ -142,7 +142,7 @@ func (h *headerTimesStreamer) Scan(line string) bool {
 		return headerExpansionRE.MatchString(line)
 	}
 
-	h.logger.Debug("[HeaderTimesStreamer] Found header %q", line)
+	h.logger.Debug(fmt.Sprintf("[HeaderTimesStreamer] Found header %q", line))
 
 	// Use mutex to prevent concurrently sending and closing the channel.
 	h.streamingMu.Lock()

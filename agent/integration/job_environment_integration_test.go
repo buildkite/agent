@@ -190,7 +190,7 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 	defer server.Close()
 
 	// create a client with server-specified headers
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 	client := api.NewClient(l, api.Config{
 		Endpoint:  server.URL,
 		Token:     "llamasrock",

@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli"
 )
 
@@ -64,7 +64,7 @@ var GitCredentialsHelperCommand = cli.Command{
 		ctx, cfg, l, _, done := setupLoggerAndConfig[GitCredentialsHelperConfig](ctx, c)
 		defer done()
 
-		l.Debug("Action: %s", cfg.Action)
+		l.Debug(fmt.Sprintf("Action: %s", cfg.Action))
 		if cfg.Action != "get" {
 			// other actions are store and erase, which we don't support
 			// see: https://git-scm.com/docs/gitcredentials#Documentation/gitcredentials.txt-codegetcode
@@ -86,7 +86,7 @@ var GitCredentialsHelperCommand = cli.Command{
 			return handleAuthError(c, l, fmt.Errorf("failed to read stdin: %w", err))
 		}
 
-		l.Debug("Git credential input:\n%s\n", string(stdin))
+		l.Debug(fmt.Sprintf("Git credential input:\n%s\n", string(stdin)))
 
 		l.Debug("Authenticating checkout using Buildkite Github App Credentials...")
 
@@ -115,8 +115,8 @@ var GitCredentialsHelperCommand = cli.Command{
 // git continues with clones etc even when the credential helper fails, so we should output something that will 100% cause
 // the clone to fail
 // this function always returns a cli.ExitError
-func handleAuthError(c *cli.Context, l logger.Logger, err error) error {
-	l.Error("Error: %v. Authentication will proceed, but will fail.", err)
+func handleAuthError(c *cli.Context, l *slog.Logger, err error) error {
+	l.Error(fmt.Sprintf("Error: %v. Authentication will proceed, but will fail.", err))
 	_, _ = fmt.Fprintln(c.App.Writer, "username=fail")
 	_, _ = fmt.Fprintln(c.App.Writer, "password=fail")
 	_, _ = fmt.Fprintln(c.App.Writer, "")

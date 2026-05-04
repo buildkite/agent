@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/secrets"
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli"
 )
 
@@ -90,7 +90,7 @@ Examples:
 	},
 }
 
-func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.Logger) error {
+func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l *slog.Logger) error {
 	if len(cfg.Keys) == 0 {
 		return errors.New("at least one secret key must be provided")
 	}

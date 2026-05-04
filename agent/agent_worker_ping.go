@@ -65,7 +65,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		// Within the interval, wait a random amount of time to avoid
 		// spontaneous synchronisation across agents.
 		jitter := rand.N(pingInterval)
-		a.logger.Debug("[runPingLoop] Waiting for jitter %v", jitter)
+		a.logger.Debug(fmt.Sprintf("[runPingLoop] Waiting for jitter %v", jitter))
 		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
 		select {
 		case <-state.skipWait:
@@ -136,10 +136,10 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 	if err != nil {
 		pingErrors.Inc()
 		if isUnrecoverable(err) {
-			a.logger.Error("%v", err)
+			a.logger.Error(fmt.Sprintf("%v", err))
 			return err
 		}
-		a.logger.Warn("%v", err)
+		a.logger.Warn(fmt.Sprintf("%v", err))
 	}
 	pingDurations.Observe(time.Since(startPing).Seconds())
 
@@ -253,7 +253,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error
 		// valid. If it is, switch and carry on, otherwise ignore the switch
 		newPing, _, err := newAPIClient.Ping(ctx)
 		if err != nil {
-			a.logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
+			a.logger.Warn(fmt.Sprintf("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err))
 		} else {
 			// Replace the APIClient and process the new ping
 			a.apiClient = newAPIClient

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"reflect"
 	"strings"
@@ -306,65 +307,62 @@ func apiFlags() []cli.Flag {
 	}
 }
 
-func CreateLogger(cfg any) logger.Logger {
-	var l logger.Logger
-	logFormat := "text"
+func CreateLogger(cfg any) *slog.Logger {
+	cfgOut := logger.Config{
+		Format: logger.FormatText,
+		Level:  slog.LevelInfo,
+	}
 
 	// Check the LogFormat config field
 	if logFormatCfg, err := reflections.GetField(cfg, "LogFormat"); err == nil {
 		if logFormatString, ok := logFormatCfg.(string); ok {
-			logFormat = logFormatString
+			f, err := logger.ParseFormat(logFormatString)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", err)
+				os.Exit(1)
+			}
+			cfgOut.Format = f
 		}
 	}
 
-	// Create a logger based on the type
-	switch logFormat {
-	case "text", "":
-		printer := logger.NewTextPrinter(os.Stderr)
+	// Turn off color if a NoColor option is present
+	if noColor, err := reflections.GetField(cfg, "NoColor"); err == nil {
+		if b, ok := noColor.(bool); ok {
+			cfgOut.NoColor = b
+		}
+	}
 
-		// Show agent fields as a prefix
-		printer.IsPrefixFn = func(field logger.Field) bool {
-			switch field.Key() {
-			case "agent", "hook":
-				return true
-			default:
-				return false
+	// Resolve --log-level (best effort: warnings are emitted by the
+	// returned logger after construction).
+	var logLevelErr error
+	if logLevel, err := reflections.GetField(cfg, "LogLevel"); err == nil {
+		if llStr, ok := logLevel.(string); ok && llStr != "" {
+			lvl, err := logger.ParseSlogLevel(llStr)
+			if err != nil {
+				logLevelErr = err
+			} else {
+				cfgOut.Level = lvl
 			}
 		}
-
-		// Turn off color if a NoColor option is present
-		noColor, err := reflections.GetField(cfg, "NoColor")
-		if noColor == true && err == nil {
-			printer.Colors = false
-		} else {
-			printer.Colors = true
-		}
-
-		l = logger.NewConsoleLogger(printer, os.Exit)
-	case "json":
-		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stderr), os.Exit)
-	default:
-		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
-		os.Exit(1)
-	}
-
-	l.SetLevel(logger.NOTICE)
-
-	err := handleLogLevelFlag(l, cfg)
-	if err != nil {
-		l.Warn("Error when setting log level: %v. Defaulting log level to NOTICE", err)
 	}
 
 	// Enable debugging if a Debug option is present
-	debugI, _ := reflections.GetField(cfg, "Debug")
-	if debug, ok := debugI.(bool); ok && debug {
-		l.SetLevel(logger.DEBUG)
+	if debugI, err := reflections.GetField(cfg, "Debug"); err == nil {
+		if debug, ok := debugI.(bool); ok && debug {
+			cfgOut.Debug = true
+		}
+	}
+
+	l := logger.New(cfgOut)
+
+	if logLevelErr != nil {
+		l.Warn(fmt.Sprintf("Error when setting log level: %v. Defaulting log level to info", logLevelErr))
 	}
 
 	return l
 }
 
-func HandleProfileFlag(l logger.Logger, cfg any) func() {
+func HandleProfileFlag(l *slog.Logger, cfg any) func() {
 	// Enable profiling a profiling mode if Profile is present
 	modeField, _ := reflections.GetField(cfg, "Profile")
 	if mode, ok := modeField.(string); ok && mode != "" {
@@ -373,7 +371,7 @@ func HandleProfileFlag(l logger.Logger, cfg any) func() {
 	return func() {}
 }
 
-func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.Context, func()) {
+func HandleGlobalFlags(ctx context.Context, l *slog.Logger, cfg any) (context.Context, func()) {
 	// Enable experiments
 	experimentNames, err := reflections.GetField(cfg, "Experiments")
 	if err != nil {
@@ -388,33 +386,13 @@ func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.C
 	for _, name := range experimentNamesSlice {
 		nctx, state := experiments.EnableWithWarnings(ctx, l, name)
 		if state == experiments.StateKnown {
-			l.Debug("Enabled experiment %q", name)
+			l.Debug(fmt.Sprintf("Enabled experiment %q", name))
 		}
 		ctx = nctx
 	}
 
 	// Handle profiling flag
 	return ctx, HandleProfileFlag(l, cfg)
-}
-
-func handleLogLevelFlag(l logger.Logger, cfg any) error {
-	logLevel, err := reflections.GetField(cfg, "LogLevel")
-	if err != nil {
-		return err
-	}
-
-	llStr, ok := logLevel.(string)
-	if !ok {
-		return fmt.Errorf("log level %v (%T) couldn't be cast to string", logLevel, logLevel)
-	}
-
-	level, err := logger.LevelFromString(llStr)
-	if err != nil {
-		return err
-	}
-
-	l.SetLevel(level)
-	return nil
 }
 
 func UnsetConfigFromEnvironment(c *cli.Context) error {
@@ -491,7 +469,7 @@ func withConfigFilePaths(paths []string) func(*cliconfig.Loader) {
 func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...configOpts) (
 	newCtx context.Context,
 	cfg T,
-	l logger.Logger,
+	l *slog.Logger,
 	f *cliconfig.File,
 	done func(),
 ) {
@@ -510,14 +488,14 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 	l = CreateLogger(&cfg)
 
 	if debug, err := reflections.GetField(cfg, "Debug"); err == nil && debug.(bool) {
-		l = l.WithFields(logger.StringField("command", c.Command.FullName()))
+		l = l.With("command", c.Command.FullName())
 	}
 
 	l.Debug("Loaded config")
 
 	// Now that we have a logger, log out the warnings that loading config generated
 	for _, warning := range warnings {
-		l.Warn("%s", warning)
+		l.Warn(warning)
 	}
 
 	// Setup any global configuration options

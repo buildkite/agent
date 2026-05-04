@@ -120,7 +120,7 @@ func envUnsetAction(c *cli.Context) error {
 
 	unset, err := client.EnvDelete(ctx, del)
 	if err != nil {
-		l.Error("couldn't unset the job executor environment variables: %v", err)
+		l.Error(fmt.Sprintf("couldn't unset the job executor environment variables: %v", err))
 	}
 
 	switch cfg.OutputFormat {

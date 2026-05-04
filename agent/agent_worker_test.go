@@ -50,12 +50,12 @@ func TestDisconnect(t *testing.T) {
 	}))
 	defer server.Close()
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	l := logger.NewBuffer()
+	l, rec := logger.Test(t, logger.QuietTb())
 	client := &core.Client{
 		APIClient: apiClient,
 		Logger:    l,
@@ -77,8 +77,8 @@ func TestDisconnect(t *testing.T) {
 		t.Fatalf("worker.Disconnect(t.Context()) error = %v, want nil", err)
 	}
 
-	if diff := cmp.Diff(l.Messages, []string{"[info] Disconnecting...", "[info] Disconnected"}); diff != "" {
-		t.Errorf("l.Messages diff (-got +want):\n%s", diff)
+	if diff := cmp.Diff(rec.Messages(), []string{"Disconnecting...", "Disconnected"}); diff != "" {
+		t.Errorf("rec.Messages() diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -103,12 +103,12 @@ func TestDisconnectRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	l := logger.NewBuffer()
+	l, rec := logger.Test(t, logger.QuietTb())
 	retrySleeps := make([]time.Duration, 0)
 	retrySleepFunc := func(d time.Duration) {
 		retrySleeps = append(retrySleeps, d)
@@ -137,20 +137,21 @@ func TestDisconnectRetry(t *testing.T) {
 		t.Errorf("retrySleeps diff (-got +want):\n%s", diff)
 	}
 
-	if got, want := len(l.Messages), 4; got != want {
-		t.Fatalf("len(l.Messages) = %d, want %d", got, want)
+	msgs := rec.Messages()
+	if got, want := len(msgs), 4; got != want {
+		t.Fatalf("len(rec.Messages()) = %d, want %d", got, want)
 	}
-	if got, want := l.Messages[0], "[info] Disconnecting..."; got != want {
-		t.Errorf("l.Messages[0] = %q, want %q", got, want)
+	if got, want := msgs[0], "Disconnecting..."; got != want {
+		t.Errorf("rec.Messages()[0] = %q, want %q", got, want)
 	}
-	if got, want := l.Messages[1], regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 Internal Server Error \(Attempt 1/4`); !want.MatchString(got) {
-		t.Errorf("l.Messages[1] = %q, want string matching %v", got, want)
+	if got, want := msgs[1], regexp.MustCompile(`POST http.*/disconnect: 500 Internal Server Error \(Attempt 1/4`); !want.MatchString(got) {
+		t.Errorf("rec.Messages()[1] = %q, want string matching %v", got, want)
 	}
-	if got, want := l.Messages[2], regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 Internal Server Error \(Attempt 2/4`); !want.MatchString(got) {
-		t.Errorf("l.Messages[2] = %q, want string matching %v", got, want)
+	if got, want := msgs[2], regexp.MustCompile(`POST http.*/disconnect: 500 Internal Server Error \(Attempt 2/4`); !want.MatchString(got) {
+		t.Errorf("rec.Messages()[2] = %q, want string matching %v", got, want)
 	}
-	if got, want := l.Messages[3], "[info] Disconnected"; got != want {
-		t.Errorf("l.Messages[3] = %q, want %q", got, want)
+	if got, want := msgs[3], "Disconnected"; got != want {
+		t.Errorf("rec.Messages()[3] = %q, want %q", got, want)
 	}
 }
 
@@ -171,18 +172,18 @@ func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
 	}))
 	defer server.Close()
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
 	worker := &AgentWorker{
-		logger:    logger.Discard,
+		logger:    logger.SlogDiscard,
 		agent:     nil,
 		apiClient: apiClient,
 		client: &core.Client{
 			APIClient: apiClient,
-			Logger:    logger.Discard,
+			Logger:    logger.SlogDiscard,
 		},
 		agentConfiguration: AgentConfiguration{},
 	}
@@ -219,7 +220,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	}))
 	defer server.Close()
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
@@ -230,12 +231,12 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	}
 	client := &core.Client{
 		APIClient:      apiClient,
-		Logger:         logger.Discard,
+		Logger:         logger.SlogDiscard,
 		RetrySleepFunc: retrySleepFunc,
 	}
 
 	worker := &AgentWorker{
-		logger:             logger.Discard,
+		logger:             logger.SlogDiscard,
 		agent:              nil,
 		apiClient:          apiClient,
 		client:             client,
@@ -282,7 +283,7 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 	// Pre-register the agent.
 	const agentSessionToken = "alpacas"
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
@@ -300,7 +301,7 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 		},
 	}
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -313,7 +314,7 @@ func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
 			JobStatusInterval: 1,
 			HeartbeatInterval: 10,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		apiClient,
 		AgentWorkerConfig{
 			SpawnIndex: 1,
@@ -373,12 +374,12 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 		}
 	}
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -391,7 +392,7 @@ func TestAgentWorker_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 			JobStatusInterval: 1,
 			HeartbeatInterval: 10,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		apiClient,
 		AgentWorkerConfig{
 			SpawnIndex: 1,
@@ -462,12 +463,12 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 
 	server.Assign(agent, job)
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -480,7 +481,7 @@ func TestAgentWorker_DisconnectAfterJob_Start_Pause_Unpause(t *testing.T) {
 			JobStatusInterval: 1,
 			HeartbeatInterval: 10,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		apiClient,
 		AgentWorkerConfig{
 			SpawnIndex: 1,
@@ -544,12 +545,12 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 
 	server.Assign(agent, job)
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -562,7 +563,7 @@ func TestAgentWorker_DisconnectAfterUptime(t *testing.T) {
 			JobStatusInterval: 1,
 			HeartbeatInterval: 10,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		apiClient,
 		AgentWorkerConfig{
 			SpawnIndex: 1,
@@ -626,12 +627,12 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 
 	// Create API client with the _old_ endpoint that it would have used for registration,
 	// but that it should not connect to again.
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: registrationEndpoint, // should not be connected to again
 		Token:    "llamas",
 	})
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -644,7 +645,7 @@ func TestAgentWorker_SetEndpointDuringRegistration(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		apiClient, // at this stage, apiClient still has the old register endpoint
 		AgentWorkerConfig{},
 	)
@@ -714,7 +715,7 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 	// start on endpointA, expect to be redirected to endpointB
 	endpoint := endpointA.URL
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -727,7 +728,7 @@ func TestAgentWorker_UpdateEndpointDuringPing(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		api.NewClient(l, api.Config{
 			Endpoint: endpoint,
 			Token:    "llamas",
@@ -790,7 +791,7 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 	// start on endpointA, expect to be redirected to endpointB
 	endpoint := endpointA.URL
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -803,7 +804,7 @@ func TestAgentWorker_UpdateEndpointDuringPing_FailAndRevert(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		api.NewClient(l, api.Config{
 			Endpoint: endpoint,
 			Token:    "llamas",
@@ -854,11 +855,11 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 		RequestHeaders:    map[string]string{headerKey: headerValue},
 	})
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	// The registration request is made in clicommand.AgentStartCommand, and we're not testing that
 	// here, so we'll emulate what it does...
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
@@ -873,7 +874,7 @@ func TestAgentWorker_SetRequestHeadersDuringRegistration(t *testing.T) {
 	worker := NewAgentWorker(
 		l,
 		reg, // the AgentRegisterResponse
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		apiClient, // the api.Client which stored requestHeaders during Register
 		AgentWorkerConfig{},
 	)
@@ -939,12 +940,12 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 		}
 	}
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -957,7 +958,7 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		apiClient,
 		AgentWorkerConfig{},
 	)
@@ -988,12 +989,12 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 		return api.Ping{}, nil
 	}
 
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -1006,7 +1007,7 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
 		apiClient,
 		AgentWorkerConfig{},
 	)
@@ -1039,7 +1040,7 @@ func TestAgentWorker_Streaming_Disconnect(t *testing.T) {
 		close(agent.PingStream)
 	}()
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -1052,8 +1053,8 @@ func TestAgentWorker_Streaming_Disconnect(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
-		api.NewClient(logger.Discard, api.Config{
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
+		api.NewClient(logger.SlogDiscard, api.Config{
 			Endpoint: server.URL,
 			Token:    "llamas",
 		}),
@@ -1096,7 +1097,7 @@ func TestAgentWorker_Streaming_Pause_Resume_Disconnect(t *testing.T) {
 		close(agent.PingStream)
 	}()
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -1109,8 +1110,8 @@ func TestAgentWorker_Streaming_Pause_Resume_Disconnect(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
-		api.NewClient(logger.Discard, api.Config{
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
+		api.NewClient(logger.SlogDiscard, api.Config{
 			Endpoint: server.URL,
 			Token:    "llamas",
 		}),
@@ -1160,7 +1161,7 @@ func TestAgentWorker_Streaming_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 		close(agent.PingStream)
 	}()
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -1173,8 +1174,8 @@ func TestAgentWorker_Streaming_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 			JobStatusInterval: 1,
 			HeartbeatInterval: 10,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
-		api.NewClient(logger.Discard, api.Config{
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
+		api.NewClient(logger.SlogDiscard, api.Config{
 			Endpoint: server.URL,
 			Token:    "llamas",
 		}),
@@ -1248,7 +1249,7 @@ func TestAgentWorker_Streaming_DisconnectAfterJob_Start_Pause_Unpause(t *testing
 
 	server.Assign(agent, job)
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -1261,8 +1262,8 @@ func TestAgentWorker_Streaming_DisconnectAfterJob_Start_Pause_Unpause(t *testing
 			JobStatusInterval: 1,
 			HeartbeatInterval: 10,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
-		api.NewClient(logger.Discard, api.Config{
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
+		api.NewClient(logger.SlogDiscard, api.Config{
 			Endpoint: server.URL,
 			Token:    "llamas",
 		}),
@@ -1314,7 +1315,7 @@ func TestAgentWorker_Streaming_UnrecoverableError_Fallback(t *testing.T) {
 		return connect.NewError(connect.CodePermissionDenied, errors.New("flagrant system error"))
 	}
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -1327,8 +1328,8 @@ func TestAgentWorker_Streaming_UnrecoverableError_Fallback(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
-		api.NewClient(logger.Discard, api.Config{
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
+		api.NewClient(logger.SlogDiscard, api.Config{
 			Endpoint: server.URL,
 			Token:    "llamas",
 		}),
@@ -1371,7 +1372,7 @@ func TestAgentWorker_Streaming_RecoverableError_Fallback_Resume(t *testing.T) {
 		}
 	}
 
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l, _ := logger.Test(t)
 
 	worker := NewAgentWorker(
 		l,
@@ -1384,8 +1385,8 @@ func TestAgentWorker_Streaming_RecoverableError_Fallback_Resume(t *testing.T) {
 			JobStatusInterval: 5,
 			HeartbeatInterval: 60,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
-		api.NewClient(logger.Discard, api.Config{
+		metrics.NewCollector(logger.SlogDiscard, metrics.CollectorConfig{}),
+		api.NewClient(logger.SlogDiscard, api.Config{
 			Endpoint: server.URL,
 			Token:    "llamas",
 		}),

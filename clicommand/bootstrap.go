@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"runtime"
@@ -14,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/self"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli"
 )
 
@@ -494,7 +494,7 @@ var BootstrapCommand = cli.Command{
 
 			// Cancel the bootstrap
 			if err := bootstrap.Cancel(); err != nil {
-				l.Debug("Failed to cancel bootstrap: %v", err)
+				l.Debug(fmt.Sprintf("Failed to cancel bootstrap: %v", err))
 			}
 
 			// Track the state and signal used
@@ -522,7 +522,7 @@ var BootstrapCommand = cli.Command{
 				return &SilentExitError{code: 131} // 128 + 3 (SIGQUIT).
 			}
 			if err := signalSelf(l, received); err != nil {
-				l.Error("Failed to signal self: %v", err)
+				l.Error(fmt.Sprintf("Failed to signal self: %v", err))
 			}
 		}
 
@@ -530,13 +530,13 @@ var BootstrapCommand = cli.Command{
 	},
 }
 
-func signalSelf(l logger.Logger, sig os.Signal) error {
+func signalSelf(l *slog.Logger, sig os.Signal) error {
 	p, err := os.FindProcess(os.Getpid())
 	if err != nil {
 		return fmt.Errorf("failed to find current process: %w", err)
 	}
 
-	l.Debug("Terminating bootstrap after cancellation with %v", sig)
+	l.Debug(fmt.Sprintf("Terminating bootstrap after cancellation with %v", sig))
 	err = p.Signal(sig)
 	if err != nil {
 		return fmt.Errorf("failed to signal self: %v", err)

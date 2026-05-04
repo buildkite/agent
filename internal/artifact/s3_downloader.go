@@ -3,13 +3,13 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/buildkite/agent/v4/internal/agenthttp"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type S3DownloaderConfig struct {
@@ -40,10 +40,10 @@ type S3Downloader struct {
 	conf S3DownloaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 }
 
-func NewS3Downloader(l logger.Logger, c S3DownloaderConfig) *S3Downloader {
+func NewS3Downloader(l *slog.Logger, c S3DownloaderConfig) *S3Downloader {
 	return &S3Downloader{
 		conf:   c,
 		logger: l,

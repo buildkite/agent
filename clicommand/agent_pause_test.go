@@ -32,12 +32,12 @@ func TestAgentPause(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, rec := logger.Test(t, logger.QuietTb())
 
 	if err := pause(ctx, cfg, l); err != nil {
 		t.Errorf("pause(ctx, %v, l) = %v", cfg, err)
 	}
-	if got, want := l.Messages, "[info] Successfully paused agent"; !slices.Contains(got, want) {
-		t.Errorf("after pause, l.Messages = %q\nis missing %q", got, want)
+	if got, want := rec.Messages(), "Successfully paused agent"; !slices.Contains(got, want) {
+		t.Errorf("after pause, rec.Messages() = %q\nis missing %q", got, want)
 	}
 }

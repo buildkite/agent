@@ -89,7 +89,7 @@ var StepGetCommand = cli.Command{
 				return stepExportResponse, err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			}
 			return stepExportResponse, err
 		})

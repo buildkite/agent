@@ -3,14 +3,14 @@
 package system
 
 import (
+	"log/slog"
 	"runtime"
 
 	"github.com/buildkite/agent/v4/internal/process"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // Returns a dump of the raw operating system information
-func VersionDump(l logger.Logger) (string, error) {
+func VersionDump(l *slog.Logger) (string, error) {
 	switch runtime.GOOS {
 	case "darwin":
 		return process.Run(l, "sw_vers")

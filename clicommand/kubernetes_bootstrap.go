@@ -179,7 +179,7 @@ var KubernetesBootstrapCommand = cli.Command{
 			// is in state interrupted or the connection died or ...), we should
 			// cancel the job.
 			if err != nil {
-				l.Error("kubernetes-bootstrap: Error waiting for client interrupt: %v; cancelling work", err)
+				l.Error(fmt.Sprintf("kubernetes-bootstrap: Error waiting for client interrupt: %v; cancelling work", err))
 			} else {
 				l.Warn("kubernetes-bootstrap: Either the job was cancelled or the pod is being deleted; cancelling work")
 			}
@@ -249,7 +249,7 @@ var KubernetesBootstrapCommand = cli.Command{
 					return
 				case sig := <-signals:
 					// Log but otherwise swallow the signal
-					l.Info("kubernetes-bootstrap: Received %v; awaiting interrupt from agent", sig)
+					l.Info(fmt.Sprintf("kubernetes-bootstrap: Received %v; awaiting interrupt from agent", sig))
 				}
 			}
 		}()

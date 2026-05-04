@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/status"
 	"github.com/dustin/go-humanize"
 )
@@ -38,7 +38,7 @@ type LogStreamer struct {
 	conf LogStreamerConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// A counter of how many chunks failed to upload
 	chunksFailedCount int32
@@ -70,7 +70,7 @@ type LogStreamer struct {
 
 // NewLogStreamer creates a new instance of the log streamer.
 func NewLogStreamer(
-	agentLogger logger.Logger,
+	agentLogger *slog.Logger,
 	callback func(context.Context, *api.Chunk) error,
 	conf LogStreamerConfig,
 ) *LogStreamer {
@@ -119,11 +119,11 @@ func (ls *LogStreamer) Process(ctx context.Context, output []byte) error {
 		// Have we exceeded the max size?
 		// (This check is also performed on the server side.)
 		if ls.bytes > ls.conf.MaxSizeBytes && !ls.warnedAboutSize {
-			ls.logger.Warn("The job log has reached %s in size, which has "+
+			ls.logger.Warn(fmt.Sprintf("The job log has reached %s in size, which has "+
 				"exceeded the maximum size (%s). Further logs may be dropped "+
 				"by the server, and a future version of the agent will stop "+
 				"sending logs at this point.",
-				humanize.IBytes(ls.bytes), humanize.IBytes(ls.conf.MaxSizeBytes))
+				humanize.IBytes(ls.bytes), humanize.IBytes(ls.conf.MaxSizeBytes)))
 			ls.warnedAboutSize = true
 			// In a future version, this will error out, e.g.:
 			// return fmt.Errorf("%w (%d > %d)", errLogExceededMaxSize, ls.bytes, ls.conf.MaxSizeBytes)
@@ -176,9 +176,9 @@ func (ls *LogStreamer) Stop() {
 
 // The actual log streamer worker
 func (ls *LogStreamer) worker(ctx context.Context, id int) {
-	ls.logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
+	ls.logger.Debug(fmt.Sprintf("[LogStreamer/Worker#%d] Worker is starting...", id))
 
-	defer ls.logger.Debug("[LogStreamer/Worker#%d] Worker has shutdown", id)
+	defer ls.logger.Debug(fmt.Sprintf("[LogStreamer/Worker#%d] Worker has shutdown", id))
 
 	ctx, setStat, done := status.AddSimpleItem(ctx, fmt.Sprintf("Log Streamer Worker %d", id))
 	defer done()
@@ -206,7 +206,7 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 		if err != nil {
 			atomic.AddInt32(&ls.chunksFailedCount, 1)
 
-			ls.logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Sequence)
+			ls.logger.Error(fmt.Sprintf("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Sequence))
 		}
 	}
 }

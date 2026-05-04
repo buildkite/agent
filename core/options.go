@@ -1,13 +1,12 @@
 package core
 
 import (
+	"log/slog"
 	"time"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type controllerConfig struct {
-	logger         logger.Logger
+	logger         *slog.Logger
 	retrySleepFunc func(time.Duration)
 
 	// Controller creation options - ignored for more specific functions.
@@ -24,7 +23,7 @@ type ControllerOption func(*controllerConfig)
 
 // WithLogger enables logging through a particular logger.
 // Defaults to [logger.Discard].
-func WithLogger(l logger.Logger) ControllerOption {
+func WithLogger(l *slog.Logger) ControllerOption {
 	return func(c *controllerConfig) {
 		c.logger = l
 	}

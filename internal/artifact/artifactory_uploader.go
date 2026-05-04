@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/agenthttp"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type ArtifactoryUploaderConfig struct {
@@ -50,7 +50,7 @@ type ArtifactoryUploader struct {
 	conf ArtifactoryUploaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// Artifactory username
 	user string
@@ -59,7 +59,7 @@ type ArtifactoryUploader struct {
 	password string
 }
 
-func NewArtifactoryUploader(l logger.Logger, c ArtifactoryUploaderConfig) (*ArtifactoryUploader, error) {
+func NewArtifactoryUploader(l *slog.Logger, c ArtifactoryUploaderConfig) (*ArtifactoryUploader, error) {
 	repo, path := ParseArtifactoryDestination(c.Destination)
 	stringURL := os.Getenv("BUILDKITE_ARTIFACTORY_URL")
 	username := os.Getenv("BUILDKITE_ARTIFACTORY_USER")
@@ -125,14 +125,14 @@ func (u *artifactoryUploaderWork) Description() string {
 
 func (u *artifactoryUploaderWork) DoWork(context.Context) (*api.ArtifactPartETag, error) {
 	// Open file from filesystem
-	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	u.logger.Debug(fmt.Sprintf("Reading file %q", u.artifact.AbsolutePath))
 	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to Artifactory.
-	u.logger.Debug("Uploading %q to %q", u.artifact.Path, u.URL(u.artifact))
+	u.logger.Debug(fmt.Sprintf("Uploading %q to %q", u.artifact.Path, u.URL(u.artifact)))
 
 	req, err := http.NewRequest("PUT", u.URL(u.artifact), f)
 	req.SetBasicAuth(u.user, u.password)

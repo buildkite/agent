@@ -41,7 +41,7 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, rec := logger.Test(t, logger.QuietTb())
 	stdout := new(bytes.Buffer)
 
 	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
@@ -52,11 +52,11 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if got, want := l.Messages, `[info] Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := rec.Messages(), `Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
+		t.Errorf("rec.Messages() = %v, want containing %q", got, want)
 	}
-	if got, want := l.Messages, `[debug] Artifact "foo.txt" found`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := rec.Messages(), `Artifact "foo.txt" found`; !slices.Contains(got, want) {
+		t.Errorf("rec.Messages() = %v, want containing %q", got, want)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, rec := logger.Test(t, logger.QuietTb())
 	stdout := new(bytes.Buffer)
 
 	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
@@ -88,10 +88,10 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if got, want := l.Messages, `[info] Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := rec.Messages(), `Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
+		t.Errorf("rec.Messages() = %v, want containing %q", got, want)
 	}
-	if got, want := l.Messages, `[debug] Artifact "foo.txt" found`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := rec.Messages(), `Artifact "foo.txt" found`; !slices.Contains(got, want) {
+		t.Errorf("rec.Messages() = %v, want containing %q", got, want)
 	}
 }

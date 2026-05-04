@@ -129,7 +129,7 @@ func envSetAction(c *cli.Context) error {
 
 	resp, err := client.EnvUpdate(ctx, req)
 	if err != nil {
-		l.Error("Couldn't update the job executor environment: %v", err)
+		l.Error(fmt.Sprintf("Couldn't update the job executor environment: %v", err))
 	}
 
 	switch cfg.OutputFormat {

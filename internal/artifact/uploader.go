@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"iter"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -21,7 +22,6 @@ import (
 	"drjosh.dev/zzglob"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/mime"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
 )
@@ -67,13 +67,13 @@ type Uploader struct {
 	conf UploaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// The APIClient that will be used when uploading jobs
 	apiClient APIClient
 }
 
-func NewUploader(l logger.Logger, ac APIClient, c UploaderConfig) *Uploader {
+func NewUploader(l *slog.Logger, ac APIClient, c UploaderConfig) *Uploader {
 	return &Uploader{
 		logger:    l,
 		apiClient: ac,
@@ -89,11 +89,11 @@ func (a *Uploader) Upload(ctx context.Context) error {
 	}
 
 	if len(artifacts) == 0 {
-		a.logger.Info("No files matched paths: %s", a.conf.Paths)
+		a.logger.Info(fmt.Sprintf("No files matched paths: %s", a.conf.Paths))
 		return nil
 	}
 
-	a.logger.Info("Found %d files that match %q", len(artifacts), a.conf.Paths)
+	a.logger.Info(fmt.Sprintf("Found %d files that match %q", len(artifacts), a.conf.Paths))
 
 	// Determine what uploader to use
 	uploader, err := a.createUploader(ctx)
@@ -180,7 +180,7 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 	}
 
 	// Start resolving globs (or not) and sending file paths to workers.
-	a.logger.Debug("Searching for %s", a.conf.Paths)
+	a.logger.Debug(fmt.Sprintf("Searching for %s", a.conf.Paths))
 	if err := fileFinder(wctx, a.paths(), filesCh); err != nil {
 		cancel(err)
 	}
@@ -248,11 +248,11 @@ func (a *Uploader) glob(ctx context.Context, paths iter.Seq[string], filesCh cha
 
 	walkDirFunc := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			a.logger.Warn("Couldn't walk path %s", path)
+			a.logger.Warn(fmt.Sprintf("Couldn't walk path %s", path))
 			return nil
 		}
 		if d != nil && d.IsDir() {
-			a.logger.Warn("One of the glob patterns matched a directory: %s", path)
+			a.logger.Warn(fmt.Sprintf("One of the glob patterns matched a directory: %s", path))
 			return nil
 		}
 		filesCh <- path
@@ -296,18 +296,18 @@ func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) e
 		c.mu.Unlock()
 
 		if seen {
-			c.logger.Debug("Skipping duplicate path %s", file)
+			c.logger.Debug(fmt.Sprintf("Skipping duplicate path %s", file))
 			continue
 		}
 
 		// Ignore directories, we only want files
 		if isDir(absolutePath) {
-			c.logger.Debug("Skipping directory %s", file)
+			c.logger.Debug(fmt.Sprintf("Skipping directory %s", file))
 			continue
 		}
 
 		if c.conf.UploadSkipSymlinks && isSymlink(absolutePath) {
-			c.logger.Debug("Skipping symlink %s", file)
+			c.logger.Debug(fmt.Sprintf("Skipping symlink %s", file))
 			continue
 		}
 
@@ -394,7 +394,7 @@ func (a *Uploader) createUploader(ctx context.Context) (_ workCreator, err error
 		if err != nil || dest == "" {
 			return
 		}
-		a.logger.Info("Uploading to %s (%q), using your agent configuration", dest, a.conf.Destination)
+		a.logger.Info(fmt.Sprintf("Uploading to %s (%q), using your agent configuration", dest, a.conf.Destination))
 	}()
 
 	switch {
@@ -527,7 +527,7 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	for _, artifact := range artifacts {
 		workUnits, err := uploader.CreateWork(artifact)
 		if err != nil {
-			a.logger.Error("Couldn't create upload workers for artifact %q: %v", artifact.Path, err)
+			a.logger.Error(fmt.Sprintf("Couldn't create upload workers for artifact %q: %v", artifact.Path, err))
 			return err
 		}
 
@@ -609,7 +609,7 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 			}
 			tracker := a.trackers[workUnit.Artifact()]
 			// Show a nice message that we're starting to upload the file
-			a.logger.Info("Uploading %s", workUnit.Description())
+			a.logger.Info(fmt.Sprintf("Uploading %s", workUnit.Description()))
 
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
@@ -621,13 +621,13 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 			partETag, err := roko.DoFunc(tracker.ctx, r, func(r *roko.Retrier) (*api.ArtifactPartETag, error) {
 				etag, err := workUnit.DoWork(tracker.ctx)
 				if err != nil {
-					a.logger.Warn("%s (%s)", err, r)
+					a.logger.Warn(fmt.Sprintf("%s (%s)", err, r))
 				}
 				return etag, err
 			})
 			// If it failed, abort any other work items for this artifact.
 			if err != nil {
-				a.logger.Info("Upload failed for %s: %v", workUnit.Description(), err)
+				a.logger.Info(fmt.Sprintf("Upload failed for %s: %v", workUnit.Description(), err))
 				tracker.cancel(err)
 				// then the error is sent to the status updater
 			}
@@ -673,7 +673,7 @@ selectLoop:
 				// The work unit failed, so the whole artifact upload has failed.
 				errs = append(errs, result.err)
 				tracker.State = "error"
-				a.logger.Debug("Artifact %s has entered state %s", tracker.ID, tracker.State)
+				a.logger.Debug(fmt.Sprintf("Artifact %s has entered state %s", tracker.ID, tracker.State))
 				continue
 			}
 
@@ -690,7 +690,7 @@ selectLoop:
 			// No pending units remain, so the whole artifact is complete.
 			// Add it to the next batch of states to upload.
 			tracker.State = "finished"
-			a.logger.Debug("Artifact %s has entered state %s", tracker.ID, tracker.State)
+			a.logger.Debug(fmt.Sprintf("Artifact %s has entered state %s", tracker.ID, tracker.State))
 		}
 	}
 
@@ -751,7 +751,7 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 
 		_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, statesToUpload)
 		if err != nil {
-			a.logger.Warn("%s (%s)", err, r)
+			a.logger.Warn(fmt.Sprintf("%s (%s)", err, r))
 		}
 
 		// after four attempts (0, 1, 2, 3)...
@@ -759,14 +759,14 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 			// The short timeout has given us fast feedback on the first couple of attempts,
 			// but perhaps the server needs more time to complete the request, so fall back to
 			// the default HTTP client timeout.
-			a.logger.Debug("UpdateArtifacts timeout (%s) removed for subsequent attempts", timeout)
+			a.logger.Debug(fmt.Sprintf("UpdateArtifacts timeout (%s) removed for subsequent attempts", timeout))
 			timeout = 0
 		}
 
 		return err
 	})
 	if err != nil {
-		a.logger.Error("Error updating artifact states: %v", err)
+		a.logger.Error(fmt.Sprintf("Error updating artifact states: %v", err))
 		return err
 	}
 
@@ -774,7 +774,7 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 		// Don't send this state again.
 		tracker.State = "sent"
 	}
-	a.logger.Debug("Updated %d artifact states", len(statesToUpload))
+	a.logger.Debug(fmt.Sprintf("Updated %d artifact states", len(statesToUpload)))
 	return nil
 }
 

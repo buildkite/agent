@@ -2,17 +2,18 @@ package agentapi
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/socket"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 // router defines all routes for the Agent API server.
-func (s *Server) router(log logger.Logger) chi.Router {
+func (s *Server) router(log *slog.Logger) chi.Router {
 	r := chi.NewRouter()
 	r.Use(
 		// Agent API is quite chatty, so only log at Debug level.
@@ -30,11 +31,11 @@ func (s *Server) router(log logger.Logger) chi.Router {
 	return r
 }
 
-func pingHandler(log logger.Logger) http.HandlerFunc {
+func pingHandler(log *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := &PingResponse{Now: time.Now()}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Error("Agent API: couldn't encode response body: %v", err)
+			log.Error(fmt.Sprintf("Agent API: couldn't encode response body: %v", err))
 		}
 	}
 }

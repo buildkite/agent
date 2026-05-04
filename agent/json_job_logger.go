@@ -2,49 +2,47 @@ package agent
 
 import (
 	"fmt"
-	"os"
+	"log/slog"
 	"strings"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // JSONJobLogger is a wrapper around a JSON Logger that satisfies the
 // io.Writer interface so it can be seamlessly used with existing job logging code.
 type JSONJobLogger struct {
-	log logger.Logger
+	log *slog.Logger
 }
 
 // NewJSONJobLogger creates a JSONJobLogger for the given job config, extracting
 // structured fields (org, pipeline, branch, etc.) from the job environment.
+//
+// Output is written to conf.AgentStdout — i.e. the JOB's own log output stream
+// that becomes Buildkite log chunks; this is intentionally NOT the agent's
+// diagnostic logger.
 func NewJSONJobLogger(conf JobRunnerConfig) JSONJobLogger {
 	stdout := conf.AgentStdout
 	job := conf.Job
 
-	fields := []logger.Field{
-		logger.StringField("org", job.Env["BUILDKITE_ORGANIZATION_SLUG"]),
-		logger.StringField("pipeline", job.Env["BUILDKITE_PIPELINE_SLUG"]),
-		logger.StringField("branch", job.Env["BUILDKITE_BRANCH"]),
-		logger.StringField("queue", job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
-		logger.StringField("build_id", job.Env["BUILDKITE_BUILD_ID"]),
-		logger.StringField("build_number", job.Env["BUILDKITE_BUILD_NUMBER"]),
-		logger.StringField("job_url", fmt.Sprintf("%s#%s", job.Env["BUILDKITE_BUILD_URL"], job.ID)),
-		logger.StringField("build_url", job.Env["BUILDKITE_BUILD_URL"]),
-		logger.StringField("job_id", job.ID),
-		logger.StringField("step_key", job.Env["BUILDKITE_STEP_KEY"]),
+	attrs := []any{
+		"org", job.Env["BUILDKITE_ORGANIZATION_SLUG"],
+		"pipeline", job.Env["BUILDKITE_PIPELINE_SLUG"],
+		"branch", job.Env["BUILDKITE_BRANCH"],
+		"queue", job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"],
+		"build_id", job.Env["BUILDKITE_BUILD_ID"],
+		"build_number", job.Env["BUILDKITE_BUILD_NUMBER"],
+		"job_url", fmt.Sprintf("%s#%s", job.Env["BUILDKITE_BUILD_URL"], job.ID),
+		"build_url", job.Env["BUILDKITE_BUILD_URL"],
+		"job_id", job.ID,
+		"step_key", job.Env["BUILDKITE_STEP_KEY"],
 	}
 
 	// If the job has a W3C traceparent (format: version-trace_id-span_id-flags),
 	// include trace_id and span_id in the log fields for trace correlation.
 	if parts := strings.SplitN(job.TraceParent, "-", 5); len(parts) >= 4 {
-		fields = append(fields,
-			logger.StringField("trace_id", parts[1]),
-			logger.StringField("span_id", parts[2]),
-		)
+		attrs = append(attrs, "trace_id", parts[1], "span_id", parts[2])
 	}
 
-	l := logger.NewConsoleLogger(logger.NewJSONPrinter(stdout), os.Exit)
-	l = l.WithFields(logger.StringField("source", "job"))
-	l = l.WithFields(fields...)
+	h := slog.NewJSONHandler(stdout, nil)
+	l := slog.New(h).With("source", "job").With(attrs...)
 
 	return JSONJobLogger{log: l}
 }

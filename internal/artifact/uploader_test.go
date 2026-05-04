@@ -80,7 +80,7 @@ func TestCollect(t *testing.T) {
 		},
 	}
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		Paths: fmt.Sprintf("%s;%s",
 			filepath.Join("fixtures", "**/*.jpg"),
 			filepath.Join(root, "fixtures", "**/*.gif"),
@@ -132,7 +132,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("log", "*"),
 			filepath.Join("tmp", "capybara", "**", "*"),
@@ -156,7 +156,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
@@ -179,7 +179,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
@@ -216,7 +216,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "**", "*.jpg"),
 			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
@@ -249,7 +249,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "**", "*.jpg"),
 			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
@@ -284,7 +284,7 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
@@ -316,7 +316,7 @@ func TestCollect_Literal(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
 			filepath.Join("fixtures", "gifs", "Smile.gif"),
@@ -347,7 +347,7 @@ func TestCollect_LiteralPathNotFound(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(logger.SlogDiscard, nil, UploaderConfig{
 		// When parsed as a glob, it finds multiple files.
 		// When used literally, it finds nothing.
 		Paths:   filepath.Join("fixtures", "**", "*.jpg"),

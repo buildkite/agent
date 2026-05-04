@@ -3,15 +3,14 @@ package process
 import (
 	"bufio"
 	"io"
-
-	"github.com/buildkite/agent/v4/logger"
+	"log/slog"
 )
 
 type Scanner struct {
-	logger logger.Logger
+	logger *slog.Logger
 }
 
-func NewScanner(l logger.Logger) *Scanner {
+func NewScanner(l *slog.Logger) *Scanner {
 	return &Scanner{
 		logger: l,
 	}

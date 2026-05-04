@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -14,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
 	"github.com/buildkite/agent/v4/internal/process"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/roko"
@@ -70,7 +70,7 @@ type AgentWorker struct {
 	client *core.Client
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// The configuration of the agent from the CLI
 	agentConfiguration AgentConfiguration
@@ -194,7 +194,7 @@ func (e *errUnrecoverable) Unwrap() error {
 }
 
 // Creates the agent worker and initializes its API Client
-func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.Collector, apiClient *api.Client, c AgentWorkerConfig) *AgentWorker {
+func NewAgentWorker(l *slog.Logger, reg *api.AgentRegisterResponse, m *metrics.Collector, apiClient *api.Client, c AgentWorkerConfig) *AgentWorker {
 	apiClient = apiClient.FromAgentRegisterResponse(reg)
 	return &AgentWorker{
 		logger:           l,
@@ -287,7 +287,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				}()
 			}
 
-			a.logger.Error("Failed to acquire and run job: %v", err)
+			a.logger.Error(fmt.Sprintf("Failed to acquire and run job: %v", err))
 		}
 	}
 
@@ -314,12 +314,12 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				// In streaming-only mode, an unrecoverable failure
 				// in the streaming loop should be reported and should
 				// terminate the agent worker.
-				a.logger.Error("Streaming ping mode failed due to an unrecoverable error: %v", err)
+				a.logger.Error(fmt.Sprintf("Streaming ping mode failed due to an unrecoverable error: %v", err))
 			default:
 				// In auto mode, the worker should fall back to the ping loop
 				// and carry on. The user might find that interesting (especially if
 				// they are expecting streaming to work).
-				a.logger.Info("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err)
+				a.logger.Info(fmt.Sprintf("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err))
 				// If the ping loop then has its own unrecoverable error, then
 				// *that* will terminate the worker. But the streaming loop shouldn't.
 				// So treat the error from the streaming loop as "business as usual".
@@ -423,7 +423,7 @@ func (a *AgentWorker) StopUngracefully() {
 		// is already being killed, so it's safe to call
 		// multiple times.
 		if err := jr.Cancel(CancelReasonAgentStopping); err != nil {
-			a.logger.Error("Unexpected error canceling job (err: %s)", err)
+			a.logger.Error(fmt.Sprintf("Unexpected error canceling job (err: %s)", err))
 		}
 	} else {
 		a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
@@ -452,7 +452,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
 			}
 
-			a.logger.Warn("%s (%s)", err, r)
+			a.logger.Warn(fmt.Sprintf("%s (%s)", err, r))
 			return nil, err
 		}
 		return b, nil
@@ -470,7 +470,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	// Track a timestamp for the successful heartbeat for better errors
 	a.stats.lastHeartbeat = time.Now()
 
-	a.logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
+	a.logger.Debug(fmt.Sprintf("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt))
 	return nil
 }
 

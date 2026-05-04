@@ -3,6 +3,7 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path"
@@ -15,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 )
 
@@ -39,10 +39,10 @@ type S3Uploader struct {
 	conf S3UploaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 }
 
-func NewS3Uploader(ctx context.Context, l logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
+func NewS3Uploader(ctx context.Context, l *slog.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 	bucketName, bucketPath := ParseS3Destination(c.Destination)
 
 	r := roko.NewRetrier(
@@ -119,14 +119,14 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 	uploader := manager.NewUploader(u.client)
 
 	// Open file from filesystem
-	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	u.logger.Debug(fmt.Sprintf("Reading file %q", u.artifact.AbsolutePath))
 	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to S3.
-	u.logger.Debug("Uploading %q to bucket with permission %q", u.artifactPath(u.artifact), permission)
+	u.logger.Debug(fmt.Sprintf("Uploading %q to bucket with permission %q", u.artifactPath(u.artifact), permission))
 
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(u.BucketName),

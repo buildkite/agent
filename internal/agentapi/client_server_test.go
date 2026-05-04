@@ -3,6 +3,7 @@ package agentapi
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -19,13 +20,10 @@ func testSocketPath() string {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("internal_agentapi_test-%d-%d", os.Getpid(), id))
 }
 
-func testLogger(t *testing.T) logger.Logger {
+func testLogger(t *testing.T) *slog.Logger {
 	t.Helper()
-	logger := logger.NewConsoleLogger(
-		logger.NewTextPrinter(os.Stderr),
-		func(c int) { t.Errorf("exit(%d)", c) },
-	)
-	return logger
+	l, _ := logger.Test(t)
+	return l
 }
 
 func testServerAndClient(t *testing.T, ctx context.Context) (*Server, *Client) {

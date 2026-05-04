@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"slices"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/stdin"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
@@ -124,7 +124,7 @@ var AnnotateCommand = cli.Command{
 	},
 }
 
-func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
+func annotate(ctx context.Context, cfg AnnotateConfig, l *slog.Logger) error {
 	var body string
 
 	if cfg.Body != "" {
@@ -182,7 +182,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			return err
 		}
 		return nil
