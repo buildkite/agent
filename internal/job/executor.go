@@ -22,21 +22,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/v3/agent/plugin"
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/file"
-	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/replacer"
-	"github.com/buildkite/agent/v3/internal/secrets"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/internal/shellscript"
-	"github.com/buildkite/agent/v3/internal/tempfile"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/agent/plugin"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/file"
+	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/secrets"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/internal/shellscript"
+	"github.com/buildkite/agent/v4/internal/tempfile"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
@@ -61,7 +62,8 @@ type Executor struct {
 	plugins []*plugin.Plugin
 
 	// Plugin checkouts from the plugin phases
-	pluginCheckouts []*pluginCheckout
+	pluginCheckouts         []*pluginCheckout
+	pluginCheckoutsReversed []*pluginCheckout
 
 	// Directories to clean up at end of job execution
 	cleanupDirs []string
@@ -1010,22 +1012,25 @@ func (e *Executor) tearDown(ctx context.Context) error {
 	// Unfortunately pre-exit hooks are often not written with this split in
 	// mind.
 	if e.includePhase("command") {
-		if err = e.executeGlobalHook(ctx, "pre-exit"); err != nil {
-			return err
+		if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+			// Legacy order = same order as environment
+			if err := cmp.Or(
+				e.executeGlobalHook(ctx, "pre-exit"),
+				e.executeLocalHook(ctx, "pre-exit"),
+				e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts),
+			); err != nil {
+				return err
+			}
+		} else {
+			// Modern order = reverse, to make composition easier
+			if err := cmp.Or(
+				e.executePluginHook(ctx, "pre-exit", e.pluginCheckoutsReversed),
+				e.executeLocalHook(ctx, "pre-exit"),
+				e.executeGlobalHook(ctx, "pre-exit"),
+			); err != nil {
+				return err
+			}
 		}
-
-		if err = e.executeLocalHook(ctx, "pre-exit"); err != nil {
-			return err
-		}
-
-		if err = e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts); err != nil {
-			return err
-		}
-	}
-
-	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDeprecatedDockerIntegration(e.shell) {
-		return tearDownDeprecatedDockerIntegration(ctx, e.shell)
 	}
 
 	for _, dir := range e.cleanupDirs {
@@ -1073,13 +1078,20 @@ func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(err) }()
 
-	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
-		return err
+	if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+		// Legacy order = same order as pre-command
+		return cmp.Or(
+			e.executeGlobalHook(ctx, "post-command"),
+			e.executeLocalHook(ctx, "post-command"),
+			e.executePluginHook(ctx, "post-command", e.pluginCheckouts),
+		)
 	}
-	if err := e.executeLocalHook(ctx, "post-command"); err != nil {
-		return err
-	}
-	return e.executePluginHook(ctx, "post-command", e.pluginCheckouts)
+	// Modern order = reverse, to make composition easier
+	return cmp.Or(
+		e.executePluginHook(ctx, "post-command", e.pluginCheckoutsReversed),
+		e.executeLocalHook(ctx, "post-command"),
+		e.executeGlobalHook(ctx, "post-command"),
+	)
 }
 
 // CommandPhase determines how to run the build, and then runs it
@@ -1262,15 +1274,6 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 	} else {
 		e.shell.Headerf("Running commands")
 		cmdToExec = e.Command
-	}
-
-	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDeprecatedDockerIntegration(e.shell) {
-		if e.Debug {
-			e.shell.Commentf("Detected deprecated docker environment variables")
-		}
-		err = runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
-		return err
 	}
 
 	var cmd []string

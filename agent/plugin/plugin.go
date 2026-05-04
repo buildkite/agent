@@ -10,15 +10,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v4/env"
 )
 
 var (
-	nonIDCharacterRE        = regexp.MustCompile(`[^a-zA-Z0-9]`)
-	consecutiveHyphenRE     = regexp.MustCompile(`-+`)
-	hypenOrSpaceRE          = regexp.MustCompile(`-|\s`)
-	whitespaceRE            = regexp.MustCompile(`\s+`)
-	consecutiveUnderscoreRE = regexp.MustCompile(`_+`)
+	nonIDCharacterRE    = regexp.MustCompile(`[^a-zA-Z0-9]`)
+	consecutiveHyphenRE = regexp.MustCompile(`-+`)
+	hypenOrSpaceRE      = regexp.MustCompile(`-|\s`)
+	whitespaceRE        = regexp.MustCompile(`\s+`)
 )
 
 // Plugin describes where to find, and how to configure, an agent plugin.
@@ -266,33 +265,6 @@ func flattenConfigToEnvMap(into map[string]string, v any, envPrefix string) erro
 	}
 }
 
-// addDeprecatedEnvVarAliases provides backward compatibility for environment variable names.
-//
-// Before v3.48.0 (https://github.com/buildkite/agent/pull/2116), consecutive underscores in
-// derived env var names were collapsed (e.g., "some--key__name" → SOME_KEY_NAME).
-// Since v3.48.0, consecutive underscores are preserved (e.g., SOME__KEY__NAME).
-//
-// For compatibility, this function adds the collapsed form for any key containing consecutive
-// underscores and returns deprecation errors listing the affected variables.
-func addDeprecatedEnvVarAliases(envMap map[string]string) error {
-	var errs *DeprecatedNameErrors
-	for k, v := range envMap {
-		// the form with consecutive underscores is replacing the form without, but the replacement
-		// is what is expected to be in input map
-		withoutConsecutiveUnderscores := consecutiveUnderscoreRE.ReplaceAllString(k, "_")
-		if k != withoutConsecutiveUnderscores {
-			envMap[withoutConsecutiveUnderscores] = v
-			errs = errs.Append(DeprecatedNameError{old: withoutConsecutiveUnderscores, new: k})
-		}
-	}
-
-	if !errs.IsEmpty() {
-		return errs
-	}
-
-	return nil
-}
-
 // ConfigurationToEnvironment converts the plugin configuration values to environment variables.
 func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 	configJSON, err := json.Marshal(p.Configuration)
@@ -309,7 +281,6 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 		return env.New(), err
 	}
 
-	err = addDeprecatedEnvVarAliases(envMap)
 	return env.FromMap(envMap), err
 }
 

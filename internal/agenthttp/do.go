@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // Do wraps the http.Client's Do method with debug logging and tracing options.

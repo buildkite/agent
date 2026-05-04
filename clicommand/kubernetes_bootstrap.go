@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/kubernetes"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/kubernetes"
 	"github.com/urfave/cli"
 )
 
@@ -125,13 +125,23 @@ var KubernetesBootstrapCommand = cli.Command{
 			}
 			cancelSignal = cs
 		}
-		cancelGracePeriodSecs := environ.GetInt("BUILDKITE_CANCEL_GRACE_PERIOD", defaultCancelGracePeriodSecs)
-		cancelGracePeriod := time.Duration(cancelGracePeriodSecs) * time.Second
-		signalGracePeriodSecs := environ.GetInt("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", defaultSignalGracePeriodSecs)
-		signalGracePeriod, err := signalGracePeriod(cancelGracePeriodSecs, signalGracePeriodSecs)
-		if err != nil {
-			return err
+		cancelSignalTimeout := defaultCancelSignalTimeout
+		if s, has := environ.Get("BUILDKITE_CANCEL_SIGNAL_TIMEOUT"); has {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				return fmt.Errorf("failed to parse BUILDKITE_CANCEL_SIGNAL_TIMEOUT: %w", err)
+			}
+			cancelSignalTimeout = d
 		}
+		cancelCleanupTimeout := defaultCancelCleanupTimeout
+		if s, has := environ.Get("BUILDKITE_CANCEL_CLEANUP_TIMEOUT"); has {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				return fmt.Errorf("failed to parse BUILDKITE_CANCEL_CLEANUP_TIMEOUT: %w", err)
+			}
+			cancelCleanupTimeout = d
+		}
+		cancelGracePeriod := cancelSignalTimeout + cancelCleanupTimeout
 
 		// BUILDKITE_KUBERNETES_EXEC is a legacy environment variable. It was used to activate the socket
 		// on the bootstrap command, and to activate the socket server on `buildkite-agent start`.
@@ -211,7 +221,7 @@ var KubernetesBootstrapCommand = cli.Command{
 			Dir:               buildPath,
 			PTY:               runInPTY,
 			InterruptSignal:   cancelSignal,
-			SignalGracePeriod: signalGracePeriod,
+			SignalGracePeriod: cancelSignalTimeout,
 		})
 
 		// We aren't expecting the user to Ctrl-C the process (we're in k8s),

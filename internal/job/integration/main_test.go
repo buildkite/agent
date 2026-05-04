@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/clicommand"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/clicommand"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/bintest/v3"
 	"github.com/urfave/cli"
 )

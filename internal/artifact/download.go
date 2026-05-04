@@ -13,11 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/agenthttp"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
 )
@@ -86,7 +85,7 @@ func (d Download) Start(ctx context.Context) error {
 	})
 }
 
-func targetPath(ctx context.Context, dlPath, destPath string) string {
+func targetPath(_ context.Context, dlPath, destPath string) string {
 	dlPath = filepath.Clean(dlPath)
 
 	// If we're downloading a file with a path of "pkg/foo.txt" to a folder
@@ -103,12 +102,6 @@ func targetPath(ctx context.Context, dlPath, destPath string) string {
 	if lastDestComponent == dlPathComponents[0] {
 		destPathComponents = destPathComponents[:lastIndex]
 		destPath = strings.Join(destPathComponents, string(os.PathSeparator))
-	}
-
-	if experiments.IsEnabled(ctx, experiments.AllowArtifactPathTraversal) {
-		// If allow-artifact-path-traversal is enabled, then we don't need to
-		// trim ".." components from dlPath before joining.
-		return filepath.Join(destPath, dlPath)
 	}
 
 	// Trim empty or ".." components from the prefix of dlPath; walking up

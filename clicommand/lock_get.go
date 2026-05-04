@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/lock"
+	"github.com/buildkite/agent/v4/lock"
 	"github.com/urfave/cli"
 )
 

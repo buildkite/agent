@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/agentapi"
+	"github.com/buildkite/agent/v4/internal/agentapi"
 )
 
 // For local sockets, we can afford to be fairly chatty. 100ms is an arbitrary

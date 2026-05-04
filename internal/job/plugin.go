@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/agent/plugin"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v4/agent/plugin"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -163,6 +163,10 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 	// Store the checkouts for future use
 	e.pluginCheckouts = checkouts
 
+	// Create a reversed copy of the slice
+	e.pluginCheckoutsReversed = slices.Clone(e.pluginCheckouts)
+	slices.Reverse(e.pluginCheckoutsReversed)
+
 	// Now we can run plugin environment hooks too
 	return e.executePluginHook(ctx, "environment", checkouts)
 }
@@ -210,6 +214,10 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 	// Finally append our vendored checkouts to the rest for subsequent hooks
 	e.pluginCheckouts = append(e.pluginCheckouts, vendoredCheckouts...)
 
+	// Create a reversed copy of the slice
+	e.pluginCheckoutsReversed = slices.Clone(e.pluginCheckouts)
+	slices.Reverse(e.pluginCheckoutsReversed)
+
 	// Now we can run plugin environment hooks too
 	return e.executePluginHook(ctx, "environment", vendoredCheckouts)
 }
@@ -255,18 +263,7 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 		hookTypeSeen[name] = true
 
 		envMap, err := p.ConfigurationToEnvironment()
-		if dnerr := (&plugin.DeprecatedNameErrors{}); errors.As(err, &dnerr) {
-			e.shell.Headerf("Deprecated environment variables for plugin %s", p.Plugin.Name())
-			e.shell.Printf("%s", strings.Join([]string{
-				"The way that environment variables are derived from the plugin configuration is changing.",
-				"We'll export both the deprecated and the replacement names for now,",
-				"You may be able to avoid this by removing consecutive underscore, hyphen, or whitespace",
-				"characters in your plugin configuration.",
-			}, " "))
-			for _, err := range dnerr.Unwrap() {
-				e.shell.Printf("%s", err.Error())
-			}
-		} else if err != nil {
+		if err != nil {
 			e.shell.Warningf("Error configuring plugin environment: %s", err)
 		}
 
