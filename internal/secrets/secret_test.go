@@ -43,12 +43,12 @@ func TestFetchSecrets_Success(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	secrets, errs := FetchSecrets(t.Context(), logger.SlogDiscard, apiClient, "test-job-id", []string{"DATABASE_URL", "API_TOKEN"}, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", []string{"DATABASE_URL", "API_TOKEN"}, 10)
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
 	}
@@ -76,8 +76,8 @@ func TestFetchSecrets_EmptyKeys(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{Endpoint: server.URL, Token: "llamas"})
-	secrets, errs := FetchSecrets(t.Context(), logger.SlogDiscard, apiClient, "test-job-id", []string{}, 10)
+	apiClient := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", []string{}, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
@@ -97,9 +97,9 @@ func TestFetchSecrets_NilKeys(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{Endpoint: server.URL, Token: "llamas"})
+	apiClient := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
 
-	secrets, errs := FetchSecrets(t.Context(), logger.SlogDiscard, apiClient, "test-job-id", nil, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", nil, 10)
 
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
@@ -131,13 +131,13 @@ func TestFetchSecrets_SomeSecretsFail(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
 	keys := []string{"DATABASE_URL", "MISSING"}
-	secrets, errs := FetchSecrets(t.Context(), logger.SlogDiscard, apiClient, "test-job-id", keys, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 errors, got %d: %v", len(errs), errs)
@@ -175,13 +175,13 @@ func TestFetchSecrets_AllSecretsFail(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
 	keys := []string{"API_TOKEN", "DATABASE_URL"}
-	secrets, errs := FetchSecrets(t.Context(), logger.SlogDiscard, apiClient, "test-job-id", keys, 10)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", keys, 10)
 
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
@@ -216,13 +216,13 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 	// Close the underlying listener to cause connection errors
 	_ = server.Listener.Close()
 
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
 	keys := []string{"TEST_SECRET"}
-	secrets, errs := FetchSecrets(t.Context(), logger.SlogDiscard, apiClient, "test-job-id", keys, 10, noSleep)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", keys, 10, noSleep)
 
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
@@ -290,12 +290,12 @@ func TestFetchSecrets_RetriesOnServerError(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	secrets, errs := FetchSecrets(t.Context(), logger.SlogDiscard, apiClient, "test-job-id", []string{"MY_SECRET"}, 10, noSleep)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", []string{"MY_SECRET"}, 10, noSleep)
 	if len(errs) > 0 {
 		t.Fatalf("expected no errors after retries, got: %v", errs)
 	}
@@ -326,12 +326,12 @@ func TestFetchSecrets_NoRetryOnNonRetryableStatus(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
-	secrets, errs := FetchSecrets(t.Context(), logger.SlogDiscard, apiClient, "test-job-id", []string{"MISSING"}, 10, noSleep)
+	secrets, errs := FetchSecrets(t.Context(), logger.Discard, apiClient, "test-job-id", []string{"MISSING"}, 10, noSleep)
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
 	}

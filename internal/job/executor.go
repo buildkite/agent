@@ -930,13 +930,13 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 
 	// Create API client for fetching secrets. Use a discard logger to avoid
 	// leaking secret-related log lines into the job's output.
-	apiClient := api.NewClient(logger.SlogDiscard, api.Config{
+	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
 		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
 	})
 
 	// Fetch all secrets
-	fetchedSecrets, errs := secrets.FetchSecrets(ctx, logger.SlogDiscard, apiClient, e.JobID, keys, 10)
+	fetchedSecrets, errs := secrets.FetchSecrets(ctx, logger.Discard, apiClient, e.JobID, keys, 10)
 	if len(errs) > 0 {
 		var errorMsg strings.Builder
 		for _, err := range errs {

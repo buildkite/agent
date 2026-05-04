@@ -53,7 +53,7 @@ type testRunJobConfig struct {
 func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 	t.Helper()
 
-	l := logger.SlogDiscard
+	l := logger.Discard
 
 	// minimal metrics, this could be cleaner
 	m := metrics.NewCollector(l, metrics.CollectorConfig{})

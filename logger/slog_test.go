@@ -43,7 +43,7 @@ func TestParseFormat(t *testing.T) {
 	}
 }
 
-func TestParseSlogLevel(t *testing.T) {
+func TestParseLevel(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -65,18 +65,18 @@ func TestParseSlogLevel(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
-			got, err := logger.ParseSlogLevel(tc.in)
+			got, err := logger.ParseLevel(tc.in)
 			if tc.wantErr {
 				if err == nil {
-					t.Fatalf("ParseSlogLevel(%q) error = nil, want error", tc.in)
+					t.Fatalf("ParseLevel(%q) error = nil, want error", tc.in)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("ParseSlogLevel(%q) error = %v, want nil", tc.in, err)
+				t.Fatalf("ParseLevel(%q) error = %v, want nil", tc.in, err)
 			}
 			if got != tc.want {
-				t.Errorf("ParseSlogLevel(%q) = %v, want %v", tc.in, got, tc.want)
+				t.Errorf("ParseLevel(%q) = %v, want %v", tc.in, got, tc.want)
 			}
 		})
 	}
@@ -123,9 +123,9 @@ func TestNew_DebugForcesDebugLevel(t *testing.T) {
 	}
 }
 
-func TestSlogDiscard_DoesNotPanic(t *testing.T) {
+func TestDiscard_DoesNotPanic(t *testing.T) {
 	t.Parallel()
 
-	logger.SlogDiscard.Info("dropped on the floor")
-	logger.SlogDiscard.With("key", "value").Error("also dropped")
+	logger.Discard.Info("dropped on the floor")
+	logger.Discard.With("key", "value").Error("also dropped")
 }

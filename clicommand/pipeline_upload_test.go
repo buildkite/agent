@@ -135,7 +135,7 @@ func TestSearchForSecrets(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			t.Parallel()
-			l := logger.SlogDiscard
+			l := logger.Discard
 			err := searchForSecrets(l, cfg, env.FromMap(test.environ), test.pipeline, "cat-o-matic.yaml")
 			if len(test.wantLog) == 0 {
 				if err != nil {
@@ -800,7 +800,7 @@ func TestReadChangedFilesFromPath(t *testing.T) {
 				t.Fatalf("tmpFile.Close() = %v", err)
 			}
 
-			l := logger.SlogDiscard
+			l := logger.Discard
 			got, err := readChangedFilesFromPath(l, tmpFile.Name())
 			if err != nil {
 				t.Fatalf("readChangedFilesFromPath() error = %v", err)

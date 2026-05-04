@@ -611,7 +611,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 	}
 
 	var processLogger *slog.Logger
-	processLogger = logger.SlogDiscard
+	processLogger = logger.Discard
 
 	if s.debug {
 		// Display normally-hidden output streams using log streamer.

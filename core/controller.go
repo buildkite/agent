@@ -23,7 +23,7 @@ func NewController(ctx context.Context, regToken, agentName string, tags []strin
 	// Some of these are redundant by Go zero-value defaults, but it spells out
 	// what the defaults are.
 	cfg := &controllerConfig{
-		logger:            logger.SlogDiscard,
+		logger:            logger.Discard,
 		retrySleepFunc:    nil,
 		endpoint:          "https://agent-edge.buildkite.com/v3",
 		userAgent:         version.UserAgent(),

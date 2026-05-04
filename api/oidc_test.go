@@ -165,7 +165,7 @@ func TestOIDCToken(t *testing.T) {
 			defer server.Close()
 
 			// Initial client with a registration token
-			client := api.NewClient(logger.SlogDiscard, api.Config{
+			client := api.NewClient(logger.Discard, api.Config{
 				UserAgent: "Test",
 				Endpoint:  server.URL,
 				Token:     accessToken,
@@ -254,7 +254,7 @@ func TestOIDCTokenError(t *testing.T) {
 			defer server.Close()
 
 			// Initial client with a registration token
-			client := api.NewClient(logger.SlogDiscard, api.Config{
+			client := api.NewClient(logger.Discard, api.Config{
 				UserAgent: "Test",
 				Endpoint:  server.URL,
 				Token:     accessToken,

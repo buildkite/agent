@@ -337,7 +337,7 @@ func CreateLogger(cfg any) *slog.Logger {
 	var logLevelErr error
 	if logLevel, err := reflections.GetField(cfg, "LogLevel"); err == nil {
 		if llStr, ok := logLevel.(string); ok && llStr != "" {
-			lvl, err := logger.ParseSlogLevel(llStr)
+			lvl, err := logger.ParseLevel(llStr)
 			if err != nil {
 				logLevelErr = err
 			} else {

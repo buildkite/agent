@@ -17,7 +17,7 @@ func TestFetchingTags(t *testing.T) {
 	cfg := FetchTagsConfig{
 		Tags: []string{"llamas", "rock"},
 	}
-	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("(&tagFetcher{}).Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -32,7 +32,7 @@ func TestFetchingTagsWithHostTags(t *testing.T) {
 		Tags:         []string{"llamas", "rock"},
 		TagsFromHost: true,
 	}
-	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("(&tagFetcher{}).Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -77,7 +77,7 @@ func TestFetchingTagsFromEC2(t *testing.T) {
 		TagsFromEC2MetaData: true,
 		TagsFromEC2Tags:     true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -99,7 +99,7 @@ func TestFetchingTagsFromEC2Tags(t *testing.T) {
 	cfg := FetchTagsConfig{
 		TagsFromEC2Tags: true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -123,7 +123,7 @@ func TestFetchingTagsFromECS(t *testing.T) {
 		Tags:                []string{"llamas", "rock"},
 		TagsFromECSMetaData: true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -166,7 +166,7 @@ func TestFetchingTagsFromGCP(t *testing.T) {
 		TagsFromGCPMetaData: true,
 		TagsFromGCPLabels:   true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -218,7 +218,7 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 		TagsFromEC2MetaDataPaths: []string{"tag=some/ec2/value"},
 		TagsFromEC2Tags:          true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -277,7 +277,7 @@ func TestFailOnMissingTags_EC2MetaData(t *testing.T) {
 		Tags:                []string{"llamas"},
 		TagsFromEC2MetaData: true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -291,7 +291,7 @@ func TestFailOnMissingTags_EC2MetaData(t *testing.T) {
 		TagsFromEC2MetaData: true,
 		FailOnMissingTags:   true,
 	}
-	_, err = fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err == nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want non-nil error", err)
 	}
@@ -312,7 +312,7 @@ func TestFailOnMissingTags_EC2MetaDataPaths(t *testing.T) {
 		Tags:                     []string{"llamas"},
 		TagsFromEC2MetaDataPaths: []string{"tag=some/path"},
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -326,7 +326,7 @@ func TestFailOnMissingTags_EC2MetaDataPaths(t *testing.T) {
 		TagsFromEC2MetaDataPaths: []string{"tag=some/path"},
 		FailOnMissingTags:        true,
 	}
-	_, err = fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err == nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want non-nil error", err)
 	}
@@ -347,7 +347,7 @@ func TestFailOnMissingTags_EC2Tags(t *testing.T) {
 		Tags:            []string{"llamas"},
 		TagsFromEC2Tags: true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -361,7 +361,7 @@ func TestFailOnMissingTags_EC2Tags(t *testing.T) {
 		TagsFromEC2Tags:   true,
 		FailOnMissingTags: true,
 	}
-	_, err = fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err == nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want non-nil error", err)
 	}
@@ -382,7 +382,7 @@ func TestFailOnMissingTags_ECSMetaData(t *testing.T) {
 		Tags:                []string{"llamas"},
 		TagsFromECSMetaData: true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -396,7 +396,7 @@ func TestFailOnMissingTags_ECSMetaData(t *testing.T) {
 		TagsFromECSMetaData: true,
 		FailOnMissingTags:   true,
 	}
-	_, err = fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err == nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want non-nil error", err)
 	}
@@ -417,7 +417,7 @@ func TestFailOnMissingTags_GCPMetaData(t *testing.T) {
 		Tags:                []string{"llamas"},
 		TagsFromGCPMetaData: true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -431,7 +431,7 @@ func TestFailOnMissingTags_GCPMetaData(t *testing.T) {
 		TagsFromGCPMetaData: true,
 		FailOnMissingTags:   true,
 	}
-	_, err = fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err == nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want non-nil error", err)
 	}
@@ -452,7 +452,7 @@ func TestFailOnMissingTags_GCPMetaDataPaths(t *testing.T) {
 		Tags:                     []string{"llamas"},
 		TagsFromGCPMetaDataPaths: []string{"tag=some/path"},
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -466,7 +466,7 @@ func TestFailOnMissingTags_GCPMetaDataPaths(t *testing.T) {
 		TagsFromGCPMetaDataPaths: []string{"tag=some/path"},
 		FailOnMissingTags:        true,
 	}
-	_, err = fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err == nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want non-nil error", err)
 	}
@@ -487,7 +487,7 @@ func TestFailOnMissingTags_GCPLabels(t *testing.T) {
 		Tags:              []string{"llamas"},
 		TagsFromGCPLabels: true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -501,7 +501,7 @@ func TestFailOnMissingTags_GCPLabels(t *testing.T) {
 		TagsFromGCPLabels: true,
 		FailOnMissingTags: true,
 	}
-	_, err = fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	_, err = fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err == nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want non-nil error", err)
 	}
@@ -527,7 +527,7 @@ func TestFailOnMissingTags_NoErrorWhenSourcesSucceed(t *testing.T) {
 		TagsFromEC2Tags:     true,
 		FailOnMissingTags:   true,
 	}
-	tags, err := fetcher.Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := fetcher.Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("fetcher.Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}
@@ -549,7 +549,7 @@ func TestFailOnMissingTags_DoesNotAffectHostTags(t *testing.T) {
 		TagsFromHost:      true,
 		FailOnMissingTags: true,
 	}
-	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.SlogDiscard, cfg)
+	tags, err := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, cfg)
 	if err != nil {
 		t.Fatalf("(&tagFetcher{}).Fetch(context.Background(), logger.Discard, cfg) error = %v, want nil", err)
 	}

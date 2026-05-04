@@ -16,14 +16,16 @@ import (
 // mutates this so that --log-level / --debug take effect at runtime.
 var LevelVar = new(slog.LevelVar)
 
-// SlogDiscard is a *slog.Logger that throws away every record.
+// Discard is a *slog.Logger that throws away every record.
 //
 // Used where a logger is required by API but the caller doesn't want
 // log output, e.g. when fetching secrets to avoid leaking key names.
-//
-// TODO(slog-migration): rename to Discard once the legacy Logger
-// interface and the existing logger.Discard variable are removed.
-var SlogDiscard = slog.New(slog.DiscardHandler)
+var Discard = slog.New(slog.DiscardHandler)
+
+// windowsColors records whether the Windows console was successfully
+// switched into ANSI virtual-terminal mode at startup. On non-Windows
+// platforms it is unused.
+var windowsColors bool
 
 // Format selects how the agent's diagnostic logs are formatted.
 type Format int
@@ -48,13 +50,10 @@ func ParseFormat(s string) (Format, error) {
 	}
 }
 
-// ParseSlogLevel parses the user-supplied --log-level value. The
-// historical "notice" level is accepted as an alias for "info"; the
-// historical "fatal" level is accepted as an alias for "error".
-//
-// TODO(slog-migration): rename to ParseLevel once the legacy
-// LevelFromString is removed.
-func ParseSlogLevel(s string) (slog.Level, error) {
+// ParseLevel parses the user-supplied --log-level value. The historical
+// "notice" level is accepted as an alias for "info"; the historical
+// "fatal" level is accepted as an alias for "error".
+func ParseLevel(s string) (slog.Level, error) {
 	switch strings.ToLower(s) {
 	case "debug":
 		return slog.LevelDebug, nil

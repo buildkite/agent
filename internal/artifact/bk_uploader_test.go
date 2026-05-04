@@ -95,7 +95,7 @@ func TestFormUploading(t *testing.T) {
 				os.Remove(abspath) //nolint:errcheck // Best-effort cleanup.
 			})
 
-			uploader := NewBKUploader(logger.SlogDiscard, BKUploaderConfig{})
+			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
 			artifact := &api.Artifact{
 				ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
 				Path:         "llamas.txt",
@@ -186,7 +186,7 @@ func TestMultipartUploading(t *testing.T) {
 				os.Remove(abspath) //nolint:errcheck // Best-effort cleanup.
 			})
 
-			uploader := NewBKUploader(logger.SlogDiscard, BKUploaderConfig{})
+			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
 			actions := []api.ArtifactUploadAction{
 				{URL: server.URL + "/llamas3.txt?partNumber=1", Method: "PUT", PartNumber: 1},
 				{URL: server.URL + "/llamas3.txt?partNumber=2", Method: "PUT", PartNumber: 2},
@@ -260,7 +260,7 @@ func TestFormUploadFileMissing(t *testing.T) {
 
 	abspath := filepath.Join(temp, "llamas.txt")
 
-	uploader := NewBKUploader(logger.SlogDiscard, BKUploaderConfig{})
+	uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
 	artifact := &api.Artifact{
 		ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
 		Path:         "llamas.txt",
@@ -293,7 +293,7 @@ func TestFormUploadFileMissing(t *testing.T) {
 }
 
 func TestFormUploadTooBig(t *testing.T) {
-	uploader := NewBKUploader(logger.SlogDiscard, BKUploaderConfig{})
+	uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
 	const size = int64(6442450944) // 6Gb
 	artifact := &api.Artifact{
 		ID:                 "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",

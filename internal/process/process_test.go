@@ -24,7 +24,7 @@ func TestProcessOutput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=output"},
 		Stdout: stdout,
@@ -153,7 +153,7 @@ func TestProcessInput(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:   "tr",
 		Args:   []string{"hw", "HW"},
 		Stdin:  strings.NewReader("hello world"),
@@ -175,7 +175,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester"},
 		SignalGracePeriod: time.Millisecond,
@@ -215,7 +215,7 @@ func TestProcessTerminatesWhenContextDone(t *testing.T) {
 
 	stdoutr, stdoutw := io.Pipe()
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester-no-handler"},
 		Stdout:            stdoutw,
@@ -257,7 +257,7 @@ func TestProcessWithSlowHandlerKilledWhenContextDone(t *testing.T) {
 
 	stdoutr, stdoutw := io.Pipe()
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester-slow-handler"},
 		Stdout:            stdoutw,
@@ -302,7 +302,7 @@ func TestProcessInterrupts(t *testing.T) {
 
 	stdoutr, stdoutw := io.Pipe()
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester-signal"},
 		Stdout:            stdoutw,
@@ -342,7 +342,7 @@ func TestProcessInterruptsAfterDone(t *testing.T) {
 		return
 	}
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path: os.Args[0],
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
@@ -369,7 +369,7 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 
 	stdoutr, stdoutw := io.Pipe()
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester-signal"},
 		Stdout:            stdoutw,
@@ -410,7 +410,7 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		return
 	}
 
-	p := process.New(logger.SlogDiscard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path: os.Args[0],
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
@@ -436,7 +436,7 @@ func assertProcessDoesntExist(t *testing.T, p *process.Process) {
 
 func BenchmarkProcess(b *testing.B) {
 	for b.Loop() {
-		proc := process.New(logger.SlogDiscard, process.Config{
+		proc := process.New(logger.Discard, process.Config{
 			Path: os.Args[0],
 			Env:  []string{"TEST_MAIN=output"},
 		})

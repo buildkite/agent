@@ -38,12 +38,12 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 
 	ctx := context.Background()
 
-	ac := api.NewClient(logger.SlogDiscard, api.Config{
+	ac := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamasforever",
 	})
 
-	d := NewDownloader(logger.SlogDiscard, ac, DownloaderConfig{
+	d := NewDownloader(logger.Discard, ac, DownloaderConfig{
 		BuildID: "my-build",
 	})
 

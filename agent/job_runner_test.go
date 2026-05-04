@@ -10,7 +10,7 @@ import (
 )
 
 func TestTruncateEnv(t *testing.T) {
-	l := logger.SlogDiscard
+	l := logger.Discard
 	key := "FOO"
 	env := map[string]string{key: strings.Repeat("a", 100)}
 	limit := 64
