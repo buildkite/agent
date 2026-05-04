@@ -129,8 +129,7 @@ type TextPrinter struct {
 	Colors bool
 	Writer io.Writer
 
-	IsPrefixFn  func(Field) bool
-	IsVisibleFn func(Field) bool
+	IsPrefixFn func(Field) bool
 }
 
 func NewTextPrinter(w io.Writer) *TextPrinter {
@@ -149,10 +148,6 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 
 	if l.IsPrefixFn != nil {
 		for _, f := range fields {
-			// Skip invisible fields
-			if l.IsVisibleFn != nil && !l.IsVisibleFn(f) {
-				continue
-			}
 			// Allow some fields to be shown as prefixes
 			if l.IsPrefixFn(f) {
 				prefix.WriteString(f.String())
@@ -189,9 +184,6 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 		}
 
 		for _, field := range fields {
-			if l.IsVisibleFn != nil && !l.IsVisibleFn(field) {
-				continue
-			}
 			if l.IsPrefixFn != nil && l.IsPrefixFn(field) {
 				continue
 			}
@@ -206,9 +198,6 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 		}
 
 		for _, field := range fields {
-			if l.IsVisibleFn != nil && !l.IsVisibleFn(field) {
-				continue
-			}
 			if l.IsPrefixFn != nil && l.IsPrefixFn(field) {
 				continue
 			}
