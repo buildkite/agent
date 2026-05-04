@@ -68,7 +68,7 @@ func NewS3Client(ctx context.Context, l *slog.Logger, bucket string) (*s3.Client
 
 	regionHint := os.Getenv(regionHintEnvVar)
 	if regionHint != "" {
-		l.Debug(fmt.Sprintf("Using bucket region %q from environment variable %q", regionHint, regionHintEnvVar))
+		l.DebugContext(ctx, fmt.Sprintf("Using bucket region %q from environment variable %q", regionHint, regionHintEnvVar))
 		// If there is a region hint provided, we use it unconditionally
 		tempCfg, err := awsS3Config(ctx, regionHint)
 		if err != nil {
@@ -84,17 +84,17 @@ func NewS3Client(ctx context.Context, l *slog.Logger, bucket string) (*s3.Client
 		}
 		cfg = tempCfg
 
-		l.Debug(fmt.Sprintf("Discovered current region as %q", cfg.Region))
+		l.DebugContext(ctx, fmt.Sprintf("Discovered current region as %q", cfg.Region))
 
 		client := s3.NewFromConfig(cfg)
 
 		bucketRegion, err := manager.GetBucketRegion(ctx, client, bucket)
 		if err != nil || bucketRegion == "" {
-			l.Error(fmt.Sprintf("Could not discover region for bucket %q. Using the %q region as a fallback, if this is not correct configure a bucket region using the %q environment variable. (%v)",
+			l.ErrorContext(ctx, fmt.Sprintf("Could not discover region for bucket %q. Using the %q region as a fallback, if this is not correct configure a bucket region using the %q environment variable. (%v)",
 				bucket, cfg.Region, regionHintEnvVar, err),
 			)
 		} else {
-			l.Debug(fmt.Sprintf("Discovered %q bucket region as %q", bucket, bucketRegion))
+			l.DebugContext(ctx, fmt.Sprintf("Discovered %q bucket region as %q", bucket, bucketRegion))
 			cfg.Region = bucketRegion
 		}
 	}
@@ -104,7 +104,7 @@ func NewS3Client(ctx context.Context, l *slog.Logger, bucket string) (*s3.Client
 	// This is useful for S3-compatible servers like MinIO.
 	usePathStyle := false
 	if endpoint := os.Getenv(s3EndpointEnvVar); endpoint != "" {
-		l.Debug(fmt.Sprintf("S3 session Endpoint from %s: %q", s3EndpointEnvVar, endpoint))
+		l.DebugContext(ctx, fmt.Sprintf("S3 session Endpoint from %s: %q", s3EndpointEnvVar, endpoint))
 		cfg.BaseEndpoint = aws.String(endpoint)
 
 		// Configure the S3 client to use path-style addressing instead of the
@@ -117,7 +117,7 @@ func NewS3Client(ctx context.Context, l *slog.Logger, bucket string) (*s3.Client
 		// AWS CLI does this by default when a custom endpoint is specified [1] so
 		// we will too.
 		// [1]: https://github.com/aws/aws-cli/blob/2.9.18/awscli/botocore/args.py#L414-L417
-		l.Debug("S3 UsePathStyle=true because custom Endpoint specified")
+		l.DebugContext(ctx, "S3 UsePathStyle=true because custom Endpoint specified")
 		usePathStyle = true
 	}
 
@@ -129,13 +129,13 @@ func NewS3Client(ctx context.Context, l *slog.Logger, bucket string) (*s3.Client
 	if credErr == nil {
 		profile := cmp.Or(os.Getenv("BUILDKITE_S3_PROFILE"), os.Getenv("AWS_PROFILE"))
 		if creds.Source == "buildkiteEnvProvider" {
-			l.Info("S3 credentials found in Buildkite environment (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY)")
+			l.InfoContext(ctx, "S3 credentials found in Buildkite environment (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY)")
 		} else {
-			l.Info(fmt.Sprintf("S3 credentials loaded from the default AWS credential chain or BUILDKITE_S3_PROFILE, profile: %q", profile))
+			l.InfoContext(ctx, fmt.Sprintf("S3 credentials loaded from the default AWS credential chain or BUILDKITE_S3_PROFILE, profile: %q", profile))
 		}
 	}
 
-	l.Debug(fmt.Sprintf("Testing AWS S3 credentials for bucket %q in region %q...", bucket, cfg.Region))
+	l.DebugContext(ctx, fmt.Sprintf("Testing AWS S3 credentials for bucket %q in region %q...", bucket, cfg.Region))
 
 	// Test the authentication by trying to list the first 0 objects in the bucket.
 	_, err := s3client.ListObjects(ctx, &s3.ListObjectsInput{

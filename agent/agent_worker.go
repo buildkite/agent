@@ -287,7 +287,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				}()
 			}
 
-			a.logger.Error(fmt.Sprintf("Failed to acquire and run job: %v", err))
+			a.logger.ErrorContext(ctx, fmt.Sprintf("Failed to acquire and run job: %v", err))
 		}
 	}
 
@@ -314,12 +314,12 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				// In streaming-only mode, an unrecoverable failure
 				// in the streaming loop should be reported and should
 				// terminate the agent worker.
-				a.logger.Error(fmt.Sprintf("Streaming ping mode failed due to an unrecoverable error: %v", err))
+				a.logger.ErrorContext(ctx, fmt.Sprintf("Streaming ping mode failed due to an unrecoverable error: %v", err))
 			default:
 				// In auto mode, the worker should fall back to the ping loop
 				// and carry on. The user might find that interesting (especially if
 				// they are expecting streaming to work).
-				a.logger.Info(fmt.Sprintf("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err))
+				a.logger.InfoContext(ctx, fmt.Sprintf("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err))
 				// If the ping loop then has its own unrecoverable error, then
 				// *that* will terminate the worker. But the streaming loop shouldn't.
 				// So treat the error from the streaming loop as "business as usual".
@@ -470,7 +470,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	// Track a timestamp for the successful heartbeat for better errors
 	a.stats.lastHeartbeat = time.Now()
 
-	a.logger.Debug(fmt.Sprintf("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt))
+	a.logger.DebugContext(ctx, fmt.Sprintf("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt))
 	return nil
 }
 

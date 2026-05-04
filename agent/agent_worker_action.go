@@ -12,8 +12,8 @@ import (
 )
 
 func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, fromPingLoop, fromDebouncer <-chan actionMessage) error {
-	a.logger.Debug("[runActionLoop] Starting")
-	defer a.logger.Debug("[runActionLoop] Exiting")
+	a.logger.DebugContext(ctx, "[runActionLoop] Starting")
+	defer a.logger.DebugContext(ctx, "[runActionLoop] Exiting")
 
 	// Once this loop terminates, there's no point continuing the others,
 	// because nothing remains to execute their actions.
@@ -37,7 +37,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 	for {
 		// Did both sources of actions terminate? Then we're done too.
 		if fromPingLoop == nil && fromDebouncer == nil {
-			a.logger.Debug("[runActionLoop] All action sources channels are closed, exiting")
+			a.logger.DebugContext(ctx, "[runActionLoop] All action sources channels are closed, exiting")
 			return nil
 		}
 
@@ -49,7 +49,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 		//   (if DisconnectAfterIdleTimeout is configured & we're not paused)
 		// - disconnect after uptime
 		//   (if DisconnectAfterUptime is configured & we're not paused)
-		a.logger.Debug("[runActionLoop] Waiting for an action...")
+		a.logger.DebugContext(ctx, "[runActionLoop] Waiting for an action...")
 		setStat("⌚️ Waiting for an action...")
 		var msg actionMessage
 		select {
@@ -60,7 +60,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 				fromPingLoop = nil
 				continue
 			}
-			a.logger.Debug(fmt.Sprintf("[runActionLoop] Got action %q, jobID %q from ping loop", m.action, m.jobID))
+			a.logger.DebugContext(ctx, fmt.Sprintf("[runActionLoop] Got action %q, jobID %q from ping loop", m.action, m.jobID))
 			msg = m
 			// continue below
 
@@ -69,38 +69,38 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 				fromDebouncer = nil
 				continue
 			}
-			a.logger.Debug(fmt.Sprintf("[runActionLoop] Got action %q, jobID %q from streaming loop debouncer", m.action, m.jobID))
+			a.logger.DebugContext(ctx, fmt.Sprintf("[runActionLoop] Got action %q, jobID %q from streaming loop debouncer", m.action, m.jobID))
 			msg = m
 			// continue below
 
 		case <-ctx.Done():
-			a.logger.Debug("[runActionLoop] Stopping due to context cancel")
+			a.logger.DebugContext(ctx, "[runActionLoop] Stopping due to context cancel")
 			return ctx.Err()
 
 		case <-a.stop:
-			a.logger.Debug("[runActionLoop] Stopping due to agent stop")
+			a.logger.DebugContext(ctx, "[runActionLoop] Stopping due to agent stop")
 			return nil
 
 		case <-disconnectAfterUptime:
-			a.logger.Info(fmt.Sprintf("Agent has exceeded max uptime of %v", maxUptime))
+			a.logger.InfoContext(ctx, fmt.Sprintf("Agent has exceeded max uptime of %v", maxUptime))
 			if paused {
 				// Wait to be unpaused before exiting
-				a.logger.Info("Awaiting resume before disconnecting...")
+				a.logger.InfoContext(ctx, "Awaiting resume before disconnecting...")
 				exitWhenNotPaused = true
 				continue
 			}
-			a.logger.Info("Disconnecting...")
+			a.logger.InfoContext(ctx, "Disconnecting...")
 			return nil
 
 		case <-idleMon.Exiting():
 			// This should only happen if the agent isn't paused.
 			// (Pausedness is a kind of non-idleness.)
-			a.logger.Info(fmt.Sprintf("All agents have been idle for at least %v. Disconnecting...", idleMon.idleTimeout))
+			a.logger.InfoContext(ctx, fmt.Sprintf("All agents have been idle for at least %v. Disconnecting...", idleMon.idleTimeout))
 			return nil
 		}
 
 		// Let's handle the action!
-		a.logger.Debug(fmt.Sprintf("[runActionLoop] Performing action %q, jobID %q", msg.action, msg.jobID))
+		a.logger.DebugContext(ctx, fmt.Sprintf("[runActionLoop] Performing action %q, jobID %q", msg.action, msg.jobID))
 		setStat(fmt.Sprintf("🧑‍🍳 Performing %q action...", msg.action))
 		pingActions.WithLabelValues(msg.action).Inc()
 
@@ -109,7 +109,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 		// Otherwise, be sure to `close(msg.errCh)`!
 		switch msg.action {
 		case "disconnect":
-			a.logger.Debug("[runActionLoop] Stopping action loop due to disconnect action")
+			a.logger.DebugContext(ctx, "[runActionLoop] Stopping action loop due to disconnect action")
 			return nil
 
 		case "pause":
@@ -117,7 +117,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 			// paused agent is expected to remain alive and pinging for
 			// instructions.
 			// *This includes acquire-job and disconnect-after-idle-timeout.*
-			a.logger.Debug("[runActionLoop] Entering pause state")
+			a.logger.DebugContext(ctx, "[runActionLoop] Entering pause state")
 			paused = true
 			// For the purposes of deciding whether or not to exit,
 			// pausedness is a kind of non-idleness.
@@ -129,12 +129,12 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 
 		// At this point, action was neither "disconnect" nor "pause".
 		if exitWhenNotPaused {
-			a.logger.Debug("[runActionLoop] Stopping action loop because exitWhenNotPaused is true")
+			a.logger.DebugContext(ctx, "[runActionLoop] Stopping action loop because exitWhenNotPaused is true")
 			return nil
 		}
 		if paused {
 			// We're not paused any more! Log a helpful message.
-			a.logger.Info("Agent has resumed after being paused")
+			a.logger.InfoContext(ctx, "Agent has resumed after being paused")
 			paused = false
 		}
 
@@ -142,7 +142,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 		// so jobID should be empty. If not, complain.
 		if a.agentConfiguration.AcquireJob != "" {
 			if msg.jobID != "" {
-				a.logger.Error(fmt.Sprintf("Agent ping dispatched a job (id %q) but agent is in acquire-job mode! Ignoring the new job", msg.jobID))
+				a.logger.ErrorContext(ctx, fmt.Sprintf("Agent ping dispatched a job (id %q) but agent is in acquire-job mode! Ignoring the new job", msg.jobID))
 			}
 			// Disconnect after acquire-job.
 			return nil
@@ -152,9 +152,9 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 		// ignore-in-dispatches=true. So jobID should be empty. If not, complain.
 		if ranJob && a.agentConfiguration.DisconnectAfterJob {
 			if msg.jobID != "" {
-				a.logger.Error(fmt.Sprintf("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)! Ignoring the new job", msg.jobID))
+				a.logger.ErrorContext(ctx, fmt.Sprintf("Agent ping dispatched a job (id %q) but agent is in disconnect-after-job mode (and already ran a job)! Ignoring the new job", msg.jobID))
 			}
-			a.logger.Info("Job ran, and disconnect-after-job is enabled. Disconnecting...")
+			a.logger.InfoContext(ctx, "Job ran, and disconnect-after-job is enabled. Disconnecting...")
 			return nil
 		}
 
@@ -171,7 +171,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 
 		// Runs the job, only errors if something goes wrong
 		if err := a.AcceptAndRunJob(ctx, msg.jobID, idleMon); err != nil {
-			a.logger.Error(fmt.Sprintf("%v", err))
+			a.logger.ErrorContext(ctx, fmt.Sprintf("%v", err))
 			setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
 			msg.errCh <- err // so the ping loop can do something special
 			close(msg.errCh)
@@ -185,7 +185,7 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 
 // Accepts a job and runs it, only returns an error if something goes wrong
 func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon *idleMonitor) error {
-	a.logger.Info(fmt.Sprintf("Assigned job %s. Accepting...", jobID))
+	a.logger.InfoContext(ctx, fmt.Sprintf("Assigned job %s. Accepting...", jobID))
 
 	// An agent is busy during a job, and idle when the job is done.
 	idleMon.MarkBusy(a)

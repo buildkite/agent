@@ -1,0 +1,36 @@
+# golangci-lint configuration for buildkite-agent.
+#
+# At present this file only enables sloglint to police the post-slog
+# migration logging conventions. Other linters can be added over time.
+
+version: "2"
+
+linters:
+  enable:
+    - sloglint
+
+  settings:
+    sloglint:
+      # Forbid mixing slog.Attr and kv-positional arguments in the
+      # same call. Either style alone is fine.
+      no-mixed-args: true
+
+      # Forbid using the package-level slog.Default() / slog.Info() /
+      # etc. The agent plumbs a *slog.Logger explicitly.
+      no-global: all
+
+      # Where a context is in scope, require the *Context method
+      # variants (l.InfoContext, l.DebugContext, ...). This is a
+      # warning, not an error during the rollout — most existing call
+      # sites still use the plain variants.
+      context: scope
+
+  exclusions:
+    rules:
+      # The migration intentionally left existing call sites in the
+      # printf-with-fmt.Sprintf form for safety; sloglint's kv-only
+      # and static-msg rules would flag every one of them. They can be
+      # tightened up incrementally and these excludes can be removed
+      # once that work is done.
+      - linters: [sloglint]
+        text: "static messages should be used"

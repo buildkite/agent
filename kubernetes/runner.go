@@ -175,10 +175,10 @@ func (r *Runner) livenessCheck(ctx context.Context) {
 				// we can just terminate.
 				lhf := time.Since(client.LastHeardFrom)
 				if client.State == StateConnected && lhf > r.conf.ClientLostTimeout {
-					r.logger.Error(fmt.Sprintf("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf))
+					r.logger.ErrorContext(ctx, fmt.Sprintf("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf))
 					client.State = StateLost
 					if err := r.Terminate(); err != nil {
-						r.logger.Error(fmt.Sprintf("terminating lost kubernetes runner: %v", err))
+						r.logger.ErrorContext(ctx, fmt.Sprintf("terminating lost kubernetes runner: %v", err))
 					}
 				}
 				client.mu.Unlock()

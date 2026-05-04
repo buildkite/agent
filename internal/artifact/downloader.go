@@ -81,7 +81,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 		return errors.New("no artifacts found for downloading")
 	}
 
-	a.logger.Info(fmt.Sprintf("Found %d artifacts. Starting to download to: %s", artifactCount, destination))
+	a.logger.InfoContext(ctx, fmt.Sprintf("Found %d artifacts. Starting to download to: %s", artifactCount, destination))
 
 	s3Clients, err := a.generateS3Clients(ctx, artifacts)
 	if err != nil {

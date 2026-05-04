@@ -386,7 +386,7 @@ func HandleGlobalFlags(ctx context.Context, l *slog.Logger, cfg any) (context.Co
 	for _, name := range experimentNamesSlice {
 		nctx, state := experiments.EnableWithWarnings(ctx, l, name)
 		if state == experiments.StateKnown {
-			l.Debug(fmt.Sprintf("Enabled experiment %q", name))
+			l.DebugContext(ctx, fmt.Sprintf("Enabled experiment %q", name))
 		}
 		ctx = nctx
 	}
@@ -491,11 +491,11 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 		l = l.With("command", c.Command.FullName())
 	}
 
-	l.Debug("Loaded config")
+	l.DebugContext(ctx, "Loaded config")
 
 	// Now that we have a logger, log out the warnings that loading config generated
 	for _, warning := range warnings {
-		l.Warn(warning)
+		l.WarnContext(ctx, warning)
 	}
 
 	// Setup any global configuration options

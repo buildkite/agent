@@ -21,6 +21,32 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Remove deprecated CLI flags [#3834](https://github.com/buildkite/agent/pull/3834) (@moskyb)
 - Remove deprecated plugin env vars [#3852](https://github.com/buildkite/agent/pull/3852) (@DrJosh9000)
 
+### Logging changes (breaking)
+
+The agent's logging output has changed in several user-visible ways:
+
+- **JSON schema:** the timestamp key is now `time` (was `ts`).
+- **JSON values:** numbers, booleans and durations are now emitted as
+  JSON-typed values instead of strings.
+- **Level names:** the `NOTICE` and `FATAL` levels have been removed.
+  `--log-level notice` is no longer accepted; `--log-level fatal` is
+  accepted as an alias for `error`. The default level is now `info`.
+- **Output stream:** JSON logs are now written to **stderr** (was
+  stdout). If you redirect agent output to capture logs, update your
+  redirection accordingly.
+- **Color:** the agent now respects the
+  [`NO_COLOR`](https://no-color.org) environment variable.
+- **`agent=` / `hook=` prefixes:** these now appear as trailing
+  `key=value` pairs rather than inline before the message.
+- **Source location:** `--debug` now includes the source file:line for
+  each log line.
+
+Internally, the bespoke `logger` package has been replaced with the
+standard library's `log/slog` (rendered via
+[`tint`](https://github.com/lmittmann/tint) for human-readable text
+output). Embedders of the `core/` and `api/` packages should now pass
+a `*slog.Logger` rather than the (removed) `logger.Logger` interface.
+
 ## [v3.124.0](https://github.com/buildkite/agent/tree/v3.124.0) (2026-04-28)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.123.1...v3.124.0)
 

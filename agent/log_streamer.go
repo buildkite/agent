@@ -119,7 +119,7 @@ func (ls *LogStreamer) Process(ctx context.Context, output []byte) error {
 		// Have we exceeded the max size?
 		// (This check is also performed on the server side.)
 		if ls.bytes > ls.conf.MaxSizeBytes && !ls.warnedAboutSize {
-			ls.logger.Warn(fmt.Sprintf("The job log has reached %s in size, which has "+
+			ls.logger.WarnContext(ctx, fmt.Sprintf("The job log has reached %s in size, which has "+
 				"exceeded the maximum size (%s). Further logs may be dropped "+
 				"by the server, and a future version of the agent will stop "+
 				"sending logs at this point.",
@@ -176,9 +176,9 @@ func (ls *LogStreamer) Stop() {
 
 // The actual log streamer worker
 func (ls *LogStreamer) worker(ctx context.Context, id int) {
-	ls.logger.Debug(fmt.Sprintf("[LogStreamer/Worker#%d] Worker is starting...", id))
+	ls.logger.DebugContext(ctx, fmt.Sprintf("[LogStreamer/Worker#%d] Worker is starting...", id))
 
-	defer ls.logger.Debug(fmt.Sprintf("[LogStreamer/Worker#%d] Worker has shutdown", id))
+	defer ls.logger.DebugContext(ctx, fmt.Sprintf("[LogStreamer/Worker#%d] Worker has shutdown", id))
 
 	ctx, setStat, done := status.AddSimpleItem(ctx, fmt.Sprintf("Log Streamer Worker %d", id))
 	defer done()
@@ -206,7 +206,7 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 		if err != nil {
 			atomic.AddInt32(&ls.chunksFailedCount, 1)
 
-			ls.logger.Error(fmt.Sprintf("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Sequence))
+			ls.logger.ErrorContext(ctx, fmt.Sprintf("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Sequence))
 		}
 	}
 }

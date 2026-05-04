@@ -135,7 +135,7 @@ func (u *gsUploaderWork) Description() string {
 	return singleUnitDescription(u.artifact)
 }
 
-func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error) {
+func (u *gsUploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, error) {
 	permission := os.Getenv("BUILDKITE_GS_ACL")
 
 	// The dirtiest validation method ever...
@@ -149,10 +149,10 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 	}
 
 	if permission == "" {
-		u.logger.Debug(fmt.Sprintf("Uploading \"%s\" to bucket \"%s\" with default permission",
+		u.logger.DebugContext(ctx, fmt.Sprintf("Uploading \"%s\" to bucket \"%s\" with default permission",
 			u.artifactPath(u.artifact), u.BucketName))
 	} else {
-		u.logger.Debug(fmt.Sprintf("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
+		u.logger.DebugContext(ctx, fmt.Sprintf("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
 			u.artifactPath(u.artifact), u.BucketName, permission))
 	}
 	object := &storage.Object{
@@ -169,7 +169,7 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 		call = call.PredefinedAcl(permission)
 	}
 	if res, err := call.Media(file, googleapi.ContentType("")).Do(); err == nil {
-		u.logger.Debug(fmt.Sprintf("Created object %v at location %v\n\n", res.Name, res.SelfLink))
+		u.logger.DebugContext(ctx, fmt.Sprintf("Created object %v at location %v\n\n", res.Name, res.SelfLink))
 	} else {
 		return nil, fmt.Errorf("failed to PUT file %q: %w", u.artifactPath(u.artifact), err)
 	}

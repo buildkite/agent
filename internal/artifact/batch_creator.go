@@ -71,7 +71,7 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 				MultipartSupported: a.conf.AllowMultipart,
 			}
 
-			a.logger.Info(fmt.Sprintf("Creating (%d-%d)/%d artifacts", offset, offset+len(theseArtifacts), total))
+			a.logger.InfoContext(ctx, fmt.Sprintf("Creating (%d-%d)/%d artifacts", offset, offset+len(theseArtifacts), total))
 			offset += len(theseArtifacts)
 
 			timeout := a.conf.CreateArtifactsTimeout

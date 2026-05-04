@@ -60,7 +60,7 @@ func Save(ctx context.Context, l *slog.Logger, cfg Config) error {
 	}
 
 	if cacheClient == nil {
-		l.Info("No caches defined in the cache configuration file, nothing to save")
+		l.InfoContext(ctx, "No caches defined in the cache configuration file, nothing to save")
 		return nil
 	}
 
@@ -75,7 +75,7 @@ func Restore(ctx context.Context, l *slog.Logger, cfg Config) error {
 	}
 
 	if cacheClient == nil {
-		l.Info("No caches defined in the cache configuration file, nothing to restore")
+		l.InfoContext(ctx, "No caches defined in the cache configuration file, nothing to restore")
 		return nil
 	}
 

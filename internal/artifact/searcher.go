@@ -31,9 +31,9 @@ func NewSearcher(l *slog.Logger, ac APIClient, buildID string) *Searcher {
 
 func (a *Searcher) Search(ctx context.Context, query, scope string, includeRetriedJobs, includeDuplicates bool) ([]*api.Artifact, error) {
 	if scope == "" {
-		a.logger.Info(fmt.Sprintf("Searching for artifacts: \"%s\"", query))
+		a.logger.InfoContext(ctx, fmt.Sprintf("Searching for artifacts: \"%s\"", query))
 	} else {
-		a.logger.Info(fmt.Sprintf("Searching for artifacts: \"%s\" within step: \"%s\"", query, scope))
+		a.logger.InfoContext(ctx, fmt.Sprintf("Searching for artifacts: \"%s\" within step: \"%s\"", query, scope))
 	}
 
 	// Retry on transport errors, a failed search will return 0 artifacts

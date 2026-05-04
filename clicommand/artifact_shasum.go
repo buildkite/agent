@@ -119,7 +119,7 @@ func searchAndPrintShaSum(
 		return fmt.Errorf("multiple artifacts were found. try being more specific with the search or scope by step")
 	} else {
 		a := artifacts[0]
-		l.Debug(fmt.Sprintf("Artifact \"%s\" found", a.Path))
+		l.DebugContext(ctx, fmt.Sprintf("Artifact \"%s\" found", a.Path))
 
 		var sha string
 		if cfg.Sha256 {

@@ -53,7 +53,7 @@ type Client struct {
 // It doesn't interpret or run the job - the caller is responsible for that.
 // It contains a builtin timeout of 330 seconds and makes up to 7 attempts, backing off exponentially.
 func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error) {
-	c.Logger.Info(fmt.Sprintf("Attempting to acquire job %s...", jobID))
+	c.Logger.InfoContext(ctx, fmt.Sprintf("Attempting to acquire job %s...", jobID))
 
 	// Timeout the context to prevent the exponential backoff from growing too
 	// large if the job is in the waiting state.
@@ -162,7 +162,7 @@ func handleRetriableJobAcquisitionError(warning string, resp *api.Response, r *r
 // Connect connects the agent to the Buildkite Agent API, retrying up to 10 times with 5
 // seconds delay if it fails.
 func (c *Client) Connect(ctx context.Context) error {
-	c.Logger.Info("Connecting to Buildkite...")
+	c.Logger.InfoContext(ctx, "Connecting to Buildkite...")
 
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(10),
@@ -181,7 +181,7 @@ func (c *Client) Connect(ctx context.Context) error {
 // permanently disconnecting. Don't spend long retrying, because we want to
 // disconnect as fast as possible.
 func (c *Client) Disconnect(ctx context.Context) error {
-	c.Logger.Info("Disconnecting...")
+	c.Logger.InfoContext(ctx, "Disconnecting...")
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(4),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
@@ -195,13 +195,13 @@ func (c *Client) Disconnect(ctx context.Context) error {
 	})
 	if err != nil {
 		// none of the retries worked
-		c.Logger.Warn(fmt.Sprintf("There was an error sending the disconnect API call to Buildkite. "+
+		c.Logger.WarnContext(ctx, fmt.Sprintf("There was an error sending the disconnect API call to Buildkite. "+
 			"If this agent still appears online, you may have to manually stop it (%s)",
 			err),
 		)
 		return err
 	}
-	c.Logger.Info("Disconnected")
+	c.Logger.InfoContext(ctx, "Disconnected")
 	return nil
 }
 
@@ -214,7 +214,7 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 	job.SignalReason = exit.SignalReason
 	job.ChunksFailedCount = failedChunkCount
 
-	c.Logger.Debug(fmt.Sprintf("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
+	c.Logger.DebugContext(ctx, fmt.Sprintf("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
 		job.ExitStatus, job.Signal, job.SignalReason))
 
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
@@ -278,15 +278,15 @@ func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*a
 		return registered, err
 	}
 
-	c.Logger.Info(fmt.Sprintf("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
+	c.Logger.InfoContext(ctx, fmt.Sprintf("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
 		strings.Join(registered.Tags, ", ")))
 
-	c.Logger.Debug(fmt.Sprintf("Ping interval: %ds", registered.PingInterval))
-	c.Logger.Debug(fmt.Sprintf("Job status interval: %ds", registered.JobStatusInterval))
-	c.Logger.Debug(fmt.Sprintf("Heartbeat interval: %ds", registered.HeartbeatInterval))
+	c.Logger.DebugContext(ctx, fmt.Sprintf("Ping interval: %ds", registered.PingInterval))
+	c.Logger.DebugContext(ctx, fmt.Sprintf("Job status interval: %ds", registered.JobStatusInterval))
+	c.Logger.DebugContext(ctx, fmt.Sprintf("Heartbeat interval: %ds", registered.HeartbeatInterval))
 
 	if registered.Endpoint != "" {
-		c.Logger.Debug(fmt.Sprintf("Endpoint: %s", registered.Endpoint))
+		c.Logger.DebugContext(ctx, fmt.Sprintf("Endpoint: %s", registered.Endpoint))
 	}
 
 	return registered, nil

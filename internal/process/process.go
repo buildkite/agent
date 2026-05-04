@@ -151,7 +151,7 @@ func (p *Process) Run(ctx context.Context) error {
 	}
 	defer cleanup()
 
-	p.logger.Info(fmt.Sprintf("[Process] Process is running with PID: %d", p.pid()))
+	p.logger.InfoContext(ctx, fmt.Sprintf("[Process] Process is running with PID: %d", p.pid()))
 
 	// Wait until the process has finished. The returned error is nil if the
 	// command runs, has no problems copying stdin, stdout, and stderr, and
@@ -186,7 +186,7 @@ func (p *Process) start(ctx context.Context) (func(), error) {
 	}
 
 	if err := p.postStart(); err != nil {
-		p.logger.Error(fmt.Sprintf("[Process] postStart failed: %v", err))
+		p.logger.ErrorContext(ctx, fmt.Sprintf("[Process] postStart failed: %v", err))
 	}
 	// Signal waiting consumers in Started() by closing the started channel
 	close(p.started)
@@ -235,7 +235,7 @@ func (p *Process) setup(ctx context.Context) error {
 // to stdout. The cleanup function waits for the copy to finish and closes the
 // PTY handle.
 func (p *Process) startWithPTY(ctx context.Context) (func(), error) {
-	p.logger.Debug("[Process] Running with a PTY")
+	p.logger.DebugContext(ctx, "[Process] Running with a PTY")
 
 	// Commands like tput expect a TERM value for a PTY
 	p.command.Env = append(p.command.Env, "TERM="+termType)
@@ -250,7 +250,7 @@ func (p *Process) startWithPTY(ctx context.Context) (func(), error) {
 	afterPTYStartHook()
 
 	if rawPTY {
-		p.logger.Debug(fmt.Sprintf("[Process] Setting raw mode for PTY %s (fd:%d)", pty.Name(), pty.Fd()))
+		p.logger.DebugContext(ctx, fmt.Sprintf("[Process] Setting raw mode for PTY %s (fd:%d)", pty.Name(), pty.Fd()))
 	}
 
 	// Copy and close the PTY, if it exists.
@@ -260,11 +260,11 @@ func (p *Process) startWithPTY(ctx context.Context) (func(), error) {
 	return func() {
 		// Sometimes (in docker containers) io.Copy never seems to finish. This is a
 		// mega hack around it. If it doesn't finish after 10 seconds, just continue.
-		p.logger.Debug("[Process] Waiting for routines to finish")
+		p.logger.DebugContext(ctx, "[Process] Waiting for routines to finish")
 
 		select {
 		case <-time.After(10 * time.Second):
-			p.logger.Debug("[Process] Timed out waiting for PTY->stdout copy")
+			p.logger.DebugContext(ctx, "[Process] Timed out waiting for PTY->stdout copy")
 		case <-copyDone:
 			// it's done
 		}

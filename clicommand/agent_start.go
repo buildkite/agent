@@ -1417,7 +1417,7 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 	}
 
 	for sig := range signals {
-		ps.log.Debug(fmt.Sprintf("Received signal `%v`", sig))
+		ps.log.DebugContext(ctx, fmt.Sprintf("Received signal `%v`", sig))
 		setStatus(fmt.Sprintf("Received signal `%v`", sig))
 
 		switch sig {
@@ -1428,23 +1428,23 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 			interruptCount++
 			switch interruptCount {
 			case 1:
-				ps.log.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
+				ps.log.InfoContext(ctx, "Received CTRL-C, send again to forcefully kill the agent(s)")
 				ps.pool.StopGracefully()
 
 			case 2:
-				ps.log.Info(fmt.Sprintf("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod))
+				ps.log.InfoContext(ctx, fmt.Sprintf("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod))
 				if !ps.skipGraceful {
-					ps.log.Info("Press Ctrl-C one more time to exit immediately without disconnecting - note that agents will be considered lost!")
+					ps.log.InfoContext(ctx, "Press Ctrl-C one more time to exit immediately without disconnecting - note that agents will be considered lost!")
 				}
 				ungracefulStop()
 
 			case 3:
-				ps.log.Info("Exiting immediately with status 1")
+				ps.log.InfoContext(ctx, "Exiting immediately with status 1")
 				os.Exit(1)
 			}
 
 		default:
-			ps.log.Debug(fmt.Sprintf("Ignoring signal `%s`", sig.String()))
+			ps.log.DebugContext(ctx, fmt.Sprintf("Ignoring signal `%s`", sig.String()))
 		}
 	}
 }
@@ -1560,7 +1560,7 @@ func runAgentAPI(ctx context.Context, l *slog.Logger, socketsPath string) (func(
 	// Try to be the leader - no worries if this fails.
 	leaderPath := agentapi.LeaderPath(socketsPath)
 	if err := os.Symlink(path, leaderPath); err == nil {
-		l.Info("Agent API: This agent became leader")
+		l.InfoContext(ctx, "Agent API: This agent became leader")
 	}
 
 	// Whoever the leader is, ping them every so often as a health-check.
@@ -1568,7 +1568,7 @@ func runAgentAPI(ctx context.Context, l *slog.Logger, socketsPath string) (func(
 
 	return func() {
 		if err := svr.Shutdown(ctx); err != nil {
-			l.Warn(fmt.Sprintf("Agent API: error shutting down server: %v", err))
+			l.WarnContext(ctx, fmt.Sprintf("Agent API: error shutting down server: %v", err))
 		}
 		if d, err := os.Readlink(leaderPath); err == nil && d == path {
 			_ = os.Remove(leaderPath)
@@ -1602,11 +1602,11 @@ func leaderPinger(ctx context.Context, l *slog.Logger, path, leaderPath string) 
 
 	for range time.Tick(100 * time.Millisecond) {
 		if err := pingLeader(); err != nil {
-			l.Warn(fmt.Sprintf("Agent API: Leader ping failed, staging coup: %v", err))
-			l.Warn("Agent API: Leader state (locks) has been lost!")
+			l.WarnContext(ctx, fmt.Sprintf("Agent API: Leader ping failed, staging coup: %v", err))
+			l.WarnContext(ctx, "Agent API: Leader state (locks) has been lost!")
 			_ = os.Remove(leaderPath)
 			if err := os.Symlink(path, leaderPath); err != nil {
-				l.Warn(fmt.Sprintf("Agent API: Failed to become leader: %v", err))
+				l.WarnContext(ctx, fmt.Sprintf("Agent API: Failed to become leader: %v", err))
 			}
 		}
 	}

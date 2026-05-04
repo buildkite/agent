@@ -130,7 +130,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l *slog.Logger) error {
 	if cfg.Body != "" {
 		body = cfg.Body
 	} else if stdin.IsReadable() {
-		l.Info("Reading annotation body from STDIN")
+		l.InfoContext(ctx, "Reading annotation body from STDIN")
 
 		// Actually read the file from STDIN
 		stdin, err := io.ReadAll(os.Stdin)
@@ -148,7 +148,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l *slog.Logger) error {
 		return err
 	}
 	if redactedBody := redact.String(body, needles); redactedBody != body {
-		l.Warn("Annotation body contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret")
+		l.WarnContext(ctx, "Annotation body contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret")
 		body = redactedBody
 	}
 
@@ -190,7 +190,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l *slog.Logger) error {
 		return fmt.Errorf("failed to annotate build: %w", err)
 	}
 
-	l.Debug("Successfully annotated build")
+	l.DebugContext(ctx, "Successfully annotated build")
 
 	return nil
 }

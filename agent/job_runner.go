@@ -231,7 +231,7 @@ func NewJobRunner(ctx context.Context, l *slog.Logger, apiClient *api.Client, co
 		jobLogDir := ""
 		if conf.AgentConfiguration.JobLogPath != "" {
 			jobLogDir = conf.AgentConfiguration.JobLogPath
-			r.agentLogger.Debug(fmt.Sprintf("[JobRunner] Job Log Path: %s", jobLogDir))
+			r.agentLogger.DebugContext(ctx, fmt.Sprintf("[JobRunner] Job Log Path: %s", jobLogDir))
 		}
 		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
@@ -410,7 +410,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
 		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
 		if err != nil {
-			r.agentLogger.Error(fmt.Sprintf("Invalid BUILDKITE_PLUGINS: %v", err))
+			r.agentLogger.ErrorContext(ctx, fmt.Sprintf("Invalid BUILDKITE_PLUGINS: %v", err))
 		}
 		if string(filtered) == "" {
 			delete(env, "BUILDKITE_PLUGINS")
@@ -510,7 +510,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if len(r.conf.Job.Step.Secrets) > 0 {
 		secretsJSON, err := json.Marshal(r.conf.Job.Step.Secrets)
 		if err != nil {
-			r.agentLogger.Error(fmt.Sprintf("Failed to marshal secrets configuration: %v", err))
+			r.agentLogger.ErrorContext(ctx, fmt.Sprintf("Failed to marshal secrets configuration: %v", err))
 			return nil, err
 		}
 
@@ -677,7 +677,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 	// see documentation for BuildkiteMessageMax
 	if err := truncateEnv(r.agentLogger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
-		r.agentLogger.Warn(fmt.Sprintf("failed to truncate %s: %v", BuildkiteMessageName, err))
+		r.agentLogger.WarnContext(ctx, fmt.Sprintf("failed to truncate %s: %v", BuildkiteMessageName, err))
 		// attempt to continue anyway
 	}
 
@@ -732,12 +732,12 @@ type LogWriter struct {
 }
 
 func (w LogWriter) Write(bytes []byte) (int, error) {
-	w.l.Info(fmt.Sprintf("%s", bytes))
+	w.l.Info(string(bytes))
 	return len(bytes), nil
 }
 
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
-	r.agentLogger.Info(fmt.Sprintf("Running pre-bootstrap hook %q", hook))
+	r.agentLogger.InfoContext(ctx, fmt.Sprintf("Running pre-bootstrap hook %q", hook))
 
 	sh, err := shell.New(
 		shell.WithStdout(LogWriter{l: r.agentLogger}),
@@ -764,14 +764,14 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 
 	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
 	if err != nil {
-		r.agentLogger.Error(fmt.Sprintf("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err))
+		r.agentLogger.ErrorContext(ctx, fmt.Sprintf("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err))
 		return false, err
 	}
 	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(environ)); err != nil {
-		r.agentLogger.Error(fmt.Sprintf("Finished pre-bootstrap hook %q: job rejected: %v", hook, err))
+		r.agentLogger.ErrorContext(ctx, fmt.Sprintf("Finished pre-bootstrap hook %q: job rejected: %v", hook, err))
 		return false, err
 	}
-	r.agentLogger.Info(fmt.Sprintf("Finished pre-bootstrap hook %q: job accepted", hook))
+	r.agentLogger.InfoContext(ctx, fmt.Sprintf("Finished pre-bootstrap hook %q: job accepted", hook))
 	return true, nil
 }
 
@@ -783,7 +783,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 	defer done()
 	setStat("Starting...")
 
-	defer r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
+	defer r.agentLogger.DebugContext(ctx, "[JobRunner] Routine that refreshes the job has finished")
 
 	select {
 	case <-r.process.Started():
@@ -828,19 +828,19 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 		jobState, response, err := r.apiClient.GetJobState(ctx, r.conf.Job.ID)
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
-				r.agentLogger.Error(fmt.Sprintf("Invalid access token, cancelling job %s", r.conf.Job.ID))
+				r.agentLogger.ErrorContext(ctx, fmt.Sprintf("Invalid access token, cancelling job %s", r.conf.Job.ID))
 				if err := r.Cancel(CancelReasonInvalidToken); err != nil {
-					r.agentLogger.Error(fmt.Sprintf("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err))
+					r.agentLogger.ErrorContext(ctx, fmt.Sprintf("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err))
 				}
 			} else {
 				// We don't really care if it fails, we'll just try again soon anyway
-				r.agentLogger.Warn(fmt.Sprintf("Problem with getting job state %s (%s)", r.conf.Job.ID, err))
+				r.agentLogger.WarnContext(ctx, fmt.Sprintf("Problem with getting job state %s (%s)", r.conf.Job.ID, err))
 			}
 			continue // the loop
 		}
 		if jobState.State == "canceling" || jobState.State == "canceled" {
 			if err := r.Cancel(CancelReasonJobState); err != nil {
-				r.agentLogger.Error(fmt.Sprintf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err))
+				r.agentLogger.ErrorContext(ctx, fmt.Sprintf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err))
 			}
 		}
 	}
@@ -864,7 +864,7 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 		return err
 	})
 	if err != nil {
-		r.agentLogger.Error(fmt.Sprintf("Ultimately unable to upload header times: %v", err))
+		r.agentLogger.ErrorContext(ctx, fmt.Sprintf("Ultimately unable to upload header times: %v", err))
 	}
 }
 

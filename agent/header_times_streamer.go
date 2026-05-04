@@ -73,7 +73,7 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 
 	defer close(h.streamingDoneCh)
 
-	h.logger.Debug("[HeaderTimesStreamer] Streamer has started...")
+	h.logger.DebugContext(ctx, "[HeaderTimesStreamer] Streamer has started...")
 
 	nextIndex := 0
 	chanOpen := true
@@ -99,7 +99,7 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 				break batchLoop
 
 			case <-ctx.Done(): // pack it all up
-				h.logger.Debug(fmt.Sprintf("[HeaderTimesStreamer] %v", ctx.Err()))
+				h.logger.DebugContext(ctx, fmt.Sprintf("[HeaderTimesStreamer] %v", ctx.Err()))
 				return
 			}
 		}
@@ -120,13 +120,13 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 		// Call our callback with the times for upload
 		setStatus(fmt.Sprintf("📡 Uploading %d header times", len(times)))
 
-		h.logger.Debug(fmt.Sprintf("[HeaderTimesStreamer] Uploading header times %d..%d", startIdx, nextIndex-1))
+		h.logger.DebugContext(ctx, fmt.Sprintf("[HeaderTimesStreamer] Uploading header times %d..%d", startIdx, nextIndex-1))
 		h.uploadCallback(ctx, startIdx, nextIndex, payload)
-		h.logger.Debug(fmt.Sprintf("[HeaderTimesStreamer] Finished uploading header times %d..%d", startIdx, nextIndex-1))
+		h.logger.DebugContext(ctx, fmt.Sprintf("[HeaderTimesStreamer] Finished uploading header times %d..%d", startIdx, nextIndex-1))
 	}
 
 	setStatus("👋 Finished!")
-	h.logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
+	h.logger.DebugContext(ctx, "[HeaderTimesStreamer] Streamer has finished...")
 }
 
 // Scan takes a line of log output and tracks a time if it's a header.
