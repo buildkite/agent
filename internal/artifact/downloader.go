@@ -36,6 +36,9 @@ type DownloaderConfig struct {
 	DebugHTTP    bool
 	TraceHTTP    bool
 	DisableHTTP2 bool
+
+	// Whether to allow multipart downloads to the custom s3 bucket
+	AllowS3Multipart bool
 }
 
 type Downloader struct {
@@ -213,13 +216,15 @@ func (a *Downloader) createDownloader(artifact *api.Artifact, path, destination 
 	case strings.HasPrefix(artifact.UploadDestination, "s3://"):
 		bucketName, _ := ParseS3Destination(artifact.UploadDestination)
 		return NewS3Downloader(a.logger, S3DownloaderConfig{
-			S3Client:    s3Clients[bucketName],
-			Path:        path,
-			S3Path:      artifact.UploadDestination,
-			Destination: destination,
-			Retries:     5,
-			DebugHTTP:   a.conf.DebugHTTP,
-			TraceHTTP:   a.conf.TraceHTTP,
+			S3Client:         s3Clients[bucketName],
+			Path:             path,
+			S3Path:           artifact.UploadDestination,
+			Destination:      destination,
+			Retries:          5,
+			DebugHTTP:        a.conf.DebugHTTP,
+			TraceHTTP:        a.conf.TraceHTTP,
+			ExpectedSHA256:   artifact.Sha256Sum,
+			AllowS3Multipart: a.conf.AllowS3Multipart,
 		})
 
 	case strings.HasPrefix(artifact.UploadDestination, "gs://"):
