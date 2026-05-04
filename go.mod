@@ -43,6 +43,7 @@ require (
 	github.com/gowebpki/jcs v1.0.1
 	github.com/klauspost/compress v1.18.5
 	github.com/lestrrat-go/jwx/v2 v2.1.6
+	github.com/lmittmann/tint v1.1.3
 	github.com/oleiade/reflections v1.1.0
 	github.com/pborman/uuid v1.2.1
 	github.com/prometheus/client_golang v1.23.2
