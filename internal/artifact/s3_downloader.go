@@ -138,7 +138,7 @@ func (d S3Downloader) startMultipart(ctx context.Context) error {
 	defer os.Remove(temp.Name()) //nolint:errcheck // Best-effort cleanup.
 	defer temp.Close()           //nolint:errcheck // Primary Close checked below.
 
-	d.logger.Debug("Multipart downloading s3://%s/%s to %s", d.BucketName(), d.BucketFileLocation(), targetPath)
+	d.logger.Debugf("Multipart downloading s3://%s/%s to %s", d.BucketName(), d.BucketFileLocation(), targetPath)
 
 	tmClient := transfermanager.New(d.conf.S3Client, func(o *transfermanager.Options) {
 		o.PartSizeBytes = s3MultipartDownloadPartSize
@@ -187,7 +187,7 @@ func (d S3Downloader) startMultipart(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target: %w", err)
 	}
 
-	d.logger.Info("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
+	d.logger.Infof("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
 	return nil
 }
 
