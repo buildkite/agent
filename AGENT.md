@@ -28,7 +28,7 @@ Go CLI application with main packages:
 - Formatting with `gofumpt` in extra mode: `go tool gofumpt -extra -w .`
 - Struct-based configuration patterns (e.g., `AgentWorkerConfig`, `JobRunnerConfig`)
 - Context-aware functions: `func Name(ctx context.Context, ...)`
-- Import organization: stdlib, external deps, internal packages
+- Import organization: stdlib, then everything else (gofumpt groups all non-stdlib imports together)
 - Error handling: explicit errors, wrapped with context
 - Naming: PascalCase for exported, camelCase for private, ALL_CAPS for constants
 - Interface types end with -er suffix where appropriate
