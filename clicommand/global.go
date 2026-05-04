@@ -542,28 +542,45 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 	// Setup any global configuration options
 	ctx, done = HandleGlobalFlags(ctx, l, cfg)
 
-	// If this process is a subcommand running inside a traced job, initialize
-	// a TracerProvider so spans emitted here appear under the parent job's trace.
-	if os.Getenv("BUILDKITE_TRACING_BACKEND") == tracetools.BackendOpenTelemetry {
-		if traceParent := os.Getenv("TRACEPARENT"); traceParent != "" {
-			serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
-			traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, nil)
-			if err != nil {
-				l.Warnf("Failed to initialize tracing: %v", err)
-			} else {
-				carrier := propagation.MapCarrier{"traceparent": traceParent}
-				if traceState := os.Getenv("TRACESTATE"); traceState != "" {
-					carrier["tracestate"] = traceState
-				}
+	// When OpenTelemetry tracing is enabled, always initialize a TracerProvider
+	// so that every command (bootstrap or standalone subcommand) can emit spans.
+	tracingBackend := os.Getenv("BUILDKITE_TRACING_BACKEND")
+	if tb, err := reflections.GetField(cfg, "TracingBackend"); err == nil {
+		if tbStr, ok := tb.(string); ok && tbStr != "" {
+			tracingBackend = tbStr
+		}
+	}
+
+	if tracingBackend == tracetools.BackendOpenTelemetry {
+		serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
+		if sn, err := reflections.GetField(cfg, "TracingServiceName"); err == nil {
+			if snStr, ok := sn.(string); ok && snStr != "" {
+				serviceName = snStr
+			}
+		}
+		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, nil)
+		if err != nil {
+			l.Warnf("Failed to initialize tracing: %v", err)
+		} else {
+			// Extract any incoming trace context so spans created in this process
+			// are linked to the parent job's trace.
+			carrier := propagation.MapCarrier{}
+			if traceParent := os.Getenv("TRACEPARENT"); traceParent != "" {
+				carrier["traceparent"] = traceParent
+			}
+			if traceState := os.Getenv("TRACESTATE"); traceState != "" {
+				carrier["tracestate"] = traceState
+			}
+			if len(carrier) > 0 {
 				ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
-				prevDone := done
-				done = func() {
-					prevDone()
-					flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					defer cancel()
-					_ = traceProvider.ForceFlush(flushCtx)
-					_ = traceProvider.Shutdown(flushCtx)
-				}
+			}
+			prevDone := done
+			done = func() {
+				prevDone()
+				flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = traceProvider.ForceFlush(flushCtx)
+				_ = traceProvider.Shutdown(flushCtx)
 			}
 		}
 	}

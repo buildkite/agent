@@ -127,7 +127,7 @@ func (e *Executor) otRootSpanName() string {
 	return base + "job"
 }
 
-// initOTelTracerProvider creates and globally registers an OpenTelemetry TracerProvider
+// InitOTelTracerProvider creates and globally registers an OpenTelemetry TracerProvider
 // and text map propagator. Caller must call ForceFlush and Shutdown
 // on the returned provider before the process exits.
 func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs []attribute.KeyValue) (*sdktrace.TracerProvider, error) {
@@ -184,32 +184,18 @@ func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (tracetools.Sp
 		e.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", k)
 	}
 
-	tracerProvider, err := InitOTelTracerProvider(ctx, e.TracingServiceName, extras)
-	if err != nil {
-		e.shell.Errorf("Error initialising OpenTelemetry tracing: %s. Disabling tracing.", err)
-		return &tracetools.NoopSpan{}, ctx, noopStopper
-	}
-
-	tracer := tracerProvider.Tracer(
+	tracer := otel.GetTracerProvider().Tracer(
 		"buildkite-agent",
 		trace.WithInstrumentationVersion(version.Version()),
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
 	ctx = e.contextWithTraceparentIfEnabled(ctx)
+	spanAttrs := append(extras, attribute.String("analytics.event", "true"))
 	ctx, span := tracer.Start(ctx, e.otRootSpanName(),
-		trace.WithAttributes(
-			attribute.String("analytics.event", "true"),
-		),
+		trace.WithAttributes(spanAttrs...),
 	)
-
-	stop := func() {
-		ctx := context.Background()
-		_ = tracerProvider.ForceFlush(ctx)
-		_ = tracerProvider.Shutdown(ctx)
-	}
-
-	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
+	return tracetools.NewOpenTelemetrySpan(span), ctx, noopStopper
 }
 
 // accepting traceparent from Buildkite control plane is an opt-in feature as its
