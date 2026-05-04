@@ -105,11 +105,11 @@ func cancelStep(ctx context.Context, cfg StepCancelConfig, l logger.Logger) erro
 			return err
 		}
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return err
 		}
 
-		l.Info("Successfully cancelled step: %s", stepCancelResponse.UUID)
+		l.Infof("Successfully cancelled step: %s", stepCancelResponse.UUID)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to cancel step: %w", err)

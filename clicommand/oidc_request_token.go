@@ -139,15 +139,15 @@ var OIDCRequestTokenCommand = cli.Command{
 				return nil, err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			}
 			return token, err
 		})
 		if err != nil {
 			if len(cfg.Audience) > 0 {
-				l.Error("Could not obtain OIDC token for audience %s", cfg.Audience)
+				l.Errorf("Could not obtain OIDC token for audience %s", cfg.Audience)
 			} else {
-				l.Error("Could not obtain OIDC token for default audience")
+				l.Errorf("Could not obtain OIDC token for default audience")
 			}
 			return err
 		}

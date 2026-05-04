@@ -84,7 +84,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 	if conf.TagsFromK8s {
 		k8sTags, err := t.k8s()
 		if err != nil {
-			l.Warn("Could not fetch tags from k8s: %s", err)
+			l.Warnf("Could not fetch tags from k8s: %s", err)
 		}
 		for tag, value := range k8sTags {
 			tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
@@ -95,7 +95,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 	if conf.TagsFromHost {
 		hostname, err := os.Hostname()
 		if err != nil {
-			l.Warn("Failed to find hostname: %v", err)
+			l.Warnf("Failed to find hostname: %v", err)
 		}
 
 		tags = append(tags,
@@ -112,7 +112,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 	// Attempt to add the default EC2 meta-data tags
 	if conf.TagsFromEC2MetaData {
-		l.Info("Fetching EC2 meta-data...")
+		l.Infof("Fetching EC2 meta-data...")
 
 		err := roko.NewRetrier(
 			roko.WithMaxAttempts(5),
@@ -121,9 +121,9 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			ec2Tags, err := t.ec2MetaDataDefault()
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			} else {
-				l.Info("Successfully fetched EC2 meta-data")
+				l.Infof("Successfully fetched EC2 meta-data")
 				for tag, value := range ec2Tags {
 					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
 				}
@@ -136,7 +136,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch EC2 meta-data: %w", err)
 			}
-			l.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
 		}
 	}
 
@@ -144,7 +144,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 	if len(conf.TagsFromEC2MetaDataPaths) > 0 {
 		paths, err := parseTagValuePathPairs(conf.TagsFromEC2MetaDataPaths)
 		if err != nil {
-			l.Error(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
 		}
 
 		ec2Tags, err := t.ec2MetaDataPaths(paths)
@@ -152,7 +152,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch EC2 meta-data from paths: %w", err)
 			}
-			l.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
 		} else {
 			for tag, value := range ec2Tags {
 				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
@@ -162,7 +162,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 	// Attempt to add the EC2 tags
 	if conf.TagsFromEC2Tags {
-		l.Info("Fetching EC2 tags...")
+		l.Infof("Fetching EC2 tags...")
 
 		err := roko.NewRetrier(
 			roko.WithMaxAttempts(5),
@@ -176,9 +176,9 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 				err = errors.New("EC2 tags are empty")
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			} else {
-				l.Info("Successfully fetched EC2 tags")
+				l.Infof("Successfully fetched EC2 tags")
 				for tag, value := range ec2Tags {
 					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
 				}
@@ -190,13 +190,13 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch EC2 tags: %w", err)
 			}
-			l.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
 		}
 	}
 
 	// Attempt to add the default ECS meta-data tags
 	if conf.TagsFromECSMetaData {
-		l.Info("Fetching ECS meta-data...")
+		l.Infof("Fetching ECS meta-data...")
 
 		err := roko.NewRetrier(
 			roko.WithMaxAttempts(5),
@@ -205,9 +205,9 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 		).Do(func(r *roko.Retrier) error {
 			ecsTags, err := t.ecsMetaDataDefault()
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			} else {
-				l.Info("Successfully fetched ECS meta-data")
+				l.Infof("Successfully fetched ECS meta-data")
 				for tag, value := range ecsTags {
 					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
 				}
@@ -220,13 +220,13 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch ECS meta-data: %w", err)
 			}
-			l.Error(fmt.Sprintf("Failed to fetch ECS meta-data: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Failed to fetch ECS meta-data: %s", err.Error()))
 		}
 	}
 
 	// Attempt to add the default GCP meta-data tags
 	if conf.TagsFromGCPMetaData {
-		l.Info("Fetching GCP meta-data...")
+		l.Infof("Fetching GCP meta-data...")
 
 		err := roko.NewRetrier(
 			roko.WithMaxAttempts(5),
@@ -236,7 +236,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			gcpTags, err := t.gcpMetaDataDefault()
 			if err != nil {
 				// Don't blow up if we can't find them, just show a nasty error.
-				l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+				l.Errorf(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
 				return err
 			}
 
@@ -250,7 +250,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch GCP meta-data: %w", err)
 			}
-			l.Error(fmt.Sprintf("Failed to fetch GCP meta-data: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Failed to fetch GCP meta-data: %s", err.Error()))
 		}
 	}
 
@@ -258,7 +258,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 	if len(conf.TagsFromGCPMetaDataPaths) > 0 {
 		paths, err := parseTagValuePathPairs(conf.TagsFromGCPMetaDataPaths)
 		if err != nil {
-			l.Error(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
 		}
 
 		gcpTags, err := t.gcpMetaDataPaths(paths)
@@ -266,7 +266,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch GCP meta-data from paths: %w", err)
 			}
-			l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
 		} else {
 			for tag, value := range gcpTags {
 				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
@@ -276,7 +276,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 
 	// Attempt to add the Google Compute instance labels
 	if conf.TagsFromGCPLabels {
-		l.Info("Fetching GCP instance labels...")
+		l.Infof("Fetching GCP instance labels...")
 		err := roko.NewRetrier(
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(conf.WaitForGCPLabelsTimeout/5)),
@@ -287,9 +287,9 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 				err = errors.New("GCP instance labels are empty")
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			} else {
-				l.Info("Successfully fetched GCP instance labels")
+				l.Infof("Successfully fetched GCP instance labels")
 				for label, value := range labels {
 					tags = append(tags, fmt.Sprintf("%s=%s", label, value))
 				}
@@ -301,7 +301,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch GCP instance labels: %w", err)
 			}
-			l.Error(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))
+			l.Errorf(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))
 		}
 	}
 

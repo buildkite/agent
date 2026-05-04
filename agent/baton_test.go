@@ -38,6 +38,6 @@ func TestBaton_NoDroppedBatonDeadlock(t *testing.T) {
 	case <-done:
 		// It probably doesn't deadlock that way
 	case <-time.After(10 * time.Second):
-		t.Error("Repeated baton.Acquire/Release failed to progress, possible deadlock")
+		t.Errorf("Repeated baton.Acquire/Release failed to progress, possible deadlock")
 	}
 }

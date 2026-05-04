@@ -16,7 +16,7 @@ func (s *Server) router(log logger.Logger) chi.Router {
 	r := chi.NewRouter()
 	r.Use(
 		// Agent API is quite chatty, so only log at Debug level.
-		socket.LoggerMiddleware("Agent API", log.Debug),
+		socket.LoggerMiddleware("Agent API", log.Debugf),
 		middleware.Recoverer,
 		// All responses are in JSON.
 		socket.HeadersMiddleware(http.Header{"Content-Type": []string{"application/json"}}),
@@ -34,7 +34,7 @@ func pingHandler(log logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := &PingResponse{Now: time.Now()}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Error("Agent API: couldn't encode response body: %v", err)
+			log.Errorf("Agent API: couldn't encode response body: %v", err)
 		}
 	}
 }

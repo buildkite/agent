@@ -92,12 +92,12 @@ func FetchSecrets(ctx context.Context, l logger.Logger, client APIClient, jobID 
 				secret, resp, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: key, JobID: jobID})
 				if err != nil {
 					if resp != nil && api.IsRetryableStatus(resp) {
-						l.Warn("Retrying secret %q fetch after retryable HTTP status %d (%s)", key, resp.StatusCode, r)
+						l.Warnf("Retrying secret %q fetch after retryable HTTP status %d (%s)", key, resp.StatusCode, r)
 						return nil, err
 					}
 
 					if api.IsRetryableError(err) {
-						l.Warn("Retrying secret %q fetch after retryable error: %v (%s)", key, err, r)
+						l.Warnf("Retrying secret %q fetch after retryable error: %v (%s)", key, err, r)
 						return nil, err
 					}
 

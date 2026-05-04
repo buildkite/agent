@@ -92,7 +92,7 @@ var StepGetCommand = cli.Command{
 				return stepExportResponse, err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			}
 			return stepExportResponse, err
 		})

@@ -111,7 +111,7 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 			secretsReader = bufio.NewReader(secretsFile)
 		}
 
-		l.Info("Reading secrets from %s for redaction", fileName)
+		l.Infof("Reading secrets from %s for redaction", fileName)
 
 		secrets, err := ParseSecrets(l, cfg, secretsReader)
 		if err != nil {

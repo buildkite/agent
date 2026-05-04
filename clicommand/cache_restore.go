@@ -80,7 +80,7 @@ var CacheRestoreCommand = cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")
 		defer span.End()
 
-		l.Info("Cache restore command executed")
+		l.Infof("Cache restore command executed")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 

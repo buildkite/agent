@@ -74,7 +74,7 @@ var CacheSaveCommand = cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-save")
 		defer span.End()
 
-		l.Info("Cache save command executed")
+		l.Infof("Cache save command executed")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 

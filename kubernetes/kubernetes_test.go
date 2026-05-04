@@ -50,7 +50,7 @@ func TestOrderedClients(t *testing.T) {
 	case <-runner.Done():
 		break
 	default:
-		t.Fatal("runner should be done when all clients have exited")
+		t.Fatalf("runner should be done when all clients have exited")
 	}
 }
 

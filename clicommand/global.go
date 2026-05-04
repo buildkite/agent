@@ -371,7 +371,7 @@ func CreateLogger(cfg any) logger.Logger {
 
 	err := handleLogLevelFlag(l, cfg)
 	if err != nil {
-		l.Warn("Error when setting log level: %v. Defaulting log level to NOTICE", err)
+		l.Warnf("Error when setting log level: %v. Defaulting log level to NOTICE", err)
 	}
 
 	// Enable debugging if a Debug option is present
@@ -407,7 +407,7 @@ func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.C
 	for _, name := range experimentNamesSlice {
 		nctx, state := experiments.EnableWithWarnings(ctx, l, name)
 		if state == experiments.StateKnown {
-			l.Debug("Enabled experiment %q", name)
+			l.Debugf("Enabled experiment %q", name)
 		}
 		ctx = nctx
 	}
@@ -532,11 +532,11 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 		l = l.WithFields(logger.StringField("command", c.Command.FullName()))
 	}
 
-	l.Debug("Loaded config")
+	l.Debugf("Loaded config")
 
 	// Now that we have a logger, log out the warnings that loading config generated
 	for _, warning := range warnings {
-		l.Warn("%s", warning)
+		l.Warnf("%s", warning)
 	}
 
 	// Setup any global configuration options
@@ -549,7 +549,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 			serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
 			traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, nil)
 			if err != nil {
-				l.Warn("Failed to initialize tracing: %v", err)
+				l.Warnf("Failed to initialize tracing: %v", err)
 			} else {
 				carrier := propagation.MapCarrier{"traceparent": traceParent}
 				if traceState := os.Getenv("TRACESTATE"); traceState != "" {

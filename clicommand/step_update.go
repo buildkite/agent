@@ -88,7 +88,7 @@ var StepUpdateCommand = cli.Command{
 
 		// Read the value from STDIN if argument omitted entirely
 		if len(c.Args()) < 2 {
-			l.Info("Reading value from STDIN")
+			l.Infof("Reading value from STDIN")
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
@@ -106,7 +106,7 @@ var StepUpdateCommand = cli.Command{
 			return err
 		}
 		if redactedValue := redact.String(cfg.Value, needles); redactedValue != cfg.Value {
-			l.Warn("New value for step %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.StepOrKey, cfg.Attribute)
+			l.Warnf("New value for step %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.StepOrKey, cfg.Attribute)
 			cfg.Value = redactedValue
 		}
 
@@ -134,7 +134,7 @@ var StepUpdateCommand = cli.Command{
 				return err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 				return err
 			}
 			return nil

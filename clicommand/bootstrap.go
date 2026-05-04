@@ -508,7 +508,7 @@ var BootstrapCommand = cli.Command{
 
 			// Cancel the bootstrap
 			if err := bootstrap.Cancel(); err != nil {
-				l.Debug("Failed to cancel bootstrap: %v", err)
+				l.Debugf("Failed to cancel bootstrap: %v", err)
 			}
 
 			// Track the state and signal used
@@ -536,7 +536,7 @@ var BootstrapCommand = cli.Command{
 				return &SilentExitError{code: 131} // 128 + 3 (SIGQUIT).
 			}
 			if err := signalSelf(l, received); err != nil {
-				l.Error("Failed to signal self: %v", err)
+				l.Errorf("Failed to signal self: %v", err)
 			}
 		}
 
@@ -550,7 +550,7 @@ func signalSelf(l logger.Logger, sig os.Signal) error {
 		return fmt.Errorf("failed to find current process: %w", err)
 	}
 
-	l.Debug("Terminating bootstrap after cancellation with %v", sig)
+	l.Debugf("Terminating bootstrap after cancellation with %v", sig)
 	err = p.Signal(sig)
 	if err != nil {
 		return fmt.Errorf("failed to signal self: %v", err)

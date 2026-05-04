@@ -9,9 +9,9 @@ import (
 
 func TestBuffer(t *testing.T) {
 	l := logger.NewBuffer()
-	l.Info("hello %s", "world")
+	l.Infof("hello %s", "world")
 	func(x logger.Logger) {
-		x.Debug("foo bar")
+		x.Debugf("foo bar")
 	}(l)
 	if diff := cmp.Diff(l.Messages, []string{
 		"[info] hello world",
