@@ -70,6 +70,7 @@ type BootstrapConfig struct {
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
 	SkipCheckout                 bool     `cli:"skip-checkout"`
+	GitCheckoutTimeout           int      `cli:"git-checkout-timeout"`
 	GitSkipFetchExistingCommits  bool     `cli:"git-skip-fetch-existing-commits"`
 	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
@@ -246,6 +247,7 @@ var BootstrapCommand = cli.Command{
 		GitMirrorsLockTimeoutFlag,
 		GitMirrorsSkipUpdateFlag,
 		GitSubmoduleCloneConfigFlag,
+		GitCheckoutTimeoutFlag,
 		GitSkipFetchExistingCommitsFlag,
 		CheckoutAttemptsFlag,
 
@@ -430,6 +432,7 @@ var BootstrapCommand = cli.Command{
 			SignalGracePeriod:            signalGracePeriod,
 			CleanCheckout:                cfg.CleanCheckout,
 			SkipCheckout:                 cfg.SkipCheckout,
+			GitCheckoutTimeout:           cfg.GitCheckoutTimeout,
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,

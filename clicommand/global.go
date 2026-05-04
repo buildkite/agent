@@ -270,6 +270,13 @@ var (
 		EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 	}
 
+	GitCheckoutTimeoutFlag = cli.IntFlag{
+		Name:   "git-checkout-timeout",
+		Value:  0,
+		Usage:  "Seconds to allow for the entire git checkout phase (0 means no timeout)",
+		EnvVar: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+	}
+
 	GitSkipFetchExistingCommitsFlag = cli.BoolFlag{
 		Name:   "git-skip-fetch-existing-commits",
 		Usage:  "Skip git fetch if the commit already exists in the local git directory (default: false)",
