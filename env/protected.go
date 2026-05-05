@@ -51,6 +51,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_AGENT_ACCESS_TOKEN":              {},
 	"BUILDKITE_AGENT_DEBUG":                     {},
 	"BUILDKITE_AGENT_ENDPOINT":                  {},
+	"BUILDKITE_AGENT_JOB_TIMEOUT_FILE":          {},
 	"BUILDKITE_AGENT_PID":                       {},
 	"BUILDKITE_ARTIFACT_PATHS":                  {mutableFromWithinJob: true},
 	"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION":     {mutableFromWithinJob: true},
