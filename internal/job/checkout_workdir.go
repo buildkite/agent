@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/tracetools"
 )
 
 // prepareCheckoutWorkdir reconciles an existing checkout or clones a fresh one.
@@ -95,12 +96,12 @@ func (e *Executor) prepareCheckoutWorkdir(
 	if mirrorDir != "" {
 		mirrorMode = e.GitMirrorCheckoutMode
 	}
-	cloneSpan.AddAttributes(map[string]string{
+	tracetools.AddAttributes(cloneSpan, map[string]string{
 		"git.mirror_mode":     mirrorMode,
 		"git.sparse":          strconv.FormatBool(sparse.active()),
 		"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
 	})
-	defer func() { cloneSpan.FinishWithError(retErr) }()
+	defer func() { tracetools.FinishWithError(cloneSpan, retErr) }()
 
 	cloneCheckout := func(
 		gitFlags []string,
