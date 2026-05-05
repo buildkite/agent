@@ -24,10 +24,8 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/shellscript"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
-	"github.com/opentracing/opentracing-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -81,9 +79,6 @@ type Shell struct {
 	// Defaults to [os.Stdout].
 	stdout io.Writer
 
-	// How to encode trace contexts.
-	traceContextCodec tracetools.Codec
-
 	// Current working directory that shell commands get executed in
 	wd string
 }
@@ -107,14 +102,9 @@ func WithSignalGracePeriod(d time.Duration) NewShellOpt {
 	return func(s *Shell) { s.signalGracePeriod = d }
 }
 
-func WithTraceContextCodec(c tracetools.Codec) NewShellOpt {
-	return func(s *Shell) { s.traceContextCodec = c }
-}
-
 // New returns a new Shell. The default stdout is [os.Stdout], the default logger
 // writes to [os.Stderr], the initial working directory is the result of calling
-// [os.Getwd], the default environment variable set is read from [os.Environ],
-// and the default trace context encoding is Gob.
+// [os.Getwd], and the default environment variable set is read from [os.Environ].
 func New(opts ...NewShellOpt) (*Shell, error) {
 	// Start with an empty shell.
 	shell := &Shell{}
@@ -133,9 +123,6 @@ func New(opts ...NewShellOpt) (*Shell, error) {
 	}
 	if shell.stdout == nil {
 		shell.stdout = os.Stdout
-	}
-	if shell.traceContextCodec == nil {
-		shell.traceContextCodec = tracetools.CodecGob{}
 	}
 	if shell.wd == "" {
 		wd, err := os.Getwd()
@@ -164,7 +151,6 @@ func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
 		wd:                s.wd,
 		interruptSignal:   s.interruptSignal,
 		signalGracePeriod: s.signalGracePeriod,
-		traceContextCodec: s.traceContextCodec,
 	}
 }
 
@@ -549,16 +535,6 @@ func WithStringSearch(m map[string]bool) RunCommandOpt { return func(c *runConfi
 // injectTraceCtx adds tracing information to the given env vars to support
 // distributed tracing across jobs/builds.
 func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
-	// OpenTracing path (for Datadog backend)
-	if span := opentracing.SpanFromContext(ctx); span != nil {
-		if err := tracetools.EncodeTraceContext(span, env.Dump(), s.traceContextCodec); err != nil {
-			if s.debug {
-				s.Warningf("Failed to encode trace context: %v", err)
-			}
-		}
-		return
-	}
-
 	// OpenTelemetry path (for OpenTelemetry backend)
 	if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
 		carrier := propagation.MapCarrier{}
