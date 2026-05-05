@@ -135,7 +135,7 @@ func (e *Executor) refreshCheckoutRoot() error {
 func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	if err = e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
@@ -819,13 +819,13 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
-	span.AddAttributes(map[string]string{
+	tracetools.AddAttributes(span, map[string]string{
 		"checkout.repo_name": e.Repository,
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
 	})
 	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	if e.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
@@ -835,7 +835,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
-		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+		tracetools.AddAttributes(span, map[string]string{"checkout.is_using_git_mirrors": "true"})
 		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
