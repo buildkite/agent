@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +17,9 @@ import (
 	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/shellwords"
+	"github.com/google/go-cmp/cmp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestResolveRemoteMirrorAttempt(t *testing.T) {
@@ -305,17 +307,33 @@ func TestRemoteMirrorTelemetrySchema(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			span := &recordingRemoteMirrorSpan{}
+			recorder := tracetest.NewSpanRecorder()
+			provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+			tracer := provider.Tracer(t.Name())
+			_, span := tracer.Start(t.Context(), "test-span")
+
 			e := New(ExecutorConfig{})
 			var logs bytes.Buffer
 			e.shell = shell.NewTestShell(t, shell.WithLogger(shell.NewWriterLogger(&logs, false, nil)))
 
 			e.emitRemoteMirrorTelemetry(span, tc.attempt)
 
-			if !maps.Equal(span.attributes, tc.wantAttrs) {
-				t.Errorf("attributes = %v, want %v", span.attributes, tc.wantAttrs)
+			span.End()
+
+			recorded := recorder.Ended()
+			if got := len(recorded); got != 1 {
+				t.Fatalf("len(recorder.Ended()) = %d, want 1", got)
 			}
-			for key, value := range span.attributes {
+			gotSpan := recorded[0]
+
+			gotAttrs := make(map[string]string)
+			for _, kv := range gotSpan.Attributes() {
+				gotAttrs[string(kv.Key)] = kv.Value.String()
+			}
+			if diff := cmp.Diff(gotAttrs, tc.wantAttrs); diff != "" {
+				t.Errorf("attributes diff (-got +want):\n%s", diff)
+			}
+			for key, value := range gotAttrs {
 				if strings.Contains(key, "url") || strings.Contains(value, "mirror.example") || strings.Contains(value, "secret") {
 					t.Errorf("metric-shaped telemetry leaks URL data: %q=%q", key, value)
 				}
@@ -611,17 +629,6 @@ func TestFetchCommitFromRemoteMirrorDoesNotFailOpenAfterCancellation(t *testing.
 		t.Errorf("outcome = %q, want not reached after cancellation", attempt.outcome)
 	}
 }
-
-type recordingRemoteMirrorSpan struct {
-	attributes map[string]string
-}
-
-func (s *recordingRemoteMirrorSpan) AddAttributes(attributes map[string]string) {
-	s.attributes = attributes
-}
-
-func (*recordingRemoteMirrorSpan) FinishWithError(error) {}
-func (*recordingRemoteMirrorSpan) RecordError(error)     {}
 
 func checkoutPathForRemoteMirrorTest(t *testing.T, e *Executor) string {
 	t.Helper()
