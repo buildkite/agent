@@ -43,7 +43,7 @@ require (
 	github.com/google/go-querystring v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/gowebpki/jcs v1.0.1
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.18.6
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/oleiade/reflections v1.1.0
 	github.com/opentracing/opentracing-go v1.2.0
