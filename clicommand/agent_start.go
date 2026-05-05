@@ -206,7 +206,6 @@ type AgentStartConfig struct {
 	StrictSingleHooks               bool          `cli:"strict-single-hooks"`
 	KubernetesExec                  bool          `cli:"kubernetes-exec"`
 	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
-	TraceContextEncoding            string        `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
 	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
 
@@ -240,10 +239,6 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 
 	if asc.AcquireJob != "" {
 		features = append(features, "acquire-job")
-	}
-
-	if asc.TracingBackend == tracetools.BackendDatadog {
-		features = append(features, "datadog-tracing")
 	}
 
 	if asc.TracingBackend == tracetools.BackendOpenTelemetry {
@@ -683,7 +678,7 @@ var AgentStartCommand = cli.Command{
 		cancelCleanupTimeoutFlag,
 		cli.StringFlag{
 			Name:   "tracing-backend",
-			Usage:  `Enable tracing for build jobs by specifying a backend, "datadog" or "opentelemetry"`,
+			Usage:  `Enable tracing for build jobs by specifying a backend. Currently only "opentelemetry" (or empty) is supported`,
 			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},
@@ -773,7 +768,6 @@ var AgentStartCommand = cli.Command{
 		// Other shared flags
 		RedactedVars,
 		StrictSingleHooksFlag,
-		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
 		AgentArtifactUploadConcurrencyFlag,
 	),
@@ -907,10 +901,6 @@ var AgentStartCommand = cli.Command{
 			if err != nil {
 				return fmt.Errorf("failed to parse gcp labels timeout: %w", err)
 			}
-		}
-
-		if _, err := tracetools.ParseEncoding(cfg.TraceContextEncoding); err != nil {
-			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
 
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
@@ -1061,7 +1051,6 @@ var AgentStartCommand = cli.Command{
 			TracingBackend:                  cfg.TracingBackend,
 			TracingServiceName:              cfg.TracingServiceName,
 			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
-			TraceContextEncoding:            cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
 			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
 			KubernetesExec:                  cfg.KubernetesExec,
