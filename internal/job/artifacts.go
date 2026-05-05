@@ -12,10 +12,9 @@ func (e *Executor) artifactPhase(ctx context.Context) error {
 		return nil
 	}
 
-	spanName := e.implementationSpecificSpanName("artifacts", "artifact upload")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "artifacts", e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 	defer e.otlpLogSpan(ctx)()
 
 	err = e.preArtifactHooks(ctx)
@@ -40,7 +39,7 @@ func (e *Executor) artifactPhase(ctx context.Context) error {
 func (e *Executor) preArtifactHooks(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-artifact", e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	if err = e.executeGlobalHook(ctx, "pre-artifact"); err != nil {
 		return err
@@ -61,7 +60,7 @@ func (e *Executor) preArtifactHooks(ctx context.Context) error {
 func (e *Executor) uploadArtifacts(ctx context.Context) error {
 	span, _ := tracetools.StartSpanFromContext(ctx, "artifact-upload", e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	e.shell.Headerf("Uploading artifacts")
 	args := []string{"artifact", "upload", e.AutomaticArtifactUploadPaths}
@@ -82,7 +81,7 @@ func (e *Executor) uploadArtifacts(ctx context.Context) error {
 func (e *Executor) postArtifactHooks(ctx context.Context) error {
 	span, _ := tracetools.StartSpanFromContext(ctx, "post-artifact", e.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	if err = e.executeGlobalHook(ctx, "post-artifact"); err != nil {
 		return err
