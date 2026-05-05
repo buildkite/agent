@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const searchHelpDescription = `Usage:
@@ -117,6 +118,8 @@ var ArtifactSearchCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "artifact-search")
+		defer span.End()
 
 		printFormat := cfg.PrintFormat
 		if strings.Contains(printFormat, `"`) {
@@ -144,7 +147,7 @@ var ArtifactSearchCommand = cli.Command{
 			if !cfg.AllowEmptyResults {
 				return fmt.Errorf("no matches found for %q", cfg.Query)
 			}
-			l.Info("No matches found for %q", cfg.Query)
+			l.Infof("No matches found for %q", cfg.Query)
 		}
 
 		for _, artifact := range artifacts {

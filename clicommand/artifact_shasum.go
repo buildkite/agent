@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const shasumHelpDescription = `Usage:
@@ -91,6 +92,8 @@ var ArtifactShasumCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactShasumConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "artifact-shasum")
+		defer span.End()
 		return searchAndPrintShaSum(ctx, cfg, l, os.Stdout)
 	},
 }
@@ -119,7 +122,7 @@ func searchAndPrintShaSum(
 		return fmt.Errorf("multiple artifacts were found. try being more specific with the search or scope by step")
 	} else {
 		a := artifacts[0]
-		l.Debug("Artifact \"%s\" found", a.Path)
+		l.Debugf("Artifact \"%s\" found", a.Path)
 
 		var sha string
 		if cfg.Sha256 {

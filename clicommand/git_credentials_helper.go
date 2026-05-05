@@ -64,7 +64,7 @@ var GitCredentialsHelperCommand = cli.Command{
 		ctx, cfg, l, _, done := setupLoggerAndConfig[GitCredentialsHelperConfig](ctx, c)
 		defer done()
 
-		l.Debug("Action: %s", cfg.Action)
+		l.Debugf("Action: %s", cfg.Action)
 		if cfg.Action != "get" {
 			// other actions are store and erase, which we don't support
 			// see: https://git-scm.com/docs/gitcredentials#Documentation/gitcredentials.txt-codegetcode
@@ -74,8 +74,8 @@ var GitCredentialsHelperCommand = cli.Command{
 		// ie, if the flags are from the command line rather than from the environment, which is how they should be passed
 		// to this process when it's called through the job executor
 		if os.Getenv("BUILDKITE_JOB_ID") == "" {
-			l.Warn("📎💬 It looks like you're calling this command directly in a step, rather than having the agent automatically call it")
-			l.Warn("This command is intended to be used as a git credential helper, and not called directly.")
+			l.Warnf("📎💬 It looks like you're calling this command directly in a step, rather than having the agent automatically call it")
+			l.Warnf("This command is intended to be used as a git credential helper, and not called directly.")
 		}
 
 		// git passes the details of the current clone process to the credential helper via stdin
@@ -86,9 +86,9 @@ var GitCredentialsHelperCommand = cli.Command{
 			return handleAuthError(c, l, fmt.Errorf("failed to read stdin: %w", err))
 		}
 
-		l.Debug("Git credential input:\n%s\n", string(stdin))
+		l.Debugf("Git credential input:\n%s\n", string(stdin))
 
-		l.Debug("Authenticating checkout using Buildkite Github App Credentials...")
+		l.Debugf("Authenticating checkout using Buildkite Github App Credentials...")
 
 		repo, err := parseGitURLFromCredentialInput(string(stdin))
 		if err != nil {
@@ -105,7 +105,7 @@ var GitCredentialsHelperCommand = cli.Command{
 		_, _ = fmt.Fprintln(c.App.Writer, "password="+tok)
 		_, _ = fmt.Fprintln(c.App.Writer, "")
 
-		l.Debug("Authentication successful!")
+		l.Debugf("Authentication successful!")
 
 		return nil
 	},
@@ -116,7 +116,7 @@ var GitCredentialsHelperCommand = cli.Command{
 // the clone to fail
 // this function always returns a cli.ExitError
 func handleAuthError(c *cli.Context, l logger.Logger, err error) error {
-	l.Error("Error: %v. Authentication will proceed, but will fail.", err)
+	l.Errorf("Error: %v. Authentication will proceed, but will fail.", err)
 	_, _ = fmt.Fprintln(c.App.Writer, "username=fail")
 	_, _ = fmt.Fprintln(c.App.Writer, "password=fail")
 	_, _ = fmt.Fprintln(c.App.Writer, "")

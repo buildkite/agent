@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 type OIDCTokenConfig struct {
@@ -103,6 +104,8 @@ var OIDCRequestTokenCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "oidc-request-token")
+		defer span.End()
 
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
 		if cfg.Lifetime < 0 {
@@ -136,15 +139,15 @@ var OIDCRequestTokenCommand = cli.Command{
 				return nil, err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			}
 			return token, err
 		})
 		if err != nil {
 			if len(cfg.Audience) > 0 {
-				l.Error("Could not obtain OIDC token for audience %s", cfg.Audience)
+				l.Errorf("Could not obtain OIDC token for audience %s", cfg.Audience)
 			} else {
-				l.Error("Could not obtain OIDC token for default audience")
+				l.Errorf("Could not obtain OIDC token for default audience")
 			}
 			return err
 		}

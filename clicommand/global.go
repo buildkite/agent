@@ -12,10 +12,14 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
@@ -367,7 +371,7 @@ func CreateLogger(cfg any) logger.Logger {
 
 	err := handleLogLevelFlag(l, cfg)
 	if err != nil {
-		l.Warn("Error when setting log level: %v. Defaulting log level to NOTICE", err)
+		l.Warnf("Error when setting log level: %v. Defaulting log level to NOTICE", err)
 	}
 
 	// Enable debugging if a Debug option is present
@@ -403,7 +407,7 @@ func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.C
 	for _, name := range experimentNamesSlice {
 		nctx, state := experiments.EnableWithWarnings(ctx, l, name)
 		if state == experiments.StateKnown {
-			l.Debug("Enabled experiment %q", name)
+			l.Debugf("Enabled experiment %q", name)
 		}
 		ctx = nctx
 	}
@@ -528,14 +532,58 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 		l = l.WithFields(logger.StringField("command", c.Command.FullName()))
 	}
 
-	l.Debug("Loaded config")
+	l.Debugf("Loaded config")
 
 	// Now that we have a logger, log out the warnings that loading config generated
 	for _, warning := range warnings {
-		l.Warn("%s", warning)
+		l.Warnf("%s", warning)
 	}
 
 	// Setup any global configuration options
 	ctx, done = HandleGlobalFlags(ctx, l, cfg)
+
+	// When OpenTelemetry tracing is enabled, always initialize a TracerProvider
+	// so that every command (bootstrap or standalone subcommand) can emit spans.
+	tracingBackend := os.Getenv("BUILDKITE_TRACING_BACKEND")
+	if tb, err := reflections.GetField(cfg, "TracingBackend"); err == nil {
+		if tbStr, ok := tb.(string); ok && tbStr != "" {
+			tracingBackend = tbStr
+		}
+	}
+
+	if tracingBackend == tracetools.BackendOpenTelemetry {
+		serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
+		if sn, err := reflections.GetField(cfg, "TracingServiceName"); err == nil {
+			if snStr, ok := sn.(string); ok && snStr != "" {
+				serviceName = snStr
+			}
+		}
+		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, nil)
+		if err != nil {
+			l.Warnf("Failed to initialize tracing: %v", err)
+		} else {
+			// Extract any incoming trace context so spans created in this process
+			// are linked to the parent job's trace.
+			carrier := propagation.MapCarrier{}
+			if traceParent := os.Getenv("TRACEPARENT"); traceParent != "" {
+				carrier["traceparent"] = traceParent
+			}
+			if traceState := os.Getenv("TRACESTATE"); traceState != "" {
+				carrier["tracestate"] = traceState
+			}
+			if len(carrier) > 0 {
+				ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+			}
+			prevDone := done
+			done = func() {
+				prevDone()
+				flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = traceProvider.ForceFlush(flushCtx)
+				_ = traceProvider.Shutdown(flushCtx)
+			}
+		}
+	}
+
 	return ctx, cfg, l, loader.File, done
 }

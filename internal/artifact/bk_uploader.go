@@ -177,7 +177,7 @@ func (u *bkMultipartUpload) DoWork(ctx context.Context) (*api.ArtifactPartETag, 
 	}
 
 	etag := resp.Header.Get("Etag")
-	u.logger.Debug("Artifact %s part %d has ETag = %s", u.artifact.ID, u.action.PartNumber, etag)
+	u.logger.Debugf("Artifact %s part %d has ETag = %s", u.artifact.ID, u.action.PartNumber, etag)
 	if etag == "" {
 		return nil, errors.New("response missing ETag header")
 	}

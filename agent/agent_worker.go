@@ -287,7 +287,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				}()
 			}
 
-			a.logger.Error("Failed to acquire and run job: %v", err)
+			a.logger.Errorf("Failed to acquire and run job: %v", err)
 		}
 	}
 
@@ -314,12 +314,12 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				// In streaming-only mode, an unrecoverable failure
 				// in the streaming loop should be reported and should
 				// terminate the agent worker.
-				a.logger.Error("Streaming ping mode failed due to an unrecoverable error: %v", err)
+				a.logger.Errorf("Streaming ping mode failed due to an unrecoverable error: %v", err)
 			default:
 				// In auto mode, the worker should fall back to the ping loop
 				// and carry on. The user might find that interesting (especially if
 				// they are expecting streaming to work).
-				a.logger.Info("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err)
+				a.logger.Infof("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err)
 				// If the ping loop then has its own unrecoverable error, then
 				// *that* will terminate the worker. But the streaming loop shouldn't.
 				// So treat the error from the streaming loop as "business as usual".
@@ -392,7 +392,7 @@ func (a *AgentWorker) internalStop() {
 func (a *AgentWorker) StopGracefully() {
 	select {
 	case <-a.stop:
-		a.logger.Warn("Agent is already gracefully stopping...")
+		a.logger.Warnf("Agent is already gracefully stopping...")
 		return
 
 	default:
@@ -402,9 +402,9 @@ func (a *AgentWorker) StopGracefully() {
 	// If we have a job, tell the user that we'll wait for it to finish
 	// before disconnecting
 	if a.jobRunner.Load() != nil {
-		a.logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
+		a.logger.Infof("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
 	} else {
-		a.logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+		a.logger.Infof("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 	}
 
 	a.internalStop()
@@ -417,16 +417,16 @@ func (a *AgentWorker) StopUngracefully() {
 
 	// If there's a job running, kill it, then disconnect.
 	if jr := a.jobRunner.Load(); jr != nil {
-		a.logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
+		a.logger.Infof("Forcefully stopping agent. The current job will be canceled before disconnecting...")
 
 		// Kill the current job. Doesn't do anything if the job
 		// is already being killed, so it's safe to call
 		// multiple times.
 		if err := jr.Cancel(CancelReasonAgentStopping); err != nil {
-			a.logger.Error("Unexpected error canceling job (err: %s)", err)
+			a.logger.Errorf("Unexpected error canceling job (err: %s)", err)
 		}
 	} else {
-		a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+		a.logger.Infof("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 	}
 }
 
@@ -452,7 +452,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
 			}
 
-			a.logger.Warn("%s (%s)", err, r)
+			a.logger.Warnf("%s (%s)", err, r)
 			return nil, err
 		}
 		return b, nil
@@ -470,7 +470,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	// Track a timestamp for the successful heartbeat for better errors
 	a.stats.lastHeartbeat = time.Now()
 
-	a.logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
+	a.logger.Debugf("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
 	return nil
 }
 

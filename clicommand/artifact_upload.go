@@ -8,6 +8,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/artifact"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const uploadHelpDescription = `Usage:
@@ -43,6 +44,13 @@ You can also upload directly to Amazon S3 if you'd like to host your own artifac
 You can use Amazon IAM assumed roles by specifying the session token:
 
     $ export BUILDKITE_S3_SESSION_TOKEN=zzz
+
+To pick a named profile from your shared AWS config or credentials file
+(~/.aws/config, ~/.aws/credentials), set BUILDKITE_S3_PROFILE. It takes
+precedence over AWS_PROFILE, so you can override an AWS_PROFILE that the
+agent's environment already has set for an unrelated purpose:
+
+    $ export BUILDKITE_S3_PROFILE=name-of-your-aws-profile
 
 Or upload directly to Google Cloud Storage:
 
@@ -136,6 +144,9 @@ var ArtifactUploadCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](ctx, c)
 		defer done()
+
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "artifact-upload")
+		defer span.End()
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))

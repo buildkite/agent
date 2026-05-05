@@ -35,7 +35,7 @@ func (s *lockServer) getLock(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
 		if err := socket.WriteError(w, "key missing", http.StatusNotFound); err != nil {
-			s.logger.Error("Agent API: couldn't write error: %v", err)
+			s.logger.Errorf("Agent API: couldn't write error: %v", err)
 		}
 		return
 	}
@@ -43,7 +43,7 @@ func (s *lockServer) getLock(w http.ResponseWriter, r *http.Request) {
 		Value: s.locks.load(key),
 	}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		s.logger.Error("Agent API: couldn't encode response body: %v", err)
+		s.logger.Errorf("Agent API: couldn't encode response body: %v", err)
 	}
 }
 
@@ -52,7 +52,7 @@ func (s *lockServer) patchLock(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
 		if err := socket.WriteError(w, "key missing", http.StatusNotFound); err != nil {
-			s.logger.Error("Agent API: couldn't write error: %v", err)
+			s.logger.Errorf("Agent API: couldn't write error: %v", err)
 		}
 		return
 	}
@@ -60,7 +60,7 @@ func (s *lockServer) patchLock(w http.ResponseWriter, r *http.Request) {
 	var req LockCASRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if err := socket.WriteError(w, fmt.Sprintf("couldn't decode request body: %v", err), http.StatusBadRequest); err != nil {
-			s.logger.Error("Agent API: couldn't write error: %v", err)
+			s.logger.Errorf("Agent API: couldn't write error: %v", err)
 		}
 		return
 	}
@@ -78,6 +78,6 @@ func (s *lockServer) patchLock(w http.ResponseWriter, r *http.Request) {
 	// - practical consequences of a successful JSON injection, given that this
 	//   API is, by default, only accessible to the same user on the same host.
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		s.logger.Error("Agent API: couldn't encode response body: %v", err)
+		s.logger.Errorf("Agent API: couldn't encode response body: %v", err)
 	}
 }

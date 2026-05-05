@@ -70,7 +70,7 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 				MultipartSupported: a.conf.AllowMultipart,
 			}
 
-			a.logger.Info("Creating (%d-%d)/%d artifacts", offset, offset+len(theseArtifacts), total)
+			a.logger.Infof("Creating (%d-%d)/%d artifacts", offset, offset+len(theseArtifacts), total)
 			offset += len(theseArtifacts)
 
 			timeout := a.conf.CreateArtifactsTimeout
@@ -92,11 +92,11 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 				// The server returns a 403 code if the artifact has exceeded the service quota.
 				// Break the retry on any 4xx code except for 429 Too Many Requests.
 				if resp != nil && (resp.StatusCode != 429 && resp.StatusCode >= 400 && resp.StatusCode <= 499) {
-					a.logger.Warn("Artifact creation failed with status code %d, breaking the retry loop", resp.StatusCode)
+					a.logger.Warnf("Artifact creation failed with status code %d, breaking the retry loop", resp.StatusCode)
 					r.Break()
 				}
 				if err != nil {
-					a.logger.Warn("%s (%s)", err, r)
+					a.logger.Warnf("%s (%s)", err, r)
 				}
 
 				// after four attempts (0, 1, 2, 3)...
@@ -104,7 +104,7 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 					// The short timeout has given us fast feedback on the first couple of attempts,
 					// but perhaps the server needs more time to complete the request, so fall back to
 					// the default HTTP client timeout.
-					a.logger.Debug("CreateArtifacts timeout (%s) removed for subsequent attempts", timeout)
+					a.logger.Debugf("CreateArtifacts timeout (%s) removed for subsequent attempts", timeout)
 					timeout = 0
 				}
 
