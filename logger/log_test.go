@@ -21,11 +21,11 @@ func TestConsoleLogger(t *testing.T) {
 	})
 	l.SetLevel(logger.INFO)
 
-	l.Debug("Debug %q", "llamas")
-	l.Info("Info %q", "llamas")
-	l.Warn("Warn %q", "llamas")
-	l.Error("Error %q", "llamas")
-	l.Fatal("Fatal %q", "llamas")
+	l.Debugf("Debug %q", "llamas")
+	l.Infof("Info %q", "llamas")
+	l.Warnf("Warn %q", "llamas")
+	l.Errorf("Error %q", "llamas")
+	l.Fatalf("Fatal %q", "llamas")
 
 	lines := strings.Split(strings.TrimRight(b.String(), "\n"), "\n")
 

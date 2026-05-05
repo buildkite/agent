@@ -208,7 +208,7 @@ func TestContextCancelInterrupts(t *testing.T) {
 			go func() {
 				select {
 				case <-time.After(1 * time.Minute):
-					t.Error("timeout waiting for process to start")
+					t.Errorf("timeout waiting for process to start")
 				case <-started:
 					// Now cancel the context, which should cause the interrupt.
 					cancel()
@@ -300,7 +300,7 @@ func TestInterrupt(t *testing.T) {
 			go func() {
 				select {
 				case <-time.After(1 * time.Minute):
-					t.Error("timeout waiting for process to start")
+					t.Errorf("timeout waiting for process to start")
 				case <-started:
 					// Now interrupt the process.
 					if err := sh.Interrupt(); err != nil {

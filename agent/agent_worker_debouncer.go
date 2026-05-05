@@ -28,8 +28,8 @@ import (
 // exit in a one-shot mode, even though the second "pause" means the
 // user actually *did* want the agent to be paused.
 func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<- actionMessage, inCh <-chan actionMessage) error {
-	a.logger.Debug("[runDebouncer] Starting")
-	defer a.logger.Debug("[runDebouncer] Exiting")
+	a.logger.Debugf("[runDebouncer] Starting")
+	defer a.logger.Debugf("[runDebouncer] Exiting")
 
 	// When the debouncer returns, close the output channel to let the next
 	// loop know to stop listening to it.
@@ -40,7 +40,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 
 	// We begin holding the baton, ensure it is released when we exit.
 	defer func() {
-		a.logger.Debug("[runDebouncer] Releasing the baton")
+		a.logger.Debugf("[runDebouncer] Releasing the baton")
 		bat.Release(actorDebouncer)
 	}()
 
@@ -61,34 +61,34 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 	for {
 		select {
 		case <-a.stop:
-			a.logger.Debug("[runDebouncer] Stopping due to agent stop")
+			a.logger.Debugf("[runDebouncer] Stopping due to agent stop")
 			return nil
 		case <-ctx.Done():
-			a.logger.Debug("[runDebouncer] Stopping due to context cancel")
+			a.logger.Debugf("[runDebouncer] Stopping due to context cancel")
 			return ctx.Err()
 
 		case <-iif(healthy, bat.Acquire()): // if the stream is healthy, take the baton if available
 			bat.Acquired(actorDebouncer)
-			a.logger.Debug("[runDebouncer] Took the baton")
+			a.logger.Debugf("[runDebouncer] Took the baton")
 			// We now have the baton!
 			// continue below to send any pending message, if able
 
 		case msg, open := <-inCh: // streaming loop has produced an event
 			if !open {
-				a.logger.Debug("[runDebouncer] Stopping due to input channel closing")
+				a.logger.Debugf("[runDebouncer] Stopping due to input channel closing")
 				return nil
 			}
 
 			healthy = !msg.unhealthy
 
 			if !healthy {
-				a.logger.Debug("[runDebouncer] Streaming loop is unhealthy")
+				a.logger.Debugf("[runDebouncer] Streaming loop is unhealthy")
 
 				// It is not healthy, so release the baton as soon as we can
 				// (when the current action is done).
 				if !actionInProgress {
 					// We can release the baton now.
-					a.logger.Debug("[runDebouncer] Releasing the baton")
+					a.logger.Debugf("[runDebouncer] Releasing the baton")
 					bat.Release(actorDebouncer)
 				}
 				break // out of the select
@@ -101,7 +101,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 			// continue below to send it
 
 		case <-lastActionResult: // most recent action has completed
-			a.logger.Debug("[runDebouncer] Last action has completed")
+			a.logger.Debugf("[runDebouncer] Last action has completed")
 			// Set the channel variable to nil so we don't spinloop.
 			// (Operations on a nil channel block forever.)
 			lastActionResult = nil
@@ -115,7 +115,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 		if !healthy || !bat.HeldBy(actorDebouncer) || actionInProgress || pending == nil {
 			continue
 		}
-		a.logger.Debug("[runDebouncer] Sending action %q, jobID %q", pending.action, pending.jobID)
+		a.logger.Debugf("[runDebouncer] Sending action %q, jobID %q", pending.action, pending.jobID)
 		lastActionResult = make(chan error)
 		pending.errCh = lastActionResult
 		select {
@@ -124,10 +124,10 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 			pending = nil
 			actionInProgress = true
 		case <-a.stop:
-			a.logger.Debug("[runDebouncer] Stopping due to agent stop")
+			a.logger.Debugf("[runDebouncer] Stopping due to agent stop")
 			return nil
 		case <-ctx.Done():
-			a.logger.Debug("[runDebouncer] Stopping due to context cancel")
+			a.logger.Debugf("[runDebouncer] Stopping due to context cancel")
 			return ctx.Err()
 		}
 	}

@@ -239,7 +239,7 @@ steps:
 							return
 						}
 					case fmt.Sprintf("/jobs/%s/pipelines/%s", jobID, stepUploadUUID):
-						t.Error("should not call the status route")
+						t.Errorf("should not call the status route")
 
 						http.Error(
 							rw,

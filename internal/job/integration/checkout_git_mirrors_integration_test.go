@@ -505,7 +505,7 @@ func TestForcingACleanCheckout_WithGitMirrors(t *testing.T) {
 	tester.RunAndCheck(t, "BUILDKITE_CLEAN_CHECKOUT=true")
 
 	if !strings.Contains(tester.Output, "Cleaning pipeline checkout") {
-		t.Fatal(`tester.Output does not contain "Cleaning pipeline checkout"`)
+		t.Fatalf(`tester.Output does not contain "Cleaning pipeline checkout"`)
 	}
 }
 

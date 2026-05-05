@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const annotationRemoveHelpDescription = `Usage:
@@ -64,6 +65,8 @@ var AnnotationRemoveCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotationRemoveConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "annotation-remove")
+		defer span.End()
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
@@ -81,7 +84,7 @@ var AnnotationRemoveCommand = cli.Command{
 				return err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 				return err
 			}
 			return nil
@@ -89,7 +92,7 @@ var AnnotationRemoveCommand = cli.Command{
 			return fmt.Errorf("failed to remove annotation: %w", err)
 		}
 
-		l.Debug("Successfully removed annotation")
+		l.Debugf("Successfully removed annotation")
 
 		return nil
 	},

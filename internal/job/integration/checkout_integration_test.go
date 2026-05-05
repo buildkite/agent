@@ -916,7 +916,7 @@ func TestForcingACleanCheckout(t *testing.T) {
 	tester.RunAndCheck(t, "BUILDKITE_CLEAN_CHECKOUT=true")
 
 	if !strings.Contains(tester.Output, "Cleaning pipeline checkout") {
-		t.Fatal(`tester.Output does not contain "Cleaning pipeline checkout"`)
+		t.Fatalf(`tester.Output does not contain "Cleaning pipeline checkout"`)
 	}
 }
 
@@ -932,17 +932,17 @@ func TestSkippingCheckout(t *testing.T) {
 	tester.RunAndCheck(t, "BUILDKITE_SKIP_CHECKOUT=true")
 
 	if !strings.Contains(tester.Output, "Skipping checkout") {
-		t.Error(`tester.Output does not contain "Skipping checkout"`)
+		t.Errorf(`tester.Output does not contain "Skipping checkout"`)
 	}
 
 	// Verify no git commands were run (no clone, fetch, checkout)
 	if strings.Contains(tester.Output, "git clone") {
-		t.Error(`tester.Output should not contain "git clone" when checkout is skipped`)
+		t.Errorf(`tester.Output should not contain "git clone" when checkout is skipped`)
 	}
 
 	// Verify no git commit metadata was checked or sent when checkout is skipped
 	if strings.Contains(tester.Output, "Checking to see if git commit information needs to be sent to Buildkite") {
-		t.Error(`tester.Output should not contain "Checking to see if git commit information needs to be sent to Buildkite" when checkout is skipped`)
+		t.Errorf(`tester.Output should not contain "Checking to see if git commit information needs to be sent to Buildkite" when checkout is skipped`)
 	}
 }
 

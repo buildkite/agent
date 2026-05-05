@@ -33,7 +33,7 @@ func TestIdleMonitor(t *testing.T) {
 
 	case <-time.After(2 * idleTimeout):
 		// TODO: use testing/synctest when that becomes available
-		t.Error("timed out waiting on <-i.Exiting()")
+		t.Errorf("timed out waiting on <-i.Exiting()")
 	}
 }
 
@@ -62,7 +62,7 @@ func TestIdleMonitor_AllDead(t *testing.T) {
 		}
 	case <-time.After(idleTimeout):
 		// TODO: use testing/synctest when that becomes available
-		t.Error("timed out waiting on <-i.Exiting()")
+		t.Errorf("timed out waiting on <-i.Exiting()")
 	}
 }
 
@@ -83,7 +83,7 @@ func TestIdleMonitor_Busy(t *testing.T) {
 
 	select {
 	case <-i.Exiting():
-		t.Error("<-i.Exiting() happened while at least one agent was still busy")
+		t.Errorf("<-i.Exiting() happened while at least one agent was still busy")
 
 	case <-time.After(2 * idleTimeout):
 		// This case should win.

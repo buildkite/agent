@@ -50,7 +50,7 @@ func TestJobLoggerTextFormat(t *testing.T) {
 	}
 
 	if err := json.Unmarshal(buf.Bytes(), &map[string]any{}); err == nil {
-		t.Error("expected non-JSON output for text format, but got valid JSON")
+		t.Errorf("expected non-JSON output for text format, but got valid JSON")
 	}
 	if got := buf.String(); got != "hello\n" {
 		t.Errorf("output = %q, want %q", got, "hello\n")

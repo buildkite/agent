@@ -53,7 +53,7 @@ func (p *Process) setupProcessGroup() {
 	}
 	jobHandle, err := newJobObject()
 	if err != nil {
-		p.logger.Error("Creating Job Object failed: %v", err)
+		p.logger.Errorf("Creating Job Object failed: %v", err)
 	}
 	p.winJobHandle = jobHandle
 }
@@ -107,10 +107,10 @@ func (p *Process) postStart() (err error) {
 
 func (p *Process) terminateProcessGroup() error {
 	if p.terminateFunc != nil {
-		p.logger.Debug("[Process] Terminating process")
+		p.logger.Debugf("[Process] Terminating process")
 		return p.terminateFunc()
 	}
-	p.logger.Debug("[Process] Terminating process tree by destroying job")
+	p.logger.Debugf("[Process] Terminating process tree by destroying job")
 	return windows.CloseHandle(windows.Handle(p.winJobHandle))
 }
 

@@ -243,7 +243,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		jobLogDir := ""
 		if conf.AgentConfiguration.JobLogPath != "" {
 			jobLogDir = conf.AgentConfiguration.JobLogPath
-			r.agentLogger.Debug("[JobRunner] Job Log Path: %s", jobLogDir)
+			r.agentLogger.Debugf("[JobRunner] Job Log Path: %s", jobLogDir)
 		}
 		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
@@ -295,7 +295,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 				_, _ = outputWriter.Write([]byte(line + "\n"))
 			})
 			if err != nil {
-				r.agentLogger.Error("[JobRunner] Encountered error %v", err)
+				r.agentLogger.Errorf("[JobRunner] Encountered error %v", err)
 			}
 		}()
 
@@ -312,7 +312,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 				r.headerTimesStreamer.Scan(line)
 			})
 			if err != nil {
-				r.agentLogger.Error("[JobRunner] Encountered error %v", err)
+				r.agentLogger.Errorf("[JobRunner] Encountered error %v", err)
 			}
 		}()
 	}
@@ -380,11 +380,11 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	go func() {
 		<-r.process.Done()
 		if err := pw.Close(); err != nil {
-			r.agentLogger.Error("%v", err)
+			r.agentLogger.Errorf("%v", err)
 		}
 		if tmpFile != nil {
 			if err := os.Remove(tmpFile.Name()); err != nil {
-				r.agentLogger.Error("%v", err)
+				r.agentLogger.Errorf("%v", err)
 			}
 		}
 	}()
@@ -422,7 +422,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
 		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
 		if err != nil {
-			r.agentLogger.Error("Invalid BUILDKITE_PLUGINS: %w", err)
+			r.agentLogger.Errorf("Invalid BUILDKITE_PLUGINS: %w", err)
 		}
 		if string(filtered) == "" {
 			delete(env, "BUILDKITE_PLUGINS")
@@ -533,7 +533,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if len(r.conf.Job.Step.Secrets) > 0 {
 		secretsJSON, err := json.Marshal(r.conf.Job.Step.Secrets)
 		if err != nil {
-			r.agentLogger.Error("Failed to marshal secrets configuration: %v", err)
+			r.agentLogger.Errorf("Failed to marshal secrets configuration: %v", err)
 			return nil, err
 		}
 
@@ -701,7 +701,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 	// see documentation for BuildkiteMessageMax
 	if err := truncateEnv(r.agentLogger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
-		r.agentLogger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)
+		r.agentLogger.Warnf("failed to truncate %s: %v", BuildkiteMessageName, err)
 		// attempt to continue anyway
 	}
 
@@ -735,7 +735,7 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 	}
 	keeplen := msgmax - len(apology)
 	env[key] = env[key][0:keeplen] + apology
-	l.Warn("%s %s", key, description)
+	l.Warnf("%s %s", key, description)
 	return nil
 }
 
@@ -756,12 +756,12 @@ type LogWriter struct {
 }
 
 func (w LogWriter) Write(bytes []byte) (int, error) {
-	w.l.Info("%s", bytes)
+	w.l.Infof("%s", bytes)
 	return len(bytes), nil
 }
 
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
-	r.agentLogger.Info("Running pre-bootstrap hook %q", hook)
+	r.agentLogger.Infof("Running pre-bootstrap hook %q", hook)
 
 	sh, err := shell.New(
 		shell.WithStdout(LogWriter{l: r.agentLogger}),
@@ -788,14 +788,14 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 
 	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
 	if err != nil {
-		r.agentLogger.Error("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
+		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
 		return false, err
 	}
 	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(environ)); err != nil {
-		r.agentLogger.Error("Finished pre-bootstrap hook %q: job rejected: %v", hook, err)
+		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: job rejected: %v", hook, err)
 		return false, err
 	}
-	r.agentLogger.Info("Finished pre-bootstrap hook %q: job accepted", hook)
+	r.agentLogger.Infof("Finished pre-bootstrap hook %q: job accepted", hook)
 	return true, nil
 }
 
@@ -807,7 +807,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 	defer done()
 	setStat("Starting...")
 
-	defer r.agentLogger.Debug("[JobRunner] Routine that refreshes the job has finished")
+	defer r.agentLogger.Debugf("[JobRunner] Routine that refreshes the job has finished")
 
 	select {
 	case <-r.process.Started():
@@ -852,20 +852,20 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 		jobState, response, err := r.apiClient.GetJobState(ctx, r.conf.Job.ID)
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
-				r.agentLogger.Error("Invalid access token, cancelling job %s", r.conf.Job.ID)
+				r.agentLogger.Errorf("Invalid access token, cancelling job %s", r.conf.Job.ID)
 				if err := r.Cancel(CancelReasonInvalidToken); err != nil {
-					r.agentLogger.Error("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
+					r.agentLogger.Errorf("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
 				}
 			} else {
 				// We don't really care if it fails, we'll just try again soon anyway
-				r.agentLogger.Warn("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
+				r.agentLogger.Warnf("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
 			}
 			continue // the loop
 		}
 		switch jobState.State {
 		case "canceling", "canceled":
 			if err := r.Cancel(CancelReasonJobState); err != nil {
-				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
+				r.agentLogger.Errorf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		case "timing_out", "timed_out":
 			if err := r.Cancel(CancelReasonJobTimeout); err != nil {
@@ -883,17 +883,17 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 		response, err := r.apiClient.SaveHeaderTimes(ctx, r.conf.Job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
-				r.agentLogger.Warn("Buildkite rejected the header times (%s)", err)
+				r.agentLogger.Warnf("Buildkite rejected the header times (%s)", err)
 				retrier.Break()
 			} else {
-				r.agentLogger.Warn("%s (%s)", err, retrier)
+				r.agentLogger.Warnf("%s (%s)", err, retrier)
 			}
 		}
 
 		return err
 	})
 	if err != nil {
-		r.agentLogger.Error("Ultimately unable to upload header times: %v", err)
+		r.agentLogger.Errorf("Ultimately unable to upload header times: %v", err)
 	}
 }
 
@@ -916,7 +916,7 @@ func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shel
 	if err != nil {
 		return nil, nil, err
 	}
-	l.Debug("[JobRunner] Created env file (shell format): %s", shellFile.Name())
+	l.Debugf("[JobRunner] Created env file (shell format): %s", shellFile.Name())
 
 	jsonFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", jobID))
 	if err != nil {
@@ -924,7 +924,7 @@ func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shel
 		_ = os.Remove(shellFile.Name())
 		return nil, nil, err
 	}
-	l.Debug("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())
+	l.Debugf("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())
 
 	return shellFile, jsonFile, nil
 }

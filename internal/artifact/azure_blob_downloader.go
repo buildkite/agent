@@ -44,7 +44,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 		return err
 	}
 
-	d.logger.Debug("Azure Blob Storage path: %v", loc)
+	d.logger.Debugf("Azure Blob Storage path: %v", loc)
 
 	client, err := NewAzureBlobClient(d.logger, loc.StorageAccountName)
 	if err != nil {
@@ -71,7 +71,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 	fullPath := path.Join(loc.BlobPath, d.conf.Path)
 
 	// Show a nice message that we're starting to download the file
-	d.logger.Debug("Downloading %s to %s", loc.URL(d.conf.Path), targetPath)
+	d.logger.Debugf("Downloading %s to %s", loc.URL(d.conf.Path), targetPath)
 
 	opts := &azblob.DownloadFileOptions{
 		RetryReaderOptionsPerBlock: azblob.RetryReaderOptions{
@@ -103,7 +103,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
 	}
 
-	d.logger.Info("Successfully downloaded %q %s", d.conf.Path, humanize.IBytes(uint64(bytes)))
+	d.logger.Infof("Successfully downloaded %q %s", d.conf.Path, humanize.IBytes(uint64(bytes)))
 
 	return nil
 }

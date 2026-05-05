@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const metaDataGetHelpDescription = `Usage:
@@ -60,6 +61,8 @@ var MetaDataGetCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataGetConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-get")
+		defer span.End()
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
@@ -84,7 +87,7 @@ var MetaDataGetCommand = cli.Command{
 				return nil, resp, err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 				return nil, resp, err
 			}
 			return metaData, resp, nil
@@ -97,7 +100,7 @@ var MetaDataGetCommand = cli.Command{
 			// We also use `IsSet` instead of `cfg.Default != ""`
 			// to allow people to use a default of a blank string.
 			if resp != nil && resp.StatusCode == 404 && c.IsSet("default") {
-				l.Warn(
+				l.Warnf(
 					"No meta-data value exists with key %q, returning the supplied default %q",
 					cfg.Key,
 					cfg.Default,

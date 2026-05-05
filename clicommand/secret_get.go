@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 type SecretGetConfig struct {
@@ -86,6 +87,8 @@ Examples:
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[SecretGetConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "secret-get")
+		defer span.End()
 		return secretGet(ctx, cfg, c.App.Writer, l)
 	},
 }
