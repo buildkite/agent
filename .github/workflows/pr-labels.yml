@@ -1,0 +1,21 @@
+name: PR Labels
+
+on:
+  pull_request:
+    types: [opened, reopened, labeled, unlabeled, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  require-label:
+    name: Require category label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for required label
+        uses: mheap/github-action-required-labels@v5
+        with:
+          mode: minimum
+          count: 1
+          labels: "bug, feature, internal, dependencies, changed"
+          message: "This PR must have at least one of these labels: {{ provided }}."

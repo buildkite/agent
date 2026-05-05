@@ -1,0 +1,28 @@
+changelog:
+  exclude:
+    labels:
+      - release
+      - skip-changelog
+
+  categories:
+    - title: 🔒 Security
+      labels:
+        - security
+
+    - title: ✨ Added
+      labels:
+        - feature
+
+    - title: 🐛 Fixed
+      labels:
+        - bug
+
+    - title: 🔧 Changed
+      labels:
+        - changed
+
+    - title: 🏠 Internal
+      labels:
+        - internal
+        - dependencies
+        - "*"
