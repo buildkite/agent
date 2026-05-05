@@ -129,6 +129,17 @@ func addNginxTypes(types map[string]string) error {
 	return nil
 }
 
+func addZstdTypes(types map[string]string) error {
+	// RFC 8878 registers application/zstd with extension "zst".
+	// Apache/nginx mime.types have not universally adopted this yet,
+	// so set it explicitly unless already present.
+	const zstdMime = "application/zstd"
+	if _, ok := types["zst"]; !ok {
+		types["zst"] = zstdMime
+	}
+	return nil
+}
+
 func addYamlTypes(types map[string]string) error {
 	// Most recent movement on the IEFT is
 	// https://mailarchive.ietf.org/arch/msg/media-types/bdCyTe91zNz-i-9tuJGDa9bHcpQ/
@@ -155,6 +166,10 @@ func generate() error {
 		return err
 	}
 	err = addYamlTypes(types)
+	if err != nil {
+		return err
+	}
+	err = addZstdTypes(types)
 	if err != nil {
 		return err
 	}

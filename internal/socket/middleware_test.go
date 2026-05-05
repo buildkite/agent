@@ -26,7 +26,7 @@ func shouldCall(t *testing.T) func(http.Handler) http.Handler {
 func shouldNotCall(t *testing.T) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Error("next.ServeHTTP should not be called")
+			t.Errorf("next.ServeHTTP should not be called")
 		})
 	}
 }

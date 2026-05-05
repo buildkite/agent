@@ -573,7 +573,7 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 	}
 
 	if path == "" {
-		t.Fatal("ruby not found in $PATH. This test requires ruby to be installed on the host")
+		t.Fatalf("ruby not found in $PATH. This test requires ruby to be installed on the host")
 	}
 
 	ctx := mainCtx

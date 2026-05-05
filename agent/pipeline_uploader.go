@@ -137,7 +137,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 			}
 
 			if !api.BreakOnNonRetryable(r, resp, err) {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			}
 			return nil, err
 		}
@@ -159,7 +159,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 		}
 
 		if result.pipelineStatusURL, err = resp.Location(); err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return nil, err
 		}
 
@@ -183,11 +183,11 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 			},
 		)
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 
 			// 422 responses will always fail no need to retry
 			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
-				l.Error("Unrecoverable error, skipping retries")
+				l.Errorf("Unrecoverable error, skipping retries")
 				r.Break()
 				return err
 			}
@@ -202,14 +202,14 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 		case "pending", "processing":
 			setNextIntervalFromResponse(r, resp)
 			err := fmt.Errorf("pipeline upload not yet applied: %s", uploadStatus.State)
-			l.Info("%s (%s)", err, r)
+			l.Infof("%s (%s)", err, r)
 			return err
 		case "rejected", "failed":
-			l.Error("Unrecoverable error, skipping retries")
+			l.Errorf("Unrecoverable error, skipping retries")
 			r.Break()
 			return fmt.Errorf("pipeline upload %s: %s", uploadStatus.State, uploadStatus.Message)
 		default:
-			l.Error("Unrecoverable error, skipping retries")
+			l.Errorf("Unrecoverable error, skipping retries")
 			r.Break()
 			return fmt.Errorf("unexpected pipeline upload state from API: %s", uploadStatus.State)
 		}

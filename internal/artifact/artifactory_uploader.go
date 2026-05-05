@@ -125,14 +125,14 @@ func (u *artifactoryUploaderWork) Description() string {
 
 func (u *artifactoryUploaderWork) DoWork(context.Context) (*api.ArtifactPartETag, error) {
 	// Open file from filesystem
-	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	u.logger.Debugf("Reading file %q", u.artifact.AbsolutePath)
 	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to Artifactory.
-	u.logger.Debug("Uploading %q to %q", u.artifact.Path, u.URL(u.artifact))
+	u.logger.Debugf("Uploading %q to %q", u.artifact.Path, u.URL(u.artifact))
 
 	req, err := http.NewRequest("PUT", u.URL(u.artifact), f)
 	req.SetBasicAuth(u.user, u.password)

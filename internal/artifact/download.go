@@ -79,7 +79,7 @@ func (d Download) Start(ctx context.Context) error {
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		if err := d.try(ctx); err != nil {
-			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, r)
+			d.logger.Warnf("Error trying to download %s (%s) %s", d.conf.URL, err, r)
 			return err
 		}
 		return nil
@@ -130,7 +130,7 @@ func (d Download) try(ctx context.Context) error {
 	targetDirectory, targetFile := filepath.Split(targetPath)
 
 	// Show a nice message that we're starting to download the file
-	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetPath)
+	d.logger.Debugf("Downloading %s to %s", d.conf.URL, targetPath)
 
 	method := cmp.Or(d.conf.Method, http.MethodGet)
 
@@ -215,7 +215,7 @@ func (d Download) try(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
 	}
 
-	d.logger.Info("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
+	d.logger.Infof("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
 
 	return nil
 }
