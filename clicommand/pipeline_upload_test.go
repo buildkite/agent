@@ -20,8 +20,8 @@ func TestSearchForSecrets(t *testing.T) {
 	t.Parallel()
 
 	cfg := &PipelineUploadConfig{
-		RedactedVars:  []string{"SEKRET", "SSH_KEY"},
-		RejectSecrets: true,
+		RedactedVars: []string{"SEKRET", "SSH_KEY"},
+		AllowSecrets: false,
 	}
 
 	plainPipeline := &pipeline.Pipeline{
@@ -158,8 +158,8 @@ func TestPipelineInterpolationCaseSensitivity(t *testing.T) {
 	t.Parallel()
 
 	cfg := &PipelineUploadConfig{
-		RedactedVars:  []string{},
-		RejectSecrets: true,
+		RedactedVars: []string{},
+		AllowSecrets: false,
 	}
 
 	// this is the data structure we use for environment variables in the agent
@@ -241,8 +241,8 @@ steps:
 - command: echo $GREETING
 `
 			cfg := &PipelineUploadConfig{
-				RedactedVars:  []string{},
-				RejectSecrets: true,
+				RedactedVars: []string{},
+				AllowSecrets: false,
 			}
 			ctx := t.Context()
 			if test.preferRuntimeEnv {
@@ -444,7 +444,7 @@ steps:
 			cfg := &PipelineUploadConfig{
 				NoInterpolation: !test.interpolation,
 				RedactedVars:    []string{},
-				RejectSecrets:   true,
+				AllowSecrets:    false,
 			}
 			ctx := t.Context()
 
