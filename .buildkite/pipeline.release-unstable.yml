@@ -1,11 +1,6 @@
 steps:
   - wait
 
-  - name: ":spiral_note_pad: Check Changelog"
-    command: ".buildkite/steps/check-changelog.sh"
-
-  - wait
-
   - name: ":s3: Upload Unstable Binaries to S3"
     command: ".buildkite/steps/publish-to-s3.sh"
     env:

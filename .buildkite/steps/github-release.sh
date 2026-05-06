@@ -10,12 +10,20 @@ dry_run() {
 }
 
 echo '--- Getting credentials from SSM'
-export GITHUB_RELEASE_ACCESS_TOKEN=$(aws ssm get-parameter --name /pipelines/agent/GITHUB_RELEASE_ACCESS_TOKEN --with-decryption --output text --query Parameter.Value --region us-east-1)
+GH_TOKEN=$(aws ssm get-parameter --name /pipelines/agent/GITHUB_RELEASE_ACCESS_TOKEN --with-decryption --output text --query Parameter.Value --region us-east-1)
+export GH_TOKEN
 
-if [[ "$GITHUB_RELEASE_ACCESS_TOKEN" == "" ]]; then
-  echo "Error: Missing \$GITHUB_RELEASE_ACCESS_TOKEN"
+if [[ "$GH_TOKEN" == "" ]]; then
+  echo "Error: Missing \$GH_TOKEN"
   exit 1
 fi
+
+echo '--- Installing gh CLI'
+GH_VERSION=2.62.0
+curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+  | tar -xz -C /tmp
+install "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh
+gh --version
 
 echo '--- Getting agent version from build meta data'
 
@@ -49,7 +57,14 @@ buildkite-agent artifact download --build "$artifacts_build" "releases/*" .
 
 echo "Version is $FULL_AGENT_VERSION"
 
-export GITHUB_RELEASE_REPOSITORY="buildkite/agent"
+release_args=(
+  "v$AGENT_VERSION"
+  releases/*
+  --repo buildkite/agent
+  --target "$(git rev-parse HEAD)"
+  --generate-notes
+  --fail-on-no-commits
+)
 
 if [[ "$IS_PRERELEASE" == "1" ]]; then
   echo "--- 🚀 $AGENT_VERSION (prerelease)"
@@ -57,12 +72,12 @@ if [[ "$IS_PRERELEASE" == "1" ]]; then
   buildkite-agent meta-data set github_release_type "prerelease"
   buildkite-agent meta-data set github_release_version "$AGENT_VERSION"
 
-  dry_run github-release "v$AGENT_VERSION" releases/* --commit "$(git rev-parse HEAD)" --prerelease
+  release_args+=(--prerelease)
 else
   echo "--- 🚀 $AGENT_VERSION"
 
   buildkite-agent meta-data set github_release_type "stable"
   buildkite-agent meta-data set github_release_version "$AGENT_VERSION"
-
-  dry_run github-release "v$AGENT_VERSION" releases/* --commit "$(git rev-parse HEAD)"
 fi
+
+dry_run gh release create "${release_args[@]}"
