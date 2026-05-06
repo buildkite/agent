@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v4.0.0-beta.2](https://github.com/buildkite/agent/tree/v4.0.0-beta.2) (2026-05-06)
+
+### Changed since beta 1
+- Make pipeline secret redaction default behaviour [#3897](https://github.com/buildkite/agent/pull/3897) (@moskyb, @DrJosh9000)
+- Rip out opentracing tracing backend (take 2) [#3896](https://github.com/buildkite/agent/pull/3896) (@moskyb, @DrJosh9000)
+- Replace `cancel-grace-period` and `signal-grace-period-seconds` with `cancel-signal-timeout` and `cancel-cleanup-timeout` [#3868](https://github.com/buildkite/agent/pull/3868) (@moskyb)
+- fix: Reverse ordering for post- hooks [#3853](https://github.com/buildkite/agent/pull/3853) (@DrJosh9000)
+
+### Changed since v3.125.0
+- build(deps): bump github.com/buildkite/go-buildkite/v4 from 4.19.0 to 4.21.0 [#3860](https://github.com/buildkite/agent/pull/3860) (@dependabot[bot])
+- build(deps): bump the cloud-providers group across 1 directory with 5 updates [#3879](https://github.com/buildkite/agent/pull/3879) (@dependabot[bot])
+- build(deps): bump github.com/klauspost/compress from 1.18.5 to 1.18.6 [#3885](https://github.com/buildkite/agent/pull/3885) (@dependabot[bot])
+- build(deps): bump the container-images group across 1 directory with 3 updates [#3888](https://github.com/buildkite/agent/pull/3888) (@dependabot[bot])
+- build(deps): bump the container-images group across 2 directories with 1 update [#3895](https://github.com/buildkite/agent/pull/3895) (@dependabot[bot])
+- build(deps): bump the container-images group across 4 directories with 1 update [#3886](https://github.com/buildkite/agent/pull/3886) (@dependabot[bot])
+- build(deps): bump the container-images group across 2 directories with 1 update [#3890](https://github.com/buildkite/agent/pull/3890) (@dependabot[bot])
+- build(deps): bump the container-images group across 3 directories with 1 update [#3891](https://github.com/buildkite/agent/pull/3891) (@dependabot[bot])
+- docs: mention BUILDKITE_S3_PROFILE in artifact upload help [#3869](https://github.com/buildkite/agent/pull/3869) (@mastermanas805)
+
 ## [v3.125.0](https://github.com/buildkite/agent/tree/v3.125.0) (2026-05-04)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.124.0...v3.125.0)
 
