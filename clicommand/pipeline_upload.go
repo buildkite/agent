@@ -86,7 +86,7 @@ type PipelineUploadConfig struct {
 	DryRunFormat        string   `cli:"format"`
 	NoInterpolation     bool     `cli:"no-interpolation"`
 	RedactedVars        []string `cli:"redacted-vars" normalize:"list"`
-	RejectSecrets       bool     `cli:"reject-secrets"`
+	AllowSecrets        bool     `cli:"allow-secrets"`
 	RejectParseWarnings bool     `cli:"reject-parse-warnings"`
 
 	// Used for if_changed processing
@@ -136,9 +136,9 @@ var PipelineUploadCommand = cli.Command{
 			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
 		},
 		cli.BoolFlag{
-			Name:   "reject-secrets",
-			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets (default: false)",
-			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+			Name:   "allow-secrets",
+			Usage:  "When true, allows the uploaded pipeline to be uploaded when it has interpolated secrets. Included for compatibility with Agent v3, using this flag is insecure. (default: false)",
+			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_ALLOW_SECRETS",
 		},
 		cli.BoolFlag{
 			Name:   "reject-parse-warnings",
@@ -596,13 +596,13 @@ func searchForSecrets(
 		secretsFound := slices.Collect(maps.Keys(secretsFound))
 		slices.Sort(secretsFound)
 
-		if cfg.RejectSecrets {
+		if !cfg.AllowSecrets {
 			return fmt.Errorf("pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
 		}
 
 		l.Warnf("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
-		l.Warnf("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
-		l.Warnf("The behaviour in the above flags will become default in Buildkite Agent v4")
+		l.Warnf("This pipeline will still be uploaded, because you've used the `--allow-secrets` flag or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_ALLOW_SECRETS` environment variable.")
+		l.Warnf("This behaviour is insecure, and may be removed in a future version of the agent")
 	}
 
 	return nil
