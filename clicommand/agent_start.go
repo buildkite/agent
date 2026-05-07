@@ -139,9 +139,6 @@ type AgentStartConfig struct {
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
 	NoPTY           bool   `cli:"no-pty"`
 
-	NoANSITimestamps bool `cli:"no-ansi-timestamps"`
-	TimestampLines   bool `cli:"timestamp-lines"`
-
 	Queue                     string   `cli:"queue"`
 	Tags                      []string `cli:"tags" normalize:"list"`
 	TagsFromEC2MetaData       bool     `cli:"tags-from-ec2-meta-data"`
@@ -550,16 +547,6 @@ var AgentStartCommand = cli.Command{
 		SocketsPathFlag,
 		PluginsPathFlag,
 
-		cli.BoolFlag{
-			Name:   "no-ansi-timestamps",
-			Usage:  "Do not insert ANSI timestamp codes at the start of each line of job output (default: false)",
-			EnvVar: "BUILDKITE_NO_ANSI_TIMESTAMPS",
-		},
-		cli.BoolFlag{
-			Name:   "timestamp-lines",
-			Usage:  "Prepend timestamps on each line of job output. Has no effect unless --no-ansi-timestamps is also used (default: false)",
-			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
-		},
 		cli.StringFlag{
 			Name:   "health-check-addr",
 			Usage:  "Start an HTTP server on this addr:port that returns whether the agent is healthy, disabled by default",
@@ -1032,8 +1019,6 @@ var AgentStartCommand = cli.Command{
 			AllowedEnvironmentVariables:     allowedEnvironmentVariables,
 			StrictSingleHooks:               cfg.StrictSingleHooks,
 			RunInPty:                        !cfg.NoPTY,
-			ANSITimestamps:                  !cfg.NoANSITimestamps,
-			TimestampLines:                  cfg.TimestampLines,
 			DisconnectAfterJob:              cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout:      time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
 			DisconnectAfterUptime:           time.Duration(cfg.DisconnectAfterUptime) * time.Second,
