@@ -163,7 +163,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout_WithGitMirrors(t *testing.
 		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
-		"BUILDKITE_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
 	}
 
 	git := tester.

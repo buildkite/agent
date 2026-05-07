@@ -81,7 +81,7 @@ type ExecutorConfig struct {
 	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
 
 	// Comma-separated list of paths for git sparse checkout (cone mode).
-	SparseCheckoutPaths string `env:"BUILDKITE_SPARSE_CHECKOUT_PATHS"`
+	GitSparseCheckoutPaths []string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"`
 
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`

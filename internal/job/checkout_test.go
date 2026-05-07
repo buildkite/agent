@@ -181,17 +181,17 @@ func TestSkipCheckout(t *testing.T) {
 	}
 }
 
-func TestParseSparseCheckoutPaths(t *testing.T) {
+func TestCleanGitSparseCheckoutPaths(t *testing.T) {
 	t.Parallel()
 
-	got := parseSparseCheckoutPaths(" .buildkite/ ,src/,, docs ")
+	got := cleanGitSparseCheckoutPaths([]string{" .buildkite/ ", "src/", "", " docs "})
 	want := []string{".buildkite/", "src/", "docs"}
 	if len(got) != len(want) {
-		t.Fatalf("parseSparseCheckoutPaths() = %#v, want %#v", got, want)
+		t.Fatalf("cleanGitSparseCheckoutPaths() = %#v, want %#v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("parseSparseCheckoutPaths() = %#v, want %#v", got, want)
+			t.Fatalf("cleanGitSparseCheckoutPaths() = %#v, want %#v", got, want)
 		}
 	}
 }
@@ -224,7 +224,7 @@ func TestParseGitVersion(t *testing.T) {
 func TestSetupSparseCheckout_Enable(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
-	executor.SparseCheckoutPaths = ".buildkite/,src/"
+	executor.GitSparseCheckoutPaths = []string{".buildkite/", "src/"}
 
 	git.Expect("--version").AndWriteToStdout("git version 2.39.0").AndExitWith(0)
 	git.Expect("sparse-checkout", "set", "--cone", ".buildkite/", "src/").AndExitWith(0)
@@ -301,7 +301,7 @@ func TestSetupSparseCheckout_DisableWithoutPriorSparseConfig(t *testing.T) {
 func TestSetupSparseCheckout_VersionFallback(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
-	executor.SparseCheckoutPaths = "src/"
+	executor.GitSparseCheckoutPaths = []string{"src/"}
 
 	git.Expect("--version").AndWriteToStdout("git version 2.25.4").AndExitWith(0)
 	git.Expect("sparse-checkout").WithAnyArguments().NotCalled()
@@ -323,7 +323,7 @@ func TestSetupSparseCheckout_VersionFallback(t *testing.T) {
 func TestSetupSparseCheckout_VersionFallbackDisablesPriorSparseConfig(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
-	executor.SparseCheckoutPaths = "src/"
+	executor.GitSparseCheckoutPaths = []string{"src/"}
 	createSparseCheckoutFile(t, executor.shell.Getwd())
 
 	git.Expect("--version").AndWriteToStdout("git version 2.25.4").AndExitWith(0)

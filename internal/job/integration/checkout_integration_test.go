@@ -172,7 +172,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
-		"BUILDKITE_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
 	}
 
 	git := tester.
@@ -216,7 +216,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutExistingGitDir(t *testing.T
 		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
-		"BUILDKITE_SPARSE_CHECKOUT_PATHS=src/",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
 	}
 
 	git := tester.
@@ -242,7 +242,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutExistingGitDir(t *testing.T
 	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 
-	env[len(env)-1] = "BUILDKITE_SPARSE_CHECKOUT_PATHS=.buildkite/"
+	env[len(env)-1] = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/"
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
 	git.ExpectAll([][]any{
 		{"config", "--get-all", "remote.origin.url"},
@@ -365,7 +365,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.
 		"BUILDKITE_GIT_CLONE_FLAGS=-v --sparse",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
-		"BUILDKITE_SPARSE_CHECKOUT_PATHS=src/",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
 	}
 
 	git := tester.
