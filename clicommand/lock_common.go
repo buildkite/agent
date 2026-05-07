@@ -1,6 +1,6 @@
 package clicommand
 
-import "github.com/urfave/cli"
+import "github.com/urfave/cli/v3"
 
 const lockClientErrMessage = `could not connect to Agent API: %v
 this command can only be used when at least one agent is running with the
@@ -9,11 +9,11 @@ this command can only be used when at least one agent is running with the
 // Flags used by all lock subcommands.
 func lockCommonFlags() []cli.Flag {
 	return append(globalFlags(),
-		cli.StringFlag{
-			Name:   "lock-scope",
-			Value:  "machine",
-			Usage:  "The scope for locks used in this operation. Currently only 'machine' scope is supported",
-			EnvVar: "BUILDKITE_LOCK_SCOPE",
+		&cli.StringFlag{
+			Name:    "lock-scope",
+			Value:   "machine",
+			Usage:   "The scope for locks used in this operation. Currently only 'machine' scope is supported",
+			Sources: cli.EnvVars("BUILDKITE_LOCK_SCOPE"),
 		},
 		SocketsPathFlag,
 	)
