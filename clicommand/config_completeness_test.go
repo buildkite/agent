@@ -1,17 +1,17 @@
 package clicommand
 
 import (
-	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/oleiade/reflections"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 type configCommandPair struct {
 	Config  any
-	Command cli.Command
+	Command *cli.Command
 }
 
 var commandConfigPairs = []configCommandPair{
@@ -64,7 +64,9 @@ func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
 	for _, pair := range commandConfigPairs {
 		flagNames := make(map[string]struct{}, len(pair.Command.Flags))
 		for _, flag := range pair.Command.Flags {
-			flagNames[flag.GetName()] = struct{}{}
+			for _, name := range flag.Names() {
+				flagNames[name] = struct{}{}
+			}
 		}
 
 		fields, err := reflections.FieldsDeep(pair.Config)
@@ -116,23 +118,18 @@ func TestDescriptionsAreIndentedUsingSpaces(t *testing.T) {
 	}
 }
 
-// cli.Command.FullName() doesn't actually print the full name of a command when its a subcommand,
-// so we need to build a map of full command names to cli.Command structs ourselves
-func commandsByFullName(t *testing.T, commands []cli.Command) map[string]cli.Command {
+func commandsByFullName(t *testing.T, commands []*cli.Command) map[string]*cli.Command {
 	t.Helper()
 
-	result := make(map[string]cli.Command)
+	result := make(map[string]*cli.Command)
 
 	for _, command := range commands {
-		if len(command.Subcommands) == 0 {
+		if len(command.Commands) == 0 {
 			result[command.FullName()] = command
 		}
 
-		for _, subcommand := range command.Subcommands {
-			subcommands := commandsByFullName(t, []cli.Command{subcommand})
-			for subcommandName, cmd := range subcommands {
-				result[fmt.Sprintf("%s %s", command.FullName(), subcommandName)] = cmd
-			}
+		for _, subcommand := range command.Commands {
+			result[subcommand.FullName()] = subcommand
 		}
 	}
 
@@ -142,23 +139,19 @@ func commandsByFullName(t *testing.T, commands []cli.Command) map[string]cli.Com
 func TestAllCommandsAreTestedForConfigCompleteness(t *testing.T) {
 	t.Parallel()
 
-	allCommands := make([]cli.Command, 0, len(commandConfigPairs))
+	allCommands := make([]*cli.Command, 0, len(commandConfigPairs))
 	for _, command := range BuildkiteAgentCommands {
-		if len(command.Subcommands) > 0 {
-			allCommands = append(allCommands, command.Subcommands...)
+		if len(command.Commands) > 0 {
+			allCommands = append(allCommands, command.Commands...)
 		} else {
 			allCommands = append(allCommands, command)
 		}
 	}
 
 	for _, command := range allCommands {
-		found := false
-		for _, pair := range commandConfigPairs {
-			if pair.Command.FullName() == command.FullName() {
-				found = true
-				break
-			}
-		}
+		found := slices.ContainsFunc(commandConfigPairs, func(pair configCommandPair) bool {
+			return pair.Command.FullName() == command.FullName()
+		})
 
 		if !found {
 			t.Errorf("command %q is not being tested for config completeness in config_completeness_test.go\n Add it and its associated config struct to the commandConfigPairs slice in config_completeness_test.go", command.FullName())

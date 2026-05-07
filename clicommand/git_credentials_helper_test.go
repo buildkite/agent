@@ -1,7 +1,7 @@
 package clicommand
 
 import (
-	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 func TestParseGitCredentialInput(t *testing.T) {
@@ -204,13 +204,16 @@ func runGitCredentialsHelperCommand(t *testing.T, endpoint, action, input string
 		_ = readStdin.Close()
 	})
 
-	app := cli.NewApp()
-	app.Commands = []cli.Command{GitCredentialsHelperCommand}
-	app.ExitErrHandler = func(_ *cli.Context, _ error) {}
-	var output bytes.Buffer
-	app.Writer = &output
-
-	err = app.Run([]string{
+	// Clone the command, because Run mutates it, which breaks the command completeness test.
+	cmd := *GitCredentialsHelperCommand
+	var output strings.Builder
+	app := &cli.Command{
+		Name:           "buildkite-agent",
+		Commands:       []*cli.Command{&cmd},
+		ExitErrHandler: func(context.Context, *cli.Command, error) {},
+		Writer:         &output,
+	}
+	err = app.Run(t.Context(), []string{
 		"buildkite-agent",
 		"git-credentials-helper",
 		"--job-id", "job-id",
