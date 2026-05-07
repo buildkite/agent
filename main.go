@@ -7,12 +7,13 @@ package main
 //go:generate go tool gofumpt -w internal/mime/mime.go
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/buildkite/agent/v4/clicommand"
 	"github.com/buildkite/agent/v4/version"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const appHelpTemplate = `Usage:
@@ -48,30 +49,30 @@ Options:
 {{ end -}}
 `
 
-func printVersion(c *cli.Context) {
-	_, _ = fmt.Fprintf(c.App.Writer, "%s version %s\n", c.App.Name, version.FullVersion())
+func printVersion(c *cli.Command) {
+	_, _ = fmt.Fprintf(c.Writer, "%s version %s\n", c.Root().Name, version.FullVersion())
 }
 
 func main() {
-	cli.AppHelpTemplate = appHelpTemplate
 	cli.CommandHelpTemplate = commandHelpTemplate
 	cli.SubcommandHelpTemplate = subcommandHelpTemplate
 	cli.VersionPrinter = printVersion
 
-	app := cli.NewApp()
-	app.Name = "buildkite-agent"
-	app.Version = version.Version()
-	app.Commands = clicommand.BuildkiteAgentCommands
-	app.ErrWriter = os.Stderr
+	app := &cli.Command{
+		Name:                          "buildkite-agent",
+		Version:                       version.Version(),
+		Commands:                      clicommand.BuildkiteAgentCommands,
+		CustomRootCommandHelpTemplate: appHelpTemplate,
+	}
 
 	// When a sub command can't be found
-	app.CommandNotFound = func(c *cli.Context, command string) {
+	app.CommandNotFound = func(ctx context.Context, c *cli.Command, command string) {
 		_, _ = fmt.Fprintf(app.ErrWriter, "buildkite-agent: unknown subcommand %q\n", command)
-		_, _ = fmt.Fprintf(app.ErrWriter, "Run '%s --help' for usage.\n", c.App.Name)
+		_, _ = fmt.Fprintf(app.ErrWriter, "Run '%s --help' for usage.\n", c.Root().Name)
 		os.Exit(1)
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
 	}
 }
