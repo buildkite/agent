@@ -188,9 +188,6 @@ type ExecutorConfig struct {
 	// Traceing context information
 	TracingTraceParent string
 
-	// Accept traceparent context from Buildkite control plane
-	TracingPropagateTraceparent bool
-
 	// Whether to start the JobAPI
 	JobAPI bool
 
