@@ -3,7 +3,7 @@ package clicommand
 import (
 	"time"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const (
@@ -12,22 +12,22 @@ const (
 )
 
 var (
-	cancelSignalTimeoutFlag = cli.DurationFlag{
-		Name:   "cancel-signal-timeout",
-		Value:  defaultCancelSignalTimeout,
-		Usage:  "The amount of time given to a subprocess to handle the cancel signal before SIGKILL is sent",
-		EnvVar: "BUILDKITE_CANCEL_SIGNAL_TIMEOUT",
+	cancelSignalTimeoutFlag = &cli.DurationFlag{
+		Name:    "cancel-signal-timeout",
+		Value:   defaultCancelSignalTimeout,
+		Usage:   "The amount of time given to a subprocess to handle the cancel signal before SIGKILL is sent",
+		Sources: cli.EnvVars("BUILDKITE_CANCEL_SIGNAL_TIMEOUT"),
 	}
-	cancelSignalFlag = cli.StringFlag{
-		Name:   "cancel-signal",
-		Value:  "SIGTERM",
-		Usage:  "The signal to use for cancellation",
-		EnvVar: "BUILDKITE_CANCEL_SIGNAL",
+	cancelSignalFlag = &cli.StringFlag{
+		Name:    "cancel-signal",
+		Value:   "SIGTERM",
+		Usage:   "The signal to use for cancellation",
+		Sources: cli.EnvVars("BUILDKITE_CANCEL_SIGNAL"),
 	}
-	cancelCleanupTimeoutFlag = cli.DurationFlag{
-		Name:   "cancel-cleanup-timeout",
-		Value:  defaultCancelCleanupTimeout,
-		Usage:  "The amount of time given to the agent after the process exits or is killed to upload logs and artifacts",
-		EnvVar: "BUILDKITE_CANCEL_CLEANUP_TIMEOUT",
+	cancelCleanupTimeoutFlag = &cli.DurationFlag{
+		Name:    "cancel-cleanup-timeout",
+		Value:   defaultCancelCleanupTimeout,
+		Usage:   "The amount of time given to the agent after the process exits or is killed to upload logs and artifacts",
+		Sources: cli.EnvVars("BUILDKITE_CANCEL_CLEANUP_TIMEOUT"),
 	}
 )
