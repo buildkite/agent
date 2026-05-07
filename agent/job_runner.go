@@ -254,50 +254,11 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		outputWriter = io.MultiWriter(outputWriter, tmpFile)
 	}
 
-	var pipeWriter *io.PipeWriter
+	// processWriter -> timestamper -> outputWriter
 
-	switch {
-	case conf.AgentConfiguration.ANSITimestamps:
-		// processWriter -> prefixer -> outputWriter
-
-		// If we have ansi-timestamps, we can skip line timestamps
-		prefixer := process.NewTimestamper(outputWriter, core.BKTimestamp, 1*time.Second)
-		allWriters = append(allWriters, prefixer)
-
-	case conf.AgentConfiguration.TimestampLines:
-		// processWriter -> pw -> pr -> process.Scanner -> outputWriter
-
-		// We use a pipe to join a writer (processWriter) to a reader
-		// (process.Scanner).
-		pr, pw := io.Pipe()
-		pipeWriter = pw
-
-		// If we have timestamp lines on, we have to buffer lines before we flush them
-		// because we need to know if the line is a header or not. It's a bummer.
-		allWriters = append(allWriters, pw)
-
-		go func() {
-			// Use a scanner to process output line by line
-			err := process.NewScanner(r.agentLogger).ScanLines(pr, func(line string) {
-				// Prefix non-header log lines with timestamps
-				if !isHeaderOrExpansion(line) {
-					line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
-				}
-
-				// Write the log line to the buffer
-				_, _ = outputWriter.Write([]byte(line + "\n"))
-			})
-			if err != nil {
-				r.agentLogger.Errorf("[JobRunner] Encountered error %v", err)
-			}
-		}()
-
-	default: // neither ANSI timestamps nor plaintext timestamps
-		// processWriter -> outputWriter
-
-		// Write output directly to the line buffer
-		allWriters = append(allWriters, outputWriter)
-	}
+	// If we have ansi-timestamps, we can skip line timestamps
+	prefixer := process.NewTimestamper(outputWriter, core.BKTimestamp, 1*time.Second)
+	allWriters = append(allWriters, prefixer)
 
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
 		allWriters = append(allWriters, NewJobLogger(conf))
@@ -361,11 +322,6 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// Close the writer end of the pipe when the process finishes
 	go func() {
 		<-r.process.Done()
-		if pipeWriter != nil {
-			if err := pipeWriter.Close(); err != nil {
-				r.agentLogger.Errorf("Couldn't close pipe: %v", err)
-			}
-		}
 		if tmpFile != nil {
 			if err := os.Remove(tmpFile.Name()); err != nil {
 				r.agentLogger.Errorf("Couldn't remove job log temp file: %v", err)
