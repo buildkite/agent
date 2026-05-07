@@ -53,8 +53,6 @@ type AgentConfiguration struct {
 	VerificationJWKS             any    // The set of keys to verify jobs with
 	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
 
-	ANSITimestamps               bool
-	TimestampLines               bool
 	HealthCheckAddr              string
 	DisconnectAfterJob           bool
 	DisconnectAfterIdleTimeout   time.Duration
