@@ -101,9 +101,6 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		}
 	}
 
-	// Start the header time streamer
-	go r.headerTimesStreamer.Run(ctx)
-
 	// Start the log streamer. Launches multiple goroutines.
 	if err := r.logStreamer.Start(ctx); err != nil {
 		return err
@@ -404,9 +401,6 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 	// Stop the log streamer. This will block until all the chunks have been uploaded
 	r.logStreamer.Stop()
-
-	// Stop the header time streamer. This will block until all the chunks have been uploaded
-	r.headerTimesStreamer.Stop()
 
 	// Warn about failed chunks
 	if count := r.logStreamer.FailedChunks(); count > 0 {
