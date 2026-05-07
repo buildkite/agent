@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/lock"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const lockAcquireHelpDescription = `Usage:
@@ -41,28 +41,28 @@ type LockAcquireConfig struct {
 	LockWaitTimeout time.Duration `cli:"lock-wait-timeout"`
 }
 
-var LockAcquireCommand = cli.Command{
+var LockAcquireCommand = &cli.Command{
 	Name:        "acquire",
 	Usage:       "Acquires a lock from the agent leader",
 	Description: lockAcquireHelpDescription,
 	Flags: append(lockCommonFlags(),
-		cli.DurationFlag{
-			Name:   "lock-wait-timeout",
-			Usage:  "Sets a maximum duration to wait for a lock before giving up",
-			EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
+		&cli.DurationFlag{
+			Name:    "lock-wait-timeout",
+			Usage:   "Sets a maximum duration to wait for a lock before giving up",
+			Sources: cli.EnvVars("BUILDKITE_LOCK_WAIT_TIMEOUT"),
 		},
 	),
 	Action: lockAcquireAction,
 }
 
-func lockAcquireAction(c *cli.Context) error {
+func lockAcquireAction(ctx context.Context, c *cli.Command) error {
 	if c.NArg() != 1 {
-		_, _ = fmt.Fprint(c.App.ErrWriter, lockAcquireHelpDescription)
+		_, _ = fmt.Fprint(c.ErrWriter, lockAcquireHelpDescription)
 		return &SilentExitError{code: 1}
 	}
-	key := c.Args()[0]
+	key := c.Args().Get(0)
 
-	ctx, cfg, _, _, done := setupLoggerAndConfig[LockAcquireConfig](context.Background(), c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockAcquireConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
@@ -85,6 +85,6 @@ func lockAcquireAction(c *cli.Context) error {
 		return fmt.Errorf("could not acquire lock: %w", err)
 	}
 
-	_, err = fmt.Fprintln(c.App.Writer, token)
+	_, err = fmt.Fprintln(c.Writer, token)
 	return err
 }
