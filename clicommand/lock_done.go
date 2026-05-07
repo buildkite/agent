@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/v4/lock"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const lockDoneHelpDescription = `Usage:
@@ -34,7 +34,7 @@ type LockDoneConfig struct {
 	LockCommonConfig
 }
 
-var LockDoneCommand = cli.Command{
+var LockDoneCommand = &cli.Command{
 	Name:        "done",
 	Usage:       "Completes a do-once lock",
 	Description: lockDoneHelpDescription,
@@ -42,14 +42,14 @@ var LockDoneCommand = cli.Command{
 	Action:      lockDoneAction,
 }
 
-func lockDoneAction(c *cli.Context) error {
+func lockDoneAction(ctx context.Context, c *cli.Command) error {
 	if c.NArg() != 1 {
-		_, _ = fmt.Fprint(c.App.ErrWriter, lockDoneHelpDescription)
+		_, _ = fmt.Fprint(c.ErrWriter, lockDoneHelpDescription)
 		return &SilentExitError{code: 1}
 	}
-	key := c.Args()[0]
+	key := c.Args().Get(0)
 
-	ctx, cfg, _, _, done := setupLoggerAndConfig[LockDoneConfig](context.Background(), c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockDoneConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {

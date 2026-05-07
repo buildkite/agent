@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 // CacheConfig includes cache-related shared options for easy inclusion across
@@ -24,53 +24,53 @@ type CacheConfig struct {
 
 func cacheFlags() []cli.Flag {
 	return []cli.Flag{
-		cli.StringSliceFlag{
-			Name:   "names",
-			Value:  &cli.StringSlice{},
-			Usage:  "Cache names to process (can be specified multiple times; if empty, processes all caches)",
-			EnvVar: "BUILDKITE_CACHE_NAMES",
+		&cli.StringSliceFlag{
+			Name:    "names",
+			Value:   []string{},
+			Usage:   "Cache names to process (can be specified multiple times; if empty, processes all caches)",
+			Sources: cli.EnvVars("BUILDKITE_CACHE_NAMES"),
 		},
-		cli.StringFlag{
-			Name:   "registry",
-			Value:  "~",
-			Usage:  "The slug of the cache registry to use; '~' selects the cluster's default registry",
-			EnvVar: "BUILDKITE_AGENT_CACHE_REGISTRY",
+		&cli.StringFlag{
+			Name:    "registry",
+			Value:   "~",
+			Usage:   "The slug of the cache registry to use; '~' selects the cluster's default registry",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_CACHE_REGISTRY"),
 		},
-		cli.StringFlag{
-			Name:   "cache-store-url",
-			Value:  "",
-			Usage:  "The URL of the cache store (e.g., s3://bucket-name); uploads/downloads use ambient credentials",
-			EnvVar: "BUILDKITE_AGENT_CACHE_STORE_URL",
+		&cli.StringFlag{
+			Name:    "cache-store-url",
+			Value:   "",
+			Usage:   "The URL of the cache store (e.g., s3://bucket-name); uploads/downloads use ambient credentials",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_CACHE_STORE_URL"),
 		},
-		cli.StringFlag{
-			Name:   "branch",
-			Value:  "",
-			Usage:  "Which branch should the cache be associated with",
-			EnvVar: "BUILDKITE_BRANCH",
+		&cli.StringFlag{
+			Name:    "branch",
+			Value:   "",
+			Usage:   "Which branch should the cache be associated with",
+			Sources: cli.EnvVars("BUILDKITE_BRANCH"),
 		},
-		cli.StringFlag{
-			Name:   "pipeline",
-			Value:  "",
-			Usage:  "The pipeline slug for this cache",
-			EnvVar: "BUILDKITE_PIPELINE_SLUG",
+		&cli.StringFlag{
+			Name:    "pipeline",
+			Value:   "",
+			Usage:   "The pipeline slug for this cache",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_SLUG"),
 		},
-		cli.StringFlag{
-			Name:   "organization",
-			Value:  "",
-			Usage:  "The organization slug for this cache",
-			EnvVar: "BUILDKITE_ORGANIZATION_SLUG",
+		&cli.StringFlag{
+			Name:    "organization",
+			Value:   "",
+			Usage:   "The organization slug for this cache",
+			Sources: cli.EnvVars("BUILDKITE_ORGANIZATION_SLUG"),
 		},
-		cli.StringFlag{
-			Name:   "cache-config-file",
-			Value:  "",
-			Usage:  "Path to the cache configuration YAML file (defaults to .buildkite/cache.yml or .buildkite/cache.yaml)",
-			EnvVar: "BUILDKITE_CACHE_CONFIG_FILE",
+		&cli.StringFlag{
+			Name:    "cache-config-file",
+			Value:   "",
+			Usage:   "Path to the cache configuration YAML file (defaults to .buildkite/cache.yml or .buildkite/cache.yaml)",
+			Sources: cli.EnvVars("BUILDKITE_CACHE_CONFIG_FILE"),
 		},
-		cli.IntFlag{
-			Name:   "concurrency",
-			Value:  2,
-			Usage:  "Number of concurrent cache operations",
-			EnvVar: "BUILDKITE_CACHE_CONCURRENCY",
+		&cli.IntFlag{
+			Name:    "concurrency",
+			Value:   2,
+			Usage:   "Number of concurrent cache operations",
+			Sources: cli.EnvVars("BUILDKITE_CACHE_CONCURRENCY"),
 		},
 	}
 }

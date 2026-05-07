@@ -11,7 +11,7 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const jobPromiseFailureHelpDescription = `Usage:
@@ -53,27 +53,27 @@ type JobPromiseFailureConfig struct {
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 }
 
-var JobPromiseFailureCommand = cli.Command{
+var JobPromiseFailureCommand = &cli.Command{
 	Name:        "promise-failure",
 	Usage:       "Promise a job will finish with a failing exit status",
 	Description: jobPromiseFailureHelpDescription,
 	Hidden:      true, // hidden until the early-failure feature is generally available
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "The job to declare an early failure for. Defaults to the current job",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "The job to declare an early failure for. Defaults to the current job",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "reason",
 			Value: "",
 			Usage: "An optional human-readable reason for the promised failure",
 		},
 		RedactedVars,
 	}),
-	Action: func(c *cli.Context) error {
-		ctx, cfg, l, _, done := setupLoggerAndConfig[JobPromiseFailureConfig](context.Background(), c)
+	Action: func(ctx context.Context, c *cli.Command) error {
+		ctx, cfg, l, _, done := setupLoggerAndConfig[JobPromiseFailureConfig](ctx, c)
 		defer done()
 
 		exitStatus, err := strconv.Atoi(cfg.ExitStatus)

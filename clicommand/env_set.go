@@ -9,7 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const envSetHelpDescription = `Usage:
@@ -46,29 +46,28 @@ type EnvSetConfig struct {
 	OutputFormat string `cli:"output-format"`
 }
 
-var EnvSetCommand = cli.Command{
+var EnvSetCommand = &cli.Command{
 	Name:        "set",
 	Usage:       "Sets variables in the job execution environment",
 	Description: envSetHelpDescription,
 	Flags: append(globalFlags(),
-		cli.StringFlag{
-			Name:   "input-format",
-			Usage:  "Input format: plain or json",
-			EnvVar: "BUILDKITE_AGENT_ENV_SET_INPUT_FORMAT",
-			Value:  "plain",
+		&cli.StringFlag{
+			Name:    "input-format",
+			Usage:   "Input format: plain or json",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ENV_SET_INPUT_FORMAT"),
+			Value:   "plain",
 		},
-		cli.StringFlag{
-			Name:   "output-format",
-			Usage:  "Output format: quiet (no output), plain, json, or json-pretty",
-			EnvVar: "BUILDKITE_AGENT_ENV_SET_OUTPUT_FORMAT",
-			Value:  "plain",
+		&cli.StringFlag{
+			Name:    "output-format",
+			Usage:   "Output format: quiet (no output), plain, json, or json-pretty",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ENV_SET_OUTPUT_FORMAT"),
+			Value:   "plain",
 		},
 	),
 	Action: envSetAction,
 }
 
-func envSetAction(c *cli.Context) error {
-	ctx := context.Background()
+func envSetAction(ctx context.Context, c *cli.Command) error {
 	ctx, cfg, _, _, done := setupLoggerAndConfig[EnvSetConfig](ctx, c)
 	defer done()
 
@@ -105,7 +104,7 @@ func envSetAction(c *cli.Context) error {
 	}
 
 	// Inspect each arg, which could either be "-" for stdin, or "KEY=value"
-	for _, arg := range c.Args() {
+	for _, arg := range c.Args().Slice() {
 		if arg == "-" {
 			// TODO: replace with c.App.Reader (or something like that) when we upgrade to urfave/cli v3
 			sc := bufio.NewScanner(os.Stdin)
@@ -138,23 +137,23 @@ func envSetAction(c *cli.Context) error {
 
 	case "plain":
 		if len(resp.Added) > 0 {
-			_, _ = fmt.Fprintln(c.App.Writer, "Added:")
+			_, _ = fmt.Fprintln(c.Writer, "Added:")
 			for _, a := range resp.Added {
-				_, _ = fmt.Fprintf(c.App.Writer, "+ %s\n", a)
+				_, _ = fmt.Fprintf(c.Writer, "+ %s\n", a)
 			}
 		}
 		if len(resp.Updated) > 0 {
-			_, _ = fmt.Fprintln(c.App.Writer, "Updated:")
+			_, _ = fmt.Fprintln(c.Writer, "Updated:")
 			for _, u := range resp.Updated {
-				_, _ = fmt.Fprintf(c.App.Writer, "~ %s\n", u)
+				_, _ = fmt.Fprintf(c.Writer, "~ %s\n", u)
 			}
 		}
 		if len(resp.Added) == 0 && len(resp.Updated) == 0 {
-			_, _ = fmt.Fprintln(c.App.Writer, "No variables added or updated.")
+			_, _ = fmt.Fprintln(c.Writer, "No variables added or updated.")
 		}
 
 	case "json", "json-pretty":
-		enc := json.NewEncoder(c.App.Writer)
+		enc := json.NewEncoder(c.Writer)
 		if c.String("output-format") == "json-pretty" {
 			enc.SetIndent("", "  ")
 		}

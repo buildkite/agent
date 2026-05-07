@@ -7,7 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -83,13 +83,12 @@ type CacheRestoreConfig struct {
 	CacheConfig
 }
 
-var CacheRestoreCommand = cli.Command{
+var CacheRestoreCommand = &cli.Command{
 	Name:        "restore",
 	Usage:       "Restores files from the cache",
 	Description: cacheRestoreHelpDescription,
 	Flags:       slices.Concat(globalFlags(), apiFlags(), cacheFlags()),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheRestoreConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")
