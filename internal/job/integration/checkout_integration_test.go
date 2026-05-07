@@ -1308,6 +1308,101 @@ func TestMultipleRemoteURLsFallsBackToGetURL(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
+func TestCommitVerificationWithValidCommit(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Get the real commit SHA from the test repo
+	commitHash, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// Expect the normal checkout flow with merge-base --is-ancestor inserted
+	// between fetch and checkout. Since this is a full clone (not shallow),
+	// merge-base succeeds immediately — no rev-parse --is-shallow-repository needed.
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", commitHash},
+		{"merge-base", "--is-ancestor", commitHash, "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", commitHash, "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Get the commit from the update-test-txt branch (not on main)
+	commitHash, err := tester.Repo.RevParse("update-test-txt")
+	if err != nil {
+		t.Fatalf("RevParse(update-test-txt) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// Expect fetch, then merge-base which should return exit 1 (not ancestor).
+	// No checkout should happen after verification fails.
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", commitHash},
+		{"merge-base", "--is-ancestor", commitHash, "main"},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+
+	// This should fail — the commit is not on main
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatalf("expected build to fail with commit verification error, but it passed")
+	}
+}
+
 type subDirMatcher struct {
 	dir string
 }

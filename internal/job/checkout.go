@@ -968,6 +968,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
+	if err := e.verifyCommit(ctx); err != nil {
+		return err
+	}
+
 	gitCheckoutFlags := e.GitCheckoutFlags
 
 	if e.Commit == "HEAD" {
