@@ -50,7 +50,7 @@ func TestParseSecrets(t *testing.T) {
 			cfg := clicommand.RedactorAddConfig{
 				Format:          tc.formatString,
 				ApplyVarsFilter: tc.applyVarsFilter,
-				RedactedVars:    *clicommand.RedactedVars.Value,
+				RedactedVars:    clicommand.RedactedVars.Value,
 			}
 			secrets, err := clicommand.ParseSecrets(logger.Discard, cfg, input)
 			if err != nil {

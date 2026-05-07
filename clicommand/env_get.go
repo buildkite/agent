@@ -7,7 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const envClientErrMessage = `could not create Job API client: %w
@@ -64,23 +64,22 @@ type EnvGetConfig struct {
 	Format string `cli:"format"`
 }
 
-var EnvGetCommand = cli.Command{
+var EnvGetCommand = &cli.Command{
 	Name:        "get",
 	Usage:       "Gets variables from the job execution environment",
 	Description: envGetHelpDescription,
 	Flags: append(globalFlags(),
-		cli.StringFlag{
-			Name:   "format",
-			Usage:  "Output format: plain, json, or json-pretty",
-			EnvVar: "BUILDKITE_AGENT_ENV_GET_FORMAT",
-			Value:  "plain",
+		&cli.StringFlag{
+			Name:    "format",
+			Usage:   "Output format: plain, json, or json-pretty",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ENV_GET_FORMAT"),
+			Value:   "plain",
 		},
 	),
 	Action: envGetAction,
 }
 
-func envGetAction(c *cli.Context) error {
-	ctx := context.Background()
+func envGetAction(ctx context.Context, c *cli.Command) error {
 	ctx, cfg, l, _, done := setupLoggerAndConfig[EnvGetConfig](ctx, c)
 	defer done()
 
@@ -97,9 +96,9 @@ func envGetAction(c *cli.Context) error {
 	notFound := false
 
 	// Filter envMap by any remaining args.
-	if len(c.Args()) > 0 {
+	if c.Args().Len() > 0 {
 		em := make(map[string]string)
-		for _, arg := range c.Args() {
+		for _, arg := range c.Args().Slice() {
 			v, ok := envMap[arg]
 			if !ok {
 				notFound = true
@@ -113,21 +112,22 @@ func envGetAction(c *cli.Context) error {
 
 	switch cfg.Format {
 	case "plain":
-		if len(c.Args()) == 1 {
+		if c.Args().Len() == 1 {
 			// Just print the value.
 			for _, v := range envMap {
-				_, _ = fmt.Fprintln(c.App.Writer, v)
+				_, _ = fmt.Fprintln(c.Writer, v)
 			}
 			break
 		}
 
 		// Print everything.
 		for _, v := range env.FromMap(envMap).ToSlice() {
-			_, _ = fmt.Fprintln(c.App.Writer, v)
+			_, _ = fmt.Fprintln(c.Writer, v)
 		}
 
 	case "json", "json-pretty":
-		enc := json.NewEncoder(c.App.Writer)
+
+		enc := json.NewEncoder(c.Writer)
 		enc.SetEscapeHTML(false) // HTML escapes may interfere with secret redaction
 		if c.String("format") == "json-pretty" {
 			enc.SetIndent("", "  ")
