@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const (
@@ -14,27 +14,27 @@ const (
 )
 
 var (
-	cancelGracePeriodFlag = cli.IntFlag{
+	cancelGracePeriodFlag = &cli.IntFlag{
 		Name:  "cancel-grace-period",
 		Value: defaultCancelGracePeriodSecs,
 		Usage: "The number of seconds a canceled or timed out job is given " +
 			"to gracefully terminate and upload its artifacts",
-		EnvVar: "BUILDKITE_CANCEL_GRACE_PERIOD",
+		Sources: cli.EnvVars("BUILDKITE_CANCEL_GRACE_PERIOD"),
 	}
-	cancelSignalFlag = cli.StringFlag{
-		Name:   "cancel-signal",
-		Value:  "SIGTERM",
-		Usage:  "The signal to use for cancellation",
-		EnvVar: "BUILDKITE_CANCEL_SIGNAL",
+	cancelSignalFlag = &cli.StringFlag{
+		Name:    "cancel-signal",
+		Value:   "SIGTERM",
+		Usage:   "The signal to use for cancellation",
+		Sources: cli.EnvVars("BUILDKITE_CANCEL_SIGNAL"),
 	}
-	signalGracePeriodSecondsFlag = cli.IntFlag{
+	signalGracePeriodSecondsFlag = &cli.IntFlag{
 		Name:  "signal-grace-period-seconds",
 		Value: defaultSignalGracePeriodSecs,
 		Usage: "The number of seconds given to a subprocess to handle being sent ′cancel-signal′. " +
 			"After this period has elapsed, SIGKILL will be sent. " +
 			"Negative values are taken relative to ′cancel-grace-period′. " +
 			"The default value (-1) means that the effective signal grace period is equal to ′cancel-grace-period′ minus 1.",
-		EnvVar: "BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
+		Sources: cli.EnvVars("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS"),
 	}
 )
 

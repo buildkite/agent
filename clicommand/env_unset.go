@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/buildkite/agent/v3/jobapi"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const envUnsetHelpDescription = `Usage:
@@ -44,29 +44,28 @@ type EnvUnsetConfig struct {
 	OutputFormat string `cli:"output-format"`
 }
 
-var EnvUnsetCommand = cli.Command{
+var EnvUnsetCommand = &cli.Command{
 	Name:        "unset",
 	Usage:       "Unsets variables from the job execution environment",
 	Description: envUnsetHelpDescription,
 	Flags: append(globalFlags(),
-		cli.StringFlag{
-			Name:   "input-format",
-			Usage:  "Input format: plain or json",
-			EnvVar: "BUILDKITE_AGENT_ENV_UNSET_INPUT_FORMAT",
-			Value:  "plain",
+		&cli.StringFlag{
+			Name:    "input-format",
+			Usage:   "Input format: plain or json",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ENV_UNSET_INPUT_FORMAT"),
+			Value:   "plain",
 		},
-		cli.StringFlag{
-			Name:   "output-format",
-			Usage:  "Output format: quiet (no output), plain, json, or json-pretty",
-			EnvVar: "BUILDKITE_AGENT_ENV_UNSET_OUTPUT_FORMAT",
-			Value:  "plain",
+		&cli.StringFlag{
+			Name:    "output-format",
+			Usage:   "Output format: quiet (no output), plain, json, or json-pretty",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ENV_UNSET_OUTPUT_FORMAT"),
+			Value:   "plain",
 		},
 	),
 	Action: envUnsetAction,
 }
 
-func envUnsetAction(c *cli.Context) error {
-	ctx := context.Background()
+func envUnsetAction(ctx context.Context, c *cli.Command) error {
 	ctx, cfg, _, _, done := setupLoggerAndConfig[EnvUnsetConfig](ctx, c)
 	defer done()
 
@@ -92,11 +91,11 @@ func envUnsetAction(c *cli.Context) error {
 		}
 
 	default:
-		_, _ = fmt.Fprintf(c.App.ErrWriter, "Invalid input format %q\n", c.String("input-format"))
+		_, _ = fmt.Fprintf(c.ErrWriter, "Invalid input format %q\n", c.String("input-format"))
 	}
 
 	// Inspect each arg, which could either be "-" for stdin, or "KEY"
-	for _, arg := range c.Args() {
+	for _, arg := range c.Args().Slice() {
 		if arg == "-" {
 			// Parse standard input
 			sc := bufio.NewScanner(os.Stdin)
@@ -129,16 +128,16 @@ func envUnsetAction(c *cli.Context) error {
 
 	case "plain":
 		if len(unset) > 0 {
-			_, _ = fmt.Fprintln(c.App.Writer, "Unset:")
+			_, _ = fmt.Fprintln(c.Writer, "Unset:")
 			for _, d := range unset {
-				_, _ = fmt.Fprintf(c.App.Writer, "- %s\n", d)
+				_, _ = fmt.Fprintf(c.Writer, "- %s\n", d)
 			}
 		} else {
-			_, _ = fmt.Fprintln(c.App.Writer, "No variables unset.")
+			_, _ = fmt.Fprintln(c.Writer, "No variables unset.")
 		}
 
 	case "json", "json-pretty":
-		enc := json.NewEncoder(c.App.Writer)
+		enc := json.NewEncoder(c.Writer)
 		if c.String("output-format") == "json-pretty" {
 			enc.SetIndent("", "  ")
 		}

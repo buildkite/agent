@@ -1,13 +1,14 @@
 package hook_test
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/version"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 func TestMain(m *testing.M) {
@@ -15,19 +16,20 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	app := cli.NewApp()
-	app.Name = "buildkite-agent"
-	app.Version = version.Version()
-	app.Commands = []cli.Command{
-		{
-			Name: "env",
-			Subcommands: []cli.Command{
-				clicommand.EnvDumpCommand,
+	app := &cli.Command{
+		Name:    "buildkite-agent",
+		Version: version.Version(),
+		Commands: []*cli.Command{
+			{
+				Name: "env",
+				Commands: []*cli.Command{
+					clicommand.EnvDumpCommand,
+				},
 			},
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
 	}
 }

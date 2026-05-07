@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const buildCancelDescription = `Usage:
@@ -32,20 +32,19 @@ type BuildCancelConfig struct {
 	Build string `cli:"build" validate:"required"`
 }
 
-var BuildCancelCommand = cli.Command{
+var BuildCancelCommand = &cli.Command{
 	Name:        "cancel",
 	Usage:       "Cancel a build",
 	Description: buildCancelDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			Usage:  "The build UUID to cancel",
-			EnvVar: "BUILDKITE_BUILD_ID",
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Usage:   "The build UUID to cancel",
+			Sources: cli.EnvVars("BUILDKITE_BUILD_ID"),
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BuildCancelConfig](ctx, c)
 		defer done()
 

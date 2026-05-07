@@ -7,7 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -52,7 +52,7 @@ list of parts; each part is a literal string or one of { agent: os },
 set fallbackLimit: true to make every part after it optional for fallback
 matching (the marked part itself stays mandatory). In the example below an exact
 match is preferred, but if the lockfile changed, an entry matching node + os + arch
-is still restored, as the fallback is specified on arch, making node + os + arch mandatory, 
+is still restored, as the fallback is specified on arch, making node + os + arch mandatory,
 but making checksum optional:
 
     caches:
@@ -83,13 +83,12 @@ type CacheRestoreConfig struct {
 	CacheConfig
 }
 
-var CacheRestoreCommand = cli.Command{
+var CacheRestoreCommand = &cli.Command{
 	Name:        "restore",
 	Usage:       "Restores files from the cache",
 	Description: cacheRestoreHelpDescription,
 	Flags:       slices.Concat(globalFlags(), apiFlags(), cacheFlags()),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheRestoreConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")

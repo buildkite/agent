@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const resumeDescription = `Usage:
@@ -30,14 +30,13 @@ type AgentResumeConfig struct {
 	APIConfig
 }
 
-var AgentResumeCommand = cli.Command{
+var AgentResumeCommand = &cli.Command{
 	Name:        "resume",
 	Category:    categoryJobCommands,
 	Usage:       "Resume the agent",
 	Description: resumeDescription,
 	Flags:       slices.Concat(globalFlags(), apiFlags()),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AgentResumeConfig](ctx, c)
 		defer done()
 

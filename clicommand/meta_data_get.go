@@ -8,7 +8,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -34,31 +34,30 @@ type MetaDataGetConfig struct {
 	Build   string `cli:"build"`
 }
 
-var MetaDataGetCommand = cli.Command{
+var MetaDataGetCommand = &cli.Command{
 	Name:        "get",
 	Usage:       "Get data from a build",
 	Description: metaDataGetHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "default",
 			Value: "",
 			Usage: "If the meta-data value doesn't exist return this instead",
 		},
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job's build should the meta-data be retrieved from",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job's build should the meta-data be retrieved from",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			Usage:  "Which build should the meta-data be retrieved from. --build will take precedence over --job",
-			EnvVar: "BUILDKITE_METADATA_BUILD_ID",
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Usage:   "Which build should the meta-data be retrieved from. --build will take precedence over --job",
+			Sources: cli.EnvVars("BUILDKITE_METADATA_BUILD_ID"),
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataGetConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-get")
@@ -105,7 +104,7 @@ var MetaDataGetCommand = cli.Command{
 					cfg.Key,
 					cfg.Default,
 				)
-				_, _ = fmt.Fprint(c.App.Writer, cfg.Default)
+				_, _ = fmt.Fprint(c.Writer, cfg.Default)
 				return nil
 			}
 
@@ -113,7 +112,7 @@ var MetaDataGetCommand = cli.Command{
 		}
 
 		// TODO: in the next agent magor version, we should terminate with a newline using fmt.FPrintln
-		_, err = fmt.Fprint(c.App.Writer, metaData.Value)
+		_, err = fmt.Fprint(c.Writer, metaData.Value)
 		return err
 	},
 }

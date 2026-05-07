@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -38,39 +38,38 @@ type StepCancelConfig struct {
 	Build                   string `cli:"build"`
 }
 
-var StepCancelCommand = cli.Command{
+var StepCancelCommand = &cli.Command{
 	Name:        "cancel",
 	Usage:       "Cancel all unfinished jobs for a step",
 	Description: stepCancelHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "step",
-			Value:  "",
-			Usage:  "The step to cancel. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
-			EnvVar: "BUILDKITE_STEP_ID",
+		&cli.StringFlag{
+			Name:    "step",
+			Value:   "",
+			Usage:   "The step to cancel. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
+			Sources: cli.EnvVars("BUILDKITE_STEP_ID"),
 		},
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			Usage:  "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
-			EnvVar: "BUILDKITE_BUILD_ID",
-			Hidden: true,
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Usage:   "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
+			Sources: cli.EnvVars("BUILDKITE_BUILD_ID"),
+			Hidden:  true,
 		},
-		cli.BoolFlag{
-			Name:   "force",
-			Usage:  "Transition unfinished jobs to a canceled state instead of waiting for jobs to finish uploading artifacts (default: false)",
-			EnvVar: "BUILDKITE_STEP_CANCEL_FORCE",
+		&cli.BoolFlag{
+			Name:    "force",
+			Usage:   "Transition unfinished jobs to a canceled state instead of waiting for jobs to finish uploading artifacts (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_STEP_CANCEL_FORCE"),
 		},
-
-		cli.Int64Flag{
-			Name:   "force-grace-period-seconds",
-			Value:  defaultCancelGracePeriodSecs,
-			Usage:  "The number of seconds to wait for agents to finish uploading artifacts before transitioning unfinished jobs to a canceled state. ′--force′ must also be supplied for this to take affect",
-			EnvVar: "BUILDKITE_STEP_CANCEL_FORCE_GRACE_PERIOD_SECONDS,BUILDKITE_CANCEL_GRACE_PERIOD",
+		&cli.Int64Flag{
+			Name:    "force-grace-period-seconds",
+			Value:   defaultCancelGracePeriodSecs,
+			Usage:   "The number of seconds to wait for agents to finish uploading artifacts before transitioning unfinished jobs to a canceled state. ′--force′ must also be supplied for this to take affect",
+			Sources: cli.EnvVars("BUILDKITE_STEP_CANCEL_FORCE_GRACE_PERIOD_SECONDS", "BUILDKITE_CANCEL_GRACE_PERIOD"),
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx, cfg, l, _, done := setupLoggerAndConfig[StepCancelConfig](context.Background(), c)
+	Action: func(ctx context.Context, c *cli.Command) error {
+		ctx, cfg, l, _, done := setupLoggerAndConfig[StepCancelConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "step-cancel")
 		defer span.End()

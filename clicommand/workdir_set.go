@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/buildkite/agent/v3/jobapi"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const workdirSetHelpDescription = `Usage:
@@ -44,32 +44,31 @@ type WorkdirSetConfig struct {
 	OutputFormat string `cli:"output-format"`
 }
 
-var WorkdirSetCommand = cli.Command{
+var WorkdirSetCommand = &cli.Command{
 	Name:        "set",
 	Usage:       "Sets the working directory for subsequent phases of the job",
 	Description: workdirSetHelpDescription,
 	Flags: append(globalFlags(),
-		cli.StringFlag{
-			Name:   "output-format",
-			Usage:  "Output format: quiet (no output), plain, or json",
-			EnvVar: "BUILDKITE_AGENT_WORKDIR_SET_OUTPUT_FORMAT",
-			Value:  "plain",
+		&cli.StringFlag{
+			Name:    "output-format",
+			Usage:   "Output format: quiet (no output), plain, or json",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_WORKDIR_SET_OUTPUT_FORMAT"),
+			Value:   "plain",
 		},
 	),
 	Action: workdirSetAction,
 }
 
-func workdirSetAction(c *cli.Context) error {
-	ctx := context.Background()
+func workdirSetAction(ctx context.Context, c *cli.Command) error {
 	ctx, cfg, _, _, done := setupLoggerAndConfig[WorkdirSetConfig](ctx, c)
 	defer done()
 
 	args := c.Args()
-	if len(args) != 1 {
-		return fmt.Errorf("expected exactly one argument (the working directory), got %d", len(args))
+	if args.Len() != 1 {
+		return fmt.Errorf("expected exactly one argument (the working directory), got %d", args.Len())
 	}
 
-	abs, err := resolveWorkdir(args[0])
+	abs, err := resolveWorkdir(args.Get(0))
 	if err != nil {
 		return err
 	}
@@ -89,10 +88,10 @@ func workdirSetAction(c *cli.Context) error {
 		return nil
 
 	case "plain":
-		_, _ = fmt.Fprintln(c.App.Writer, workdir)
+		_, _ = fmt.Fprintln(c.Writer, workdir)
 
 	case "json":
-		enc := json.NewEncoder(c.App.Writer)
+		enc := json.NewEncoder(c.Writer)
 		if err := enc.Encode(jobapi.WorkdirSetResponse{Workdir: workdir}); err != nil {
 			return fmt.Errorf("error marshalling JSON: %w", err)
 		}

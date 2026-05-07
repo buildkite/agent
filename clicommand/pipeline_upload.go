@@ -36,7 +36,7 @@ import (
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/buildkite/interpolate"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 	"gopkg.in/yaml.v3"
 )
@@ -103,96 +103,96 @@ type PipelineUploadConfig struct {
 	DebugSigning     bool   `cli:"debug-signing"`
 }
 
-var PipelineUploadCommand = cli.Command{
+var PipelineUploadCommand = &cli.Command{
 	Name:        "upload",
 	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job",
 	Description: pipelineUploadHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.BoolFlag{
-			Name:   "replace",
-			Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed (default: false)",
-			EnvVar: "BUILDKITE_PIPELINE_REPLACE",
+		&cli.BoolFlag{
+			Name:    "replace",
+			Usage:   "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_REPLACE"),
 		},
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "The job that is making the changes to its build",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "The job that is making the changes to its build",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
-		cli.BoolFlag{
-			Name:   "dry-run",
-			Usage:  "Rather than uploading the pipeline, it will be echoed to stdout (default: false)",
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN",
+		&cli.BoolFlag{
+			Name:    "dry-run",
+			Usage:   "Rather than uploading the pipeline, it will be echoed to stdout (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_UPLOAD_DRY_RUN"),
 		},
-		cli.StringFlag{
-			Name:   "format",
-			Usage:  "In dry-run mode, specifies the form to output the pipeline in. Must be one of: json,yaml",
-			Value:  "json",
-			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN_FORMAT",
+		&cli.StringFlag{
+			Name:    "format",
+			Usage:   "In dry-run mode, specifies the form to output the pipeline in. Must be one of: json,yaml",
+			Value:   "json",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_UPLOAD_DRY_RUN_FORMAT"),
 		},
-		cli.BoolFlag{
-			Name:   "no-interpolation",
-			Usage:  "Skip variable interpolation into the pipeline prior to upload (default: false)",
-			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
+		&cli.BoolFlag{
+			Name:    "no-interpolation",
+			Usage:   "Skip variable interpolation into the pipeline prior to upload (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_NO_INTERPOLATION"),
 		},
-		cli.BoolFlag{
-			Name:   "reject-secrets",
-			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets (default: false)",
-			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+		&cli.BoolFlag{
+			Name:    "reject-secrets",
+			Usage:   "When true, fail the pipeline upload early if the pipeline contains secrets (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS"),
 		},
-		cli.BoolTFlag{
-			Name:   "apply-if-changed",
-			Usage:  "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the step is skipped. Minimum Buildkite Agent version: v3.99 (with --apply-if-changed flag), v3.103.0 (enabled by default) (default: true)",
-			EnvVar: "BUILDKITE_AGENT_APPLY_IF_CHANGED,BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED",
+		&cli.BoolFlag{
+			Name:    "apply-if-changed",
+			Usage:   "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the step is skipped. Minimum Buildkite Agent version: v3.99 (with --apply-if-changed flag), v3.103.0 (enabled by default) (default: true)",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_AGENT_APPLY_IF_CHANGED", "BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED"),
 		},
-		cli.StringFlag{
-			Name:   "git-diff-base",
-			Usage:  "Provides the base from which to find the git diff when processing ′if_changed′, e.g. origin/main. If not provided, it uses the first valid value of {origin/$BUILDKITE_PULL_REQUEST_BASE_BRANCH, origin/$BUILDKITE_PIPELINE_DEFAULT_BRANCH, origin/main}.",
-			EnvVar: "BUILDKITE_GIT_DIFF_BASE",
+		&cli.StringFlag{
+			Name:    "git-diff-base",
+			Usage:   "Provides the base from which to find the git diff when processing ′if_changed′, e.g. origin/main. If not provided, it uses the first valid value of {origin/$BUILDKITE_PULL_REQUEST_BASE_BRANCH, origin/$BUILDKITE_PIPELINE_DEFAULT_BRANCH, origin/main}.",
+			Sources: cli.EnvVars("BUILDKITE_GIT_DIFF_BASE"),
 		},
-		cli.BoolFlag{
-			Name:   "fetch-diff-base",
-			Usage:  "When enabled, the base for computing the git diff will be git-fetched prior to computing the diff (default: false)",
-			EnvVar: "BUILDKITE_FETCH_DIFF_BASE",
+		&cli.BoolFlag{
+			Name:    "fetch-diff-base",
+			Usage:   "When enabled, the base for computing the git diff will be git-fetched prior to computing the diff (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_FETCH_DIFF_BASE"),
 		},
-		cli.StringFlag{
-			Name:   "changed-files-path",
-			Usage:  "Path to a file containing the list of changed files (newline-separated) to use for ′if_changed′ evaluation. When provided, the agent skips running git commands to determine changed files.",
-			EnvVar: "BUILDKITE_CHANGED_FILES_PATH",
+		&cli.StringFlag{
+			Name:    "changed-files-path",
+			Usage:   "Path to a file containing the list of changed files (newline-separated) to use for ′if_changed′ evaluation. When provided, the agent skips running git commands to determine changed files.",
+			Sources: cli.EnvVars("BUILDKITE_CHANGED_FILES_PATH"),
 		},
 
 		// Note: changes to these environment variables need to be reflected in the environment created
 		// in the job runner. At the momenet, that's at agent/job_runner.go:500-507
-		cli.StringFlag{
-			Name:   "jwks-file",
-			Usage:  "Path to a file containing a JWKS. Passing this flag enables pipeline signing",
-			EnvVar: "BUILDKITE_AGENT_JWKS_FILE",
+		&cli.StringFlag{
+			Name:    "jwks-file",
+			Usage:   "Path to a file containing a JWKS. Passing this flag enables pipeline signing",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_FILE"),
 		},
-		cli.StringFlag{
-			Name:   "jwks-key-id",
-			Usage:  "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
-			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
+		&cli.StringFlag{
+			Name:    "jwks-key-id",
+			Usage:   "The JWKS key ID to use when signing the pipeline. Required when using a JWKS",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_KEY_ID"),
 		},
-		cli.StringFlag{
-			Name:   "signing-aws-kms-key",
-			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
-			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
+		&cli.StringFlag{
+			Name:    "signing-aws-kms-key",
+			Usage:   "The AWS KMS key identifier which is used to sign pipelines.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_AWS_KMS_KEY"),
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name: "signing-gcp-kms-key",
 			Usage: "The GCP KMS key identifier which is used to sign pipelines. " +
 				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
-			EnvVar: "BUILDKITE_AGENT_GCP_KMS_KEY",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_GCP_KMS_KEY"),
 		},
-		cli.BoolFlag{
-			Name:   "debug-signing",
-			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
-			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
+		&cli.BoolFlag{
+			Name:    "debug-signing",
+			Usage:   "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_DEBUG_SIGNING"),
 		},
 		RedactedVars,
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "pipeline-upload")
@@ -295,12 +295,12 @@ var PipelineUploadCommand = cli.Command{
 		if cfg.DryRun {
 			switch cfg.DryRunFormat {
 			case "json":
-				enc := json.NewEncoder(c.App.Writer)
+				enc := json.NewEncoder(c.Writer)
 				enc.SetIndent("", "  ")
 				dryRunEnc = enc.Encode
 
 			case "yaml":
-				dryRunEnc = yaml.NewEncoder(c.App.Writer).Encode
+				dryRunEnc = yaml.NewEncoder(c.Writer).Encode
 
 			default:
 				return fmt.Errorf("unknown output format %q", cfg.DryRunFormat)

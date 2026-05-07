@@ -13,7 +13,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -70,50 +70,49 @@ type AnnotateConfig struct {
 	Scope        string   `cli:"scope"`
 }
 
-var AnnotateCommand = cli.Command{
+var AnnotateCommand = &cli.Command{
 	Name:        "annotate",
 	Category:    categoryJobCommands,
 	Usage:       "Annotate the build page in the Buildkite UI with information from within a Buildkite job",
 	Description: annotateHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "context",
-			Usage:  "The context of the annotation used to differentiate this annotation from others. This value has a limit of 100 characters.",
-			EnvVar: "BUILDKITE_ANNOTATION_CONTEXT",
+		&cli.StringFlag{
+			Name:    "context",
+			Usage:   "The context of the annotation used to differentiate this annotation from others. This value has a limit of 100 characters.",
+			Sources: cli.EnvVars("BUILDKITE_ANNOTATION_CONTEXT"),
 		},
-		cli.StringFlag{
-			Name:   "style",
-			Usage:  "The style of the annotation (′success′, ′info′, ′warning′ or ′error′)",
-			EnvVar: "BUILDKITE_ANNOTATION_STYLE",
+		&cli.StringFlag{
+			Name:    "style",
+			Usage:   "The style of the annotation (′success′, ′info′, ′warning′ or ′error′)",
+			Sources: cli.EnvVars("BUILDKITE_ANNOTATION_STYLE"),
 		},
-		cli.BoolFlag{
-			Name:   "append",
-			Usage:  "Append to the body of an existing annotation (default: false)",
-			EnvVar: "BUILDKITE_ANNOTATION_APPEND",
+		&cli.BoolFlag{
+			Name:    "append",
+			Usage:   "Append to the body of an existing annotation (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_ANNOTATION_APPEND"),
 		},
-		cli.IntFlag{
-			Name:   "priority",
-			Usage:  "The priority of the annotation (′1′ to ′10′). Annotations with a priority of ′10′ are shown first, while annotations with a priority of ′1′ are shown last.",
-			EnvVar: "BUILDKITE_ANNOTATION_PRIORITY",
-			Value:  3,
+		&cli.IntFlag{
+			Name:    "priority",
+			Usage:   "The priority of the annotation (′1′ to ′10′). Annotations with a priority of ′10′ are shown first, while annotations with a priority of ′1′ are shown last.",
+			Sources: cli.EnvVars("BUILDKITE_ANNOTATION_PRIORITY"),
+			Value:   3,
 		},
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job should the annotation come from",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job should the annotation come from",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
-		cli.StringFlag{
-			Name:   "scope",
-			Value:  "build",
-			Usage:  "The scope of the annotation, which will control where the annotation is displayed in the Buildkite UI. One of 'build', 'job'",
-			EnvVar: "BUILDKITE_ANNOTATION_SCOPE",
+		&cli.StringFlag{
+			Name:    "scope",
+			Value:   "build",
+			Usage:   "The scope of the annotation, which will control where the annotation is displayed in the Buildkite UI. One of 'build', 'job'",
+			Sources: cli.EnvVars("BUILDKITE_ANNOTATION_SCOPE"),
 		},
 
 		RedactedVars,
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotateConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "annotate")
