@@ -6,10 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func newArtifactTestServer(t *testing.T) *httptest.Server {
@@ -18,7 +18,7 @@ func newArtifactTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
 		case "/builds/buildid/artifacts/search?query=foo.%2A&state=finished":
-			io.WriteString(rw, `[{"path": "foo.txt", "sha1sum": "theshastring", "sha256sum": "thesha256string"}]`)
+			_, _ = io.WriteString(rw, `[{"path": "foo.txt", "sha1sum": "theshastring", "sha256sum": "thesha256string"}]`)
 		default:
 			t.Errorf("unexpected HTTP request: %s %v", req.Method, req.URL.RequestURI())
 		}
@@ -44,12 +44,20 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintShaSum(ctx, cfg, l, stdout)
+	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
+		t.Fatalf("searchAndPrintShaSum() error = %v", err)
+	}
 
-	assert.Equal(t, "theshastring\n", stdout.String())
+	if got, want := stdout.String(), "theshastring\n"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
+	}
 
-	assert.Contains(t, l.Messages, `[info] Searching for artifacts: "foo.*"`)
-	assert.Contains(t, l.Messages, `[debug] Artifact "foo.txt" found`)
+	if got, want := l.Messages, `[info] Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
+		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	}
+	if got, want := l.Messages, `[debug] Artifact "foo.txt" found`; !slices.Contains(got, want) {
+		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	}
 }
 
 func TestSearchAndPrintSha256Sum(t *testing.T) {
@@ -72,10 +80,18 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintShaSum(ctx, cfg, l, stdout)
+	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
+		t.Fatalf("searchAndPrintShaSum() error = %v", err)
+	}
 
-	assert.Equal(t, "thesha256string\n", stdout.String())
+	if got, want := stdout.String(), "thesha256string\n"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
+	}
 
-	assert.Contains(t, l.Messages, `[info] Searching for artifacts: "foo.*"`)
-	assert.Contains(t, l.Messages, `[debug] Artifact "foo.txt" found`)
+	if got, want := l.Messages, `[info] Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
+		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	}
+	if got, want := l.Messages, `[debug] Artifact "foo.txt" found`; !slices.Contains(got, want) {
+		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	}
 }

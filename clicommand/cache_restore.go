@@ -6,6 +6,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/cache"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const cacheRestoreHelpDescription = `Usage:
@@ -76,8 +77,10 @@ var CacheRestoreCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheRestoreConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")
+		defer span.End()
 
-		l.Info("Cache restore command executed")
+		l.Infof("Cache restore command executed")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 

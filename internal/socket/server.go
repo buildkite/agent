@@ -54,7 +54,9 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	go s.svr.Serve(ln)
+	go func() {
+		_ = s.svr.Serve(ln)
+	}()
 	s.started = true
 
 	return nil

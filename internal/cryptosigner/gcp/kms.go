@@ -60,14 +60,8 @@ func NewKMS(ctx context.Context, keyResourceName string, opts ...option.ClientOp
 		Name: keyResourceName,
 	})
 	if err != nil {
-		client.Close()
+		_ = client.Close()
 		return nil, fmt.Errorf("failed to get public key for %q: %w", keyResourceName, err)
-	}
-
-	// Validate key purpose
-	if pubKeyResp.ProtectionLevel == kmspb.ProtectionLevel_EXTERNAL {
-		// For external keys, we can't validate the purpose as easily
-		// so we'll trust the configuration
 	}
 
 	// Map GCP algorithm to JWA algorithm
@@ -99,7 +93,7 @@ func NewKMS(ctx context.Context, keyResourceName string, opts ...option.ClientOp
 		jwaAlg = jwa.PS512
 		hashAlg = crypto.SHA512
 	default:
-		client.Close()
+		_ = client.Close()
 		return nil, fmt.Errorf("%w: %s (supported: EC_SIGN_P256_SHA256, EC_SIGN_P384_SHA384, RSA_SIGN_*)",
 			ErrInvalidKeyAlgorithm, pubKeyResp.Algorithm)
 	}

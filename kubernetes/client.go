@@ -165,5 +165,8 @@ func (c *Client) StatusLoop(ctx context.Context, onInterrupt func(error)) error 
 }
 
 func (c *Client) Close() {
-	c.client.Close()
+	if c.client == nil {
+		return
+	}
+	_ = c.client.Close()
 }

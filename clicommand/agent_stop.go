@@ -74,11 +74,11 @@ func stop(ctx context.Context, cfg AgentStopConfig, l logger.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return err
 		}
 
-		l.Info("Successfully stopped agent")
+		l.Infof("Successfully stopped agent")
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to stop agent: %w", err)

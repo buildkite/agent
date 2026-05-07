@@ -23,7 +23,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/shell"
-	"gotest.tools/v3/assert"
 
 	"github.com/buildkite/bintest/v3"
 )
@@ -344,21 +343,28 @@ func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
 	if err := e.Run(t, env...); shell.ExitCode(err) != 0 {
-		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
+		if err != nil {
+			t.Fatalf("bootstrap output:\n%s", e.Output)
+		}
 	}
 
 	e.CheckMocks(t)
 }
 
-// Close the tester, delete all the directories and mocks
-func (e *ExecutorTester) Close() error {
+// Close the tester, delete all the directories and mocks.
+func (e *ExecutorTester) Close() {
+	_ = e.CloseErr()
+}
+
+// CloseErr closes the tester and returns any cleanup error.
+func (e *ExecutorTester) CloseErr() error {
 	for _, mock := range e.mocks {
 		if err := mock.Close(); err != nil {
 			return err
 		}
 	}
 	if e.Repo != nil {
-		if err := e.Repo.Close(); err != nil {
+		if err := e.Repo.CloseErr(); err != nil {
 			return err
 		}
 	}
@@ -405,7 +411,11 @@ func mockEnvAsJSONOnStdout(e *ExecutorTester) func(c *bintest.Call) {
 			c.Exit(1)
 		}
 
-		c.Stdout.Write(envJSON)
+		if _, err := c.Stdout.Write(envJSON); err != nil {
+			fmt.Println("Failed to write env map in mocked agent call:", err)
+			c.Exit(1)
+			return
+		}
 		c.Exit(0)
 	}
 }
@@ -434,7 +444,7 @@ func newTestLogWriter(t *testing.T) *testLogWriter {
 			r.CloseWithError(err)
 			return
 		}
-		r.Close()
+		_ = r.Close()
 	}()
 
 	return lw

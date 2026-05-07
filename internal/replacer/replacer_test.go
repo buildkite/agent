@@ -11,7 +11,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/google/go-cmp/cmp"
-	"gotest.tools/v3/assert"
 )
 
 const lipsum = "Lorem ipsum dolor sit amet"
@@ -335,22 +334,34 @@ func TestAddingNeedles(t *testing.T) {
 
 	slices.Sort(needles)
 	slices.Sort(actualNeedles)
-	assert.DeepEqual(t, actualNeedles, needles)
+	if diff := cmp.Diff(needles, actualNeedles); diff != "" {
+		t.Fatalf("[]string{\"secret1111\", \"secret2222\"} diff (-got +want):\n%s", diff)
+	}
 
 	_, err := replacer.Write([]byte("redact secret1111 and secret2222 but not pre-secret3333\n"))
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("replacer.Write([]byte(\"redact secret1111 and secret2222 but not pre-secret3333\\n\")) error = %v, want nil", err)
+	}
 
 	replacer.Add("pre-secret3333")
 	actualNeedles = replacer.Needles()
 	slices.Sort(actualNeedles)
 	slices.Sort(afterAddExpectedNeedles)
-	assert.DeepEqual(t, actualNeedles, afterAddExpectedNeedles)
+	if diff := cmp.Diff(afterAddExpectedNeedles, actualNeedles); diff != "" {
+		t.Fatalf("[]string{\"secret1111\", \"secret2222\", \"pre-secret3333\"} diff (-got +want):\n%s", diff)
+	}
 
 	_, err = replacer.Write([]byte("now redact secret1111, secret2222, and pre-secret3333\n"))
-	assert.NilError(t, err)
-	assert.NilError(t, replacer.Flush())
+	if err != nil {
+		t.Fatalf("replacer.Write([]byte(\"now redact secret1111, secret2222, and pre-secret3333\\n\")) error = %v, want nil", err)
+	}
+	if err := replacer.Flush(); err != nil {
+		t.Fatalf("replacer.Flush() error = %v, want nil", err)
+	}
 
-	assert.Equal(t, buf.String(), "redact [REDACTED] and [REDACTED] but not pre-secret3333\nnow redact [REDACTED], [REDACTED], and [REDACTED]\n")
+	if got, want := buf.String(), "redact [REDACTED] and [REDACTED] but not pre-secret3333\nnow redact [REDACTED], [REDACTED], and [REDACTED]\n"; got != want {
+		t.Fatalf("buf.String() = %q, want %q", got, want)
+	}
 }
 
 func BenchmarkReplacer(b *testing.B) {

@@ -66,7 +66,7 @@ func NewArtifactoryUploader(l logger.Logger, c ArtifactoryUploaderConfig) (*Arti
 	password := os.Getenv("BUILDKITE_ARTIFACTORY_PASSWORD")
 	// authentication is not set
 	if stringURL == "" || username == "" || password == "" {
-		return nil, errors.New("Must set BUILDKITE_ARTIFACTORY_URL, BUILDKITE_ARTIFACTORY_USER, BUILDKITE_ARTIFACTORY_PASSWORD when using rt:// path")
+		return nil, errors.New("must set BUILDKITE_ARTIFACTORY_URL, BUILDKITE_ARTIFACTORY_USER, and BUILDKITE_ARTIFACTORY_PASSWORD when using an rt:// path")
 	}
 
 	parsedURL, err := url.Parse(stringURL)
@@ -125,14 +125,14 @@ func (u *artifactoryUploaderWork) Description() string {
 
 func (u *artifactoryUploaderWork) DoWork(context.Context) (*api.ArtifactPartETag, error) {
 	// Open file from filesystem
-	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	u.logger.Debugf("Reading file %q", u.artifact.AbsolutePath)
 	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to Artifactory.
-	u.logger.Debug("Uploading %q to %q", u.artifact.Path, u.URL(u.artifact))
+	u.logger.Debugf("Uploading %q to %q", u.artifact.Path, u.URL(u.artifact))
 
 	req, err := http.NewRequest("PUT", u.URL(u.artifact), f)
 	req.SetBasicAuth(u.user, u.password)

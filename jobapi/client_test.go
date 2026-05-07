@@ -3,6 +3,7 @@ package jobapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/google/go-cmp/cmp"
-	"gotest.tools/v3/assert"
 )
 
 type fakeServer struct {
@@ -41,19 +41,21 @@ func runFakeServer() (svr *fakeServer, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("net.Listen(unix, %q) error = %w", f.sock, err)
 	}
-	go f.svr.Serve(ln)
+	go func() {
+		_ = f.svr.Serve(ln)
+	}()
 	return f, nil
 }
 
-func (f *fakeServer) Close() { f.svr.Close() }
+func (f *fakeServer) Close() { _ = f.svr.Close() }
 
 func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+f.token {
-		socket.WriteError(w, "invalid Authorization header", http.StatusForbidden)
+		_ = socket.WriteError(w, "invalid Authorization header", http.StatusForbidden)
 		return
 	}
 	if r.URL.Path != "/api/current-job/v0/env" {
-		socket.WriteError(w, fmt.Sprintf("not found: %q", r.URL.Path), http.StatusNotFound)
+		_ = socket.WriteError(w, fmt.Sprintf("not found: %q", r.URL.Path), http.StatusNotFound)
 		return
 	}
 
@@ -61,23 +63,23 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		b := EnvGetResponse{Env: f.env}
 		if err := json.NewEncoder(w).Encode(&b); err != nil {
-			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
 		}
 
 	case "PATCH":
 		var req EnvUpdateRequestPayload
 		var resp EnvUpdateResponse
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			_ = socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
 			return
 		}
 		for k, v := range req.Env {
 			if k == "READONLY" {
-				socket.WriteError(w, "mutating READONLY is not allowed", http.StatusBadRequest)
+				_ = socket.WriteError(w, "mutating READONLY is not allowed", http.StatusBadRequest)
 				return
 			}
 			if v == nil {
-				socket.WriteError(w, fmt.Sprintf("setting %q to null is not allowed", k), http.StatusBadRequest)
+				_ = socket.WriteError(w, fmt.Sprintf("setting %q to null is not allowed", k), http.StatusBadRequest)
 				return
 			}
 		}
@@ -91,19 +93,19 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Normalize()
 		if err := json.NewEncoder(w).Encode(&resp); err != nil {
-			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
 		}
 
 	case "DELETE":
 		var req EnvDeleteRequest
 		var resp EnvDeleteResponse
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			_ = socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
 			return
 		}
 		for _, k := range req.Keys {
 			if k == "READONLY" {
-				socket.WriteError(w, "deleting READONLY is not allowed", http.StatusBadRequest)
+				_ = socket.WriteError(w, "deleting READONLY is not allowed", http.StatusBadRequest)
 			}
 		}
 		for _, k := range req.Keys {
@@ -115,11 +117,11 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Normalize()
 		if err := json.NewEncoder(w).Encode(&resp); err != nil {
-			socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
 		}
 
 	default:
-		socket.WriteError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest)
+		_ = socket.WriteError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest)
 	}
 }
 
@@ -131,7 +133,9 @@ func TestClient_NoSocket(t *testing.T) {
 
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "") // This may be set if the test is being run by a buildkite agent!
 	_, err := NewDefaultClient(ctx)
-	assert.ErrorIs(t, err, errNoJobAPISocketEnv, "NewDefaultClient() error = %v, want %v", err, errNoJobAPISocketEnv)
+	if want := errNoJobAPISocketEnv; !errors.Is(err, want) {
+		t.Fatalf("NewDefaultClient() error = %v, want %v", err, errNoJobAPISocketEnv)
+	}
 }
 
 func TestClient_NoToken(t *testing.T) {
@@ -144,7 +148,9 @@ func TestClient_NoToken(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")                  // This may be set if the test is being run by a buildkite agent!
 
 	_, err := NewDefaultClient(ctx)
-	assert.ErrorIs(t, err, errNoJobAPITokenEnv, "NewDefaultClient() error = %v, want %v", err, errNoJobAPITokenEnv)
+	if want := errNoJobAPITokenEnv; !errors.Is(err, want) {
+		t.Fatalf("NewDefaultClient() error = %v, want %v", err, errNoJobAPITokenEnv)
+	}
 }
 
 func TestClientEnvGet(t *testing.T) {

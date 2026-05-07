@@ -3,8 +3,6 @@ package job
 import (
 	"bytes"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestLimitWriter_ExactBudget(t *testing.T) {
@@ -15,9 +13,15 @@ func TestLimitWriter_ExactBudget(t *testing.T) {
 	lw := &limitWriter{w: &buf, remainingBytes: &remaining}
 
 	n, err := lw.Write([]byte("hello"))
-	assert.NoError(t, err)
-	assert.Equal(t, 5, n)
-	assert.Equal(t, uint64(0), remaining)
+	if err != nil {
+		t.Errorf("lw.Write([]byte(\"hello\")) error = %v, want nil", err)
+	}
+	if got, want := n, 5; got != want {
+		t.Errorf("lw.Write([]byte(\"hello\")) = %d, want %d", got, want)
+	}
+	if got, want := remaining, uint64(0); got != want {
+		t.Errorf("uint64(%d) = %d, want %d", 5, got, want)
+	}
 }
 
 func TestLimitWriter_ExceedsBudget(t *testing.T) {
@@ -28,5 +32,7 @@ func TestLimitWriter_ExceedsBudget(t *testing.T) {
 	lw := &limitWriter{w: &buf, remainingBytes: &remaining}
 
 	_, err := lw.Write([]byte("hello"))
-	assert.Error(t, err)
+	if err == nil {
+		t.Errorf("lw.Write([]byte(\"hello\")) error = %v, want non-nil error", err)
+	}
 }

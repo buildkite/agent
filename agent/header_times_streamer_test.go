@@ -31,7 +31,7 @@ func TestHeaderTimesStreamerScanAfterStopDoesNotPanic(t *testing.T) {
 
 		select {
 		case <-deadline:
-			t.Fatal("timed out waiting for header times streamer to start")
+			t.Fatalf("timed out waiting for header times streamer to start")
 		default:
 			time.Sleep(1 * time.Millisecond)
 		}
@@ -46,7 +46,7 @@ func TestHeaderTimesStreamerScanAfterStopDoesNotPanic(t *testing.T) {
 	select {
 	case <-stopDone:
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timed out waiting for header times streamer to stop")
+		t.Fatalf("timed out waiting for header times streamer to stop")
 	}
 
 	defer func() {
@@ -62,6 +62,6 @@ func TestHeaderTimesStreamerScanAfterStopDoesNotPanic(t *testing.T) {
 	select {
 	case <-runDone:
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timed out waiting for header times streamer run loop to exit")
+		t.Fatalf("timed out waiting for header times streamer run loop to exit")
 	}
 }

@@ -73,7 +73,7 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 
 	defer close(h.streamingDoneCh)
 
-	h.logger.Debug("[HeaderTimesStreamer] Streamer has started...")
+	h.logger.Debugf("[HeaderTimesStreamer] Streamer has started...")
 
 	nextIndex := 0
 	chanOpen := true
@@ -99,7 +99,7 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 				break batchLoop
 
 			case <-ctx.Done(): // pack it all up
-				h.logger.Debug("[HeaderTimesStreamer] %v", ctx.Err())
+				h.logger.Debugf("[HeaderTimesStreamer] %v", ctx.Err())
 				return
 			}
 		}
@@ -120,13 +120,13 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 		// Call our callback with the times for upload
 		setStatus(fmt.Sprintf("📡 Uploading %d header times", len(times)))
 
-		h.logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", startIdx, nextIndex-1)
+		h.logger.Debugf("[HeaderTimesStreamer] Uploading header times %d..%d", startIdx, nextIndex-1)
 		h.uploadCallback(ctx, startIdx, nextIndex, payload)
-		h.logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", startIdx, nextIndex-1)
+		h.logger.Debugf("[HeaderTimesStreamer] Finished uploading header times %d..%d", startIdx, nextIndex-1)
 	}
 
 	setStatus("👋 Finished!")
-	h.logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
+	h.logger.Debugf("[HeaderTimesStreamer] Streamer has finished...")
 }
 
 // Scan takes a line of log output and tracks a time if it's a header.
@@ -142,7 +142,7 @@ func (h *headerTimesStreamer) Scan(line string) bool {
 		return headerExpansionRE.MatchString(line)
 	}
 
-	h.logger.Debug("[HeaderTimesStreamer] Found header %q", line)
+	h.logger.Debugf("[HeaderTimesStreamer] Found header %q", line)
 
 	// Use mutex to prevent concurrently sending and closing the channel.
 	h.streamingMu.Lock()
@@ -167,6 +167,6 @@ func (h *headerTimesStreamer) Stop() {
 	close(h.timesCh)
 	h.streamingMu.Unlock()
 
-	h.logger.Debug("[HeaderTimesStreamer] Waiting for all the header times to be uploaded")
+	h.logger.Debugf("[HeaderTimesStreamer] Waiting for all the header times to be uploaded")
 	<-h.streamingDoneCh
 }

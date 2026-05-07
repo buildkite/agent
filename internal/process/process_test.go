@@ -231,7 +231,7 @@ func TestProcessTerminatesWhenContextDone(t *testing.T) {
 	})
 
 	go func() {
-		defer stdoutw.Close()
+		defer func() { _ = stdoutw.Close() }()
 		if err := p.Run(ctx); err != nil {
 			t.Errorf("p.Run(ctx) = %v", err)
 		}
@@ -273,7 +273,7 @@ func TestProcessWithSlowHandlerKilledWhenContextDone(t *testing.T) {
 	})
 
 	go func() {
-		defer stdoutw.Close()
+		defer func() { _ = stdoutw.Close() }()
 		if err := p.Run(ctx); err != nil {
 			t.Errorf("p.Run(ctx) = %v", err)
 		}
@@ -318,7 +318,7 @@ func TestProcessInterrupts(t *testing.T) {
 	})
 
 	go func() {
-		defer stdoutw.Close()
+		defer func() { _ = stdoutw.Close() }()
 		if err := p.Run(ctx); err != nil {
 			t.Errorf("p.Run(ctx) = %v", err)
 		}
@@ -386,7 +386,7 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 	})
 
 	go func() {
-		defer stdoutw.Close()
+		defer func() { _ = stdoutw.Close() }()
 		if err := p.Run(ctx); err != nil {
 			t.Errorf("p.Run(ctx) = %v", err)
 		}

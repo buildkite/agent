@@ -10,6 +10,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const stepCancelHelpDescription = `Usage:
@@ -71,9 +72,11 @@ var StepCancelCommand = cli.Command{
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[StepCancelConfig](context.Background(), c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "step-cancel")
+		defer span.End()
 
 		if cfg.ForceGracePeriodSeconds < 0 {
-			return fmt.Errorf("The value of ′--force-grace-period-seconds′ must be greater than or equal to 0")
+			return fmt.Errorf("the value of ′--force-grace-period-seconds′ must be greater than or equal to 0")
 		}
 
 		return cancelStep(ctx, cfg, l)
@@ -102,14 +105,14 @@ func cancelStep(ctx context.Context, cfg StepCancelConfig, l logger.Logger) erro
 			return err
 		}
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return err
 		}
 
-		l.Info("Successfully cancelled step: %s", stepCancelResponse.UUID)
+		l.Infof("Successfully cancelled step: %s", stepCancelResponse.UUID)
 		return nil
 	}); err != nil {
-		return fmt.Errorf("Failed to cancel step: %w", err)
+		return fmt.Errorf("failed to cancel step: %w", err)
 	}
 
 	return nil

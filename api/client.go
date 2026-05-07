@@ -185,7 +185,7 @@ func (c *Client) setRequestHeaders(headers map[string]string) {
 	if c.logger.Level() <= logger.DEBUG {
 		for k, values := range c.requestHeaders {
 			for _, v := range values {
-				c.logger.Debug("Server-specified request header: %s: %s", k, v)
+				c.logger.Debugf("Server-specified request header: %s: %s", k, v)
 			}
 		}
 	}

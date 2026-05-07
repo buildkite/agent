@@ -68,7 +68,7 @@ func NewS3Client(ctx context.Context, l logger.Logger, bucket string) (*s3.Clien
 
 	regionHint := os.Getenv(regionHintEnvVar)
 	if regionHint != "" {
-		l.Debug("Using bucket region %q from environment variable %q", regionHint, regionHintEnvVar)
+		l.Debugf("Using bucket region %q from environment variable %q", regionHint, regionHintEnvVar)
 		// If there is a region hint provided, we use it unconditionally
 		tempCfg, err := awsS3Config(ctx, regionHint)
 		if err != nil {
@@ -84,18 +84,18 @@ func NewS3Client(ctx context.Context, l logger.Logger, bucket string) (*s3.Clien
 		}
 		cfg = tempCfg
 
-		l.Debug("Discovered current region as %q", cfg.Region)
+		l.Debugf("Discovered current region as %q", cfg.Region)
 
 		client := s3.NewFromConfig(cfg)
 
 		bucketRegion, err := manager.GetBucketRegion(ctx, client, bucket)
 		if err != nil || bucketRegion == "" {
-			l.Error(
+			l.Errorf(
 				"Could not discover region for bucket %q. Using the %q region as a fallback, if this is not correct configure a bucket region using the %q environment variable. (%v)",
 				bucket, cfg.Region, regionHintEnvVar, err,
 			)
 		} else {
-			l.Debug("Discovered %q bucket region as %q", bucket, bucketRegion)
+			l.Debugf("Discovered %q bucket region as %q", bucket, bucketRegion)
 			cfg.Region = bucketRegion
 		}
 	}
@@ -105,7 +105,7 @@ func NewS3Client(ctx context.Context, l logger.Logger, bucket string) (*s3.Clien
 	// This is useful for S3-compatible servers like MinIO.
 	usePathStyle := false
 	if endpoint := os.Getenv(s3EndpointEnvVar); endpoint != "" {
-		l.Debug("S3 session Endpoint from %s: %q", s3EndpointEnvVar, endpoint)
+		l.Debugf("S3 session Endpoint from %s: %q", s3EndpointEnvVar, endpoint)
 		cfg.BaseEndpoint = aws.String(endpoint)
 
 		// Configure the S3 client to use path-style addressing instead of the
@@ -118,7 +118,7 @@ func NewS3Client(ctx context.Context, l logger.Logger, bucket string) (*s3.Clien
 		// AWS CLI does this by default when a custom endpoint is specified [1] so
 		// we will too.
 		// [1]: https://github.com/aws/aws-cli/blob/2.9.18/awscli/botocore/args.py#L414-L417
-		l.Debug("S3 UsePathStyle=true because custom Endpoint specified")
+		l.Debugf("S3 UsePathStyle=true because custom Endpoint specified")
 		usePathStyle = true
 	}
 
@@ -130,13 +130,13 @@ func NewS3Client(ctx context.Context, l logger.Logger, bucket string) (*s3.Clien
 	if credErr == nil {
 		profile := cmp.Or(os.Getenv("BUILDKITE_S3_PROFILE"), os.Getenv("AWS_PROFILE"))
 		if creds.Source == "buildkiteEnvProvider" {
-			l.Info("S3 credentials found in Buildkite environment (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY)")
+			l.Infof("S3 credentials found in Buildkite environment (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY)")
 		} else {
-			l.Info("S3 credentials loaded from the default AWS credential chain or BUILDKITE_S3_PROFILE, profile: %q", profile)
+			l.Infof("S3 credentials loaded from the default AWS credential chain or BUILDKITE_S3_PROFILE, profile: %q", profile)
 		}
 	}
 
-	l.Debug("Testing AWS S3 credentials for bucket %q in region %q...", bucket, cfg.Region)
+	l.Debugf("Testing AWS S3 credentials for bucket %q in region %q...", bucket, cfg.Region)
 
 	// Test the authentication by trying to list the first 0 objects in the bucket.
 	_, err := s3client.ListObjects(ctx, &s3.ListObjectsInput{
@@ -151,10 +151,10 @@ func NewS3Client(ctx context.Context, l logger.Logger, bucket string) (*s3.Clien
 		const errorTitle = "could not authenticate to AWS S3 using any of the included credential providers."
 
 		if hasProxy && !hasNoProxyIdmsException {
-			return nil, fmt.Errorf("%s Your HTTP proxy settings do not grant a NO_PROXY=169.254.169.254 exemption for the instance metadata service, instance profile credentials may not be retrievable via your HTTP proxy.", errorTitle)
+			return nil, fmt.Errorf("%s your HTTP proxy settings do not grant a NO_PROXY=169.254.169.254 exemption for the instance metadata service, so instance profile credentials may not be retrievable via your HTTP proxy", errorTitle)
 		}
 
-		return nil, fmt.Errorf("%s You can authenticate by setting Buildkite environment variables (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY, BUILDKITE_S3_PROFILE), AWS environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_PROFILE), Web Identity environment variables (AWS_ROLE_ARN, AWS_ROLE_SESSION_NAME, AWS_WEB_IDENTITY_TOKEN_FILE), or if running on AWS EC2 ensuring network access to the EC2 Instance Metadata Service to use an instance profile’s IAM Role credentials.", errorTitle)
+		return nil, fmt.Errorf("%s you can authenticate by setting Buildkite environment variables (BUILDKITE_S3_ACCESS_KEY_ID, BUILDKITE_S3_SECRET_ACCESS_KEY, BUILDKITE_S3_PROFILE), AWS environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_PROFILE), web identity environment variables (AWS_ROLE_ARN, AWS_ROLE_SESSION_NAME, AWS_WEB_IDENTITY_TOKEN_FILE), or if running on AWS EC2 by ensuring network access to the EC2 Instance Metadata Service so an instance profile IAM role can be used", errorTitle)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("could not s3:ListObjects in your AWS S3 bucket %q in region %q: %w", bucket, cfg.Region, err)

@@ -24,17 +24,17 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 
 	case "output":
-		fmt.Fprintf(os.Stdout, "llamas1\n")
-		fmt.Fprintf(os.Stderr, "alpacas1\r")
-		fmt.Fprintf(os.Stdout, "llamas2\r\n")
-		fmt.Fprintf(os.Stderr, "alpacas2\n")
+		_, _ = fmt.Fprintf(os.Stdout, "llamas1\n")
+		_, _ = fmt.Fprintf(os.Stderr, "alpacas1\r")
+		_, _ = fmt.Fprintf(os.Stdout, "llamas2\r\n")
+		_, _ = fmt.Fprintf(os.Stderr, "alpacas2\n")
 		os.Exit(0)
 
 	case "output-slow-exit":
-		fmt.Fprintf(os.Stdout, "llamas1\n")
-		fmt.Fprintf(os.Stderr, "alpacas1\r")
-		fmt.Fprintf(os.Stdout, "llamas2\r\n")
-		fmt.Fprintf(os.Stderr, "alpacas2\n")
+		_, _ = fmt.Fprintf(os.Stdout, "llamas1\n")
+		_, _ = fmt.Fprintf(os.Stderr, "alpacas1\r")
+		_, _ = fmt.Fprintf(os.Stdout, "llamas2\r\n")
+		_, _ = fmt.Fprintf(os.Stderr, "alpacas2\n")
 		time.Sleep(100 * time.Millisecond)
 		os.Exit(0)
 
@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 
 		go func() {
 			for s := range signals {
-				fmt.Fprintf(os.Stdout, "received signal: %d", s)
+				_, _ = fmt.Fprintf(os.Stdout, "received signal: %d", s)
 				time.Sleep(10 * time.Second)
 				os.Exit(0)
 			}

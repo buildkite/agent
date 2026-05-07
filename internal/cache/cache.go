@@ -60,7 +60,7 @@ func Save(ctx context.Context, l logger.Logger, cfg Config) error {
 	}
 
 	if cacheClient == nil {
-		l.Info("No caches defined in the cache configuration file, nothing to save")
+		l.Infof("No caches defined in the cache configuration file, nothing to save")
 		return nil
 	}
 
@@ -75,7 +75,7 @@ func Restore(ctx context.Context, l logger.Logger, cfg Config) error {
 	}
 
 	if cacheClient == nil {
-		l.Info("No caches defined in the cache configuration file, nothing to restore")
+		l.Infof("No caches defined in the cache configuration file, nothing to restore")
 		return nil
 	}
 
@@ -123,7 +123,7 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 				logger.StringField("cache_id", cacheID),
 				logger.StringField("stage", stage),
 				logger.StringField("message", message),
-			).Info("Cache progress")
+			).Infof("Cache progress")
 		},
 	})
 	if err != nil {
@@ -182,7 +182,7 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 						return
 					}
 
-					l.Info("Restoring cache: %s", cacheID)
+					l.Infof("Restoring cache: %s", cacheID)
 					result, err := client.Restore(wctx, cacheID)
 					if err != nil {
 						cancel(fmt.Errorf("failed to restore cache %q: %w", cacheID, err))
@@ -202,12 +202,12 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
 							logger.IntField("part_count", result.Transfer.PartCount),
 							logger.IntField("concurrency", result.Transfer.Concurrency),
-						).Info("Cache restored")
+						).Infof("Cache restored")
 					default:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
 							logger.StringField("cache_key", result.Key),
-						).Info("Cache not restored (not found)")
+						).Infof("Cache not restored (not found)")
 					}
 
 				case <-wctx.Done():
@@ -258,7 +258,7 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 						return
 					}
 
-					l.Info("Saving cache: %s", cacheID)
+					l.Infof("Saving cache: %s", cacheID)
 					result, err := client.Save(wctx, cacheID)
 					if err != nil {
 						cancel(fmt.Errorf("failed to save cache %q: %w", cacheID, err))
@@ -277,12 +277,12 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
 							logger.IntField("part_count", result.Transfer.PartCount),
 							logger.IntField("concurrency", result.Transfer.Concurrency),
-						).Info("Cache created")
+						).Infof("Cache created")
 					default:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
 							logger.StringField("cache_key", result.Key),
-						).Info("Cache already exists, not saving")
+						).Infof("Cache already exists, not saving")
 					}
 
 				case <-wctx.Done():

@@ -56,7 +56,7 @@ func (e *Executor) removeCheckoutDir() error {
 	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	if e.checkoutRoot != nil {
-		e.checkoutRoot.Close()
+		_ = e.checkoutRoot.Close()
 		e.checkoutRoot = nil
 	}
 
@@ -124,7 +124,7 @@ func (e *Executor) refreshCheckoutRoot() error {
 	}
 	// This cleanup is largely ornamental, since the executor pointer only
 	// becomes unreachable when the bootstrap exits.
-	runtime.AddCleanup(e, func(r *os.Root) { r.Close() }, root)
+	runtime.AddCleanup(e, func(r *os.Root) { _ = r.Close() }, root)
 	e.checkoutRoot = root
 	return nil
 }
@@ -767,7 +767,7 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 				Retry:         retry,
 				RefSpecs:      refspecs,
 			}); err != nil {
-				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
 			}
 		} else {
 			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
@@ -776,7 +776,7 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 			refspecs = append(refspecs, e.Commit)
 			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
 			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
-				return fmt.Errorf("Fetching PR refspec %q: %w", refspecs, err)
+				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
 			}
 		}
 
@@ -869,11 +869,15 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			case "dissociate":
 				// If the existing repo is still relying on the reference, then
 				// "dissociate" it (git repack, and delete the alternates file).
-				e.dissociateIfNeeded(ctx, existingGitDir)
+				if err := e.dissociateIfNeeded(ctx, existingGitDir); err != nil {
+					return fmt.Errorf("dissociating existing reference clone: %w", err)
+				}
 			case "reference":
 				// If the existing repo does not have a reference to the mirror,
 				// create one. Existing objects don't need cleaning up.
-				e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir)
+				if err := e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir); err != nil {
+					return fmt.Errorf("reassociating existing clone: %w", err)
+				}
 			}
 		}
 

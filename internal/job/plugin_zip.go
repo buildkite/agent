@@ -60,7 +60,7 @@ func (e *Executor) checkoutZipPlugin(ctx context.Context, p *plugin.Plugin, chec
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
-	defer os.RemoveAll(tempDir) // Clean up temp dir
+	defer func() { _ = os.RemoveAll(tempDir) }() // Clean up temp dir
 
 	zipPath := filepath.Join(tempDir, "plugin.zip")
 
@@ -96,7 +96,7 @@ func (e *Executor) checkoutZipPlugin(ctx context.Context, p *plugin.Plugin, chec
 	if err != nil {
 		return fmt.Errorf("opening plugin directory as a root: %w", err)
 	}
-	runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
+	runtime.AddCleanup(checkout, func(r *os.Root) { _ = r.Close() }, pluginRoot)
 	checkout.Root = pluginRoot
 
 	// Ensure hooks is a directory that exists within the checkout
@@ -198,7 +198,7 @@ func (e *Executor) downloadZipPluginHTTP(ctx context.Context, downloadURL, destP
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, resp.Status)
@@ -209,8 +209,10 @@ func (e *Executor) downloadZipPluginHTTP(ctx context.Context, downloadURL, destP
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
+	defer func() {
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
+	}()
 
 	// Copy data to temp file
 	if _, err := io.Copy(tempFile, resp.Body); err != nil {
@@ -235,15 +237,15 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
 		return err
 	}
 
@@ -256,7 +258,7 @@ func computeFileSHA256(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	hash := sha256.New()
 	if _, err := io.Copy(hash, f); err != nil {
@@ -272,7 +274,7 @@ func extractZipPlugin(zipPath, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open zip file: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	// Check total size to prevent zip bombs
 	var totalSize uint64
@@ -326,14 +328,14 @@ func extractZipFile(f *zip.File, destPath string, remainingBytes *uint64) error 
 	if err != nil {
 		return fmt.Errorf("failed to open zip entry: %w", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	// Create destination file
 	outFile, err := os.OpenFile(cleanPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	// Copy content through a budget-enforcing writer
 	if _, err := io.Copy(&limitWriter{w: outFile, remainingBytes: remainingBytes}, rc); err != nil {

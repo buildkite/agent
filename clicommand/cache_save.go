@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/cache"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const cacheSaveHelpDescription = `Usage:
@@ -70,8 +71,10 @@ var CacheSaveCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheSaveConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-save")
+		defer span.End()
 
-		l.Info("Cache save command executed")
+		l.Infof("Cache save command executed")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 

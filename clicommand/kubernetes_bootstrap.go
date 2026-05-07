@@ -169,9 +169,9 @@ var KubernetesBootstrapCommand = cli.Command{
 			// is in state interrupted or the connection died or ...), we should
 			// cancel the job.
 			if err != nil {
-				l.Error("kubernetes-bootstrap: Error waiting for client interrupt: %v; cancelling work", err)
+				l.Errorf("kubernetes-bootstrap: Error waiting for client interrupt: %v; cancelling work", err)
 			} else {
-				l.Warn("kubernetes-bootstrap: Either the job was cancelled or the pod is being deleted; cancelling work")
+				l.Warnf("kubernetes-bootstrap: Either the job was cancelled or the pod is being deleted; cancelling work")
 			}
 			// The context cancellation handler in process.Run first calls
 			// Interrupt, waits for its signalGracePeriod, and then calls
@@ -187,7 +187,7 @@ var KubernetesBootstrapCommand = cli.Command{
 				// in that case is superfluous.)
 				time.Sleep(cancelGracePeriod)
 				// We get here if the main goroutine hasn't returned yet.
-				l.Info("kubernetes-bootstrap: Timed out waiting for subprocess to exit; exiting immediately with status 1")
+				l.Infof("kubernetes-bootstrap: Timed out waiting for subprocess to exit; exiting immediately with status 1")
 				os.Exit(1)
 			}()
 		}); err != nil {
@@ -195,7 +195,7 @@ var KubernetesBootstrapCommand = cli.Command{
 		}
 
 		phases := environ.GetString("BUILDKITE_BOOTSTRAP_PHASES", "(unknown)")
-		fmt.Fprintf(socket, "~~~ Bootstrapping phases %s\n", phases)
+		_, _ = fmt.Fprintf(socket, "~~~ Bootstrapping phases %s\n", phases)
 
 		// Now we can run the real `buildkite-agent bootstrap`.
 		// Compare with the setup in [agent.NewJobRunner].
@@ -239,17 +239,17 @@ var KubernetesBootstrapCommand = cli.Command{
 					return
 				case sig := <-signals:
 					// Log but otherwise swallow the signal
-					l.Info("kubernetes-bootstrap: Received %v; awaiting interrupt from agent", sig)
+					l.Infof("kubernetes-bootstrap: Received %v; awaiting interrupt from agent", sig)
 				}
 			}
 		}()
 
 		exitCode := -1
-		defer func() { socket.Exit(exitCode) }()
+		defer func() { _ = socket.Exit(exitCode) }()
 
 		// NB: Run blocks until the subprocess exits.
 		if err := proc.Run(ctx); err != nil {
-			fmt.Fprintf(socket, "Couldn't execute bootstrap: %v\n", err)
+			_, _ = fmt.Fprintf(socket, "Couldn't execute bootstrap: %v\n", err)
 			return &ExitError{1, err}
 		}
 

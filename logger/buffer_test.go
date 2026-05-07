@@ -4,17 +4,19 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestBuffer(t *testing.T) {
 	l := logger.NewBuffer()
-	l.Info("hello %s", "world")
+	l.Infof("hello %s", "world")
 	func(x logger.Logger) {
-		x.Debug("foo bar")
+		x.Debugf("foo bar")
 	}(l)
-	assert.Equal(t, []string{
+	if diff := cmp.Diff(l.Messages, []string{
 		"[info] hello world",
 		"[debug] foo bar",
-	}, l.Messages)
+	}); diff != "" {
+		t.Errorf("l.Messages diff (-got +want):\n%s", diff)
+	}
 }

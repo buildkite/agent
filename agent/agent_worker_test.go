@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,8 +25,6 @@ import (
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var dummyBootstrap = "/bin/sh -c true"
@@ -43,7 +42,7 @@ func TestDisconnect(t *testing.T) {
 		switch req.URL.Path {
 		case "/disconnect":
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprintf(rw, `{"id": "fakeuuid", "connection_state": "disconnected"}`)
+			_, _ = fmt.Fprintf(rw, `{"id": "fakeuuid", "connection_state": "disconnected"}`)
 		default:
 			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
 			http.Error(rw, "Not found", http.StatusNotFound)
@@ -61,7 +60,7 @@ func TestDisconnect(t *testing.T) {
 		APIClient: apiClient,
 		Logger:    l,
 		RetrySleepFunc: func(time.Duration) {
-			t.Error("unexpected retrier sleep")
+			t.Errorf("unexpected retrier sleep")
 		},
 	}
 
@@ -74,9 +73,13 @@ func TestDisconnect(t *testing.T) {
 	}
 
 	err := worker.Disconnect(t.Context())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("worker.Disconnect(t.Context()) error = %v, want nil", err)
+	}
 
-	assert.Equal(t, []string{"[info] Disconnecting...", "[info] Disconnected"}, l.Messages)
+	if diff := cmp.Diff(l.Messages, []string{"[info] Disconnecting...", "[info] Disconnected"}); diff != "" {
+		t.Errorf("l.Messages diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestDisconnectRetry(t *testing.T) {
@@ -125,16 +128,30 @@ func TestDisconnectRetry(t *testing.T) {
 	}
 
 	err := worker.Disconnect(t.Context())
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("worker.Disconnect(t.Context()) error = %v, want nil", err)
+	}
 
 	// 2 failed attempts sleep 1 second each
-	assert.Equal(t, []time.Duration{1 * time.Second, 1 * time.Second}, retrySleeps)
+	if diff := cmp.Diff(retrySleeps, []time.Duration{1 * time.Second, 1 * time.Second}); diff != "" {
+		t.Errorf("retrySleeps diff (-got +want):\n%s", diff)
+	}
 
-	require.Equal(t, 4, len(l.Messages))
-	assert.Equal(t, "[info] Disconnecting...", l.Messages[0])
-	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 Internal Server Error \(Attempt 1/4`), l.Messages[1])
-	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 Internal Server Error \(Attempt 2/4`), l.Messages[2])
-	assert.Equal(t, "[info] Disconnected", l.Messages[3])
+	if got, want := len(l.Messages), 4; got != want {
+		t.Fatalf("len(l.Messages) = %d, want %d", got, want)
+	}
+	if got, want := l.Messages[0], "[info] Disconnecting..."; got != want {
+		t.Errorf("l.Messages[0] = %q, want %q", got, want)
+	}
+	if got, want := l.Messages[1], regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 Internal Server Error \(Attempt 1/4`); !want.MatchString(got) {
+		t.Errorf("l.Messages[1] = %q, want string matching %v", got, want)
+	}
+	if got, want := l.Messages[2], regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 Internal Server Error \(Attempt 2/4`); !want.MatchString(got) {
+		t.Errorf("l.Messages[2] = %q, want string matching %v", got, want)
+	}
+	if got, want := l.Messages[3], "[info] Disconnected"; got != want {
+		t.Errorf("l.Messages[3] = %q, want %q", got, want)
+	}
 }
 
 func TestAcquireJobReturnsWrappedError_WhenServerResponds422(t *testing.T) {
@@ -195,7 +212,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 
 			rw.Header().Set("Retry-After", fmt.Sprintf("%f", delay))
 			rw.WriteHeader(http.StatusLocked)
-			fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assigned"}`)
+			_, _ = fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assigned"}`)
 		default:
 			http.Error(rw, "Not found", http.StatusNotFound)
 		}
@@ -226,7 +243,9 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	}
 
 	err := worker.AcquireAndRunJob(t.Context(), "waitinguuid")
-	assert.ErrorContains(t, err, "423")
+	if want := "423"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("worker.AcquireAndRunJob(t.Context(), %q) error = %v, want error containing %q", "waitinguuid", err, want)
+	}
 
 	if !errors.Is(err, core.ErrJobLocked) {
 		t.Fatalf("expected worker.AcquireAndRunJob(%q) = core.ErrJobLocked, got %v", "waitinguuid", err)
@@ -237,7 +256,9 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	for d := 1; d <= 1<<5; d *= 2 {
 		expectedSleeps = append(expectedSleeps, time.Duration(d)*time.Second)
 	}
-	assert.Equal(t, expectedSleeps, retrySleeps)
+	if diff := cmp.Diff(retrySleeps, expectedSleeps); diff != "" {
+		t.Errorf("retrySleeps diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestAgentWorker_Start_AcquireJob_JobAcquisitionRejected(t *testing.T) {
@@ -871,12 +892,11 @@ func TestAgentWorker_UpdateRequestHeadersDuringPing(t *testing.T) {
 	t.Parallel()
 
 	const agentSessionToken = "alpacas"
+	const headerKey = "Buildkite-Hello"
+	const headerValue = "world"
 
 	server := NewFakeAPIServer()
 	defer server.Close()
-
-	const headerKey = "Buildkite-Hello"
-	const headerValue = "world"
 
 	agent := server.AddAgent(agentSessionToken)
 	agent.PingHandler = func(req *http.Request) (api.Ping, error) {
@@ -959,9 +979,6 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 
 	server := NewFakeAPIServer()
 	defer server.Close()
-
-	const headerKey = "Buildkite-Hello"
-	const headerValue = "world"
 
 	agent := server.AddAgent(agentSessionToken)
 	agent.PingHandler = func(req *http.Request) (api.Ping, error) {

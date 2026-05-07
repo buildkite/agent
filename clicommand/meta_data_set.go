@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const metaDataSetHelpDescription = `Usage:
@@ -63,10 +64,12 @@ var MetaDataSetCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-set")
+		defer span.End()
 
 		// Read the value from STDIN if argument omitted entirely
 		if len(c.Args()) < 2 {
-			l.Info("Reading meta-data value from STDIN")
+			l.Infof("Reading meta-data value from STDIN")
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
@@ -89,7 +92,7 @@ var MetaDataSetCommand = cli.Command{
 			return err
 		}
 		if redactedValue := redact.String(cfg.Value, needles); redactedValue != cfg.Value {
-			l.Warn("Meta-data value for key %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.Key)
+			l.Warnf("Meta-data value for key %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.Key)
 			cfg.Value = redactedValue
 		}
 
@@ -113,7 +116,7 @@ var MetaDataSetCommand = cli.Command{
 				return err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 				return err
 			}
 			return nil

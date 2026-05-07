@@ -92,7 +92,7 @@ func envUnsetAction(c *cli.Context) error {
 		}
 
 	default:
-		fmt.Fprintf(c.App.ErrWriter, "Invalid input format %q\n", c.String("input-format"))
+		_, _ = fmt.Fprintf(c.App.ErrWriter, "Invalid input format %q\n", c.String("input-format"))
 	}
 
 	// Inspect each arg, which could either be "-" for stdin, or "KEY"
@@ -129,12 +129,12 @@ func envUnsetAction(c *cli.Context) error {
 
 	case "plain":
 		if len(unset) > 0 {
-			fmt.Fprintln(c.App.Writer, "Unset:")
+			_, _ = fmt.Fprintln(c.App.Writer, "Unset:")
 			for _, d := range unset {
-				fmt.Fprintf(c.App.Writer, "- %s\n", d)
+				_, _ = fmt.Fprintf(c.App.Writer, "- %s\n", d)
 			}
 		} else {
-			fmt.Fprintln(c.App.Writer, "No variables unset.")
+			_, _ = fmt.Fprintln(c.App.Writer, "No variables unset.")
 		}
 
 	case "json", "json-pretty":

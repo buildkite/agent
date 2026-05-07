@@ -44,7 +44,7 @@ var LockReleaseCommand = cli.Command{
 
 func lockReleaseAction(c *cli.Context) error {
 	if c.NArg() != 2 {
-		fmt.Fprint(c.App.ErrWriter, lockReleaseHelpDescription)
+		_, _ = fmt.Fprint(c.App.ErrWriter, lockReleaseHelpDescription)
 		return &SilentExitError{code: 1}
 	}
 	key, token := c.Args()[0], c.Args()[1]
@@ -53,7 +53,7 @@ func lockReleaseAction(c *cli.Context) error {
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		return fmt.Errorf("only 'machine' scope for locks is supported in this version.")
+		return fmt.Errorf("only 'machine' scope for locks is supported in this version")
 	}
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)

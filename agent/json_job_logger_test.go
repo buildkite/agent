@@ -28,7 +28,9 @@ func TestJSONJobLogger_JobFields(t *testing.T) {
 	}
 
 	log := NewJSONJobLogger(JobRunnerConfig{AgentStdout: &buf, Job: job})
-	log.Write([]byte("hello\n"))
+	if _, err := log.Write([]byte("hello\n")); err != nil {
+		t.Fatalf("log.Write() = %v", err)
+	}
 
 	var got map[string]string
 	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
@@ -55,6 +57,32 @@ func TestJSONJobLogger_JobFields(t *testing.T) {
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("Logged JSON diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestJSONJobLogger_PreservesPercentSequences(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+
+	log := NewJSONJobLogger(JobRunnerConfig{
+		AgentStdout: &buf,
+		Job: &api.Job{
+			ID:  "test-job",
+			Env: map[string]string{},
+		},
+	})
+	const line = "Receiving objects:   0% (1/140)\n"
+	if _, err := log.Write([]byte(line)); err != nil {
+		t.Fatalf("log.Write() = %v", err)
+	}
+
+	var got map[string]string
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("failed to parse JSON log: %v", err)
+	}
+
+	if got, want := got["msg"], "Receiving objects:   0% (1/140)"; got != want {
+		t.Errorf("logged msg = %q, want %q", got, want)
 	}
 }
 
@@ -94,7 +122,9 @@ func TestJSONJobLogger_TraceparentFields(t *testing.T) {
 			}
 
 			log := NewJSONJobLogger(JobRunnerConfig{AgentStdout: &buf, Job: job})
-			log.Write([]byte("hello\n"))
+			if _, err := log.Write([]byte("hello\n")); err != nil {
+				t.Fatalf("log.Write() = %v", err)
+			}
 
 			var got map[string]string
 			if err := json.Unmarshal(buf.Bytes(), &got); err != nil {

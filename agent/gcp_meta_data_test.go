@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestGCPMetaDataGetPaths(t *testing.T) {
@@ -20,9 +20,9 @@ func TestGCPMetaDataGetPaths(t *testing.T) {
 
 		switch path := r.URL.EscapedPath(); path {
 		case "/computeMetadata/v1/value":
-			fmt.Fprintf(w, "I could live on only burritos for the rest of my life")
+			_, _ = fmt.Fprintf(w, "I could live on only burritos for the rest of my life")
 		case "/computeMetadata/v1/nested/paths/work":
-			fmt.Fprintf(w, "Velociraptors are terrifying")
+			_, _ = fmt.Fprintf(w, "Velociraptors are terrifying")
 		default:
 			// NB: Do not use t.Fatal/Fatalf/FailNow from outside the test
 			// runner goroutine. See https://pkg.go.dev/testing#T.FailNow
@@ -55,9 +55,11 @@ func TestGCPMetaDataGetPaths(t *testing.T) {
 		t.Fatalf("GCPMetadata{}.GetPaths(%v) error = %v", paths, err)
 	}
 
-	assert.Equal(t, values, map[string]string{
+	if diff := cmp.Diff(values, map[string]string{
 		"truth":     "I could live on only burritos for the rest of my life",
 		"scary":     "Velociraptors are terrifying",
 		"weird key": "I could live on only burritos for the rest of my life",
-	})
+	}); diff != "" {
+		t.Errorf("GCPMetaData{}.GetPaths(ctx, paths) diff (-got +want):\n%s", diff)
+	}
 }

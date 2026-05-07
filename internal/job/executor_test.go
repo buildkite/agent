@@ -2,12 +2,13 @@ package job
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
-	"github.com/stretchr/testify/assert"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 )
 
@@ -24,7 +25,9 @@ func TestDirForAgentName(t *testing.T) {
 	t.Parallel()
 
 	for _, test := range agentNameTests {
-		assert.Equal(t, test.expected, dirForAgentName(test.agentName))
+		if got, want := dirForAgentName(test.agentName), test.expected; got != want {
+			t.Errorf("dirForAgentName(test.agentName) = %q, want %q", got, want)
+		}
 	}
 }
 
@@ -40,7 +43,9 @@ func TestDirForRepository(t *testing.T) {
 	t.Parallel()
 
 	for _, test := range repositoryNameTests {
-		assert.Equal(t, test.expected, dirForRepository(test.repositoryName))
+		if got, want := dirForRepository(test.repositoryName), test.expected; got != want {
+			t.Errorf("dirForRepository(test.repositoryName) = %q, want %q", got, want)
+		}
 	}
 }
 
@@ -52,15 +57,21 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 
 	oriCtx := context.Background()
 	e.shell, err = shell.New()
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("shell.New() error = %v, want nil", err)
+	}
 
 	span, _, stopper := e.startTracing(oriCtx)
-	assert.Equal(t, span, &tracetools.NoopSpan{})
+	if diff := cmp.Diff(span, &tracetools.NoopSpan{}); diff != "" {
+		t.Errorf("e.startTracing(oriCtx) diff (-got +want):\n%s", diff)
+	}
 	span.FinishWithError(nil) // Finish the nil span, just for completeness' sake
 
 	// If you call opentracing.GlobalTracer() without having set it first, it returns a NoopTracer
 	// In this test case, we haven't touched opentracing at all, so we get the NoopTracer
-	assert.IsType(t, opentracing.NoopTracer{}, opentracing.GlobalTracer())
+	if got, want := reflect.TypeOf(opentracing.GlobalTracer()), reflect.TypeOf(opentracing.NoopTracer{}); got != want {
+		t.Errorf("opentracing.GlobalTracer() = %v, want %v", got, want)
+	}
 	stopper()
 }
 
@@ -73,15 +84,23 @@ func TestStartTracing_Datadog(t *testing.T) {
 
 	oriCtx := context.Background()
 	e.shell, err = shell.New()
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("shell.New() error = %v, want nil", err)
+	}
 
 	span, ctx, stopper := e.startTracing(oriCtx)
 	span.FinishWithError(nil)
 
-	assert.IsType(t, opentracer.New(), opentracing.GlobalTracer())
+	if got, want := reflect.TypeOf(opentracing.GlobalTracer()), reflect.TypeOf(opentracer.New()); got != want {
+		t.Errorf("opentracing.GlobalTracer() = %v, want %v", got, want)
+	}
 	spanImpl, ok := span.(*tracetools.OpenTracingSpan)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("span.(*tracetools.OpenTracingSpan) = %t, want true", got)
+	}
 
-	assert.Equal(t, spanImpl.Span, opentracing.SpanFromContext(ctx))
+	if got, want := opentracing.SpanFromContext(ctx), spanImpl.Span; !reflect.DeepEqual(got, want) {
+		t.Errorf("opentracing.SpanFromContext(ctx) = %v, want %v", got, want)
+	}
 	stopper()
 }

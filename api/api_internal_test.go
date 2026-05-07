@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewRequestBuildkiteTimeoutMilliseconds(t *testing.T) {
@@ -17,11 +16,15 @@ func TestNewRequestBuildkiteTimeoutMilliseconds(t *testing.T) {
 	defer cancel()
 
 	r, err := c.newRequest(ctx, "GET", "/foo", nil)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("c.newRequest(ctx, %q, %q, %v) error = %v, want nil", "GET", "/foo", nil, err)
+	}
 
 	value := r.Header.Get("Buildkite-Timeout-Milliseconds")
 	ms, err := strconv.ParseInt(value, 10, 64)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("strconv.ParseInt(%q, %d, %d) error = %v, want nil", value, 10, 64, err)
+	}
 
 	// Allow a generous 1000ms between setting the timeout and the header being set.
 	if ms <= 9_000 || ms > 10_000 {
@@ -35,7 +38,9 @@ func TestNewRequestWithoutBuildkiteTimeoutMilliseconds(t *testing.T) {
 	ctx := context.Background() // no timeout/deadline
 
 	r, err := c.newRequest(ctx, "GET", "/foo", nil)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Errorf("c.newRequest(ctx, %q, %q, %v) error = %v, want nil", "GET", "/foo", nil, err)
+	}
 
 	if value, ok := r.Header["Buildkite-Timeout-Milliseconds"]; ok {
 		t.Errorf("Expected no Buildkite-Timeout-Milliseconds header, got %q", value)

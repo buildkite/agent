@@ -19,7 +19,6 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/bintest/v3"
-	"gotest.tools/v3/assert"
 )
 
 func TestPreBootstrapHookScripts(t *testing.T) {
@@ -83,18 +82,24 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 			ctx := context.Background()
 
 			hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
-			assert.NilError(t, err, "making bootstrap-hooks directory: %v", err)
+			if err != nil {
+				t.Fatalf("making bootstrap-hooks directory: %v", err)
+			}
 			t.Cleanup(func() { _ = os.RemoveAll(hooksDir) })
 
 			hookPath := filepath.Join(hooksDir, "pre-bootstrap"+tc.ext)
 			testMainPath, err := os.Executable()
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("os.Executable() error = %v, want nil", err)
+			}
 
 			// Write pre-bootstrap hook in a subprocess to avoid intermittent ETXTBSY errors on Linux
 			cmd := exec.Command(testMainPath, "write-exec", hookPath)
 			cmd.Stdin = strings.NewReader(tc.contents)
 			err = cmd.Run()
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("cmd.Run() error = %v, want nil", err)
+			}
 
 			// Creates a mock agent API
 			e := createTestAgentEndpoint()
@@ -450,7 +455,7 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 		mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 			start := time.Now()
 			for time.Since(start) < 4*time.Second {
-				fmt.Fprintf(c.Stdout, "Log output at start+%v\n", time.Since(start))
+				_, _ = fmt.Fprintf(c.Stdout, "Log output at start+%v\n", time.Since(start))
 				time.Sleep(100 * time.Millisecond)
 			}
 			c.Exit(0)

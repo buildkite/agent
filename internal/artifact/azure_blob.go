@@ -21,7 +21,7 @@ func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Cl
 	// https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#readme-credential-types
 
 	if connStr := os.Getenv("BUILDKITE_AZURE_BLOB_CONNECTION_STRING"); connStr != "" {
-		l.Debug("Connecting to Azure Blob Storage using Connection String")
+		l.Debugf("Connecting to Azure Blob Storage using Connection String")
 		client, err := service.NewClientFromConnectionString(connStr, nil)
 		if err != nil {
 			return nil, fmt.Errorf("creating Azure Blob storage client with connection string: %w", err)
@@ -32,7 +32,7 @@ func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Cl
 	url := fmt.Sprintf("https://%s%s/", storageAccountName, azureBlobHostSuffix)
 
 	if accKey := os.Getenv("BUILDKITE_AZURE_BLOB_ACCESS_KEY"); accKey != "" {
-		l.Debug("Connecting to Azure Blob Storage using Shared Key Credential")
+		l.Debugf("Connecting to Azure Blob Storage using Shared Key Credential")
 		cred, err := service.NewSharedKeyCredential(storageAccountName, accKey)
 		if err != nil {
 			return nil, fmt.Errorf("creating Azure shared key credential: %w", err)
@@ -44,7 +44,7 @@ func NewAzureBlobClient(l logger.Logger, storageAccountName string) (*service.Cl
 		return client, nil
 	}
 
-	l.Debug("Connecting to Azure Blob Storage using Default Azure Credential")
+	l.Debugf("Connecting to Azure Blob Storage using Default Azure Credential")
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating default Azure credential: %w", err)

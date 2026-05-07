@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.126.0](https://github.com/buildkite/agent/tree/v3.126.0) (2026-05-07)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.125.0...v3.126.0)
+
+### Added
+- Add `priority` and `queue` labels to the Prometheus job-start/end counters, plus a new `jobsRunning` gauge with the same labels [#3900](https://github.com/buildkite/agent/pull/3900) (@buildkate)
+
+### Changed
+- Document `BUILDKITE_S3_PROFILE` in `buildkite-agent artifact upload --help` [#3869](https://github.com/buildkite/agent/pull/3869) (@mastermanas805)
+
+### Internal
+- Remove `omitempty` JSON tags from `api.Job` (the struct is only ever unmarshalled from API responses, so the tags had no effect) [#3902](https://github.com/buildkite/agent/pull/3902) (@buildkate)
+- Dependabot updates: [#3847](https://github.com/buildkite/agent/pull/3847), [#3860](https://github.com/buildkite/agent/pull/3860), [#3879](https://github.com/buildkite/agent/pull/3879), [#3885](https://github.com/buildkite/agent/pull/3885), [#3886](https://github.com/buildkite/agent/pull/3886), [#3888](https://github.com/buildkite/agent/pull/3888), [#3890](https://github.com/buildkite/agent/pull/3890), [#3891](https://github.com/buildkite/agent/pull/3891), [#3895](https://github.com/buildkite/agent/pull/3895) (@dependabot[bot])
+
+## [v3.125.0](https://github.com/buildkite/agent/tree/v3.125.0) (2026-05-04)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.124.0...v3.125.0)
+
+### Added
+- Multipart S3 download for faster artifact downloads [#3875](https://github.com/buildkite/agent/pull/3875) (@buildkate)
+- New `--fail-on-missing-tags` flag (and `BUILDKITE_AGENT_FAIL_ON_MISSING_TAGS` env var) to exit the agent on startup if a configured cloud tag source (EC2/ECS/GCP) returns no tags [#3801](https://github.com/buildkite/agent/pull/3801) (@omehegan)
+- Automatic tracing for CLI subcommands (e.g. `artifact upload`, `pipeline upload`) when `BUILDKITE_TRACING_BACKEND=opentelemetry` and a `TRACEPARENT` is present [#3866](https://github.com/buildkite/agent/pull/3866) (@ss1909)
+- Register `application/zstd` MIME type for `.zst` artifact uploads [#3864](https://github.com/buildkite/agent/pull/3864) (@ladd)
+
+### Fixed
+- Preserve literal percent sequences in JSON job logs (previously rewritten by Go format-string handling) [#3877](https://github.com/buildkite/agent/pull/3877) (@friel-openai)
+
+### Internal
+- Remove Bazel from the agent build [#3873](https://github.com/buildkite/agent/pull/3873) (@moskyb)
+- Rename `logger.Logger` methods to end in `f` (e.g. `Debugf`, `Infof`) [#3878](https://github.com/buildkite/agent/pull/3878) [#3881](https://github.com/buildkite/agent/pull/3881) (@DrJosh9000, @buildkate)
+- Separate OTel provider provisioning from span generation [#3880](https://github.com/buildkite/agent/pull/3880) (@ss1909)
+- Only log the first stream connection to reduce log noise [#3872](https://github.com/buildkite/agent/pull/3872) (@moskyb)
+- Remove and prevent use of assert libraries (testify) [#3858](https://github.com/buildkite/agent/pull/3858) (@DrJosh9000)
+- Bump go-pipeline to v0.17.0 [#3865](https://github.com/buildkite/agent/pull/3865) (@CerealBoy)
+
+## [v3.124.0](https://github.com/buildkite/agent/tree/v3.124.0) (2026-04-28)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.123.1...v3.124.0)
+
+### Added
+- feat: build and publish freebsd/arm64 binary [#3855](https://github.com/buildkite/agent/pull/3855) (@buildkate)
+- feat: add metrics to record histogram of chunk sizes and compressed size [#3833](https://github.com/buildkite/agent/pull/3833) (@wolfeidau)
+
+### Changed
+- fix: Hide detached-HEAD advice [#3851](https://github.com/buildkite/agent/pull/3851) (@DrJosh9000)
+- Big process refactor, improved Windows signal handling [#3814](https://github.com/buildkite/agent/pull/3814) (@DrJosh9000)
+
+### Fixed
+- fix: use single-quoted shell escaping for --format env output [#3856](https://github.com/buildkite/agent/pull/3856) (@ss1909)
+- fix: More consistent protected env vars [#3838](https://github.com/buildkite/agent/pull/3838) (@DrJosh9000)
+- fix: set PTY raw mode before process start [#3837](https://github.com/buildkite/agent/pull/3837) (@lox)
+
+### Internal
+- fix: Flakes in shell_test.go due to missing signal grace period [#3854](https://github.com/buildkite/agent/pull/3854) (@DrJosh9000)
+- fix: Make TestChunksIntervalSeconds less flaky [#3850](https://github.com/buildkite/agent/pull/3850) (@DrJosh9000)
+- chore: rename mise config and add tasks [#3839](https://github.com/buildkite/agent/pull/3839) (@lox)
+- feat: migrate to github.com/klauspost/compress/gzip for optimized deflate [#3832](https://github.com/buildkite/agent/pull/3832) (@wolfeidau)
+- Removal manual gates from deployment process [#3830](https://github.com/buildkite/agent/pull/3830) (@zhming0)
+- Normalise HTTP status-based retry policies across the agent [#3827](https://github.com/buildkite/agent/pull/3827) (@moskyb)
+
 ## [v3.123.1](https://github.com/buildkite/agent/tree/v3.123.1) (2026-04-17)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.123.0...v3.123.1)
 

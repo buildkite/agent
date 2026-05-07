@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 	ctx := context.Background()
 	ident, _, err := client.GetTokenIdentity(ctx)
 	if err != nil {
-		l.Fatal("Could not read token identity: %v", err)
+		l.Fatalf("Could not read token identity: %v", err)
 	}
 	targetOrg = ident.OrganizationSlug
 	targetCluster = ident.ClusterUUID

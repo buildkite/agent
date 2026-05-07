@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestSignalStringUnix(t *testing.T) {
@@ -25,7 +24,9 @@ func TestSignalStringUnix(t *testing.T) {
 		{15, "SIGTERM"},
 		{100, "100"},
 	} {
-		assert.Equal(t, row.s, process.SignalString(syscall.Signal(row.n)))
+		if got, want := process.SignalString(syscall.Signal(row.n)), row.s; got != want {
+			t.Errorf("process.SignalString(syscall.Signal(row.n)) = %q, want %q", got, want)
+		}
 	}
 }
 
@@ -45,6 +46,8 @@ func TestSignalStringWindows(t *testing.T) {
 		{15, "terminated"},
 		{100, "signal 100"},
 	} {
-		assert.Equal(t, row.s, process.SignalString(syscall.Signal(row.n)))
+		if got, want := process.SignalString(syscall.Signal(row.n)), row.s; got != want {
+			t.Errorf("process.SignalString(syscall.Signal(row.n)) = %q, want %q", got, want)
+		}
 	}
 }

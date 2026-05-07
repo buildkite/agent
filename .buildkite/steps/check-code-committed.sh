@@ -36,6 +36,18 @@ if ! git diff --no-ext-diff --exit-code; then
   exit 1
 fi
 
+echo --- :go: Running assertzapper...
+if ! lint_out="$(go tool assertzapper ./...)" ; then
+  echo ^^^ +++
+  echo "assertzapper found uses of an assert library:"
+  echo ""
+  echo "${lint_out}"
+  echo "Run"
+  echo "  go tool assertzapper -fix ./..."
+  echo "then refine any changes it makes, and make a commit."
+  exit 1
+fi
+
 echo +++ :go: Running golangci-lint...
 if ! lint_out="$(golangci-lint run --color=always)" ; then
   echo ^^^ +++
@@ -49,9 +61,7 @@ golangci-lint found the following issues:
 ${lint_out}
 \`\`\`
 EOF
-  # While we're cleaning up things found by golangci-lint, don't fail if it
-  # finds things.
-  exit 0
+  exit 1
 fi
 
 echo +++ Everything is clean and tidy! 🎉

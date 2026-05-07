@@ -57,7 +57,7 @@ func (p *Timestamper) Write(data []byte) (n int, err error) {
 		var codeEnd []byte
 		for p.ansiParser.insideCode() && len(data) > len(codeEnd) {
 			fed := len(codeEnd)
-			p.ansiParser.Write(data[fed : fed+1])
+			_, _ = p.ansiParser.Write(data[fed : fed+1])
 			codeEnd = data[:fed+1]
 		}
 		if len(codeEnd) > 0 {
@@ -89,7 +89,7 @@ func (p *Timestamper) Write(data []byte) (n int, err error) {
 		if idx == nil {
 			// Write all remaining data. The line continues into the next Write
 			// call.
-			p.ansiParser.Write(data)
+			_, _ = p.ansiParser.Write(data)
 			n, err := p.out.Write(data)
 			written += n
 			return written, err
@@ -98,7 +98,7 @@ func (p *Timestamper) Write(data []byte) (n int, err error) {
 		// Write up to (and including) the newline / breaking sequence, ready to
 		// start a new line in the next iteration or Write.
 		chunk := data[:idx[1]]
-		p.ansiParser.Write(chunk)
+		_, _ = p.ansiParser.Write(chunk)
 		n, err = p.out.Write(chunk)
 		written += n
 		if err != nil {

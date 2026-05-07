@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/olfactor"
-	"gotest.tools/v3/assert"
 )
 
 func TestOlfactor(t *testing.T) {
@@ -63,16 +62,22 @@ func TestOlfactor(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, len(test.smells), len(test.expected))
+			if got, want := len(test.expected), len(test.smells); got != want {
+				t.Fatalf("len(test.expected) = %d, want %d", got, want)
+			}
 
 			w, olfactor := olfactor.New(io.Discard, test.smells)
 			_, err := w.Write([]byte(test.input))
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("w.Write([]byte(test.input)) error = %v, want nil", err)
+			}
 
 			for i, smell := range test.smells {
 				expected := test.expected[i]
 				smelt := olfactor.Smelt(smell)
-				assert.Check(t, expected == smelt, "smell: %q", smell)
+				if got := expected == smelt; !got {
+					t.Errorf("smell: %q", smell)
+				}
 			}
 		})
 	}

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestEnvironmentExists(t *testing.T) {
@@ -16,9 +16,15 @@ func TestEnvironmentExists(t *testing.T) {
 	env.Set("FOO", "bar")
 	env.Set("EMPTY", "")
 
-	assert.Equal(t, env.Exists("FOO"), true)
-	assert.Equal(t, env.Exists("EMPTY"), true)
-	assert.Equal(t, env.Exists("does not exist"), false)
+	if got, want := env.Exists("FOO"), true; got != want {
+		t.Errorf("env.Exists(\"FOO\") = %t, want %t", got, want)
+	}
+	if got, want := env.Exists("EMPTY"), true; got != want {
+		t.Errorf("env.Exists(\"EMPTY\") = %t, want %t", got, want)
+	}
+	if got, want := env.Exists("does not exist"), false; got != want {
+		t.Errorf("env.Exists(\"does not exist\") = %t, want %t", got, want)
+	}
 }
 
 func TestEnvironmentSet(t *testing.T) {
@@ -29,8 +35,12 @@ func TestEnvironmentSet(t *testing.T) {
 	env.Set("    THIS_IS_THE_BEST   \n\n", "\"IT SURE IS\"\n\n")
 
 	v, ok := env.Get("    THIS_IS_THE_BEST   \n\n")
-	assert.Equal(t, v, "\"IT SURE IS\"\n\n")
-	assert.True(t, ok)
+	if got, want := v, "\"IT SURE IS\"\n\n"; got != want {
+		t.Errorf("env.Get(%q) = %q, want %q", "    THIS_IS_THE_BEST   \n\n", got, want)
+	}
+	if got := ok; !got {
+		t.Errorf("env.Get(%q) = %t, want true", "    THIS_IS_THE_BEST   \n\n", got)
+	}
 }
 
 func TestEnvironmentSet_NormalizesKeyNames(t *testing.T) {
@@ -44,33 +54,51 @@ func TestEnvironmentSet_NormalizesKeyNames(t *testing.T) {
 	case "windows":
 		// All keys are treated as being in the same case so long as they have the same letters
 		// (i.e. "Mountain", "mountain" and "MOUNTAIN" are treated the same key)
-		assert.True(t, e.Exists(mountain))
-		assert.True(t, e.Exists(strings.ToUpper(mountain)))
+		if got := e.Exists(mountain); !got {
+			t.Errorf("e.Exists(mountain) = %t, want true", got)
+		}
+		if got := e.Exists(strings.ToUpper(mountain)); !got {
+			t.Errorf("e.Exists(strings.ToUpper(mountain)) = %t, want true", got)
+		}
 
 		v, _ := e.Get(strings.ToUpper(mountain))
-		assert.Equal(t, v, "Cerro Torre")
+		if got, want := v, "Cerro Torre"; got != want {
+			t.Errorf("e.Get(%q) = %q, want %q", strings.ToUpper(mountain), got, want)
+		}
 
 		e.Set(strings.ToUpper(mountain), "Cerro Poincenot")
 
 		v, _ = e.Get(mountain)
-		assert.Equal(t, v, "Cerro Poincenot")
+		if got, want := v, "Cerro Poincenot"; got != want {
+			t.Errorf("e.Get(%q) = %q, want %q", mountain, got, want)
+		}
 
 		v, _ = e.Get(strings.ToUpper(mountain))
-		assert.Equal(t, v, "Cerro Poincenot")
+		if got, want := v, "Cerro Poincenot"; got != want {
+			t.Errorf("e.Get(%q) = %q, want %q", strings.ToUpper(mountain), got, want)
+		}
 
 	default:
 		// Two keys with the same letters but different cases can coexist
 		// (i.e. "Mountain", "mountain", "MOUNTAIN" are treated as three different keys)
-		assert.True(t, e.Exists(mountain))
-		assert.False(t, e.Exists(strings.ToUpper(mountain)))
+		if got := e.Exists(mountain); !got {
+			t.Errorf("e.Exists(mountain) = %t, want true", got)
+		}
+		if got := e.Exists(strings.ToUpper(mountain)); got {
+			t.Errorf("e.Exists(strings.ToUpper(mountain)) = %t, want false", got)
+		}
 
 		e.Set(strings.ToUpper(mountain), "Cerro Poincenot")
 
 		camel, _ := e.Get(mountain)
-		assert.Equal(t, camel, "Cerro Torre")
+		if got, want := camel, "Cerro Torre"; got != want {
+			t.Errorf("e.Get(%q) = %q, want %q", mountain, got, want)
+		}
 
 		upper, _ := e.Get(strings.ToUpper(mountain))
-		assert.Equal(t, upper, "Cerro Poincenot")
+		if got, want := upper, "Cerro Poincenot"; got != want {
+			t.Errorf("e.Get(%q) = %q, want %q", strings.ToUpper(mountain), got, want)
+		}
 	}
 }
 
@@ -84,25 +112,45 @@ func TestEnvironmentGetBool(t *testing.T) {
 		"BUNYIP_ENABLED=off",
 	})
 
-	assert.True(t, env.GetBool("LLAMAS_ENABLED", false))
-	assert.False(t, env.GetBool("ALPACAS_ENABLED", true))
-	assert.False(t, env.GetBool("PLATYPUS_ENABLED", false))
-	assert.True(t, env.GetBool("PLATYPUS_ENABLED", true))
-	assert.False(t, env.GetBool("BUNYIP_ENABLED", true))
+	if got := env.GetBool("LLAMAS_ENABLED", false); !got {
+		t.Errorf("env.GetBool(\"LLAMAS_ENABLED\", false) = %t, want true", got)
+	}
+	if got := env.GetBool("ALPACAS_ENABLED", true); got {
+		t.Errorf("env.GetBool(\"ALPACAS_ENABLED\", true) = %t, want false", got)
+	}
+	if got := env.GetBool("PLATYPUS_ENABLED", false); got {
+		t.Errorf("env.GetBool(\"PLATYPUS_ENABLED\", false) = %t, want false", got)
+	}
+	if got := env.GetBool("PLATYPUS_ENABLED", true); !got {
+		t.Errorf("env.GetBool(\"PLATYPUS_ENABLED\", true) = %t, want true", got)
+	}
+	if got := env.GetBool("BUNYIP_ENABLED", true); got {
+		t.Errorf("env.GetBool(\"BUNYIP_ENABLED\", true) = %t, want false", got)
+	}
 }
 
 func TestEnvironmentRemove(t *testing.T) {
 	env := FromSlice([]string{"FOO=bar"})
 
 	v, ok := env.Get("FOO")
-	assert.Equal(t, v, "bar")
-	assert.True(t, ok)
+	if got, want := v, "bar"; got != want {
+		t.Errorf("env.Get(%q) = %q, want %q", "FOO", got, want)
+	}
+	if got := ok; !got {
+		t.Errorf("env.Get(%q) = %t, want true", "FOO", got)
+	}
 
-	assert.Equal(t, env.Remove("FOO"), "bar")
+	if got, want := env.Remove("FOO"), "bar"; got != want {
+		t.Errorf("env.Remove(\"FOO\") = %q, want %q", got, want)
+	}
 
 	v, ok = env.Get("FOO")
-	assert.Equal(t, v, "")
-	assert.False(t, ok)
+	if got, want := v, ""; got != want {
+		t.Errorf("env.Get(%q) = %q, want %q", "FOO", got, want)
+	}
+	if got := ok; got {
+		t.Errorf("env.Get(%q) = %t, want false", "FOO", got)
+	}
 }
 
 func TestEnvironmentMerge(t *testing.T) {
@@ -113,7 +161,9 @@ func TestEnvironmentMerge(t *testing.T) {
 
 	env1.Merge(env2)
 
-	assert.Equal(t, env1.ToSlice(), []string{"BAR=foo", "FOO=bar"})
+	if diff := cmp.Diff(env1.ToSlice(), []string{"BAR=foo", "FOO=bar"}); diff != "" {
+		t.Errorf("env1.ToSlice() diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestEnvironmentCopy(t *testing.T) {
@@ -122,11 +172,15 @@ func TestEnvironmentCopy(t *testing.T) {
 	env1 := FromSlice([]string{"FOO=bar"})
 	env2 := env1.Copy()
 
-	assert.Equal(t, []string{"FOO=bar"}, env2.ToSlice())
+	if diff := cmp.Diff(env2.ToSlice(), []string{"FOO=bar"}); diff != "" {
+		t.Errorf("env2.ToSlice() diff (-got +want):\n%s", diff)
+	}
 
 	env1.Set("FOO", "not-bar-anymore")
 
-	assert.Equal(t, []string{"FOO=bar"}, env2.ToSlice())
+	if diff := cmp.Diff(env2.ToSlice(), []string{"FOO=bar"}); diff != "" {
+		t.Errorf("env2.ToSlice() diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestEnvironmentToSlice(t *testing.T) {
@@ -134,7 +188,9 @@ func TestEnvironmentToSlice(t *testing.T) {
 
 	env := FromSlice([]string{"THIS_IS_GREAT=totes", "ZOMG=greatness"})
 
-	assert.Equal(t, []string{"THIS_IS_GREAT=totes", "ZOMG=greatness"}, env.ToSlice())
+	if diff := cmp.Diff(env.ToSlice(), []string{"THIS_IS_GREAT=totes", "ZOMG=greatness"}); diff != "" {
+		t.Errorf("env.ToSlice() diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestEnvironmentDiff(t *testing.T) {
@@ -143,7 +199,7 @@ func TestEnvironmentDiff(t *testing.T) {
 	b := FromSlice([]string{"A=hello", "B=there", "C=new", "D="})
 
 	ab := a.Diff(b)
-	assert.Equal(t, Diff{
+	if diff := cmp.Diff(ab, Diff{
 		Added: map[string]string{},
 		Changed: map[string]DiffPair{
 			"B": {
@@ -155,10 +211,12 @@ func TestEnvironmentDiff(t *testing.T) {
 			"C": {},
 			"D": {},
 		},
-	}, ab)
+	}); diff != "" {
+		t.Errorf("a.Diff(b) diff (-got +want):\n%s", diff)
+	}
 
 	ba := b.Diff(a)
-	assert.Equal(t, Diff{
+	if diff := cmp.Diff(ba, Diff{
 		Added: map[string]string{
 			"C": "new",
 			"D": "",
@@ -170,7 +228,9 @@ func TestEnvironmentDiff(t *testing.T) {
 			},
 		},
 		Removed: map[string]struct{}{},
-	}, ba)
+	}); diff != "" {
+		t.Errorf("b.Diff(a) diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestEnvironmentDiffRemove(t *testing.T) {
@@ -195,11 +255,13 @@ func TestEnvironmentDiffRemove(t *testing.T) {
 	diff.Remove("B")
 	diff.Remove("C")
 
-	assert.Equal(t, Diff{
+	if diff := cmp.Diff(diff, Diff{
 		Added:   map[string]string{},
 		Changed: map[string]DiffPair{},
 		Removed: map[string]struct{}{},
-	}, diff)
+	}); diff != "" {
+		t.Errorf("Diff{\n\tAdded: map[string]string{\n\t\t\"A\": \"new\",\n\t},\n\tChanged: map[string]DiffPair{\n\t\t\"B\": {\n\t\t\tOld:\t\"old\",\n\t\t\tNew:\t\"new\",\n\t\t},\n\t},\n\tRemoved: map[string]struct{}{\n\t\t\"C\": {},\n\t},\n} diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestEmptyDiff(t *testing.T) {
@@ -207,7 +269,9 @@ func TestEmptyDiff(t *testing.T) {
 
 	empty := Diff{}
 
-	assert.Equal(t, true, empty.Empty())
+	if got, want := empty.Empty(), true; got != want {
+		t.Errorf("empty.Empty() = %t, want %t", got, want)
+	}
 }
 
 func TestEnvironmentApply(t *testing.T) {
@@ -221,9 +285,11 @@ func TestEnvironmentApply(t *testing.T) {
 		Changed: map[string]DiffPair{},
 		Removed: map[string]struct{}{},
 	})
-	assert.Equal(t, FromSlice([]string{
+	if diff := cmp.Diff(env.Dump(), FromSlice([]string{
 		"LLAMAS_ENABLED=1",
-	}).Dump(), env.Dump())
+	}).Dump()); diff != "" {
+		t.Errorf("env.Dump() diff (-got +want):\n%s", diff)
+	}
 
 	env.Apply(Diff{
 		Added: map[string]string{
@@ -237,10 +303,12 @@ func TestEnvironmentApply(t *testing.T) {
 		},
 		Removed: map[string]struct{}{},
 	})
-	assert.Equal(t, FromSlice([]string{
+	if diff := cmp.Diff(env.Dump(), FromSlice([]string{
 		"ALPACAS_ENABLED=1",
 		"LLAMAS_ENABLED=0",
-	}).Dump(), env.Dump())
+	}).Dump()); diff != "" {
+		t.Errorf("env.Dump() diff (-got +want):\n%s", diff)
+	}
 
 	env.Apply(Diff{
 		Added:   map[string]string{},
@@ -250,7 +318,9 @@ func TestEnvironmentApply(t *testing.T) {
 			"ALPACAS_ENABLED": {},
 		},
 	})
-	assert.Equal(t, FromSlice([]string{}).Dump(), env.Dump())
+	if diff := cmp.Diff(env.Dump(), FromSlice([]string{}).Dump()); diff != "" {
+		t.Errorf("env.Dump() diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestSplit(t *testing.T) {
