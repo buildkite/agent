@@ -12,7 +12,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const metaDataSetBatchHelpDescription = `Usage:
@@ -41,30 +41,29 @@ type MetaDataSetBatchConfig struct {
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 }
 
-var MetaDataSetBatchCommand = cli.Command{
+var MetaDataSetBatchCommand = &cli.Command{
 	Name:        "set-batch",
 	Usage:       "Set multiple meta-data key/value pairs on a build",
 	Description: metaDataSetBatchHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job's build should the meta-data be set on",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job's build should the meta-data be set on",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 		RedactedVars,
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetBatchConfig](ctx, c)
 		defer done()
 
 		args := c.Args()
-		if len(args) == 0 {
+		if args.Len() == 0 {
 			return errors.New("at least one key=value argument is required")
 		}
 
-		items, err := parseMetaDataBatchArgs(args)
+		items, err := parseMetaDataBatchArgs(args.Slice())
 		if err != nil {
 			return err
 		}
