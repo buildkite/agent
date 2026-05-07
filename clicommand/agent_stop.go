@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const stopDescription = `Usage:
@@ -35,19 +35,18 @@ type AgentStopConfig struct {
 	Force bool `cli:"force"`
 }
 
-var AgentStopCommand = cli.Command{
+var AgentStopCommand = &cli.Command{
 	Name:        "stop",
 	Category:    categoryJobCommands,
 	Usage:       "Stop the agent",
 	Description: stopDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.BoolFlag{
+		&cli.BoolFlag{
 			Name:  "force",
 			Usage: "Cancel any currently running job (default: false)",
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AgentStopConfig](ctx, c)
 		defer done()
 
