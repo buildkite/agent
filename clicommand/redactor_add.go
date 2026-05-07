@@ -15,7 +15,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 // Note: if you add a new format string, make sure to add it to `secretsFormats`
@@ -46,7 +46,7 @@ type RedactorAddConfig struct {
 	RedactedVars    []string `cli:"redacted-vars"`
 }
 
-var RedactorAddCommand = cli.Command{
+var RedactorAddCommand = &cli.Command{
 	Name:  "add",
 	Usage: "Add values to redact from a job's log output",
 	Description: `Usage:
@@ -84,21 +84,20 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 
     $ echo '{"key":"value1","key":"value2","key":"value3"}' | buildkite-agent redactor add --format json`,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "format",
-			Usage:  "The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
-			EnvVar: "BUILDKITE_AGENT_REDACT_ADD_FORMAT",
-			Value:  FormatStringNone,
+		&cli.StringFlag{
+			Name:    "format",
+			Usage:   "The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_REDACT_ADD_FORMAT"),
+			Value:   FormatStringNone,
 		},
-		cli.BoolFlag{
-			Name:   "apply-vars-filter",
-			Usage:  fmt.Sprintf("When enabled, and the input is in 'json' format, the secrets are filtered before adding them to the redactor using the same rules used to detect secrets from environment variables: secrets must be at least %d characters long, and names must match the patterns defined by --redacted-vars or $BUILDKITE_REDACTED_VARS. Enabling this means secrets not matching these rules will not be redacted.", redact.LengthMin),
-			EnvVar: "BUILDKITE_AGENT_REDACT_VARS_FILTER",
+		&cli.BoolFlag{
+			Name:    "apply-vars-filter",
+			Usage:   fmt.Sprintf("When enabled, and the input is in 'json' format, the secrets are filtered before adding them to the redactor using the same rules used to detect secrets from environment variables: secrets must be at least %d characters long, and names must match the patterns defined by --redacted-vars or $BUILDKITE_REDACTED_VARS. Enabling this means secrets not matching these rules will not be redacted.", redact.LengthMin),
+			Sources: cli.EnvVars("BUILDKITE_AGENT_REDACT_VARS_FILTER"),
 		},
 		RedactedVars,
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[RedactorAddConfig](ctx, c)
 		defer done()
 
