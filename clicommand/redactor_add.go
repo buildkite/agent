@@ -13,7 +13,7 @@ import (
 
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 // Note: if you add a new format string, make sure to add it to `secretsFormats`
@@ -42,7 +42,7 @@ type RedactorAddConfig struct {
 	Format string `cli:"format"`
 }
 
-var RedactorAddCommand = cli.Command{
+var RedactorAddCommand = &cli.Command{
 	Name:  "add",
 	Usage: "Add values to redact from a job's log output",
 	Description: `Usage:
@@ -80,15 +80,14 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 
     $ echo '{"key":"value1","key":"value2","key":"value3"}' | buildkite-agent redactor add --format json`,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "format",
-			Usage:  "The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
-			EnvVar: "BUILDKITE_AGENT_REDACT_ADD_FORMAT",
-			Value:  FormatStringNone,
+		&cli.StringFlag{
+			Name:    "format",
+			Usage:   "The format for the input, whose value is either ′json′ or ′none′. ′none′ adds the entire input's content to the redactor, with the exception of leading and trailing space. ′json′ parses the input's content as a JSON object, where each value of each key is added to the redactor.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_REDACT_ADD_FORMAT"),
+			Value:   FormatStringNone,
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[RedactorAddConfig](ctx, c)
 		defer done()
 

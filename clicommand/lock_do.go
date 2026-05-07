@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/lock"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const lockDoHelpDescription = `Usage:
@@ -46,28 +46,28 @@ type LockDoConfig struct {
 	LockWaitTimeout time.Duration `cli:"lock-wait-timeout"`
 }
 
-var LockDoCommand = cli.Command{
+var LockDoCommand = &cli.Command{
 	Name:        "do",
 	Usage:       "Begins a do-once lock",
 	Description: lockDoHelpDescription,
 	Flags: append(lockCommonFlags(),
-		cli.DurationFlag{
-			Name:   "lock-wait-timeout",
-			Usage:  "Sets a maximum duration to wait for a lock before giving up",
-			EnvVar: "BUILDKITE_LOCK_WAIT_TIMEOUT",
+		&cli.DurationFlag{
+			Name:    "lock-wait-timeout",
+			Usage:   "Sets a maximum duration to wait for a lock before giving up",
+			Sources: cli.EnvVars("BUILDKITE_LOCK_WAIT_TIMEOUT"),
 		},
 	),
 	Action: lockDoAction,
 }
 
-func lockDoAction(c *cli.Context) error {
+func lockDoAction(ctx context.Context, c *cli.Command) error {
 	if c.NArg() != 1 {
-		_, _ = fmt.Fprint(c.App.ErrWriter, lockDoHelpDescription)
+		_, _ = fmt.Fprint(c.ErrWriter, lockDoHelpDescription)
 		return &SilentExitError{code: 1}
 	}
-	key := c.Args()[0]
+	key := c.Args().Get(0)
 
-	ctx, cfg, _, _, done := setupLoggerAndConfig[LockDoConfig](context.Background(), c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockDoConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
@@ -91,9 +91,9 @@ func lockDoAction(c *cli.Context) error {
 	}
 
 	if do {
-		_, err = fmt.Fprintln(c.App.Writer, "do")
+		_, err = fmt.Fprintln(c.Writer, "do")
 	} else {
-		_, err = fmt.Fprintln(c.App.Writer, "done")
+		_, err = fmt.Fprintln(c.Writer, "done")
 	}
 	return err
 }
