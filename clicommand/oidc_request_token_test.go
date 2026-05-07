@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 func newOIDCRequestTokenTestServer(t *testing.T, jobID, token string) *httptest.Server {
@@ -29,11 +30,18 @@ func newOIDCRequestTokenTestServer(t *testing.T, jobID, token string) *httptest.
 func runOIDCRequestTokenCommand(t *testing.T, serverURL string, args ...string) (string, error) {
 	t.Helper()
 
-	app := cli.NewApp()
-	app.Commands = []cli.Command{OIDCRequestTokenCommand}
+	// Clone the command because Run mutates it.
+	cmd := *OIDCRequestTokenCommand
+	app := &cli.Command{
+		Name: "buildkite-agent",
+		Commands: []*cli.Command{
+			&cmd,
+		},
+	}
 
 	var out bytes.Buffer
-	app.Writer = &out
+	cmd.Writer = &out
+	cmd.ErrWriter = os.Stderr
 
 	runArgs := []string{
 		"buildkite-agent",
@@ -44,7 +52,7 @@ func runOIDCRequestTokenCommand(t *testing.T, serverURL string, args ...string) 
 	}
 	runArgs = append(runArgs, args...)
 
-	err := app.Run(runArgs)
+	err := app.Run(t.Context(), runArgs)
 	return out.String(), err
 }
 

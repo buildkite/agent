@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const acknowledgementsHelpDescription = `Usage:
@@ -28,12 +28,11 @@ var files embed.FS
 
 type AcknowledgementsConfig struct{}
 
-var AcknowledgementsCommand = cli.Command{
+var AcknowledgementsCommand = &cli.Command{
 	Name:        "acknowledgements",
 	Usage:       "Prints the licenses and notices of open source software incorporated into this software.",
 	Description: acknowledgementsHelpDescription,
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		_, _, _, _, done := setupLoggerAndConfig[AcknowledgementsConfig](ctx, c)
 		defer done()
 
@@ -50,7 +49,7 @@ var AcknowledgementsCommand = cli.Command{
 		if err != nil {
 			return fmt.Errorf("couldn't create a gzip reader: %w", err)
 		}
-		if _, err := io.Copy(c.App.Writer, r); err != nil {
+		if _, err := io.Copy(c.Writer, r); err != nil {
 			return fmt.Errorf("couldn't copy acknowledgments to output: %w", err)
 		}
 		return nil

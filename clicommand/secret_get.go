@@ -14,7 +14,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/secrets"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -28,7 +28,7 @@ type SecretGetConfig struct {
 	SkipRedaction bool     `cli:"skip-redaction"`
 }
 
-var SecretGetCommand = cli.Command{
+var SecretGetCommand = &cli.Command{
 	Name:  "get",
 	Usage: "Get a list of secrets by their keys and print them to stdout",
 	Description: `Usage:
@@ -66,30 +66,29 @@ Examples:
     {"deploy_key": "...", "github_api_token": "..."}
 `,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "job",
-			Usage:  "Which job should should the secret be for",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Usage:   "Which job should should the secret be for",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
-		cli.StringFlag{
-			Name:   "format",
-			Usage:  "The output format, either 'default', 'json', or 'env'. When 'default', a single secret will print just the value, while multiple secrets will print JSON. When 'json' or 'env', secrets will be printed as key-value pairs in the requested format",
-			Value:  "default",
-			EnvVar: "BUILDKITE_AGENT_SECRET_GET_FORMAT",
+		&cli.StringFlag{
+			Name:    "format",
+			Usage:   "The output format, either 'default', 'json', or 'env'. When 'default', a single secret will print just the value, while multiple secrets will print JSON. When 'json' or 'env', secrets will be printed as key-value pairs in the requested format",
+			Value:   "default",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_SECRET_GET_FORMAT"),
 		},
-		cli.BoolFlag{
-			Name:   "skip-redaction",
-			Usage:  "Skip redacting the retrieved secret from the logs. Then, the command will print the secret to the Job's logs if called directly (default: false)",
-			EnvVar: "BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION",
+		&cli.BoolFlag{
+			Name:    "skip-redaction",
+			Usage:   "Skip redacting the retrieved secret from the logs. Then, the command will print the secret to the Job's logs if called directly (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION"),
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[SecretGetConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "secret-get")
 		defer span.End()
-		return secretGet(ctx, cfg, c.App.Writer, l)
+		return secretGet(ctx, cfg, c.Writer, l)
 	},
 }
 
