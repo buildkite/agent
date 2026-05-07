@@ -11,7 +11,7 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -56,38 +56,38 @@ type StepUpdateConfig struct {
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 }
 
-var StepUpdateCommand = cli.Command{
+var StepUpdateCommand = &cli.Command{
 	Name:        "update",
 	Usage:       "Change the value of an attribute",
 	Description: stepUpdateHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "step",
-			Value:  "",
-			Usage:  "The step to update. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
-			EnvVar: "BUILDKITE_STEP_ID",
+		&cli.StringFlag{
+			Name:    "step",
+			Value:   "",
+			Usage:   "The step to update. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
+			Sources: cli.EnvVars("BUILDKITE_STEP_ID"),
 		},
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			Usage:  "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
-			EnvVar: "BUILDKITE_BUILD_ID",
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Usage:   "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
+			Sources: cli.EnvVars("BUILDKITE_BUILD_ID"),
 		},
-		cli.BoolFlag{
-			Name:   "append",
-			Usage:  "Append to current attribute instead of replacing it (default: false)",
-			EnvVar: "BUILDKITE_STEP_UPDATE_APPEND",
+		&cli.BoolFlag{
+			Name:    "append",
+			Usage:   "Append to current attribute instead of replacing it (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_STEP_UPDATE_APPEND"),
 		},
 		RedactedVars,
 	}),
-	Action: func(c *cli.Context) error {
-		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](context.Background(), c)
+	Action: func(ctx context.Context, c *cli.Command) error {
+		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "step-update")
 		defer span.End()
 
 		// Read the value from STDIN if argument omitted entirely
-		if len(c.Args()) < 2 {
+		if c.Args().Len() < 2 {
 			l.Infof("Reading value from STDIN")
 
 			input, err := io.ReadAll(os.Stdin)
