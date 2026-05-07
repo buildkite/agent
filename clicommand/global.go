@@ -235,6 +235,12 @@ var (
 		// -q: quiet, only report errors
 	}
 
+	GitCommitVerificationFlag = cli.BoolFlag{
+		Name:   "git-commit-verification",
+		Usage:  "Enable git commit verification",
+		EnvVar: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+	}
+
 	GitFetchFlagsFlag = cli.StringFlag{
 		Name:   "git-fetch-flags",
 		Value:  "-v --prune",

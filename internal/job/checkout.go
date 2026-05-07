@@ -806,6 +806,78 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 	return nil
 }
 
+// verifyCommit is called if the user has commit verification enabled. It ensures that the commit we are
+// asked to build exists and is reachable on the branch we are given.
+func (e *Executor) verifyCommit(ctx context.Context) error {
+	// Skip if not enabled
+	if !e.GitCommitVerification {
+		return nil
+	}
+
+	// Skip if commit is HEAD (nothing to verify)
+	if e.Commit == "HEAD" {
+		return nil
+	}
+
+	// Skip if we haven't been given a branch - e.g. it's a tag push event
+	if e.Branch == "" {
+		return nil
+	}
+
+	e.shell.Commentf("Verifying commit %q is on branch %q", e.Commit, e.Branch)
+
+	// Try the ancestry check
+	err := e.shell.Command("git", "merge-base", "--is-ancestor", e.Commit, e.Branch).Run(ctx)
+	exitCode := shell.ExitCode(err)
+
+	switch exitCode {
+	case 0:
+		return nil // verified!
+	case 1:
+		return fmt.Errorf("commit %q is not on branch %q", e.Commit, e.Branch)
+	case 128:
+		// We might have a shallow clone, try to deepen or unshallow to find the commit
+		output, _ := e.shell.Command("git", "rev-parse", "--is-shallow-repository").RunAndCaptureStdout(ctx)
+
+		if strings.TrimSpace(output) != "true" {
+			// Not shallow — this is a genuine error
+			return fmt.Errorf("unable to verify commit %q on branch %q: %w", e.Commit, e.Branch, err)
+		}
+
+		// Try deepening by 50 commits first
+		e.shell.Commentf("Shallow clone detected, deepening by 50 commits...")
+		_ = e.shell.Command("git", "fetch", "--deepen=50").Run(ctx)
+
+		retryErr := e.shell.Command("git", "merge-base", "--is-ancestor", e.Commit, e.Branch).Run(ctx)
+		retryCode := shell.ExitCode(retryErr)
+
+		if retryCode == 0 {
+			return nil // Found a valid commit after deepening
+		}
+		if retryCode == 1 {
+			return fmt.Errorf("commit %q is not on branch %q", e.Commit, e.Branch)
+		}
+
+		// Still 128 - full unshallow as last resort
+		e.shell.Commentf("Deepening insufficient, performing a full unshallow...")
+		_ = e.shell.Command("git", "fetch", "--unshallow").Run(ctx)
+
+		retryErr = e.shell.Command("git", "merge-base", "--is-ancestor", e.Commit, e.Branch).Run(ctx)
+		retryCode = shell.ExitCode(retryErr)
+
+		if retryCode == 0 {
+			return nil // Found a valid commit after unshallowing
+		}
+		if retryCode == 1 {
+			return fmt.Errorf("commit %q is not on branch %q", e.Commit, e.Branch)
+		}
+
+		return fmt.Errorf("unable to verify commit %q on branch %q after unshallowing: %w", e.Commit, e.Branch, retryErr)
+	default:
+		return fmt.Errorf("unable to verify commit %q on branch %q: %w", e.Commit, e.Branch, err)
+	}
+}
+
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
@@ -915,6 +987,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	}
 
 	if err := e.fetchSource(ctx); err != nil {
+		return err
+	}
+
+	if err := e.verifyCommit(ctx); err != nil {
 		return err
 	}
 
