@@ -638,7 +638,8 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// breaks the rest of the job.
 	var protected []string
 	for k := range changes.Diff.Keys {
-		if env.IsProtectedFromWithinJob(k) {
+		if env.IsProtectedFromWithinJob(k) ||
+			(e.NoCheckoutOverride && env.IsCheckoutOverrideScoped(k)) {
 			protected = append(protected, k)
 			changes.Diff.Remove(k)
 		}
@@ -978,6 +979,9 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 				// Check if the environment variable is protected
 				if env.IsProtected(pipelineSecret.EnvironmentVariable) {
 					return fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+				if e.NoCheckoutOverride && env.IsCheckoutOverrideScoped(pipelineSecret.EnvironmentVariable) {
+					return fmt.Errorf("secret %q cannot set checkout-locked environment variable %q while BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
 				}
 
 				var alreadySet bool

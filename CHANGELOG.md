@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.126.0](https://github.com/buildkite/agent/tree/v3.126.0) (2026-05-07)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.125.0...v3.126.0)
+
+### Added
+- Add `priority` and `queue` labels to the Prometheus job-start/end counters, plus a new `jobsRunning` gauge with the same labels [#3900](https://github.com/buildkite/agent/pull/3900) (@buildkate)
+
+### Changed
+- Document `BUILDKITE_S3_PROFILE` in `buildkite-agent artifact upload --help` [#3869](https://github.com/buildkite/agent/pull/3869) (@mastermanas805)
+
+### Internal
+- Remove `omitempty` JSON tags from `api.Job` (the struct is only ever unmarshalled from API responses, so the tags had no effect) [#3902](https://github.com/buildkite/agent/pull/3902) (@buildkate)
+- Dependabot updates: [#3847](https://github.com/buildkite/agent/pull/3847), [#3860](https://github.com/buildkite/agent/pull/3860), [#3879](https://github.com/buildkite/agent/pull/3879), [#3885](https://github.com/buildkite/agent/pull/3885), [#3886](https://github.com/buildkite/agent/pull/3886), [#3888](https://github.com/buildkite/agent/pull/3888), [#3890](https://github.com/buildkite/agent/pull/3890), [#3891](https://github.com/buildkite/agent/pull/3891), [#3895](https://github.com/buildkite/agent/pull/3895) (@dependabot[bot])
+
 ## [v3.125.0](https://github.com/buildkite/agent/tree/v3.125.0) (2026-05-04)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.124.0...v3.125.0)
 
