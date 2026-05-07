@@ -50,7 +50,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
-	github.com/urfave/cli v1.22.17
+	github.com/urfave/cli/v3 v3.8.0
 	go.opentelemetry.io/contrib/propagators/aws v1.43.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.43.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.43.0
@@ -105,7 +105,6 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/fatih/color v1.18.0 // indirect
@@ -139,11 +138,11 @@ require (
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/qri-io/jsonpointer v0.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/saracen/zipextra v0.0.0-20250129175152-f1aa42d25216 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.32 // indirect
 	github.com/wolfeidau/quickzip v1.0.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

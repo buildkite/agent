@@ -10,7 +10,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/artifact"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -82,40 +82,39 @@ type ArtifactSearchConfig struct {
 	PrintFormat        string `cli:"format"`
 }
 
-var ArtifactSearchCommand = cli.Command{
+var ArtifactSearchCommand = &cli.Command{
 	Name:               "search",
 	Usage:              "Searches artifacts in Buildkite",
 	Description:        searchHelpDescription,
 	CustomHelpTemplate: artifactSearchHelpTemplate,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "step",
 			Value: "",
 			Usage: "Scope the search to a particular step by using either its name or job ID",
 		},
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			EnvVar: "BUILDKITE_BUILD_ID",
-			Usage:  "The build that the artifacts were uploaded to",
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Sources: cli.EnvVars("BUILDKITE_BUILD_ID"),
+			Usage:   "The build that the artifacts were uploaded to",
 		},
-		cli.BoolFlag{
-			Name:   "include-retried-jobs",
-			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from retried jobs in the search (default: false)",
+		&cli.BoolFlag{
+			Name:    "include-retried-jobs",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS"),
+			Usage:   "Include artifacts from retried jobs in the search (default: false)",
 		},
-		cli.BoolFlag{
+		&cli.BoolFlag{
 			Name:  "allow-empty-results",
 			Usage: "By default, searches exit 1 if there are no results. If this flag is set, searches will exit 0 with an empty set (default: false)",
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "format",
 			Value: "%j %p %c\\n", // Note: users supply \n in the flag value literally
 			Usage: "Output formatting of results. See below for listing of available format specifiers.",
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactSearchConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "artifact-search")
@@ -161,7 +160,7 @@ var ArtifactSearchCommand = cli.Command{
 				"%u", artifact.URL,
 				"%i", artifact.ID,
 			)
-			if _, err := fmt.Fprint(c.App.Writer, r.Replace(printFormat)); err != nil {
+			if _, err := fmt.Fprint(c.Writer, r.Replace(printFormat)); err != nil {
 				return err
 			}
 		}
