@@ -8,7 +8,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -41,32 +41,32 @@ type StepGetConfig struct {
 	Format    string `cli:"format"`
 }
 
-var StepGetCommand = cli.Command{
+var StepGetCommand = &cli.Command{
 	Name:        "get",
 	Usage:       "Get the value of an attribute",
 	Description: stepGetHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "step",
-			Value:  "",
-			Usage:  "The step to get. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
-			EnvVar: "BUILDKITE_STEP_ID",
+		&cli.StringFlag{
+			Name:    "step",
+			Value:   "",
+			Usage:   "The step to get. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
+			Sources: cli.EnvVars("BUILDKITE_STEP_ID"),
 		},
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			Usage:  "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
-			EnvVar: "BUILDKITE_BUILD_ID",
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Usage:   "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
+			Sources: cli.EnvVars("BUILDKITE_BUILD_ID"),
 		},
-		cli.StringFlag{
-			Name:   "format",
-			Value:  "",
-			Usage:  "The format to output the attribute value in (currently only JSON is supported)",
-			EnvVar: "BUILDKITE_STEP_GET_FORMAT",
+		&cli.StringFlag{
+			Name:    "format",
+			Value:   "",
+			Usage:   "The format to output the attribute value in (currently only JSON is supported)",
+			Sources: cli.EnvVars("BUILDKITE_STEP_GET_FORMAT"),
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx, cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](context.Background(), c)
+	Action: func(ctx context.Context, c *cli.Command) error {
+		ctx, cfg, l, _, done := setupLoggerAndConfig[StepGetConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "step-get")
 		defer span.End()
@@ -101,7 +101,7 @@ var StepGetCommand = cli.Command{
 		}
 
 		// Output the value to STDOUT
-		_, err = fmt.Fprintln(c.App.Writer, stepExportResponse.Output)
+		_, err = fmt.Fprintln(c.Writer, stepExportResponse.Output)
 		return err
 	},
 }
