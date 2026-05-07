@@ -11,7 +11,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/bintest/v3"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 // This context needs to be stored here in order to pass experiments to tests,
@@ -40,20 +40,21 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	app := cli.NewApp()
-	app.Name = "buildkite-agent"
-	app.Version = version.Version()
-	app.Commands = []cli.Command{
-		clicommand.BootstrapCommand,
-		{
-			Name: "env",
-			Subcommands: []cli.Command{
-				clicommand.EnvDumpCommand,
+	app := &cli.Command{
+		Name:    "buildkite-agent",
+		Version: version.Version(),
+		Commands: []*cli.Command{
+			clicommand.BootstrapCommand,
+			{
+				Name: "env",
+				Commands: []*cli.Command{
+					clicommand.EnvDumpCommand,
+				},
 			},
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(mainCtx, os.Args); err != nil {
 		os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
 	}
 }

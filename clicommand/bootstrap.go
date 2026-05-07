@@ -15,7 +15,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const bootstrapHelpDescription = `Usage:
@@ -114,123 +114,123 @@ type BootstrapConfig struct {
 	CheckoutAttempts             int           `cli:"checkout-attempts"`
 }
 
-var BootstrapCommand = cli.Command{
+var BootstrapCommand = &cli.Command{
 	Name:        "bootstrap",
 	Usage:       "Harness used internally by the agent to run jobs as subprocesses",
 	Category:    categoryInternal,
 	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:   "command",
-			Value:  "",
-			Usage:  "The command to run",
-			EnvVar: "BUILDKITE_COMMAND",
+		&cli.StringFlag{
+			Name:    "command",
+			Value:   "",
+			Usage:   "The command to run",
+			Sources: cli.EnvVars("BUILDKITE_COMMAND"),
 		},
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "The ID of the job being run",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "The ID of the job being run",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
-		cli.StringFlag{
-			Name:   "repository",
-			Value:  "",
-			Usage:  "The repository to clone and run the job from",
-			EnvVar: "BUILDKITE_REPO",
+		&cli.StringFlag{
+			Name:    "repository",
+			Value:   "",
+			Usage:   "The repository to clone and run the job from",
+			Sources: cli.EnvVars("BUILDKITE_REPO"),
 		},
-		cli.StringFlag{
-			Name:   "commit",
-			Value:  "",
-			Usage:  "The commit to checkout in the repository",
-			EnvVar: "BUILDKITE_COMMIT",
+		&cli.StringFlag{
+			Name:    "commit",
+			Value:   "",
+			Usage:   "The commit to checkout in the repository",
+			Sources: cli.EnvVars("BUILDKITE_COMMIT"),
 		},
-		cli.StringFlag{
-			Name:   "branch",
-			Value:  "",
-			Usage:  "The branch the commit is in",
-			EnvVar: "BUILDKITE_BRANCH",
+		&cli.StringFlag{
+			Name:    "branch",
+			Value:   "",
+			Usage:   "The branch the commit is in",
+			Sources: cli.EnvVars("BUILDKITE_BRANCH"),
 		},
-		cli.StringFlag{
-			Name:   "tag",
-			Value:  "",
-			Usage:  "The tag the commit",
-			EnvVar: "BUILDKITE_TAG",
+		&cli.StringFlag{
+			Name:    "tag",
+			Value:   "",
+			Usage:   "The tag the commit",
+			Sources: cli.EnvVars("BUILDKITE_TAG"),
 		},
-		cli.StringFlag{
-			Name:   "refspec",
-			Value:  "",
-			Usage:  "Optional refspec to override git fetch",
-			EnvVar: "BUILDKITE_REFSPEC",
+		&cli.StringFlag{
+			Name:    "refspec",
+			Value:   "",
+			Usage:   "Optional refspec to override git fetch",
+			Sources: cli.EnvVars("BUILDKITE_REFSPEC"),
 		},
-		cli.StringFlag{
-			Name:   "plugins",
-			Value:  "",
-			Usage:  "The plugins for the job",
-			EnvVar: "BUILDKITE_PLUGINS",
+		&cli.StringFlag{
+			Name:    "plugins",
+			Value:   "",
+			Usage:   "The plugins for the job",
+			Sources: cli.EnvVars("BUILDKITE_PLUGINS"),
 		},
-		cli.StringFlag{
-			Name:   "secrets",
-			Value:  "",
-			Usage:  "Secrets to be loaded into the job environment",
-			EnvVar: "BUILDKITE_SECRETS_CONFIG",
+		&cli.StringFlag{
+			Name:    "secrets",
+			Value:   "",
+			Usage:   "Secrets to be loaded into the job environment",
+			Sources: cli.EnvVars("BUILDKITE_SECRETS_CONFIG"),
 		},
-		cli.StringFlag{
-			Name:   "pullrequest",
-			Value:  "",
-			Usage:  "The number/id of the pull request this commit belonged to",
-			EnvVar: "BUILDKITE_PULL_REQUEST",
+		&cli.StringFlag{
+			Name:    "pullrequest",
+			Value:   "",
+			Usage:   "The number/id of the pull request this commit belonged to",
+			Sources: cli.EnvVars("BUILDKITE_PULL_REQUEST"),
 		},
-		cli.BoolFlag{
-			Name:   "pull-request-using-merge-refspec",
-			Usage:  "Whether the agent should attempt to checkout the pull request commit using the merge refspec. This feature is in private preview and requires backend enablement—contact support to enable (default: false)",
-			EnvVar: "BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC",
+		&cli.BoolFlag{
+			Name:    "pull-request-using-merge-refspec",
+			Usage:   "Whether the agent should attempt to checkout the pull request commit using the merge refspec. This feature is in private preview and requires backend enablement—contact support to enable (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC"),
 		},
-		cli.StringFlag{
-			Name:   "agent",
-			Value:  "",
-			Usage:  "The name of the agent running the job",
-			EnvVar: "BUILDKITE_AGENT_NAME",
+		&cli.StringFlag{
+			Name:    "agent",
+			Value:   "",
+			Usage:   "The name of the agent running the job",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_NAME"),
 		},
-		cli.StringFlag{
-			Name:   "queue",
-			Value:  "",
-			Usage:  "The name of the queue the agent belongs to, if tagged",
-			EnvVar: "BUILDKITE_AGENT_META_DATA_QUEUE",
+		&cli.StringFlag{
+			Name:    "queue",
+			Value:   "",
+			Usage:   "The name of the queue the agent belongs to, if tagged",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_META_DATA_QUEUE"),
 		},
-		cli.StringFlag{
-			Name:   "organization",
-			Value:  "",
-			Usage:  "The slug of the organization that the job is a part of",
-			EnvVar: "BUILDKITE_ORGANIZATION_SLUG",
+		&cli.StringFlag{
+			Name:    "organization",
+			Value:   "",
+			Usage:   "The slug of the organization that the job is a part of",
+			Sources: cli.EnvVars("BUILDKITE_ORGANIZATION_SLUG"),
 		},
-		cli.StringFlag{
-			Name:   "pipeline",
-			Value:  "",
-			Usage:  "The slug of the pipeline that the job is a part of",
-			EnvVar: "BUILDKITE_PIPELINE_SLUG",
+		&cli.StringFlag{
+			Name:    "pipeline",
+			Value:   "",
+			Usage:   "The slug of the pipeline that the job is a part of",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_SLUG"),
 		},
-		cli.StringFlag{
-			Name:   "pipeline-provider",
-			Value:  "",
-			Usage:  "The id of the SCM provider that the repository is hosted on",
-			EnvVar: "BUILDKITE_PIPELINE_PROVIDER",
+		&cli.StringFlag{
+			Name:    "pipeline-provider",
+			Value:   "",
+			Usage:   "The id of the SCM provider that the repository is hosted on",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_PROVIDER"),
 		},
-		cli.StringFlag{
-			Name:   "artifact-upload-paths",
-			Value:  "",
-			Usage:  "Paths to files to automatically upload at the end of a job",
-			EnvVar: "BUILDKITE_ARTIFACT_PATHS",
+		&cli.StringFlag{
+			Name:    "artifact-upload-paths",
+			Value:   "",
+			Usage:   "Paths to files to automatically upload at the end of a job",
+			Sources: cli.EnvVars("BUILDKITE_ARTIFACT_PATHS"),
 		},
-		cli.StringFlag{
-			Name:   "artifact-upload-destination",
-			Value:  "",
-			Usage:  "A custom location to upload artifact paths to (for example, s3://my-custom-bucket/and/prefix)",
-			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_DESTINATION",
+		&cli.StringFlag{
+			Name:    "artifact-upload-destination",
+			Value:   "",
+			Usage:   "A custom location to upload artifact paths to (for example, s3://my-custom-bucket/and/prefix)",
+			Sources: cli.EnvVars("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"),
 		},
-		cli.BoolFlag{
-			Name:   "clean-checkout",
-			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command (default: false)",
-			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
+		&cli.BoolFlag{
+			Name:    "clean-checkout",
+			Usage:   "Whether or not the bootstrap should remove the existing repository before running the command (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_CLEAN_CHECKOUT"),
 		},
 
 		// Various git related flags shared with agent start
@@ -249,11 +249,11 @@ var BootstrapCommand = cli.Command{
 		GitSkipFetchExistingCommitsFlag,
 		CheckoutAttemptsFlag,
 
-		cli.StringFlag{
-			Name:   "bin-path",
-			Value:  "",
-			Usage:  "Directory where the buildkite-agent binary lives",
-			EnvVar: "BUILDKITE_BIN_PATH",
+		&cli.StringFlag{
+			Name:    "bin-path",
+			Value:   "",
+			Usage:   "Directory where the buildkite-agent binary lives",
+			Sources: cli.EnvVars("BUILDKITE_BIN_PATH"),
 		},
 
 		// Various file path flags shared with agent start
@@ -263,95 +263,101 @@ var BootstrapCommand = cli.Command{
 		SocketsPathFlag,
 		PluginsPathFlag,
 
-		cli.BoolTFlag{
-			Name:   "command-eval",
-			Usage:  "Allow running of arbitrary commands (default: true)",
-			EnvVar: "BUILDKITE_COMMAND_EVAL",
+		&cli.BoolFlag{
+			Name:    "command-eval",
+			Usage:   "Allow running of arbitrary commands (default: true)",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_COMMAND_EVAL"),
 		},
-		cli.BoolTFlag{
-			Name:   "plugins-enabled",
-			Usage:  "Allow plugins to be run (default: true)",
-			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
+		&cli.BoolFlag{
+			Name:    "plugins-enabled",
+			Usage:   "Allow plugins to be run (default: true)",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_PLUGINS_ENABLED"),
 		},
-		cli.BoolFlag{
-			Name:   "plugin-validation",
-			Usage:  "Validate plugin configuration (default: false)",
-			EnvVar: "BUILDKITE_PLUGIN_VALIDATION",
+		&cli.BoolFlag{
+			Name:    "plugin-validation",
+			Usage:   "Validate plugin configuration (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_PLUGIN_VALIDATION"),
 		},
-		cli.BoolFlag{
-			Name:   "plugins-always-clone-fresh",
-			Usage:  "Always make a new clone of plugin source, even if already present (default: false)",
-			EnvVar: "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH",
+		&cli.BoolFlag{
+			Name:    "plugins-always-clone-fresh",
+			Usage:   "Always make a new clone of plugin source, even if already present (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH"),
 		},
-		cli.BoolTFlag{
-			Name:   "local-hooks-enabled",
-			Usage:  "Allow local hooks to be run (default: true)",
-			EnvVar: "BUILDKITE_LOCAL_HOOKS_ENABLED",
+		&cli.BoolFlag{
+			Name:    "local-hooks-enabled",
+			Usage:   "Allow local hooks to be run (default: true)",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_LOCAL_HOOKS_ENABLED"),
 		},
-		cli.BoolTFlag{
-			Name:   "ssh-keyscan",
-			Usage:  "Automatically run ssh-keyscan before checkout (default: true)",
-			EnvVar: "BUILDKITE_SSH_KEYSCAN",
+		&cli.BoolFlag{
+			Name:    "ssh-keyscan",
+			Usage:   "Automatically run ssh-keyscan before checkout (default: true)",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_SSH_KEYSCAN"),
 		},
-		cli.BoolTFlag{ // no-git-submodules in agent start
-			Name:   "git-submodules",
-			Usage:  "Enable git submodules (default: true)",
-			EnvVar: "BUILDKITE_GIT_SUBMODULES",
+		&cli.BoolFlag{ // no-git-submodules in agent start
+			Name:    "git-submodules",
+			Usage:   "Enable git submodules (default: true)",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_GIT_SUBMODULES"),
 		},
-		cli.BoolTFlag{
-			Name:   "pty",
-			Usage:  "Run jobs within a pseudo terminal (default: true)",
-			EnvVar: "BUILDKITE_PTY",
+		&cli.BoolFlag{
+			Name:    "pty",
+			Usage:   "Run jobs within a pseudo terminal (default: true)",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_PTY"),
 		},
-		cli.StringFlag{
-			Name:   "shell",
-			Usage:  "The shell to use to interpret build commands",
-			EnvVar: "BUILDKITE_SHELL",
-			Value:  DefaultShell(),
+		&cli.StringFlag{
+			Name:    "shell",
+			Usage:   "The shell to use to interpret build commands",
+			Sources: cli.EnvVars("BUILDKITE_SHELL"),
+			Value:   DefaultShell(),
 		},
-		cli.StringFlag{
-			Name:   "hooks-shell",
-			Usage:  "The shell to use to interpret hooks commands",
-			EnvVar: "BUILDKITE_HOOKS_SHELL",
+		&cli.StringFlag{
+			Name:    "hooks-shell",
+			Usage:   "The shell to use to interpret hooks commands",
+			Sources: cli.EnvVars("BUILDKITE_HOOKS_SHELL"),
 		},
-		cli.StringSliceFlag{
-			Name:   "phases",
-			Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
-			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
+		&cli.StringSliceFlag{
+			Name:    "phases",
+			Usage:   "The specific phases to execute. The order they're defined is irrelevant.",
+			Sources: cli.EnvVars("BUILDKITE_BOOTSTRAP_PHASES"),
 		},
-		cli.StringFlag{
-			Name:   "tracing-backend",
-			Usage:  "The name of the tracing backend to use.",
-			EnvVar: "BUILDKITE_TRACING_BACKEND",
-			Value:  "",
+		&cli.StringFlag{
+			Name:    "tracing-backend",
+			Usage:   "The name of the tracing backend to use.",
+			Sources: cli.EnvVars("BUILDKITE_TRACING_BACKEND"),
+			Value:   "",
 		},
-		cli.StringFlag{
-			Name:   "tracing-service-name",
-			Usage:  "Service name to use when reporting traces.",
-			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
-			Value:  "buildkite-agent",
+		&cli.StringFlag{
+			Name:    "tracing-service-name",
+			Usage:   "Service name to use when reporting traces.",
+			Sources: cli.EnvVars("BUILDKITE_TRACING_SERVICE_NAME"),
+			Value:   "buildkite-agent",
 		},
-		cli.StringFlag{
-			Name:   "tracing-traceparent",
-			Usage:  "W3C Trace Parent for tracing",
-			EnvVar: "BUILDKITE_TRACING_TRACEPARENT",
-			Value:  "",
+		&cli.StringFlag{
+			Name:    "tracing-traceparent",
+			Usage:   "W3C Trace Parent for tracing",
+			Sources: cli.EnvVars("BUILDKITE_TRACING_TRACEPARENT"),
+			Value:   "",
 		},
-		cli.BoolFlag{
-			Name:   "tracing-propagate-traceparent",
-			Usage:  "Accept traceparent from Buildkite control plane (default: false)",
-			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
+		&cli.BoolFlag{
+			Name:    "tracing-propagate-traceparent",
+			Usage:   "Accept traceparent from Buildkite control plane (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"),
 		},
 
-		cli.BoolFlag{
-			Name:   "no-job-api",
-			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job (default: false)",
-			EnvVar: "BUILDKITE_AGENT_NO_JOB_API",
+		&cli.BoolFlag{
+			Name:    "no-job-api",
+			Usage:   "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_NO_JOB_API"),
 		},
-		cli.StringSliceFlag{
-			Name:   "disable-warnings-for",
-			Usage:  "A list of warning IDs to disable",
-			EnvVar: "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR",
+		&cli.StringSliceFlag{
+			Name:    "disable-warnings-for",
+			Usage:   "A list of warning IDs to disable",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR"),
 		},
 		cancelSignalFlag,
 		cancelSignalTimeoutFlag,
@@ -365,8 +371,7 @@ var BootstrapCommand = cli.Command{
 		RedactedVars,
 		StrictSingleHooksFlag,
 	},
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
 
