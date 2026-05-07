@@ -25,7 +25,7 @@ type AgentConfiguration struct {
 	GitCloneMirrorFlags             string
 	GitCleanFlags                   string
 	GitFetchFlags                   string
-	SparseCheckoutPaths             string
+	GitSparseCheckoutPaths          []string
 	GitSubmodules                   bool
 	GitSubmoduleCloneConfig         []string
 	SkipCheckout                    bool

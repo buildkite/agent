@@ -381,16 +381,15 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 	return osutil.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
-func parseSparseCheckoutPaths(paths string) []string {
-	parts := strings.Split(paths, ",")
-	parsed := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			parsed = append(parsed, part)
+func cleanGitSparseCheckoutPaths(paths []string) []string {
+	cleaned := make([]string, 0, len(paths))
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path != "" {
+			cleaned = append(cleaned, path)
 		}
 	}
-	return parsed
+	return cleaned
 }
 
 func parseGitVersion(output string) (major, minor int, ok bool) {
@@ -466,7 +465,7 @@ func (e *Executor) disableSparseCheckoutIfConfigured(ctx context.Context) {
 // applied for this build, so callers can adjust later behaviour (e.g. skip
 // submodule init, which requires the full tree).
 func (e *Executor) setupSparseCheckout(ctx context.Context) (bool, error) {
-	paths := parseSparseCheckoutPaths(e.SparseCheckoutPaths)
+	paths := cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
 	if len(paths) == 0 {
 		e.disableSparseCheckoutIfConfigured(ctx)
 		return false, nil
@@ -484,7 +483,7 @@ func (e *Executor) setupSparseCheckout(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	e.shell.Commentf("Setting up sparse checkout for paths: %s", e.SparseCheckoutPaths)
+	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(paths, ","))
 	args := append([]string{"sparse-checkout", "set", "--cone"}, paths...)
 	if err := e.shell.Command("git", args...).Run(ctx); err != nil {
 		return false, fmt.Errorf("setting sparse checkout paths: %w", err)
