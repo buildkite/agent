@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -146,7 +147,16 @@ func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.L
 
 	case cfg.Format == "env":
 		for _, key := range slices.Sorted(maps.Keys(secretsMap)) {
-			_, _ = fmt.Fprintf(w, "%s=%s\n", strings.ToUpper(key), shellQuote(secretsMap[key]))
+			envKey := strings.ToUpper(key)
+			// The output is intended to be consumed by `source` / `declare -x`,
+			// so we MUST refuse to emit a left-hand side that isn't a valid
+			// POSIX environment variable name. Otherwise a key like
+			// `FOO=$(evil)` would produce a line that the shell evaluates as
+			// an arbitrary command when sourced.
+			if !envShellKeyRE.MatchString(envKey) {
+				return fmt.Errorf("secret key %q is not a valid POSIX shell identifier and cannot be emitted in env format", key)
+			}
+			_, _ = fmt.Fprintf(w, "%s=%s\n", envKey, shellQuote(secretsMap[key]))
 		}
 
 	default:
@@ -156,7 +166,19 @@ func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.L
 	return nil
 }
 
-// shellQuote wraps the string in single quotes, which suppresses all shell expansions
+// envShellKeyRE matches valid POSIX environment variable names. Keys that
+// don't match must not be emitted as the left-hand side of a shell
+// assignment because the resulting line would not be a safe shell
+// assignment when sourced.
+var envShellKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// shellQuote wraps the string in POSIX single quotes such that, when
+// evaluated by a POSIX shell (e.g. via `source`), it expands to the literal
+// input. Each embedded single quote is encoded as the four-byte sequence
+// close-quote, backslash, single-quote, open-quote. Single-quoted POSIX
+// strings preserve every other byte literally, including $, backticks,
+// $(...), ${...} and other shell metacharacters, so the result cannot
+// trigger command substitution or variable expansion.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

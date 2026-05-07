@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -223,6 +224,66 @@ echo hello world
 				t.Fatalf("filepath.EvalSymlinks(%q) = %q, want %q", afterWd, got, want)
 			}
 		})
+	}
+}
+
+// TestPosixWrapperEscapesHostilePathComponents verifies that path values
+// templated into the generated POSIX wrapper script cannot trigger command
+// substitution or variable expansion, even if a path component contains
+// shell metacharacters (e.g. via $TMPDIR being attacker-influenced).
+//
+// This is the wrapper.go analogue of the BUILDKITE_ENV_FILE shell-injection
+// fix in agent/job_runner.go: paths used to be embedded inside "..." which
+// leaves $, $(...), `...`, ${...} active when bash executes the script.
+func TestPosixWrapperEscapesHostilePathComponents(t *testing.T) {
+	t.Parallel()
+
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available on PATH; skipping")
+	}
+
+	canary := filepath.Join(t.TempDir(), "canary_should_not_exist")
+	hostile := "$(touch " + canary + ")"
+
+	wrapperPath, err := hook.WriteHookWrapper(
+		hook.PosixShellTemplateType,
+		hook.WrapperTemplateInput{
+			AgentBinary:       "/bin/true" + hostile,
+			ShebangLine:       "#!/bin/sh",
+			BeforeEnvFileName: "/dev/null" + hostile,
+			AfterEnvFileName:  "/dev/null" + hostile,
+			PathToHook:        "/dev/null" + hostile,
+		},
+		t.TempDir(),
+		"hook-script-wrapper",
+	)
+	if err != nil {
+		t.Fatalf("WriteHookWrapper: %v", err)
+	}
+	contents, err := os.ReadFile(wrapperPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	t.Logf("generated wrapper:\n%s", contents)
+
+	// Syntax-check the script: parses but does not execute commands.
+	// If quoting were broken the script would still parse, so this is
+	// just a sanity check on well-formedness.
+	if out, err := exec.Command(bash, "-n", wrapperPath).CombinedOutput(); err != nil {
+		t.Fatalf("bash -n %s failed: %v\n%s", wrapperPath, err, out)
+	}
+
+	// Now actually execute the wrapper. The commands inside it will fail
+	// (the paths don't exist and the agent isn't there), but failure is
+	// fine — what we're asserting is that bash never performs the
+	// $(touch CANARY) command substitution embedded in the path strings.
+	// If it did, the canary file would be created before the failed
+	// commands ran.
+	_ = exec.Command(bash, wrapperPath).Run()
+
+	if _, err := os.Stat(canary); err == nil {
+		t.Fatalf("command substitution executed: canary %s was created", canary)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -442,9 +443,16 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	}
 
 	// Write out the job environment to file:
-	// - envShellFile: in k="v" format, with newlines escaped. If the
-	//   propagate-agent-vars experiment is enabled, the names of several agent
-	//   config variables are prepended at the top.
+	// - envShellFile: in k='v' format, with values escaped using POSIX
+	//   single-quote quoting so each KEY=VALUE line is safe to `source` from
+	//   a POSIX shell (e.g. from a pre-bootstrap hook). Keys that are not
+	//   valid POSIX environment variable names are skipped with a warning;
+	//   they are still preserved in envJSONFile and in the job process env.
+	//   NOTE: when the propagate-agent-vars experiment is enabled, a header
+	//   block of bare variable names (no assignment) is prepended for use by
+	//   tools that read the file in docker-style "include from current env"
+	//   mode. That header is not a valid POSIX shell snippet and the file
+	//   should not be `source`d in that mode; prefer envJSONFile for parsing.
 	// - envJSONFile: as a single JSON object {"k":"v",...}, escaped appropriately for JSON.
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
@@ -491,7 +499,14 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 
 		for key, value := range env {
-			if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
+			if !validEnvShellKey(key) {
+				// Skip keys that aren't valid POSIX shell identifiers
+				// rather than emit a line that would corrupt the file
+				// when sourced. The JSON env file still carries them.
+				r.agentLogger.Warnf("Skipping env var with invalid shell identifier name from BUILDKITE_ENV_FILE: %q", key)
+				continue
+			}
+			if _, err := fmt.Fprintf(r.envShellFile, "%s=%s\n", key, posixShellQuote(value)); err != nil {
 				return nil, err
 			}
 		}
@@ -940,4 +955,35 @@ func jobTimeoutFilePath(jobID string, kubernetesExec bool) string {
 		tempDir = "/workspace"
 	}
 	return filepath.Join(tempDir, fmt.Sprintf("job-timeout-%s", jobID))
+}
+
+// envShellKeyRE matches valid POSIX environment variable names: a leading
+// letter or underscore, followed by zero or more letters, digits or
+// underscores. Keys that don't match must not be written to the shell-format
+// env file because they could otherwise produce a line that is not a valid
+// shell assignment (e.g. a key containing `=`, whitespace or shell
+// metacharacters), corrupting the file when it is sourced.
+var envShellKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// validEnvShellKey reports whether key is a valid POSIX environment variable
+// name and is therefore safe to emit as the left-hand side of an assignment
+// in the shell-format env file.
+func validEnvShellKey(key string) bool {
+	return envShellKeyRE.MatchString(key)
+}
+
+// posixShellQuote returns s wrapped in POSIX single quotes such that the
+// result, when evaluated by a POSIX shell (e.g. via `source`), expands back
+// to the literal s. Each single quote in s is encoded as the four-byte
+// sequence: close-quote, backslash, single-quote, open-quote.
+// Single-quoted POSIX strings preserve every other byte literally, including
+// $, backticks, $(...), ${...}, newlines and other shell metacharacters, so
+// the resulting line cannot trigger command substitution or variable
+// expansion.
+//
+// This deliberately replaces a previous use of Go's fmt %q verb, which
+// produces Go-style (not POSIX-shell-style) quoting and leaves shell
+// metacharacters active when the file is sourced.
+func posixShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

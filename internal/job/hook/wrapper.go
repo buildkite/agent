@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/template"
 
 	"github.com/buildkite/agent/v3/env"
@@ -56,20 +57,39 @@ $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
 {{.AgentBinary}} env dump | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
+	// posixShellWrapper interpolates path values as POSIX-quoted tokens via
+	// the {{posixq}} template func so that path components containing shell
+	// metacharacters (for example via $TMPDIR) cannot trigger command
+	// substitution or variable expansion when this generated script is
+	// executed. Previously these paths were embedded inside "..." which
+	// leaves $, $(...), `...`, ${...} active in the resulting script source.
 	posixShellWrapper = `{{if .ShebangLine}}{{.ShebangLine}}
 {{end -}}
-"{{.AgentBinary}}" env dump > "{{.BeforeEnvFileName}}"
-. "{{.PathToHook}}"
+{{posixq .AgentBinary}} env dump > {{posixq .BeforeEnvFileName}}
+. {{posixq .PathToHook}}
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
-"{{.AgentBinary}}" env dump > "{{.AfterEnvFileName}}"
+{{posixq .AgentBinary}} env dump > {{posixq .AfterEnvFileName}}
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
+
+// posixShellQuote returns s wrapped in POSIX single quotes such that when
+// evaluated by a POSIX shell it expands back to the literal s. Each embedded
+// single quote is encoded as the four-byte sequence close-quote, backslash,
+// single-quote, open-quote. Single-quoted POSIX strings preserve every
+// other byte literally (including $, backticks, $(...), ${...}, newlines)
+// so the resulting token cannot trigger command substitution or variable
+// expansion when included in a generated shell script.
+func posixShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
 
 var (
 	batchWrapperTmpl      = template.Must(template.New("batch").Parse(batchWrapper))
 	powershellWrapperTmpl = template.Must(template.New("pwsh").Parse(powershellWrapper))
-	posixShellWrapperTmpl = template.Must(template.New("bash").Parse(posixShellWrapper))
+	posixShellWrapperTmpl = template.Must(template.New("bash").Funcs(template.FuncMap{
+		"posixq": posixShellQuote,
+	}).Parse(posixShellWrapper))
 
 	ErrNoHookPath = errors.New("hook path was not provided")
 )
