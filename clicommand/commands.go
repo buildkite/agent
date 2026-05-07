@@ -1,13 +1,13 @@
 package clicommand
 
-import "github.com/urfave/cli"
+import "github.com/urfave/cli/v3"
 
 const (
 	categoryJobCommands = "Commands that can be run within a Buildkite job"
 	categoryInternal    = "Internal commands, not intended to be run by users"
 )
 
-var BuildkiteAgentCommands = []cli.Command{
+var BuildkiteAgentCommands = []*cli.Command{
 	// These commands are special. The have a different lifecycle to the others
 	AgentStartCommand,
 	BootstrapCommand,
@@ -20,7 +20,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "annotation",
 		Category: categoryJobCommands,
 		Usage:    "Make changes to annotations on the currently running build",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			AnnotationRemoveCommand,
 		},
 	},
@@ -28,7 +28,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "artifact",
 		Category: categoryJobCommands,
 		Usage:    "Upload/download artifacts from Buildkite jobs",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			ArtifactUploadCommand,
 			ArtifactDownloadCommand,
 			ArtifactSearchCommand,
@@ -39,7 +39,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "build",
 		Category: categoryJobCommands,
 		Usage:    "Interact with a Buildkite build",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			BuildCancelCommand,
 		},
 	},
@@ -47,7 +47,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "job",
 		Category: categoryJobCommands,
 		Usage:    "Interact with a Buildkite job",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			JobUpdateCommand,
 		},
 	},
@@ -56,7 +56,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Category: categoryJobCommands,
 		Usage:    "Manage build caches",
 		Hidden:   true, // currently in experimental phase
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			CacheSaveCommand,
 			CacheRestoreCommand,
 		},
@@ -65,7 +65,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "env",
 		Category: categoryJobCommands,
 		Usage:    "Interact with the environment of the currently running build",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			EnvDumpCommand,
 			EnvGetCommand,
 			EnvSetCommand,
@@ -77,7 +77,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "lock",
 		Category: categoryJobCommands,
 		Usage:    "Lock or unlock resources for the currently running build",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			LockAcquireCommand,
 			LockDoCommand,
 			LockDoneCommand,
@@ -89,7 +89,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "redactor",
 		Category: categoryJobCommands,
 		Usage:    "Redact sensitive information from logs",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			RedactorAddCommand,
 		},
 	},
@@ -97,7 +97,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "meta-data",
 		Category: categoryJobCommands,
 		Usage:    "Get/set metadata from Buildkite jobs",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			MetaDataSetCommand,
 			MetaDataGetCommand,
 			MetaDataExistsCommand,
@@ -108,7 +108,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "oidc",
 		Category: categoryJobCommands,
 		Usage:    "Interact with Buildkite OpenID Connect (OIDC)",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			OIDCRequestTokenCommand,
 		},
 	},
@@ -117,7 +117,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "pipeline",
 		Category: categoryJobCommands,
 		Usage:    "Make changes to the pipeline of the currently running build",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			PipelineUploadCommand,
 		},
 	},
@@ -126,7 +126,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "secret",
 		Category: categoryJobCommands,
 		Usage:    "Interact with Pipelines Secrets",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			SecretGetCommand,
 		},
 	},
@@ -134,7 +134,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Name:     "step",
 		Category: categoryJobCommands,
 		Usage:    "Get or update an attribute of a build step, or cancel unfinished jobs for a step",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			StepGetCommand,
 			StepUpdateCommand,
 			StepCancelCommand,
@@ -144,7 +144,7 @@ var BuildkiteAgentCommands = []cli.Command{
 	{
 		Name:  "tool",
 		Usage: "Utilities for working with the Buildkite Agent",
-		Subcommands: []cli.Command{
+		Commands: []*cli.Command{
 			ToolKeygenCommand,
 			ToolSignCommand,
 		},

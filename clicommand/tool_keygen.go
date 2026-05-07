@@ -10,7 +10,7 @@ import (
 	"github.com/buildkite/go-pipeline/jwkutil"
 	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 type ToolKeygenConfig struct {
@@ -23,7 +23,7 @@ type ToolKeygenConfig struct {
 }
 
 // TODO: Add docs link when there is one.
-var ToolKeygenCommand = cli.Command{
+var ToolKeygenCommand = &cli.Command{
 	Name:  "keygen",
 	Usage: "Generate a new JWS key pair, used for signing and verifying jobs in Buildkite",
 	Description: `Usage:
@@ -42,29 +42,31 @@ and the public JWKS for verification.
 For more information about JWS, see https://tools.ietf.org/html/rfc7515 and
 for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 	Flags: append(globalFlags(),
-		cli.StringFlag{
-			Name:   "alg",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_ALG",
-			Usage:  fmt.Sprintf("The JWS signing algorithm to use for the key pair. Defaults to 'EdDSA'. Valid algorithms are: %v", jwkutil.ValidSigningAlgorithms),
+		&cli.StringFlag{
+			Name:    "alg",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_KEYGEN_ALG"),
+			Usage:   fmt.Sprintf("The JWS signing algorithm to use for the key pair. Defaults to 'EdDSA'. Valid algorithms are: %v", jwkutil.ValidSigningAlgorithms),
 		},
-		cli.StringFlag{
-			Name:   "key-id",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_KEY_ID",
-			Usage:  "The ID to use for the keys generated. If none is provided, a random one will be generated",
+		&cli.StringFlag{
+			Name:    "key-id",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_KEYGEN_KEY_ID"),
+			Usage:   "The ID to use for the keys generated. If none is provided, a random one will be generated",
 		},
-		cli.StringFlag{
-			Name:   "private-jwks-file",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_PRIVATE_JWKS_FILE",
-			Usage:  "The filename to write the private key to. Defaults to a name based on the key id in the current directory",
+		&cli.StringFlag{
+			Name:      "private-jwks-file",
+			Sources:   cli.EnvVars("BUILDKITE_AGENT_KEYGEN_PRIVATE_JWKS_FILE"),
+			Usage:     "The filename to write the private key to. Defaults to a name based on the key id in the current directory",
+			TakesFile: true,
 		},
-		cli.StringFlag{
-			Name:   "public-jwks-file",
-			EnvVar: "BUILDKITE_AGENT_KEYGEN_PUBLIC_JWKS_FILE",
-			Usage:  "The filename to write the public keyset to. Defaults to a name based on the key id in the current directory",
+		&cli.StringFlag{
+			Name:      "public-jwks-file",
+			Sources:   cli.EnvVars("BUILDKITE_AGENT_KEYGEN_PUBLIC_JWKS_FILE"),
+			Usage:     "The filename to write the public keyset to. Defaults to a name based on the key id in the current directory",
+			TakesFile: true,
 		},
 	),
-	Action: func(c *cli.Context) {
-		_, cfg, l, _, done := setupLoggerAndConfig[ToolKeygenConfig](context.Background(), c)
+	Action: func(ctx context.Context, c *cli.Command) error {
+		_, cfg, l, _, done := setupLoggerAndConfig[ToolKeygenConfig](ctx, c)
 		defer done()
 
 		if cfg.Alg == "" {
@@ -119,6 +121,7 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 		}
 
 		l.Infof("Done! Enjoy your new keys ^_^")
+		return nil
 	},
 }
 

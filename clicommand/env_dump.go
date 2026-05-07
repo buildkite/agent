@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/buildkite/agent/v4/env"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const envDumpHelpDescription = `Usage:
@@ -30,20 +30,20 @@ type EnvDumpConfig struct {
 	Format string `cli:"format"`
 }
 
-var EnvDumpCommand = cli.Command{
+var EnvDumpCommand = &cli.Command{
 	Name:        "dump",
 	Usage:       "Print the environment of the current process as a JSON object",
 	Description: envDumpHelpDescription,
 	Flags: append(globalFlags(),
-		cli.StringFlag{
-			Name:   "format",
-			Usage:  "Output format; json or json-pretty",
-			EnvVar: "BUILDKITE_AGENT_ENV_DUMP_FORMAT",
-			Value:  "json",
+		&cli.StringFlag{
+			Name:    "format",
+			Usage:   "Output format; json or json-pretty",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ENV_DUMP_FORMAT"),
+			Value:   "json",
 		},
 	),
-	Action: func(c *cli.Context) error {
-		_, cfg, _, _, done := setupLoggerAndConfig[EnvDumpConfig](context.Background(), c)
+	Action: func(ctx context.Context, c *cli.Command) error {
+		_, cfg, _, _, done := setupLoggerAndConfig[EnvDumpConfig](ctx, c)
 		defer done()
 
 		envn := os.Environ()
@@ -55,7 +55,7 @@ var EnvDumpCommand = cli.Command{
 			}
 		}
 
-		enc := json.NewEncoder(c.App.Writer)
+		enc := json.NewEncoder(c.Writer)
 		if cfg.Format == "json-pretty" {
 			enc.SetIndent("", "  ")
 		}
