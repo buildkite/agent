@@ -11,7 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/logger"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const gitCredentialsHelperHelpDescription = `Usage:
@@ -38,16 +38,16 @@ type GitCredentialsHelperConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 }
 
-var GitCredentialsHelperCommand = cli.Command{
+var GitCredentialsHelperCommand = &cli.Command{
 	Name:        "git-credentials-helper",
 	Usage:       "Internal process used to authenticate with repository providers",
 	Category:    categoryInternal,
 	Description: gitCredentialsHelperHelpDescription,
 	Flags: append(globalFlags(),
-		cli.StringFlag{
-			Name:   "job-id",
-			Usage:  "The job id to get credentials for",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job-id",
+			Usage:   "The job id to get credentials for",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 
 		// API Flags
@@ -56,8 +56,7 @@ var GitCredentialsHelperCommand = cli.Command{
 		NoHTTP2Flag,
 		// DebugHTTPFlag, // Not present due to the possibility of leaking code access tokens to logs
 	),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[GitCredentialsHelperConfig](ctx, c)
 		defer done()
 
@@ -99,9 +98,9 @@ var GitCredentialsHelperCommand = cli.Command{
 			return handleAuthError(c, l, errors.New("repository credential response contained an empty token"))
 		}
 
-		_, _ = fmt.Fprintln(c.App.Writer, "username=token")
-		_, _ = fmt.Fprintln(c.App.Writer, "password="+tok)
-		_, _ = fmt.Fprintln(c.App.Writer, "")
+		_, _ = fmt.Fprintln(c.Root().Writer, "username=token")
+		_, _ = fmt.Fprintln(c.Root().Writer, "password="+tok)
+		_, _ = fmt.Fprintln(c.Root().Writer, "")
 
 		l.Debugf("Authentication successful!")
 
@@ -113,13 +112,13 @@ var GitCredentialsHelperCommand = cli.Command{
 // git continues with clones etc even when the credential helper fails, so we should output something that will 100% cause
 // the clone to fail
 // this function always returns a cli.ExitError
-func handleAuthError(c *cli.Context, l logger.Logger, err error) error {
+func handleAuthError(c *cli.Command, l logger.Logger, err error) error {
 	l.Errorf("Error: %v. Authentication will proceed, but will fail.", err)
-	_, _ = fmt.Fprintln(c.App.Writer, "username=fail")
-	_, _ = fmt.Fprintln(c.App.Writer, "password=fail")
-	_, _ = fmt.Fprintln(c.App.Writer, "")
+	_, _ = fmt.Fprintln(c.Root().Writer, "username=fail")
+	_, _ = fmt.Fprintln(c.Root().Writer, "password=fail")
+	_, _ = fmt.Fprintln(c.Root().Writer, "")
 
-	return cli.NewExitError("", 1)
+	return cli.Exit("", 1)
 }
 
 var (

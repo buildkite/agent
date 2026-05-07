@@ -15,12 +15,12 @@ import (
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/oleiade/reflections"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 type Loader struct {
-	// The context that is passed when using a urfave/cli action
-	CLI *cli.Context
+	// The Command that is passed when using a urfave/cli action
+	CLI *cli.Command
 
 	// The struct that the config values will be loaded into
 	Config any
@@ -173,7 +173,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 	return warnings, nil
 }
 
-func (l Loader) setFieldValueFromCLI(fieldName, cliName string) error {
+func (l Loader) setFieldValueFromCLI(fieldName, cliName string) (finalErr error) {
 	// Get the kind of field we need to set
 	fieldKind, err := reflections.GetFieldKind(l.Config, fieldName)
 	if err != nil {
@@ -193,7 +193,7 @@ func (l Loader) setFieldValueFromCLI(fieldName, cliName string) error {
 
 		if argNum == "*" {
 			// All args.
-			value = l.CLI.Args()
+			value = l.CLI.Args().Slice()
 		} else {
 			// It's an index.
 			// Convert the arg position to an integer
@@ -204,8 +204,8 @@ func (l Loader) setFieldValueFromCLI(fieldName, cliName string) error {
 
 			// Only set the value if the args are long enough for
 			// the position to exist.
-			if len(l.CLI.Args()) > argIndex {
-				value = l.CLI.Args()[argIndex]
+			if l.CLI.Args().Len() > argIndex {
+				value = l.CLI.Args().Get(argIndex)
 			}
 		}
 
@@ -255,7 +255,7 @@ func (l Loader) setFieldValueFromCLI(fieldName, cliName string) error {
 
 		// If a value hasn't been found in a config file, but there
 		// _is_ one provided by the CLI context, then use that.
-		if value == nil || l.cliValueIsSet(cliName) {
+		if value == nil || l.CLI.IsSet(cliName) {
 			switch fieldKind {
 			case reflect.String:
 				value = l.CLI.String(cliName)
@@ -292,33 +292,9 @@ func (l Loader) setFieldValueFromCLI(fieldName, cliName string) error {
 }
 
 func (l Loader) Errorf(format string, v ...any) error {
-	suffix := fmt.Sprintf(" See: `%s %s --help`", l.CLI.App.Name, l.CLI.Command.Name)
+	suffix := fmt.Sprintf(" See: `%s --help`", l.CLI.FullName())
 
 	return fmt.Errorf(format+suffix, v...)
-}
-
-func (l Loader) cliValueIsSet(cliName string) bool {
-	if l.CLI.IsSet(cliName) {
-		return true
-	} else {
-		// cli.Context#IsSet only checks to see if the command was set via the cli, not
-		// via the environment. So here we do some hacks to find out the name of the
-		// EnvVar, and return true if it was set.
-		for _, flag := range l.CLI.Command.Flags {
-			name, _ := reflections.GetField(flag, "Name")
-			envVar, _ := reflections.GetField(flag, "EnvVar")
-			if name == cliName && envVar != "" {
-				// Make sure envVar is a string
-				if envVarStr, ok := envVar.(string); ok {
-					envVarStr = strings.TrimSpace(string(envVarStr))
-
-					return os.Getenv(envVarStr) != ""
-				}
-			}
-		}
-	}
-
-	return false
 }
 
 func (l Loader) fieldValueIsEmpty(fieldName string) bool {
