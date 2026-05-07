@@ -236,6 +236,13 @@ var (
 		EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
 	}
 
+	SparseCheckoutPathsFlag = cli.StringFlag{
+		Name:   "sparse-checkout-paths",
+		Value:  "",
+		Usage:  "Comma-separated list of paths for git sparse checkout (cone mode). When set, only the listed paths are materialized in the working tree.",
+		EnvVar: "BUILDKITE_SPARSE_CHECKOUT_PATHS",
+	}
+
 	GitMirrorsPathFlag = cli.StringFlag{
 		Name:   "git-mirrors-path",
 		Value:  "",
