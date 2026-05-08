@@ -869,7 +869,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 			}
 		case "timing_out", "timed_out":
 			if err := r.Cancel(CancelReasonJobTimeout); err != nil {
-				r.agentLogger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
+				r.agentLogger.Errorf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}
 	}

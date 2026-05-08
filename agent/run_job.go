@@ -436,7 +436,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	// the file does not exist — Cancel only writes it on a job-level timeout.
 	if r.jobTimeoutFilePath != "" {
 		if err := os.Remove(r.jobTimeoutFilePath); err != nil && !os.IsNotExist(err) {
-			r.agentLogger.Warn("[JobRunner] Error cleaning up job timeout file: %s", err)
+			r.agentLogger.Warnf("[JobRunner] Error cleaning up job timeout file: %s", err)
 		}
 	}
 
@@ -620,7 +620,7 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	// proceeds and the hook will simply see BUILDKITE_JOB_CANCELLED only.
 	if reason == CancelReasonJobTimeout && r.jobTimeoutFilePath != "" {
 		if err := os.WriteFile(r.jobTimeoutFilePath, []byte("true"), 0o644); err != nil {
-			r.agentLogger.Warn("Failed to write job timeout marker file %s: %v", r.jobTimeoutFilePath, err)
+			r.agentLogger.Warnf("Failed to write job timeout marker file %s: %v", r.jobTimeoutFilePath, err)
 		}
 	}
 
