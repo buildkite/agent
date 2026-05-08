@@ -169,7 +169,7 @@ func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
 
 			tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 				if got, want := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"), tc.wantSkipCheckoutEnv; got != want {
-					fmt.Fprintf(c.Stderr, "Expected BUILDKITE_SKIP_CHECKOUT=%q, got %q\n", want, got)
+					_, _ = fmt.Fprintf(c.Stderr, "Expected BUILDKITE_SKIP_CHECKOUT=%q, got %q\n", want, got)
 					c.Exit(1)
 					return
 				}
