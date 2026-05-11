@@ -143,6 +143,22 @@ func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
 	return nil
 }
 
+// gitLFSFetchCheckout fetches LFS objects for the current HEAD then materialises
+// them. Fetch and checkout failures are wrapped with distinct messages so that a
+// caller can tell which step failed from the error string alone.
+func gitLFSFetchCheckout(ctx context.Context, sh *shell.Shell) error {
+	fetchArgs := []string{"lfs", "fetch"}
+
+	if err := sh.Command("git", fetchArgs...).Run(ctx); err != nil {
+		return fmt.Errorf("git lfs fetch: %w", err)
+	}
+
+	if err := sh.Command("git", "lfs", "checkout").Run(ctx); err != nil {
+		return fmt.Errorf("git lfs checkout: %w", err)
+	}
+	return nil
+}
+
 type gitFetchArgs struct {
 	Shell         *shell.Shell // The shell to run the command in
 	GitFlags      string       // Global git flags to pass to the command
