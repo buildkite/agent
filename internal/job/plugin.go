@@ -16,7 +16,6 @@ import (
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -368,16 +367,26 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
 	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
 	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
-	if e.PluginsAlwaysCloneFresh && osutil.FileExists(pluginDirectory) {
-		e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
-		if err := os.RemoveAll(pluginDirectory); err != nil {
-			e.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
-			return nil, err
+	if e.PluginsAlwaysCloneFresh {
+		_, statErr := os.Stat(pluginDirectory)
+		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+			return nil, fmt.Errorf("checking plugin directory %q: %w", pluginDirectory, statErr)
+		}
+		if statErr == nil {
+			e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
+			if err := os.RemoveAll(pluginDirectory); err != nil {
+				e.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
+				return nil, err
+			}
 		}
 	}
 
-	// Does the .git directory exist? (i.e. it's already checkout out?)
-	if osutil.FileExists(pluginGitDirectory) {
+	// Does the .git directory exist? (i.e. it's already checked out?)
+	_, statErr := os.Stat(pluginGitDirectory)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return nil, fmt.Errorf("checking plugin git directory %q: %w", pluginGitDirectory, statErr)
+	}
+	if statErr == nil {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
 		headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, pluginDirectory, "--short=7", "HEAD")
