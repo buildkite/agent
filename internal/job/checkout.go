@@ -216,15 +216,10 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
-// errCheckoutAttemptTimeout is returned when a single checkout attempt exceeds
-// BUILDKITE_GIT_CHECKOUT_TIMEOUT. It is wrapped so the retry loop can recognize
-// it via errors.Is and decide whether to retry.
-var errCheckoutAttemptTimeout = errors.New("checkout attempt timed out")
-
 // runDefaultCheckoutAttempt runs defaultCheckoutPhase, applying a per-attempt
-// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. If the per-attempt timeout
-// fires (and the outer context is still alive), it returns a wrapped
-// errCheckoutAttemptTimeout so the retry loop can decide what to do.
+// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the underlying
+// error is wrapped so the retry loop's generic failure path can log a
+// meaningful message and clean up before retrying.
 func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 	if e.GitCheckoutTimeout <= 0 {
 		return e.defaultCheckoutPhase(ctx)
@@ -236,7 +231,7 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 
 	err := e.defaultCheckoutPhase(attemptCtx)
 	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
-		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimeout, timeout, err)
+		return fmt.Errorf("checkout attempt timed out after %s: %w", timeout, err)
 	}
 	return err
 }
@@ -292,19 +287,6 @@ func (e *Executor) checkout(ctx context.Context) error {
 				r.Break()
 				// 94 chosen by fair die roll
 				return &shell.ExitError{Code: 94, Err: err}
-
-			case errors.Is(err, errCheckoutAttemptTimeout):
-				// Per-attempt timeout (BUILDKITE_GIT_CHECKOUT_TIMEOUT) fired. Let
-				// the retrier decide whether to retry; clean the checkout dir so
-				// the next attempt starts fresh in case git left things in a bad
-				// state when killed.
-				e.shell.Warningf("Checkout attempt timed out (%s)", r)
-				if err := e.removeCheckoutDir(); err != nil {
-					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout timeout: %v", err)
-				}
-				if err := e.createCheckoutDir(); err != nil {
-					return err
-				}
 
 			case errors.Is(err, context.Canceled):
 				e.shell.Warningf("Checkout was cancelled")
@@ -364,10 +346,6 @@ func (e *Executor) checkout(ctx context.Context) error {
 
 			return err
 		}); err != nil {
-			if errors.Is(err, errCheckoutAttemptTimeout) {
-				e.shell.Errorf("Checkout failed: every attempt exceeded the configured timeout of %ds (BUILDKITE_GIT_CHECKOUT_TIMEOUT)", e.GitCheckoutTimeout)
-				return &shell.ExitError{Code: 95, Err: err}
-			}
 			return err
 		}
 	}
