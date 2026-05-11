@@ -269,7 +269,7 @@ var (
 	GitCheckoutTimeoutFlag = cli.IntFlag{
 		Name:   "git-checkout-timeout",
 		Value:  0,
-		Usage:  "Seconds to allow for the entire git checkout phase (0 means no timeout)",
+		Usage:  "Seconds to allow for each git checkout attempt before it is killed and retried (0 means no timeout)",
 		EnvVar: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
 	}
 
