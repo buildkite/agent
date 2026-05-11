@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/internal/agenthttp"
-	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
 )
@@ -39,7 +39,11 @@ func (e *Executor) checkoutZipPlugin(ctx context.Context, p *plugin.Plugin, chec
 	}
 
 	// Remove existing directory if present, as of right now caching is not supported.
-	if osutil.FileExists(pluginDirectory) {
+	_, statErr := os.Stat(pluginDirectory)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("checking zip plugin directory %q: %w", pluginDirectory, statErr)
+	}
+	if statErr == nil {
 		if err := os.RemoveAll(pluginDirectory); err != nil {
 			e.shell.Errorf("Failed to remove existing plugin directory %s", pluginDirectory)
 			return err
