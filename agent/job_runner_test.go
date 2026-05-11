@@ -72,7 +72,7 @@ func TestJobTimeoutFilePath(t *testing.T) {
 		t.Errorf("jobTimeoutFilePath(%q, false) = %q, want %q", "abc123", got, want)
 	}
 
-	if got, want := jobTimeoutFilePath("abc123", true), "/workspace/job-timeout-abc123"; got != want {
+	if got, want := jobTimeoutFilePath("abc123", true), filepath.Join("/workspace", "job-timeout-abc123"); got != want {
 		t.Errorf("jobTimeoutFilePath(%q, true) = %q, want %q", "abc123", got, want)
 	}
 }
