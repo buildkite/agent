@@ -1,17 +1,17 @@
-### Description
+## Description
 
 <!--
 - What problem are you trying to solve, and how are you solving it?
 - What alternatives did you consider?
 -->
 
-### Context
+## Context
 
 <!--
 For example, a link to a GitHub issue or a Buildkite internal document such as Linear, Coda, Slack, Basecamp.
 -->
 
-### Changes
+## Changes
 
 <!--
 List of what the PR changes. If the PR changes the CLI arguments, consider adding the output of the various levels of `buildkite-agent <subcomand> --help`.
@@ -19,7 +19,7 @@ List of what the PR changes. If the PR changes the CLI arguments, consider addin
 Can skip if changes are simple or clear from the commit messages.
 -->
 
-### Testing
+## Testing
 - [ ] Tests have run locally (with `go test ./...`). Buildkite employees may check this if the pipeline has run automatically.
 - [ ] Code is formatted (with `go tool gofumpt -extra -w .`)
 
@@ -27,8 +27,13 @@ Can skip if changes are simple or clear from the commit messages.
 Note: if the tests fail to run locally, please let us know!
 -->
 
+## Affiliation (optional, external contributors)
 
-### Disclosures / Credits
+<!--
+If you're contributing from outside Buildkite and are comfortable sharing, let us know your company or organisation — it helps us prioritise review and may accelerate a response.
+-->
+
+## Disclosures / Credits
 
 <!--
 If you used AI in any way to produce this PR (beyond typo fixes or small amounts of tab-autocompletion), please describe the extent of the contribution here, and the tools used.
