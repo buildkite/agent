@@ -105,7 +105,7 @@ type ExecutorConfig struct {
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 
 	// Enable git commit verification
-	GitCommitVerification bool `env:"BUILDKITE_GIT_COMMIT_VERIFICATION"`
+	GitCommitVerification string `env:"BUILDKITE_GIT_COMMIT_VERIFICATION"`
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
 	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`

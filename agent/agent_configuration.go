@@ -23,7 +23,7 @@ type AgentConfiguration struct {
 	GitCloneFlags                   string
 	GitCloneMirrorFlags             string
 	GitCleanFlags                   string
-	GitCommitVerification           bool
+	GitCommitVerification           string
 	GitFetchFlags                   string
 	GitSubmodules                   bool
 	GitSubmoduleCloneConfig         []string

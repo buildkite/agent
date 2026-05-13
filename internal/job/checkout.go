@@ -806,24 +806,7 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 	return nil
 }
 
-// verifyCommit is called if the user has commit verification enabled. It ensures that the commit we are
-// asked to build exists and is reachable on the branch we are given.
-func (e *Executor) verifyCommit(ctx context.Context) error {
-	// Skip if not enabled
-	if !e.GitCommitVerification {
-		return nil
-	}
-
-	// Skip if commit is HEAD (nothing to verify)
-	if e.Commit == "HEAD" {
-		return nil
-	}
-
-	// Skip if we haven't been given a branch - e.g. it's a tag push event
-	if e.Branch == "" {
-		return nil
-	}
-
+func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	e.shell.Commentf("Verifying commit %q is on branch %q", e.Commit, e.Branch)
 
 	// Try the ancestry check
@@ -875,6 +858,55 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 		return fmt.Errorf("unable to verify commit %q on branch %q after unshallowing: %w", e.Commit, e.Branch, retryErr)
 	default:
 		return fmt.Errorf("unable to verify commit %q on branch %q: %w", e.Commit, e.Branch, err)
+	}
+}
+
+// verifyCommit is called if the user has commit verification enabled. It ensures that the commit we are
+// asked to build exists and is reachable on the branch we are given.
+func (e *Executor) verifyCommit(ctx context.Context) error {
+	// Skip if not enabled
+	if e.GitCommitVerification == "" {
+		return nil
+	}
+
+	// Skip if commit is HEAD (nothing to verify)
+	if e.Commit == "HEAD" {
+		return nil
+	}
+
+	// Skip if we haven't been given a branch - e.g. it's a tag push event
+	if e.Branch == "" {
+		return nil
+	}
+
+	// Skip if this is a tag build — tags are not branch-specific
+	if e.Tag != "" {
+		return nil
+	}
+
+	// Skip if this is a PR build — the commit may be on a merge ref, not the target branch
+	if e.PullRequest != "" {
+		return nil
+	}
+
+	// Perform the verification
+	err := e.checkCommitOnBranch(ctx)
+
+	// Verification passed
+	if err == nil {
+		return nil
+	}
+
+	// Handle verification failure depending on setting
+	switch e.GitCommitVerification {
+	case "strict":
+		return err
+	case "warn":
+		e.shell.Warningf("Commit verification failed: %v", err)
+		return nil
+	default:
+		e.shell.Warningf("Unknown git-commit-verification value %q, skipping verification", e.GitCommitVerification)
+		return nil
 	}
 }
 

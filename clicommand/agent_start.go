@@ -166,7 +166,7 @@ type AgentStartConfig struct {
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
-	GitCommitVerification       bool     `cli:"git-commit-verification"`
+	GitCommitVerification       string     `cli:"git-commit-verification"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`

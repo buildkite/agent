@@ -76,7 +76,7 @@ type BootstrapConfig struct {
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
-	GitCommitVerification        bool     `cli:"git-commit-verification"`
+	GitCommitVerification        string     `cli:"git-commit-verification"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode        string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
