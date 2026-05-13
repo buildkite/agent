@@ -597,6 +597,10 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	setEnv("BUILDKITE_LOCAL_HOOKS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled))
 
+	if len(r.conf.AgentConfiguration.GitSparseCheckoutPaths) > 0 {
+		setCheckoutEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", strings.Join(r.conf.AgentConfiguration.GitSparseCheckoutPaths, ","))
+	}
+	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
 	setCheckoutEnv("BUILDKITE_GIT_CHECKOUT_FLAGS", r.conf.AgentConfiguration.GitCheckoutFlags)
 	setCheckoutEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
 	setCheckoutEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
