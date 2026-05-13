@@ -600,7 +600,7 @@ func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
 			if !tc.wantErr {
 				tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
 					if got, want := c.GetEnv("BUILDKITE_GIT_CLONE_FLAGS"), "--mirror"; got != want {
-						fmt.Fprintf(c.Stderr, "Expected BUILDKITE_GIT_CLONE_FLAGS=%q, got %q\n", want, got)
+						_, _ = fmt.Fprintf(c.Stderr, "Expected BUILDKITE_GIT_CLONE_FLAGS=%q, got %q\n", want, got)
 						c.Exit(1)
 						return
 					}

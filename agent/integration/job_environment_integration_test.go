@@ -290,6 +290,30 @@ func TestCheckoutScopedJobEnvOverrideHonorsNoCheckoutOverride(t *testing.T) {
 			wantEnvValue:       "false",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SUBMODULES"},
 		},
+		{
+			name:    "disabled_allows_job_env_to_override_skip_checkout",
+			varName: "BUILDKITE_SKIP_CHECKOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_SKIP_CHECKOUT": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				SkipCheckout: true,
+			},
+			wantEnvValue: "false",
+		},
+		{
+			name:    "enabled_locks_skip_checkout_to_agent_config",
+			varName: "BUILDKITE_SKIP_CHECKOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_SKIP_CHECKOUT": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				SkipCheckout:       true,
+				NoCheckoutOverride: true,
+			},
+			wantEnvValue:       "true",
+			wantIgnoredEnvVars: []string{"BUILDKITE_SKIP_CHECKOUT"},
+		},
 	}
 
 	for _, tc := range tests {
