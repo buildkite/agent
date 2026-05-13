@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -902,6 +903,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 		}
 	}
 
+	// Fail fast before any git work if git-lfs is required but missing.
+	if e.GitLFSEnabled {
+		if _, err := exec.LookPath("git-lfs"); err != nil {
+			return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but git-lfs binary is not found on PATH: %w", err)
+		}
+	}
+
 	// Git clean prior to checkout, we do this even if submodules have been
 	// disabled to ensure previous submodules are cleaned up
 	if hasGitSubmodules(e.shell) {
@@ -912,6 +920,20 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 
 	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
 		return fmt.Errorf("cleaning git repository: %w", err)
+	}
+
+	// Install LFS filter before fetch so the filter is registered before any
+	// network operation, following the conventional git-lfs setup order.
+	if e.GitLFSEnabled {
+		e.shell.Commentf("Installing Git LFS filter")
+		if err := e.shell.Command("git", "lfs", "install", "--local").Run(ctx); err != nil {
+			return fmt.Errorf("installing git lfs filter: %w", err)
+		}
+		// Force-set GIT_LFS_SKIP_SMUDGE=1 so checkout writes pointer files to
+		// disk rather than downloading objects inline. Intentionally not
+		// restored — git lfs checkout materialises files from cache without
+		// triggering the smudge filter.
+		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
 	}
 
 	if err := e.fetchSource(ctx); err != nil {
@@ -1016,6 +1038,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 			if err := cmd.Run(ctx); err != nil {
 				return fmt.Errorf("resetting submodules: %w", err)
 			}
+		}
+	}
+
+	if e.GitLFSEnabled {
+		if err := gitLFSFetchCheckout(ctx, e.shell); err != nil {
+			return err
 		}
 	}
 

@@ -2,7 +2,12 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -274,5 +279,168 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	err = tt.executor.defaultCheckoutPhase(ctx)
 	if err != nil {
 		t.Fatalf("tt.executor.defaultCheckoutPhase(ctx) error = %v, want nil", err)
+	}
+}
+
+func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
+	// Not parallel: subtests manipulate PATH via t.Setenv, which modifies
+	// process-global state.
+	ctx := context.Background()
+
+	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
+	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
+	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
+
+	// gitOnlyBinDir returns a temp dir containing git (via a symlink on Unix or
+	// a .bat wrapper on Windows) but no git-lfs, so exec.LookPath("git-lfs")
+	// will fail while git commands still work.
+	gitOnlyBinDir := func(t *testing.T) string {
+		t.Helper()
+		gitBin, err := exec.LookPath("git")
+		if err != nil {
+			t.Fatalf("exec.LookPath(\"git\") error = %v", err)
+		}
+		binDir := t.TempDir()
+		if runtime.GOOS == "windows" {
+			// Use a .bat wrapper to avoid copying the multi-MB binary and to
+			// sidestep the symlink-privilege requirement on Windows.
+			wrapper := fmt.Sprintf("@echo off\r\n\"%s\" %%*\r\n", gitBin)
+			if err := os.WriteFile(filepath.Join(binDir, "git.bat"), []byte(wrapper), 0o755); err != nil {
+				t.Fatalf("os.WriteFile() error = %v", err)
+			}
+		} else {
+			if err := os.Symlink(gitBin, filepath.Join(binDir, "git")); err != nil {
+				t.Fatalf("os.Symlink() error = %v", err)
+			}
+		}
+		return binDir
+	}
+
+	// fakeLFSBinDir returns a temp dir that has git (via gitOnlyBinDir) plus a
+	// fake git-lfs whose behaviour is defined by the provided scripts.
+	// unixScript is a #!/bin/sh script; winBatch is a .bat file body.
+	fakeLFSBinDir := func(t *testing.T, unixScript, winBatch string) string {
+		t.Helper()
+		binDir := gitOnlyBinDir(t)
+		if runtime.GOOS == "windows" {
+			if err := os.WriteFile(filepath.Join(binDir, "git-lfs.bat"), []byte(winBatch), 0o755); err != nil {
+				t.Fatalf("os.WriteFile() error = %v", err)
+			}
+		} else {
+			if err := os.WriteFile(filepath.Join(binDir, "git-lfs"), []byte(unixScript), 0o755); err != nil {
+				t.Fatalf("os.WriteFile() error = %v", err)
+			}
+		}
+		return binDir
+	}
+
+	tests := []struct {
+		name       string
+		lfsEnabled bool
+		setupPath  func(t *testing.T)
+		wantErr    string
+	}{
+		{
+			name:       "LFS disabled",
+			lfsEnabled: false,
+		},
+		{
+			name:       "LFS enabled binary present",
+			lfsEnabled: true,
+			setupPath: func(t *testing.T) {
+				if _, err := exec.LookPath("git-lfs"); err != nil {
+					t.Skip("git-lfs not installed")
+				}
+			},
+		},
+		{
+			name:       "LFS enabled binary missing",
+			lfsEnabled: true,
+			setupPath: func(t *testing.T) {
+				t.Setenv("PATH", gitOnlyBinDir(t))
+			},
+			wantErr: "git-lfs binary is not found on PATH",
+		},
+		{
+			name:       "LFS enabled git lfs command fails",
+			lfsEnabled: true,
+			setupPath: func(t *testing.T) {
+				t.Setenv("PATH", fakeLFSBinDir(t,
+					"#!/bin/sh\nexit 1\n",
+					"@echo off\r\nexit /b 1\r\n",
+				))
+			},
+			wantErr: "installing git lfs filter",
+		},
+		{
+			name:       "LFS enabled git lfs fetch fails",
+			lfsEnabled: true,
+			setupPath: func(t *testing.T) {
+				t.Setenv("PATH", fakeLFSBinDir(t,
+					"#!/bin/sh\ncase \"$1\" in\n  install) exit 0 ;;\n  *) exit 1 ;;\nesac\n",
+					"@echo off\r\nif \"%1\"==\"install\" exit /b 0\r\nexit /b 1\r\n",
+				))
+			},
+			wantErr: "git lfs fetch",
+		},
+	}
+
+	s := githttptest.NewServer()
+	t.Cleanup(s.Close)
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up the remote repository BEFORE restricting PATH so that
+			// githttptest's git operations use the real git binary.
+			projectName := fmt.Sprintf("lfs-test-%d", i)
+			if err := s.CreateRepository(projectName); err != nil {
+				t.Fatalf("s.CreateRepository(%q) error = %v", projectName, err)
+			}
+			out, err := s.InitRepository(projectName)
+			if err != nil {
+				t.Fatalf("s.InitRepository(%q) error = %v, output: %s", projectName, err, out)
+			}
+
+			// Restrict PATH after the repo is initialised.
+			if tt.setupPath != nil {
+				tt.setupPath(t)
+			}
+
+			sh, err := shell.New()
+			if err != nil {
+				t.Fatalf("shell.New() error = %v", err)
+			}
+
+			checkoutDir := t.TempDir()
+			sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
+
+			executor := &Executor{
+				shell: sh,
+				ExecutorConfig: ExecutorConfig{
+					Commit:        "HEAD",
+					Branch:        "main",
+					GitCleanFlags: "-f -d -x",
+					BuildPath:     t.TempDir(),
+					Repository:    s.RepoURL(projectName),
+					GitLFSEnabled: tt.lfsEnabled,
+				},
+			}
+
+			err = executor.defaultCheckoutPhase(ctx)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("defaultCheckoutPhase() error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Errorf("defaultCheckoutPhase() error = nil, want error containing %q", tt.wantErr)
+				return
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("defaultCheckoutPhase() error = %q, want it to contain %q", err.Error(), tt.wantErr)
+			}
+		})
 	}
 }
