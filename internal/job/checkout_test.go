@@ -2,9 +2,11 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -290,18 +292,54 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
 	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
 
-	// Note:  "LFS enabled" test bypasses GIT_LFS_SKIP_SMUDGE=1
-	// setUp sets GIT_LFS_SKIP_SMUDGE=1 to prevent implicit LFS downloads
-	// during git checkout. These tests call defaultCheckoutPhase directly so they
-	// don't exercise that env var, but the test repo has no LFS-tracked files so
-	// smudge filters are never triggered.
+	// gitOnlyBinDir returns a temp dir containing git (via a symlink on Unix or
+	// a .bat wrapper on Windows) but no git-lfs, so exec.LookPath("git-lfs")
+	// will fail while git commands still work.
+	gitOnlyBinDir := func(t *testing.T) string {
+		t.Helper()
+		gitBin, err := exec.LookPath("git")
+		if err != nil {
+			t.Fatalf("exec.LookPath(\"git\") error = %v", err)
+		}
+		binDir := t.TempDir()
+		if runtime.GOOS == "windows" {
+			// Use a .bat wrapper to avoid copying the multi-MB binary and to
+			// sidestep the symlink-privilege requirement on Windows.
+			wrapper := fmt.Sprintf("@echo off\r\n\"%s\" %%*\r\n", gitBin)
+			if err := os.WriteFile(filepath.Join(binDir, "git.bat"), []byte(wrapper), 0o755); err != nil {
+				t.Fatalf("os.WriteFile() error = %v", err)
+			}
+		} else {
+			if err := os.Symlink(gitBin, filepath.Join(binDir, "git")); err != nil {
+				t.Fatalf("os.Symlink() error = %v", err)
+			}
+		}
+		return binDir
+	}
+
+	// fakeLFSBinDir returns a temp dir that has git (via gitOnlyBinDir) plus a
+	// fake git-lfs whose behaviour is defined by the provided scripts.
+	// unixScript is a #!/bin/sh script; winBatch is a .bat file body.
+	fakeLFSBinDir := func(t *testing.T, unixScript, winBatch string) string {
+		t.Helper()
+		binDir := gitOnlyBinDir(t)
+		if runtime.GOOS == "windows" {
+			if err := os.WriteFile(filepath.Join(binDir, "git-lfs.bat"), []byte(winBatch), 0o755); err != nil {
+				t.Fatalf("os.WriteFile() error = %v", err)
+			}
+		} else {
+			if err := os.WriteFile(filepath.Join(binDir, "git-lfs"), []byte(unixScript), 0o755); err != nil {
+				t.Fatalf("os.WriteFile() error = %v", err)
+			}
+		}
+		return binDir
+	}
+
 	tests := []struct {
 		name       string
 		lfsEnabled bool
-		// setupPath runs before the shell and executor are created. Use it to
-		// manipulate PATH for binary-presence tests.
-		setupPath func(t *testing.T)
-		wantErr   string
+		setupPath  func(t *testing.T)
+		wantErr    string
 	}{
 		{
 			name:       "LFS disabled",
@@ -320,15 +358,7 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 			name:       "LFS enabled binary missing",
 			lfsEnabled: true,
 			setupPath: func(t *testing.T) {
-				gitBin, err := exec.LookPath("git")
-				if err != nil {
-					t.Fatalf("exec.LookPath(\"git\") error = %v", err)
-				}
-				binDir := t.TempDir()
-				if err := os.Symlink(gitBin, filepath.Join(binDir, "git")); err != nil {
-					t.Fatalf("os.Symlink() error = %v", err)
-				}
-				t.Setenv("PATH", binDir)
+				t.Setenv("PATH", gitOnlyBinDir(t))
 			},
 			wantErr: "git-lfs binary is not found on PATH",
 		},
@@ -336,19 +366,10 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 			name:       "LFS enabled git lfs command fails",
 			lfsEnabled: true,
 			setupPath: func(t *testing.T) {
-				gitBin, err := exec.LookPath("git")
-				if err != nil {
-					t.Fatalf("exec.LookPath(\"git\") error = %v", err)
-				}
-				binDir := t.TempDir()
-				if err := os.Symlink(gitBin, filepath.Join(binDir, "git")); err != nil {
-					t.Fatalf("os.Symlink() error = %v", err)
-				}
-				fakeLFS := filepath.Join(binDir, "git-lfs")
-				if err := os.WriteFile(fakeLFS, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
-					t.Fatalf("os.WriteFile() error = %v", err)
-				}
-				t.Setenv("PATH", binDir)
+				t.Setenv("PATH", fakeLFSBinDir(t,
+					"#!/bin/sh\nexit 1\n",
+					"@echo off\r\nexit /b 1\r\n",
+				))
 			},
 			wantErr: "installing git lfs filter",
 		},
@@ -356,21 +377,10 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 			name:       "LFS enabled git lfs fetch fails",
 			lfsEnabled: true,
 			setupPath: func(t *testing.T) {
-				gitBin, err := exec.LookPath("git")
-				if err != nil {
-					t.Fatalf("exec.LookPath(\"git\") error = %v", err)
-				}
-				binDir := t.TempDir()
-				if err := os.Symlink(gitBin, filepath.Join(binDir, "git")); err != nil {
-					t.Fatalf("os.Symlink() error = %v", err)
-				}
-				// install exits 0; every other subcommand (fetch, checkout) exits 1.
-				fakeLFS := filepath.Join(binDir, "git-lfs")
-				script := "#!/bin/sh\ncase \"$1\" in\n  install) exit 0 ;;\n  *) exit 1 ;;\nesac\n"
-				if err := os.WriteFile(fakeLFS, []byte(script), 0o755); err != nil {
-					t.Fatalf("os.WriteFile() error = %v", err)
-				}
-				t.Setenv("PATH", binDir)
+				t.Setenv("PATH", fakeLFSBinDir(t,
+					"#!/bin/sh\ncase \"$1\" in\n  install) exit 0 ;;\n  *) exit 1 ;;\nesac\n",
+					"@echo off\r\nif \"%1\"==\"install\" exit /b 0\r\nexit /b 1\r\n",
+				))
 			},
 			wantErr: "git lfs fetch",
 		},
@@ -379,8 +389,20 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 	s := githttptest.NewServer()
 	t.Cleanup(s.Close)
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Set up the remote repository BEFORE restricting PATH so that
+			// githttptest's git operations use the real git binary.
+			projectName := fmt.Sprintf("lfs-test-%d", i)
+			if err := s.CreateRepository(projectName); err != nil {
+				t.Fatalf("s.CreateRepository(%q) error = %v", projectName, err)
+			}
+			out, err := s.InitRepository(projectName)
+			if err != nil {
+				t.Fatalf("s.InitRepository(%q) error = %v, output: %s", projectName, err, out)
+			}
+
+			// Restrict PATH after the repo is initialised.
 			if tt.setupPath != nil {
 				tt.setupPath(t)
 			}
@@ -388,15 +410,6 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 			sh, err := shell.New()
 			if err != nil {
 				t.Fatalf("shell.New() error = %v", err)
-			}
-
-			projectName := "lfs-" + strings.ReplaceAll(strings.ToLower(tt.name), " ", "-")
-			if err := s.CreateRepository(projectName); err != nil {
-				t.Fatalf("s.CreateRepository(%q) error = %v", projectName, err)
-			}
-			out, err := s.InitRepository(projectName)
-			if err != nil {
-				t.Fatalf("s.InitRepository(%q) error = %v, output: %s", projectName, err, out)
 			}
 
 			checkoutDir := t.TempDir()
