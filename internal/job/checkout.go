@@ -216,6 +216,26 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
+// runDefaultCheckoutAttempt runs defaultCheckoutPhase, applying a per-attempt
+// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the underlying
+// error is wrapped so the retry loop's generic failure path can log a
+// meaningful message and clean up before retrying.
+func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
+	if e.GitCheckoutTimeout <= 0 {
+		return e.defaultCheckoutPhase(ctx)
+	}
+
+	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
+	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	err := e.defaultCheckoutPhase(attemptCtx)
+	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+		return fmt.Errorf("checkout attempt timed out after %s: %w", timeout, err)
+	}
+	return err
+}
+
 // checkout runs checkout hook or default checkout logic
 func (e *Executor) checkout(ctx context.Context) error {
 	if e.SkipCheckout {
@@ -249,7 +269,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			err := e.defaultCheckoutPhase(ctx)
+			err := e.runDefaultCheckoutAttempt(ctx)
 			if err == nil {
 				return nil
 			}
