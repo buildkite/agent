@@ -133,28 +133,25 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 	return nil
 }
 
+// gitLFSFetchCheckout fetches LFS objects for the current HEAD then materialises
+// them. Fetch and checkout failures are wrapped with distinct messages so that a
+// caller can tell which step failed from the error string alone.
+func gitLFSFetchCheckout(ctx context.Context, sh *shell.Shell) error {
+	if err := sh.Command("git", "lfs", "fetch").Run(ctx); err != nil {
+		return fmt.Errorf("git lfs fetch: %w", err)
+	}
+	if err := sh.Command("git", "lfs", "checkout").Run(ctx); err != nil {
+		return fmt.Errorf("git lfs checkout: %w", err)
+	}
+	return nil
+}
+
 func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
 	commandArgs := []string{"repack"}
 	commandArgs = append(commandArgs, args...)
 
 	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
 		return &gitError{error: err, Type: gitErrorRepack}
-	}
-	return nil
-}
-
-// gitLFSFetchCheckout fetches LFS objects for the current HEAD then materialises
-// them. Fetch and checkout failures are wrapped with distinct messages so that a
-// caller can tell which step failed from the error string alone.
-func gitLFSFetchCheckout(ctx context.Context, sh *shell.Shell) error {
-	fetchArgs := []string{"lfs", "fetch"}
-
-	if err := sh.Command("git", fetchArgs...).Run(ctx); err != nil {
-		return fmt.Errorf("git lfs fetch: %w", err)
-	}
-
-	if err := sh.Command("git", "lfs", "checkout").Run(ctx); err != nil {
-		return fmt.Errorf("git lfs checkout: %w", err)
 	}
 	return nil
 }
