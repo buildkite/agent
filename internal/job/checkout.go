@@ -889,6 +889,12 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 		return nil
 	}
 
+	// Skip if a custom refspec is set — the fetch may not populate standard branch refs,
+	// making ancestry verification unreliable
+	if e.RefSpec != "" {
+		return nil
+	}
+
 	// Perform the verification
 	err := e.checkCommitOnBranch(ctx)
 

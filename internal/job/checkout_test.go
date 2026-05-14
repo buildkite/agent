@@ -326,6 +326,15 @@ func TestVerifyCommit(t *testing.T) {
 				Tag:                   "v1.0.0",
 			},
 		},
+		{
+			name: "skips for custom refspec",
+			config: ExecutorConfig{
+				GitCommitVerification: "strict",
+				Commit:                "abc123",
+				Branch:                "main",
+				RefSpec:               "refs/custom/spec",
+			},
+		},
 	}
 
 	for _, tt := range skipTests {
