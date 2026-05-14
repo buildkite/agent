@@ -166,6 +166,7 @@ type AgentStartConfig struct {
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
+	GitCommitVerification       string   `cli:"git-commit-verification"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
@@ -376,7 +377,8 @@ var AgentStartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Starts a Buildkite agent",
 	Description: startDescription,
-	Flags: append(globalFlags(),
+	Flags: append(
+		globalFlags(),
 		cli.StringFlag{
 			Name:   "config",
 			Value:  "",
@@ -540,6 +542,7 @@ var AgentStartCommand = cli.Command{
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCleanFlagsFlag,
+		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitCloneMirrorFlagsFlag,
 		GitMirrorsPathFlag,
@@ -1075,6 +1078,7 @@ var AgentStartCommand = cli.Command{
 			GitCloneFlags:                   cfg.GitCloneFlags,
 			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                   cfg.GitCleanFlags,
+			GitCommitVerification:           cfg.GitCommitVerification,
 			GitFetchFlags:                   cfg.GitFetchFlags,
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
