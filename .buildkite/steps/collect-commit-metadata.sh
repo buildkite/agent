@@ -12,10 +12,10 @@
 # hiccup never blocks the build.
 #
 # Runs inside the `agent` docker-compose service (see
-# .buildkite/docker-compose.yml). The service provides `go` on PATH for
-# bktec's gotest runner (which shells out to `go list ./...` to discover
-# packages) and forwards BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN into the
-# container.
+# .buildkite/docker-compose.yml), which is a linux/amd64+arm64 golang image.
+# The service provides `go` on PATH for bktec's gotest runner (which shells
+# out to `go list ./...` to discover packages) and forwards
+# BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN into the container.
 #
 # bktec is downloaded fresh each run from the test-engine-client GitHub
 # release. The agent repo's go.mod pins test-engine-client v1.6.0 for use as
@@ -29,15 +29,6 @@ BKTEC_VERSION="${BKTEC_VERSION:-2.5.0}"
 
 echo "+++ :test_tube: Installing bktec v${BKTEC_VERSION}"
 
-case "$(uname -s)" in
-  Linux)  os=linux ;;
-  Darwin) os=darwin ;;
-  *)
-    echo "Unsupported OS: $(uname -s)" >&2
-    exit 1
-    ;;
-esac
-
 case "$(uname -m)" in
   x86_64)         arch=amd64 ;;
   aarch64|arm64)  arch=arm64 ;;
@@ -48,11 +39,9 @@ case "$(uname -m)" in
 esac
 
 bindir="$(mktemp -d)"
-asset="bktec_${BKTEC_VERSION}_${os}_${arch}"
-url="https://github.com/buildkite/test-engine-client/releases/download/v${BKTEC_VERSION}/${asset}"
+url="https://github.com/buildkite/test-engine-client/releases/download/v${BKTEC_VERSION}/bktec_${BKTEC_VERSION}_linux_${arch}"
 
-curl --fail --silent --show-error --location \
-  --output "${bindir}/bktec" "${url}"
+curl --fail --silent --show-error --location --output "${bindir}/bktec" "${url}"
 chmod +x "${bindir}/bktec"
 export PATH="${bindir}:${PATH}"
 
@@ -60,24 +49,10 @@ bktec --version
 
 echo "+++ :test_tube: Collecting git commit metadata via bktec plan (discarded)"
 
-# Test Engine API rejects metadata-only plan requests with parallelism = 0
-# and discards the entire payload (including --collect-git-metadata fields).
-# Set max-parallelism / target-time non-zero so bktec computes a non-zero
-# parallelism the API accepts. The plan output is still discarded below.
-# Surfaced by TE-5766 verification on bk/bk-rspec (build 190531).
-export BUILDKITE_TEST_ENGINE_SUITE_SLUG="${BUILDKITE_TEST_ENGINE_SUITE_SLUG:-buildkite-agent}"
-export BUILDKITE_TEST_ENGINE_TEST_RUNNER="${BUILDKITE_TEST_ENGINE_TEST_RUNNER:-gotest}"
-export BUILDKITE_TEST_ENGINE_MAX_PARALLELISM="${BUILDKITE_TEST_ENGINE_MAX_PARALLELISM:-2}"
-export BUILDKITE_TEST_ENGINE_TARGET_TIME="${BUILDKITE_TEST_ENGINE_TARGET_TIME:-1m}"
+# bktec needs a writable RESULT_PATH for plan output config validation. The
+# --json output is redirected to /dev/null below so this file is never read.
+export BUILDKITE_TEST_ENGINE_RESULT_PATH=/tmp/bktec-plan-metadata.json
 
-# bktec needs a writable RESULT_PATH for plan output. We redirect --json to
-# /dev/null below so the file is never consulted; this is here only to keep
-# bktec's config validation happy.
-export BUILDKITE_TEST_ENGINE_RESULT_PATH="${BUILDKITE_TEST_ENGINE_RESULT_PATH:-/tmp/bktec-plan-metadata.json}"
-
-BKTEC_PREVIEW_SELECTION=1 bktec plan \
-  --json \
-  --collect-git-metadata \
-  > /dev/null
+BKTEC_PREVIEW_SELECTION=1 bktec plan --json --collect-git-metadata > /dev/null
 
 echo "Plan request issued -- git commit metadata sent to Test Engine."
