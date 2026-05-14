@@ -37,10 +37,10 @@ type BatchCreator struct {
 	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
-	apiClient APIClient
+	apiClient *api.Client
 }
 
-func NewArtifactBatchCreator(l logger.Logger, ac APIClient, c BatchCreatorConfig) *BatchCreator {
+func NewArtifactBatchCreator(l logger.Logger, ac *api.Client, c BatchCreatorConfig) *BatchCreator {
 	return &BatchCreator{
 		logger:    l,
 		conf:      c,

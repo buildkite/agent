@@ -71,10 +71,10 @@ type Uploader struct {
 	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
-	apiClient APIClient
+	apiClient *api.Client
 }
 
-func NewUploader(l logger.Logger, ac APIClient, c UploaderConfig) *Uploader {
+func NewUploader(l logger.Logger, ac *api.Client, c UploaderConfig) *Uploader {
 	return &Uploader{
 		logger:    l,
 		apiClient: ac,

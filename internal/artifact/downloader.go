@@ -49,10 +49,10 @@ type Downloader struct {
 	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
-	apiClient APIClient
+	apiClient *api.Client
 }
 
-func NewDownloader(l logger.Logger, ac APIClient, c DownloaderConfig) Downloader {
+func NewDownloader(l logger.Logger, ac *api.Client, c DownloaderConfig) Downloader {
 	return Downloader{
 		logger:    l,
 		apiClient: ac,

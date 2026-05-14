@@ -14,13 +14,13 @@ type Searcher struct {
 	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
-	apiClient APIClient
+	apiClient *api.Client
 
 	// The ID of the Build that these artifacts belong to
 	buildID string
 }
 
-func NewSearcher(l logger.Logger, ac APIClient, buildID string) *Searcher {
+func NewSearcher(l logger.Logger, ac *api.Client, buildID string) *Searcher {
 	return &Searcher{
 		logger:    l,
 		apiClient: ac,
@@ -41,13 +41,14 @@ func (a *Searcher) Search(ctx context.Context, query, scope string, includeRetri
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	)
 	return roko.DoFunc(ctx, r, func(*roko.Retrier) ([]*api.Artifact, error) {
-		artifacts, _, err := a.apiClient.SearchArtifacts(ctx, a.buildID, &api.ArtifactSearchOptions{
+		artifacts, resp, err := a.apiClient.SearchArtifacts(ctx, a.buildID, &api.ArtifactSearchOptions{
 			Query:              query,
 			Scope:              scope,
 			State:              "finished",
 			IncludeRetriedJobs: includeRetriedJobs,
 			IncludeDuplicates:  includeDuplicates,
 		})
+		api.BreakOnNonRetryable(r, resp, err)
 		return artifacts, err
 	})
 }
