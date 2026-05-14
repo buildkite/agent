@@ -123,7 +123,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
-	github.com/buildkite/test-engine-client v1.6.0 // indirect
+	github.com/buildkite/test-engine-client/v2 v2.5.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -190,6 +190,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/trailofbits/go-mutexasserts v0.0.0-20250514102930-c1f3d2e37561 // indirect
+	github.com/urfave/cli/v3 v3.8.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.32 // indirect
 	github.com/wolfeidau/quickzip v1.0.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
@@ -227,7 +228,7 @@ require (
 tool (
 	drjosh.dev/assertzapper
 	github.com/Khan/genqlient/generate
-	github.com/buildkite/test-engine-client
+	github.com/buildkite/test-engine-client/v2
 	gotest.tools/gotestsum
 	mvdan.cc/gofumpt
 )
