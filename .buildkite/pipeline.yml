@@ -41,7 +41,12 @@ steps:
   # every build. Plan output is discarded -- the Tests and Coverage group
   # below continues to use its declared parallelism. This step has no
   # depends_on and no dependents, and is soft_fail, so a Test Engine API
-  # hiccup never blocks the build. See TE-5828.
+  # hiccup never blocks the build.
+  #
+  # Runs inside the `agent` compose service so bktec's gotest runner has
+  # `go` on PATH (needed for `go list ./...` package discovery) and the
+  # Test Engine API token is forwarded (declared in docker-compose.yml).
+  # See TE-5828.
   - name: ":test_tube: Collect commit metadata"
     key: collect-commit-metadata
     command: .buildkite/steps/collect-commit-metadata.sh
@@ -53,6 +58,12 @@ steps:
       # requests. See TE-5766 verification on bk/bk-rspec.
       BUILDKITE_TEST_ENGINE_MAX_PARALLELISM: "2"
       BUILDKITE_TEST_ENGINE_TARGET_TIME: "1m"
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          propagate-environment: true
+          run: agent
 
   - group: ":go::scientist: Tests and Coverage"
     if_changed:

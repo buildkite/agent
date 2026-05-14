@@ -11,6 +11,12 @@
 # context. The step is soft-failed at the pipeline level so a Test Engine API
 # hiccup never blocks the build.
 #
+# Runs inside the `agent` docker-compose service (see
+# .buildkite/docker-compose.yml). The service provides `go` on PATH for
+# bktec's gotest runner (which shells out to `go list ./...` to discover
+# packages) and forwards BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN into the
+# container.
+#
 # bktec is downloaded fresh each run from the test-engine-client GitHub
 # release. The agent repo's go.mod pins test-engine-client v1.6.0 for use as
 # a `go tool` on the runtime test path; that v1 shape predates the `plan`
