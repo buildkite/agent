@@ -23,4 +23,4 @@ else
   export BUILDKITE_TEST_ENGINE_TEST_CMD="go tool gotestsum --junitfile={{resultPath}} -- -count=1 -cover $* {{packages}} -test.gocoverdir=${COVERAGE_DIR}"
 fi
 
-go tool test-engine-client
+go tool test-engine-client run
