@@ -1,0 +1,40 @@
+version: 1
+backends:
+  darwin-vz:
+    memory_mib: 12288
+sandbox:
+  image:
+    ref: ghcr.io/buildkite/cleanroom-base/debian@sha256:28c3f638fabe1ed780f87b82cfb0c6dda2549c86b9e4edbe519e8250243411c5
+  dependencies:
+    command: |
+      mise settings ruby.compile=false
+      mise install
+      mise exec -- go mod download
+    key:
+      files:
+        - mise.toml
+        - go.mod
+        - go.sum
+  network:
+    default: deny
+    allow:
+      - host: github.com
+        ports: [443]
+      - host: api.github.com
+        ports: [443]
+      - host: dl.google.com
+        ports: [443]
+      - host: proxy.golang.org
+        ports: [443]
+      - host: sum.golang.org
+        ports: [443]
+      - host: storage.googleapis.com
+        ports: [443]
+      - host: mise-versions.jdx.dev
+        ports: [443]
+      - host: mise.jdx.dev
+        ports: [443]
+      - host: release-assets.githubusercontent.com
+        ports: [443]
+      - host: tuf-repo-cdn.sigstore.dev
+        ports: [443]
