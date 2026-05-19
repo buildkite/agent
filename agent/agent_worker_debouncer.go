@@ -49,8 +49,15 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 	// It starts nil because at the beginning, there is no previous action.
 	var lastActionResult chan error
 
-	// pending is the next message to send, when able.
-	var pending *actionMessage
+	// pendingJobs holds jobs to start, when able. This normally holds no more
+	// than 1 job ID, because the backend should never try to dispatch more jobs
+	// before the existing ones have run, but handing this is basically no cost.
+	var pendingJobs []string
+	// pendingAction can be "disconnect", "pause", or "" (resume / next job).
+	// Choosing the next action is the main function of the debouncer.
+	var pendingAction string
+	// pending is true when the action is pending, false otherwise
+	var pending bool
 
 	// Is the stream healthy?
 	// If so, take the baton (which blocks the ping loop).
@@ -94,9 +101,41 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 				break // out of the select
 			}
 
-			// The next message to send is, currently, always the most recent
-			// healthy message.
-			pending = &msg
+			// If nothing's pending, make the new message the pending action.
+			if !pending {
+				pending = true
+				pendingAction = msg.action
+				if msg.jobID != "" {
+					pendingJobs = append(pendingJobs, msg.jobID)
+				}
+				break // out of the select
+			}
+
+			// Something is already pending; figure out how to debounce.
+
+			// Apply disconnect ASAP.
+			if msg.action == "disconnect" {
+				pendingAction = "disconnect"
+			}
+			// Don't debounce over the top of an existing "disconnect".
+			if pendingAction == "disconnect" {
+				break // out of the select
+			}
+
+			// Replace the pending action with the new action, debouncing it.
+			// This makes sense in all remaining cases (having dealt with
+			// disconnect above):
+			// pause  -> pause:  no change (probably shouldn't happen though)
+			// pause  -> resume: resume as though we never received the pause
+			// resume -> pause:  pause as though we never received the resume
+			// resume -> resume: no change (probably a job dispatch)
+			pendingAction = msg.action
+
+			// If there's a job ID (msg.action should be ""), enqueue it to run
+			// once resumed.
+			if msg.jobID != "" {
+				pendingJobs = append(pendingJobs, msg.jobID)
+			}
 
 			// continue below to send it
 
@@ -111,17 +150,29 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 		}
 
 		// If we're healthy, have the baton, there's no action in progress,
-		// and there's a pending message, then send that message.
-		if !healthy || !bat.HeldBy(actorDebouncer) || actionInProgress || pending == nil {
+		// and there's a pending action, then send the pending action.
+		if !healthy || !bat.HeldBy(actorDebouncer) || actionInProgress || !pending {
 			continue
 		}
-		a.logger.Debugf("[runDebouncer] Sending action %q, jobID %q", pending.action, pending.jobID)
+
 		lastActionResult = make(chan error)
-		pending.errCh = lastActionResult
+		newMsg := actionMessage{
+			action: pendingAction,
+			errCh:  lastActionResult,
+		}
+		// If we're resumed, include the next job if there is one.
+		if pendingAction == "" && len(pendingJobs) > 0 {
+			newMsg.jobID = pendingJobs[0]
+		}
+		a.logger.Debugf("[runDebouncer] Sending action %q, next jobID %q", newMsg.action, newMsg.jobID)
 		select {
-		case outCh <- *pending:
+		case outCh <- newMsg:
 			// sent!
-			pending = nil
+			pending = false
+			if newMsg.jobID != "" {
+				pendingJobs = pendingJobs[1:]
+				pending = len(pendingJobs) > 0
+			}
 			actionInProgress = true
 		case <-a.stop:
 			a.logger.Debugf("[runDebouncer] Stopping due to agent stop")
