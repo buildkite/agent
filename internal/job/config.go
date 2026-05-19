@@ -7,9 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/process"
 )
 
 // Config provides the configuration for the job executor. Some of the keys are
@@ -194,9 +193,6 @@ type ExecutorConfig struct {
 
 	// Accept traceparent context from Buildkite control plane
 	TracingPropagateTraceparent bool
-
-	// Encoding (within base64) for the trace context environment variable.
-	TraceContextCodec tracetools.Codec
 
 	// Whether to start the JobAPI
 	JobAPI bool

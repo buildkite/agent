@@ -13,16 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/kubernetes"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/kubernetes"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/metrics"
+	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/go-pipeline"
 )
 
@@ -101,9 +100,6 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			r.conf.MetricsScope.Timing("queue.duration", r.startedAt.Sub(runnableAt))
 		}
 	}
-
-	// Start the header time streamer
-	go r.headerTimesStreamer.Run(ctx)
 
 	// Start the log streamer. Launches multiple goroutines.
 	if err := r.logStreamer.Start(ctx); err != nil {
@@ -386,9 +382,7 @@ One or more containers connected to the agent, but then stopped communicating wi
 		if exit.Status == 0 {
 			// On Windows, a signalled process exits 0 rather than non-zero.
 			// This is inconsistent with cancellation on other platforms.
-			if experiments.IsEnabled(ctx, experiments.OverrideZeroExitOnCancel) {
-				exit.Status = 1
-			}
+			exit.Status = 1
 		}
 	}
 
@@ -407,9 +401,6 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 	// Stop the log streamer. This will block until all the chunks have been uploaded
 	r.logStreamer.Stop()
-
-	// Stop the header time streamer. This will block until all the chunks have been uploaded
-	r.headerTimesStreamer.Stop()
 
 	// Warn about failed chunks
 	if count := r.logStreamer.FailedChunks(); count > 0 {
@@ -608,7 +599,7 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	r.agentLogger.Infof(
 		"Canceling job %s with a signal grace period of %v (%s)",
 		r.conf.Job.ID,
-		r.conf.AgentConfiguration.SignalGracePeriod,
+		r.conf.AgentConfiguration.CancelSignalTimeout,
 		reason,
 	)
 
@@ -637,11 +628,11 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	// Extra time between the end of the signal grace period and the end of the
 	// cancel grace period is the time we (agent side) need to upload logs and
 	// disconnect (if the agent is exiting).
-	case <-time.After(r.conf.AgentConfiguration.SignalGracePeriod):
+	case <-time.After(r.conf.AgentConfiguration.CancelSignalTimeout):
 		r.agentLogger.Infof(
 			"Job %s hasn't stopped within %v, terminating",
 			r.conf.Job.ID,
-			r.conf.AgentConfiguration.SignalGracePeriod,
+			r.conf.AgentConfiguration.CancelSignalTimeout,
 		)
 
 		// Terminate the process as we've exceeded our context

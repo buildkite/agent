@@ -10,18 +10,18 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/kms"
-	"github.com/buildkite/agent/v3/internal/awslib"
-	"github.com/buildkite/agent/v3/internal/bkgql"
-	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
-	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
-	"github.com/buildkite/agent/v3/internal/stdin"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/internal/awslib"
+	"github.com/buildkite/agent/v4/internal/bkgql"
+	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
+	"github.com/buildkite/agent/v4/internal/stdin"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/buildkite/interpolate"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
 )
 
@@ -68,7 +68,7 @@ var (
 	ErrNotFound = errors.New("pipeline not found")
 )
 
-var ToolSignCommand = cli.Command{
+var ToolSignCommand = &cli.Command{
 	Name:  "sign",
 	Usage: "Sign pipeline steps",
 	Description: `Usage:
@@ -106,78 +106,78 @@ Signing a pipeline from a file:
         --jwks-file /path/to/private/key.json \
         --repo <repo url for your pipeline>`,
 	Flags: append(globalFlags(),
-		cli.StringFlag{
-			Name:   "graphql-token",
-			Usage:  "A token for the buildkite graphql API. This will be used to populate the value of the repository URL, and download the pipeline definition. Both ′repo′ and ′pipeline-file′ will be ignored in preference of values from the GraphQL API if the token in provided.",
-			EnvVar: "BUILDKITE_GRAPHQL_TOKEN",
+		&cli.StringFlag{
+			Name:    "graphql-token",
+			Usage:   "A token for the buildkite graphql API. This will be used to populate the value of the repository URL, and download the pipeline definition. Both ′repo′ and ′pipeline-file′ will be ignored in preference of values from the GraphQL API if the token in provided.",
+			Sources: cli.EnvVars("BUILDKITE_GRAPHQL_TOKEN"),
 		},
-		cli.BoolFlag{
-			Name:   "update",
-			Usage:  "Update the pipeline using the GraphQL API after signing it. This can only be used if ′graphql-token′ is provided (default: false)",
-			EnvVar: "BUILDKITE_TOOL_SIGN_UPDATE",
+		&cli.BoolFlag{
+			Name:    "update",
+			Usage:   "Update the pipeline using the GraphQL API after signing it. This can only be used if ′graphql-token′ is provided (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_TOOL_SIGN_UPDATE"),
 		},
-		cli.BoolFlag{
-			Name:   "no-confirm",
-			Usage:  "Show confirmation prompts before updating the pipeline with the GraphQL API (default: false)",
-			EnvVar: "BUILDKITE_TOOL_SIGN_NO_CONFIRM",
+		&cli.BoolFlag{
+			Name:    "no-confirm",
+			Usage:   "Show confirmation prompts before updating the pipeline with the GraphQL API (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_TOOL_SIGN_NO_CONFIRM"),
 		},
 
 		// Used for signing
-		cli.StringFlag{
-			Name:   "jwks-file",
-			Usage:  "Path to a file containing a JWKS.",
-			EnvVar: "BUILDKITE_AGENT_JWKS_FILE",
+		&cli.StringFlag{
+			Name:    "jwks-file",
+			Usage:   "Path to a file containing a JWKS.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_FILE"),
 		},
-		cli.StringFlag{
-			Name:   "jwks-key-id",
-			Usage:  "The JWKS key ID to use when signing the pipeline. If none is provided and the JWKS file contains only one key, that key will be used.",
-			EnvVar: "BUILDKITE_AGENT_JWKS_KEY_ID",
+		&cli.StringFlag{
+			Name:    "jwks-key-id",
+			Usage:   "The JWKS key ID to use when signing the pipeline. If none is provided and the JWKS file contains only one key, that key will be used.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_KEY_ID"),
 		},
-		cli.StringFlag{
-			Name:   "signing-aws-kms-key",
-			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
-			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
+		&cli.StringFlag{
+			Name:    "signing-aws-kms-key",
+			Usage:   "The AWS KMS key identifier which is used to sign pipelines.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_AWS_KMS_KEY"),
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name: "signing-gcp-kms-key",
 			Usage: "The GCP KMS key identifier which is used to sign pipelines. " +
 				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
-			EnvVar: "BUILDKITE_AGENT_GCP_KMS_KEY",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_GCP_KMS_KEY"),
 		},
-		cli.BoolFlag{
-			Name:   "debug-signing",
-			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
-			EnvVar: "BUILDKITE_AGENT_DEBUG_SIGNING",
+		&cli.BoolFlag{
+			Name:    "debug-signing",
+			Usage:   "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_DEBUG_SIGNING"),
 		},
 
 		// These are required for GraphQL
-		cli.StringFlag{
-			Name:   "organization-slug",
-			Usage:  "The organization slug. Required to connect to the GraphQL API.",
-			EnvVar: "BUILDKITE_ORGANIZATION_SLUG",
+		&cli.StringFlag{
+			Name:    "organization-slug",
+			Usage:   "The organization slug. Required to connect to the GraphQL API.",
+			Sources: cli.EnvVars("BUILDKITE_ORGANIZATION_SLUG"),
 		},
-		cli.StringFlag{
-			Name:   "pipeline-slug",
-			Usage:  "The pipeline slug. Required to connect to the GraphQL API.",
-			EnvVar: "BUILDKITE_PIPELINE_SLUG",
+		&cli.StringFlag{
+			Name:    "pipeline-slug",
+			Usage:   "The pipeline slug. Required to connect to the GraphQL API.",
+			Sources: cli.EnvVars("BUILDKITE_PIPELINE_SLUG"),
 		},
-		cli.StringFlag{
-			Name:   "graphql-endpoint",
-			Usage:  "The endpoint for the Buildkite GraphQL API. This is only needed if you are using the the graphql-token flag, and is mostly useful for development purposes",
-			Value:  bkgql.DefaultEndpoint,
-			EnvVar: "BUILDKITE_GRAPHQL_ENDPOINT",
+		&cli.StringFlag{
+			Name:    "graphql-endpoint",
+			Usage:   "The endpoint for the Buildkite GraphQL API. This is only needed if you are using the the graphql-token flag, and is mostly useful for development purposes",
+			Value:   bkgql.DefaultEndpoint,
+			Sources: cli.EnvVars("BUILDKITE_GRAPHQL_ENDPOINT"),
 		},
 
 		// Added to signature
-		cli.StringFlag{
-			Name:   "repo",
-			Usage:  "The URL of the pipeline's repository, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
-			EnvVar: "BUILDKITE_REPO",
+		&cli.StringFlag{
+			Name:    "repo",
+			Usage:   "The URL of the pipeline's repository, which is used in the pipeline signature. If the GraphQL token is provided, this will be ignored.",
+			Sources: cli.EnvVars("BUILDKITE_REPO"),
 		},
 	),
 
-	Action: func(c *cli.Context) error {
-		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](context.Background(), c)
+	Action: func(ctx context.Context, c *cli.Command) error {
+		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](ctx, c)
 		defer done()
 
 		var (
@@ -248,7 +248,7 @@ func validateNoInterpolations(pipelineString string) error {
 	return nil
 }
 
-func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
+func signOffline(ctx context.Context, c *cli.Command, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
 	if cfg.Repository == "" {
 		return ErrUseGraphQL
 	}
@@ -302,7 +302,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 	}
 
 	if cfg.Debug {
-		enc := yaml.NewEncoder(c.App.Writer)
+		enc := yaml.NewEncoder(c.Writer)
 		enc.SetIndent(yamlIndent)
 		if err := enc.Encode(parsedPipeline); err != nil {
 			return fmt.Errorf("couldn't encode pipeline: %w", err)
@@ -330,12 +330,12 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
-	enc := yaml.NewEncoder(c.App.Writer)
+	enc := yaml.NewEncoder(c.Writer)
 	enc.SetIndent(yamlIndent)
 	return enc.Encode(parsedPipeline)
 }
 
-func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
+func signWithGraphQL(ctx context.Context, c *cli.Command, l logger.Logger, key signature.Key, cfg *ToolSignConfig) error {
 	orgPipelineSlug := fmt.Sprintf("%s/%s", cfg.OrganizationSlug, cfg.PipelineSlug)
 	debugL := l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
 
@@ -375,7 +375,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 	}
 
 	if cfg.Debug {
-		enc := yaml.NewEncoder(c.App.Writer)
+		enc := yaml.NewEncoder(c.Writer)
 		enc.SetIndent(yamlIndent)
 		if err := enc.Encode(parsedPipeline); err != nil {
 			return fmt.Errorf("couldn't encode pipeline: %w", err)
@@ -397,7 +397,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 	}
 
 	if !cfg.Update {
-		enc := yaml.NewEncoder(c.App.Writer)
+		enc := yaml.NewEncoder(c.Writer)
 		enc.SetIndent(yamlIndent)
 		return enc.Encode(parsedPipeline)
 	}
@@ -434,12 +434,12 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 	return nil
 }
 
-func promptConfirm(c *cli.Context, cfg *ToolSignConfig, message string) (bool, error) {
+func promptConfirm(c *cli.Command, cfg *ToolSignConfig, message string) (bool, error) {
 	if cfg.NoConfirm {
 		return true, nil
 	}
 
-	if _, err := fmt.Fprintf(c.App.Writer, "%s [y/N]: ", message); err != nil {
+	if _, err := fmt.Fprintf(c.Writer, "%s [y/N]: ", message); err != nil {
 		return false, err
 	}
 

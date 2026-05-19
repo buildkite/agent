@@ -48,9 +48,13 @@ YAML
 edge_steps_yaml() {
   echo "steps:"
 
-  trigger_step \
-    "edge ${agent_version}.${build_version}" \
-    "agent-release-edge"
+  # Don't create edge releases for beta/RC in this branch
+  # TODO(v4 cleanup): Re-enable edge releases here
+  if [[ ! "$agent_version" =~ (beta|rc) ]] ; then
+    trigger_step \
+        "edge ${agent_version}.${build_version}" \
+        "agent-release-edge"
+  fi
 }
 
 output_steps_yaml() {

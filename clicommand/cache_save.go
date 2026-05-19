@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/buildkite/agent/v3/internal/cache"
-	"github.com/urfave/cli"
+	"github.com/buildkite/agent/v4/internal/cache"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -62,13 +62,12 @@ type CacheSaveConfig struct {
 	CacheConfig
 }
 
-var CacheSaveCommand = cli.Command{
+var CacheSaveCommand = &cli.Command{
 	Name:        "save",
 	Usage:       "Saves files to the cache",
 	Description: cacheSaveHelpDescription,
 	Flags:       slices.Concat(globalFlags(), apiFlags(), cacheFlags()),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheSaveConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-save")

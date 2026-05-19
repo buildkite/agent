@@ -20,7 +20,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/version"
 
 	"github.com/buildkite/go-buildkite/v4"
 	"github.com/buildkite/roko"

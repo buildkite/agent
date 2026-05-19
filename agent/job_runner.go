@@ -16,17 +16,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/core"
-	envutil "github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/kubernetes"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/status"
-	"github.com/buildkite/roko"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/core"
+	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/kubernetes"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/metrics"
+	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/shellwords"
 )
 
@@ -116,9 +115,6 @@ type JobRunner struct {
 	// The internal buffer of the process output
 	output *process.Buffer
 
-	// The internal header time streamer
-	headerTimesStreamer *headerTimesStreamer
-
 	// The internal log streamer. Don't write to this directly, use `jobLogs` instead
 	logStreamer *LogStreamer
 
@@ -182,9 +178,6 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	if conf.JobStatusInterval == 0 {
 		conf.JobStatusInterval = 1 * time.Second
 	}
-
-	// Create our header times struct
-	r.headerTimesStreamer = newHeaderTimesStreamer(r.agentLogger, r.onUploadHeaderTime)
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
@@ -261,61 +254,11 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		outputWriter = io.MultiWriter(outputWriter, tmpFile)
 	}
 
-	pr, pw := io.Pipe()
+	// processWriter -> timestamper -> outputWriter
 
-	switch {
-	case conf.AgentConfiguration.ANSITimestamps:
-		// processWriter -> prefixer -> outputWriter
-
-		// If we have ansi-timestamps, we can skip line timestamps AND header times
-		// this is the future of timestamping
-		prefixer := process.NewTimestamper(outputWriter, core.BKTimestamp, 1*time.Second)
-		allWriters = append(allWriters, prefixer)
-
-	case conf.AgentConfiguration.TimestampLines:
-		// processWriter -> pw -> pr -> process.Scanner -> {headerTimesStreamer, outputWriter}
-
-		// If we have timestamp lines on, we have to buffer lines before we flush them
-		// because we need to know if the line is a header or not. It's a bummer.
-		allWriters = append(allWriters, pw)
-
-		go func() {
-			// Use a scanner to process output line by line
-			err := process.NewScanner(r.agentLogger).ScanLines(pr, func(line string) {
-				// Send to our header streamer and determine if it's a header
-				// or header expansion.
-				isHeaderOrExpansion := r.headerTimesStreamer.Scan(line)
-
-				// Prefix non-header log lines with timestamps
-				if !isHeaderOrExpansion {
-					line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
-				}
-
-				// Write the log line to the buffer
-				_, _ = outputWriter.Write([]byte(line + "\n"))
-			})
-			if err != nil {
-				r.agentLogger.Errorf("[JobRunner] Encountered error %v", err)
-			}
-		}()
-
-	default:
-		// processWriter -> {pw, outputWriter};
-		// pw -> pr -> process.Scanner -> headerTimesStreamer
-
-		// Write output directly to the line buffer
-		allWriters = append(allWriters, pw, outputWriter)
-
-		// Use a scanner to process output for headers only
-		go func() {
-			err := process.NewScanner(r.agentLogger).ScanLines(pr, func(line string) {
-				r.headerTimesStreamer.Scan(line)
-			})
-			if err != nil {
-				r.agentLogger.Errorf("[JobRunner] Encountered error %v", err)
-			}
-		}()
-	}
+	// If we have ansi-timestamps, we can skip line timestamps
+	prefixer := process.NewTimestamper(outputWriter, core.BKTimestamp, 1*time.Second)
+	allWriters = append(allWriters, prefixer)
 
 	if conf.AgentConfiguration.WriteJobLogsToStdout {
 		allWriters = append(allWriters, NewJobLogger(conf))
@@ -372,19 +315,16 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			Stdout:            r.jobLogs,
 			Stderr:            r.jobLogs,
 			InterruptSignal:   cancelSignal,
-			SignalGracePeriod: conf.AgentConfiguration.SignalGracePeriod,
+			SignalGracePeriod: conf.AgentConfiguration.CancelSignalTimeout,
 		})
 	}
 
 	// Close the writer end of the pipe when the process finishes
 	go func() {
 		<-r.process.Done()
-		if err := pw.Close(); err != nil {
-			r.agentLogger.Errorf("%v", err)
-		}
 		if tmpFile != nil {
 			if err := os.Remove(tmpFile.Name()); err != nil {
-				r.agentLogger.Errorf("%v", err)
+				r.agentLogger.Errorf("Couldn't remove job log temp file: %v", err)
 			}
 		}
 	}()
@@ -449,13 +389,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envShellFile != nil {
-		if experiments.IsEnabled(ctx, experiments.PropagateAgentConfigVars) {
-			// Note that some variables in this list might not be defined later,
-			// when something comes to read the file. See below where they are
-			// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
-			// Docker in particular tolerates undefined vars in an env file
-			// without complaints.
-			const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
+		// Note that some variables in this list might not be defined later,
+		// when something comes to read the file. See below where they are
+		// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
+		// Docker in particular tolerates undefined vars in an env file
+		// without complaints.
+		const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
@@ -476,7 +415,6 @@ BUILDKITE_HOOKS_SHELL
 BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
-BUILDKITE_TRACE_CONTEXT_ENCODING
 BUILDKITE_TRACING_BACKEND
 BUILDKITE_TRACING_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
@@ -485,9 +423,8 @@ BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
 BUILDKITE_AGENT_JWKS_KEY_ID`
-			if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
-				return nil, err
-			}
+		if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
+			return nil, err
 		}
 
 		for key, value := range env {
@@ -624,9 +561,8 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
 	setEnv("BUILDKITE_REDACTED_VARS", strings.Join(r.conf.AgentConfiguration.RedactedVars, ","))
 	setEnv("BUILDKITE_STRICT_SINGLE_HOOKS", fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks))
-	setEnv("BUILDKITE_CANCEL_GRACE_PERIOD", strconv.Itoa(r.conf.AgentConfiguration.CancelGracePeriod))
-	setEnv("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", strconv.Itoa(int(r.conf.AgentConfiguration.SignalGracePeriod/time.Second)))
-	setEnv("BUILDKITE_TRACE_CONTEXT_ENCODING", r.conf.AgentConfiguration.TraceContextEncoding)
+	setEnv("BUILDKITE_CANCEL_SIGNAL_TIMEOUT", r.conf.AgentConfiguration.CancelSignalTimeout.String())
+	setEnv("BUILDKITE_CANCEL_CLEANUP_TIMEOUT", r.conf.AgentConfiguration.CancelCleanupTimeout.String())
 
 	if !r.conf.AgentConfiguration.AllowMultipartArtifactUpload {
 		setEnv("BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", "true")
@@ -875,28 +811,6 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 				r.agentLogger.Errorf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}
-	}
-}
-
-func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, times map[string]string) {
-	err := roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.SaveHeaderTimes(ctx, r.conf.Job.ID, &api.HeaderTimes{Times: times})
-		if err != nil {
-			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
-				r.agentLogger.Warnf("Buildkite rejected the header times (%s)", err)
-				retrier.Break()
-			} else {
-				r.agentLogger.Warnf("%s (%s)", err, retrier)
-			}
-		}
-
-		return err
-	})
-	if err != nil {
-		r.agentLogger.Errorf("Ultimately unable to upload header times: %v", err)
 	}
 }
 

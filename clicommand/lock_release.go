@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/lock"
-	"github.com/urfave/cli"
+	"github.com/buildkite/agent/v4/lock"
+	"github.com/urfave/cli/v3"
 )
 
 const lockReleaseHelpDescription = `Usage:
@@ -34,7 +34,7 @@ type LockReleaseConfig struct {
 	LockCommonConfig
 }
 
-var LockReleaseCommand = cli.Command{
+var LockReleaseCommand = &cli.Command{
 	Name:        "release",
 	Usage:       "Releases a previously-acquired lock",
 	Description: lockReleaseHelpDescription,
@@ -42,14 +42,14 @@ var LockReleaseCommand = cli.Command{
 	Action:      lockReleaseAction,
 }
 
-func lockReleaseAction(c *cli.Context) error {
+func lockReleaseAction(ctx context.Context, c *cli.Command) error {
 	if c.NArg() != 2 {
-		_, _ = fmt.Fprint(c.App.ErrWriter, lockReleaseHelpDescription)
+		_, _ = fmt.Fprint(c.ErrWriter, lockReleaseHelpDescription)
 		return &SilentExitError{code: 1}
 	}
-	key, token := c.Args()[0], c.Args()[1]
+	key, token := c.Args().Get(0), c.Args().Get(1)
 
-	ctx, cfg, _, _, done := setupLoggerAndConfig[LockReleaseConfig](context.Background(), c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockReleaseConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
