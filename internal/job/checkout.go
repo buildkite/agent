@@ -131,22 +131,22 @@ func (e *Executor) refreshCheckoutRoot() error {
 
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
-func (e *Executor) CheckoutPhase(ctx context.Context) (err error) {
+func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
+	if err := e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
 	}
 
-	if err = e.executePluginHook(ctx, "pre-checkout", e.pluginCheckouts); err != nil {
+	if err := e.executePluginHook(ctx, "pre-checkout", e.pluginCheckouts); err != nil {
 		return err
 	}
 
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if e.CleanCheckout {
 		e.shell.Headerf("Cleaning pipeline checkout")
-		if err = e.removeCheckoutDir(); err != nil {
+		if err := e.removeCheckoutDir(); err != nil {
 			return err
 		}
 	}
@@ -155,8 +155,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (err error) {
 
 	// If we have a blank repository then use a temp dir for builds
 	if e.Repository == "" {
-		var buildDir string
-		buildDir, err = os.MkdirTemp("", "buildkite-job-"+e.JobID)
+		buildDir, err := os.MkdirTemp("", "buildkite-job-"+e.JobID)
 		if err != nil {
 			return err
 		}
@@ -167,17 +166,16 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (err error) {
 	}
 
 	// Make sure the build directory exists
-	if err = e.createCheckoutDir(); err != nil {
+	if err := e.createCheckoutDir(); err != nil {
 		return err
 	}
 
-	if err = e.checkout(ctx); err != nil {
+	if err := e.checkout(ctx); err != nil {
 		return err
 	}
 
-	// sendCommitToBuildkite is non-critical, don't propagate to span
-	if sendErr := e.sendCommitToBuildkite(ctx); sendErr != nil {
-		e.shell.OptionalWarningf("git-commit-resolution-failed", "Couldn't send commit information to Buildkite: %v", sendErr)
+	if err := e.sendCommitToBuildkite(ctx); err != nil {
+		e.shell.OptionalWarningf("git-commit-resolution-failed", "Couldn't send commit information to Buildkite: %v", err)
 	}
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
@@ -188,15 +186,15 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (err error) {
 	}
 
 	// Run post-checkout hooks
-	if err = e.executeGlobalHook(ctx, "post-checkout"); err != nil {
+	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err = e.executeLocalHook(ctx, "post-checkout"); err != nil {
+	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err = e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
+	if err := e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -207,7 +205,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (err error) {
 	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
 		e.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
-		if err = e.shell.Chdir(newCheckoutPath); err != nil {
+		if err := e.shell.Chdir(newCheckoutPath); err != nil {
 			return err
 		}
 	}
@@ -827,14 +825,14 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
-func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
+func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
 	span.AddAttributes(map[string]string{
 		"checkout.repo_name": e.Repository,
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
 	})
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
 	if e.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
@@ -845,6 +843,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+		var err error
 		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
@@ -854,7 +853,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 	}
 
 	// Make sure the build directory exists and that we change directory into it
-	if err = e.createCheckoutDir(); err != nil {
+	if err := e.createCheckoutDir(); err != nil {
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
@@ -878,7 +877,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 	if osutil.FileExists(existingGitDir) {
 		// Ensure the origin matches the configured repo, so we can
 		// gracefully handle repository renames.
-		if _, err = e.updateRemoteURL(ctx, "", e.Repository); err != nil {
+		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
 			return fmt.Errorf("setting origin: %w", err)
 		}
 
@@ -887,13 +886,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 			case "dissociate":
 				// If the existing repo is still relying on the reference, then
 				// "dissociate" it (git repack, and delete the alternates file).
-				if err = e.dissociateIfNeeded(ctx, existingGitDir); err != nil {
+				if err := e.dissociateIfNeeded(ctx, existingGitDir); err != nil {
 					return fmt.Errorf("dissociating existing reference clone: %w", err)
 				}
 			case "reference":
 				// If the existing repo does not have a reference to the mirror,
 				// create one. Existing objects don't need cleaning up.
-				if err = e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir); err != nil {
+				if err := e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir); err != nil {
 					return fmt.Errorf("reassociating existing clone: %w", err)
 				}
 			}
@@ -915,7 +914,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 		}
 
 		// Do the clone.
-		if err = gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
+		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
 			return fmt.Errorf("cloning git repository: %w", err)
 		}
 	}
@@ -923,27 +922,27 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 	// Git clean prior to checkout, we do this even if submodules have been
 	// disabled to ensure previous submodules are cleaned up
 	if hasGitSubmodules(e.shell) {
-		if err = gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
+		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
 			return fmt.Errorf("cleaning git submodules: %w", err)
 		}
 	}
 
-	if err = gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
+	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
 		return fmt.Errorf("cleaning git repository: %w", err)
 	}
 
-	if err = e.fetchSource(ctx); err != nil {
+	if err := e.fetchSource(ctx); err != nil {
 		return err
 	}
 
 	gitCheckoutFlags := e.GitCheckoutFlags
 
 	if e.Commit == "HEAD" {
-		if err = gitCheckout(ctx, e.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
+		if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
 			return fmt.Errorf("checking out FETCH_HEAD: %w", err)
 		}
 	} else {
-		if err = gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
+		if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
 			return fmt.Errorf("checking out commit %q: %w", e.Commit, err)
 		}
 	}
@@ -964,7 +963,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 		// is only available in git version 1.8.1, so
 		// if the call fails, continue the job
 		// script, and show an informative error.
-		if syncErr := e.shell.Command("git", "submodule", "sync", "--recursive").Run(ctx); syncErr != nil {
+		if err := e.shell.Command("git", "submodule", "sync", "--recursive").Run(ctx); err != nil {
 			gitVersionOutput, _ := e.shell.Command("git", "--version").RunAndCaptureStdout(ctx)
 			e.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
@@ -981,9 +980,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 		}
 
 		// Checking for submodule repositories
-		submoduleRepos, enumErr := gitEnumerateSubmoduleURLs(ctx, e.shell)
-		if enumErr != nil {
-			e.shell.Warningf("Failed to enumerate git submodules: %v", enumErr)
+		submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, e.shell)
+		if err != nil {
+			e.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
 			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
@@ -997,19 +996,19 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 				}
 				// It's all mirrored submodules for the rest of the loop.
 
-				subMirrorDir, mirrorErr := e.getOrUpdateMirrorDir(ctx, repository)
-				if mirrorErr != nil {
-					return fmt.Errorf("getting/updating mirror dir for submodules: %w", mirrorErr)
+				mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
+				if err != nil {
+					return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 				}
 
 				// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-				if err = e.createCheckoutDir(); err != nil {
+				if err := e.createCheckoutDir(); err != nil {
 					return fmt.Errorf("creating checkout dir: %w", err)
 				}
 
 				submoduleArgs := slices.Clone(args)
-				if subMirrorDir != "" {
-					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", subMirrorDir)
+				if mirrorDir != "" {
+					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
 					if e.GitMirrorCheckoutMode == "dissociate" {
 						submoduleArgs = append(submoduleArgs, "--dissociate")
 					}
@@ -1018,20 +1017,20 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
 				}
 
-				if err = e.shell.Command("git", submoduleArgs...).Run(ctx); err != nil {
+				if err := e.shell.Command("git", submoduleArgs...).Run(ctx); err != nil {
 					return fmt.Errorf("updating submodules: %w", err)
 				}
 			}
 
 			if !mirrorSubmodules {
 				args = append(args, "submodule", "update", "--init", "--recursive", "--force")
-				if err = e.shell.Command("git", args...).Run(ctx); err != nil {
+				if err := e.shell.Command("git", args...).Run(ctx); err != nil {
 					return fmt.Errorf("updating submodules: %w", err)
 				}
 			}
 
 			cmd := e.shell.Command("git", "submodule", "foreach", "--recursive", "git reset --hard")
-			if err = cmd.Run(ctx); err != nil {
+			if err := cmd.Run(ctx); err != nil {
 				return fmt.Errorf("resetting submodules: %w", err)
 			}
 		}
@@ -1042,12 +1041,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 	// good solution to this problem that we've found
 	e.shell.Commentf("Cleaning again to catch any post-checkout changes")
 
-	if err = gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
+	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
 		return fmt.Errorf("cleaning repository post-checkout: %w", err)
 	}
 
 	if gitSubmodules {
-		if err = gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
+		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
 			return fmt.Errorf("cleaning submodules post-checkout: %w", err)
 		}
 	}

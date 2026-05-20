@@ -134,10 +134,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell = sh
 	}
 
-	var err error
+	var retErr error
 	span, ctx, stopper := e.startTracing(ctx)
 	defer stopper()
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
 	// Listen for cancellation. Once ctx is cancelled, some tasks can run
 	// afterwards during the signal grace period. These use graceCtx.
@@ -157,6 +157,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		cleanup, err := e.startJobAPI()
 		if err != nil {
 			e.shell.Errorf("Error setting up Job API: %v", err)
+			retErr = err
 			return 1
 		}
 		defer cleanup()
@@ -186,6 +187,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		err := e.configureGitCredentialHelper(ctx)
 		if err != nil {
 			e.shell.Errorf("Error configuring git credential helper: %v", err)
+			retErr = err
 			return shell.ExitCode(err)
 		}
 
@@ -193,6 +195,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		err = e.configureHTTPSInsteadOfSSH(ctx)
 		if err != nil {
 			e.shell.Errorf("Error configuring https instead of ssh: %v", err)
+			retErr = err
 			return shell.ExitCode(err)
 		}
 	}
@@ -200,13 +203,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Initialize the environment, a failure here will still call the tearDown.
 	// setUp can fail due to infrastructure errors (secret fetch, env init)
 	// or due to a user hook (environment hook) returning non-zero.
-	if err = e.setUp(ctx); err != nil {
-		e.shell.Errorf("Error setting up job executor: %v", err)
+	if retErr = e.setUp(ctx); retErr != nil {
+		e.shell.Errorf("Error setting up job executor: %v", retErr)
 
 		// If the error is a typed ExitError (e.g. from a hook), preserve
 		// the hook's exit code. Otherwise it's an infra error — return
 		// ExitCodeSetupFailure so the parent can map it to -1.
-		if exitErr := new(shell.ExitError); errors.As(err, &exitErr) {
+		if exitErr := new(shell.ExitError); errors.As(retErr, &exitErr) {
 			return exitErr.Code
 		}
 		return ExitCodeSetupFailure
@@ -296,7 +299,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Phase errors are where something of ours broke that merits a big red error
 	// this won't include command failures, as we view that as more in the user space
 	if phaseErr != nil {
-		err = phaseErr
+		retErr = phaseErr
 		e.shell.Errorf("%v", phaseErr)
 		return shell.ExitCode(phaseErr)
 	}
@@ -372,11 +375,11 @@ func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
 }
 
 // executeHook runs a hook script with the hookRunner
-func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (err error) {
+func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr error) {
 	scopeName := e.tracingImplementationSpecificHookScope(hookCfg.Scope)
 	spanName := e.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 	span.AddAttributes(map[string]string{
 		"hook.type":    scopeName,
 		"hook.name":    hookCfg.Name,
@@ -418,27 +421,28 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (err err
 			// Regardless: not supported right now, or potentially ever.
 			sheb, _ := shellscript.ShebangLine(hookCfg.Path) // we know this won't error because it must have a shebang to be a script
 
-			return fmt.Errorf(`when trying to run the hook at %q, the agent found that it was a script with a shebang that isn't for a shellscripting language - in this case, %q.
+			err := fmt.Errorf(`when trying to run the hook at %q, the agent found that it was a script with a shebang that isn't for a shellscripting language - in this case, %q.
 Hooks of this kind are unfortunately not supported on Windows, as we have no way of interpreting a shebang on Windows`, hookCfg.Path, sheb)
+			return err
 		}
 
 		// It's a script, and we can rely on the OS to figure out how to run it (because we're not on windows), so run it
 		// directly without wrapping
-		if err = e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
+		if err := e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q script hook: %w", hookName, err)
 		}
 
 		return nil
 	case hook.TypeBinary:
 		// It's a binary, so we'll just run it directly, no wrapping needed or possible
-		if err = e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
+		if err := e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q binary hook: %w", hookName, err)
 		}
 
 		return nil
 	case hook.TypeShell:
 		// It's definitely a shell script, wrap it so that we can snaffle the changed environment variables
-		if err = e.runWrappedShellScriptHook(ctx, hookName, hookCfg); err != nil {
+		if err := e.runWrappedShellScriptHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q shell hook: %w", hookName, err)
 		}
 
@@ -862,9 +866,9 @@ func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repo
 
 // setUp is run before all the phases run. It's responsible for initializing the
 // job environment
-func (e *Executor) setUp(ctx context.Context) (err error) {
+func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if e.BinPath != "" {
@@ -914,7 +918,7 @@ func (e *Executor) setUp(ctx context.Context) (err error) {
 
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {
-		if err = e.fetchAndSetSecrets(ctx); err != nil {
+		if err := e.fetchAndSetSecrets(ctx); err != nil {
 			return fmt.Errorf("failed to fetch secrets for job: %w", err)
 		}
 	}
@@ -1002,10 +1006,9 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 }
 
 // tearDown is called before the executor exits, even on error
-func (e *Executor) tearDown(ctx context.Context) error {
+func (e *Executor) tearDown(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.TracingBackend)
-	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
 	// In vanilla agent usage, there's always a command phase.
 	// But over in agent-stack-k8s, which splits the agent phases among
@@ -1014,15 +1017,15 @@ func (e *Executor) tearDown(ctx context.Context) error {
 	// Unfortunately pre-exit hooks are often not written with this split in
 	// mind.
 	if e.includePhase("command") {
-		if err = e.executeGlobalHook(ctx, "pre-exit"); err != nil {
+		if err := e.executeGlobalHook(ctx, "pre-exit"); err != nil {
 			return err
 		}
 
-		if err = e.executeLocalHook(ctx, "pre-exit"); err != nil {
+		if err := e.executeLocalHook(ctx, "pre-exit"); err != nil {
 			return err
 		}
 
-		if err = e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts); err != nil {
+		if err := e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts); err != nil {
 			return err
 		}
 	}
@@ -1033,7 +1036,7 @@ func (e *Executor) tearDown(ctx context.Context) error {
 	}
 
 	for _, dir := range e.cleanupDirs {
-		if err = os.RemoveAll(dir); err != nil {
+		if err := os.RemoveAll(dir); err != nil {
 			e.shell.Warningf("Failed to remove dir %s: %v", dir, err)
 		}
 	}
@@ -1042,15 +1045,15 @@ func (e *Executor) tearDown(ctx context.Context) error {
 }
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
-func (e *Executor) runPreCommandHooks(ctx context.Context) (err error) {
+func (e *Executor) runPreCommandHooks(ctx context.Context) (retErr error) {
 	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-command"); err != nil {
+	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "pre-command"); err != nil {
+	if err := e.executeLocalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
 	return e.executePluginHook(ctx, "pre-command", e.pluginCheckouts)
@@ -1072,15 +1075,15 @@ func (e *Executor) runCommand(ctx context.Context) error {
 }
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
-func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
+func (e *Executor) runPostCommandHooks(ctx context.Context) (retErr error) {
 	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
-	if err = e.executeGlobalHook(ctx, "post-command"); err != nil {
+	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err = e.executeLocalHook(ctx, "post-command"); err != nil {
+	if err := e.executeLocalHook(ctx, "post-command"); err != nil {
 		return err
 	}
 	return e.executePluginHook(ctx, "post-command", e.pluginCheckouts)
@@ -1156,16 +1159,16 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
-func (e *Executor) defaultCommandPhase(ctx context.Context) (err error) {
+func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	defer func() {
-		if flushErr := e.redactors.Flush(); flushErr != nil {
-			e.shell.Errorf("Error flushing redactors: %v", flushErr)
+		if err := e.redactors.Flush(); err != nil {
+			e.shell.Errorf("Error flushing redactors: %v", err)
 		}
 	}()
 
 	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 	span.AddAttributes(map[string]string{
 		"hook.name": "command",
 		"hook.type": "default",
@@ -1276,7 +1279,8 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (err error) {
 		if e.Debug {
 			e.shell.Commentf("Detected deprecated docker environment variables")
 		}
-		return runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
+		err = runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
+		return err
 	}
 
 	var cmd []string
@@ -1289,7 +1293,8 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (err error) {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	return e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
+	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
+	return err
 }
 
 /*
