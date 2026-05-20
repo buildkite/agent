@@ -1092,7 +1092,11 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 
 	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.TracingBackend)
 	defer func() {
-		span.FinishWithError(hookErr)
+		if hookErr != nil {
+			span.FinishWithError(hookErr)
+		} else {
+			span.FinishWithError(commandErr)
+		}
 	}()
 
 	// Run postCommandHooks, even if there is an error from the command, but not if there is an
