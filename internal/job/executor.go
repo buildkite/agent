@@ -372,11 +372,10 @@ func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
 }
 
 // executeHook runs a hook script with the hookRunner
-func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
+func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (err error) {
 	scopeName := e.tracingImplementationSpecificHookScope(hookCfg.Scope)
 	spanName := e.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
 		"hook.type":    scopeName,
@@ -419,28 +418,27 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) error {
 			// Regardless: not supported right now, or potentially ever.
 			sheb, _ := shellscript.ShebangLine(hookCfg.Path) // we know this won't error because it must have a shebang to be a script
 
-			err := fmt.Errorf(`when trying to run the hook at %q, the agent found that it was a script with a shebang that isn't for a shellscripting language - in this case, %q.
+			return fmt.Errorf(`when trying to run the hook at %q, the agent found that it was a script with a shebang that isn't for a shellscripting language - in this case, %q.
 Hooks of this kind are unfortunately not supported on Windows, as we have no way of interpreting a shebang on Windows`, hookCfg.Path, sheb)
-			return err
 		}
 
 		// It's a script, and we can rely on the OS to figure out how to run it (because we're not on windows), so run it
 		// directly without wrapping
-		if err := e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
+		if err = e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q script hook: %w", hookName, err)
 		}
 
 		return nil
 	case hook.TypeBinary:
 		// It's a binary, so we'll just run it directly, no wrapping needed or possible
-		if err := e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
+		if err = e.runUnwrappedHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q binary hook: %w", hookName, err)
 		}
 
 		return nil
 	case hook.TypeShell:
 		// It's definitely a shell script, wrap it so that we can snaffle the changed environment variables
-		if err := e.runWrappedShellScriptHook(ctx, hookName, hookCfg); err != nil {
+		if err = e.runWrappedShellScriptHook(ctx, hookName, hookCfg); err != nil {
 			return fmt.Errorf("running %q shell hook: %w", hookName, err)
 		}
 
@@ -864,9 +862,8 @@ func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repo
 
 // setUp is run before all the phases run. It's responsible for initializing the
 // job environment
-func (e *Executor) setUp(ctx context.Context) error {
+func (e *Executor) setUp(ctx context.Context) (err error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
@@ -917,7 +914,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {
-		if err := e.fetchAndSetSecrets(ctx); err != nil {
+		if err = e.fetchAndSetSecrets(ctx); err != nil {
 			return fmt.Errorf("failed to fetch secrets for job: %w", err)
 		}
 	}
@@ -925,8 +922,7 @@ func (e *Executor) setUp(ctx context.Context) error {
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
-	err = e.executeGlobalHook(ctx, "environment")
-	return err
+	return e.executeGlobalHook(ctx, "environment")
 }
 
 // fetchAndSetSecrets handles secrets fetching and processing directly
@@ -1051,10 +1047,10 @@ func (e *Executor) runPreCommandHooks(ctx context.Context) (err error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(err) }()
 
-	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
+	if err = e.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-	if err := e.executeLocalHook(ctx, "pre-command"); err != nil {
+	if err = e.executeLocalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
 	return e.executePluginHook(ctx, "pre-command", e.pluginCheckouts)
@@ -1081,10 +1077,10 @@ func (e *Executor) runPostCommandHooks(ctx context.Context) (err error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(err) }()
 
-	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
+	if err = e.executeGlobalHook(ctx, "post-command"); err != nil {
 		return err
 	}
-	if err := e.executeLocalHook(ctx, "post-command"); err != nil {
+	if err = e.executeLocalHook(ctx, "post-command"); err != nil {
 		return err
 	}
 	return e.executePluginHook(ctx, "post-command", e.pluginCheckouts)
@@ -1156,16 +1152,15 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
-func (e *Executor) defaultCommandPhase(ctx context.Context) error {
+func (e *Executor) defaultCommandPhase(ctx context.Context) (err error) {
 	defer func() {
-		if err := e.redactors.Flush(); err != nil {
-			e.shell.Errorf("Error flushing redactors: %v", err)
+		if flushErr := e.redactors.Flush(); flushErr != nil {
+			e.shell.Errorf("Error flushing redactors: %v", flushErr)
 		}
 	}()
 
 	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
 		"hook.name": "command",
@@ -1277,8 +1272,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		if e.Debug {
 			e.shell.Commentf("Detected deprecated docker environment variables")
 		}
-		err = runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
-		return err
+		return runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
 	}
 
 	var cmd []string
@@ -1291,8 +1285,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) error {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
-	return err
+	return e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
 }
 
 /*
