@@ -131,23 +131,22 @@ func (e *Executor) refreshCheckoutRoot() error {
 
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
-func (e *Executor) CheckoutPhase(ctx context.Context) error {
+func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
-	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
-	if err = e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
+	if err := e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
 	}
 
-	if err = e.executePluginHook(ctx, "pre-checkout", e.pluginCheckouts); err != nil {
+	if err := e.executePluginHook(ctx, "pre-checkout", e.pluginCheckouts); err != nil {
 		return err
 	}
 
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if e.CleanCheckout {
 		e.shell.Headerf("Cleaning pipeline checkout")
-		if err = e.removeCheckoutDir(); err != nil {
+		if err := e.removeCheckoutDir(); err != nil {
 			return err
 		}
 	}
@@ -156,8 +155,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 
 	// If we have a blank repository then use a temp dir for builds
 	if e.Repository == "" {
-		var buildDir string
-		buildDir, err = os.MkdirTemp("", "buildkite-job-"+e.JobID)
+		buildDir, err := os.MkdirTemp("", "buildkite-job-"+e.JobID)
 		if err != nil {
 			return err
 		}
@@ -176,8 +174,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) error {
 		return err
 	}
 
-	err = e.sendCommitToBuildkite(ctx)
-	if err != nil {
+	if err := e.sendCommitToBuildkite(ctx); err != nil {
 		e.shell.OptionalWarningf("git-commit-resolution-failed", "Couldn't send commit information to Buildkite: %v", err)
 	}
 
@@ -828,15 +825,14 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
-func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
+func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
 	span.AddAttributes(map[string]string{
 		"checkout.repo_name": e.Repository,
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
 	})
-	var err error
-	defer func() { span.FinishWithError(err) }()
+	defer func() { span.FinishWithError(retErr) }()
 
 	if e.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
@@ -847,6 +843,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+		var err error
 		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
