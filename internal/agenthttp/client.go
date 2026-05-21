@@ -102,6 +102,10 @@ func newTransport(conf *clientConfig) *http.Transport {
 		}
 	} else {
 		transport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+		// Ensure TLSClientConfig is not nil, to set NextProtos.
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = new(tls.Config)
+		}
 		// The default TLSClientConfig has h2 in NextProtos, so the
 		// negotiated TLS connection will assume h2 support.
 		// see https://github.com/golang/go/issues/50571
