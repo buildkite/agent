@@ -20,7 +20,7 @@ import (
 // To add a new config option that is mapped from an environment variable, add a
 // struct tag, then don't forget to add a corresponding CLI flag over in the
 // clicommand/bootstrap.go(BootstrapConfig) struct, otherwise it won't work.
-// Also check the protectedEnv map in env/protected.go.
+// Also check protectedEnv and checkoutOverrideScope in env/protected.go.
 
 type ExecutorConfig struct {
 	// The command to run
@@ -85,6 +85,9 @@ type ExecutorConfig struct {
 
 	// Timeout in seconds for the git checkout phase (0 means no timeout)
 	GitCheckoutTimeout int `env:"BUILDKITE_GIT_CHECKOUT_TIMEOUT"`
+  
+	// This intentionally has no env tag so hooks cannot disable it at runtime.
+	NoCheckoutOverride bool
 
 	// Flags to pass to "git checkout" command
 	GitCheckoutFlags string `env:"BUILDKITE_GIT_CHECKOUT_FLAGS"`
@@ -231,6 +234,10 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 
 		// Find struct fields with env tag
 		if tag := f.Tag.Get("env"); tag != "" && environ.Exists(tag) {
+			if c.NoCheckoutOverride && env.IsCheckoutOverrideScoped(tag) {
+				continue
+			}
+
 			newStr, _ := environ.Get(tag)
 
 			switch v.Kind() {

@@ -36,7 +36,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 
 	added := make([]string, 0, len(req.Env))
 	updated := make([]string, 0, len(req.Env))
-	protected := checkProtected(slices.Collect(maps.Keys(req.Env)))
+	protected := s.checkProtected(slices.Collect(maps.Keys(req.Env)))
 
 	if len(protected) > 0 {
 		err := socket.WriteError(
@@ -106,7 +106,7 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	protected := checkProtected(req.Keys)
+	protected := s.checkProtected(req.Keys)
 	if len(protected) > 0 {
 		err := socket.WriteError(
 			w,
@@ -138,12 +138,13 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkProtected(candidates []string) []string {
+func (s *Server) checkProtected(candidates []string) []string {
 	protected := make([]string, 0, len(candidates))
 	for _, c := range candidates {
 		// The Job API is only accessible from within the job, so allow writes
 		// to vars that allow write from within job.
-		if env.IsProtectedFromWithinJob(c) {
+		if env.IsProtectedFromWithinJob(c) ||
+			(s.noCheckoutOverride && env.IsCheckoutOverrideScoped(c)) {
 			protected = append(protected, c)
 		}
 	}
