@@ -134,6 +134,7 @@ var (
 			"*_SECRET",
 			"*_TOKEN",
 			"*_PRIVATE_KEY",
+			"*_SSH_KEY",
 			"*_ACCESS_KEY",
 			"*_SECRET_KEY",
 			// Connection strings frequently contain passwords, e.g.
