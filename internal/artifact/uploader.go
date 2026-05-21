@@ -222,7 +222,11 @@ func (a *Uploader) literal(ctx context.Context, paths iter.Seq[string], filesCh 
 		if path == "" {
 			continue
 		}
-		filesCh <- path
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case filesCh <- path:
+		}
 	}
 	return nil
 }
@@ -256,8 +260,12 @@ func (a *Uploader) glob(ctx context.Context, paths iter.Seq[string], filesCh cha
 			a.logger.Warnf("One of the glob patterns matched a directory: %s", path)
 			return nil
 		}
-		filesCh <- path
-		return nil
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case filesCh <- path:
+			return nil
+		}
 	}
 	err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
 	if err != nil {
