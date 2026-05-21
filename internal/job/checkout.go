@@ -828,18 +828,34 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
-func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
+func (e *Executor) defaultCheckoutPhase(ctx context.Context) (err error) {
 	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
 	span.AddAttributes(map[string]string{
 		"checkout.repo_name": e.Repository,
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
 	})
-	var err error
 	defer func() { span.FinishWithError(err) }()
 
 	if e.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
+	}
+
+	sshKeyPath, cleanupSSHKey, err := e.prepareGitSSHKey()
+	if err != nil {
+		return fmt.Errorf("preparing git ssh key: %w", err)
+	}
+	if cleanupSSHKey != nil {
+		defer func() {
+			if cleanupErr := cleanupSSHKey(); cleanupErr != nil {
+				cleanupErr = fmt.Errorf("cleaning up git ssh key %q: %w", sshKeyPath, cleanupErr)
+				if err == nil {
+					err = cleanupErr
+				} else {
+					err = errors.Join(err, cleanupErr)
+				}
+			}
+		}()
 	}
 
 	var mirrorDir string
@@ -1066,6 +1082,77 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// prepareGitSSHKey materialises the configured GitSSHKey into a private
+// directory next to the build checkout and points GIT_SSH_COMMAND at it for
+// the duration of the checkout phase. It returns the path to the key file, a
+// cleanup function that removes the key and restores any previous
+// GIT_SSH_COMMAND, and an error. If no key is configured both the path and
+// cleanup are zero.
+//
+// Only the default checkout phase invokes this; custom checkout hooks must
+// arrange their own credentials.
+func (e *Executor) prepareGitSSHKey() (_ string, _ func() error, retErr error) {
+	if e.GitSSHKey == "" {
+		return "", nil, nil
+	}
+
+	checkoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if !exists || checkoutPath == "" {
+		return "", nil, errors.New("BUILDKITE_BUILD_CHECKOUT_PATH is not set")
+	}
+
+	parentDir := filepath.Dir(checkoutPath)
+	if err := os.MkdirAll(parentDir, 0o700); err != nil {
+		return "", nil, fmt.Errorf("creating ssh key parent directory %q: %w", parentDir, err)
+	}
+
+	pattern := ".buildkite-ssh-key-"
+	if e.PipelineSlug != "" {
+		pattern += badCharsRE.ReplaceAllString(e.PipelineSlug, "-") + "-"
+	}
+
+	// os.MkdirTemp creates the directory with mode 0o700 on Unix, giving the
+	// key file inside an additional layer of protection from sibling builds.
+	sshKeyDir, err := os.MkdirTemp(parentDir, pattern)
+	if err != nil {
+		return "", nil, fmt.Errorf("creating ssh key directory: %w", err)
+	}
+	defer func() {
+		if retErr != nil {
+			_ = os.RemoveAll(sshKeyDir)
+		}
+	}()
+
+	sshKeyPath := filepath.Join(sshKeyDir, "id")
+	// Most SSH key parsers require a trailing newline; tolerate either form
+	// of input and always write a single one.
+	keyBytes := []byte(strings.TrimRight(e.GitSSHKey, "\n") + "\n")
+	if err := os.WriteFile(sshKeyPath, keyBytes, 0o600); err != nil {
+		return "", nil, fmt.Errorf("writing ssh key file: %w", err)
+	}
+
+	previousGitSSHCommand, hadPreviousGitSSHCommand := e.shell.Env.Get("GIT_SSH_COMMAND")
+	e.shell.Env.Set("GIT_SSH_COMMAND", gitSSHCommandForKeyFile(sshKeyPath))
+
+	cleanup := func() error {
+		if hadPreviousGitSSHCommand {
+			e.shell.Env.Set("GIT_SSH_COMMAND", previousGitSSHCommand)
+		} else {
+			e.shell.Env.Remove("GIT_SSH_COMMAND")
+		}
+		if err := os.RemoveAll(sshKeyDir); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	return sshKeyPath, cleanup, nil
+}
+
+func gitSSHCommandForKeyFile(path string) string {
+	return fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", shellwords.Quote(path))
 }
 
 // gitFetchWithFallback run git fetch for refspecs, when it fails on recoverable reason, it will retry fetching
