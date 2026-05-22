@@ -366,6 +366,13 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 			name:       "LFS enabled git lfs command fails",
 			lfsEnabled: true,
 			setupPath: func(t *testing.T) {
+				// Git for Windows ships its own git-lfs.exe inside
+				// GIT_EXEC_PATH, which git resolves before falling back to
+				// PATH. We can't fool git's subcommand lookup with a PATH
+				// override the way we can fool Go's exec.LookPath.
+				if runtime.GOOS == "windows" {
+					t.Skip("Not runnable on Windows: git for Windows uses bundled git-lfs.exe regardless of PATH")
+				}
 				t.Setenv("PATH", fakeLFSBinDir(t,
 					"#!/bin/sh\nexit 1\n",
 					"@echo off\r\nexit /b 1\r\n",
@@ -377,6 +384,9 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 			name:       "LFS enabled git lfs fetch fails",
 			lfsEnabled: true,
 			setupPath: func(t *testing.T) {
+				if runtime.GOOS == "windows" {
+					t.Skip("Not runnable on Windows: git for Windows uses bundled git-lfs.exe regardless of PATH")
+				}
 				t.Setenv("PATH", fakeLFSBinDir(t,
 					"#!/bin/sh\ncase \"$1\" in\n  install) exit 0 ;;\n  *) exit 1 ;;\nesac\n",
 					"@echo off\r\nif \"%1\"==\"install\" exit /b 0\r\nexit /b 1\r\n",
@@ -412,19 +422,16 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 				t.Fatalf("shell.New() error = %v", err)
 			}
 
-			checkoutDir := t.TempDir()
+			// Use os.MkdirTemp + best-effort cleanup rather than t.TempDir():
+			// on Windows, git's child processes (credential helpers, git-lfs
+			// filter-process) can hold file handles open past their parent's
+			// exit, and t.TempDir()'s strict cleanup fails the test.
+			checkoutDir, err := os.MkdirTemp("", "checkout-path-")
+			if err != nil {
+				t.Fatalf("os.MkdirTemp() error = %v", err)
+			}
 			t.Cleanup(func() {
-				if runtime.GOOS != "windows" {
-					return // t.TempDir handles it
-				}
-				// Best-effort: try git lfs uninstall to release filter handles,
-				// then retry RemoveAll a few times.
-				for i := 0; i < 10; i++ {
-					if err := os.RemoveAll(checkoutDir); err == nil {
-						return
-					}
-					time.Sleep(100 * time.Millisecond)
-				}
+				os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
 			})
 			buildDir, err := os.MkdirTemp("", "build-path-")
 			if err != nil {
