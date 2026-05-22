@@ -1079,7 +1079,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	if e.GitLFSEnabled {
-		if err := gitLFSFetchCheckout(ctx, e.shell); err != nil {
+		if err := gitLFSFetchCheckout(ctx, gitLFSFetchCheckoutArgs{
+			Shell: e.shell,
+			Retry: true,
+		}); err != nil {
 			return err
 		}
 	}

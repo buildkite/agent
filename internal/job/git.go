@@ -133,17 +133,50 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 	return nil
 }
 
+type gitLFSFetchCheckoutArgs struct {
+	Shell *shell.Shell
+	Retry bool // Whether to retry the fetch+checkout on failure
+}
+
 // gitLFSFetchCheckout fetches LFS objects for the current HEAD then materialises
 // them. Fetch and checkout failures are wrapped with distinct messages so that a
 // caller can tell which step failed from the error string alone.
-func gitLFSFetchCheckout(ctx context.Context, sh *shell.Shell) error {
-	if err := sh.Command("git", "lfs", "fetch").Run(ctx); err != nil {
-		return fmt.Errorf("git lfs fetch: %w", err)
+//
+// When args.Retry is true, the fetch+checkout pair is retried with exponential
+// backoff to ride out transient network errors talking to the LFS server.
+// Unlike gitFetch, we don't smelt for specific error strings: git-lfs uses
+// different exit codes and error vocabulary than git itself, so we retry
+// indiscriminately on any failure and rely on the retry budget to bound the
+// damage from a genuinely permanent error.
+func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) error {
+	retrier := roko.NewRetrier(
+		roko.WithStrategy(roko.Constant(0)),
+		roko.WithMaxAttempts(1),
+	)
+
+	if args.Retry {
+		retrier = roko.NewRetrier(
+			roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
+			roko.WithMaxAttempts(10), // 10 attempts will take ~2 minutes 17s
+			roko.WithJitter(),
+		)
 	}
-	if err := sh.Command("git", "lfs", "checkout").Run(ctx); err != nil {
-		return fmt.Errorf("git lfs checkout: %w", err)
-	}
-	return nil
+
+	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		if err := args.Shell.Command("git", "lfs", "fetch").Run(ctx); err != nil {
+			if args.Retry {
+				args.Shell.Commentf("%s", retrier)
+			}
+			return fmt.Errorf("git lfs fetch: %w", err)
+		}
+		if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx); err != nil {
+			if args.Retry {
+				args.Shell.Commentf("%s", retrier)
+			}
+			return fmt.Errorf("git lfs checkout: %w", err)
+		}
+		return nil
+	})
 }
 
 func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
