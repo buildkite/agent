@@ -87,10 +87,13 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
 
-	oldUmask, err := Umask(0) // set umask of socket file to 0o777 (world read-write-executable)
+	// Set umask to 0, so the socket is created with mode 0o777 (world
+	// read-write-executable)
+	oldUmask, err := Umask(0)
 	if err != nil {
 		return fmt.Errorf("failed to set socket umask: %w", err)
 	}
+	defer Umask(oldUmask) //nolint:errcheck // Best-effort cleanup on failure
 	l, err := (&net.ListenConfig{}).Listen(ctx, "unix", r.conf.SocketPath)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
