@@ -331,7 +331,28 @@ func cleanPath(ctx context.Context, dir string) error {
 	}
 
 	// Module cache has 0555 directories; make them writable in order to remove content.
-	// Use os.Root to confine chmod operations within `clean` and prevent symlink TOCTOU traversal.
+	if err := makeTreeWritable(ctx, clean); err != nil {
+		return err
+	}
+
+	// Check context again before potentially long RemoveAll
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if err := os.RemoveAll(clean); err != nil {
+		return fmt.Errorf("cleanPath: failed to remove %q: %w", clean, err)
+	}
+
+	return nil
+}
+
+// makeTreeWritable walks `clean` and chmods every directory to 0755 so that
+// the subsequent os.RemoveAll can delete read-only entries (e.g. Go module
+// cache). The os.Root handle is closed before returning so that the caller
+// can remove `clean` on platforms (Windows) that disallow removing a
+// directory with an open handle.
+func makeTreeWritable(ctx context.Context, clean string) error {
 	root, err := os.OpenRoot(clean)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -342,7 +363,6 @@ func cleanPath(ctx context.Context, dir string) error {
 	defer func() { _ = root.Close() }()
 
 	err = fs.WalkDir(root.FS(), ".", func(relPath string, info fs.DirEntry, walkErr error) error {
-		// Respect context cancellation for long directory trees
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -367,15 +387,5 @@ func cleanPath(ctx context.Context, dir string) error {
 		}
 		return fmt.Errorf("cleanPath: error preparing %q for removal: %w", clean, err)
 	}
-
-	// Check context again before potentially long RemoveAll
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	if err := os.RemoveAll(clean); err != nil {
-		return fmt.Errorf("cleanPath: failed to remove %q: %w", clean, err)
-	}
-
 	return nil
 }

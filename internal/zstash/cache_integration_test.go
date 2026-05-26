@@ -270,18 +270,25 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *Cache, cache
 	// Create mock API client
 	mockClient := newMockAPIClient(storageType)
 
-	// Build storage URL based on type (need absolute path for file:// URLs)
+	// Build storage URL based on type (need absolute path for file:// URLs).
+	// On Windows, paths like "C:\foo" must be encoded as "/C:/foo" so the
+	// resulting URL is the well-formed "file:///C:/foo".
 	absStorageDir, err := filepath.Abs(storageDir)
 	if err != nil {
 		t.Fatalf("filepath.Abs: %v", err)
 	}
 
+	urlPath := filepath.ToSlash(absStorageDir)
+	if !strings.HasPrefix(urlPath, "/") {
+		urlPath = "/" + urlPath
+	}
+
 	var bucketURL string
 	switch storageType {
 	case "local_file":
-		bucketURL = fmt.Sprintf("file://%s", absStorageDir)
+		bucketURL = fmt.Sprintf("file://%s", urlPath)
 	case "local_s3":
-		bucketURL = fmt.Sprintf("file://%s", absStorageDir) // Use file:// for testing
+		bucketURL = fmt.Sprintf("file://%s", urlPath) // Use file:// for testing
 	default:
 		t.Fatalf("unsupported storage type: %s", storageType)
 	}

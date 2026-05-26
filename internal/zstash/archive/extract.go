@@ -55,8 +55,12 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 	foundPaths := make(map[string]bool)
 
 	err = extract.ExtractWithPathMapper(ctx, func(file *zip.File) (string, error) {
+		// Zip entry names always use forward slashes (per the zip spec),
+		// but mapping.RelativePath comes from filepath.Rel and may use the
+		// OS native separator (backslash on Windows). Normalise the mapping
+		// to forward slashes for the comparison.
 		for _, mapping := range mappings {
-			if strings.HasPrefix(file.Name, mapping.RelativePath) {
+			if strings.HasPrefix(file.Name, filepath.ToSlash(mapping.RelativePath)) {
 				foundPaths[mapping.Path] = true
 				return filepath.Join(mapping.Chroot, file.Name), nil
 			}

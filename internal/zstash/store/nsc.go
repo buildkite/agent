@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -33,8 +34,12 @@ func validateFilePath(filePath string) error {
 	// Clean the path to normalize it
 	cleanPath := filepath.Clean(filePath)
 
-	// Check for potentially dangerous characters that could be used for command injection
-	dangerousChars := []string{";", "&", "|", "`", "$", "(", ")", "{", "}", "[", "]", "<", ">", "\"", "'", "\\"}
+	// Check for potentially dangerous characters that could be used for command injection.
+	// Backslash is the path separator on Windows so it must be allowed there.
+	dangerousChars := []string{";", "&", "|", "`", "$", "(", ")", "{", "}", "[", "]", "<", ">", "\"", "'"}
+	if runtime.GOOS != "windows" {
+		dangerousChars = append(dangerousChars, "\\")
+	}
 	for _, char := range dangerousChars {
 		if strings.Contains(cleanPath, char) {
 			return fmt.Errorf("file path contains potentially dangerous character: %s", char)

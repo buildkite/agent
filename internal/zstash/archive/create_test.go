@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,12 @@ import (
 )
 
 func TestBuildArchive(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// The expected sha256/size encode unix file modes and LF line
+		// endings, which differ on Windows.
+		t.Skip("archive byte layout is platform-specific")
+	}
+
 	_, err := trace.NewProvider(context.Background(), "noop", "test", "0.0.1")
 	if err != nil {
 		t.Fatalf("trace.NewProvider: %v", err)
@@ -22,7 +29,7 @@ func TestBuildArchive(t *testing.T) {
 		t.Fatalf("os.Getwd: %v", err)
 	}
 
-	t.Setenv("HOME", home)
+	setHomeDir(t, home)
 
 	archiveInfo, err := BuildArchive(context.Background(), []string{"testdata"}, "test")
 	if err != nil {
@@ -51,7 +58,7 @@ func TestBuildAndExtractArchive_MultipleHomeDirPaths(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeDir(t, home)
 
 	goBuildDir := filepath.Join(home, ".go-build")
 	err = os.MkdirAll(goBuildDir, 0o755)
@@ -168,7 +175,7 @@ func TestBuildArchive_MissingPathOnFilesystem(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeDir(t, home)
 
 	goBuildDir := filepath.Join(home, ".go-build")
 	err = os.MkdirAll(goBuildDir, 0o755)
@@ -220,7 +227,7 @@ func TestExtractArchive_MissingPathInArchive(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeDir(t, home)
 
 	goBuildDir := filepath.Join(home, ".go-build")
 	err = os.MkdirAll(goBuildDir, 0o755)

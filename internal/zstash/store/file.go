@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -90,6 +91,12 @@ func NewLocalFileBlob(ctx context.Context, fileURL string) (*LocalFileBlob, erro
 		path = strings.TrimPrefix(path, "~")
 		path = strings.TrimPrefix(path, "/")
 		path = filepath.Join(homeDir, path)
+	}
+
+	// A Windows file URL like "file:///C:/foo/bar" parses to u.Path = "/C:/foo/bar".
+	// Strip the spurious leading "/" so it becomes a valid OS path "C:/foo/bar".
+	if runtime.GOOS == "windows" && len(path) >= 3 && path[0] == '/' && path[2] == ':' {
+		path = path[1:]
 	}
 
 	root := filepath.Clean(filepath.FromSlash(path))

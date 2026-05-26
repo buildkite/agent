@@ -8,7 +8,7 @@ import (
 
 func TestPathsToMappings_AbsolutePathUnderHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeDir(t, home)
 
 	paths := []string{
 		filepath.Join(home, ".go-build"),
