@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/buildkite/agent/v3/internal/zstash"
+	"github.com/buildkite/agent/v3/internal/zstash/api"
+	"github.com/buildkite/agent/v3/internal/zstash/cache"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
-	"github.com/buildkite/zstash"
-	"github.com/buildkite/zstash/api"
-	"github.com/buildkite/zstash/cache"
 	"github.com/dustin/go-humanize"
 	"gopkg.in/yaml.v3"
 )
