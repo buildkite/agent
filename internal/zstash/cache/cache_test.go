@@ -1,9 +1,8 @@
 package cache
 
 import (
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestCacheValidate(t *testing.T) {
@@ -158,13 +157,18 @@ func TestCacheValidate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := require.New(t)
 			err := tt.cache.Validate()
 			if tt.wantErr {
-				assert.Error(err, "Cache.Validate() expected error but got none")
-				assert.Contains(err.Error(), tt.errMsg, "error message should contain expected text")
+				if err == nil {
+					t.Fatal("Cache.Validate() expected error but got none")
+				}
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("error message should contain %q, got %q", tt.errMsg, err.Error())
+				}
 			} else {
-				assert.NoError(err, "Cache.Validate() should not return error")
+				if err != nil {
+					t.Fatalf("Cache.Validate() should not return error: %v", err)
+				}
 			}
 		})
 	}
@@ -210,9 +214,10 @@ func TestIsValidPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := require.New(t)
 			got := isValidPath(tt.path)
-			assert.Equal(tt.want, got, "isValidPath() should return expected result")
+			if got != tt.want {
+				t.Errorf("isValidPath() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

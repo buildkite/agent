@@ -284,7 +284,7 @@ func (c *Cache) extractCache(ctx context.Context, archiveFile string, archiveSiz
 		span.SetStatus(codes.Error, "failed to open archive file")
 		return nil, fmt.Errorf("failed to open archive file: %w", err)
 	}
-	defer archiveFileHandle.Close()
+	defer func() { _ = archiveFileHandle.Close() }()
 
 	// Extract files
 	archiveInfo, err := archive.ExtractFiles(ctx, archiveFileHandle, archiveSize, paths)

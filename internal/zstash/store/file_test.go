@@ -1,13 +1,12 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewLocalFileBlob(t *testing.T) {
@@ -49,15 +48,28 @@ func TestNewLocalFileBlob(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			blob, err := NewLocalFileBlob(ctx, tt.url)
 			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errContains != "" {
-					assert.Contains(t, err.Error(), tt.errContains)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
 				}
 			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, blob)
-				assert.NotEmpty(t, blob.root)
-				assert.DirExists(t, blob.root)
+				if err != nil {
+					t.Fatalf("NewLocalFileBlob: %v", err)
+				}
+				if blob == nil {
+					t.Fatal("expected non-nil blob")
+				}
+				if blob.root == "" {
+					t.Error("expected non-empty blob.root")
+				}
+				info, statErr := os.Stat(blob.root)
+				if statErr != nil {
+					t.Errorf("expected blob.root %q to exist: %v", blob.root, statErr)
+				} else if !info.IsDir() {
+					t.Errorf("expected blob.root %q to be a directory", blob.root)
+				}
 			}
 		})
 	}
@@ -117,12 +129,16 @@ func TestValidateFileKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateFileKey(tt.key)
 			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errContains != "" {
-					assert.Contains(t, err.Error(), tt.errContains)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
 				}
 			} else {
-				require.NoError(t, err)
+				if err != nil {
+					t.Fatalf("validateFileKey: %v", err)
+				}
 			}
 		})
 	}
@@ -135,32 +151,54 @@ func TestLocalFileBlobUpload(t *testing.T) {
 	rootDir := filepath.Join(tmpDir, "cache-root")
 	srcDir := filepath.Join(tmpDir, "source")
 
-	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	blob, err := NewLocalFileBlob(ctx, "file://"+rootDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
 
 	srcFile := filepath.Join(srcDir, "test.txt")
 	testContent := []byte("Hello, World! This is a test file.")
-	require.NoError(t, os.WriteFile(srcFile, testContent, 0o600))
+	if err := os.WriteFile(srcFile, testContent, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	key := "test/cache/artifact.txt"
 
 	info, err := blob.Upload(ctx, srcFile, key)
-	require.NoError(t, err)
-	assert.Equal(t, int64(len(testContent)), info.BytesTransferred)
-	assert.Greater(t, info.TransferSpeed, 0.0)
-	assert.NotZero(t, info.Duration)
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if info.BytesTransferred != int64(len(testContent)) {
+		t.Errorf("BytesTransferred: got %d, want %d", info.BytesTransferred, len(testContent))
+	}
+	if info.TransferSpeed <= 0.0 {
+		t.Errorf("expected TransferSpeed > 0, got %f", info.TransferSpeed)
+	}
+	if info.Duration == 0 {
+		t.Error("expected non-zero Duration")
+	}
 
 	dataPath := filepath.Join(rootDir, "test/cache/artifact.txt")
-	assert.FileExists(t, dataPath)
+	if _, err := os.Stat(dataPath); err != nil {
+		t.Errorf("expected file %q to exist: %v", dataPath, err)
+	}
 
 	metaPath := dataPath + ".attrs.json"
-	assert.FileExists(t, metaPath)
+	if _, err := os.Stat(metaPath); err != nil {
+		t.Errorf("expected file %q to exist: %v", metaPath, err)
+	}
 
 	content, err := os.ReadFile(dataPath)
-	require.NoError(t, err)
-	assert.Equal(t, testContent, content)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !bytes.Equal(content, testContent) {
+		t.Errorf("content mismatch: got %q, want %q", content, testContent)
+	}
 }
 
 func TestLocalFileBlobDownload(t *testing.T) {
@@ -171,33 +209,55 @@ func TestLocalFileBlobDownload(t *testing.T) {
 	srcDir := filepath.Join(tmpDir, "source")
 	destDir := filepath.Join(tmpDir, "dest")
 
-	require.NoError(t, os.MkdirAll(srcDir, 0o755))
-	require.NoError(t, os.MkdirAll(destDir, 0o755))
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll srcDir: %v", err)
+	}
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll destDir: %v", err)
+	}
 
 	blob, err := NewLocalFileBlob(ctx, "file://"+rootDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
 
 	srcFile := filepath.Join(srcDir, "test.txt")
 	testContent := []byte("Hello, World! This is a test file.")
-	require.NoError(t, os.WriteFile(srcFile, testContent, 0o600))
+	if err := os.WriteFile(srcFile, testContent, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	key := "test/cache/artifact.txt"
 
 	// Upload first
 	_, err = blob.Upload(ctx, srcFile, key)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
 
 	// Then download
 	destFile := filepath.Join(destDir, "downloaded.txt")
 	info, err := blob.Download(ctx, key, destFile)
-	require.NoError(t, err)
-	assert.Equal(t, int64(len(testContent)), info.BytesTransferred)
-	assert.Greater(t, info.TransferSpeed, 0.0)
-	assert.NotZero(t, info.Duration)
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if info.BytesTransferred != int64(len(testContent)) {
+		t.Errorf("BytesTransferred: got %d, want %d", info.BytesTransferred, len(testContent))
+	}
+	if info.TransferSpeed <= 0.0 {
+		t.Errorf("expected TransferSpeed > 0, got %f", info.TransferSpeed)
+	}
+	if info.Duration == 0 {
+		t.Error("expected non-zero Duration")
+	}
 
 	content, err := os.ReadFile(destFile)
-	require.NoError(t, err)
-	assert.Equal(t, testContent, content)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !bytes.Equal(content, testContent) {
+		t.Errorf("content mismatch: got %q, want %q", content, testContent)
+	}
 }
 
 func TestLocalFileBlobUploadOverwrite(t *testing.T) {
@@ -207,34 +267,52 @@ func TestLocalFileBlobUploadOverwrite(t *testing.T) {
 	rootDir := filepath.Join(tmpDir, "cache-root")
 	srcDir := filepath.Join(tmpDir, "source")
 
-	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	blob, err := NewLocalFileBlob(ctx, "file://"+rootDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
 
 	key := "test/cache/artifact.txt"
 
 	// Upload original content
 	srcFile1 := filepath.Join(srcDir, "test1.txt")
 	content1 := []byte("Original content")
-	require.NoError(t, os.WriteFile(srcFile1, content1, 0o600))
+	if err := os.WriteFile(srcFile1, content1, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 	_, err = blob.Upload(ctx, srcFile1, key)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
 
 	// Overwrite with new content
 	srcFile2 := filepath.Join(srcDir, "test2.txt")
 	content2 := []byte("Updated content")
-	require.NoError(t, os.WriteFile(srcFile2, content2, 0o600))
+	if err := os.WriteFile(srcFile2, content2, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	info, err := blob.Upload(ctx, srcFile2, key)
-	require.NoError(t, err)
-	assert.Equal(t, int64(len(content2)), info.BytesTransferred)
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if info.BytesTransferred != int64(len(content2)) {
+		t.Errorf("BytesTransferred: got %d, want %d", info.BytesTransferred, len(content2))
+	}
 
 	// Verify the new content
 	dataPath := filepath.Join(rootDir, "test/cache/artifact.txt")
 	storedContent, err := os.ReadFile(dataPath)
-	require.NoError(t, err)
-	assert.Equal(t, content2, storedContent)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !bytes.Equal(storedContent, content2) {
+		t.Errorf("content mismatch: got %q, want %q", storedContent, content2)
+	}
 }
 
 func TestLocalFileBlobDownloadNonExistent(t *testing.T) {
@@ -244,15 +322,23 @@ func TestLocalFileBlobDownloadNonExistent(t *testing.T) {
 	rootDir := filepath.Join(tmpDir, "cache-root")
 	destDir := filepath.Join(tmpDir, "dest")
 
-	require.NoError(t, os.MkdirAll(destDir, 0o755))
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	blob, err := NewLocalFileBlob(ctx, "file://"+rootDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
 
 	destFile := filepath.Join(destDir, "nonexistent.txt")
 	_, err = blob.Download(ctx, "nonexistent/key", destFile)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to open source file")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to open source file") {
+		t.Errorf("error %q does not contain %q", err.Error(), "failed to open source file")
+	}
 }
 
 func TestLocalFileBlobUploadInvalidKey(t *testing.T) {
@@ -262,17 +348,27 @@ func TestLocalFileBlobUploadInvalidKey(t *testing.T) {
 	rootDir := filepath.Join(tmpDir, "cache-root")
 	srcDir := filepath.Join(tmpDir, "source")
 
-	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	blob, err := NewLocalFileBlob(ctx, "file://"+rootDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
 
 	srcFile := filepath.Join(srcDir, "test.txt")
-	require.NoError(t, os.WriteFile(srcFile, []byte("test"), 0o600))
+	if err := os.WriteFile(srcFile, []byte("test"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	_, err = blob.Upload(ctx, srcFile, "../../../etc/passwd")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "dangerous pattern")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "dangerous pattern") {
+		t.Errorf("error %q does not contain %q", err.Error(), "dangerous pattern")
+	}
 }
 
 func TestLocalFileBlobDownloadInvalidKey(t *testing.T) {
@@ -282,15 +378,23 @@ func TestLocalFileBlobDownloadInvalidKey(t *testing.T) {
 	rootDir := filepath.Join(tmpDir, "cache-root")
 	destDir := filepath.Join(tmpDir, "dest")
 
-	require.NoError(t, os.MkdirAll(destDir, 0o755))
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	blob, err := NewLocalFileBlob(ctx, "file://"+rootDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
 
 	destFile := filepath.Join(destDir, "test.txt")
 	_, err = blob.Download(ctx, "cache//invalid", destFile)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "dangerous pattern")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "dangerous pattern") {
+		t.Errorf("error %q does not contain %q", err.Error(), "dangerous pattern")
+	}
 }
 
 func TestKeyToPaths(t *testing.T) {
@@ -298,7 +402,9 @@ func TestKeyToPaths(t *testing.T) {
 	ctx := context.Background()
 
 	blob, err := NewLocalFileBlob(ctx, "file://"+tmpDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
 
 	tests := []struct {
 		name        string
@@ -347,14 +453,22 @@ func TestKeyToPaths(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dataPath, metaPath, err := blob.keyToPaths(tt.key)
 			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errContains != "" {
-					assert.Contains(t, err.Error(), tt.errContains)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
 				}
 			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.wantData, dataPath)
-				assert.Equal(t, tt.wantMeta, metaPath)
+				if err != nil {
+					t.Fatalf("keyToPaths: %v", err)
+				}
+				if dataPath != tt.wantData {
+					t.Errorf("dataPath: got %q, want %q", dataPath, tt.wantData)
+				}
+				if metaPath != tt.wantMeta {
+					t.Errorf("metaPath: got %q, want %q", metaPath, tt.wantMeta)
+				}
 			}
 		})
 	}
@@ -367,21 +481,29 @@ func TestLocalFileBlobConcurrentUpload(t *testing.T) {
 	rootDir := filepath.Join(tmpDir, "cache-root")
 	srcDir := filepath.Join(tmpDir, "source")
 
-	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	blob, err := NewLocalFileBlob(ctx, "file://"+rootDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
 
 	key := "test/cache/concurrent.txt"
 
 	// Create two source files with different content
 	srcFile1 := filepath.Join(srcDir, "file1.txt")
 	content1 := []byte("Content from goroutine 1")
-	require.NoError(t, os.WriteFile(srcFile1, content1, 0o600))
+	if err := os.WriteFile(srcFile1, content1, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	srcFile2 := filepath.Join(srcDir, "file2.txt")
 	content2 := []byte("Content from goroutine 2")
-	require.NoError(t, os.WriteFile(srcFile2, content2, 0o600))
+	if err := os.WriteFile(srcFile2, content2, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	// Upload concurrently
 	done := make(chan error, 2)
@@ -401,19 +523,28 @@ func TestLocalFileBlobConcurrentUpload(t *testing.T) {
 	err2 := <-done
 
 	// Both uploads should succeed (last-writer-wins)
-	require.NoError(t, err1)
-	require.NoError(t, err2)
+	if err1 != nil {
+		t.Fatalf("Upload goroutine 1: %v", err1)
+	}
+	if err2 != nil {
+		t.Fatalf("Upload goroutine 2: %v", err2)
+	}
 
 	// Verify file exists and contains one of the two contents
 	dataPath := filepath.Join(rootDir, "test/cache/concurrent.txt")
-	assert.FileExists(t, dataPath)
+	if _, err := os.Stat(dataPath); err != nil {
+		t.Errorf("expected file %q to exist: %v", dataPath, err)
+	}
 
 	finalContent, err := os.ReadFile(dataPath)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
 
 	// Should be one of the two contents (last writer wins)
-	validContent := string(finalContent) == string(content1) || string(finalContent) == string(content2)
-	assert.True(t, validContent, "final content should be from one of the uploaders")
+	if !bytes.Equal(finalContent, content1) && !bytes.Equal(finalContent, content2) {
+		t.Errorf("final content should be from one of the uploaders, got %q", finalContent)
+	}
 }
 
 func TestNewBlobStoreLocalFile(t *testing.T) {
@@ -421,9 +552,14 @@ func TestNewBlobStoreLocalFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	blob, err := NewBlobStore(ctx, LocalFileStore, "file://"+tmpDir)
-	require.NoError(t, err)
-	assert.NotNil(t, blob)
+	if err != nil {
+		t.Fatalf("NewBlobStore: %v", err)
+	}
+	if blob == nil {
+		t.Fatal("expected non-nil blob")
+	}
 
-	_, ok := blob.(*LocalFileBlob)
-	assert.True(t, ok, "expected LocalFileBlob type")
+	if _, ok := blob.(*LocalFileBlob); !ok {
+		t.Errorf("expected LocalFileBlob type, got %T", blob)
+	}
 }

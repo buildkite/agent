@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestTemplate(t *testing.T) {
@@ -37,8 +35,12 @@ func TestTemplate(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				got, err := Template("", tt.key)
-				require.NoError(t, err)
-				require.Equal(t, tt.expected, got)
+				if err != nil {
+					t.Fatalf("Template: %v", err)
+				}
+				if got != tt.expected {
+					t.Errorf("Template() = %q, want %q", got, tt.expected)
+				}
 			})
 		}
 	})
@@ -193,21 +195,21 @@ func TestTemplate(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				assert := require.New(t)
-
-				// Create temp directory
 				tmpDir, err := os.MkdirTemp("", "zstash-test")
-				assert.NoError(err)
+				if err != nil {
+					t.Fatalf("MkdirTemp: %v", err)
+				}
 				defer func() {
 					_ = os.RemoveAll(tmpDir)
 				}()
-				err = os.Chdir(tmpDir)
-				assert.NoError(err)
+				if err := os.Chdir(tmpDir); err != nil {
+					t.Fatalf("Chdir: %v", err)
+				}
 
-				// Setup test environment
 				if tt.setup != nil {
-					err := tt.setup()
-					assert.NoError(err)
+					if err := tt.setup(); err != nil {
+						t.Fatalf("setup: %v", err)
+					}
 				}
 
 				if tt.cleanup != nil {
@@ -215,8 +217,12 @@ func TestTemplate(t *testing.T) {
 				}
 
 				got, err := Template(tt.id, tt.key)
-				assert.NoError(err)
-				assert.Equal(tt.expected, got)
+				if err != nil {
+					t.Fatalf("Template: %v", err)
+				}
+				if got != tt.expected {
+					t.Errorf("Template() = %q, want %q", got, tt.expected)
+				}
 			})
 		}
 	})

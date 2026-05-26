@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/zstash/cache"
-	"github.com/stretchr/testify/require"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestLoadTemplateDefaults(t *testing.T) {
@@ -39,12 +39,14 @@ func TestLoadTemplateDefaults(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				assert := require.New(t)
-
 				// Call configuration.ExpandCacheConfiguration to load the template defaults
 				got, err := ExpandCacheConfiguration([]cache.Cache{tt.cache})
-				assert.NoError(err)
-				assert.Equal(tt.expected, got[0], "ExpandCacheConfiguration() should return expected result")
+				if err != nil {
+					t.Fatalf("ExpandCacheConfiguration: %v", err)
+				}
+				if diff := cmp.Diff(tt.expected, got[0]); diff != "" {
+					t.Errorf("ExpandCacheConfiguration() mismatch (-want +got):\n%s", diff)
+				}
 			})
 		}
 	})
@@ -118,12 +120,14 @@ func TestLoadTemplateDefaults(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				assert := require.New(t)
-
 				// Call configuration.ExpandCacheConfiguration to load the template defaults
 				got, err := ExpandCacheConfiguration([]cache.Cache{tt.cache})
-				assert.NoError(err)
-				assert.Equal(tt.expected, got[0], "ExpandCacheConfiguration() should return expected result")
+				if err != nil {
+					t.Fatalf("ExpandCacheConfiguration: %v", err)
+				}
+				if diff := cmp.Diff(tt.expected, got[0]); diff != "" {
+					t.Errorf("ExpandCacheConfiguration() mismatch (-want +got):\n%s", diff)
+				}
 			})
 		}
 	})
@@ -214,21 +218,23 @@ func TestLoadTemplateDefaults(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				assert := require.New(t)
-
 				// Create temp directory
 				tmpDir, err := os.MkdirTemp("", "zstash-test")
-				assert.NoError(err)
+				if err != nil {
+					t.Fatalf("MkdirTemp: %v", err)
+				}
 				defer func() {
 					_ = os.RemoveAll(tmpDir)
 				}()
-				err = os.Chdir(tmpDir)
-				assert.NoError(err)
+				if err := os.Chdir(tmpDir); err != nil {
+					t.Fatalf("Chdir: %v", err)
+				}
 
 				// Setup test environment
 				if tt.setup != nil {
-					err := tt.setup()
-					assert.NoError(err)
+					if err := tt.setup(); err != nil {
+						t.Fatalf("setup: %v", err)
+					}
 				}
 
 				if tt.cleanup != nil {
@@ -237,8 +243,12 @@ func TestLoadTemplateDefaults(t *testing.T) {
 
 				// Call configuration.ExpandCacheConfiguration to load the template defaults
 				got, err := ExpandCacheConfiguration([]cache.Cache{tt.cache})
-				assert.NoError(err)
-				assert.Equal(tt.expected, got[0], "ExpandCacheConfiguration() should return expected result")
+				if err != nil {
+					t.Fatalf("ExpandCacheConfiguration: %v", err)
+				}
+				if diff := cmp.Diff(tt.expected, got[0]); diff != "" {
+					t.Errorf("ExpandCacheConfiguration() mismatch (-want +got):\n%s", diff)
+				}
 			})
 		}
 	})

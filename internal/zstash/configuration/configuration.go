@@ -99,7 +99,7 @@ func loadTemplates() (map[string]cache.Cache, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open template file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	decoder := json.NewDecoder(file)
 

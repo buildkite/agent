@@ -4,13 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestPathsToMappings_AbsolutePathUnderHome(t *testing.T) {
-	assert := require.New(t)
-
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -20,23 +16,39 @@ func TestPathsToMappings_AbsolutePathUnderHome(t *testing.T) {
 	}
 
 	mappings, err := PathsToMappings(paths)
-	assert.NoError(err)
-	assert.Len(mappings, 2)
+	if err != nil {
+		t.Fatalf("PathsToMappings: %v", err)
+	}
+	if len(mappings) != 2 {
+		t.Fatalf("len(mappings) = %d, want 2", len(mappings))
+	}
 
-	assert.Equal(".go-build", mappings[0].RelativePath)
-	assert.Equal(filepath.Join(home, ".go-build"), mappings[0].ResolvedPath)
-	assert.False(mappings[0].Relative)
+	if got, want := mappings[0].RelativePath, ".go-build"; got != want {
+		t.Errorf("mappings[0].RelativePath = %v, want %v", got, want)
+	}
+	if got, want := mappings[0].ResolvedPath, filepath.Join(home, ".go-build"); got != want {
+		t.Errorf("mappings[0].ResolvedPath = %v, want %v", got, want)
+	}
+	if mappings[0].Relative {
+		t.Errorf("mappings[0].Relative = true, want false")
+	}
 
-	assert.Equal(filepath.Join("go", "pkg", "mod"), mappings[1].RelativePath)
-	assert.Equal(filepath.Join(home, "go", "pkg", "mod"), mappings[1].ResolvedPath)
-	assert.False(mappings[1].Relative)
+	if got, want := mappings[1].RelativePath, filepath.Join("go", "pkg", "mod"); got != want {
+		t.Errorf("mappings[1].RelativePath = %v, want %v", got, want)
+	}
+	if got, want := mappings[1].ResolvedPath, filepath.Join(home, "go", "pkg", "mod"); got != want {
+		t.Errorf("mappings[1].ResolvedPath = %v, want %v", got, want)
+	}
+	if mappings[1].Relative {
+		t.Errorf("mappings[1].Relative = true, want false")
+	}
 }
 
 func TestResolveHomeDir(t *testing.T) {
-	assert := require.New(t)
-
 	homeDir, err := os.UserHomeDir()
-	assert.NoError(err)
+	if err != nil {
+		t.Fatalf("os.UserHomeDir: %v", err)
+	}
 
 	tests := []struct {
 		name     string
@@ -86,11 +98,17 @@ func TestResolveHomeDir(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := ResolveHomeDir(tt.path)
 			if tt.wantErr {
-				assert.Error(err)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
 				return
 			}
-			assert.NoError(err)
-			assert.Equal(tt.expected, result)
+			if err != nil {
+				t.Fatalf("ResolveHomeDir: %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("ResolveHomeDir() = %v, want %v", result, tt.expected)
+			}
 		})
 	}
 }

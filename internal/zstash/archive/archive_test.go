@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestIsUnderHome(t *testing.T) {
@@ -104,15 +102,18 @@ func TestChecksumSHA256_Sum(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := require.New(t)
 			c := &ChecksumSHA256{
 				sha256: sha256.New(),
 				f:      &bytes.Buffer{},
 			}
 			_, err := c.Write(tt.input)
-			assert.NoError(err)
+			if err != nil {
+				t.Fatalf("Write: %v", err)
+			}
 			result := c.Sum()
-			assert.Equal(tt.expected, result)
+			if result != tt.expected {
+				t.Errorf("Sum() = %v, want %v", result, tt.expected)
+			}
 		})
 	}
 }

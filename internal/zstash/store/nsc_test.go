@@ -4,10 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNscStore_Interface(t *testing.T) {
@@ -92,12 +90,16 @@ func TestValidateFilePath(t *testing.T) {
 			err := validateFilePath(tt.filePath)
 
 			if tt.expectError {
-				require.Error(t, err)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errorMsg)
 				}
 			} else {
-				require.NoError(t, err)
+				if err != nil {
+					t.Fatalf("validateFilePath: %v", err)
+				}
 			}
 		})
 	}
@@ -179,12 +181,16 @@ func TestValidateKey(t *testing.T) {
 			err := validateKey(tt.key)
 
 			if tt.expectError {
-				require.Error(t, err)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errorMsg)
 				}
 			} else {
-				require.NoError(t, err)
+				if err != nil {
+					t.Fatalf("validateKey: %v", err)
+				}
 			}
 		})
 	}
@@ -195,78 +201,118 @@ func TestRunCommandValidation(t *testing.T) {
 
 	// Test empty args
 	result, err := runCommand(ctx, "" /* no args */)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no command provided")
-	assert.Nil(t, result)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no command provided") {
+		t.Errorf("error %q does not contain %q", err.Error(), "no command provided")
+	}
+	if result != nil {
+		t.Errorf("expected nil result, got %v", result)
+	}
 }
 
 // TestNscStore_MockUpload tests the Upload method with mocked command execution
 // Note: This test will fail if nsc is not installed, but shows the structure
 func TestNscStore_Upload_Validation(t *testing.T) {
 	store, err := NewNscStore()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewNscStore: %v", err)
+	}
 
 	ctx := context.Background()
 
 	// Create a temporary test file
 	tmpDir, err := os.MkdirTemp("", "nsc-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.txt")
 	err = os.WriteFile(testFile, []byte("test content"), 0o600)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	// Test invalid file path
 	_, err = store.Upload(ctx, "invalid;path", "valid-key")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid file path")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid file path") {
+		t.Errorf("error %q does not contain %q", err.Error(), "invalid file path")
+	}
 
 	// Test invalid key
 	_, err = store.Upload(ctx, testFile, "invalid key with spaces")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid key")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid key") {
+		t.Errorf("error %q does not contain %q", err.Error(), "invalid key")
+	}
 
 	// Test valid inputs (will fail with nsc command error, but validation passes)
 	_, err = store.Upload(ctx, testFile, "valid-key")
 	// This will error because nsc command likely doesn't exist or isn't configured
 	// but the error should be about command execution, not validation
 	if err != nil {
-		assert.NotContains(t, err.Error(), "invalid file path")
-		assert.NotContains(t, err.Error(), "invalid key")
+		if strings.Contains(err.Error(), "invalid file path") {
+			t.Errorf("error %q should not contain %q", err.Error(), "invalid file path")
+		}
+		if strings.Contains(err.Error(), "invalid key") {
+			t.Errorf("error %q should not contain %q", err.Error(), "invalid key")
+		}
 	}
 }
 
 // TestNscStore_Download_Validation tests the Download method validation
 func TestNscStore_Download_Validation(t *testing.T) {
 	store, err := NewNscStore()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewNscStore: %v", err)
+	}
 
 	ctx := context.Background()
 
 	tmpDir, err := os.MkdirTemp("", "nsc-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	destFile := filepath.Join(tmpDir, "download.txt")
 
 	// Test invalid key
 	_, err = store.Download(ctx, "invalid key with spaces", destFile)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid key")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid key") {
+		t.Errorf("error %q does not contain %q", err.Error(), "invalid key")
+	}
 
 	// Test invalid file path
 	_, err = store.Download(ctx, "valid-key", "invalid;path")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid file path")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid file path") {
+		t.Errorf("error %q does not contain %q", err.Error(), "invalid file path")
+	}
 
 	// Test valid inputs (will fail with nsc command error, but validation passes)
 	_, err = store.Download(ctx, "valid-key", destFile)
 	// This will error because nsc command likely doesn't exist or isn't configured
 	// but the error should be about command execution, not validation
 	if err != nil {
-		assert.NotContains(t, err.Error(), "invalid key")
-		assert.NotContains(t, err.Error(), "invalid file path")
+		if strings.Contains(err.Error(), "invalid key") {
+			t.Errorf("error %q should not contain %q", err.Error(), "invalid key")
+		}
+		if strings.Contains(err.Error(), "invalid file path") {
+			t.Errorf("error %q should not contain %q", err.Error(), "invalid file path")
+		}
 	}
 }
 
@@ -279,41 +325,63 @@ func TestNscStore_Integration(t *testing.T) {
 	}
 
 	store, err := NewNscStore()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("NewNscStore: %v", err)
+	}
 
 	ctx := context.Background()
 
 	// Create temporary directories and files
 	tmpDir, err := os.MkdirTemp("", "nsc-integration-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test-upload.txt")
 	testContent := "Hello from NSC integration test!"
 	err = os.WriteFile(testFile, []byte(testContent), 0o600)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 
 	// Test upload
 	key := "integration-test/test-file.txt"
 	transferInfo, err := store.Upload(ctx, testFile, key)
-	require.NoError(t, err, "Upload should succeed with valid NSC setup")
+	if err != nil {
+		t.Fatalf("Upload should succeed with valid NSC setup: %v", err)
+	}
 
-	assert.Greater(t, transferInfo.BytesTransferred, int64(0))
-	assert.Greater(t, transferInfo.TransferSpeed, 0.0)
-	assert.Greater(t, transferInfo.Duration, 0)
+	if transferInfo.BytesTransferred <= 0 {
+		t.Errorf("expected BytesTransferred > 0, got %d", transferInfo.BytesTransferred)
+	}
+	if transferInfo.TransferSpeed <= 0.0 {
+		t.Errorf("expected TransferSpeed > 0, got %f", transferInfo.TransferSpeed)
+	}
+	if transferInfo.Duration <= 0 {
+		t.Errorf("expected Duration > 0, got %v", transferInfo.Duration)
+	}
 
 	// Test download
 	downloadFile := filepath.Join(tmpDir, "test-download.txt")
 	transferInfo, err = store.Download(ctx, key, downloadFile)
-	require.NoError(t, err, "Download should succeed")
+	if err != nil {
+		t.Fatalf("Download should succeed: %v", err)
+	}
 
-	assert.Greater(t, transferInfo.BytesTransferred, int64(0))
+	if transferInfo.BytesTransferred <= 0 {
+		t.Errorf("expected BytesTransferred > 0, got %d", transferInfo.BytesTransferred)
+	}
 
 	// Verify downloaded content
 	downloadedContent, err := os.ReadFile(downloadFile)
-	require.NoError(t, err)
-	assert.Equal(t, testContent, string(downloadedContent))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(downloadedContent) != testContent {
+		t.Errorf("downloaded content mismatch: got %q, want %q", string(downloadedContent), testContent)
+	}
 
 	t.Logf("Upload: %d bytes at %.2f MB/s in %v",
 		transferInfo.BytesTransferred,

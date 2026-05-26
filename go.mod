@@ -50,7 +50,6 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
-	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli v1.22.17
 	github.com/wolfeidau/quickzip v1.0.2
 	go.opentelemetry.io/contrib/propagators/aws v1.43.0
@@ -186,6 +185,7 @@ require (
 	github.com/secure-systems-lab/go-securesystemslib v0.10.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.3 // indirect
+	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tinylib/msgp v1.6.3 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,8 +14,6 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/zstash/api"
 	"github.com/buildkite/agent/v3/internal/zstash/cache"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // mockAPIClient implements api.CacheClient for integration testing
@@ -198,11 +197,15 @@ func (m *mockAPIClient) CacheRetrieve(ctx context.Context, registry string, req 
 func createRandomFile(t *testing.T, path string, sizeBytes int64) {
 	t.Helper()
 
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	f, err := os.Create(path)
-	require.NoError(t, err)
-	defer f.Close()
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer func() { _ = f.Close() }()
 
 	// Write random data in chunks to avoid memory issues with large files
 	const chunkSize = 1024 * 1024 // 1MB chunks
@@ -215,16 +218,20 @@ func createRandomFile(t *testing.T, path string, sizeBytes int64) {
 			toWrite = remaining
 		}
 
-		_, err := rand.Read(buf[:toWrite])
-		require.NoError(t, err)
+		if _, err := rand.Read(buf[:toWrite]); err != nil {
+			t.Fatalf("rand.Read: %v", err)
+		}
 
-		_, err = f.Write(buf[:toWrite])
-		require.NoError(t, err)
+		if _, err := f.Write(buf[:toWrite]); err != nil {
+			t.Fatalf("Write: %v", err)
+		}
 
 		remaining -= toWrite
 	}
 
-	require.NoError(t, f.Sync())
+	if err := f.Sync(); err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
 }
 
 // setupTestCache creates a test cache with temporary directories and files
@@ -241,8 +248,12 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *Cache, cache
 	cacheDir = filepath.Join(tmpBase, "cache")
 	storageDir = filepath.Join(tmpBase, "storage")
 
-	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.MkdirAll(storageDir, 0o755))
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.MkdirAll(storageDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	// Create test files with random data (~100MB total)
 	testFiles := []string{
@@ -261,7 +272,9 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *Cache, cache
 
 	// Build storage URL based on type (need absolute path for file:// URLs)
 	absStorageDir, err := filepath.Abs(storageDir)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
 
 	var bucketURL string
 	switch storageType {
@@ -306,18 +319,40 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 	// Save the cache
 	t.Run("save", func(t *testing.T) {
 		result, err := cacheClient.Save(ctx, "test-cache")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("Save: %v", err)
+		}
 
-		assert.True(t, result.CacheCreated, "cache should be created")
-		assert.Equal(t, "v1-test-key", result.Key)
-		assert.NotEmpty(t, result.UploadID)
-		assert.Greater(t, result.Archive.Size, int64(0), "archive should have size")
-		assert.Greater(t, result.Archive.WrittenBytes, int64(0), "should have written bytes")
-		assert.Greater(t, result.Archive.WrittenEntries, int64(0), "should have entries")
-		assert.NotEmpty(t, result.Archive.Sha256Sum, "should have SHA256 checksum")
-		require.NotNil(t, result.Transfer, "should have transfer info")
-		assert.Greater(t, result.Transfer.BytesTransferred, int64(0), "should have transferred bytes")
-		assert.Greater(t, result.TotalDuration, time.Duration(0), "should have duration")
+		if !result.CacheCreated {
+			t.Error("cache should be created")
+		}
+		if result.Key != "v1-test-key" {
+			t.Errorf("Key = %q, want %q", result.Key, "v1-test-key")
+		}
+		if result.UploadID == "" {
+			t.Error("UploadID should not be empty")
+		}
+		if result.Archive.Size <= 0 {
+			t.Errorf("archive should have size, got %d", result.Archive.Size)
+		}
+		if result.Archive.WrittenBytes <= 0 {
+			t.Errorf("should have written bytes, got %d", result.Archive.WrittenBytes)
+		}
+		if result.Archive.WrittenEntries <= 0 {
+			t.Errorf("should have entries, got %d", result.Archive.WrittenEntries)
+		}
+		if result.Archive.Sha256Sum == "" {
+			t.Error("should have SHA256 checksum")
+		}
+		if result.Transfer == nil {
+			t.Fatal("should have transfer info")
+		}
+		if result.Transfer.BytesTransferred <= 0 {
+			t.Errorf("should have transferred bytes, got %d", result.Transfer.BytesTransferred)
+		}
+		if result.TotalDuration <= 0 {
+			t.Errorf("should have duration, got %v", result.TotalDuration)
+		}
 
 		t.Logf("Saved cache: %d bytes (%.2f MB), compression ratio: %.2fx, duration: %s",
 			result.Archive.Size,
@@ -330,35 +365,67 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 	t.Run("verify_storage", func(t *testing.T) {
 		// For local_file storage, check that files exist
 		entries, err := os.ReadDir(storageDir)
-		require.NoError(t, err)
-		assert.NotEmpty(t, entries, "storage directory should contain files")
+		if err != nil {
+			t.Fatalf("ReadDir: %v", err)
+		}
+		if len(entries) == 0 {
+			t.Error("storage directory should contain files")
+		}
 	})
 
 	// Remove the original cache files to simulate a fresh checkout
 	t.Run("cleanup_cache_dir", func(t *testing.T) {
-		require.NoError(t, os.RemoveAll(cacheDir))
-		require.NoError(t, os.MkdirAll(cacheDir, 0o755))
+		if err := os.RemoveAll(cacheDir); err != nil {
+			t.Fatalf("RemoveAll: %v", err)
+		}
+		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
 
 		// Verify directory is empty
 		entries, err := os.ReadDir(cacheDir)
-		require.NoError(t, err)
-		assert.Empty(t, entries, "cache directory should be empty")
+		if err != nil {
+			t.Fatalf("ReadDir: %v", err)
+		}
+		if len(entries) != 0 {
+			t.Errorf("cache directory should be empty, got %d entries", len(entries))
+		}
 	})
 
 	// Restore the cache
 	t.Run("restore", func(t *testing.T) {
 		result, err := cacheClient.Restore(ctx, "test-cache")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("Restore: %v", err)
+		}
 
-		assert.True(t, result.CacheRestored, "cache should be restored")
-		assert.True(t, result.CacheHit, "should be exact key match")
-		assert.False(t, result.FallbackUsed, "should not use fallback")
-		assert.Equal(t, "v1-test-key", result.Key)
-		assert.Greater(t, result.Archive.Size, int64(0), "archive should have size")
-		assert.Greater(t, result.Archive.WrittenBytes, int64(0), "should have written bytes")
-		assert.Greater(t, result.Archive.WrittenEntries, int64(0), "should have entries")
-		assert.Greater(t, result.Transfer.BytesTransferred, int64(0), "should have transferred bytes")
-		assert.Greater(t, result.TotalDuration, time.Duration(0), "should have duration")
+		if !result.CacheRestored {
+			t.Error("cache should be restored")
+		}
+		if !result.CacheHit {
+			t.Error("should be exact key match")
+		}
+		if result.FallbackUsed {
+			t.Error("should not use fallback")
+		}
+		if result.Key != "v1-test-key" {
+			t.Errorf("Key = %q, want %q", result.Key, "v1-test-key")
+		}
+		if result.Archive.Size <= 0 {
+			t.Errorf("archive should have size, got %d", result.Archive.Size)
+		}
+		if result.Archive.WrittenBytes <= 0 {
+			t.Errorf("should have written bytes, got %d", result.Archive.WrittenBytes)
+		}
+		if result.Archive.WrittenEntries <= 0 {
+			t.Errorf("should have entries, got %d", result.Archive.WrittenEntries)
+		}
+		if result.Transfer.BytesTransferred <= 0 {
+			t.Errorf("should have transferred bytes, got %d", result.Transfer.BytesTransferred)
+		}
+		if result.TotalDuration <= 0 {
+			t.Errorf("should have duration, got %v", result.TotalDuration)
+		}
 
 		t.Logf("Restored cache: %d bytes (%.2f MB), compression ratio: %.2fx, duration: %s",
 			result.Archive.Size,
@@ -376,12 +443,18 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 		}
 
 		for _, file := range expectedFiles {
-			assert.FileExists(t, file, "restored file should exist: %s", file)
+			stat, err := os.Stat(file)
+			if err != nil {
+				t.Errorf("restored file should exist: %s: %v", file, err)
+				continue
+			}
 
 			// Verify file size is approximately correct (~33MB each)
-			stat, err := os.Stat(file)
-			require.NoError(t, err)
-			assert.InDelta(t, 33*1024*1024, stat.Size(), 1024*1024, "file size should be ~33MB")
+			const expected = int64(33 * 1024 * 1024)
+			const delta = int64(1024 * 1024)
+			if math.Abs(float64(stat.Size()-expected)) > float64(delta) {
+				t.Errorf("file %s size should be ~33MB, got %d", file, stat.Size())
+			}
 		}
 	})
 }
@@ -393,15 +466,27 @@ func TestCacheIntegration_SaveAlreadyExists(t *testing.T) {
 
 	// Save the cache first time
 	result1, err := cacheClient.Save(ctx, "test-cache")
-	require.NoError(t, err)
-	assert.True(t, result1.CacheCreated, "first save should create cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !result1.CacheCreated {
+		t.Error("first save should create cache")
+	}
 
 	// Try to save again
 	result2, err := cacheClient.Save(ctx, "test-cache")
-	require.NoError(t, err)
-	assert.False(t, result2.CacheCreated, "second save should not create cache")
-	assert.Nil(t, result2.Transfer, "should not have transfer info when cache exists")
-	assert.Equal(t, "v1-test-key", result2.Key)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if result2.CacheCreated {
+		t.Error("second save should not create cache")
+	}
+	if result2.Transfer != nil {
+		t.Error("should not have transfer info when cache exists")
+	}
+	if result2.Key != "v1-test-key" {
+		t.Errorf("Key = %q, want %q", result2.Key, "v1-test-key")
+	}
 }
 
 func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
@@ -411,12 +496,22 @@ func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
 
 	// Try to restore without saving first
 	result, err := cacheClient.Restore(ctx, "test-cache")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
 
-	assert.False(t, result.CacheRestored, "should not restore when cache doesn't exist")
-	assert.False(t, result.CacheHit, "should not be a cache hit")
-	assert.False(t, result.FallbackUsed, "should not use fallback")
-	assert.Equal(t, "v1-test-key", result.Key, "should return requested key")
+	if result.CacheRestored {
+		t.Error("should not restore when cache doesn't exist")
+	}
+	if result.CacheHit {
+		t.Error("should not be a cache hit")
+	}
+	if result.FallbackUsed {
+		t.Error("should not use fallback")
+	}
+	if result.Key != "v1-test-key" {
+		t.Errorf("should return requested key, Key = %q, want %q", result.Key, "v1-test-key")
+	}
 }
 
 func TestCacheIntegration_RestoreWithFallback(t *testing.T) {
@@ -429,33 +524,55 @@ func TestCacheIntegration_RestoreWithFallback(t *testing.T) {
 	cacheClient.caches[0].Key = "v1-fallback-key"
 	cacheClient.caches[0].FallbackKeys = []string{}
 	saveResult, err := cacheClient.Save(ctx, "test-cache")
-	require.NoError(t, err)
-	assert.True(t, saveResult.CacheCreated, "fallback cache should be created")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !saveResult.CacheCreated {
+		t.Error("fallback cache should be created")
+	}
 	t.Logf("Saved fallback cache with key: %s", saveResult.Key)
 
 	// Clean up cache directory
-	require.NoError(t, os.RemoveAll(cacheDir))
-	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
+	if err := os.RemoveAll(cacheDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	// Now try to restore with a different key that has the fallback
 	cacheClient.caches[0].Key = "v1-test-key"
 	cacheClient.caches[0].FallbackKeys = []string{"v1-fallback-key"}
 	result, err := cacheClient.Restore(ctx, "test-cache")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
 
 	// Should use the fallback key
-	assert.True(t, result.CacheRestored, "cache should be restored")
-	assert.True(t, result.FallbackUsed, "should use fallback key")
-	assert.False(t, result.CacheHit, "should not be exact hit")
-	assert.Equal(t, "v1-fallback-key", result.Key, "should return fallback key")
+	if !result.CacheRestored {
+		t.Error("cache should be restored")
+	}
+	if !result.FallbackUsed {
+		t.Error("should use fallback key")
+	}
+	if result.CacheHit {
+		t.Error("should not be exact hit")
+	}
+	if result.Key != "v1-fallback-key" {
+		t.Errorf("should return fallback key, Key = %q, want %q", result.Key, "v1-fallback-key")
+	}
 
 	t.Logf("Restore result: restored=%v, hit=%v, fallback=%v, key=%s",
 		result.CacheRestored, result.CacheHit, result.FallbackUsed, result.Key)
 
 	// Verify files were restored
 	entries, err := os.ReadDir(cacheDir)
-	require.NoError(t, err)
-	assert.NotEmpty(t, entries, "cache directory should have restored files")
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Error("cache directory should have restored files")
+	}
 }
 
 func TestCacheIntegration_LargeFileChecksum(t *testing.T) {
@@ -465,23 +582,38 @@ func TestCacheIntegration_LargeFileChecksum(t *testing.T) {
 
 	// Save cache
 	result, err := cacheClient.Save(ctx, "test-cache")
-	require.NoError(t, err)
-	require.True(t, result.CacheCreated)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !result.CacheCreated {
+		t.Fatal("expected CacheCreated to be true")
+	}
 
 	checksum1 := result.Archive.Sha256Sum
-	assert.NotEmpty(t, checksum1, "should have SHA256 checksum")
+	if checksum1 == "" {
+		t.Error("should have SHA256 checksum")
+	}
 
 	// Restore and save again
-	require.NoError(t, os.RemoveAll(cacheDir))
-	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
+	if err := os.RemoveAll(cacheDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
-	_, err = cacheClient.Restore(ctx, "test-cache")
-	require.NoError(t, err)
+	if _, err = cacheClient.Restore(ctx, "test-cache"); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
 
 	// Save again - should be detected as already exists
 	result2, err := cacheClient.Save(ctx, "test-cache")
-	require.NoError(t, err)
-	assert.False(t, result2.CacheCreated, "cache should already exist")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if result2.CacheCreated {
+		t.Error("cache should already exist")
+	}
 }
 
 func TestCacheIntegration_TransferMetrics(t *testing.T) {
@@ -491,12 +623,22 @@ func TestCacheIntegration_TransferMetrics(t *testing.T) {
 
 	// Save cache and check transfer metrics
 	saveResult, err := cacheClient.Save(ctx, "test-cache")
-	require.NoError(t, err)
-	require.NotNil(t, saveResult.Transfer)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if saveResult.Transfer == nil {
+		t.Fatal("expected Transfer to be non-nil")
+	}
 
-	assert.Greater(t, saveResult.Transfer.BytesTransferred, int64(0))
-	assert.Greater(t, saveResult.Transfer.TransferSpeed, 0.0)
-	assert.Greater(t, saveResult.Transfer.Duration, time.Duration(0))
+	if saveResult.Transfer.BytesTransferred <= 0 {
+		t.Errorf("BytesTransferred should be > 0, got %d", saveResult.Transfer.BytesTransferred)
+	}
+	if saveResult.Transfer.TransferSpeed <= 0.0 {
+		t.Errorf("TransferSpeed should be > 0, got %f", saveResult.Transfer.TransferSpeed)
+	}
+	if saveResult.Transfer.Duration <= 0 {
+		t.Errorf("Duration should be > 0, got %v", saveResult.Transfer.Duration)
+	}
 
 	t.Logf("Upload: %d bytes at %.2f MB/s in %s",
 		saveResult.Transfer.BytesTransferred,
@@ -505,11 +647,19 @@ func TestCacheIntegration_TransferMetrics(t *testing.T) {
 
 	// Restore cache and check transfer metrics
 	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
 
-	assert.Greater(t, restoreResult.Transfer.BytesTransferred, int64(0))
-	assert.Greater(t, restoreResult.Transfer.TransferSpeed, 0.0)
-	assert.Greater(t, restoreResult.Transfer.Duration, time.Duration(0))
+	if restoreResult.Transfer.BytesTransferred <= 0 {
+		t.Errorf("BytesTransferred should be > 0, got %d", restoreResult.Transfer.BytesTransferred)
+	}
+	if restoreResult.Transfer.TransferSpeed <= 0.0 {
+		t.Errorf("TransferSpeed should be > 0, got %f", restoreResult.Transfer.TransferSpeed)
+	}
+	if restoreResult.Transfer.Duration <= 0 {
+		t.Errorf("Duration should be > 0, got %v", restoreResult.Transfer.Duration)
+	}
 
 	t.Logf("Download: %d bytes at %.2f MB/s in %s",
 		restoreResult.Transfer.BytesTransferred,

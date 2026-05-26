@@ -2,89 +2,133 @@ package zstash
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCleanPath(t *testing.T) {
 	t.Run("removes directory and contents", func(t *testing.T) {
 		dir := t.TempDir()
 		testDir := filepath.Join(dir, "cache")
-		require.NoError(t, os.MkdirAll(filepath.Join(testDir, "subdir"), 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(testDir, "file.txt"), []byte("test"), 0o600))
-		require.NoError(t, os.WriteFile(filepath.Join(testDir, "subdir", "nested.txt"), []byte("nested"), 0o600))
+		if err := os.MkdirAll(filepath.Join(testDir, "subdir"), 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(testDir, "file.txt"), []byte("test"), 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(testDir, "subdir", "nested.txt"), []byte("nested"), 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
 
-		err := cleanPath(context.Background(), testDir)
-		require.NoError(t, err)
+		if err := cleanPath(context.Background(), testDir); err != nil {
+			t.Fatalf("cleanPath: %v", err)
+		}
 
-		_, err = os.Stat(testDir)
-		assert.True(t, os.IsNotExist(err), "directory should be removed")
+		_, err := os.Stat(testDir)
+		if !os.IsNotExist(err) {
+			t.Errorf("directory should be removed, got err=%v", err)
+		}
 	})
 
 	t.Run("handles read-only directories (like go module cache)", func(t *testing.T) {
 		dir := t.TempDir()
 		testDir := filepath.Join(dir, "modcache")
 		subdir := filepath.Join(testDir, "pkg")
-		require.NoError(t, os.MkdirAll(subdir, 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(subdir, "mod.go"), []byte("package mod"), 0o400))
-		require.NoError(t, os.Chmod(subdir, 0o555))
-		require.NoError(t, os.Chmod(testDir, 0o555))
+		if err := os.MkdirAll(subdir, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(subdir, "mod.go"), []byte("package mod"), 0o400); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		if err := os.Chmod(subdir, 0o555); err != nil {
+			t.Fatalf("Chmod: %v", err)
+		}
+		if err := os.Chmod(testDir, 0o555); err != nil {
+			t.Fatalf("Chmod: %v", err)
+		}
 
-		err := cleanPath(context.Background(), testDir)
-		require.NoError(t, err)
+		if err := cleanPath(context.Background(), testDir); err != nil {
+			t.Fatalf("cleanPath: %v", err)
+		}
 
-		_, err = os.Stat(testDir)
-		assert.True(t, os.IsNotExist(err), "directory should be removed")
+		_, err := os.Stat(testDir)
+		if !os.IsNotExist(err) {
+			t.Errorf("directory should be removed, got err=%v", err)
+		}
 	})
 
 	t.Run("succeeds on non-existent path", func(t *testing.T) {
-		err := cleanPath(context.Background(), "/nonexistent/path/that/does/not/exist")
-		require.NoError(t, err)
+		if err := cleanPath(context.Background(), "/nonexistent/path/that/does/not/exist"); err != nil {
+			t.Fatalf("cleanPath: %v", err)
+		}
 	})
 
 	t.Run("rejects empty path", func(t *testing.T) {
 		err := cleanPath(context.Background(), "")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "empty directory path")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "empty directory path") {
+			t.Errorf("error %q should contain %q", err.Error(), "empty directory path")
+		}
 	})
 
 	t.Run("rejects root path", func(t *testing.T) {
 		err := cleanPath(context.Background(), "/")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "refusing to remove")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+		}
 	})
 
 	t.Run("rejects current directory", func(t *testing.T) {
 		err := cleanPath(context.Background(), ".")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "refusing to remove")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+		}
 	})
 
 	t.Run("rejects home directory", func(t *testing.T) {
 		home, err := os.UserHomeDir()
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("UserHomeDir: %v", err)
+		}
 
 		err = cleanPath(context.Background(), home)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "refusing to remove home directory")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "refusing to remove home directory") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove home directory")
+		}
 	})
 
 	t.Run("respects context cancellation", func(t *testing.T) {
 		dir := t.TempDir()
 		testDir := filepath.Join(dir, "cache")
-		require.NoError(t, os.MkdirAll(testDir, 0o755))
+		if err := os.MkdirAll(testDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
 		err := cleanPath(ctx, testDir)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, context.Canceled)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
 	})
 }
 
@@ -94,6 +138,10 @@ func TestCleanPathWindowsDriveRoot(t *testing.T) {
 	}
 
 	err := cleanPath(context.Background(), "C:\\")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "refusing to remove drive root")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "refusing to remove drive root") {
+		t.Errorf("error %q should contain %q", err.Error(), "refusing to remove drive root")
+	}
 }

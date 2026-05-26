@@ -1,10 +1,10 @@
 package store
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestOptionsFromURL(t *testing.T) {
@@ -251,21 +251,21 @@ func TestOptionsFromURL(t *testing.T) {
 			got, err := OptionsFromURL(tt.url)
 
 			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errContains != "" {
-					assert.Contains(t, err.Error(), tt.errContains)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
 				}
 				return
 			}
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.want.Bucket, got.Bucket, "Bucket mismatch")
-			assert.Equal(t, tt.want.Region, got.Region, "Region mismatch")
-			assert.Equal(t, tt.want.Prefix, got.Prefix, "Prefix mismatch")
-			assert.Equal(t, tt.want.S3Endpoint, got.S3Endpoint, "S3Endpoint mismatch")
-			assert.Equal(t, tt.want.UsePathStyle, got.UsePathStyle, "UsePathStyle mismatch")
-			assert.Equal(t, tt.want.Concurrency, got.Concurrency, "Concurrency mismatch")
-			assert.Equal(t, tt.want.PartSizeMB, got.PartSizeMB, "PartSizeMB mismatch")
+			if err != nil {
+				t.Fatalf("OptionsFromURL: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("OptionsFromURL mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -321,7 +321,9 @@ func TestGetFullKey(t *testing.T) {
 				prefix: tt.prefix,
 			}
 			got := blob.getFullKey(tt.key)
-			assert.Equal(t, tt.want, got)
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
 		})
 	}
 }
