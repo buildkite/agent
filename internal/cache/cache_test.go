@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/zstash"
+	"github.com/buildkite/agent/v3/internal/zstash/cache"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/zstash"
-	"github.com/buildkite/zstash/cache"
 	"github.com/google/go-cmp/cmp"
 )
 

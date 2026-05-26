@@ -31,7 +31,6 @@ require (
 	github.com/buildkite/interpolate v0.1.5
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.1
-	github.com/buildkite/zstash v0.8.0
 	github.com/creack/pty v1.1.24
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
@@ -52,6 +51,7 @@ require (
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
 	github.com/urfave/cli v1.22.17
+	github.com/wolfeidau/quickzip v1.0.2
 	go.opentelemetry.io/contrib/propagators/aws v1.43.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.43.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.43.0
@@ -192,7 +192,6 @@ require (
 	github.com/trailofbits/go-mutexasserts v0.0.0-20250514102930-c1f3d2e37561 // indirect
 	github.com/urfave/cli/v3 v3.8.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.32 // indirect
-	github.com/wolfeidau/quickzip v1.0.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/component v1.55.0 // indirect
