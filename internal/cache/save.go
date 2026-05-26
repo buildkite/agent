@@ -47,7 +47,7 @@ import (
 //	} else {
 //	    log.Printf("Cache saved: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
-func (c *Client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
+func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.Save")
 	defer span.End()
@@ -93,7 +93,7 @@ func (c *Client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "checking_exists", "Checking if cache already exists", 0, 0)
 
 	// Check if cache already exists
-	_, exists, err := c.client.CachePeekExists(ctx, c.registry, api.CachePeekReq{
+	_, exists, err := c.api.CachePeekExists(ctx, c.registry, api.CachePeekReq{
 		Key:    cacheConfig.Key,
 		Branch: c.branch,
 	})
@@ -120,7 +120,7 @@ func (c *Client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "fetching_registry", "Looking up cache registry", 0, 0)
 
 	// Get cache registry information
-	registryResp, err := c.client.CacheRegistry(ctx, c.registry)
+	registryResp, err := c.api.CacheRegistry(ctx, c.registry)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to get cache registry")
@@ -170,7 +170,7 @@ func (c *Client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "creating_entry", "Creating cache entry", 0, 0)
 
 	// Create cache entry
-	createResp, err := c.client.CacheCreate(ctx, registryResp.Name, api.CacheCreateReq{
+	createResp, err := c.api.CacheCreate(ctx, registryResp.Name, api.CacheCreateReq{
 		Key:          cacheConfig.Key,
 		FallbackKeys: cacheConfig.FallbackKeys,
 		Compression:  c.format,
@@ -232,7 +232,7 @@ func (c *Client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "committing", "Committing cache entry", 0, 0)
 
 	// Commit cache
-	_, err = c.client.CacheCommit(ctx, c.registry, api.CacheCommitReq{
+	_, err = c.api.CacheCommit(ctx, c.registry, api.CacheCommitReq{
 		UploadID: createResp.UploadID,
 	})
 	if err != nil {

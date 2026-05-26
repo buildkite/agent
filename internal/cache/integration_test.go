@@ -235,7 +235,7 @@ func createRandomFile(t *testing.T, path string, sizeBytes int64) {
 }
 
 // setupTestCache creates a test cache with temporary directories and files
-func setupTestCache(t *testing.T, storageType string) (cacheClient *Client, cacheDir, storageDir string) {
+func setupTestCache(t *testing.T, storageType string) (cacheClient *client, cacheDir, storageDir string) {
 	t.Helper()
 
 	// Create temp directory under current working directory to satisfy chroot requirements
@@ -294,8 +294,8 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *Client, cach
 	}
 
 	// Create cache client
-	client := &Client{
-		client:       mockClient,
+	c := &client{
+		api:          mockClient,
 		bucketURL:    bucketURL,
 		format:       "zip",
 		branch:       "main",
@@ -314,7 +314,7 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *Client, cach
 		onProgress: nil,
 	}
 
-	return client, cacheDir, storageDir
+	return c, cacheDir, storageDir
 }
 
 func TestCacheIntegration_SaveAndRestore(t *testing.T) {
