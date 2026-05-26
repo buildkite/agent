@@ -1,4 +1,4 @@
-package zstash
+package cache
 
 import (
 	"context"

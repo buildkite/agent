@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/zstash/cache"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -14,19 +13,19 @@ func TestLoadTemplateDefaults(t *testing.T) {
 	t.Run("with no template", func(t *testing.T) {
 		tests := []struct {
 			name     string
-			cache    cache.Cache
-			expected cache.Cache
+			cache    Cache
+			expected Cache
 		}{
 			{
 				name: "with no template",
-				cache: cache.Cache{
+				cache: Cache{
 					ID:           "my_ruby",
 					Template:     "",
 					Key:          "my-key-overriden",
 					FallbackKeys: []string{},
 					Paths:        []string{"vendor/bundle"},
 				},
-				expected: cache.Cache{
+				expected: Cache{
 					ID:           "my_ruby",
 					Template:     "",
 					Registry:     "",
@@ -40,7 +39,7 @@ func TestLoadTemplateDefaults(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				// Call configuration.ExpandCacheConfiguration to load the template defaults
-				got, err := ExpandCacheConfiguration([]cache.Cache{tt.cache})
+				got, err := ExpandCacheConfiguration([]Cache{tt.cache})
 				if err != nil {
 					t.Fatalf("ExpandCacheConfiguration: %v", err)
 				}
@@ -54,17 +53,17 @@ func TestLoadTemplateDefaults(t *testing.T) {
 	t.Run("with template (overridden key)", func(t *testing.T) {
 		tests := []struct {
 			name     string
-			cache    cache.Cache
-			expected cache.Cache
+			cache    Cache
+			expected Cache
 		}{
 			{
 				name: "with ruby template",
-				cache: cache.Cache{
+				cache: Cache{
 					ID:       "my_ruby",
 					Template: "ruby",
 					Key:      "my-key-overriden",
 				},
-				expected: cache.Cache{
+				expected: Cache{
 					ID:       "my_ruby",
 					Template: "",
 					Registry: "",
@@ -78,13 +77,13 @@ func TestLoadTemplateDefaults(t *testing.T) {
 			},
 			{
 				name: "with node-yarn template",
-				cache: cache.Cache{
+				cache: Cache{
 					ID:       "my_node_yarn",
 					Template: "node-yarn",
 					Key:      "my-key-overriden",
 					Paths:    []string{"node_modules"},
 				},
-				expected: cache.Cache{
+				expected: Cache{
 					ID:       "my_node_yarn",
 					Template: "",
 					Registry: "",
@@ -98,13 +97,13 @@ func TestLoadTemplateDefaults(t *testing.T) {
 			},
 			{
 				name: "with node-npm template",
-				cache: cache.Cache{
+				cache: Cache{
 					ID:       "my_node_npm",
 					Template: "node-npm",
 					Key:      "my-key-overriden",
 					Paths:    []string{"node_modules"},
 				},
-				expected: cache.Cache{
+				expected: Cache{
 					ID:       "my_node_npm",
 					Template: "",
 					Registry: "",
@@ -121,7 +120,7 @@ func TestLoadTemplateDefaults(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				// Call configuration.ExpandCacheConfiguration to load the template defaults
-				got, err := ExpandCacheConfiguration([]cache.Cache{tt.cache})
+				got, err := ExpandCacheConfiguration([]Cache{tt.cache})
 				if err != nil {
 					t.Fatalf("ExpandCacheConfiguration: %v", err)
 				}
@@ -135,10 +134,10 @@ func TestLoadTemplateDefaults(t *testing.T) {
 	t.Run("with template (no overriden key)", func(t *testing.T) {
 		tests := []struct {
 			name     string
-			cache    cache.Cache
+			cache    Cache
 			setup    func() error
 			cleanup  func()
-			expected cache.Cache
+			expected Cache
 		}{
 			{
 				name: "with ruby template",
@@ -148,11 +147,11 @@ func TestLoadTemplateDefaults(t *testing.T) {
 				cleanup: func() {
 					_ = os.Remove("Gemfile.lock")
 				},
-				cache: cache.Cache{
+				cache: Cache{
 					ID:       "my_ruby",
 					Template: "ruby",
 				},
-				expected: cache.Cache{
+				expected: Cache{
 					ID:       "my_ruby",
 					Template: "",
 					Registry: "",
@@ -172,12 +171,12 @@ func TestLoadTemplateDefaults(t *testing.T) {
 				cleanup: func() {
 					_ = os.Remove("yarn.lock")
 				},
-				cache: cache.Cache{
+				cache: Cache{
 					ID:       "my_node_yarn",
 					Template: "node-yarn",
 					Paths:    []string{"node_modules"},
 				},
-				expected: cache.Cache{
+				expected: Cache{
 					ID:       "my_node_yarn",
 					Template: "",
 					Registry: "",
@@ -197,12 +196,12 @@ func TestLoadTemplateDefaults(t *testing.T) {
 				cleanup: func() {
 					_ = os.Remove("package-lock.json")
 				},
-				cache: cache.Cache{
+				cache: Cache{
 					ID:       "my_node_npm",
 					Template: "node-npm",
 					Paths:    []string{"node_modules"},
 				},
-				expected: cache.Cache{
+				expected: Cache{
 					ID:       "my_node_npm",
 					Template: "",
 					Registry: "",
@@ -242,7 +241,7 @@ func TestLoadTemplateDefaults(t *testing.T) {
 				}
 
 				// Call configuration.ExpandCacheConfiguration to load the template defaults
-				got, err := ExpandCacheConfiguration([]cache.Cache{tt.cache})
+				got, err := ExpandCacheConfiguration([]Cache{tt.cache})
 				if err != nil {
 					t.Fatalf("ExpandCacheConfiguration: %v", err)
 				}

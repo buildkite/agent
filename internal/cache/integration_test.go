@@ -1,4 +1,4 @@
-package zstash
+package cache
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/zstash/api"
-	"github.com/buildkite/agent/v3/internal/zstash/cache"
+	"github.com/buildkite/agent/v3/internal/cache/api"
+	"github.com/buildkite/agent/v3/internal/cache/configuration"
 )
 
 // mockAPIClient implements api.CacheClient for integration testing
@@ -235,7 +235,7 @@ func createRandomFile(t *testing.T, path string, sizeBytes int64) {
 }
 
 // setupTestCache creates a test cache with temporary directories and files
-func setupTestCache(t *testing.T, storageType string) (cacheClient *Cache, cacheDir, storageDir string) {
+func setupTestCache(t *testing.T, storageType string) (cacheClient *Client, cacheDir, storageDir string) {
 	t.Helper()
 
 	// Create temp directory under current working directory to satisfy chroot requirements
@@ -294,7 +294,7 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *Cache, cache
 	}
 
 	// Create cache client
-	client := &Cache{
+	client := &Client{
 		client:       mockClient,
 		bucketURL:    bucketURL,
 		format:       "zip",
@@ -303,7 +303,7 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *Cache, cache
 		organization: "test-org",
 		platform:     "linux/amd64",
 		registry:     "~",
-		caches: []cache.Cache{
+		caches: []configuration.Cache{
 			{
 				ID:           "test-cache",
 				Key:          "v1-test-key",

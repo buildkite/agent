@@ -10,34 +10,33 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/zstash"
-	"github.com/buildkite/agent/v3/internal/zstash/cache"
+	"github.com/buildkite/agent/v3/internal/cache/configuration"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
 // mockCacheClient is a mock implementation of the CacheClient interface for testing
 type mockCacheClient struct {
-	saveFunc    func(ctx context.Context, cacheID string) (zstash.SaveResult, error)
-	restoreFunc func(ctx context.Context, cacheID string) (zstash.RestoreResult, error)
-	listFunc    func() []cache.Cache
+	saveFunc    func(ctx context.Context, cacheID string) (SaveResult, error)
+	restoreFunc func(ctx context.Context, cacheID string) (RestoreResult, error)
+	listFunc    func() []configuration.Cache
 }
 
-func (m *mockCacheClient) Save(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
+func (m *mockCacheClient) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	if m.saveFunc != nil {
 		return m.saveFunc(ctx, cacheID)
 	}
-	return zstash.SaveResult{}, nil
+	return SaveResult{}, nil
 }
 
-func (m *mockCacheClient) Restore(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
+func (m *mockCacheClient) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
 	if m.restoreFunc != nil {
 		return m.restoreFunc(ctx, cacheID)
 	}
-	return zstash.RestoreResult{}, nil
+	return RestoreResult{}, nil
 }
 
-func (m *mockCacheClient) ListCaches() []cache.Cache {
+func (m *mockCacheClient) ListCaches() []configuration.Cache {
 	if m.listFunc != nil {
 		return m.listFunc()
 	}
@@ -64,17 +63,17 @@ func TestSaveWithClient_CacheCreated(t *testing.T) {
 	ctx := context.Background()
 
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
-			return zstash.SaveResult{
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
+			return SaveResult{
 				CacheCreated: true,
 				Key:          "test-key-v1",
-				Archive: zstash.ArchiveMetrics{
+				Archive: ArchiveMetrics{
 					Size:             1024,
 					WrittenBytes:     1024,
 					WrittenEntries:   10,
 					CompressionRatio: 2.5,
 				},
-				Transfer: &zstash.TransferMetrics{
+				Transfer: &TransferMetrics{
 					TransferSpeed: 5.5,
 				},
 			}, nil
@@ -92,8 +91,8 @@ func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 	ctx := context.Background()
 
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
-			return zstash.SaveResult{
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
+			return SaveResult{
 				CacheCreated: false,
 				Key:          "test-key-v1",
 			}, nil
@@ -112,18 +111,18 @@ func TestSaveWithClient_MultipleCaches(t *testing.T) {
 
 	callCount := 0
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
 			callCount++
-			return zstash.SaveResult{
+			return SaveResult{
 				CacheCreated: true,
 				Key:          fmt.Sprintf("key-%s", cacheID),
-				Archive: zstash.ArchiveMetrics{
+				Archive: ArchiveMetrics{
 					Size:             100,
 					WrittenBytes:     100,
 					WrittenEntries:   1,
 					CompressionRatio: 1.0,
 				},
-				Transfer: &zstash.TransferMetrics{
+				Transfer: &TransferMetrics{
 					TransferSpeed: 1.0,
 				},
 			}, nil
@@ -145,8 +144,8 @@ func TestSaveWithClient_Error(t *testing.T) {
 
 	expectedErr := errors.New("save failed")
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
-			return zstash.SaveResult{}, expectedErr
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
+			return SaveResult{}, expectedErr
 		},
 	}
 
@@ -167,9 +166,9 @@ func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 	ctx := context.Background()
 
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
 			t.Fatalf("Save should not be called with empty cache IDs")
-			return zstash.SaveResult{}, nil
+			return SaveResult{}, nil
 		},
 	}
 
@@ -186,19 +185,19 @@ func TestRestoreWithClient_CacheHit(t *testing.T) {
 	ctx := context.Background()
 
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			return zstash.RestoreResult{
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{
 				CacheHit:      true,
 				CacheRestored: true,
 				FallbackUsed:  false,
 				Key:           "test-key-v1",
-				Archive: zstash.ArchiveMetrics{
+				Archive: ArchiveMetrics{
 					Size:             1024,
 					WrittenBytes:     1024,
 					WrittenEntries:   10,
 					CompressionRatio: 2.5,
 				},
-				Transfer: zstash.TransferMetrics{
+				Transfer: TransferMetrics{
 					TransferSpeed: 5.5,
 				},
 			}, nil
@@ -216,19 +215,19 @@ func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 	ctx := context.Background()
 
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			return zstash.RestoreResult{
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{
 				CacheHit:      false,
 				CacheRestored: true,
 				FallbackUsed:  true,
 				Key:           "test-key-fallback",
-				Archive: zstash.ArchiveMetrics{
+				Archive: ArchiveMetrics{
 					Size:             512,
 					WrittenBytes:     512,
 					WrittenEntries:   5,
 					CompressionRatio: 2.0,
 				},
-				Transfer: zstash.TransferMetrics{
+				Transfer: TransferMetrics{
 					TransferSpeed: 3.5,
 				},
 			}, nil
@@ -246,8 +245,8 @@ func TestRestoreWithClient_CacheMiss(t *testing.T) {
 	ctx := context.Background()
 
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			return zstash.RestoreResult{
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{
 				CacheHit:      false,
 				CacheRestored: false,
 				FallbackUsed:  false,
@@ -268,9 +267,9 @@ func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 
 	callCount := 0
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
 			callCount++
-			return zstash.RestoreResult{
+			return RestoreResult{
 				CacheHit:      true,
 				CacheRestored: true,
 				Key:           fmt.Sprintf("key-%s", cacheID),
@@ -293,8 +292,8 @@ func TestRestoreWithClient_Error(t *testing.T) {
 
 	expectedErr := errors.New("restore failed")
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			return zstash.RestoreResult{}, expectedErr
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{}, expectedErr
 		},
 	}
 
@@ -315,9 +314,9 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 	ctx := context.Background()
 
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
 			t.Fatalf("Restore should not be called with empty cache IDs")
-			return zstash.RestoreResult{}, nil
+			return RestoreResult{}, nil
 		},
 	}
 
