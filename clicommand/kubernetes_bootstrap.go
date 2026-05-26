@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -87,21 +87,21 @@ var KubernetesBootstrapCommand = cli.Command{
 		}
 		defer socket.Close()
 
-		// Start with the registration response env, then override with our
-		// existing env.
-		// This is important because we're given higher-priority info from
-		// agent-stack-k8s or the container's default setup. Examples:
-		// - agent-stack-k8s interprets the job definition itself, and sets
-		//   BUILDKITE_COMMAND to one that could be radically different to the
-		//   one the agent normally sets.
-		// - Similarly, bootstrap phases varies depending on whether this is a
-		//   checkout or command container. The agent would have us run all
-		//   phases.
-		// - Container ID should be preserved in case of Hyrum's Law.
-		// - Sockets path is set by agent-stack-k8s as it varies by container
-		//   name.
-		// - We don't want to use the agent container's HOME, KUBERNETES_*, etc.
-		environ := env.FromSlice(slices.Concat(regResp.Env, os.Environ()))
+		// Build the subprocess env by starting with the current env, then
+		// overriding mainly with the registration response env. Nearly all of
+		// the registration env is higher priority than existing env, but we're
+		// given some higher-priority info from agent-stack-k8s or the
+		// container's default setup.
+		environ := env.FromSlice(os.Environ())
+		for name, val := range env.SeqSlice(regResp.Env) {
+			if _, skip := existingEnvPriority[name]; skip {
+				continue
+			}
+			if strings.HasPrefix(name, "KUBERNETES_") {
+				continue
+			}
+			environ.Set(name, val)
+		}
 
 		// Capture parameters from the agent that affect how the subprocess
 		// should be run: build path, PTY, cancel signal, and signal grace period.
@@ -256,4 +256,38 @@ var KubernetesBootstrapCommand = cli.Command{
 		exitCode = proc.WaitStatus().ExitStatus()
 		return &SilentExitError{code: exitCode}
 	},
+}
+
+// existingEnvPriority lists existing env vars (the ones this process started
+// with) that should take priority over the registration response env. This is
+// vaguely similar to the "protectedEnv" map, but is distinct and inverted.
+//
+// The two reasons for including an env var in this map are:
+//
+//   - The value is set by agent-stack-k8s in the env config of the container,
+//     and the value would be different to the one computed by the agent.
+//   - The value is provided by the underlying container and could be breakingly
+//     different from the agent container's value.
+var existingEnvPriority = map[string]struct{}{
+	// BUILDKITE_BOOTSTRAP_PHASES varies depending on whether this is a checkout
+	// or command container. The agent would have us run all phases.
+	"BUILDKITE_BOOTSTRAP_PHASES": {},
+	// agent-stack-k8s interprets the job definition itself, and sets
+	// BUILDKITE_COMMAND to one that could be radically different to the one the
+	// agent normally sets.
+	"BUILDKITE_COMMAND": {},
+	// BUILDKITE_CONTAINER_ID is preserved in case of Hyrum's Law.
+	"BUILDKITE_CONTAINER_ID": {},
+	// BUILDKITE_SOCKETS_PATH is set by agent-stack-k8s and varies by container
+	// name.
+	"BUILDKITE_SOCKETS_PATH": {},
+	// We don't want to use the agent container's HOME, HOSTNAME, PWD, PATH,
+	// KUBERNETES_*, etc.
+	"HOME":     {},
+	"HOSTNAME": {},
+	"PATH":     {},
+	"PWD":      {},
+	"SHLVL":    {},
+	"TERM":     {},
+	// "KUBERNETES_*": {}, // implemented as a strings.HasPrefix check
 }
