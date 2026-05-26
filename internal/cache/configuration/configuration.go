@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/zstash/cache"
-	"github.com/buildkite/agent/v3/internal/zstash/internal/key"
+	"github.com/buildkite/agent/v3/internal/cache/internal/key"
 )
 
 //go:embed templates.json
@@ -26,7 +25,7 @@ Takes a list of cache configurations and expands them into a list of cache of re
 
 Uses the OS environment variables for template expansion.
 */
-func ExpandCacheConfiguration(caches []cache.Cache) ([]cache.Cache, error) {
+func ExpandCacheConfiguration(caches []Cache) ([]Cache, error) {
 	return expandCacheConfiguration(caches, nil)
 }
 
@@ -41,11 +40,11 @@ Parameters:
 
 Returns the expanded cache configurations or an error if expansion fails.
 */
-func ExpandCacheConfigurationWithEnv(caches []cache.Cache, env map[string]string) ([]cache.Cache, error) {
+func ExpandCacheConfigurationWithEnv(caches []Cache, env map[string]string) ([]Cache, error) {
 	return expandCacheConfiguration(caches, env)
 }
 
-func expandCacheConfiguration(caches []cache.Cache, env map[string]string) ([]cache.Cache, error) {
+func expandCacheConfiguration(caches []Cache, env map[string]string) ([]Cache, error) {
 	templatesMap, err := loadTemplates()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
@@ -94,7 +93,7 @@ func expandCacheConfiguration(caches []cache.Cache, env map[string]string) ([]ca
 Loads the templates from templates.json as a map of template name to Cache object.
 Map<string, Cache>
 */
-func loadTemplates() (map[string]cache.Cache, error) {
+func loadTemplates() (map[string]Cache, error) {
 	file, err := templatesFile.Open("templates.json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open template file: %w", err)
@@ -110,7 +109,7 @@ func loadTemplates() (map[string]cache.Cache, error) {
 	}
 
 	// Create a map of template name to Cache object
-	templatesCacheMap := make(map[string]cache.Cache)
+	templatesCacheMap := make(map[string]Cache)
 
 	for templateName, template := range rawTemplates {
 		cache, err := extractTemplateCache(templateName, template)
@@ -123,29 +122,29 @@ func loadTemplates() (map[string]cache.Cache, error) {
 	return templatesCacheMap, nil
 }
 
-// extractTemplateCache safely extracts a cache.Cache from raw template data
-func extractTemplateCache(templateName string, template interface{}) (cache.Cache, error) {
+// extractTemplateCache safely extracts a Cache from raw template data
+func extractTemplateCache(templateName string, template interface{}) (Cache, error) {
 	templateMap, ok := template.(map[string]interface{})
 	if !ok {
-		return cache.Cache{}, fmt.Errorf("template %s is not a valid object", templateName)
+		return Cache{}, fmt.Errorf("template %s is not a valid object", templateName)
 	}
 
 	key, err := extractStringField(templateMap, "key", true)
 	if err != nil {
-		return cache.Cache{}, fmt.Errorf("template %s: %w", templateName, err)
+		return Cache{}, fmt.Errorf("template %s: %w", templateName, err)
 	}
 
 	fallbackKeys, err := extractStringArrayField(templateMap, "fallback_keys", true)
 	if err != nil {
-		return cache.Cache{}, fmt.Errorf("template %s: %w", templateName, err)
+		return Cache{}, fmt.Errorf("template %s: %w", templateName, err)
 	}
 
 	paths, err := extractStringArrayField(templateMap, "paths", true)
 	if err != nil {
-		return cache.Cache{}, fmt.Errorf("template %s: %w", templateName, err)
+		return Cache{}, fmt.Errorf("template %s: %w", templateName, err)
 	}
 
-	return cache.Cache{
+	return Cache{
 		ID:           "", // Templates do not have an ID
 		Template:     "", // Templates do not have a Template
 		Registry:     "", // Templates do not have a Registry
@@ -205,7 +204,7 @@ func extractStringArrayField(m map[string]interface{}, field string, required bo
 /*
 Replace cache.Template with the template values from template.json
 */
-func augmentTemplateWithCache(templatesMap map[string]cache.Cache, cache cache.Cache) (cache.Cache, error) {
+func augmentTemplateWithCache(templatesMap map[string]Cache, cache Cache) (Cache, error) {
 	template, ok := templatesMap[cache.Template]
 	if !ok {
 		return cache, fmt.Errorf("template '%s' not found", cache.Template)

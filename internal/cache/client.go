@@ -1,20 +1,20 @@
-// Package zstash provides a library for saving and restoring cache archives
+// Package cache provides a library for saving and restoring cache archives
 // to/from cloud storage with the Buildkite cache API.
 //
-// The main entry point is NewCache, which creates a Cache client for managing
-// cache operations. The Cache client is safe for concurrent use by multiple
+// The main entry point is NewClient, which creates a Client for managing
+// cache operations. The Client is safe for concurrent use by multiple
 // goroutines.
 //
 // Basic usage:
 //
 //	client := api.NewClient(ctx, version, endpoint, token)
-//	cacheClient, err := zstash.NewCache(zstash.Config{
+//	cacheClient, err := cache.NewClient(cache.ClientConfig{
 //	    Client:       client,
 //	    BucketURL:    "s3://my-bucket",
 //	    Branch:       "main",
 //	    Pipeline:     "my-pipeline",
 //	    Organization: "my-org",
-//	    Caches: []cache.Cache{
+//	    Caches: []configuration.Cache{
 //	        {ID: "node_modules", Key: "v1-{{ checksum \"package-lock.json\" }}", Paths: []string{"node_modules"}},
 //	    },
 //	})
@@ -27,14 +27,14 @@
 //
 //	// Restore a cache
 //	result, err := cacheClient.Restore(ctx, "node_modules")
-package zstash
+package cache
 
 import (
 	"errors"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/zstash/api"
-	"github.com/buildkite/agent/v3/internal/zstash/cache"
+	"github.com/buildkite/agent/v3/internal/cache/api"
+	"github.com/buildkite/agent/v3/internal/cache/configuration"
 )
 
 // Sentinel errors for common scenarios
@@ -48,14 +48,14 @@ var (
 	ErrInvalidConfiguration = errors.New("invalid configuration")
 )
 
-// Cache provides cache save and restore operations with the Buildkite cache API.
+// Client provides cache save and restore operations with the Buildkite cache API.
 //
-// A Cache client is created once with configuration and can be used for multiple
-// operations. The client is safe for concurrent use by multiple goroutines.
+// A Client is created once with configuration and can be used for multiple
+// operations. The Client is safe for concurrent use by multiple goroutines.
 //
 // All cache operations respect context cancellation and will clean up resources
 // when the context is cancelled.
-type Cache struct {
+type Client struct {
 	client       api.CacheClient
 	bucketURL    string
 	format       string
@@ -64,15 +64,15 @@ type Cache struct {
 	organization string
 	platform     string
 	registry     string
-	caches       []cache.Cache
+	caches       []configuration.Cache
 	onProgress   ProgressCallback
 }
 
-// Config holds all configuration for creating a Cache client.
+// ClientConfig holds all configuration for creating a Client.
 //
 // The only required field is Client. All other fields have sensible defaults or
 // are optional depending on your use case.
-type Config struct {
+type ClientConfig struct {
 	// Client is the Buildkite API client (required).
 	// Create with api.NewClient(ctx, version, endpoint, token).
 	Client api.CacheClient
@@ -109,7 +109,7 @@ type Config struct {
 
 	// Caches is the list of cache configurations to manage.
 	// Cache keys and paths will be expanded using template variables.
-	Caches []cache.Cache
+	Caches []configuration.Cache
 
 	// OnProgress is an optional callback for progress updates during operations.
 	// If nil, no progress callbacks are made. The callback must be thread-safe
@@ -148,16 +148,15 @@ type Config struct {
 //   - "complete": Operation finished successfully
 type ProgressCallback func(cacheID, stage, message string, current, total int)
 
-// NewCache creates and validates a new cache client.
-// Implementation is in service.go
-
-// Save and Restore methods are implemented in save.go and restore.go
+// NewClient creates and validates a new cache client. Implementation is in
+// client_constructor.go. Save and Restore methods are implemented in save.go
+// and restore.go respectively.
 
 // ListCaches returns all cache configurations managed by this cache client.
 //
 // The returned caches have already been expanded (templates resolved) and
-// validated during NewCache construction.
-func (c *Cache) ListCaches() []cache.Cache {
+// validated during NewClient construction.
+func (c *Client) ListCaches() []configuration.Cache {
 	return c.caches
 }
 
@@ -165,13 +164,13 @@ func (c *Cache) ListCaches() []cache.Cache {
 //
 // Returns ErrCacheNotFound if the cache ID is not found in the client's
 // configuration.
-func (c *Cache) GetCache(id string) (cache.Cache, error) {
+func (c *Client) GetCache(id string) (configuration.Cache, error) {
 	for _, cacheItem := range c.caches {
 		if cacheItem.ID == id {
 			return cacheItem, nil
 		}
 	}
-	return cache.Cache{}, ErrCacheNotFound
+	return configuration.Cache{}, ErrCacheNotFound
 }
 
 // SaveResult contains detailed information about a cache save operation.

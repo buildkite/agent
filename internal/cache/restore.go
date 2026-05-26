@@ -1,4 +1,4 @@
-package zstash
+package cache
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/zstash/api"
-	"github.com/buildkite/agent/v3/internal/zstash/archive"
-	"github.com/buildkite/agent/v3/internal/zstash/store"
+	"github.com/buildkite/agent/v3/internal/cache/api"
+	"github.com/buildkite/agent/v3/internal/cache/archive"
+	"github.com/buildkite/agent/v3/internal/cache/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -57,9 +57,9 @@ import (
 //	} else {
 //	    log.Printf("Cache hit: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
-func (c *Cache) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
-	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/zstash")
-	ctx, span := tracer.Start(ctx, "Cache.Restore")
+func (c *Client) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
+	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
+	ctx, span := tracer.Start(ctx, "Client.Restore")
 	defer span.End()
 
 	span.SetAttributes(
@@ -217,9 +217,9 @@ func (c *Cache) Restore(ctx context.Context, cacheID string) (RestoreResult, err
 }
 
 // downloadCache downloads a cache archive from storage
-func (c *Cache) downloadCache(ctx context.Context, retrieveResp api.CacheRetrieveResp, bucketURL string) (tmpDir, archiveFile string, transferInfo *store.TransferInfo, err error) {
-	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/zstash")
-	ctx, span := tracer.Start(ctx, "Cache.downloadCache")
+func (c *Client) downloadCache(ctx context.Context, retrieveResp api.CacheRetrieveResp, bucketURL string) (tmpDir, archiveFile string, transferInfo *store.TransferInfo, err error) {
+	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
+	ctx, span := tracer.Start(ctx, "Client.downloadCache")
 	defer span.End()
 
 	span.SetAttributes(
@@ -266,9 +266,9 @@ func (c *Cache) downloadCache(ctx context.Context, retrieveResp api.CacheRetriev
 }
 
 // extractCache extracts files from a cache archive
-func (c *Cache) extractCache(ctx context.Context, archiveFile string, archiveSize int64, paths []string) (*archive.ArchiveInfo, error) {
-	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/zstash")
-	ctx, span := tracer.Start(ctx, "Cache.extractCache")
+func (c *Client) extractCache(ctx context.Context, archiveFile string, archiveSize int64, paths []string) (*archive.ArchiveInfo, error) {
+	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
+	ctx, span := tracer.Start(ctx, "Client.extractCache")
 	defer span.End()
 
 	span.SetAttributes(

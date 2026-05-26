@@ -8,9 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/buildkite/agent/v3/internal/zstash"
-	"github.com/buildkite/agent/v3/internal/zstash/api"
-	"github.com/buildkite/agent/v3/internal/zstash/cache"
+	"github.com/buildkite/agent/v3/internal/cache/api"
+	"github.com/buildkite/agent/v3/internal/cache/configuration"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/dustin/go-humanize"
@@ -42,14 +41,14 @@ type Config struct {
 // FileConfig represents the structure of the cache configuration YAML file
 type FileConfig struct {
 	// Dependencies is the list of dependency caches to restore/save
-	Dependencies []cache.Cache `yaml:"dependencies"`
+	Dependencies []configuration.Cache `yaml:"dependencies"`
 }
 
 // CacheClient defines the interface for cache operations
 type CacheClient interface {
-	Save(ctx context.Context, cacheID string) (zstash.SaveResult, error)
-	Restore(ctx context.Context, cacheID string) (zstash.RestoreResult, error)
-	ListCaches() []cache.Cache
+	Save(ctx context.Context, cacheID string) (SaveResult, error)
+	Restore(ctx context.Context, cacheID string) (RestoreResult, error)
+	ListCaches() []configuration.Cache
 }
 
 // Save saves caches based on the provided configuration and logs results as each cache is processed
@@ -98,7 +97,7 @@ func loadCacheConfiguration(cacheConfigFile string) (*FileConfig, error) {
 }
 
 // setupCacheClient creates a cache client and determines which cache IDs to process
-func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash.Cache, []string, error) {
+func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*Client, []string, error) {
 	client := api.NewClient(ctx, version.Version(), cfg.APIEndpoint, cfg.APIToken)
 
 	fileConfig, err := loadCacheConfiguration(cfg.CacheConfigFile)
@@ -110,7 +109,7 @@ func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash
 		return nil, nil, nil
 	}
 
-	cacheClient, err := zstash.NewCache(zstash.Config{
+	cacheClient, err := NewClient(ClientConfig{
 		Client:       client,
 		BucketURL:    cfg.BucketURL,
 		Format:       "zip",

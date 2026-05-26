@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/zstash/internal/trace"
+	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
 )
 
 func TestBuildArchive(t *testing.T) {
