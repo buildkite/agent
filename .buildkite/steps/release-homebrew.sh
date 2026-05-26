@@ -92,7 +92,7 @@ BASE_FORMULA_FILE="buildkite-agent@${AGENT_VERSION%%.*}.rb"
 FORMULA_FILE="./pkg/${BASE_FORMULA_FILE}"
 UPDATED_FORMULA_FILE=./pkg/${BASE_FORMULA_FILE}.updated
 
-CONTENTS_API_RESPONSE="$(curl
+CONTENTS_API_RESPONSE="$(curl \
   "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/Formula/${BASE_FORMULA_FILE}" \
   -H "Authorization: token ${GITHUB_RELEASE_ACCESS_TOKEN}")"
 
