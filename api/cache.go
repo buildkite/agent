@@ -32,8 +32,8 @@ var ErrCacheEntryNotFound = errors.New("cache entry not found")
 
 var cacheTracer = otel.Tracer("github.com/buildkite/agent/v3/api/cache")
 
-// CacheCreateReq is the request body for creating a cache entry.
-type CacheCreateReq struct {
+// CacheEntryCreateReq is the request body for creating a cache entry.
+type CacheEntryCreateReq struct {
 	Store        string   `json:"store"`
 	Key          string   `json:"key"`
 	FallbackKeys []string `json:"fallback_keys"`
@@ -47,15 +47,15 @@ type CacheCreateReq struct {
 	Organization string   `json:"owner"`
 }
 
-// CacheRetrieveReq is the query for retrieving a cache entry.
-type CacheRetrieveReq struct {
+// CacheEntryRetrieveReq is the query for retrieving a cache entry.
+type CacheEntryRetrieveReq struct {
 	Key          string `url:"key"`
 	Branch       string `url:"branch"`
 	FallbackKeys string `url:"fallback_keys"`
 }
 
-// CacheRetrieveResp describes the cache entry to download.
-type CacheRetrieveResp struct {
+// CacheEntryRetrieveResp describes the cache entry to download.
+type CacheEntryRetrieveResp struct {
 	Store                string    `json:"store"`
 	Key                  string    `json:"key"`
 	Fallback             bool      `json:"fallback"`
@@ -67,8 +67,8 @@ type CacheRetrieveResp struct {
 	Message              string    `json:"message"`
 }
 
-// CacheCreateResp describes where and how to upload the new cache entry.
-type CacheCreateResp struct {
+// CacheEntryCreateResp describes where and how to upload the new cache entry.
+type CacheEntryCreateResp struct {
 	UploadID           string   `json:"upload_id"`
 	StoreObjectName    string   `json:"store_object_name"`
 	Multipart          bool     `json:"multipart"`
@@ -76,14 +76,14 @@ type CacheCreateResp struct {
 	Message            string   `json:"message"`
 }
 
-// CachePeekReq is the query for checking whether a cache entry exists.
-type CachePeekReq struct {
+// CacheEntryPeekReq is the query for checking whether a cache entry exists.
+type CacheEntryPeekReq struct {
 	Key    string `url:"key"`
 	Branch string `url:"branch"`
 }
 
-// CachePeekResp describes the cache entry returned by a peek.
-type CachePeekResp struct {
+// CacheEntryPeekResp describes the cache entry returned by a peek.
+type CacheEntryPeekResp struct {
 	Store        string    `json:"store"`
 	Digest       string    `json:"digest"`
 	ExpiresAt    time.Time `json:"expires_at"`
@@ -110,13 +110,13 @@ type CacheRegistryResp struct {
 	Store string `json:"store"`
 }
 
-// CacheCommitReq is the request body for committing a previously created cache entry.
-type CacheCommitReq struct {
+// CacheEntryCommitReq is the request body for committing a previously created cache entry.
+type CacheEntryCommitReq struct {
 	UploadID string `json:"upload_id"`
 }
 
-// CacheCommitResp acknowledges a commit.
-type CacheCommitResp struct {
+// CacheEntryCommitResp acknowledges a commit.
+type CacheEntryCommitResp struct {
 	Message string `json:"message"`
 }
 
@@ -142,14 +142,14 @@ func (c *Client) CacheRegistry(ctx context.Context, registry string) (CacheRegis
 	return resp, nil
 }
 
-// CachePeekExists checks whether a cache entry exists.
+// CacheEntryPeekExists checks whether a cache entry exists.
 // Returns (resp, true, nil) on hit, (resp, false, nil) on miss (HTTP 404 with
 // CacheEntryNotFound), or (resp, false, err) on any other failure.
-func (c *Client) CachePeekExists(ctx context.Context, registry string, peek CachePeekReq) (CachePeekResp, bool, error) {
-	ctx, span := cacheTracer.Start(ctx, "Client.CachePeekExists")
+func (c *Client) CacheEntryPeekExists(ctx context.Context, registry string, peek CacheEntryPeekReq) (CacheEntryPeekResp, bool, error) {
+	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryPeekExists")
 	defer span.End()
 
-	var resp CachePeekResp
+	var resp CacheEntryPeekResp
 
 	path, err := cacheQueryPath("/cache_registries/%s/peek", registry, peek)
 	if err != nil {
@@ -168,12 +168,12 @@ func (c *Client) CachePeekExists(ctx context.Context, registry string, peek Cach
 	return interpretCacheResponse(span, res, resp)
 }
 
-// CacheCreate creates a new cache entry and returns upload instructions.
-func (c *Client) CacheCreate(ctx context.Context, registry string, create CacheCreateReq) (CacheCreateResp, error) {
-	ctx, span := cacheTracer.Start(ctx, "Client.CacheCreate")
+// CacheEntryCreate creates a new cache entry and returns upload instructions.
+func (c *Client) CacheEntryCreate(ctx context.Context, registry string, create CacheEntryCreateReq) (CacheEntryCreateResp, error) {
+	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryCreate")
 	defer span.End()
 
-	var resp CacheCreateResp
+	var resp CacheEntryCreateResp
 
 	req, err := c.newRequest(ctx, http.MethodPut, cachePath("/cache_registries/%s/store", registry), &create)
 	if err != nil {
@@ -190,12 +190,12 @@ func (c *Client) CacheCreate(ctx context.Context, registry string, create CacheC
 	return resp, nil
 }
 
-// CacheCommit marks a previously created cache entry as committed.
-func (c *Client) CacheCommit(ctx context.Context, registry string, commit CacheCommitReq) (CacheCommitResp, error) {
-	ctx, span := cacheTracer.Start(ctx, "Client.CacheCommit")
+// CacheEntryCommit marks a previously created cache entry as committed.
+func (c *Client) CacheEntryCommit(ctx context.Context, registry string, commit CacheEntryCommitReq) (CacheEntryCommitResp, error) {
+	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryCommit")
 	defer span.End()
 
-	var resp CacheCommitResp
+	var resp CacheEntryCommitResp
 
 	req, err := c.newRequest(ctx, http.MethodPut, cachePath("/cache_registries/%s/commit", registry), &commit)
 	if err != nil {
@@ -212,14 +212,14 @@ func (c *Client) CacheCommit(ctx context.Context, registry string, commit CacheC
 	return resp, nil
 }
 
-// CacheRetrieve retrieves download instructions for a cache entry.
+// CacheEntryRetrieve retrieves download instructions for a cache entry.
 // Returns (resp, true, nil) on hit (possibly via a fallback key), (resp, false,
 // nil) on miss, or (resp, false, err) on any other failure.
-func (c *Client) CacheRetrieve(ctx context.Context, registry string, retrieve CacheRetrieveReq) (CacheRetrieveResp, bool, error) {
-	ctx, span := cacheTracer.Start(ctx, "Client.CacheRetrieve")
+func (c *Client) CacheEntryRetrieve(ctx context.Context, registry string, retrieve CacheEntryRetrieveReq) (CacheEntryRetrieveResp, bool, error) {
+	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryRetrieve")
 	defer span.End()
 
-	var resp CacheRetrieveResp
+	var resp CacheEntryRetrieveResp
 
 	path, err := cacheQueryPath("/cache_registries/%s/retrieve", registry, retrieve)
 	if err != nil {
@@ -301,8 +301,8 @@ type cacheMessage interface {
 	cacheMessage() string
 }
 
-func (r CachePeekResp) cacheMessage() string     { return r.Message }
-func (r CacheRetrieveResp) cacheMessage() string { return r.Message }
+func (r CacheEntryPeekResp) cacheMessage() string     { return r.Message }
+func (r CacheEntryRetrieveResp) cacheMessage() string { return r.Message }
 
 // interpretCacheResponse maps the dual "200 = hit, 404 + message = miss"
 // convention into the (resp, exists, err) return shape used by peek/retrieve.

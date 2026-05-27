@@ -72,18 +72,18 @@ func (m *mockAPIClient) CacheRegistry(ctx context.Context, registry string) (api
 	}, nil
 }
 
-func (m *mockAPIClient) CachePeekExists(ctx context.Context, registry string, req api.CachePeekReq) (api.CachePeekResp, bool, error) {
+func (m *mockAPIClient) CacheEntryPeekExists(ctx context.Context, registry string, req api.CacheEntryPeekReq) (api.CacheEntryPeekResp, bool, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CachePeekResp{}, false, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryPeekResp{}, false, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	entry, exists := reg.cache[req.Key]
 	if !exists || !entry.committed {
-		return api.CachePeekResp{Message: api.CacheEntryNotFound}, false, nil
+		return api.CacheEntryPeekResp{Message: api.CacheEntryNotFound}, false, nil
 	}
 
-	return api.CachePeekResp{
+	return api.CacheEntryPeekResp{
 		Store:        reg.store,
 		Digest:       entry.digest,
 		ExpiresAt:    entry.expiresAt,
@@ -103,10 +103,10 @@ func (m *mockAPIClient) CachePeekExists(ctx context.Context, registry string, re
 	}, true, nil
 }
 
-func (m *mockAPIClient) CacheCreate(ctx context.Context, registry string, req api.CacheCreateReq) (api.CacheCreateResp, error) {
+func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, req api.CacheEntryCreateReq) (api.CacheEntryCreateResp, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CacheCreateResp{}, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryCreateResp{}, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	uploadID := fmt.Sprintf("upload-%d", time.Now().UnixNano())
@@ -131,37 +131,37 @@ func (m *mockAPIClient) CacheCreate(ctx context.Context, registry string, req ap
 
 	reg.cache[req.Key] = entry
 
-	return api.CacheCreateResp{
+	return api.CacheEntryCreateResp{
 		UploadID:        uploadID,
 		StoreObjectName: storeObjectName,
 	}, nil
 }
 
-func (m *mockAPIClient) CacheCommit(ctx context.Context, registry string, req api.CacheCommitReq) (api.CacheCommitResp, error) {
+func (m *mockAPIClient) CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CacheCommitResp{}, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryCommitResp{}, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	for _, entry := range reg.cache {
 		if entry.uploadID == req.UploadID {
 			entry.committed = true
-			return api.CacheCommitResp{Message: "Cache entry committed successfully"}, nil
+			return api.CacheEntryCommitResp{Message: "Cache entry committed successfully"}, nil
 		}
 	}
 
-	return api.CacheCommitResp{}, fmt.Errorf("upload ID not found: %s", req.UploadID)
+	return api.CacheEntryCommitResp{}, fmt.Errorf("upload ID not found: %s", req.UploadID)
 }
 
-func (m *mockAPIClient) CacheRetrieve(ctx context.Context, registry string, req api.CacheRetrieveReq) (api.CacheRetrieveResp, bool, error) {
+func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string, req api.CacheEntryRetrieveReq) (api.CacheEntryRetrieveResp, bool, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CacheRetrieveResp{}, false, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryRetrieveResp{}, false, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	// Try exact key match first
 	if entry, exists := reg.cache[req.Key]; exists && entry.committed {
-		return api.CacheRetrieveResp{
+		return api.CacheEntryRetrieveResp{
 			Store:           reg.store,
 			Key:             entry.key,
 			Fallback:        false,
@@ -178,7 +178,7 @@ func (m *mockAPIClient) CacheRetrieve(ctx context.Context, registry string, req 
 		for _, fbKey := range fallbackKeys {
 			fbKey = strings.TrimSpace(fbKey)
 			if entry, exists := reg.cache[fbKey]; exists && entry.committed {
-				return api.CacheRetrieveResp{
+				return api.CacheEntryRetrieveResp{
 					Store:           reg.store,
 					Key:             entry.key,
 					Fallback:        true,
@@ -190,7 +190,7 @@ func (m *mockAPIClient) CacheRetrieve(ctx context.Context, registry string, req 
 		}
 	}
 
-	return api.CacheRetrieveResp{Message: api.CacheEntryNotFound}, false, nil
+	return api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound}, false, nil
 }
 
 // createRandomFile creates a file filled with random data
@@ -330,7 +330,7 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 			t.Fatalf("Save: %v", err)
 		}
 
-		if !result.CacheCreated {
+		if !result.CacheEntryCreated {
 			t.Error("cache should be created")
 		}
 		if result.Key != "v1-test-key" {
@@ -476,7 +476,7 @@ func TestCacheIntegration_SaveAlreadyExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	if !result1.CacheCreated {
+	if !result1.CacheEntryCreated {
 		t.Error("first save should create cache")
 	}
 
@@ -485,7 +485,7 @@ func TestCacheIntegration_SaveAlreadyExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	if result2.CacheCreated {
+	if result2.CacheEntryCreated {
 		t.Error("second save should not create cache")
 	}
 	if result2.Transfer != nil {
@@ -534,7 +534,7 @@ func TestCacheIntegration_RestoreWithFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	if !saveResult.CacheCreated {
+	if !saveResult.CacheEntryCreated {
 		t.Error("fallback cache should be created")
 	}
 	t.Logf("Saved fallback cache with key: %s", saveResult.Key)
@@ -592,8 +592,8 @@ func TestCacheIntegration_LargeFileChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	if !result.CacheCreated {
-		t.Fatal("expected CacheCreated to be true")
+	if !result.CacheEntryCreated {
+		t.Fatal("expected CacheEntryCreated to be true")
 	}
 
 	checksum1 := result.Archive.Sha256Sum
@@ -618,7 +618,7 @@ func TestCacheIntegration_LargeFileChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	if result2.CacheCreated {
+	if result2.CacheEntryCreated {
 		t.Error("cache should already exist")
 	}
 }

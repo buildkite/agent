@@ -21,7 +21,7 @@ func newTestCacheClient(t *testing.T, endpoint string) *api.Client {
 	})
 }
 
-func TestCachePeekExists_Success(t *testing.T) {
+func TestCacheEntryPeekExists_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodGet)
@@ -35,18 +35,18 @@ func TestCachePeekExists_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(api.CachePeekResp{Message: "Cache exists"})
+		_ = json.NewEncoder(w).Encode(api.CacheEntryPeekResp{Message: "Cache exists"})
 	}))
 	defer server.Close()
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, err := client.CachePeekExists(context.Background(), "test-slug", api.CachePeekReq{
+	resp, exists, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "test-key",
 		Branch: "main",
 	})
 	if err != nil {
-		t.Fatalf("CachePeekExists error = %v, want nil", err)
+		t.Fatalf("CacheEntryPeekExists error = %v, want nil", err)
 	}
 	if !exists {
 		t.Error("exists = false, want true")
@@ -56,22 +56,22 @@ func TestCachePeekExists_Success(t *testing.T) {
 	}
 }
 
-func TestCachePeekExists_NotFound(t *testing.T) {
+func TestCacheEntryPeekExists_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(api.CachePeekResp{Message: api.CacheEntryNotFound})
+		_ = json.NewEncoder(w).Encode(api.CacheEntryPeekResp{Message: api.CacheEntryNotFound})
 	}))
 	defer server.Close()
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, err := client.CachePeekExists(context.Background(), "test-slug", api.CachePeekReq{
+	resp, exists, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "nonexistent-key",
 		Branch: "main",
 	})
 	if err != nil {
-		t.Fatalf("CachePeekExists error = %v, want nil", err)
+		t.Fatalf("CacheEntryPeekExists error = %v, want nil", err)
 	}
 	if exists {
 		t.Error("exists = true, want false")
@@ -81,7 +81,7 @@ func TestCachePeekExists_NotFound(t *testing.T) {
 	}
 }
 
-func TestCachePeekExists_WrongContentType(t *testing.T) {
+func TestCacheEntryPeekExists_WrongContentType(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -91,50 +91,50 @@ func TestCachePeekExists_WrongContentType(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, _, err := client.CachePeekExists(context.Background(), "test-slug", api.CachePeekReq{
+	_, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "test-key",
 		Branch: "main",
 	})
 	if err == nil {
-		t.Error("CachePeekExists error = nil, want non-nil for wrong content type")
+		t.Error("CacheEntryPeekExists error = nil, want non-nil for wrong content type")
 	}
 }
 
-func TestCachePeekExists_CacheRegistryNotFound(t *testing.T) {
+func TestCacheEntryPeekExists_CacheRegistryNotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(api.CachePeekResp{Message: api.CacheRegistryNotFound})
+		_ = json.NewEncoder(w).Encode(api.CacheEntryPeekResp{Message: api.CacheRegistryNotFound})
 	}))
 	defer server.Close()
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, _, err := client.CachePeekExists(context.Background(), "test-slug", api.CachePeekReq{
+	_, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "test-key",
 		Branch: "main",
 	})
 	if err == nil {
-		t.Error("CachePeekExists error = nil, want non-nil for cache registry not found")
+		t.Error("CacheEntryPeekExists error = nil, want non-nil for cache registry not found")
 	}
 }
 
-func TestCachePeekExists_ContentTypeWithCharset(t *testing.T) {
+func TestCacheEntryPeekExists_ContentTypeWithCharset(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(api.CachePeekResp{Message: "Cache exists"})
+		_ = json.NewEncoder(w).Encode(api.CacheEntryPeekResp{Message: "Cache exists"})
 	}))
 	defer server.Close()
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, err := client.CachePeekExists(context.Background(), "test-slug", api.CachePeekReq{
+	resp, exists, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "test-key",
 		Branch: "main",
 	})
 	if err != nil {
-		t.Fatalf("CachePeekExists error = %v, want nil", err)
+		t.Fatalf("CacheEntryPeekExists error = %v, want nil", err)
 	}
 	if !exists {
 		t.Error("exists = false, want true")
@@ -144,12 +144,12 @@ func TestCachePeekExists_ContentTypeWithCharset(t *testing.T) {
 	}
 }
 
-func TestCacheCreate_Success(t *testing.T) {
+func TestCacheEntryCreate_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodPut)
 		}
-		var req api.CacheCreateReq
+		var req api.CacheEntryCreateReq
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
@@ -159,7 +159,7 @@ func TestCacheCreate_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(api.CacheCreateResp{
+		_ = json.NewEncoder(w).Encode(api.CacheEntryCreateResp{
 			UploadID:           "upload-123",
 			Multipart:          false,
 			UploadInstructions: []string{"curl -X PUT..."},
@@ -170,7 +170,7 @@ func TestCacheCreate_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, err := client.CacheCreate(context.Background(), "test-slug", api.CacheCreateReq{
+	resp, err := client.CacheEntryCreate(context.Background(), "test-slug", api.CacheEntryCreateReq{
 		Key:          "test-key",
 		FallbackKeys: []string{"fallback-1", "fallback-2"},
 		Compression:  "gzip",
@@ -183,7 +183,7 @@ func TestCacheCreate_Success(t *testing.T) {
 		Organization: "test-org",
 	})
 	if err != nil {
-		t.Fatalf("CacheCreate error = %v, want nil", err)
+		t.Fatalf("CacheEntryCreate error = %v, want nil", err)
 	}
 	if got, want := resp.UploadID, "upload-123"; got != want {
 		t.Errorf("resp.UploadID = %q, want %q", got, want)
@@ -193,7 +193,7 @@ func TestCacheCreate_Success(t *testing.T) {
 	}
 }
 
-func TestCacheRetrieve_Success(t *testing.T) {
+func TestCacheEntryRetrieve_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodGet)
@@ -204,7 +204,7 @@ func TestCacheRetrieve_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(api.CacheRetrieveResp{
+		_ = json.NewEncoder(w).Encode(api.CacheEntryRetrieveResp{
 			Key:                  "test-key",
 			Fallback:             false,
 			ExpiresAt:            time.Now().Add(24 * time.Hour),
@@ -217,13 +217,13 @@ func TestCacheRetrieve_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, found, err := client.CacheRetrieve(context.Background(), "test-slug", api.CacheRetrieveReq{
+	resp, found, err := client.CacheEntryRetrieve(context.Background(), "test-slug", api.CacheEntryRetrieveReq{
 		Key:          "test-key",
 		Branch:       "main",
 		FallbackKeys: "fallback-1,fallback-2",
 	})
 	if err != nil {
-		t.Fatalf("CacheRetrieve error = %v, want nil", err)
+		t.Fatalf("CacheEntryRetrieve error = %v, want nil", err)
 	}
 	if !found {
 		t.Error("found = false, want true")
@@ -236,22 +236,22 @@ func TestCacheRetrieve_Success(t *testing.T) {
 	}
 }
 
-func TestCacheRetrieve_NotFound(t *testing.T) {
+func TestCacheEntryRetrieve_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(api.CacheRetrieveResp{Message: api.CacheEntryNotFound})
+		_ = json.NewEncoder(w).Encode(api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound})
 	}))
 	defer server.Close()
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, found, err := client.CacheRetrieve(context.Background(), "test-slug", api.CacheRetrieveReq{
+	resp, found, err := client.CacheEntryRetrieve(context.Background(), "test-slug", api.CacheEntryRetrieveReq{
 		Key:    "nonexistent-key",
 		Branch: "main",
 	})
 	if err != nil {
-		t.Fatalf("CacheRetrieve error = %v, want nil", err)
+		t.Fatalf("CacheEntryRetrieve error = %v, want nil", err)
 	}
 	if found {
 		t.Error("found = true, want false")
@@ -261,12 +261,12 @@ func TestCacheRetrieve_NotFound(t *testing.T) {
 	}
 }
 
-func TestCacheCommit_Success(t *testing.T) {
+func TestCacheEntryCommit_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodPut)
 		}
-		var req api.CacheCommitReq
+		var req api.CacheEntryCommitReq
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
@@ -276,37 +276,37 @@ func TestCacheCommit_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(api.CacheCommitResp{Message: "Committed successfully"})
+		_ = json.NewEncoder(w).Encode(api.CacheEntryCommitResp{Message: "Committed successfully"})
 	}))
 	defer server.Close()
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, err := client.CacheCommit(context.Background(), "test-slug", api.CacheCommitReq{
+	resp, err := client.CacheEntryCommit(context.Background(), "test-slug", api.CacheEntryCommitReq{
 		UploadID: "upload-123",
 	})
 	if err != nil {
-		t.Fatalf("CacheCommit error = %v, want nil", err)
+		t.Fatalf("CacheEntryCommit error = %v, want nil", err)
 	}
 	if got, want := resp.Message, "Committed successfully"; got != want {
 		t.Errorf("resp.Message = %q, want %q", got, want)
 	}
 }
 
-func TestCacheCommit_Failure(t *testing.T) {
+func TestCacheEntryCommit_Failure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(api.CacheCommitResp{Message: "Invalid upload ID"})
+		_ = json.NewEncoder(w).Encode(api.CacheEntryCommitResp{Message: "Invalid upload ID"})
 	}))
 	defer server.Close()
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, err := client.CacheCommit(context.Background(), "test-slug", api.CacheCommitReq{
+	_, err := client.CacheEntryCommit(context.Background(), "test-slug", api.CacheEntryCommitReq{
 		UploadID: "invalid-upload-id",
 	})
 	if err == nil {
-		t.Error("CacheCommit error = nil, want non-nil for bad request")
+		t.Error("CacheEntryCommit error = nil, want non-nil for bad request")
 	}
 }

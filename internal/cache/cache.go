@@ -177,7 +177,7 @@ func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs [
 					}
 
 					switch {
-					case result.CacheCreated:
+					case result.CacheEntryCreated:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
 							logger.StringField("cache_key", result.Key),

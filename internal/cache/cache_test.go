@@ -58,15 +58,15 @@ func createTempCacheConfig(t *testing.T, content string) string {
 
 // Tests for saveWithClient
 
-func TestSaveWithClient_CacheCreated(t *testing.T) {
+func TestSaveWithClient_CacheEntryCreated(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
 	mock := &mockCacheClient{
 		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
 			return SaveResult{
-				CacheCreated: true,
-				Key:          "test-key-v1",
+				CacheEntryCreated: true,
+				Key:               "test-key-v1",
 				Archive: ArchiveMetrics{
 					Size:             1024,
 					WrittenBytes:     1024,
@@ -93,8 +93,8 @@ func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 	mock := &mockCacheClient{
 		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
 			return SaveResult{
-				CacheCreated: false,
-				Key:          "test-key-v1",
+				CacheEntryCreated: false,
+				Key:               "test-key-v1",
 			}, nil
 		},
 	}
@@ -114,8 +114,8 @@ func TestSaveWithClient_MultipleCaches(t *testing.T) {
 		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
 			callCount++
 			return SaveResult{
-				CacheCreated: true,
-				Key:          fmt.Sprintf("key-%s", cacheID),
+				CacheEntryCreated: true,
+				Key:               fmt.Sprintf("key-%s", cacheID),
 				Archive: ArchiveMetrics{
 					Size:             100,
 					WrittenBytes:     100,

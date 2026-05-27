@@ -25,7 +25,7 @@ import (
 //  6. Commits the cache entry
 //
 // If the cache already exists, no upload is performed and the function returns
-// early with CacheCreated=false and Transfer=nil.
+// early with CacheEntryCreated=false and Transfer=nil.
 //
 // The operation respects context cancellation and will stop immediately when
 // ctx is cancelled, cleaning up any temporary resources.
@@ -42,7 +42,7 @@ import (
 //	if err != nil {
 //	    log.Fatalf("Cache save failed: %v", err)
 //	}
-//	if !result.CacheCreated {
+//	if !result.CacheEntryCreated {
 //	    log.Printf("Cache already exists for key: %s", result.Key)
 //	} else {
 //	    log.Printf("Cache saved: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
@@ -93,7 +93,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "checking_exists", "Checking if cache already exists", 0, 0)
 
 	// Check if cache already exists
-	_, exists, err := c.api.CachePeekExists(ctx, c.registry, api.CachePeekReq{
+	_, exists, err := c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
 		Key:    cacheConfig.Key,
 		Branch: c.branch,
 	})
@@ -105,7 +105,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 
 	if exists {
 		// Cache already exists, no need to upload
-		result.CacheCreated = false
+		result.CacheEntryCreated = false
 		result.TotalDuration = time.Since(startTime)
 		span.SetAttributes(
 			attribute.Bool("cache.created", false),
@@ -170,7 +170,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "creating_entry", "Creating cache entry", 0, 0)
 
 	// Create cache entry
-	createResp, err := c.api.CacheCreate(ctx, registryResp.Name, api.CacheCreateReq{
+	createResp, err := c.api.CacheEntryCreate(ctx, registryResp.Name, api.CacheEntryCreateReq{
 		Key:          cacheConfig.Key,
 		FallbackKeys: cacheConfig.FallbackKeys,
 		Compression:  c.format,
@@ -232,7 +232,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "committing", "Committing cache entry", 0, 0)
 
 	// Commit cache
-	_, err = c.api.CacheCommit(ctx, c.registry, api.CacheCommitReq{
+	_, err = c.api.CacheEntryCommit(ctx, c.registry, api.CacheEntryCommitReq{
 		UploadID: createResp.UploadID,
 	})
 	if err != nil {
@@ -241,7 +241,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("failed to commit cache: %w", err)
 	}
 
-	result.CacheCreated = true
+	result.CacheEntryCreated = true
 	result.TotalDuration = time.Since(startTime)
 
 	// Add final result attributes to span
