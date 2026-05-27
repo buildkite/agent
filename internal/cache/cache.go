@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache/configuration"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/dustin/go-humanize"
@@ -25,10 +26,6 @@ type Config struct {
 	CacheConfigFile string
 	// Ids is a list of cache IDs (if empty, processes all caches)
 	Ids []string
-	// APIEndpoint is the Agent API endpoint
-	APIEndpoint string
-	// APIToken is the access token used to authenticate
-	APIToken string
 	// Concurrency is the number of concurrent cache operations
 	Concurrency int
 }
@@ -43,8 +40,8 @@ type cacheOps interface {
 
 // Save saves caches based on the provided configuration and logs results as
 // each cache is processed.
-func Save(ctx context.Context, l logger.Logger, cfg Config) error {
-	c, cacheIDs, err := newClient(ctx, l, cfg)
+func Save(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
+	c, cacheIDs, err := newClient(l, apiClient, cfg)
 	if err != nil {
 		return err
 	}
@@ -57,8 +54,8 @@ func Save(ctx context.Context, l logger.Logger, cfg Config) error {
 
 // Restore restores caches based on the provided configuration and logs results
 // as each cache is processed.
-func Restore(ctx context.Context, l logger.Logger, cfg Config) error {
-	c, cacheIDs, err := newClient(ctx, l, cfg)
+func Restore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
+	c, cacheIDs, err := newClient(l, apiClient, cfg)
 	if err != nil {
 		return err
 	}

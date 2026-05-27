@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/cache/api"
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache/archive"
 	"github.com/buildkite/agent/v3/internal/cache/store"
 	"go.opentelemetry.io/otel"

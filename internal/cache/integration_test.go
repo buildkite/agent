@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/cache/api"
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache/configuration"
 )
 
