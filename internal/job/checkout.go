@@ -213,10 +213,16 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	return nil
 }
 
+// errCheckoutAttemptTimedOut is a sentinel marker, joined into the error
+// returned by runDefaultCheckoutAttempt when the per-attempt timeout fires.
+// The retry loop matches it explicitly so a timeout-killed git process is
+// retried instead of being treated like a user signal.
+var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
+
 // runDefaultCheckoutAttempt runs defaultCheckoutPhase, applying a per-attempt
-// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the underlying
-// error is wrapped so the retry loop's generic failure path can log a
-// meaningful message and clean up before retrying.
+// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the returned
+// error is joined with errCheckoutAttemptTimedOut so the retry loop can
+// distinguish a timeout-kill from other signal-terminated processes.
 func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 	if e.GitCheckoutTimeout <= 0 {
 		return e.defaultCheckoutPhase(ctx)
@@ -228,7 +234,8 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 
 	err := e.defaultCheckoutPhase(attemptCtx)
 	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
-		return fmt.Errorf("checkout attempt timed out after %s: %w", timeout, err)
+		return errors.Join(errCheckoutAttemptTimedOut,
+			fmt.Errorf("checkout attempt timed out after %s: %w", timeout, err))
 	}
 	return err
 }
@@ -275,6 +282,20 @@ func (e *Executor) checkout(ctx context.Context) error {
 			var errGit *gitError
 
 			switch {
+			case errors.Is(err, errCheckoutAttemptTimedOut):
+				// The per-attempt timeout fired and git was signal-killed.
+				// Treat this like a generic transient failure: warn, clean
+				// the checkout dir, and let the retrier try again.
+				e.shell.Warningf("Checkout failed! %s (%s)", err, r)
+
+				if err := e.removeCheckoutDir(); err != nil {
+					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
+				}
+
+				if err := e.createCheckoutDir(); err != nil {
+					return err
+				}
+
 			case shell.IsExitError(err) && shell.ExitCode(err) == -1:
 				e.shell.Warningf("Checkout was interrupted by a signal")
 				r.Break()
