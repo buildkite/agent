@@ -480,6 +480,7 @@ BUILDKITE_TRACE_CONTEXT_ENCODING
 BUILDKITE_TRACING_BACKEND
 BUILDKITE_TRACING_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
+BUILDKITE_TRACING_TRACESTATE
 BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
 BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
@@ -694,6 +695,13 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		// https://www.w3.org/TR/trace-context/#traceparent-header
 		if r.conf.Job.TraceParent != "" {
 			setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
+		}
+		// Buildkite backend may also provide a tracestate property on the job,
+		// which carries vendor-specific trace context alongside the traceparent.
+		//
+		// https://www.w3.org/TR/trace-context/#tracestate-header
+		if r.conf.Job.TraceState != "" {
+			setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
 		}
 		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
 			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")

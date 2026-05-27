@@ -192,6 +192,12 @@ type ExecutorConfig struct {
 	// Traceing context information
 	TracingTraceParent string
 
+	// W3C tracestate accompanying TracingTraceParent. Plumbed through to the
+	// bootstrap environment whenever the server provides a value, but only
+	// attached to the OTel span context when TracingPropagateTraceparent is
+	// enabled (same opt-in gate as TracingTraceParent).
+	TracingTraceState string
+
 	// Accept traceparent context from Buildkite control plane
 	TracingPropagateTraceparent bool
 

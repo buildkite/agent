@@ -109,6 +109,7 @@ type BootstrapConfig struct {
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
 	TracingTraceParent           string   `cli:"tracing-traceparent"`
+	TracingTraceState            string   `cli:"tracing-tracestate"`
 	TracingPropagateTraceparent  bool     `cli:"tracing-propagate-traceparent"`
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
@@ -339,6 +340,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_TRACEPARENT",
 			Value:  "",
 		},
+		cli.StringFlag{
+			Name:   "tracing-tracestate",
+			Usage:  "W3C Trace State for tracing",
+			EnvVar: "BUILDKITE_TRACING_TRACESTATE",
+			Value:  "",
+		},
 		cli.BoolFlag{
 			Name:   "tracing-propagate-traceparent",
 			Usage:  "Accept traceparent from Buildkite control plane (default: false)",
@@ -478,6 +485,7 @@ var BootstrapCommand = cli.Command{
 			TracingServiceName:           cfg.TracingServiceName,
 			TraceContextCodec:            traceContextCodec,
 			TracingTraceParent:           cfg.TracingTraceParent,
+			TracingTraceState:            cfg.TracingTraceState,
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
