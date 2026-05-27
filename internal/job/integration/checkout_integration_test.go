@@ -713,7 +713,7 @@ func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
 				return fmt.Errorf("GIT_SSH_COMMAND not set for git %q", i.Args[0])
 			}
 
-			const prefix = existingGitSSHCommand + " -i "
+			const prefix = existingGitSSHCommand + " -o StrictHostKeyChecking=accept-new -i "
 			const suffix = " -o IdentitiesOnly=yes"
 			if !strings.HasPrefix(gitSSHCommand, prefix) || !strings.HasSuffix(gitSSHCommand, suffix) {
 				return fmt.Errorf("unexpected GIT_SSH_COMMAND %q", gitSSHCommand)
@@ -1611,11 +1611,6 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		AndWriteToStdout("github.com ssh-rsa xxx=").
-		AndExitWith(0)
-
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
@@ -1639,10 +1634,6 @@ func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		NotCalled()
-
 	env := []string{
 		"BUILDKITE_REPO=https://github.com/buildkite/bash-example.git",
 		"BUILDKITE_SSH_KEYSCAN=false",
@@ -1659,10 +1650,6 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
 	defer tester.Close()
-
-	tester.MustMock(t, "ssh-keyscan").
-		Expect("github.com").
-		NotCalled()
 
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
