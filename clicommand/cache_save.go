@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache"
 	"github.com/urfave/cli"
 	"go.opentelemetry.io/otel"
@@ -82,6 +83,8 @@ var CacheSaveCommand = cli.Command{
 			return fmt.Errorf("an API token must be provided to save caches")
 		}
 
+		apiClient := api.NewClient(l, apiCfg)
+
 		// Build cache configuration
 		cacheCfg := cache.Config{
 			BucketURL:       cfg.BucketURL,
@@ -90,12 +93,10 @@ var CacheSaveCommand = cli.Command{
 			Organization:    cfg.Organization,
 			CacheConfigFile: cfg.CacheConfigFile,
 			Ids:             cfg.Ids,
-			APIEndpoint:     apiCfg.Endpoint,
-			APIToken:        apiCfg.Token,
 			Concurrency:     cfg.Concurrency,
 		}
 
 		// Perform cache save (logging happens inside)
-		return cache.Save(ctx, l, cacheCfg)
+		return cache.Save(ctx, l, apiClient, cacheCfg)
 	},
 }

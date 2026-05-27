@@ -330,7 +330,6 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 
 func TestNewClient_InvalidCacheIDs(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	config := `dependencies:
   - id: cache1
@@ -351,28 +350,25 @@ func TestNewClient_InvalidCacheIDs(t *testing.T) {
 		Branch:          "main",
 		Pipeline:        "test-pipeline",
 		Organization:    "test-org",
-		APIEndpoint:     "https://api.buildkite.com/v3",
-		APIToken:        "test-token",
 	}
 
-	_, _, err := newClient(ctx, logger.Discard, cfg)
+	_, _, err := newClient(logger.Discard, nil, cfg)
 	if err == nil {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want non-nil error", err)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want non-nil error", err)
 	}
 	if want := "cache IDs not found in configuration"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want error containing %q", err, want)
 	}
 	if want := "invalid1"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want error containing %q", err, want)
 	}
 	if want := "invalid2"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want error containing %q", err, want)
 	}
 }
 
 func TestNewClient_ValidCacheIDs(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	config := `dependencies:
   - id: cache1
@@ -393,25 +389,22 @@ func TestNewClient_ValidCacheIDs(t *testing.T) {
 		Branch:          "main",
 		Pipeline:        "test-pipeline",
 		Organization:    "test-org",
-		APIEndpoint:     "https://api.buildkite.com/v3",
-		APIToken:        "test-token",
 	}
 
-	client, cacheIDs, err := newClient(ctx, logger.Discard, cfg)
+	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)
 	if err != nil {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want nil", err)
 	}
 	if got := client; got == nil {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) = %v, want non-nil value", got)
 	}
 	if diff := cmp.Diff(cacheIDs, []string{"cache1", "cache2"}); diff != "" {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) diff (-got +want):\n%s", diff)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) diff (-got +want):\n%s", diff)
 	}
 }
 
 func TestNewClient_AllCaches(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	config := `dependencies:
   - id: cache1
@@ -432,18 +425,16 @@ func TestNewClient_AllCaches(t *testing.T) {
 		Branch:          "main",
 		Pipeline:        "test-pipeline",
 		Organization:    "test-org",
-		APIEndpoint:     "https://api.buildkite.com/v3",
-		APIToken:        "test-token",
 	}
 
-	client, cacheIDs, err := newClient(ctx, logger.Discard, cfg)
+	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)
 	if err != nil {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want nil", err)
 	}
 	if got := client; got == nil {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) = %v, want non-nil value", got)
 	}
 	if diff := cmp.Diff(slices.Sorted(slices.Values(cacheIDs)), slices.Sorted(slices.Values([]string{"cache1", "cache2"}))); diff != "" {
-		t.Fatalf("newClient(ctx, logger.Discard, cfg) sorted diff (-got +want):\n%s", diff)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) sorted diff (-got +want):\n%s", diff)
 	}
 }

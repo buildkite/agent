@@ -13,11 +13,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/cache/api"
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache/configuration"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
 )
+
+// cacheAPI is the subset of *api.Client that the cache package depends on.
+// It exists so integration tests can substitute a fake.
+//
+// TODO: drop this interface and let `api` field hold *api.Client directly.
+// The integration test's mockAPIClient should be replaced with an httptest
+// server returning canned responses — this repo prefers real HTTP servers
+// over hand-rolled mocks.
+type cacheAPI interface {
+	CacheRegistry(ctx context.Context, registry string) (api.CacheRegistryResp, error)
+	CachePeekExists(ctx context.Context, registry string, req api.CachePeekReq) (api.CachePeekResp, bool, error)
+	CacheCreate(ctx context.Context, registry string, req api.CacheCreateReq) (api.CacheCreateResp, error)
+	CacheCommit(ctx context.Context, registry string, req api.CacheCommitReq) (api.CacheCommitResp, error)
+	CacheRetrieve(ctx context.Context, registry string, req api.CacheRetrieveReq) (api.CacheRetrieveResp, bool, error)
+}
 
 // Sentinel errors for common scenarios.
 var (
@@ -36,7 +50,7 @@ var (
 // bucket and the expanded, validated cache definitions used by every call.
 // Safe for concurrent use; honours context cancellation.
 type client struct {
-	api          api.CacheClient
+	api          cacheAPI
 	bucketURL    string
 	format       string
 	branch       string
@@ -48,14 +62,14 @@ type client struct {
 	onProgress   ProgressCallback
 }
 
-// newClient builds a client from cfg: creates the API client, loads and expands
-// the cache configuration file, validates every cache definition, and returns
-// the client together with the cache IDs to operate on (filtered by cfg.Ids if
+// newClient builds a client from apiClient and cfg: loads and expands the
+// cache configuration file, validates every cache definition, and returns the
+// client together with the cache IDs to operate on (filtered by cfg.Ids if
 // non-empty).
 //
 // Returns (nil, nil, nil) when the configuration file has no caches.
 // Returns ErrInvalidConfiguration (wrapped) on expansion or validation failure.
-func newClient(ctx context.Context, l logger.Logger, cfg Config) (*client, []string, error) {
+func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []string, error) {
 	caches, err := configuration.LoadFile(cfg.CacheConfigFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load cache configuration: %w", err)
@@ -75,7 +89,7 @@ func newClient(ctx context.Context, l logger.Logger, cfg Config) (*client, []str
 	}
 
 	c := &client{
-		api:          api.NewClient(ctx, version.Version(), cfg.APIEndpoint, cfg.APIToken),
+		api:          apiClient,
 		bucketURL:    cfg.BucketURL,
 		format:       "zip",
 		branch:       cfg.Branch,
