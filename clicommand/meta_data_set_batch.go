@@ -85,18 +85,36 @@ var MetaDataSetBatchCommand = cli.Command{
 	},
 }
 
+type invalidFormatError struct{ arg string }
+
+func (e invalidFormatError) Error() string {
+	return fmt.Sprintf("invalid argument %q: must be in key=value format", e.arg)
+}
+
+type emptyKeyError struct{ arg string }
+
+func (e emptyKeyError) Error() string {
+	return fmt.Sprintf("invalid argument %q: key cannot be empty, or composed of only whitespace characters", e.arg)
+}
+
+type emptyValueError struct{ arg string }
+
+func (e emptyValueError) Error() string {
+	return fmt.Sprintf("invalid argument %q: value cannot be empty, or composed of only whitespace characters", e.arg)
+}
+
 func parseMetaDataBatchArgs(args []string) ([]api.MetaData, error) {
 	items := make([]api.MetaData, 0, len(args))
 	for _, arg := range args {
 		key, value, ok := strings.Cut(arg, "=")
 		if !ok {
-			return nil, fmt.Errorf("invalid argument %q: must be in key=value format", arg)
+			return nil, invalidFormatError{arg: arg}
 		}
 		if strings.TrimSpace(key) == "" {
-			return nil, fmt.Errorf("invalid argument %q: key cannot be empty, or composed of only whitespace characters", arg)
+			return nil, emptyKeyError{arg: arg}
 		}
 		if strings.TrimSpace(value) == "" {
-			return nil, fmt.Errorf("invalid argument %q: value cannot be empty, or composed of only whitespace characters", arg)
+			return nil, emptyValueError{arg: arg}
 		}
 		items = append(items, api.MetaData{Key: key, Value: value})
 	}

@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,7 +22,7 @@ func TestParseMetaDataBatchArgs(t *testing.T) {
 		name    string
 		args    []string
 		want    []api.MetaData
-		wantErr string
+		wantErr error
 	}{
 		{
 			name: "single pair",
@@ -45,32 +46,32 @@ func TestParseMetaDataBatchArgs(t *testing.T) {
 		{
 			name:    "missing equals sign",
 			args:    []string{"foobar"},
-			wantErr: `invalid argument "foobar": must be in key=value format`,
+			wantErr: invalidFormatError{arg: "foobar"},
 		},
 		{
 			name:    "empty key",
 			args:    []string{"=bar"},
-			wantErr: `invalid argument "=bar": key cannot be empty`,
+			wantErr: emptyKeyError{arg: "=bar"},
 		},
 		{
 			name:    "whitespace-only key",
 			args:    []string{"  =bar"},
-			wantErr: `invalid argument "  =bar": key cannot be empty`,
+			wantErr: emptyKeyError{arg: "  =bar"},
 		},
 		{
 			name:    "empty value",
 			args:    []string{"foo="},
-			wantErr: `invalid argument "foo=": value cannot be empty`,
+			wantErr: emptyValueError{arg: "foo="},
 		},
 		{
 			name:    "whitespace-only value",
 			args:    []string{"foo=   "},
-			wantErr: `invalid argument "foo=   ": value cannot be empty`,
+			wantErr: emptyValueError{arg: "foo=   "},
 		},
 		{
 			name:    "error on first invalid stops parsing",
 			args:    []string{"a=1", "bad", "c=3"},
-			wantErr: `invalid argument "bad": must be in key=value format`,
+			wantErr: invalidFormatError{arg: "bad"},
 		},
 	}
 
@@ -79,17 +80,8 @@ func TestParseMetaDataBatchArgs(t *testing.T) {
 			t.Parallel()
 
 			got, err := parseMetaDataBatchArgs(tc.args)
-			if tc.wantErr != "" {
-				if err == nil {
-					t.Fatalf("parseMetaDataBatchArgs(%v) error = nil, want error containing %q", tc.args, tc.wantErr)
-				}
-				if !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("parseMetaDataBatchArgs(%v) error = %q, want error containing %q", tc.args, err, tc.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseMetaDataBatchArgs(%v) error = %v, want nil", tc.args, err)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("parseMetaDataBatchArgs(%v) error = %v, want %v", tc.args, err, tc.wantErr)
 			}
 			if diff := cmp.Diff(got, tc.want); diff != "" {
 				t.Fatalf("parseMetaDataBatchArgs(%v) diff (-got +want):\n%s", tc.args, diff)
