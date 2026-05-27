@@ -341,10 +341,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	// Adopt the repo-checkout child ctx so git.* spans nest under it.
 	ctx = spanCtx
 
-	if e.SSHKeyscan && !e.skipRepositorySSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
-	}
-
 	sshKeyPath, cleanupSSHKey, err := e.prepareGitSSHKey()
 	if err != nil {
 		return fmt.Errorf("preparing git ssh key: %w", err)
@@ -620,55 +616,45 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	tracetools.AddAttributes(submodulesSpan, map[string]string{"git.count": strconv.Itoa(len(submoduleRepos))})
 
 	mirrorSubmodules := e.GitMirrorsPath != ""
-	for _, repository := range submoduleRepos {
-		// submodules might need their fingerprints verified too
-		if e.SSHKeyscan {
-			addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
-		}
+	if mirrorSubmodules {
+		for _, repository := range submoduleRepos {
+			// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
+			// this produces the same sub-tree of spans; git.repo distinguishes
+			// submodules since the span names repeat.
+			subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
+			tracetools.AddAttributes(subMirrorSpan, map[string]string{"git.repo": redact.URLCredentials(repository)})
 
-		if !mirrorSubmodules {
-			continue
-		}
-		// It's all mirrored submodules for the rest of the loop.
+			mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
 
-		// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
-		// this produces the same sub-tree of spans; git.repo distinguishes
-		// submodules since the span names repeat.
-		subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
-		tracetools.AddAttributes(subMirrorSpan, map[string]string{"git.repo": redact.URLCredentials(repository)})
+			tracetools.FinishWithError(subMirrorSpan, err)
 
-		mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
-
-		tracetools.FinishWithError(subMirrorSpan, err)
-
-		if err != nil {
-			return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
-		}
-
-		// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-		if err := e.createCheckoutDir(); err != nil {
-			return fmt.Errorf("creating checkout dir: %w", err)
-		}
-
-		submoduleArgs := slices.Clone(args)
-		if mirrorDir != "" {
-			submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
-			if e.GitMirrorCheckoutMode == "dissociate" {
-				submoduleArgs = append(submoduleArgs, "--dissociate")
+			if err != nil {
+				return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 			}
-		} else {
-			// Fall back to a clean update, rather than failing the checkout and therefore the build
-			submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
-		}
 
-		if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
-			return e.shell.Command("git", submoduleArgs...).Run(ctx)
-		}); err != nil {
-			return fmt.Errorf("updating submodules: %w", err)
-		}
-	}
+			// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
+			if err := e.createCheckoutDir(); err != nil {
+				return fmt.Errorf("creating checkout dir: %w", err)
+			}
 
-	if !mirrorSubmodules {
+			submoduleArgs := slices.Clone(args)
+			if mirrorDir != "" {
+				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
+				if e.GitMirrorCheckoutMode == "dissociate" {
+					submoduleArgs = append(submoduleArgs, "--dissociate")
+				}
+			} else {
+				// Fall back to a clean update, rather than failing the checkout and therefore the build
+				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
+			}
+
+			if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
+				return e.shell.Command("git", submoduleArgs...).Run(ctx)
+			}); err != nil {
+				return fmt.Errorf("updating submodules: %w", err)
+			}
+		}
+	} else { // no submodule mirrors
 		args = append(args, "submodule", "update", "--init", "--recursive", "--force")
 		if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
 			return e.shell.Command("git", args...).Run(ctx)
