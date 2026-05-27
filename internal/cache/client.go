@@ -27,10 +27,10 @@ import (
 // over hand-rolled mocks.
 type cacheAPI interface {
 	CacheRegistry(ctx context.Context, registry string) (api.CacheRegistryResp, error)
-	CachePeekExists(ctx context.Context, registry string, req api.CachePeekReq) (api.CachePeekResp, bool, error)
-	CacheCreate(ctx context.Context, registry string, req api.CacheCreateReq) (api.CacheCreateResp, error)
-	CacheCommit(ctx context.Context, registry string, req api.CacheCommitReq) (api.CacheCommitResp, error)
-	CacheRetrieve(ctx context.Context, registry string, req api.CacheRetrieveReq) (api.CacheRetrieveResp, bool, error)
+	CacheEntryPeekExists(ctx context.Context, registry string, req api.CacheEntryPeekReq) (api.CacheEntryPeekResp, bool, error)
+	CacheEntryCreate(ctx context.Context, registry string, req api.CacheEntryCreateReq) (api.CacheEntryCreateResp, error)
+	CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, error)
+	CacheEntryRetrieve(ctx context.Context, registry string, req api.CacheEntryRetrieveReq) (api.CacheEntryRetrieveResp, bool, error)
 }
 
 // Sentinel errors for common scenarios.
@@ -171,23 +171,23 @@ type ProgressCallback func(cacheID, stage, message string, current, total int)
 
 // SaveResult contains detailed information about a cache save operation.
 type SaveResult struct {
-	// CacheCreated indicates whether a new cache entry was created.
+	// CacheEntryCreated indicates whether a new cache entry was created.
 	// false means the cache already existed and no upload occurred.
 	// When false, Transfer will be nil since no upload was performed.
-	CacheCreated bool
+	CacheEntryCreated bool
 
 	// Key is the actual cache key that was used (after template expansion).
 	Key string
 
 	// UploadID is the unique identifier for this upload (if created).
-	// Empty if CacheCreated is false.
+	// Empty if CacheEntryCreated is false.
 	UploadID string
 
 	// Archive contains information about the archive that was built.
 	Archive ArchiveMetrics
 
 	// Transfer contains information about the upload (if performed).
-	// Nil if CacheCreated is false (cache already existed).
+	// Nil if CacheEntryCreated is false (cache already existed).
 	Transfer *TransferMetrics
 
 	// TotalDuration is the end-to-end duration of the save operation.

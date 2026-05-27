@@ -95,7 +95,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	c.callProgress(cacheID, "checking_exists", "Checking if cache exists", 0, 0)
 
 	// Check if cache exists
-	retrieveResp, exists, err := c.api.CacheRetrieve(ctx, c.registry, api.CacheRetrieveReq{
+	retrieveResp, exists, err := c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
 		Key:          cacheConfig.Key,
 		Branch:       c.branch,
 		FallbackKeys: strings.Join(cacheConfig.FallbackKeys, ","),
@@ -217,7 +217,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 }
 
 // downloadCache downloads a cache archive from storage
-func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheRetrieveResp, bucketURL string) (tmpDir, archiveFile string, transferInfo *store.TransferInfo, err error) {
+func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp, bucketURL string) (tmpDir, archiveFile string, transferInfo *store.TransferInfo, err error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.downloadCache")
 	defer span.End()
