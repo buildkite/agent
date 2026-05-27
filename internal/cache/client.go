@@ -1,62 +1,42 @@
-// Package cache provides a library for saving and restoring cache archives
-// to/from cloud storage with the Buildkite cache API.
+// Package cache saves and restores cache archives via the Buildkite cache API.
 //
-// The main entry point is NewClient, which creates a Client for managing
-// cache operations. The Client is safe for concurrent use by multiple
-// goroutines.
-//
-// Basic usage:
-//
-//	client := api.NewClient(ctx, version, endpoint, token)
-//	cacheClient, err := cache.NewClient(cache.ClientConfig{
-//	    Client:       client,
-//	    BucketURL:    "s3://my-bucket",
-//	    Branch:       "main",
-//	    Pipeline:     "my-pipeline",
-//	    Organization: "my-org",
-//	    Caches: []configuration.Cache{
-//	        {ID: "node_modules", Key: "v1-{{ checksum \"package-lock.json\" }}", Paths: []string{"node_modules"}},
-//	    },
-//	})
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//
-//	// Save a cache
-//	result, err := cacheClient.Save(ctx, "node_modules")
-//
-//	// Restore a cache
-//	result, err := cacheClient.Restore(ctx, "node_modules")
+// The CLI entry points are Save and Restore in cache.go. Internally they build
+// a client (a configured handle bundling the API client, storage bucket and
+// the expanded cache definitions) and dispatch Save/Restore per cache ID.
 package cache
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/cache/api"
 	"github.com/buildkite/agent/v3/internal/cache/configuration"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/version"
 )
 
-// Sentinel errors for common scenarios
+// Sentinel errors for common scenarios.
 var (
-	// ErrCacheNotFound is returned when a requested cache ID doesn't exist
-	// in the cache client's configuration.
+	// ErrCacheNotFound is returned when a requested cache ID doesn't exist in
+	// the loaded configuration.
 	ErrCacheNotFound = errors.New("cache not found")
 
 	// ErrInvalidConfiguration is returned when configuration validation fails
-	// during cache client creation.
+	// while building a client.
 	ErrInvalidConfiguration = errors.New("invalid configuration")
 )
 
-// Client provides cache save and restore operations with the Buildkite cache API.
+// client is a configured handle for cache Save and Restore operations.
 //
-// A Client is created once with configuration and can be used for multiple
-// operations. The Client is safe for concurrent use by multiple goroutines.
-//
-// All cache operations respect context cancellation and will clean up resources
-// when the context is cancelled.
-type Client struct {
-	client       api.CacheClient
+// It is not a network connection; it just bundles the API client, storage
+// bucket and the expanded, validated cache definitions used by every call.
+// Safe for concurrent use; honours context cancellation.
+type client struct {
+	api          api.CacheClient
 	bucketURL    string
 	format       string
 	branch       string
@@ -68,115 +48,114 @@ type Client struct {
 	onProgress   ProgressCallback
 }
 
-// ClientConfig holds all configuration for creating a Client.
+// newClient builds a client from cfg: creates the API client, loads and expands
+// the cache configuration file, validates every cache definition, and returns
+// the client together with the cache IDs to operate on (filtered by cfg.Ids if
+// non-empty).
 //
-// The only required field is Client. All other fields have sensible defaults or
-// are optional depending on your use case.
-type ClientConfig struct {
-	// Client is the Buildkite API client (required).
-	// Create with api.NewClient(ctx, version, endpoint, token).
-	Client api.CacheClient
+// Returns (nil, nil, nil) when the configuration file has no caches.
+// Returns ErrInvalidConfiguration (wrapped) on expansion or validation failure.
+func newClient(ctx context.Context, l logger.Logger, cfg Config) (*client, []string, error) {
+	caches, err := configuration.LoadFile(cfg.CacheConfigFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load cache configuration: %w", err)
+	}
+	if len(caches) == 0 {
+		return nil, nil, nil
+	}
 
-	// BucketURL is the storage backend URL (required for most store types).
-	// Examples: "s3://bucket-name", "gs://bucket-name", "file:///path/to/dir"
-	BucketURL string
-
-	// Format is the archive format. Defaults to "zip" if not specified.
-	Format string
-
-	// Branch is the git branch name, used for cache scoping in the Buildkite API.
-	Branch string
-
-	// Pipeline is the pipeline slug, used for cache scoping in the Buildkite API.
-	Pipeline string
-
-	// Organization is the organization slug, used for cache scoping in the Buildkite API.
-	Organization string
-
-	// Platform is the OS/arch string (e.g., "linux/amd64", "darwin/arm64").
-	// If empty, defaults to runtime.GOOS/runtime.GOARCH.
-	Platform string
-
-	// Registry is the default cache registry to use for all cache operations.
-	// If empty, defaults to "~" (the default registry).
-	// Individual cache configurations can override this by setting their own Registry field.
-	Registry string
-
-	// Env is an optional environment variable map used for cache template expansion.
-	// If nil, OS environment variables are used instead via os.Getenv.
-	// Cache keys and paths can use templates like "{{ env \"NODE_VERSION\" }}".
-	Env map[string]string
-
-	// Caches is the list of cache configurations to manage.
-	// Cache keys and paths will be expanded using template variables.
-	Caches []configuration.Cache
-
-	// OnProgress is an optional callback for progress updates during operations.
-	// If nil, no progress callbacks are made. The callback must be thread-safe
-	// as it may be called from multiple goroutines.
-	OnProgress ProgressCallback
-}
-
-// ProgressCallback is called during long-running operations to report progress.
-//
-// The callback is invoked at various stages during Save and Restore operations
-// to provide visibility into the operation's progress. Implementations must be
-// thread-safe as the callback may be called from multiple goroutines.
-//
-// Parameters:
-//   - cacheID: The ID of the cache being operated on.
-//   - stage: The current operation stage. See below for possible values.
-//   - message: A human-readable description of the current action.
-//   - current: Current progress value (bytes transferred, files processed, etc.).
-//   - total: Total expected value (0 if unknown).
-//
-// Save operation stages:
-//   - "validating": Validating cache configuration
-//   - "checking_exists": Checking if cache already exists
-//   - "fetching_registry": Looking up cache registry
-//   - "building_archive": Building archive (current=files processed, total=total files)
-//   - "creating_entry": Creating cache entry in API
-//   - "uploading": Uploading cache (current=bytes sent, total=total bytes)
-//   - "committing": Committing cache entry
-//   - "complete": Operation finished successfully
-//
-// Restore operation stages:
-//   - "validating": Validating cache configuration
-//   - "checking_exists": Checking if cache exists
-//   - "downloading": Downloading cache (current=bytes received, total=total bytes)
-//   - "extracting": Extracting files (current=files extracted, total=total files)
-//   - "complete": Operation finished successfully
-type ProgressCallback func(cacheID, stage, message string, current, total int)
-
-// NewClient creates and validates a new cache client. Implementation is in
-// client_constructor.go. Save and Restore methods are implemented in save.go
-// and restore.go respectively.
-
-// ListCaches returns all cache configurations managed by this cache client.
-//
-// The returned caches have already been expanded (templates resolved) and
-// validated during NewClient construction.
-func (c *Client) ListCaches() []configuration.Cache {
-	return c.caches
-}
-
-// GetCache returns a specific cache configuration by ID.
-//
-// Returns ErrCacheNotFound if the cache ID is not found in the client's
-// configuration.
-func (c *Client) GetCache(id string) (configuration.Cache, error) {
-	for _, cacheItem := range c.caches {
-		if cacheItem.ID == id {
-			return cacheItem, nil
+	expanded, err := configuration.ExpandCacheConfiguration(caches)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: failed to expand cache configuration: %w", ErrInvalidConfiguration, err)
+	}
+	for _, c := range expanded {
+		if err := c.Validate(); err != nil {
+			return nil, nil, fmt.Errorf("%w: cache validation failed for ID %s: %w", ErrInvalidConfiguration, c.ID, err)
 		}
 	}
-	return configuration.Cache{}, ErrCacheNotFound
+
+	c := &client{
+		api:          api.NewClient(ctx, version.Version(), cfg.APIEndpoint, cfg.APIToken),
+		bucketURL:    cfg.BucketURL,
+		format:       "zip",
+		branch:       cfg.Branch,
+		pipeline:     cfg.Pipeline,
+		organization: cfg.Organization,
+		platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		registry:     "~",
+		caches:       expanded,
+		onProgress: func(cacheID, stage, message string, _, _ int) {
+			l.WithFields(
+				logger.StringField("cache_id", cacheID),
+				logger.StringField("stage", stage),
+				logger.StringField("message", message),
+			).Infof("Cache progress")
+		},
+	}
+
+	ids, err := c.resolveCacheIDs(cfg.Ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	return c, ids, nil
 }
 
-// SaveResult contains detailed information about a cache save operation.
+// resolveCacheIDs returns requested if non-empty (after validating every ID
+// exists), otherwise returns every cache ID configured on the client.
+func (c *client) resolveCacheIDs(requested []string) ([]string, error) {
+	if len(requested) == 0 {
+		ids := make([]string, 0, len(c.caches))
+		for _, cc := range c.caches {
+			ids = append(ids, cc.ID)
+		}
+		return ids, nil
+	}
+
+	known := make(map[string]bool, len(c.caches))
+	for _, cc := range c.caches {
+		known[cc.ID] = true
+	}
+	var invalid []string
+	for _, id := range requested {
+		if !known[id] {
+			invalid = append(invalid, id)
+		}
+	}
+	if len(invalid) > 0 {
+		return nil, fmt.Errorf("cache IDs not found in configuration: %s", strings.Join(invalid, ", "))
+	}
+	return requested, nil
+}
+
+// callProgress safely invokes the progress callback if set, recovering from
+// panics in caller-supplied callbacks.
+func (c *client) callProgress(cacheID, stage, message string, current, total int) {
+	if c.onProgress == nil {
+		return
+	}
+	defer func() {
+		_ = recover()
+	}()
+	c.onProgress(cacheID, stage, message, current, total)
+}
+
+// findCache returns the cache definition with the given ID, or ErrCacheNotFound.
+func (c *client) findCache(id string) (*configuration.Cache, error) {
+	for i := range c.caches {
+		if c.caches[i].ID == id {
+			return &c.caches[i], nil
+		}
+	}
+	return nil, ErrCacheNotFound
+}
+
+// ProgressCallback is invoked during Save and Restore to report progress.
 //
-// Check CacheCreated to see if a new cache was uploaded or if the cache
-// already existed.
+// Implementations must be thread-safe; the callback may be called from
+// multiple goroutines. See save.go and restore.go for the stage values.
+type ProgressCallback func(cacheID, stage, message string, current, total int)
+
+// SaveResult contains detailed information about a cache save operation.
 type SaveResult struct {
 	// CacheCreated indicates whether a new cache entry was created.
 	// false means the cache already existed and no upload occurred.
@@ -190,55 +169,41 @@ type SaveResult struct {
 	// Empty if CacheCreated is false.
 	UploadID string
 
-	// Archive contains information about the archive that was built,
-	// including size, compression ratio, and file counts.
+	// Archive contains information about the archive that was built.
 	Archive ArchiveMetrics
 
 	// Transfer contains information about the upload (if performed).
 	// Nil if CacheCreated is false (cache already existed).
 	Transfer *TransferMetrics
 
-	// TotalDuration is the end-to-end duration of the save operation,
-	// from validation through commit (if created) or early exit (if exists).
+	// TotalDuration is the end-to-end duration of the save operation.
 	TotalDuration time.Duration
 }
 
 // RestoreResult contains detailed information about a cache restore operation.
-//
-// Check CacheRestored to see if a cache was found.
-// Use CacheHit and FallbackUsed to determine if the exact key matched.
 type RestoreResult struct {
 	// CacheHit indicates whether the exact cache key was found.
-	// false means either no cache found, or a fallback key was used.
-	// When false, check CacheRestored to distinguish between cache miss
-	// and fallback hit.
 	CacheHit bool
 
 	// CacheRestored indicates whether any cache was restored (including fallbacks).
-	// false means complete cache miss (no matching key or fallback keys).
 	CacheRestored bool
 
 	// Key is the actual cache key that was restored.
-	// May differ from the requested key if FallbackUsed is true.
 	Key string
 
 	// FallbackUsed indicates whether a fallback key was used.
-	// true means the exact key wasn't found, but a fallback key matched.
 	FallbackUsed bool
 
-	// Archive contains information about the archive that was extracted,
-	// including size, compression ratio, and file counts.
+	// Archive contains information about the archive that was extracted.
 	Archive ArchiveMetrics
 
-	// Transfer contains information about the download operation,
-	// including bytes transferred and transfer speed.
+	// Transfer contains information about the download operation.
 	Transfer TransferMetrics
 
 	// ExpiresAt indicates when this cache entry will expire.
 	ExpiresAt time.Time
 
-	// TotalDuration is the end-to-end duration of the restore operation,
-	// from validation through extraction.
+	// TotalDuration is the end-to-end duration of the restore operation.
 	TotalDuration time.Duration
 }
 
@@ -254,11 +219,9 @@ type ArchiveMetrics struct {
 	WrittenEntries int64
 
 	// CompressionRatio is WrittenBytes / Size.
-	// Higher values indicate better compression (e.g., 3.0 means 3:1 compression).
 	CompressionRatio float64
 
-	// Sha256Sum is the SHA-256 hash of the archive file.
-	// Only populated for save operations, empty for restore.
+	// Sha256Sum is the SHA-256 hash of the archive file (save only).
 	Sha256Sum string
 
 	// Duration is how long the archive build or extraction took.
@@ -280,7 +243,6 @@ type TransferMetrics struct {
 	Duration time.Duration
 
 	// RequestID is the provider-specific request identifier for debugging.
-	// Format depends on the storage backend (e.g., S3 request ID).
 	RequestID string
 
 	// PartCount is the number of parts used in multipart transfer (0 if not multipart).

@@ -57,7 +57,7 @@ import (
 //	} else {
 //	    log.Printf("Cache hit: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
-func (c *Client) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
+func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.Restore")
 	defer span.End()
@@ -95,7 +95,7 @@ func (c *Client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	c.callProgress(cacheID, "checking_exists", "Checking if cache exists", 0, 0)
 
 	// Check if cache exists
-	retrieveResp, exists, err := c.client.CacheRetrieve(ctx, c.registry, api.CacheRetrieveReq{
+	retrieveResp, exists, err := c.api.CacheRetrieve(ctx, c.registry, api.CacheRetrieveReq{
 		Key:          cacheConfig.Key,
 		Branch:       c.branch,
 		FallbackKeys: strings.Join(cacheConfig.FallbackKeys, ","),
@@ -217,7 +217,7 @@ func (c *Client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 }
 
 // downloadCache downloads a cache archive from storage
-func (c *Client) downloadCache(ctx context.Context, retrieveResp api.CacheRetrieveResp, bucketURL string) (tmpDir, archiveFile string, transferInfo *store.TransferInfo, err error) {
+func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheRetrieveResp, bucketURL string) (tmpDir, archiveFile string, transferInfo *store.TransferInfo, err error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.downloadCache")
 	defer span.End()
@@ -266,7 +266,7 @@ func (c *Client) downloadCache(ctx context.Context, retrieveResp api.CacheRetrie
 }
 
 // extractCache extracts files from a cache archive
-func (c *Client) extractCache(ctx context.Context, archiveFile string, archiveSize int64, paths []string) (*archive.ArchiveInfo, error) {
+func (c *client) extractCache(ctx context.Context, archiveFile string, archiveSize int64, paths []string) (*archive.ArchiveInfo, error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.extractCache")
 	defer span.End()

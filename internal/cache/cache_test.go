@@ -326,88 +326,9 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 	}
 }
 
-// Tests for loadCacheConfiguration
+// Tests for newClient
 
-func TestLoadCacheConfiguration_Valid(t *testing.T) {
-	t.Parallel()
-
-	config := `dependencies:
-  - id: node
-    key: 'node-{{ checksum "package-lock.json" }}'
-    paths:
-      - node_modules
-  - id: ruby
-    key: 'ruby-{{ checksum "Gemfile.lock" }}'
-    paths:
-      - vendor/bundle
-`
-	configFile := createTempCacheConfig(t, config)
-
-	fileConfig, err := loadCacheConfiguration(configFile)
-	if err != nil {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want nil", configFile, err)
-	}
-	if got, want := len(fileConfig.Dependencies), 2; got != want {
-		t.Fatalf("len(fileConfig.Dependencies) = %d, want %d", got, want)
-	}
-	if got, want := fileConfig.Dependencies[0].ID, "node"; got != want {
-		t.Fatalf("fileConfig.Dependencies[0].ID = %q, want %q", got, want)
-	}
-	if got, want := fileConfig.Dependencies[1].ID, "ruby"; got != want {
-		t.Fatalf("fileConfig.Dependencies[1].ID = %q, want %q", got, want)
-	}
-}
-
-func TestLoadCacheConfiguration_InvalidYAML(t *testing.T) {
-	t.Parallel()
-
-	config := `dependencies:
-  - id: node
-    key: test
-    paths
-      - invalid indentation here
-    : wrong syntax
-`
-	configFile := createTempCacheConfig(t, config)
-
-	_, err := loadCacheConfiguration(configFile)
-	if err == nil {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want non-nil error", configFile, err)
-	}
-	if want := "failed to unmarshal cache config file"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want error containing %q", configFile, err, want)
-	}
-}
-
-func TestLoadCacheConfiguration_FileNotFound(t *testing.T) {
-	t.Parallel()
-
-	_, err := loadCacheConfiguration("/nonexistent/path/to/cache.yml")
-	if err == nil {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want non-nil error", "/nonexistent/path/to/cache.yml", err)
-	}
-	if want := "failed to read cache config file"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want error containing %q", "/nonexistent/path/to/cache.yml", err, want)
-	}
-}
-
-func TestLoadCacheConfiguration_EmptyFile(t *testing.T) {
-	t.Parallel()
-
-	configFile := createTempCacheConfig(t, "")
-
-	fileConfig, err := loadCacheConfiguration(configFile)
-	if err != nil {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want nil", configFile, err)
-	}
-	if got := len(fileConfig.Dependencies); got != 0 {
-		t.Fatalf("len(fileConfig.Dependencies) = %d, want 0", got)
-	}
-}
-
-// Tests for setupCacheClient
-
-func TestSetupCacheClient_InvalidCacheIDs(t *testing.T) {
+func TestNewClient_InvalidCacheIDs(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -434,22 +355,22 @@ func TestSetupCacheClient_InvalidCacheIDs(t *testing.T) {
 		APIToken:        "test-token",
 	}
 
-	_, _, err := setupCacheClient(ctx, logger.Discard, cfg)
+	_, _, err := newClient(ctx, logger.Discard, cfg)
 	if err == nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want non-nil error", err)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want non-nil error", err)
 	}
 	if want := "cache IDs not found in configuration"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
 	}
 	if want := "invalid1"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
 	}
 	if want := "invalid2"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
 	}
 }
 
-func TestSetupCacheClient_ValidCacheIDs(t *testing.T) {
+func TestNewClient_ValidCacheIDs(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -476,19 +397,19 @@ func TestSetupCacheClient_ValidCacheIDs(t *testing.T) {
 		APIToken:        "test-token",
 	}
 
-	client, cacheIDs, err := setupCacheClient(ctx, logger.Discard, cfg)
+	client, cacheIDs, err := newClient(ctx, logger.Discard, cfg)
 	if err != nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
 	}
 	if got := client; got == nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
 	}
 	if diff := cmp.Diff(cacheIDs, []string{"cache1", "cache2"}); diff != "" {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) diff (-got +want):\n%s", diff)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestSetupCacheClient_AllCaches(t *testing.T) {
+func TestNewClient_AllCaches(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -515,14 +436,14 @@ func TestSetupCacheClient_AllCaches(t *testing.T) {
 		APIToken:        "test-token",
 	}
 
-	client, cacheIDs, err := setupCacheClient(ctx, logger.Discard, cfg)
+	client, cacheIDs, err := newClient(ctx, logger.Discard, cfg)
 	if err != nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
 	}
 	if got := client; got == nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
 	}
 	if diff := cmp.Diff(slices.Sorted(slices.Values(cacheIDs)), slices.Sorted(slices.Values([]string{"cache1", "cache2"}))); diff != "" {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) sorted diff (-got +want):\n%s", diff)
+		t.Fatalf("newClient(ctx, logger.Discard, cfg) sorted diff (-got +want):\n%s", diff)
 	}
 }
