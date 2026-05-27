@@ -829,24 +829,6 @@ func dirForRepository(repository string) string {
 	return badCharsRE.ReplaceAllString(repository, "-")
 }
 
-// Given a repository, it will add the host to the set of SSH known_hosts on the machine
-func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repository string) {
-	if osutil.FileExists(repository) {
-		return
-	}
-
-	knownHosts, err := findKnownHosts(sh)
-	if err != nil {
-		sh.Warningf("Failed to find SSH known_hosts file: %v", err)
-		return
-	}
-
-	if err = knownHosts.AddFromRepository(ctx, repository); err != nil {
-		sh.Warningf("Error adding to known_hosts: %v", err)
-		return
-	}
-}
-
 // setUp is run before all the phases run. It's responsible for initializing the
 // job environment
 func (e *Executor) setUp(ctx context.Context) (retErr error) {
@@ -904,6 +886,11 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	if e.GitLFSEnabled {
 		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
 	}
+
+	// Configure SSH to automatically accept new host keys (TOFU - Trust On First Use)
+	// This replaces the previous ssh-keyscan approach with a simpler mechanism that
+	// achieves the same security model: accept new hosts, reject changed keys.
+	e.configureSSHKeyChecking(e.SSHKeyscan)
 
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {
