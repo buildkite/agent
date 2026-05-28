@@ -1,6 +1,6 @@
 // Package cache saves and restores cache archives via the Buildkite cache API.
 //
-// The CLI entry points are Save and Restore in cache.go. Internally they build
+// The CLI entry points are RunSave and RunRestore in cache.go. Internally they build
 // a client (a configured handle bundling the API client, storage bucket and
 // the expanded cache definitions) and dispatch Save/Restore per cache ID.
 package cache
