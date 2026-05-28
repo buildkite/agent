@@ -234,8 +234,7 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 
 	err := e.defaultCheckoutPhase(attemptCtx)
 	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
-		return errors.Join(errCheckoutAttemptTimedOut,
-			fmt.Errorf("checkout attempt timed out after %s: %w", timeout, err))
+		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimedOut, timeout, err)
 	}
 	return err
 }
