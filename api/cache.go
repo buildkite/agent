@@ -121,121 +121,124 @@ type CacheEntryCommitResp struct {
 }
 
 // CacheRegistry retrieves information about a cache registry.
-func (c *Client) CacheRegistry(ctx context.Context, registry string) (CacheRegistryResp, error) {
+func (c *Client) CacheRegistry(ctx context.Context, registry string) (CacheRegistryResp, *Response, error) {
 	ctx, span := cacheTracer.Start(ctx, "Client.CacheRegistry")
 	defer span.End()
 
-	var resp CacheRegistryResp
+	var cacheResp CacheRegistryResp
 
 	req, err := c.newRequest(ctx, http.MethodGet, cachePath("/cache_registries/%s", registry), nil)
 	if err != nil {
-		return resp, cacheSpanErr(span, "failed to create request: %w", err)
+		return cacheResp, nil, cacheSpanErr(span, "failed to create request: %w", err)
 	}
 
-	res, err := c.cacheDo(req, &resp)
+	apiResp, err := c.cacheDo(req, &cacheResp)
 	if err != nil {
-		return resp, cacheSpanErr(span, "%w", err)
+		return cacheResp, apiResp, cacheSpanErr(span, "%w", err)
 	}
-	if res.StatusCode != http.StatusOK {
-		return resp, cacheSpanErr(span, "failed to get cache registry: %s", res.Status)
+	if apiResp.StatusCode != http.StatusOK {
+		return cacheResp, apiResp, cacheSpanErr(span, "failed to get cache registry: %s", apiResp.Status)
 	}
-	return resp, nil
+	return cacheResp, apiResp, nil
 }
 
 // CacheEntryPeekExists checks whether a cache entry exists.
-// Returns (resp, true, nil) on hit, (resp, false, nil) on miss (HTTP 404 with
-// CacheEntryNotFound), or (resp, false, err) on any other failure.
-func (c *Client) CacheEntryPeekExists(ctx context.Context, registry string, peek CacheEntryPeekReq) (CacheEntryPeekResp, bool, error) {
+// Returns (resp, true, _, nil) on hit, (resp, false, _, nil) on miss (HTTP 404
+// with CacheEntryNotFound), or (resp, false, _, err) on any other failure.
+func (c *Client) CacheEntryPeekExists(ctx context.Context, registry string, peek CacheEntryPeekReq) (CacheEntryPeekResp, bool, *Response, error) {
 	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryPeekExists")
 	defer span.End()
 
-	var resp CacheEntryPeekResp
+	var cacheResp CacheEntryPeekResp
 
 	path, err := cacheQueryPath("/cache_registries/%s/peek", registry, peek)
 	if err != nil {
-		return resp, false, cacheSpanErr(span, "%w", err)
+		return cacheResp, false, nil, cacheSpanErr(span, "%w", err)
 	}
 
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return resp, false, cacheSpanErr(span, "failed to create request: %w", err)
+		return cacheResp, false, nil, cacheSpanErr(span, "failed to create request: %w", err)
 	}
 
-	res, err := c.cacheDo(req, &resp)
+	apiResp, err := c.cacheDo(req, &cacheResp)
 	if err != nil {
-		return resp, false, cacheSpanErr(span, "%w", err)
+		return cacheResp, false, apiResp, cacheSpanErr(span, "%w", err)
 	}
-	return interpretCacheResponse(span, res, resp)
+	cacheResp, exists, err := interpretCacheResponse(span, apiResp, cacheResp)
+	return cacheResp, exists, apiResp, err
 }
 
 // CacheEntryCreate creates a new cache entry and returns upload instructions.
-func (c *Client) CacheEntryCreate(ctx context.Context, registry string, create CacheEntryCreateReq) (CacheEntryCreateResp, error) {
+func (c *Client) CacheEntryCreate(ctx context.Context, registry string, create CacheEntryCreateReq) (CacheEntryCreateResp, *Response, error) {
 	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryCreate")
 	defer span.End()
 
-	var resp CacheEntryCreateResp
+	var cacheResp CacheEntryCreateResp
 
 	req, err := c.newRequest(ctx, http.MethodPut, cachePath("/cache_registries/%s/store", registry), &create)
 	if err != nil {
-		return resp, cacheSpanErr(span, "failed to create request: %w", err)
+		return cacheResp, nil, cacheSpanErr(span, "failed to create request: %w", err)
 	}
 
-	res, err := c.cacheDo(req, &resp)
+	apiResp, err := c.cacheDo(req, &cacheResp)
 	if err != nil {
-		return resp, cacheSpanErr(span, "%w", err)
+		return cacheResp, apiResp, cacheSpanErr(span, "%w", err)
 	}
-	if res.StatusCode != http.StatusOK {
-		return resp, cacheSpanErr(span, "failed to save: %s", res.Status)
+	if apiResp.StatusCode != http.StatusOK {
+		return cacheResp, apiResp, cacheSpanErr(span, "failed to save: %s", apiResp.Status)
 	}
-	return resp, nil
+	return cacheResp, apiResp, nil
 }
 
 // CacheEntryCommit marks a previously created cache entry as committed.
-func (c *Client) CacheEntryCommit(ctx context.Context, registry string, commit CacheEntryCommitReq) (CacheEntryCommitResp, error) {
+func (c *Client) CacheEntryCommit(ctx context.Context, registry string, commit CacheEntryCommitReq) (CacheEntryCommitResp, *Response, error) {
 	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryCommit")
 	defer span.End()
 
-	var resp CacheEntryCommitResp
+	var cacheResp CacheEntryCommitResp
 
 	req, err := c.newRequest(ctx, http.MethodPut, cachePath("/cache_registries/%s/commit", registry), &commit)
 	if err != nil {
-		return resp, cacheSpanErr(span, "failed to create request: %w", err)
+		return cacheResp, nil, cacheSpanErr(span, "failed to create request: %w", err)
 	}
 
-	res, err := c.cacheDo(req, &resp)
+	apiResp, err := c.cacheDo(req, &cacheResp)
 	if err != nil {
-		return resp, cacheSpanErr(span, "%w", err)
+		return cacheResp, apiResp, cacheSpanErr(span, "%w", err)
 	}
-	if res.StatusCode != http.StatusOK {
-		return resp, cacheSpanErr(span, "failed to commit: %s", res.Status)
+	if apiResp.StatusCode != http.StatusOK {
+		return cacheResp, apiResp, cacheSpanErr(span, "failed to commit: %s", apiResp.Status)
 	}
-	return resp, nil
+	return cacheResp, apiResp, nil
 }
 
 // CacheEntryRetrieve retrieves download instructions for a cache entry.
-// Returns (resp, true, nil) on hit (possibly via a fallback key), (resp, false,
-// nil) on miss, or (resp, false, err) on any other failure.
-func (c *Client) CacheEntryRetrieve(ctx context.Context, registry string, retrieve CacheEntryRetrieveReq) (CacheEntryRetrieveResp, bool, error) {
+// Returns (resp, true, _, nil) on hit (possibly via a fallback key),
+// (resp, false, _, nil) on miss, or (resp, false, _, err) on any other failure.
+func (c *Client) CacheEntryRetrieve(ctx context.Context, registry string, retrieve CacheEntryRetrieveReq) (CacheEntryRetrieveResp, bool, *Response, error) {
 	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryRetrieve")
 	defer span.End()
 
-	var resp CacheEntryRetrieveResp
+	var cacheResp CacheEntryRetrieveResp
 
 	path, err := cacheQueryPath("/cache_registries/%s/retrieve", registry, retrieve)
 	if err != nil {
-		return resp, false, cacheSpanErr(span, "%w", err)
+		return cacheResp, false, nil, cacheSpanErr(span, "%w", err)
 	}
 
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return resp, false, cacheSpanErr(span, "failed to create request: %w", err)
+		return cacheResp, false, nil, cacheSpanErr(span, "failed to create request: %w", err)
 	}
 
-	res, err := c.cacheDo(req, &resp)
+	apiResp, err := c.cacheDo(req, &cacheResp)
 	if err != nil {
-		return resp, false, cacheSpanErr(span, "%w", err)
+		return cacheResp, false, apiResp, cacheSpanErr(span, "%w", err)
 	}
-	return interpretCacheResponse(span, res, resp)
+
+	cacheResp, exists, err := interpretCacheResponse(span, apiResp, cacheResp)
+	return cacheResp, exists, apiResp, err
 }
 
 // cachePath formats a cache API path with URL-safe escaping for path components.
@@ -260,7 +263,7 @@ func cacheQueryPath(format, registry string, params any) (string, error) {
 // and decodes a JSON body into resp. Unlike Client.doRequest, it does not
 // treat non-2xx as an error — cache responses use 404 + a message to signal a
 // miss, and callers want to inspect the status themselves.
-func (c *Client) cacheDo(req *http.Request, resp any) (*http.Response, error) {
+func (c *Client) cacheDo(req *http.Request, resp any) (*Response, error) {
 	httpResp, err := agenthttp.Do(c.logger, c.client, req,
 		agenthttp.WithDebugHTTP(c.conf.DebugHTTP),
 		agenthttp.WithTraceHTTP(c.conf.TraceHTTP),
@@ -271,29 +274,31 @@ func (c *Client) cacheDo(req *http.Request, resp any) (*http.Response, error) {
 	defer httpResp.Body.Close()              //nolint:errcheck
 	defer io.Copy(io.Discard, httpResp.Body) //nolint:errcheck
 
+	apiResp := newResponse(httpResp)
+
 	if httpResp.StatusCode >= 500 {
-		return httpResp, fmt.Errorf("request failed with status: %s", httpResp.Status)
+		return apiResp, fmt.Errorf("request failed with status: %s", httpResp.Status)
 	}
 	if httpResp.Body == http.NoBody {
-		return httpResp, nil
+		return apiResp, nil
 	}
 
 	contentType := httpResp.Header.Get("Content-Type")
 	if !isJSONContent(contentType) {
-		return httpResp, fmt.Errorf("unexpected content type: %s", contentType)
+		return apiResp, fmt.Errorf("unexpected content type: %s", contentType)
 	}
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return httpResp, fmt.Errorf("failed to read response body: %w", err)
+		return apiResp, fmt.Errorf("failed to read response body: %w", err)
 	}
 	if len(body) == 0 {
-		return httpResp, nil
+		return apiResp, nil
 	}
 	if err := json.Unmarshal(body, resp); err != nil {
-		return httpResp, fmt.Errorf("failed to decode response body: %w", err)
+		return apiResp, fmt.Errorf("failed to decode response body: %w", err)
 	}
-	return httpResp, nil
+	return apiResp, nil
 }
 
 // cacheMessage is the subset of cache responses needed to classify a 404.
@@ -306,23 +311,23 @@ func (r CacheEntryRetrieveResp) cacheMessage() string { return r.Message }
 
 // interpretCacheResponse maps the dual "200 = hit, 404 + message = miss"
 // convention into the (resp, exists, err) return shape used by peek/retrieve.
-func interpretCacheResponse[T cacheMessage](span oteltrace.Span, res *http.Response, resp T) (T, bool, error) {
-	if res.StatusCode == http.StatusOK {
-		return resp, true, nil
+func interpretCacheResponse[T cacheMessage](span oteltrace.Span, apiResp *Response, cacheResp T) (T, bool, error) {
+	if apiResp.StatusCode == http.StatusOK {
+		return cacheResp, true, nil
 	}
-	switch res.StatusCode {
+	switch apiResp.StatusCode {
 	case http.StatusNotFound:
-		switch resp.cacheMessage() {
+		switch cacheResp.cacheMessage() {
 		case CacheEntryNotFound:
-			return resp, false, nil
+			return cacheResp, false, nil
 		case CacheRegistryNotFound:
-			return resp, false, cacheSpanErr(span, "cache registry not found: %s", res.Status)
+			return cacheResp, false, cacheSpanErr(span, "cache registry not found: %s", apiResp.Status)
 		}
-		return resp, false, cacheSpanErr(span, "not found: %s", res.Status)
+		return cacheResp, false, cacheSpanErr(span, "not found: %s", apiResp.Status)
 	case http.StatusBadRequest:
-		return resp, false, cacheSpanErr(span, "bad request: %s", res.Status)
+		return cacheResp, false, cacheSpanErr(span, "bad request: %s", apiResp.Status)
 	default:
-		return resp, false, cacheSpanErr(span, "request failed with status: %s", res.Status)
+		return cacheResp, false, cacheSpanErr(span, "request failed with status: %s", apiResp.Status)
 	}
 }
 
