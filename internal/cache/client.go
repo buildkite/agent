@@ -26,11 +26,11 @@ import (
 // server returning canned responses — this repo prefers real HTTP servers
 // over hand-rolled mocks.
 type cacheAPI interface {
-	CacheRegistry(ctx context.Context, registry string) (api.CacheRegistryResp, error)
-	CacheEntryPeekExists(ctx context.Context, registry string, req api.CacheEntryPeekReq) (api.CacheEntryPeekResp, bool, error)
-	CacheEntryCreate(ctx context.Context, registry string, req api.CacheEntryCreateReq) (api.CacheEntryCreateResp, error)
-	CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, error)
-	CacheEntryRetrieve(ctx context.Context, registry string, req api.CacheEntryRetrieveReq) (api.CacheEntryRetrieveResp, bool, error)
+	CacheRegistry(ctx context.Context, registry string) (api.CacheRegistryResp, *api.Response, error)
+	CacheEntryPeekExists(ctx context.Context, registry string, req api.CacheEntryPeekReq) (api.CacheEntryPeekResp, bool, *api.Response, error)
+	CacheEntryCreate(ctx context.Context, registry string, req api.CacheEntryCreateReq) (api.CacheEntryCreateResp, *api.Response, error)
+	CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, *api.Response, error)
+	CacheEntryRetrieve(ctx context.Context, registry string, req api.CacheEntryRetrieveReq) (api.CacheEntryRetrieveResp, bool, *api.Response, error)
 }
 
 // Sentinel errors for common scenarios.

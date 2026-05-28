@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache/archive"
 	"github.com/buildkite/agent/v3/internal/cache/store"
+	"github.com/buildkite/roko"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -34,6 +35,11 @@ import (
 //
 // The operation respects context cancellation and will stop immediately when
 // ctx is cancelled, cleaning up any temporary resources (downloaded archives).
+//
+// Transient API errors (429, 5xx, connection reset/timeout/EOF) on
+// CacheEntryRetrieve are retried automatically per api.BreakOnNonRetryable.
+// Non-retryable errors (4xx other than 429) cause the operation to fail
+// immediately.
 //
 // Progress callbacks (if configured) are invoked at each stage with the
 // following stages: "validating", "checking_exists", "downloading", "extracting",
@@ -94,11 +100,35 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 
 	c.callProgress(cacheID, "checking_exists", "Checking if cache exists", 0, 0)
 
-	// Check if cache exists
-	retrieveResp, exists, err := c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
-		Key:          cacheConfig.Key,
-		Branch:       c.branch,
-		FallbackKeys: strings.Join(cacheConfig.FallbackKeys, ","),
+	var (
+		apiResp      *api.Response
+		retrieveResp api.CacheEntryRetrieveResp
+		exists       bool
+	)
+
+	// Cache restore is latency-sensitive: it runs at the start of a job and
+	// blocks forward progress, so transient failures should retry quickly
+	// After ~5 attempts (~3.4s wall-clock with this curve),
+	// treat repeated failures as a cache miss.
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var err error
+		retrieveResp, exists, apiResp, err = c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
+			Key:          cacheConfig.Key,
+			Branch:       c.branch,
+			FallbackKeys: strings.Join(cacheConfig.FallbackKeys, ","),
+		})
+		if api.BreakOnNonRetryable(r, apiResp, err) {
+			return err
+		}
+		if err != nil {
+			slog.Warn("cache retrieve failed, retrying", "err", err, "retrier", r.String())
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		span.RecordError(err)

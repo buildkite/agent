@@ -41,7 +41,7 @@ func TestCacheEntryPeekExists_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
+	resp, exists, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "test-key",
 		Branch: "main",
 	})
@@ -66,7 +66,7 @@ func TestCacheEntryPeekExists_NotFound(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
+	resp, exists, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "nonexistent-key",
 		Branch: "main",
 	})
@@ -91,7 +91,7 @@ func TestCacheEntryPeekExists_WrongContentType(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
+	_, _, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "test-key",
 		Branch: "main",
 	})
@@ -110,7 +110,7 @@ func TestCacheEntryPeekExists_CacheRegistryNotFound(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
+	_, _, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "test-key",
 		Branch: "main",
 	})
@@ -129,7 +129,7 @@ func TestCacheEntryPeekExists_ContentTypeWithCharset(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
+	resp, exists, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
 		Key:    "test-key",
 		Branch: "main",
 	})
@@ -170,7 +170,7 @@ func TestCacheEntryCreate_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, err := client.CacheEntryCreate(context.Background(), "test-slug", api.CacheEntryCreateReq{
+	resp, _, err := client.CacheEntryCreate(context.Background(), "test-slug", api.CacheEntryCreateReq{
 		Key:          "test-key",
 		FallbackKeys: []string{"fallback-1", "fallback-2"},
 		Compression:  "gzip",
@@ -217,7 +217,7 @@ func TestCacheEntryRetrieve_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, found, err := client.CacheEntryRetrieve(context.Background(), "test-slug", api.CacheEntryRetrieveReq{
+	resp, found, _, err := client.CacheEntryRetrieve(context.Background(), "test-slug", api.CacheEntryRetrieveReq{
 		Key:          "test-key",
 		Branch:       "main",
 		FallbackKeys: "fallback-1,fallback-2",
@@ -246,7 +246,7 @@ func TestCacheEntryRetrieve_NotFound(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, found, err := client.CacheEntryRetrieve(context.Background(), "test-slug", api.CacheEntryRetrieveReq{
+	resp, found, _, err := client.CacheEntryRetrieve(context.Background(), "test-slug", api.CacheEntryRetrieveReq{
 		Key:    "nonexistent-key",
 		Branch: "main",
 	})
@@ -282,7 +282,7 @@ func TestCacheEntryCommit_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, err := client.CacheEntryCommit(context.Background(), "test-slug", api.CacheEntryCommitReq{
+	resp, _, err := client.CacheEntryCommit(context.Background(), "test-slug", api.CacheEntryCommitReq{
 		UploadID: "upload-123",
 	})
 	if err != nil {
@@ -303,7 +303,7 @@ func TestCacheEntryCommit_Failure(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, err := client.CacheEntryCommit(context.Background(), "test-slug", api.CacheEntryCommitReq{
+	_, _, err := client.CacheEntryCommit(context.Background(), "test-slug", api.CacheEntryCommitReq{
 		UploadID: "invalid-upload-id",
 	})
 	if err == nil {
