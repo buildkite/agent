@@ -846,11 +846,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		defer func() {
 			if cleanupErr := cleanupSSHKey(); cleanupErr != nil {
 				cleanupErr = fmt.Errorf("cleaning up git ssh key %q: %w", sshKeyPath, cleanupErr)
-				if err == nil {
-					err = cleanupErr
-				} else {
-					err = errors.Join(err, cleanupErr)
-				}
+				retErr = errors.Join(retErr, cleanupErr)
 			}
 		}()
 	}
