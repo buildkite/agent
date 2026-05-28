@@ -38,9 +38,9 @@ type cacheOps interface {
 	ListCaches() []configuration.Cache
 }
 
-// Save saves caches based on the provided configuration and logs results as
+// RunSave saves caches based on the provided configuration and logs results as
 // each cache is processed.
-func Save(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
+func RunSave(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
 	c, cacheIDs, err := newClient(l, apiClient, cfg)
 	if err != nil {
 		return err
@@ -52,9 +52,9 @@ func Save(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Confi
 	return saveWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
 }
 
-// Restore restores caches based on the provided configuration and logs results
+// RunRestore restores caches based on the provided configuration and logs results
 // as each cache is processed.
-func Restore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
+func RunRestore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
 	c, cacheIDs, err := newClient(l, apiClient, cfg)
 	if err != nil {
 		return err

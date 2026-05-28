@@ -97,6 +97,6 @@ var CacheRestoreCommand = cli.Command{
 		}
 
 		// Perform cache restore (logging happens inside)
-		return cache.Restore(ctx, l, apiClient, cacheCfg)
+		return cache.RunRestore(ctx, l, apiClient, cacheCfg)
 	},
 }

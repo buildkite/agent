@@ -97,6 +97,6 @@ var CacheSaveCommand = cli.Command{
 		}
 
 		// Perform cache save (logging happens inside)
-		return cache.Save(ctx, l, apiClient, cacheCfg)
+		return cache.RunSave(ctx, l, apiClient, cacheCfg)
 	},
 }
