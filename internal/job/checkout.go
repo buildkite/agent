@@ -1087,7 +1087,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 //
 // Only the default checkout phase invokes this; custom checkout hooks must
 // arrange their own credentials.
-func (e *Executor) prepareGitSSHKey() (_ string, _ func() error, retErr error) {
+func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, retErr error) {
 	if e.GitSSHKey == "" {
 		return "", nil, nil
 	}
