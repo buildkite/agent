@@ -3,12 +3,14 @@ package cache
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache/archive"
 	"github.com/buildkite/agent/v3/internal/cache/store"
+	"github.com/buildkite/roko"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -29,6 +31,11 @@ import (
 //
 // The operation respects context cancellation and will stop immediately when
 // ctx is cancelled, cleaning up any temporary resources.
+//
+// Transient API errors (429, 5xx, connection reset/timeout/EOF) on
+// CacheEntryPeekExists, CacheRegistry, CacheEntryCreate, and CacheEntryCommit
+// are retried automatically per api.BreakOnNonRetryable. Non-retryable errors
+// (4xx other than 429) cause the operation to fail immediately.
 //
 // Progress callbacks (if configured) are invoked at each stage with the
 // following stages: "validating", "checking_exists", "fetching_registry",
@@ -93,9 +100,29 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "checking_exists", "Checking if cache already exists", 0, 0)
 
 	// Check if cache already exists
-	_, exists, err := c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
-		Key:    cacheConfig.Key,
-		Branch: c.branch,
+	var (
+		peekApiResp *api.Response
+		exists      bool
+	)
+
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var err error
+		_, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
+			Key:    cacheConfig.Key,
+			Branch: c.branch,
+		})
+		if api.BreakOnNonRetryable(r, peekApiResp, err) {
+			return err
+		}
+		if err != nil {
+			slog.Warn("cache peek failed, retrying", "err", err, "retrier", r.String())
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -120,7 +147,27 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "fetching_registry", "Looking up cache registry", 0, 0)
 
 	// Get cache registry information
-	registryResp, err := c.api.CacheRegistry(ctx, c.registry)
+	var (
+		registryApiResp *api.Response
+		registryResp    api.CacheRegistryResp
+	)
+
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var err error
+		registryResp, registryApiResp, err = c.api.CacheRegistry(ctx, c.registry)
+		if api.BreakOnNonRetryable(r, registryApiResp, err) {
+			return err
+		}
+		if err != nil {
+			slog.Warn("cache registry lookup failed, retrying", "err", err, "retrier", r.String())
+			return err
+		}
+		return nil
+	})
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to get cache registry")
@@ -169,19 +216,41 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 
 	c.callProgress(cacheID, "creating_entry", "Creating cache entry", 0, 0)
 
-	// Create cache entry
-	createResp, err := c.api.CacheEntryCreate(ctx, registryResp.Name, api.CacheEntryCreateReq{
-		Key:          cacheConfig.Key,
-		FallbackKeys: cacheConfig.FallbackKeys,
-		Compression:  c.format,
-		FileSize:     int(archiveInfo.Size),
-		Digest:       fmt.Sprintf("sha256:%s", archiveInfo.Sha256sum),
-		Paths:        cacheConfig.Paths,
-		Platform:     c.platform,
-		Pipeline:     c.pipeline,
-		Branch:       c.branch,
-		Organization: c.organization,
-		Store:        registryResp.Store,
+	// Create cache entry.
+	// Retry-safe: server generates a fresh upload_uuid per call; orphaned temp
+	// rows + presigned URLs self-expire.
+	var (
+		createApiResp *api.Response
+		createResp    api.CacheEntryCreateResp
+	)
+
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var err error
+		createResp, createApiResp, err = c.api.CacheEntryCreate(ctx, registryResp.Name, api.CacheEntryCreateReq{
+			Key:          cacheConfig.Key,
+			FallbackKeys: cacheConfig.FallbackKeys,
+			Compression:  c.format,
+			FileSize:     int(archiveInfo.Size),
+			Digest:       fmt.Sprintf("sha256:%s", archiveInfo.Sha256sum),
+			Paths:        cacheConfig.Paths,
+			Platform:     c.platform,
+			Pipeline:     c.pipeline,
+			Branch:       c.branch,
+			Organization: c.organization,
+			Store:        registryResp.Store,
+		})
+		if api.BreakOnNonRetryable(r, createApiResp, err) {
+			return err
+		}
+		if err != nil {
+			slog.Warn("cache entry create failed, retrying", "err", err, "retrier", r.String())
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -231,9 +300,28 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 
 	c.callProgress(cacheID, "committing", "Committing cache entry", 0, 0)
 
-	// Commit cache
-	_, err = c.api.CacheEntryCommit(ctx, c.registry, api.CacheEntryCommitReq{
-		UploadID: createResp.UploadID,
+	// Commit cache.
+	// Retry-safe: server-side put_item is an unconditional overwrite with
+	// deterministic content.
+	var commitApiResp *api.Response
+
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var err error
+		_, commitApiResp, err = c.api.CacheEntryCommit(ctx, c.registry, api.CacheEntryCommitReq{
+			UploadID: createResp.UploadID,
+		})
+		if api.BreakOnNonRetryable(r, commitApiResp, err) {
+			return err
+		}
+		if err != nil {
+			slog.Warn("cache entry commit failed, retrying", "err", err, "retrier", r.String())
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		span.RecordError(err)

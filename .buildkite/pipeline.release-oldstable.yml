@@ -1,0 +1,233 @@
+steps:
+  - wait
+
+  - name: ":s3: Upload Oldstable Binaries to S3"
+    command: ".buildkite/steps/publish-to-s3.sh"
+    env:
+      CODENAME: "oldstable"
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-oldstable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
+      - ecr#v2.7.0:
+          login: true
+          account-ids: "032379705303"
+      - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
+          propagate-environment: true
+          mount-buildkite-agent: true
+
+  - name: ":octocat: :rocket: Create Github Release (if necessary)"
+    skip: "TODO(v4 release): unskip when v3 no longer stable"
+    command: ".buildkite/steps/github-release.sh"
+    env:
+      CODENAME: "oldstable"
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-oldstable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
+      - ecr#v2.7.0:
+          login: true
+          account-ids: "032379705303"
+      - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
+          propagate-environment: true
+          mount-buildkite-agent: true
+
+  - name: ":redhat: Publish Oldstable RPM Package"
+    command: ".buildkite/steps/publish-rpm-package.sh"
+    env:
+      CODENAME: "oldstable"
+      RPM_S3_BUCKET: "yum.buildkite.com"
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-oldstable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
+      - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
+          image: "buildkite/agent:3.55.0-ubuntu"
+          entrypoint: bash
+          propagate-environment: true
+          mount-buildkite-agent: true
+          volumes:
+            - "/yum.buildkite.com"
+    retry:
+      automatic:
+        - exit_status: 1
+          limit: 3
+
+  - group: ":redhat: Publish Oldstable RPM Package to Buildkite Packages"
+    steps:
+      - name: ":redhat: Publish Oldstable {{matrix.pkg_arch}} RPM Package to Buildkite Packages"
+        plugins:
+          - publish-to-packages#v2.2.0:
+              artifacts: "rpm/buildkite-agent_*_{{matrix.pkg_arch}}.rpm"
+              registry: "buildkite/agent-rpm-oldstable"
+              artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
+              attestations:
+                - "buildkite-agent-linux-{{matrix.go_arch}}.build-attestation.json"
+                - "buildkite-agent-rpm-packages.package-attestation.json"
+        soft_fail: true
+        matrix:
+          setup:
+            go_arch:
+              - "amd64"
+              - "386"
+              - "arm64"
+              - "ppc64"
+              - "ppc64le"
+              - "riscv64"
+            pkg_arch:
+              - "SKIP_FAKE_ARCH"
+          adjustments:
+            - with: { go_arch: "amd64", pkg_arch: "x86_64" }
+            - with: { go_arch: "386", pkg_arch: "i386" }
+            - with: { go_arch: "arm64", pkg_arch: "aarch64" }
+            - with: { go_arch: "ppc64", pkg_arch: "ppc64" }
+            - with: { go_arch: "ppc64le", pkg_arch: "ppc64le" }
+            - with: { go_arch: "riscv64", pkg_arch: "riscv64" }
+            - with: { pkg_arch: "SKIP_FAKE_ARCH" }
+              skip: true
+
+  - name: ":debian: Publish Oldstable Debian Package"
+    command: ".buildkite/steps/publish-debian-package.sh"
+    env:
+      CODENAME: "oldstable"
+      DEB_S3_BUCKET: "apt.buildkite.com/buildkite-agent"
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-oldstable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
+      - ecr#v2.7.0:
+          login: true
+          account-ids: "032379705303"
+      - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
+          propagate-environment: true
+          mount-buildkite-agent: true
+          tmpfs:
+            - "/root/.gnupg"
+
+  - group: ":debian: Publish Oldstable Debian Package to Buildkite Packages"
+    steps:
+      - name: ":debian: Publish Oldstable {{matrix.pkg_arch}} Debian Package to Buildkite Packages"
+        plugins:
+          - publish-to-packages#v2.2.0:
+              artifacts: "deb/buildkite-agent_*_{{matrix.pkg_arch}}.deb"
+              registry: "buildkite/agent-deb-oldstable"
+              artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
+              attestations:
+                - "buildkite-agent-linux-{{matrix.go_arch}}.build-attestation.json"
+                - "buildkite-agent-debian-packages.package-attestation.json"
+        soft_fail: true
+        matrix:
+          setup:
+            go_arch:
+              - "amd64"
+              - "386"
+              - "arm"
+              - "armhf"
+              - "arm64"
+              - "ppc64"
+              - "ppc64le"
+              - "riscv64"
+            pkg_arch:
+              - "SKIP_FAKE_ARCH"
+          adjustments:
+            - with: { go_arch: "amd64", pkg_arch: "x86_64" }
+            - with: { go_arch: "386", pkg_arch: "i386" }
+            - with: { go_arch: "arm", pkg_arch: "arm" }
+            - with: { go_arch: "armhf", pkg_arch: "armhf" }
+            - with: { go_arch: "arm64", pkg_arch: "arm64" }
+            - with: { go_arch: "ppc64", pkg_arch: "ppc64" }
+            - with: { go_arch: "ppc64le", pkg_arch: "ppc64el" }
+            - with: { go_arch: "riscv64", pkg_arch: "riscv64" }
+            - with: { pkg_arch: "SKIP_FAKE_ARCH" }
+              skip: true
+
+  - group: ":docker: Publish Oldstable Docker Images"
+    steps:
+      - name: ":docker: Publish Oldstable Images to {{matrix.registry}}"
+        command: ".buildkite/steps/publish-docker-images.sh"
+        env:
+          CODENAME: "oldstable"
+          REGISTRY: "{{matrix.registry}}"
+        plugins:
+          - aws-assume-role-with-web-identity#v1.4.0:
+              role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-oldstable
+              session-tags:
+                - organization_slug
+                - organization_id
+                - pipeline_slug
+                - build_branch
+          - ecr#v2.7.0:
+              login: true
+              account-ids: "445615400570"
+        matrix:
+          setup:
+            registry:
+              - docker.io
+              - ghcr.io
+              - packages.buildkite.com
+          adjustments:
+            - with: { registry: "packages.buildkite.com" }
+              soft_fail: true
+
+  - wait
+
+  - name: ":beer: Publish Oldstable Homebrew Package"
+    skip: "TODO(v4 release): unskip when v3 no longer stable"
+    command: ".buildkite/steps/release-homebrew.sh"
+    artifact_paths: "pkg/*.rb;pkg/*.json"
+    env:
+      CODENAME: "oldstable"
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-oldstable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
+      - ecr#v2.7.0:
+          login: true
+          account-ids: "032379705303"
+      - docker#v5.8.0:
+          environment:
+            - "AWS_ACCESS_KEY_ID"
+            - "AWS_SECRET_ACCESS_KEY"
+            - "AWS_SESSION_TOKEN"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
+          propagate-environment: true
+          mount-buildkite-agent: true

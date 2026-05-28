@@ -54,7 +54,7 @@ sync_from_s3() {
 }
 
 if [[ "${CODENAME}" == "" ]]; then
-  echo "Error: Missing \$CODENAME (stable or unstable)"
+  echo "Error: Missing \$CODENAME (stable, unstable, oldstable)"
   exit 1
 fi
 

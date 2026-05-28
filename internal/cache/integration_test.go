@@ -60,27 +60,27 @@ func (m *mockAPIClient) Do(req *http.Request) (*http.Response, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *mockAPIClient) CacheRegistry(ctx context.Context, registry string) (api.CacheRegistryResp, error) {
+func (m *mockAPIClient) CacheRegistry(ctx context.Context, registry string) (api.CacheRegistryResp, *api.Response, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CacheRegistryResp{}, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheRegistryResp{}, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	return api.CacheRegistryResp{
 		Name:  reg.name,
 		Store: reg.store,
-	}, nil
+	}, nil, nil
 }
 
-func (m *mockAPIClient) CacheEntryPeekExists(ctx context.Context, registry string, req api.CacheEntryPeekReq) (api.CacheEntryPeekResp, bool, error) {
+func (m *mockAPIClient) CacheEntryPeekExists(ctx context.Context, registry string, req api.CacheEntryPeekReq) (api.CacheEntryPeekResp, bool, *api.Response, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CacheEntryPeekResp{}, false, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryPeekResp{}, false, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	entry, exists := reg.cache[req.Key]
 	if !exists || !entry.committed {
-		return api.CacheEntryPeekResp{Message: api.CacheEntryNotFound}, false, nil
+		return api.CacheEntryPeekResp{Message: api.CacheEntryNotFound}, false, nil, nil
 	}
 
 	return api.CacheEntryPeekResp{
@@ -100,13 +100,13 @@ func (m *mockAPIClient) CacheEntryPeekExists(ctx context.Context, registry strin
 		AgentID:      "test-agent-id",
 		JobID:        "test-job-id",
 		BuildID:      "test-build-id",
-	}, true, nil
+	}, true, nil, nil
 }
 
-func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, req api.CacheEntryCreateReq) (api.CacheEntryCreateResp, error) {
+func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, req api.CacheEntryCreateReq) (api.CacheEntryCreateResp, *api.Response, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CacheEntryCreateResp{}, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryCreateResp{}, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	uploadID := fmt.Sprintf("upload-%d", time.Now().UnixNano())
@@ -134,29 +134,29 @@ func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, r
 	return api.CacheEntryCreateResp{
 		UploadID:        uploadID,
 		StoreObjectName: storeObjectName,
-	}, nil
+	}, nil, nil
 }
 
-func (m *mockAPIClient) CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, error) {
+func (m *mockAPIClient) CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, *api.Response, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CacheEntryCommitResp{}, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryCommitResp{}, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	for _, entry := range reg.cache {
 		if entry.uploadID == req.UploadID {
 			entry.committed = true
-			return api.CacheEntryCommitResp{Message: "Cache entry committed successfully"}, nil
+			return api.CacheEntryCommitResp{Message: "Cache entry committed successfully"}, nil, nil
 		}
 	}
 
-	return api.CacheEntryCommitResp{}, fmt.Errorf("upload ID not found: %s", req.UploadID)
+	return api.CacheEntryCommitResp{}, nil, fmt.Errorf("upload ID not found: %s", req.UploadID)
 }
 
-func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string, req api.CacheEntryRetrieveReq) (api.CacheEntryRetrieveResp, bool, error) {
+func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string, req api.CacheEntryRetrieveReq) (api.CacheEntryRetrieveResp, bool, *api.Response, error) {
 	reg, ok := m.registries[registry]
 	if !ok {
-		return api.CacheEntryRetrieveResp{}, false, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryRetrieveResp{}, false, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
 	// Try exact key match first
@@ -168,7 +168,7 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 			StoreObjectName: entry.storeObjectName,
 			ExpiresAt:       entry.expiresAt,
 			CompressionType: entry.compression,
-		}, true, nil
+		}, true, nil, nil
 	}
 
 	// Try fallback keys - check if the entry key matches any of the requested fallback keys
@@ -185,12 +185,12 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 					StoreObjectName: entry.storeObjectName,
 					ExpiresAt:       entry.expiresAt,
 					CompressionType: entry.compression,
-				}, true, nil
+				}, true, nil, nil
 			}
 		}
 	}
 
-	return api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound}, false, nil
+	return api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound}, false, nil, nil
 }
 
 // createRandomFile creates a file filled with random data
