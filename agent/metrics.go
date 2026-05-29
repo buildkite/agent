@@ -57,35 +57,17 @@ var (
 		Buckets:   prometheus.LinearBuckets(1, 1, 20),
 	})
 
-	// Original unlabelled counters — kept for backwards compatibility with
-	// existing scrape consumers. New code should prefer the labelled
-	// jobsStartedWithLabels / jobsEndedWithLabels counters below.
-	jobsStarted = promauto.NewCounter(prometheus.CounterOpts{
+	// Job counters, labelled by job priority and agent queue.
+	jobsStarted = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: metricsNamespace,
 		Subsystem: "jobs",
 		Name:      "started_total",
-		Help:      "Count of jobs started",
-	})
-	jobsEnded = promauto.NewCounter(prometheus.CounterOpts{
+		Help:      "Count of jobs started, labelled by job priority and agent queue",
+	}, []string{"priority", "queue"})
+	jobsEnded = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: metricsNamespace,
 		Subsystem: "jobs",
 		Name:      "ended_total",
-		Help:      "Count of jobs ended (any outcome)",
-	})
-
-	// Labelled counters added for A-1100. These coexist with the unlabelled
-	// jobsStarted / jobsEnded above; both are incremented at the same call
-	// site so the unlabelled total always equals sum() over the labelled.
-	jobsStartedWithLabels = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: metricsNamespace,
-		Subsystem: "jobs",
-		Name:      "started_with_labels_total",
-		Help:      "Count of jobs started, labelled by job priority and agent queue",
-	}, []string{"priority", "queue"})
-	jobsEndedWithLabels = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: metricsNamespace,
-		Subsystem: "jobs",
-		Name:      "ended_with_labels_total",
 		Help:      "Count of jobs ended (any outcome), labelled by job priority and agent queue",
 	}, []string{"priority", "queue"})
 
