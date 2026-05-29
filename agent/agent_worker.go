@@ -520,13 +520,8 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 	priorityLabel := strconv.Itoa(acceptResponse.Priority)
 	queueLabel := acceptResponse.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]
 
-	// Legacy unlabelled counters; kept incrementing in lockstep with the
-	// labelled counters below so existing scrape consumers see no shape change.
-	jobsStarted.Inc()
-	defer jobsEnded.Inc()
-
-	jobsStartedWithLabels.WithLabelValues(priorityLabel, queueLabel).Inc()
-	defer jobsEndedWithLabels.WithLabelValues(priorityLabel, queueLabel).Inc()
+	jobsStarted.WithLabelValues(priorityLabel, queueLabel).Inc()
+	defer jobsEnded.WithLabelValues(priorityLabel, queueLabel).Inc()
 
 	running := jobsRunning.WithLabelValues(priorityLabel, queueLabel)
 	running.Inc()
