@@ -11,6 +11,7 @@ import (
 
 const (
 	envURL        = "http://job/api/current-job/v0/env"
+	workdirURL    = "http://job/api/current-job/v0/workdir"
 	redactionsURL = "http://job/api/current-job/v0/redactions"
 )
 
@@ -95,6 +96,18 @@ func (c *Client) EnvDelete(ctx context.Context, del []string) (deleted []string,
 	}
 	resp.Normalize()
 	return resp.Deleted, nil
+}
+
+// SetWorkdir requests that subsequent hooks and the command phase run in dir.
+// dir must be an absolute path. It returns the absolute working directory as
+// recorded by the executor.
+func (c *Client) SetWorkdir(ctx context.Context, dir string) (string, error) {
+	req := WorkdirSetRequest{Workdir: dir}
+	var resp WorkdirSetResponse
+	if err := c.client.Do(ctx, http.MethodPut, workdirURL, &req, &resp); err != nil {
+		return "", err
+	}
+	return resp.Workdir, nil
 }
 
 // RedactionCreate creates a redaction in the job executor.

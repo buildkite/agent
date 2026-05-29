@@ -191,6 +191,59 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
 }
 
+func TestBinaryHookCanSetWorkdir(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Binary hooks set the workdir via the Job API, which behaves the same on all platforms, but this test relies on POSIX-y path handling")
+	}
+
+	ctx := mainCtx
+
+	tester, err := NewExecutorTester(ctx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Build a binary pre-command hook that calls the Job API to set the working
+	// directory for subsequent phases. The source is in
+	// ./test-binary-hook-workdir/main.go.
+	t.Logf("Building test-binary-hook-workdir")
+	hookPath := filepath.Join(tester.HooksDir, "pre-command")
+	output, err := exec.Command("go", "build", "-o", hookPath, "./test-binary-hook-workdir").CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build test-binary-hook-workdir: %v, output: %s", err, string(output))
+	}
+
+	// The command hook should run in the directory the binary hook requested.
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if want := c.GetEnv("EXPECTED_WORKDIR"); want != c.Dir {
+			_, _ = fmt.Fprintf(c.Stderr, "Expected command hook dir to be %q, got %q\n", want, c.Dir)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	// A subsequent hook should also run in the requested directory, proving the
+	// change persists across hooks.
+	tester.ExpectGlobalHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if want := c.GetEnv("EXPECTED_WORKDIR"); want != c.Dir {
+			_, _ = fmt.Fprintf(c.Stderr, "Expected post-command hook dir to be %q, got %q\n", want, c.Dir)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t)
+
+	if !strings.Contains(tester.Output, "hi there from the workdir-setting binary hook 📂") {
+		t.Fatalf("tester.Output %q does not contain expected output: %q", tester.Output, "hi there from the workdir-setting binary hook 📂")
+	}
+}
+
 func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	t.Parallel()
 

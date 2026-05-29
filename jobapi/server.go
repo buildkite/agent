@@ -34,6 +34,11 @@ type Server struct {
 	environ   *env.Environment
 	redactors *replacer.Mux
 
+	// pendingWorkdir holds an absolute working directory requested by a hook via
+	// the /workdir endpoint, waiting to be applied by the executor once the hook
+	// process exits. Guarded by mtx.
+	pendingWorkdir string
+
 	token   string
 	sockSvr *socket.Server
 }
@@ -72,6 +77,21 @@ func NewServer(
 	s.sockSvr = svr
 
 	return s, token, err
+}
+
+// TakePendingWorkdir returns the working directory requested by a hook via the
+// /workdir endpoint (if any) and clears the pending signal. The second return
+// value reports whether a directory was pending. The applied directory persists
+// in the executor's shell working directory; this only consumes the signal.
+func (s *Server) TakePendingWorkdir() (string, bool) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if s.pendingWorkdir == "" {
+		return "", false
+	}
+	wd := s.pendingWorkdir
+	s.pendingWorkdir = ""
+	return wd, true
 }
 
 // Start starts the server in a goroutine, returning an error if the server can't be started
