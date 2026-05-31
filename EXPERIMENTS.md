@@ -6,7 +6,7 @@ We frequently introduce new experimental features to the agent. You can use the 
 buildkite-agent start --experiment experiment1 --experiment experiment2
 ```
 
-Or you can set them in your [agent configuration file](https://buildkite.com/docs/agent/v3/configuration):
+Or you can set them in your [agent configuration file](https://buildkite.com/docs/agent/self-hosted/configure):
 
 ```
 experiment="experiment1,experiment2"
