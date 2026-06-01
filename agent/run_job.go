@@ -420,6 +420,12 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	r.agentLogger.Debugf("[JobRunner] Waiting for all other routines to finish")
 	wg.Wait()
 
+	if r.jobLogsOTLP != nil {
+		if err := r.jobLogsOTLP.Close(ctx); err != nil {
+			r.agentLogger.Warnf("Failed to flush OTLP job logs: %v", err)
+		}
+	}
+
 	// Remove the env file, if any
 	for _, f := range []*os.File{r.envShellFile, r.envJSONFile} {
 		if f == nil {

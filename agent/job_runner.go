@@ -125,6 +125,9 @@ type JobRunner struct {
 	// jobLogs is an io.Writer that sends data to the job logs
 	jobLogs io.Writer
 
+	// jobLogsOTLP exports job log lines to an OTLP logs endpoint when enabled.
+	jobLogsOTLP *OTLPJobLogger
+
 	// Job cancellation control
 	cancelLock sync.Mutex // prevent concurrent calls to Cancel
 
@@ -262,6 +265,15 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	}
 
 	pr, pw := io.Pipe()
+	if conf.AgentConfiguration.JobLogsOTLP {
+		jobLogsOTLP, err := NewOTLPJobLogger(ctx, conf)
+		if err != nil {
+			r.agentLogger.Warnf("Failed to initialize OTLP job log exporter: %v", err)
+		} else {
+			r.jobLogsOTLP = jobLogsOTLP
+			allWriters = append(allWriters, jobLogsOTLP)
+		}
+	}
 
 	switch {
 	case conf.AgentConfiguration.ANSITimestamps:
