@@ -7,8 +7,12 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/tracetools"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 type otlpJobLogTestExporter struct {
@@ -125,6 +129,52 @@ func TestOTLPJobLoggerEmitsStructuredLineRecords(t *testing.T) {
 	}
 }
 
+func TestOTLPJobLogContextCreatesTraceparentForBootstrapWhenServerDoesNotProvideOne(t *testing.T) {
+	oldTracerProvider := otel.GetTracerProvider()
+	tracerProvider := sdktrace.NewTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(oldTracerProvider)
+		_ = tracerProvider.Shutdown(context.Background())
+	})
+
+	conf := JobRunnerConfig{
+		AgentConfiguration: AgentConfiguration{
+			TracingBackend:              tracetools.BackendOpenTelemetry,
+			TracingPropagateTraceparent: true,
+		},
+		Job: &api.Job{
+			ID:  "job-123",
+			Env: map[string]string{},
+		},
+	}
+
+	ctx, span := otlpJobLogContext(context.Background(), conf)
+	if span == nil {
+		t.Fatalf("otlpJobLogContext() span = nil, want fallback span")
+	}
+	t.Cleanup(func() { span.End() })
+
+	sc := oteltrace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		t.Fatalf("SpanContextFromContext(ctx).IsValid() = false, want true")
+	}
+	if got := conf.Job.TraceParent; got != "" {
+		t.Errorf("conf.Job.TraceParent = %q, want empty", got)
+	}
+	if got := conf.Job.TraceState; got != "" {
+		t.Errorf("conf.Job.TraceState = %q, want empty", got)
+	}
+
+	logger := newOTLPJobLoggerWithLogger(ctx, nil, nil, otlpJobLogAttributes(conf))
+	attrs := keyValues(logger.attrs)
+	for _, key := range []string{"trace_id", "span_id"} {
+		if got := attrs[key]; got != "" {
+			t.Errorf("attribute %s = %q, want empty", key, got)
+		}
+	}
+}
+
 func TestOTLPJobLoggerFlushesPartialLineOnClose(t *testing.T) {
 	t.Parallel()
 
@@ -138,7 +188,7 @@ func TestOTLPJobLoggerFlushesPartialLineOnClose(t *testing.T) {
 	if got := len(exporter.Records()); got != 0 {
 		t.Fatalf("record count before close = %d, want 0", got)
 	}
-	if err := logger.Close(context.Background()); err != nil {
+	if err := logger.Close(); err != nil {
 		t.Fatalf("logger.Close() = %v", err)
 	}
 	records := exporter.Records()
@@ -147,6 +197,29 @@ func TestOTLPJobLoggerFlushesPartialLineOnClose(t *testing.T) {
 	}
 	if got, want := records[0].Body().AsString(), "partial"; got != want {
 		t.Errorf("record body = %q, want %q", got, want)
+	}
+}
+
+func TestOTLPJobLoggerDetachesEmitContextFromCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx := contextWithJobTraceparent(
+		context.Background(),
+		"00-abcdef1234567890abcdef1234567890-1234567890abcdef-01",
+		"",
+	)
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+
+	exporter := &otlpJobLogTestExporter{}
+	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
+	logger := newOTLPJobLoggerWithLogger(ctx, provider.Logger("test"), provider, nil)
+
+	if err := logger.ctx.Err(); err != nil {
+		t.Fatalf("logger ctx error = %v, want nil", err)
+	}
+	if got, want := oteltrace.SpanContextFromContext(logger.ctx).TraceID().String(), "abcdef1234567890abcdef1234567890"; got != want {
+		t.Fatalf("logger ctx trace ID = %q, want %q", got, want)
 	}
 }
 
@@ -167,6 +240,29 @@ func TestOTLPJobLoggerPreservesBodyWithoutTimestampPrefix(t *testing.T) {
 	}
 	if records[0].Timestamp().Before(before) {
 		t.Errorf("record timestamp = %v, want after %v", records[0].Timestamp(), before)
+	}
+}
+
+func TestOTLPJobLogContextDoesNotAcceptTraceparentWithoutPropagateOptIn(t *testing.T) {
+	t.Parallel()
+
+	conf := JobRunnerConfig{
+		AgentConfiguration: AgentConfiguration{
+			TracingBackend: tracetools.BackendOpenTelemetry,
+		},
+		Job: &api.Job{
+			ID:          "job-123",
+			Env:         map[string]string{},
+			TraceParent: "00-abcdef1234567890abcdef1234567890-1234567890abcdef-01",
+		},
+	}
+
+	ctx, span := otlpJobLogContext(context.Background(), conf)
+	if span != nil {
+		t.Fatalf("otlpJobLogContext() span = %v, want nil", span)
+	}
+	if sc := oteltrace.SpanContextFromContext(ctx); sc.IsValid() {
+		t.Fatalf("SpanContextFromContext(ctx).IsValid() = true, want false")
 	}
 }
 
@@ -231,11 +327,44 @@ func TestOTLPJobLoggerAddsPluginHookScopeFromHeaders(t *testing.T) {
 	}
 }
 
+func TestOTLPJobLoggerDoesNotUpdateScopeFromOrdinaryOutput(t *testing.T) {
+	t.Parallel()
+
+	exporter := &otlpJobLogTestExporter{}
+	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
+	logger := newOTLPJobLoggerWithLogger(context.Background(), provider.Logger("test"), provider, nil)
+
+	if _, err := logger.Write([]byte("Running plugin docker#v5.12.0 pre-command hook\nordinary output\n")); err != nil {
+		t.Fatalf("logger.Write() = %v", err)
+	}
+
+	records := exporter.Records()
+	if got, want := len(records), 2; got != want {
+		t.Fatalf("record count = %d, want %d", got, want)
+	}
+	for i, record := range records {
+		attrs := recordAttributes(record)
+		for _, key := range []string{"buildkite.phase", "buildkite.hook.name", "buildkite.hook.scope", "buildkite.hook.plugin"} {
+			if got := attrs[key]; got != "" {
+				t.Errorf("record %d attribute %s = %q, want empty", i, key, got)
+			}
+		}
+	}
+}
+
 func recordAttributes(record sdklog.Record) map[string]string {
 	attrs := map[string]string{}
 	record.WalkAttributes(func(kv log.KeyValue) bool {
 		attrs[kv.Key] = kv.Value.AsString()
 		return true
 	})
+	return attrs
+}
+
+func keyValues(kvs []log.KeyValue) map[string]string {
+	attrs := map[string]string{}
+	for _, kv := range kvs {
+		attrs[kv.Key] = kv.Value.AsString()
+	}
 	return attrs
 }

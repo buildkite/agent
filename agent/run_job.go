@@ -421,7 +421,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	wg.Wait()
 
 	if r.jobLogsOTLP != nil {
-		if err := r.jobLogsOTLP.Close(ctx); err != nil {
+		if err := r.jobLogsOTLP.Close(); err != nil {
 			r.agentLogger.Warnf("Failed to flush OTLP job logs: %v", err)
 		}
 	}
