@@ -125,6 +125,7 @@ type AgentStartConfig struct {
 
 	LogFormat            string   `cli:"log-format"`
 	WriteJobLogsToStdout bool     `cli:"write-job-logs-to-stdout"`
+	JobLogsOTLP          bool     `cli:"job-logs-otlp"`
 	DisableWarningsFor   []string `cli:"disable-warnings-for" normalize:"list"`
 
 	BuildPath            string   `cli:"build-path" normalize:"filepath" validate:"required"`
@@ -436,6 +437,11 @@ var AgentStartCommand = cli.Command{
 			Name:   "write-job-logs-to-stdout",
 			Usage:  "Writes job logs to the agent process' stdout. This simplifies log collection if running agents in Docker (default: false)",
 			EnvVar: "BUILDKITE_WRITE_JOB_LOGS_TO_STDOUT",
+		},
+		cli.BoolFlag{
+			Name:   "job-logs-otlp",
+			Usage:  "Export job logs directly to an OTLP logs endpoint using OpenTelemetry log records (default: false)",
+			EnvVar: "BUILDKITE_JOB_LOGS_OTLP",
 		},
 		cli.StringFlag{
 			Name:   "shell",
@@ -1107,6 +1113,7 @@ var AgentStartCommand = cli.Command{
 			EnableJobLogTmpfile:             cfg.EnableJobLogTmpfile,
 			JobLogPath:                      cfg.JobLogPath,
 			WriteJobLogsToStdout:            cfg.WriteJobLogsToStdout,
+			JobLogsOTLP:                     cfg.JobLogsOTLP,
 			LogFormat:                       cfg.LogFormat,
 			Shell:                           cfg.Shell,
 			HooksShell:                      cfg.HooksShell,

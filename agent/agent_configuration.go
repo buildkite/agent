@@ -66,6 +66,7 @@ type AgentConfiguration struct {
 	EnableJobLogTmpfile          bool
 	JobLogPath                   string
 	WriteJobLogsToStdout         bool
+	JobLogsOTLP                  bool
 	LogFormat                    string
 	Shell                        string
 	HooksShell                   string
