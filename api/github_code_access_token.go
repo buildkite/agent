@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
-
-	"github.com/buildkite/roko"
 )
 
 type GithubCodeAccessTokenRequest struct {
@@ -25,38 +22,10 @@ func (c *Client) GenerateGithubCodeAccessToken(ctx context.Context, repoURL, job
 		return "", nil, err
 	}
 
-	r := roko.NewRetrier(
-		roko.WithMaxAttempts(3),
-		roko.WithStrategy(roko.Constant(5*time.Second)),
-	)
-
 	var g GithubCodeAccessTokenResponse
-
-	resp, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*Response, error) {
-		resp, err := c.doRequest(req, &g)
-		if err == nil {
-			return resp, nil
-		}
-
-		if resp != nil {
-			if !IsRetryableStatus(resp) {
-				r.Break()
-				return resp, err
-			}
-
-			if resp.Header.Get("Retry-After") != "" {
-				retryAfter, errParseDuration := time.ParseDuration(resp.Header.Get("Retry-After") + "s")
-				if errParseDuration == nil {
-					r.SetNextInterval(retryAfter)
-				}
-			}
-		}
-
-		return resp, err
-	})
+	resp, err := c.doRequest(req, &g)
 	if err != nil {
 		return "", resp, err
 	}
-
 	return g.Token, resp, nil
 }

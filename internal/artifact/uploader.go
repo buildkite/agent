@@ -760,9 +760,14 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 			defer cancel()
 		}
 
-		_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, statesToUpload)
+		resp, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, statesToUpload)
 		if err != nil {
-			a.logger.Warnf("%s (%s)", err, r)
+			if api.BreakOnNonRetryable(r, resp, err) {
+				a.logger.Warnf("Buildkite rejected the artifact state update (%s)", err)
+			} else {
+				a.logger.Warnf("%s (%s)", err, r)
+				return err
+			}
 		}
 
 		// after four attempts (0, 1, 2, 3)...

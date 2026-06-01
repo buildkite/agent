@@ -89,14 +89,12 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 				}
 
 				creation, resp, err := a.apiClient.CreateArtifacts(ctxTimeout, a.conf.JobID, batch)
-				// The server returns a 403 code if the artifact has exceeded the service quota.
-				// Break the retry on any 4xx code except for 429 Too Many Requests.
-				if resp != nil && (resp.StatusCode != 429 && resp.StatusCode >= 400 && resp.StatusCode <= 499) {
-					a.logger.Warnf("Artifact creation failed with status code %d, breaking the retry loop", resp.StatusCode)
-					r.Break()
-				}
 				if err != nil {
-					a.logger.Warnf("%s (%s)", err, r)
+					if api.BreakOnNonRetryable(r, resp, err) {
+						a.logger.Warnf("Artifact creation failed (%s), breaking the retry loop", err)
+					} else {
+						a.logger.Warnf("%s (%s)", err, r)
+					}
 				}
 
 				// after four attempts (0, 1, 2, 3)...

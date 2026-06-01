@@ -200,13 +200,12 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, jobID string, idleMon
 	)
 
 	accepted, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.Job, error) {
-		accepted, _, err := a.apiClient.AcceptJob(ctx, jobID)
+		accepted, resp, err := a.apiClient.AcceptJob(ctx, jobID)
 		if err != nil {
-			if api.IsRetryableError(err) {
-				a.logger.Warnf("%s (%s)", err, r)
-			} else {
+			if api.BreakOnNonRetryable(r, resp, err) {
 				a.logger.Warnf("Buildkite rejected the call to accept the job (%s)", err)
-				r.Break()
+			} else {
+				a.logger.Warnf("%s (%s)", err, r)
 			}
 		}
 		return accepted, err

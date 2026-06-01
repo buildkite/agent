@@ -8,9 +8,11 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -96,7 +98,26 @@ var GitCredentialsHelperCommand = cli.Command{
 		}
 
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-		tok, _, err := client.GenerateGithubCodeAccessToken(ctx, repo, cfg.JobID)
+
+		r := roko.NewRetrier(
+			roko.WithMaxAttempts(3),
+			roko.WithStrategy(roko.Constant(5*time.Second)),
+		)
+		tok, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (string, error) {
+			tok, resp, err := client.GenerateGithubCodeAccessToken(ctx, repo, cfg.JobID)
+			if err != nil {
+				if api.BreakOnNonRetryable(r, resp, err) {
+					return "", err
+				}
+				if resp != nil && resp.Header.Get("Retry-After") != "" {
+					if retryAfter, parseErr := time.ParseDuration(resp.Header.Get("Retry-After") + "s"); parseErr == nil {
+						r.SetNextInterval(retryAfter)
+					}
+				}
+				return "", err
+			}
+			return tok, nil
+		})
 		if err != nil {
 			return handleAuthError(c, l, fmt.Errorf("failed to get github app credentials: %w", err))
 		}

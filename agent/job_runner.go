@@ -910,9 +910,8 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.SaveHeaderTimes(ctx, r.conf.Job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
-			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
+			if api.BreakOnNonRetryable(retrier, response, err) {
 				r.agentLogger.Warnf("Buildkite rejected the header times (%s)", err)
-				retrier.Break()
 			} else {
 				r.agentLogger.Warnf("%s (%s)", err, retrier)
 			}

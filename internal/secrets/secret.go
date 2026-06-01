@@ -91,18 +91,9 @@ func FetchSecrets(ctx context.Context, l logger.Logger, client APIClient, jobID 
 			apiSecret, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.Secret, error) {
 				secret, resp, err := client.GetSecret(ctx, &api.GetSecretRequest{Key: key, JobID: jobID})
 				if err != nil {
-					if resp != nil && api.IsRetryableStatus(resp) {
-						l.Warnf("Retrying secret %q fetch after retryable HTTP status %d (%s)", key, resp.StatusCode, r)
-						return nil, err
-					}
-
-					if api.IsRetryableError(err) {
+					if !api.BreakOnNonRetryable(r, resp, err) {
 						l.Warnf("Retrying secret %q fetch after retryable error: %v (%s)", key, err, r)
-						return nil, err
 					}
-
-					// Non-retryable error, stop retrying
-					r.Break()
 					return nil, err
 				}
 				return secret, nil

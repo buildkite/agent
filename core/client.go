@@ -169,9 +169,13 @@ func (c *Client) Connect(ctx context.Context) error {
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		_, err := c.APIClient.Connect(ctx)
+		resp, err := c.APIClient.Connect(ctx)
 		if err != nil {
-			c.Logger.Warnf("%s (%s)", err, r)
+			if !api.BreakOnNonRetryable(r, resp, err) {
+				c.Logger.Warnf("%s (%s)", err, r)
+			} else {
+				c.Logger.Warnf("Buildkite rejected the call to connect (%s)", err)
+			}
 		}
 		return err
 	})
@@ -187,8 +191,13 @@ func (c *Client) Disconnect(ctx context.Context) error {
 		roko.WithStrategy(roko.Constant(1*time.Second)),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		if _, err := c.APIClient.Disconnect(ctx); err != nil {
-			c.Logger.Warnf("%s (%s)", err, r) // e.g. POST https://...: 500 (Attempt 0/4 Retrying in ..)
+		resp, err := c.APIClient.Disconnect(ctx)
+		if err != nil {
+			if !api.BreakOnNonRetryable(r, resp, err) {
+				c.Logger.Warnf("%s (%s)", err, r) // e.g. POST https://...: 500 (Attempt 0/4 Retrying in ..)
+			} else {
+				c.Logger.Warnf("Buildkite rejected the call to disconnect (%s)", err)
+			}
 			return err
 		}
 		return nil
@@ -307,17 +316,11 @@ func (c *Client) StartJob(ctx context.Context, job *api.Job, startedAt time.Time
 	).DoWithContext(ctx, func(rtr *roko.Retrier) error {
 		response, err := c.APIClient.StartJob(ctx, job)
 		if err != nil {
-			if response != nil && api.IsRetryableStatus(response) {
+			if api.BreakOnNonRetryable(rtr, response, err) {
+				c.Logger.Warnf("Buildkite rejected the call to start the job (%s)", err)
+			} else {
 				c.Logger.Warnf("%s (%s)", err, rtr)
-				return err
 			}
-			if api.IsRetryableError(err) {
-				c.Logger.Warnf("%s (%s)", err, rtr)
-				return err
-			}
-
-			c.Logger.Warnf("Buildkite rejected the call to start the job (%s)", err)
-			rtr.Break()
 		}
 
 		return err
@@ -346,9 +349,8 @@ func (c *Client) UploadChunk(ctx context.Context, jobID string, chunk *api.Chunk
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := c.APIClient.UploadChunk(ctx, jobID, chunk)
 		if err != nil {
-			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
+			if api.BreakOnNonRetryable(retrier, response, err) {
 				c.Logger.Warnf("Buildkite rejected the chunk upload (%s)", err)
-				retrier.Break()
 				return err
 			}
 			c.Logger.Warnf("%s (%s)", err, retrier)
