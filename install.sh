@@ -72,9 +72,9 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1 ; then
-  HTTP_GET="curl -LsS"
+  HTTP_GET=("curl" "-LsS")
 elif command -v wget >/dev/null 2>&1 ; then
-  HTTP_GET="wget -qO-"
+  HTTP_GET=("wget" "-qO-")
 else
   echo -e "\033[31mCouldn't find either curl or wget on the system\!\033[0m\n"
   echo -e "\033[31mMake sure either curl or wget is installed and findable within \$PATH\!\033[0m\n"
@@ -89,7 +89,7 @@ if [[ "${BUILDKITE_AGENT_VERSION:-latest}" == "latest" ]]; then
       RELEASE_INFO_URL="${RELEASE_INFO_URL}&prerelease=true"
     fi
 
-    LATEST_RELEASE="$(eval "${HTTP_GET} '${RELEASE_INFO_URL}'")"
+    LATEST_RELEASE="$("${HTTP_GET[@]}" "${RELEASE_INFO_URL}")"
 
     VERSION="$(          echo "${LATEST_RELEASE}" | awk -F= '/version=/  { print $2 }')"
     DOWNLOAD_FILENAME="$(echo "${LATEST_RELEASE}" | awk -F= '/filename=/ { print $2 }')"
@@ -102,9 +102,9 @@ fi
 
 if [[ "${DISABLE_CHECKSUM_VERIFICATION:-}" != "true" ]]; then
   if command -v openssl >/dev/null 2>&1 ; then
-    SHA256SUM="openssl dgst -sha256 -r"
+    SHA256SUM=("openssl" "dgst" "-sha256" "-r")
   elif command -v sha256sum >/dev/null 2>&1 ; then
-    SHA256SUM="sha256sum"
+    SHA256SUM=("sha256sum")
   else
     echo -e "\033[31mCouldn't find either openssl or sha256sum on the system\!\033[0m\n"
     echo -e "\033[31mMake sure either openssl or sha256sum is installed and findable within \$PATH\!\033[0m\n"
@@ -114,7 +114,7 @@ if [[ "${DISABLE_CHECKSUM_VERIFICATION:-}" != "true" ]]; then
 
   SHASUMS_FILE="buildkite-agent-${VERSION}.SHA256SUMS"
   SHASUMS_URL="${DOWNLOAD_URL%"${DOWNLOAD_FILENAME}"}${SHASUMS_FILE}"
-  WANT_SHASUM="$(eval "${HTTP_GET} '${SHASUMS_URL}' | awk '/${DOWNLOAD_FILENAME}/ { print \$1 }'")"
+  WANT_SHASUM="$("${HTTP_GET[@]}" "${SHASUMS_URL}" | awk "/${DOWNLOAD_FILENAME}/ { print \$1 }")"
 
   if [[ "${WANT_SHASUM}" == "" ]]; then
     echo -e "\033[31mA SHA256 checksum for ${DOWNLOAD_FILENAME} could not be fetched\!\033[0m\n"
@@ -179,14 +179,14 @@ if [[ -e "releases/${DOWNLOAD_FILENAME}" ]]; then
   echo "Using existing release: releases/${DOWNLOAD_FILENAME}"
   cp "releases/${DOWNLOAD_FILENAME}" "${INSTALL_TMP}/${DOWNLOAD_FILENAME}"
 else
-  if ! eval "${HTTP_GET} '${DOWNLOAD_URL}'" > "${INSTALL_TMP}/${DOWNLOAD_FILENAME}" ; then
+  if ! "${HTTP_GET[@]}" "${DOWNLOAD_URL}" > "${INSTALL_TMP}/${DOWNLOAD_FILENAME}" ; then
     echo -e "\033[31mFailed to download file: ${DOWNLOAD_FILENAME}\033[0m\n"
     exit 1
   fi
 fi
 
 if [[ "${DISABLE_CHECKSUM_VERIFICATION:-}" != "true" ]]; then
-  if ! eval "${SHA256SUM} ${INSTALL_TMP}/${DOWNLOAD_FILENAME} | grep -q '${WANT_SHASUM}'" ; then
+  if ! "${SHA256SUM[@]}" "${INSTALL_TMP}/${DOWNLOAD_FILENAME}" | grep -q "${WANT_SHASUM}" ; then
     echo -e "\033[31m${DOWNLOAD_FILENAME} downloaded, but was corrupted (has the wrong checksum)\033[0m\n"
     echo -e "\033[31mYou might be able to resolve this by retrying.\033[0m\n"
     echo -e "\033[31mTo skip checksum verification, set DISABLE_CHECKSUM_VERIFICATION=true when re-running.\033[0m\n"

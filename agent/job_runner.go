@@ -480,6 +480,7 @@ BUILDKITE_TRACE_CONTEXT_ENCODING
 BUILDKITE_TRACING_BACKEND
 BUILDKITE_TRACING_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
+BUILDKITE_TRACING_TRACESTATE
 BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
 BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
@@ -491,6 +492,15 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 
 		for key, value := range env {
+			// Note that the value below is %q-quoted, and not shell-escaped.
+			// Env files are designed to be validated by the pre-bootstrap hook.
+			// Because the job env may contain untrusted or even dangerous env
+			// vars (suppose a user adds an env var in the "New Build" UI with a
+			// value that exploits a command injection in Bash), the
+			// pre-bootstrap hook should do this validation *without* sourcing
+			// the file. (If the job env was universally safe, then we wouldn't
+			// bother using a file - we'd load it straight into the subprocess
+			// env.)
 			if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
 				return nil, err
 			}
@@ -500,6 +510,8 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 	}
 	if r.envJSONFile != nil {
+		// key="value" format can be difficult to parse in some circumstances,
+		// so we also have a JSON formatted env file.
 		if err := json.NewEncoder(r.envJSONFile).Encode(env); err != nil {
 			return nil, err
 		}
@@ -695,6 +707,13 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		if r.conf.Job.TraceParent != "" {
 			setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
 		}
+		// Buildkite backend may also provide a tracestate property on the job,
+		// which carries vendor-specific trace context alongside the traceparent.
+		//
+		// https://www.w3.org/TR/trace-context/#tracestate-header
+		if r.conf.Job.TraceState != "" {
+			setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
+		}
 		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
 			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
 		}
@@ -775,7 +794,13 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 
 	// This (plus inherited) is the only ENV that should be exposed
 	// to the pre-bootstrap hook.
-	// - Env files are designed to be validated by the pre-bootstrap hook
+	// - Env files are designed to be validated by the pre-bootstrap hook.
+	//   Because the job env may contain untrusted or even dangerous env vars
+	//   (suppose a user adds an env var in the "New Build" UI with a value that
+	//   exploits a command injection in Bash), the pre-bootstrap hook should do
+	//   this validation *without* sourcing the file. (If the job env was
+	//   universally safe to source, then we would just pre-populate this env
+	//   with it.)
 	// - The pre-bootstrap hook may want to create annotations, so it can also
 	//   have a few necessary and global args as env vars.
 	environ := envutil.New()

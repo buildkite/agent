@@ -1,0 +1,32 @@
+{
+  "node-yarn": {
+    "key": "{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum \"yarn.lock\" }}",
+    "fallback_keys": [
+      "{{ id }}-{{ agent.os }}-{{ agent.arch }}-",
+      "{{ id }}-"
+    ],
+    "paths": [
+      "node_modules"
+    ]
+  },
+  "node-npm": {
+    "key": "{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum \"package-lock.json\" }}",
+    "fallback_keys": [
+      "{{ id }}-{{ agent.os }}-{{ agent.arch }}-",
+      "{{ id }}-"
+    ],
+    "paths": [
+      "node_modules"
+    ]
+  },
+  "ruby": {
+    "key": "{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum \"Gemfile.lock\" }}",
+    "fallback_keys": [
+      "{{ id }}-{{ agent.os }}-{{ agent.arch }}-",
+      "{{ id }}-"
+    ],
+    "paths": [
+      "vendor/bundle"
+    ]
+  }
+}

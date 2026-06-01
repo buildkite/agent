@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache"
 	"github.com/urfave/cli"
 	"go.opentelemetry.io/otel"
@@ -83,6 +84,7 @@ var CacheRestoreCommand = cli.Command{
 		l.Infof("Cache restore command executed")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
+		apiClient := api.NewClient(l, apiCfg)
 
 		// Build cache configuration
 		cacheCfg := cache.Config{
@@ -92,11 +94,9 @@ var CacheRestoreCommand = cli.Command{
 			Organization:    cfg.Organization,
 			CacheConfigFile: cfg.CacheConfigFile,
 			Ids:             cfg.Ids,
-			APIEndpoint:     apiCfg.Endpoint,
-			APIToken:        apiCfg.Token,
 		}
 
 		// Perform cache restore (logging happens inside)
-		return cache.Restore(ctx, l, cacheCfg)
+		return cache.RunRestore(ctx, l, apiClient, cacheCfg)
 	},
 }

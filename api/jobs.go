@@ -27,6 +27,7 @@ type Job struct {
 	RunnableAt            string                     `json:"runnable_at"`
 	ChunksFailedCount     int                        `json:"chunks_failed_count"`
 	TraceParent           string                     `json:"traceparent"`
+	TraceState            string                     `json:"tracestate"`
 	Priority              int                        `json:"priority"`
 }
 
