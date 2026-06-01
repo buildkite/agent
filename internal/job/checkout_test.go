@@ -178,7 +178,7 @@ func TestPrepareGitSSHKey(t *testing.T) {
 		}
 	})
 
-	t.Run("creates key file and restores environment", func(t *testing.T) {
+	t.Run("creates key file, augments GIT_SSH_COMMAND, and restores environment", func(t *testing.T) {
 		checkoutParent := t.TempDir()
 		checkoutPath := filepath.Join(checkoutParent, "checkout")
 		sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutPath)
@@ -229,7 +229,7 @@ func TestPrepareGitSSHKey(t *testing.T) {
 				t.Fatalf("ssh key directory permissions = %o, want %o", got, want)
 			}
 		}
-		if got, want := sh.Env.GetString("GIT_SSH_COMMAND", ""), gitSSHCommandForKeyFile(sshKeyPath); got != want {
+		if got, want := sh.Env.GetString("GIT_SSH_COMMAND", ""), gitSSHCommandForKeyFile(sshKeyPath, "ssh -F ~/.ssh/config"); got != want {
 			t.Fatalf("GIT_SSH_COMMAND = %q, want %q", got, want)
 		}
 
@@ -241,6 +241,38 @@ func TestPrepareGitSSHKey(t *testing.T) {
 		}
 		if got, want := sh.Env.GetString("GIT_SSH_COMMAND", ""), "ssh -F ~/.ssh/config"; got != want {
 			t.Fatalf("restored GIT_SSH_COMMAND = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("creates key file with default ssh command when none exists", func(t *testing.T) {
+		checkoutParent := t.TempDir()
+		checkoutPath := filepath.Join(checkoutParent, "checkout")
+		sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutPath)
+		sh.Env.Remove("GIT_SSH_COMMAND")
+
+		executor := &Executor{
+			shell: sh,
+			ExecutorConfig: ExecutorConfig{
+				GitSSHKey: "super-secret-key",
+			},
+		}
+
+		sshKeyPath, cleanup, err := executor.prepareGitSSHKey()
+		if err != nil {
+			t.Fatalf("executor.prepareGitSSHKey() error = %v, want nil", err)
+		}
+		if cleanup == nil {
+			t.Fatal("executor.prepareGitSSHKey() cleanup = nil, want non-nil")
+		}
+		if got, want := sh.Env.GetString("GIT_SSH_COMMAND", ""), gitSSHCommandForKeyFile(sshKeyPath, ""); got != want {
+			t.Fatalf("GIT_SSH_COMMAND = %q, want %q", got, want)
+		}
+
+		if err := cleanup(); err != nil {
+			t.Fatalf("cleanup() error = %v, want nil", err)
+		}
+		if _, exists := sh.Env.Get("GIT_SSH_COMMAND"); exists {
+			t.Fatal("GIT_SSH_COMMAND was restored, want unset")
 		}
 	})
 }

@@ -1127,8 +1127,8 @@ func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, 
 		pattern += badCharsRE.ReplaceAllString(e.PipelineSlug, "-") + "-"
 	}
 
-	// os.MkdirTemp creates the directory with mode 0o700 on Unix, giving the
-	// key file inside an additional layer of protection from sibling builds.
+	// os.MkdirTemp creates the directory with mode 0o700 on Unix, keeping the
+	// key file in its own private directory instead of beside the checkout.
 	sshKeyDir, err := os.MkdirTemp(parentDir, pattern)
 	if err != nil {
 		return "", nil, fmt.Errorf("creating ssh key directory: %w", err)
@@ -1139,7 +1139,7 @@ func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, 
 		}
 	}()
 
-	sshKeyPath := filepath.Join(sshKeyDir, "id")
+	sshKeyPath = filepath.Join(sshKeyDir, "id")
 	// Most SSH key parsers require a trailing newline; tolerate either form
 	// of input and always write a single one.
 	keyBytes := []byte(strings.TrimRight(e.GitSSHKey, "\n") + "\n")
@@ -1148,9 +1148,9 @@ func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, 
 	}
 
 	previousGitSSHCommand, hadPreviousGitSSHCommand := e.shell.Env.Get("GIT_SSH_COMMAND")
-	e.shell.Env.Set("GIT_SSH_COMMAND", gitSSHCommandForKeyFile(sshKeyPath))
+	e.shell.Env.Set("GIT_SSH_COMMAND", gitSSHCommandForKeyFile(sshKeyPath, previousGitSSHCommand))
 
-	cleanup := func() error {
+	cleanup = func() error {
 		if hadPreviousGitSSHCommand {
 			e.shell.Env.Set("GIT_SSH_COMMAND", previousGitSSHCommand)
 		} else {
@@ -1165,8 +1165,12 @@ func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, 
 	return sshKeyPath, cleanup, nil
 }
 
-func gitSSHCommandForKeyFile(path string) string {
-	return fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", shellwords.Quote(path))
+func gitSSHCommandForKeyFile(path, previous string) string {
+	keyOptions := fmt.Sprintf("-i %s -o IdentitiesOnly=yes", shellwords.Quote(path))
+	if previous == "" {
+		return "ssh " + keyOptions
+	}
+	return strings.TrimSpace(previous) + " " + keyOptions
 }
 
 // gitFetchWithFallback run git fetch for refspecs, when it fails on recoverable reason, it will retry fetching

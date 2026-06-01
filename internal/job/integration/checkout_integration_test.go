@@ -113,6 +113,7 @@ func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
 	defer tester.Close()
 
 	const sshKey = "super-secret-key"
+	const existingGitSSHCommand = "ssh -F ~/.ssh/config"
 	var sshKeyPath string
 
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
@@ -129,7 +130,7 @@ func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
 				return fmt.Errorf("GIT_SSH_COMMAND not set for git %q", i.Args[0])
 			}
 
-			const prefix = "ssh -i "
+			const prefix = existingGitSSHCommand + " -i "
 			const suffix = " -o IdentitiesOnly=yes"
 			if !strings.HasPrefix(gitSSHCommand, prefix) || !strings.HasSuffix(gitSSHCommand, suffix) {
 				return fmt.Errorf("unexpected GIT_SSH_COMMAND %q", gitSSHCommand)
@@ -163,6 +164,7 @@ func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 		"BUILDKITE_GIT_SSH_KEY="+sshKey,
+		"GIT_SSH_COMMAND="+existingGitSSHCommand,
 	)
 
 	if sshKeyPath == "" {
