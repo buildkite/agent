@@ -201,7 +201,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 }
 
-func TestCheckingOutLocalGitProjectWithSparseCheckoutExistingGitDir(t *testing.T) {
+func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(t *testing.T) {
 	t.Parallel()
 	skipIfGitSparseCheckoutUnsupported(t)
 
@@ -224,6 +224,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutExistingGitDir(t *testing.T
 		PassthroughToLocalCommand()
 	agent := tester.MockAgent(t)
 
+	// First run: create an initial sparse checkout.
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 	git.ExpectAll([][]any{
@@ -242,6 +243,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutExistingGitDir(t *testing.T
 	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 
+	// Second run: keep the same checkout dir but switch the sparse paths.
 	env[len(env)-1] = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/"
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
 	git.ExpectAll([][]any{
@@ -258,6 +260,25 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutExistingGitDir(t *testing.T
 	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", false)
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+
+	// Third run: disable sparse checkout entirely and restore the full tree.
+	env = env[:len(env)-1]
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
+	git.ExpectAll([][]any{
+		{"config", "--get-all", "remote.origin.url"},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"config", "--get", "core.sparseCheckout"},
+		{"sparse-checkout", "disable"},
+		{"config", "--worktree", "--list"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+	})
+
+	tester.RunAndCheck(t, env...)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", true)
 }
 
 func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
