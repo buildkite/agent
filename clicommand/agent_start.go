@@ -442,7 +442,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "job-logs-otlp",
-			Usage:  "Export job logs directly to an OTLP logs endpoint using OpenTelemetry log records (default: false)",
+			Usage:  "Export job logs directly as OpenTelemetry log records using the OTEL_EXPORTER_OTLP_LOGS_* / OTEL_EXPORTER_OTLP_* environment configuration (default: false)",
 			EnvVar: "BUILDKITE_JOB_LOGS_OTLP",
 		},
 		cli.StringFlag{

@@ -160,7 +160,7 @@ type jobProcess interface {
 }
 
 // Initializes the job runner
-func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (_ *JobRunner, err error) {
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
 	if conf.Job.Token != "" {
@@ -176,7 +176,15 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		client:      &core.Client{APIClient: apiClient, Logger: l},
 	}
 
-	var err error
+	defer func() {
+		if err != nil && r.jobLogsOTLP != nil {
+			if closeErr := r.jobLogsOTLP.Close(); closeErr != nil {
+				r.agentLogger.Warnf("Failed to close OTLP job log exporter after job runner initialization error: %v", closeErr)
+			}
+			r.jobLogsOTLP = nil
+		}
+	}()
+
 	r.VerificationFailureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.VerificationFailureBehaviour)
 	if err != nil {
 		return nil, fmt.Errorf("setting no signature behavior: %w", err)
@@ -226,6 +234,16 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// BUILDKITE_AGENT_JOB_TIMEOUT_FILE env var.
 	r.jobTimeoutFilePath = jobTimeoutFilePath(r.conf.Job.ID, conf.KubernetesExec)
 
+	var jobLogsOTLP *OTLPJobLogger
+	if conf.AgentConfiguration.JobLogsOTLP {
+		jobLogsOTLP, err = NewOTLPJobLogger(ctx, conf)
+		if err != nil {
+			r.agentLogger.Warnf("Failed to initialize OTLP job log exporter: %v", err)
+		} else {
+			r.jobLogsOTLP = jobLogsOTLP
+		}
+	}
+
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
 		return nil, err
@@ -265,14 +283,8 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	}
 
 	pr, pw := io.Pipe()
-	if conf.AgentConfiguration.JobLogsOTLP {
-		jobLogsOTLP, err := NewOTLPJobLogger(ctx, conf)
-		if err != nil {
-			r.agentLogger.Warnf("Failed to initialize OTLP job log exporter: %v", err)
-		} else {
-			r.jobLogsOTLP = jobLogsOTLP
-			allWriters = append(allWriters, jobLogsOTLP)
-		}
+	if jobLogsOTLP != nil {
+		allWriters = append(allWriters, jobLogsOTLP)
 	}
 
 	switch {
