@@ -121,8 +121,8 @@ func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
 		case "clone", "fetch":
 			var gitSSHCommand string
 			for _, envVar := range i.Env {
-				if strings.HasPrefix(envVar, "GIT_SSH_COMMAND=") {
-					gitSSHCommand = strings.TrimPrefix(envVar, "GIT_SSH_COMMAND=")
+				if after, ok := strings.CutPrefix(envVar, "GIT_SSH_COMMAND="); ok {
+					gitSSHCommand = after
 					break
 				}
 			}
