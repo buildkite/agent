@@ -46,7 +46,7 @@ platforms without extras. On Linux hosts it requires `dbus`.
 
 [The agents page](https://buildkite.com/organizations/-/agents) on Buildkite has
 personalised instructions, or you can refer to
-[the Buildkite docs](https://buildkite.com/docs/agent/v3/installation). Both
+[the Buildkite docs](https://buildkite.com/docs/agent/self-hosted/install). Both
 cover installing the agent with Ubuntu (via apt), Debian (via apt), macOS (via
 homebrew), Windows and Linux.
 

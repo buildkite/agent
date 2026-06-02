@@ -242,7 +242,7 @@ You can now start the agent!
 
 For docs, help and support:
 
-  https://buildkite.com/docs/agent/v3
+  https://buildkite.com/docs/agent
 
 Happy building! <3
 "
