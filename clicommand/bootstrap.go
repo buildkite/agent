@@ -37,7 +37,7 @@ command phase that executes the specified command in the created environment.
 You can run only specific phases with the --phases flag.
 
 The bootstrap is also responsible for executing hooks around the phases.
-See https://buildkite.com/docs/agent/v3/hooks for more details.
+See https://buildkite.com/docs/agent/hooks for more details.
 
 Example:
 
