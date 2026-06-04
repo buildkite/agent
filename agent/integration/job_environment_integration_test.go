@@ -233,7 +233,7 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 func TestArtifactUploadConcurrencyFromAgentConfigIsSet(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	job := &api.Job{
 		ID:                 "artifact-upload-concurrency-job",
 		ChunksMaxSizeBytes: 1024,
@@ -271,7 +271,7 @@ func TestArtifactUploadConcurrencyFromAgentConfigIsSet(t *testing.T) {
 func TestArtifactUploadConcurrencyFromJobEnvIsPreservedWhenAgentConfigUnset(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	job := &api.Job{
 		ID:                 "artifact-upload-concurrency-env-job",
 		ChunksMaxSizeBytes: 1024,
