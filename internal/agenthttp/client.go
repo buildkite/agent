@@ -55,7 +55,21 @@ func NewClient(opts ...ClientOption) *http.Client {
 			Token:    conf.Token,
 			Delegate: transport,
 		},
+		CheckRedirect: checkAuthenticatedRedirect,
 	}
+}
+
+func checkAuthenticatedRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) == 0 {
+		return nil
+	}
+
+	origin := via[0].URL
+	if req.URL.Scheme != origin.Scheme || req.URL.Host != origin.Host {
+		return http.ErrUseLastResponse
+	}
+
+	return nil
 }
 
 // Various NewClient options.
