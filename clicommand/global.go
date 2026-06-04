@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	DefaultEndpoint = "https://agent-edge.buildkite.com/v3"
+	DefaultEndpoint                 = "https://agent-edge.buildkite.com/v3"
+	ArtifactUploadConcurrencyEnvVar = "BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"
 )
 
 var (
@@ -116,6 +117,12 @@ var (
 		Name:   "no-multipart-artifact-upload",
 		Usage:  "For Buildkite-hosted artifacts, disables the use of multipart uploads. Has no effect on uploads to other destinations such as custom cloud buckets (default: false)",
 		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
+	}
+
+	AgentArtifactUploadConcurrencyFlag = cli.IntFlag{
+		Name:   "artifact-upload-concurrency",
+		Usage:  "Maximum number of concurrent artifact upload operations used by jobs started by this agent. When unset, artifact uploads use their default",
+		EnvVar: ArtifactUploadConcurrencyEnvVar,
 	}
 
 	ExperimentsFlag = cli.StringSliceFlag{

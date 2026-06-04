@@ -204,6 +204,7 @@ type AgentStartConfig struct {
 	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
 	TraceContextEncoding            string        `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
+	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -776,6 +777,7 @@ var AgentStartCommand = cli.Command{
 		StrictSingleHooksFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
+		AgentArtifactUploadConcurrencyFlag,
 
 		// Deprecated flags which will be removed in v4
 		KubernetesLogCollectionGracePeriodFlag,
@@ -1103,6 +1105,7 @@ var AgentStartCommand = cli.Command{
 			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
 			TraceContextEncoding:            cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
+			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
 			KubernetesExec:                  cfg.KubernetesExec,
 			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
 			PingMode:                        cfg.PingMode,

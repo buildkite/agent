@@ -456,6 +456,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 			// Docker in particular tolerates undefined vars in an env file
 			// without complaints.
 			const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
+BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
@@ -642,6 +643,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 	if !r.conf.AgentConfiguration.AllowMultipartArtifactUpload {
 		setEnv("BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", "true")
+	}
+	if r.conf.AgentConfiguration.ArtifactUploadConcurrency > 0 {
+		setEnv("BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY", strconv.Itoa(r.conf.AgentConfiguration.ArtifactUploadConcurrency))
 	}
 
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM

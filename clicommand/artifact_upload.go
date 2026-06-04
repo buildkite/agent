@@ -143,7 +143,7 @@ var ArtifactUploadCommand = cli.Command{
 			Name:   "concurrency",
 			Value:  artifact.DefaultUploadConcurrency(),
 			Usage:  "Number of concurrent artifact upload operations",
-			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY",
+			EnvVar: ArtifactUploadConcurrencyEnvVar,
 		},
 		NoMultipartArtifactUploadFlag,
 	}),

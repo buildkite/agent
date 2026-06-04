@@ -229,3 +229,80 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 		t.Fatalf("runJob() error = %v", err)
 	}
 }
+
+func TestArtifactUploadConcurrencyFromAgentConfigIsSet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	job := &api.Job{
+		ID:                 "artifact-upload-concurrency-job",
+		ChunksMaxSizeBytes: 1024,
+		Step:               pipeline.CommandStep{},
+		Token:              "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got, want := c.GetEnv("BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"), "7"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY) = %q, want %q", got, want)
+		}
+		c.Exit(0)
+	})
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:    job,
+		server: server,
+		agentCfg: agent.AgentConfiguration{
+			ArtifactUploadConcurrency: 7,
+		},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+}
+
+func TestArtifactUploadConcurrencyFromJobEnvIsPreservedWhenAgentConfigUnset(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	job := &api.Job{
+		ID:                 "artifact-upload-concurrency-env-job",
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY": "5",
+		},
+		Step:  pipeline.CommandStep{},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got, want := c.GetEnv("BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"), "5"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY) = %q, want %q", got, want)
+		}
+		c.Exit(0)
+	})
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+}
