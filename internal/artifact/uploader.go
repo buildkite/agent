@@ -61,6 +61,10 @@ type UploaderConfig struct {
 
 	// Whether to allow multipart uploads to the BK-hosted bucket
 	AllowMultipart bool
+
+	// How many upload operations to run concurrently. When zero, defaults to
+	// DefaultUploadConcurrency.
+	UploadConcurrency int
 }
 
 type Uploader struct {
@@ -80,6 +84,10 @@ func NewUploader(l logger.Logger, ac APIClient, c UploaderConfig) *Uploader {
 		apiClient: ac,
 		conf:      c,
 	}
+}
+
+func DefaultUploadConcurrency() int {
+	return 10 * runtime.GOMAXPROCS(0)
 }
 
 func (a *Uploader) Upload(ctx context.Context) error {
@@ -535,12 +543,14 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	}
 
 	// Create work and trackers for each artifact.
+	var workUnitCount int
 	for _, artifact := range artifacts {
 		workUnits, err := uploader.CreateWork(artifact)
 		if err != nil {
 			a.logger.Errorf("Couldn't create upload workers for artifact %q: %v", artifact.Path, err)
 			return err
 		}
+		workUnitCount += len(workUnits)
 
 		actx, acancel := context.WithCancelCause(ctx)
 		worker.trackers[artifact] = &artifactTracker{
@@ -555,6 +565,12 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 		}
 	}
 
+	workerCount := a.uploadWorkerCount(workUnitCount)
+	if workerCount == 0 {
+		return nil
+	}
+	a.logger.Debugf("Uploading %d artifact work units with %d workers", workUnitCount, workerCount)
+
 	// unitsCh: work unit creation --(work unit to be run)--> multiple worker goroutines
 	unitsCh := make(chan workUnit)
 	// resultsCh: multiple worker goroutines --(work unit result)--> state updater
@@ -568,7 +584,7 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 
 	// Worker goroutines that work on work units.
 	var wg sync.WaitGroup
-	for range runtime.GOMAXPROCS(0) {
+	for range workerCount {
 		wg.Go(func() { worker.doWorkUnits(ctx, unitsCh, resultsCh) })
 	}
 
@@ -606,6 +622,19 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	a.logger.Infof("Artifact uploads completed successfully")
 
 	return nil
+}
+
+func (a *Uploader) uploadWorkerCount(workUnitCount int) int {
+	if workUnitCount <= 0 {
+		return 0
+	}
+
+	concurrency := a.conf.UploadConcurrency
+	if concurrency <= 0 {
+		concurrency = DefaultUploadConcurrency()
+	}
+
+	return min(concurrency, workUnitCount)
 }
 
 func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan workUnit, resultsCh chan<- workUnitResult) {

@@ -1,13 +1,17 @@
 package artifact
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/experiments"
@@ -393,4 +397,129 @@ func TestCollect_LiteralPathNotFound(t *testing.T) {
 	if pathErr.Op != "open" {
 		t.Errorf("uploader.collect() error Op = %q, want open", pathErr.Op)
 	}
+}
+
+func TestUploadUsesConfiguredConcurrency(t *testing.T) {
+	t.Parallel()
+
+	const wantConcurrency int32 = 3
+
+	state := &uploadConcurrencyState{
+		want:    wantConcurrency,
+		ready:   make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	uploader := NewUploader(logger.Discard, &uploadConcurrencyAPIClient{}, UploaderConfig{
+		JobID:             "job-id",
+		UploadConcurrency: int(wantConcurrency),
+	})
+	workCreator := &uploadConcurrencyWorkCreator{state: state}
+
+	artifacts := make([]*api.Artifact, 10)
+	for i := range artifacts {
+		artifacts[i] = &api.Artifact{
+			ID:   fmt.Sprintf("artifact-%d", i),
+			Path: fmt.Sprintf("artifact-%d.txt", i),
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- uploader.upload(ctx, artifacts, workCreator)
+	}()
+
+	select {
+	case <-state.ready:
+	case <-time.After(2 * time.Second):
+		cancel()
+		err := <-errCh
+		t.Fatalf("upload did not start %d concurrent workers before timeout: %v", wantConcurrency, err)
+	}
+
+	close(state.release)
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("uploader.upload() error = %v", err)
+	}
+
+	if got := state.max.Load(); got != wantConcurrency {
+		t.Fatalf("max concurrent uploads = %d, want %d", got, wantConcurrency)
+	}
+}
+
+type uploadConcurrencyState struct {
+	want int32
+
+	active atomic.Int32
+	max    atomic.Int32
+
+	readyOnce sync.Once
+	ready     chan struct{}
+	release   chan struct{}
+}
+
+type uploadConcurrencyWorkCreator struct {
+	state *uploadConcurrencyState
+}
+
+func (u *uploadConcurrencyWorkCreator) URL(*api.Artifact) string {
+	return ""
+}
+
+func (u *uploadConcurrencyWorkCreator) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
+	return []workUnit{&uploadConcurrencyWork{
+		artifact: artifact,
+		state:    u.state,
+	}}, nil
+}
+
+type uploadConcurrencyWork struct {
+	artifact *api.Artifact
+	state    *uploadConcurrencyState
+}
+
+func (u *uploadConcurrencyWork) Artifact() *api.Artifact {
+	return u.artifact
+}
+
+func (u *uploadConcurrencyWork) Description() string {
+	return u.artifact.Path
+}
+
+func (u *uploadConcurrencyWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, error) {
+	active := u.state.active.Add(1)
+	for {
+		maxActive := u.state.max.Load()
+		if active <= maxActive || u.state.max.CompareAndSwap(maxActive, active) {
+			break
+		}
+	}
+	if active == u.state.want {
+		u.state.readyOnce.Do(func() { close(u.state.ready) })
+	}
+	defer u.state.active.Add(-1)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-u.state.release:
+		return nil, nil
+	}
+}
+
+type uploadConcurrencyAPIClient struct{}
+
+func (*uploadConcurrencyAPIClient) CreateArtifacts(context.Context, string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error) {
+	return nil, nil, errors.New("unexpected CreateArtifacts call")
+}
+
+func (*uploadConcurrencyAPIClient) SearchArtifacts(context.Context, string, *api.ArtifactSearchOptions) ([]*api.Artifact, *api.Response, error) {
+	return nil, nil, errors.New("unexpected SearchArtifacts call")
+}
+
+func (*uploadConcurrencyAPIClient) UpdateArtifacts(context.Context, string, []api.ArtifactState) (*api.Response, error) {
+	return nil, nil
 }
