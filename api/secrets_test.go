@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +28,7 @@ func TestGetSecret(t *testing.T) {
 		nonAccessToken = "alpacas"
 	)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, test := range []struct {
 		name             string

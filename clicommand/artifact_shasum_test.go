@@ -2,7 +2,6 @@ package clicommand
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +30,7 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 	server := newArtifactTestServer(t)
 	defer server.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cfg := ArtifactShasumConfig{
 		Query: "foo.*",
@@ -66,7 +65,7 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 	server := newArtifactTestServer(t)
 	defer server.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cfg := ArtifactShasumConfig{
 		Query:  "foo.*",

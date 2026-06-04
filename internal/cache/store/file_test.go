@@ -2,7 +2,6 @@ package store
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,7 +10,7 @@ import (
 )
 
 func TestNewLocalFileBlob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name        string
@@ -146,7 +145,7 @@ func TestValidateFileKey(t *testing.T) {
 }
 
 func TestLocalFileBlobUpload(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpDir := t.TempDir()
 	rootDir := filepath.Join(tmpDir, "cache-root")
@@ -203,7 +202,7 @@ func TestLocalFileBlobUpload(t *testing.T) {
 }
 
 func TestLocalFileBlobDownload(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpDir := t.TempDir()
 	rootDir := filepath.Join(tmpDir, "cache-root")
@@ -262,7 +261,7 @@ func TestLocalFileBlobDownload(t *testing.T) {
 }
 
 func TestLocalFileBlobUploadOverwrite(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpDir := t.TempDir()
 	rootDir := filepath.Join(tmpDir, "cache-root")
@@ -317,7 +316,7 @@ func TestLocalFileBlobUploadOverwrite(t *testing.T) {
 }
 
 func TestLocalFileBlobDownloadNonExistent(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpDir := t.TempDir()
 	rootDir := filepath.Join(tmpDir, "cache-root")
@@ -343,7 +342,7 @@ func TestLocalFileBlobDownloadNonExistent(t *testing.T) {
 }
 
 func TestLocalFileBlobUploadInvalidKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpDir := t.TempDir()
 	rootDir := filepath.Join(tmpDir, "cache-root")
@@ -373,7 +372,7 @@ func TestLocalFileBlobUploadInvalidKey(t *testing.T) {
 }
 
 func TestLocalFileBlobDownloadInvalidKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpDir := t.TempDir()
 	rootDir := filepath.Join(tmpDir, "cache-root")
@@ -400,7 +399,7 @@ func TestLocalFileBlobDownloadInvalidKey(t *testing.T) {
 
 func TestKeyToPaths(t *testing.T) {
 	tmpDir := t.TempDir()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	blob, err := NewLocalFileBlob(ctx, fileURL(tmpDir))
 	if err != nil {
@@ -484,7 +483,7 @@ func TestLocalFileBlobConcurrentUpload(t *testing.T) {
 		t.Skip("concurrent rename-to-same-key is not safe on Windows")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpDir := t.TempDir()
 	rootDir := filepath.Join(tmpDir, "cache-root")
@@ -557,7 +556,7 @@ func TestLocalFileBlobConcurrentUpload(t *testing.T) {
 }
 
 func TestNewBlobStoreLocalFile(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tmpDir := t.TempDir()
 
 	blob, err := NewBlobStore(ctx, LocalFileStore, fileURL(tmpDir))

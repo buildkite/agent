@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -15,7 +14,7 @@ import (
 func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	job := &api.Job{
 		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
@@ -56,7 +55,7 @@ func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 func TestCacheSettingsOnSelfHosted_LogsMessage(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	jobID := "cache-self-hosted-job"
 	job := &api.Job{
 		ID:                 jobID,
@@ -102,7 +101,7 @@ func TestCacheSettingsOnSelfHosted_LogsMessage(t *testing.T) {
 func TestCacheSettingsOnHosted_DoesNotLogMessage(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	jobID := "cache-hosted-job"
 	job := &api.Job{
 		ID:                 jobID,
@@ -145,7 +144,7 @@ func TestCacheSettingsOnHosted_DoesNotLogMessage(t *testing.T) {
 func TestNoCacheSettings_DoesNotLogMessage(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	jobID := "no-cache-job"
 	job := &api.Job{
 		ID:                 jobID,
@@ -213,7 +212,7 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err := runJob(t, context.Background(), testRunJobConfig{
+	err := runJob(t, t.Context(), testRunJobConfig{
 		job: &api.Job{
 			ID:                 "00000000-0000-0000-0000-000000000123",
 			ChunksMaxSizeBytes: 1024,

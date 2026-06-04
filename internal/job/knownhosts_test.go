@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -64,7 +63,7 @@ func TestAddingToKnownHosts(t *testing.T) {
 
 	// Add the host - this resolves any SSH client configuration
 	// (in case the URL contains an alias), and runs ssh-keyscan to get its key.
-	if err := kh.AddFromRepository(context.Background(), repoURL); err != nil {
+	if err := kh.AddFromRepository(t.Context(), repoURL); err != nil {
 		t.Errorf("kh.AddFromRespository(%q) = %v", repoURL, err)
 	}
 

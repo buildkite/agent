@@ -60,7 +60,7 @@ func TestSmokeStatusTemplate(t *testing.T) {
 		StartTime:    startTime.Format(time.RFC1123),
 		StartTimeAgo: time.Since(startTime),
 		CurrentTime:  time.Now().Format(time.RFC1123),
-		Ctx:          context.Background(),
+		Ctx:          t.Context(),
 	}
 
 	if err := statusTmpl.Execute(io.Discard, data); err != nil {
@@ -69,7 +69,7 @@ func TestSmokeStatusTemplate(t *testing.T) {
 }
 
 func TestSmokeHandle(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cctx, setStat, done := AddSimpleItem(ctx, "Llamas")
 	defer done()
 	setStat("Essence of Llama")

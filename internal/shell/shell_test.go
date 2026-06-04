@@ -356,7 +356,7 @@ func TestDefaultWorkingDirFromSystem(t *testing.T) {
 
 func TestWorkingDir(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tempDir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {

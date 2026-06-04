@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -58,7 +57,7 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 	// When there's no tracing backend, the tracer should be a no-op.
 	e := New(ExecutorConfig{})
 
-	oriCtx := context.Background()
+	oriCtx := t.Context()
 	e.shell, err = shell.New()
 	if err != nil {
 		t.Errorf("shell.New() error = %v, want nil", err)
@@ -85,7 +84,7 @@ func TestStartTracing_Datadog(t *testing.T) {
 	cfg := ExecutorConfig{TracingBackend: "datadog"}
 	e := New(cfg)
 
-	oriCtx := context.Background()
+	oriCtx := t.Context()
 	e.shell, err = shell.New()
 	if err != nil {
 		t.Errorf("shell.New() error = %v, want nil", err)

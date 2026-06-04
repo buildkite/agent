@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -24,7 +23,7 @@ func TestFindingSSHTools(t *testing.T) {
 
 	sh.Logger = shell.TestingLogger{T: t}
 
-	if _, err := findPathToSSHTools(context.Background(), sh); err != nil {
+	if _, err := findPathToSSHTools(t.Context(), sh); err != nil {
 		t.Errorf("findPathToSSHTools(sh) error = %v", err)
 	}
 }
@@ -47,13 +46,13 @@ func TestSSHKeyscanReturnsOutput(t *testing.T) {
 		AndWriteToStdout("github.com ssh-rsa xxx=").
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
+	keyScanOutput, err := sshKeyScan(t.Context(), sh, "github.com")
 
 	if got, want := keyScanOutput, "github.com ssh-rsa xxx="; got != want {
-		t.Errorf("sshKeyScan(context.Background(), sh, %q) = %q, want %q", "github.com", got, want)
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) = %q, want %q", "github.com", got, want)
 	}
 	if err != nil {
-		t.Errorf("sshKeyScan(context.Background(), sh, %q) error = %v, want nil", "github.com", err)
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) error = %v, want nil", "github.com", err)
 	}
 }
 
@@ -75,13 +74,13 @@ func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
 		AndWriteToStdout("github.com ssh-rsa xxx=").
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com:123")
+	keyScanOutput, err := sshKeyScan(t.Context(), sh, "github.com:123")
 
 	if got, want := keyScanOutput, "github.com ssh-rsa xxx="; got != want {
-		t.Errorf("sshKeyScan(context.Background(), sh, %q) = %q, want %q", "github.com:123", got, want)
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) = %q, want %q", "github.com:123", got, want)
 	}
 	if err != nil {
-		t.Errorf("sshKeyScan(context.Background(), sh, %q) error = %v, want nil", "github.com:123", err)
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) error = %v, want nil", "github.com:123", err)
 	}
 }
 
@@ -104,13 +103,13 @@ func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
 		Exactly(3).
 		AndExitWith(1)
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
+	keyScanOutput, err := sshKeyScan(t.Context(), sh, "github.com")
 
 	if got, want := keyScanOutput, ""; got != want {
-		t.Errorf("sshKeyScan(context.Background(), sh, %q) = %q, want %q", "github.com", got, want)
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) = %q, want %q", "github.com", got, want)
 	}
 	if want := "`ssh-keyscan \"github.com\"` failed"; err == nil || err.Error() != want {
-		t.Errorf("sshKeyScan(context.Background(), sh, %q) error = %v, want error with message %q", "github.com", err, want)
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) error = %v, want error with message %q", "github.com", err, want)
 	}
 }
 
@@ -137,12 +136,12 @@ func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
 		Exactly(3).
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
+	keyScanOutput, err := sshKeyScan(t.Context(), sh, "github.com")
 
 	if got, want := keyScanOutput, ""; got != want {
-		t.Errorf("sshKeyScan(context.Background(), sh, %q) = %q, want %q", "github.com", got, want)
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) = %q, want %q", "github.com", got, want)
 	}
 	if want := "`ssh-keyscan \"github.com\"` returned nothing"; err == nil || err.Error() != want {
-		t.Errorf("sshKeyScan(context.Background(), sh, %q) error = %v, want error with message %q", "github.com", err, want)
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) error = %v, want error with message %q", "github.com", err, want)
 	}
 }

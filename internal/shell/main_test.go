@@ -40,6 +40,7 @@ func acquiringLockHelperProcess() error {
 	sh.Logger = shell.DiscardLogger
 
 	log.Printf("🔓 Locking %s forever...", fileName)
+	// This runs in a helper process outside a test function, so there is no testing.T for t.Context.
 	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
 	defer canc()
 	if _, err := sh.LockFile(ctx, fileName); err != nil {

@@ -318,7 +318,7 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *client, cach
 }
 
 func TestCacheIntegration_SaveAndRestore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Setup test cache with local file storage
 	cacheClient, cacheDir, storageDir := setupTestCache(t, "local_file")
@@ -467,7 +467,7 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 }
 
 func TestCacheIntegration_SaveAlreadyExists(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cacheClient, _, _ := setupTestCache(t, "local_file")
 
@@ -497,7 +497,7 @@ func TestCacheIntegration_SaveAlreadyExists(t *testing.T) {
 }
 
 func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cacheClient, _, _ := setupTestCache(t, "local_file")
 
@@ -522,7 +522,7 @@ func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
 }
 
 func TestCacheIntegration_RestoreWithFallback(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Use setupTestCache to create test environment
 	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
@@ -583,7 +583,7 @@ func TestCacheIntegration_RestoreWithFallback(t *testing.T) {
 }
 
 func TestCacheIntegration_LargeFileChecksum(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
 
@@ -624,7 +624,7 @@ func TestCacheIntegration_LargeFileChecksum(t *testing.T) {
 }
 
 func TestCacheIntegration_TransferMetrics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	cacheClient, _, _ := setupTestCache(t, "local_file")
 

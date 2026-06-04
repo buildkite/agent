@@ -2,7 +2,6 @@ package artifact
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -21,7 +20,7 @@ import (
 )
 
 func TestFormUploading(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if req.Method != "POST" && req.URL.Path != "/buildkiteartifacts.com" {
@@ -130,7 +129,7 @@ func TestFormUploading(t *testing.T) {
 }
 
 func TestMultipartUploading(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if req.Method != "PUT" || req.URL.Path != "/llamas3.txt" {
@@ -244,7 +243,7 @@ func TestMultipartUploading(t *testing.T) {
 }
 
 func TestFormUploadFileMissing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, "Not found", http.StatusNotFound)
 	}))

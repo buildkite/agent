@@ -128,7 +128,7 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func TestClient_NoSocket(t *testing.T) {
 	// t.Parallel() // Can't be parallelised, because it uses the t.Setenv() function
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "") // This may be set if the test is being run by a buildkite agent!
@@ -141,7 +141,7 @@ func TestClient_NoSocket(t *testing.T) {
 func TestClient_NoToken(t *testing.T) {
 	// t.Parallel() // Can't be parallelised, because it uses the t.Setenv() function
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "/tmp/fake-socket") // Just to make sure it's set
@@ -162,7 +162,7 @@ func TestClientEnvGet(t *testing.T) {
 	}
 	defer svr.Close()
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	cli, err := NewClient(ctx, svr.sock, svr.token)
@@ -170,7 +170,7 @@ func TestClientEnvGet(t *testing.T) {
 		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
 	}
 
-	got, err := cli.EnvGet(context.Background())
+	got, err := cli.EnvGet(t.Context())
 	if err != nil {
 		t.Fatalf("cli.EnvGet() error = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestClientEnvUpdate(t *testing.T) {
 	}
 	defer svr.Close()
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	cli, err := NewClient(ctx, svr.sock, svr.token)
@@ -210,7 +210,7 @@ func TestClientEnvUpdate(t *testing.T) {
 		},
 	}
 
-	got, err := cli.EnvUpdate(context.Background(), req)
+	got, err := cli.EnvUpdate(t.Context(), req)
 	if err != nil {
 		t.Fatalf("cli.EnvUpdate() error = %v", err)
 	}
@@ -233,7 +233,7 @@ func TestClientEnvDelete(t *testing.T) {
 	}
 	defer svr.Close()
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	cli, err := NewClient(ctx, svr.sock, svr.token)
@@ -242,7 +242,7 @@ func TestClientEnvDelete(t *testing.T) {
 	}
 
 	req := []string{"YZMA"}
-	got, err := cli.EnvDelete(context.Background(), req)
+	got, err := cli.EnvDelete(t.Context(), req)
 	if err != nil {
 		t.Fatalf("cli.EnvUpdate() error = %v", err)
 	}

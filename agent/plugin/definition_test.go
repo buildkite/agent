@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -56,7 +55,7 @@ func TestDefinitionValidationFailsIfDependenciesNotMet(t *testing.T) {
 		Requirements: []string{"llamas"},
 	}
 
-	res := validator.Validate(context.Background(), def, nil)
+	res := validator.Validate(t.Context(), def, nil)
 
 	if res.Valid() {
 		t.Errorf("validator.Validate(def, nil).Valid() = true, want false")
@@ -94,7 +93,7 @@ func TestDefinitionValidatesConfiguration(t *testing.T) {
 	cfg := map[string]any{
 		"llamas": "always",
 	}
-	res := validator.Validate(context.Background(), def, cfg)
+	res := validator.Validate(t.Context(), def, cfg)
 
 	if res.Valid() {
 		t.Errorf("validator.Validate(def, % #v).Valid() = true, want false", cfg)
@@ -129,7 +128,7 @@ func TestDefinitionWithoutAdditionalProperties(t *testing.T) {
 		"alpacas": "definitely",
 		"camels":  "never",
 	}
-	res := validator.Validate(context.Background(), def, cfg)
+	res := validator.Validate(t.Context(), def, cfg)
 
 	if res.Valid() {
 		t.Errorf("validator.Validate(def, % #v).Valid() = true, want false", cfg)
@@ -164,7 +163,7 @@ func TestDefinitionWithAdditionalProperties(t *testing.T) {
 		"alpacas": "definitely",
 		"camels":  "never",
 	}
-	res := validator.Validate(context.Background(), def, cfg)
+	res := validator.Validate(t.Context(), def, cfg)
 
 	if !res.Valid() {
 		t.Errorf("validator.Validate(def, % #v).Valid() = false, want true", cfg)

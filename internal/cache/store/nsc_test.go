@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -197,7 +196,7 @@ func TestValidateKey(t *testing.T) {
 }
 
 func TestRunCommandValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Test empty args
 	result, err := runCommand(ctx, "" /* no args */)
@@ -220,7 +219,7 @@ func TestNscStore_Upload_Validation(t *testing.T) {
 		t.Fatalf("NewNscStore: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create a temporary test file
 	tmpDir, err := os.MkdirTemp("", "nsc-test")
@@ -274,7 +273,7 @@ func TestNscStore_Download_Validation(t *testing.T) {
 		t.Fatalf("NewNscStore: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tmpDir, err := os.MkdirTemp("", "nsc-test")
 	if err != nil {
@@ -329,7 +328,7 @@ func TestNscStore_Integration(t *testing.T) {
 		t.Fatalf("NewNscStore: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create temporary directories and files
 	tmpDir, err := os.MkdirTemp("", "nsc-integration-test")

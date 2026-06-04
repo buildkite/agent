@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -90,7 +89,7 @@ func TestOIDCToken(t *testing.T) {
 	const audience = "sts.amazonaws.com"
 	const lifetime = 600
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		OIDCTokenRequest *api.OIDCTokenRequest
@@ -209,7 +208,7 @@ func TestOIDCTokenError(t *testing.T) {
 	const accessToken = "llamas"
 	const audience = "sts.amazonaws.com"
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		OIDCTokenRequest *api.OIDCTokenRequest

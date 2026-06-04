@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -42,7 +41,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	server.EnableHTTP2 = true
 	server.StartTLS()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Initial client with a registration token
 	c := api.NewClient(logger.Discard, api.Config{
