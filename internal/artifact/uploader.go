@@ -87,7 +87,7 @@ func NewUploader(l logger.Logger, ac APIClient, c UploaderConfig) *Uploader {
 }
 
 func DefaultUploadConcurrency() int {
-	return 10 * runtime.GOMAXPROCS(0)
+	return runtime.GOMAXPROCS(0)
 }
 
 func (a *Uploader) Upload(ctx context.Context) error {

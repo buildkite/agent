@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -447,6 +448,14 @@ func TestUploadUsesConfiguredConcurrency(t *testing.T) {
 
 	if got := state.max.Load(); got != wantConcurrency {
 		t.Fatalf("max concurrent uploads = %d, want %d", got, wantConcurrency)
+	}
+}
+
+func TestDefaultUploadConcurrencyMatchesExistingWorkerCount(t *testing.T) {
+	t.Parallel()
+
+	if got, want := DefaultUploadConcurrency(), runtime.GOMAXPROCS(0); got != want {
+		t.Fatalf("DefaultUploadConcurrency() = %d, want %d", got, want)
 	}
 }
 
