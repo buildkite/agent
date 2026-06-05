@@ -90,6 +90,7 @@ type ArtifactUploadConfig struct {
 	GlobResolveFollowSymlinks bool   `cli:"glob-resolve-follow-symlinks"`
 	UploadSkipSymlinks        bool   `cli:"upload-skip-symlinks"`
 	NoMultipartUpload         bool   `cli:"no-multipart-artifact-upload"`
+	UploadConcurrency         int    `cli:"concurrency"`
 
 	// deprecated
 	FollowSymlinks bool `cli:"follow-symlinks" deprecated-and-renamed-to:"GlobResolveFollowSymlinks"`
@@ -138,6 +139,12 @@ var ArtifactUploadCommand = cli.Command{
 			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead (default: false)",
 			EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
 		},
+		cli.IntFlag{
+			Name:   "concurrency",
+			Value:  artifact.DefaultUploadConcurrency(),
+			Usage:  "Number of concurrent artifact upload operations",
+			EnvVar: ArtifactUploadConcurrencyEnvVar,
+		},
 		NoMultipartArtifactUploadFlag,
 	}),
 	Action: func(c *cli.Context) error {
@@ -153,16 +160,17 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
-			JobID:          cfg.Job,
-			Paths:          cfg.UploadPaths,
-			Destination:    cfg.Destination,
-			ContentType:    cfg.ContentType,
-			DebugHTTP:      cfg.DebugHTTP,
-			TraceHTTP:      cfg.TraceHTTP,
-			DisableHTTP2:   cfg.NoHTTP2,
-			AllowMultipart: !cfg.NoMultipartUpload,
-			Literal:        cfg.Literal,
-			Delimiter:      cfg.Delimiter,
+			JobID:             cfg.Job,
+			Paths:             cfg.UploadPaths,
+			Destination:       cfg.Destination,
+			ContentType:       cfg.ContentType,
+			DebugHTTP:         cfg.DebugHTTP,
+			TraceHTTP:         cfg.TraceHTTP,
+			DisableHTTP2:      cfg.NoHTTP2,
+			AllowMultipart:    !cfg.NoMultipartUpload,
+			Literal:           cfg.Literal,
+			Delimiter:         cfg.Delimiter,
+			UploadConcurrency: cfg.UploadConcurrency,
 
 			// If the deprecated flag was set to true, pretend its replacement was set to true too
 			// this works as long as the user only sets one of the two flags
