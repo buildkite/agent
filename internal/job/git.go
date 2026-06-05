@@ -33,6 +33,9 @@ const (
 	gitErrorClean
 	gitErrorCleanSubmodules
 	gitErrorRepack
+	// LFS fetch or checkout failure; distinct from gitErrorFetch because the
+	// gitFetch retry-clean/bad-object recovery paths don't apply to LFS.
+	gitErrorLFS
 )
 
 const (
@@ -148,6 +151,11 @@ type gitLFSFetchCheckoutArgs struct {
 // different exit codes and error vocabulary than git itself, so we retry
 // indiscriminately on any failure and rely on the retry budget to bound the
 // damage from a genuinely permanent error.
+//
+// On exhaustion, the error is wrapped as a *gitError with WasRetried=true so
+// that the outer checkout retrier in defaultCheckoutPhase's caller does not
+// loop on top of this one — without that signal, a permanent LFS failure
+// could be attempted 6 × 5 = 30 times instead of 5.
 func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) error {
 	retrier := roko.NewRetrier(
 		roko.WithStrategy(roko.Constant(0)),
@@ -157,12 +165,12 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 	if args.Retry {
 		retrier = roko.NewRetrier(
 			roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
-			roko.WithMaxAttempts(10), // 10 attempts will take ~2 minutes 17s
+			roko.WithMaxAttempts(5), // 5 attempts will take ~16s
 			roko.WithJitter(),
 		)
 	}
 
-	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
+	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		if err := args.Shell.Command("git", "lfs", "fetch").Run(ctx); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
@@ -177,6 +185,11 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		}
 		return nil
 	})
+
+	if err != nil && args.Retry {
+		return &gitError{error: err, Type: gitErrorLFS, WasRetried: true}
+	}
+	return err
 }
 
 func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
