@@ -77,6 +77,7 @@ type BootstrapConfig struct {
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
+	GitSSHKey                    string   `cli:"git-ssh-key"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode        string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
@@ -243,6 +244,11 @@ var BootstrapCommand = cli.Command{
 		GitCloneMirrorFlagsFlag,
 		GitCleanFlagsFlag,
 		GitFetchFlagsFlag,
+		cli.StringFlag{
+			Name:   "git-ssh-key",
+			Usage:  "SSH private key to use for git checkout",
+			EnvVar: "BUILDKITE_GIT_SSH_KEY",
+		},
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
@@ -450,6 +456,7 @@ var BootstrapCommand = cli.Command{
 			GitCloneFlags:                cfg.GitCloneFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
+			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
@@ -497,7 +504,8 @@ var BootstrapCommand = cli.Command{
 		defer cancel()
 
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, os.Interrupt,
+		signal.Notify(
+			signals, os.Interrupt,
 			syscall.SIGHUP,
 			syscall.SIGTERM,
 			syscall.SIGINT,
