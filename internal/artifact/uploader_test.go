@@ -427,27 +427,44 @@ func TestUploadUsesConfiguredConcurrency(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	errCh := make(chan error, 1)
+	errCh := make(chan struct {
+		stats artifactUploadBatchStats
+		err   error
+	}, 1)
 	go func() {
-		errCh <- uploader.upload(ctx, artifacts, workCreator)
+		stats, err := uploader.upload(ctx, artifacts, workCreator)
+		errCh <- struct {
+			stats artifactUploadBatchStats
+			err   error
+		}{stats, err}
 	}()
 
 	select {
 	case <-state.ready:
 	case <-time.After(2 * time.Second):
 		cancel()
-		err := <-errCh
-		t.Fatalf("upload did not start %d concurrent workers before timeout: %v", wantConcurrency, err)
+		result := <-errCh
+		t.Fatalf("upload did not start %d concurrent workers before timeout: %v", wantConcurrency, result.err)
 	}
 
 	close(state.release)
 
-	if err := <-errCh; err != nil {
-		t.Fatalf("uploader.upload() error = %v", err)
+	result := <-errCh
+	if result.err != nil {
+		t.Fatalf("uploader.upload() error = %v", result.err)
 	}
 
 	if got := state.max.Load(); got != wantConcurrency {
 		t.Fatalf("max concurrent uploads = %d, want %d", got, wantConcurrency)
+	}
+	if got, want := result.stats.workUnits, len(artifacts); got != want {
+		t.Fatalf("upload stats workUnits = %d, want %d", got, want)
+	}
+	if got := result.stats.workerCount; got != int(wantConcurrency) {
+		t.Fatalf("upload stats workerCount = %d, want %d", got, wantConcurrency)
+	}
+	if got := result.stats.stateUpdateCount; got != 1 {
+		t.Fatalf("upload stats stateUpdateCount = %d, want 1", got)
 	}
 }
 
@@ -456,6 +473,46 @@ func TestDefaultUploadConcurrencyMatchesExistingWorkerCount(t *testing.T) {
 
 	if got, want := DefaultUploadConcurrency(), runtime.GOMAXPROCS(0); got != want {
 		t.Fatalf("DefaultUploadConcurrency() = %d, want %d", got, want)
+	}
+}
+
+func TestArtifactUploadTimingsSummary(t *testing.T) {
+	t.Parallel()
+
+	timings := &artifactUploadTimings{
+		collectDuration: 1456 * time.Millisecond,
+		createDuration:  82 * time.Millisecond,
+		uploadDuration:  334 * time.Millisecond,
+		stateDuration:   11 * time.Millisecond,
+
+		artifactCount:    1296,
+		artifactBytes:    1296 * 4096,
+		batches:          44,
+		workUnits:        1296,
+		maxWorkerCount:   30,
+		stateUpdateCount: 44,
+	}
+
+	l := logger.NewBuffer()
+	timings.logSummary(l)
+
+	got := strings.Join(l.Messages, "\n")
+	for _, want := range []string{
+		"Artifact upload timings:",
+		"collect=1.456s",
+		"create=82ms",
+		"upload=334ms",
+		"state_update=11ms",
+		"artifacts=1296",
+		"bytes=5.1 MiB",
+		"batches=44",
+		"work_units=1296",
+		"max_workers=30",
+		"state_updates=44",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("timings summary = %q, want substring %q", got, want)
+		}
 	}
 }
 
