@@ -9,18 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	otellog "go.opentelemetry.io/otel/log"
-	"go.opentelemetry.io/otel/propagation"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // OTLPJobLogger satisfies io.WriteCloser and emits job output as OpenTelemetry
@@ -30,7 +25,6 @@ type OTLPJobLogger struct {
 	ctx      context.Context
 	log      otellog.Logger
 	provider *sdklog.LoggerProvider
-	span     trace.Span
 	attrs    []otellog.KeyValue
 
 	mu                sync.Mutex
@@ -83,10 +77,7 @@ func NewOTLPJobLogger(ctx context.Context, conf JobRunnerConfig) (*OTLPJobLogger
 		otellog.WithSchemaURL(semconv.SchemaURL),
 	)
 
-	logCtx, span := otlpJobLogContext(ctx, conf)
-	logger := newOTLPJobLoggerWithLogger(logCtx, log, provider, otlpJobLogAttributes(conf))
-	logger.span = span
-	return logger, nil
+	return newOTLPJobLoggerWithLogger(ctx, log, provider, otlpJobLogAttributes(conf)), nil
 }
 
 func newOTLPJobLoggerWithLogger(ctx context.Context, log otellog.Logger, provider *sdklog.LoggerProvider, attrs []otellog.KeyValue) *OTLPJobLogger {
@@ -128,10 +119,6 @@ func (l *OTLPJobLogger) Close() error {
 		l.buf = l.buf[:0]
 	}
 	l.mu.Unlock()
-
-	if l.span != nil {
-		l.span.End()
-	}
 
 	if l.provider == nil {
 		return nil
@@ -189,8 +176,8 @@ func (l *OTLPJobLogger) updateScope(line string) {
 
 	if strings.Contains(rest, "Running commands") || strings.Contains(rest, "Running script") {
 		l.currentPhase = "command"
-		l.currentHook = ""
-		l.currentHookScope = ""
+		l.currentHook = "command"
+		l.currentHookScope = "default"
 		l.currentHookPlugin = ""
 		return
 	}
@@ -220,35 +207,6 @@ func isKnownHook(name string) bool {
 	default:
 		return false
 	}
-}
-
-func contextWithJobTraceparent(ctx context.Context, traceparent, tracestate string) context.Context {
-	if traceparent == "" {
-		return ctx
-	}
-	carrier := propagation.MapCarrier{"traceparent": traceparent}
-	if tracestate != "" {
-		carrier["tracestate"] = tracestate
-	}
-	return propagation.TraceContext{}.Extract(ctx, carrier)
-}
-
-func otlpJobLogContext(ctx context.Context, conf JobRunnerConfig) (context.Context, trace.Span) {
-	if conf.AgentConfiguration.TracingBackend != tracetools.BackendOpenTelemetry || !conf.AgentConfiguration.TracingPropagateTraceparent {
-		return ctx, nil
-	}
-	ctx = contextWithJobTraceparent(ctx, conf.Job.TraceParent, conf.Job.TraceState)
-	if trace.SpanContextFromContext(ctx).IsValid() {
-		return ctx, nil
-	}
-
-	ctx, span := otel.Tracer(
-		"buildkite-agent",
-		trace.WithInstrumentationVersion(version.Version()),
-		trace.WithSchemaURL(semconv.SchemaURL),
-	).Start(ctx, "job.logs", trace.WithAttributes(attribute.String("buildkite.job.id", conf.Job.ID)))
-
-	return ctx, span
 }
 
 func otlpJobLogAttributes(conf JobRunnerConfig) []otellog.KeyValue {

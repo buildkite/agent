@@ -152,6 +152,20 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Create an empty env for us to keep track of our env changes in
 	e.shell.Env = env.FromSlice(os.Environ())
 
+	if e.JobLogsOTLP && e.TracingBackend == tracetools.BackendOpenTelemetry {
+		jobLogger, err := newOTLPJobLogger(ctx, e)
+		if err != nil {
+			e.shell.Warningf("Failed to initialize OTLP job log exporter: %v", err)
+		} else {
+			e.shell.SetOutputInterceptor(jobLogger.Wrap)
+			defer func() {
+				if err := jobLogger.Close(); err != nil {
+					e.shell.Warningf("Failed to close OTLP job log exporter: %v", err)
+				}
+			}()
+		}
+	}
+
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
 	if e.JobAPI {
 		cleanup, err := e.startJobAPI()
@@ -357,6 +371,18 @@ type HookConfig struct {
 	PluginName     string
 }
 
+func hookLogAttributes(hookCfg HookConfig) map[string]string {
+	attrs := map[string]string{
+		"buildkite.phase":      "hook",
+		"buildkite.hook.name":  hookCfg.Name,
+		"buildkite.hook.scope": hookCfg.Scope,
+	}
+	if hookCfg.PluginName != "" {
+		attrs["buildkite.hook.plugin"] = hookCfg.PluginName
+	}
+	return attrs
+}
+
 func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
 	if e.TracingBackend != tracetools.BackendDatadog {
 		return scope
@@ -459,7 +485,7 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ)); err != nil {
+	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ), shell.WithOutputAttributes(hookLogAttributes(hookCfg))); err != nil {
 		return err
 	}
 	// Passing an empty env changes through because in polyglot hook we can't detect
@@ -568,7 +594,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 			r.Break()
 			return err
 		}
-		err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
+		err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env), shell.WithOutputAttributes(hookLogAttributes(hookCfg)))
 		if errors.Is(err, syscall.ETXTBSY) {
 			return err
 		}
@@ -1293,7 +1319,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
+	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false), shell.WithOutputAttributes(map[string]string{
+		"buildkite.phase":      "command",
+		"buildkite.hook.name":  "command",
+		"buildkite.hook.scope": "default",
+	}))
 	return err
 }
 

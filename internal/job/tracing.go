@@ -211,17 +211,14 @@ func (e *Executor) contextWithTraceparentIfEnabled(ctx context.Context) context.
 		return ctx
 	}
 
-	carrier := propagation.MapCarrier{
-		"traceparent": e.TracingTraceParent,
-	}
+	carrier := propagation.MapCarrier{"traceparent": e.TracingTraceParent}
 	// W3C tracestate is optional and only meaningful alongside traceparent.
 	// The OTel TraceContext propagator already tolerates a missing key, so
 	// this guard is purely to keep the carrier minimal.
 	if e.TracingTraceState != "" {
 		carrier["tracestate"] = e.TracingTraceState
 	}
-
-	return otel.GetTextMapPropagator().Extract(ctx, carrier)
+	return propagation.TraceContext{}.Extract(ctx, carrier)
 }
 
 func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {

@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -235,7 +236,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	r.jobTimeoutFilePath = jobTimeoutFilePath(r.conf.Job.ID, conf.KubernetesExec)
 
 	var jobLogsOTLP *OTLPJobLogger
-	if conf.AgentConfiguration.JobLogsOTLP {
+	if conf.AgentConfiguration.JobLogsOTLP && conf.AgentConfiguration.TracingBackend != tracetools.BackendOpenTelemetry {
 		jobLogsOTLP, err = NewOTLPJobLogger(ctx, conf)
 		if err != nil {
 			r.agentLogger.Warnf("Failed to initialize OTLP job log exporter: %v", err)
@@ -730,23 +731,27 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		setEnv("BUILDKITE_TRACING_BACKEND", r.conf.AgentConfiguration.TracingBackend)
 		setEnv("BUILDKITE_TRACING_SERVICE_NAME", r.conf.AgentConfiguration.TracingServiceName)
 
-		// Buildkite backend can provide a traceparent property on the job
-		// which can be propagated to the job tracing if OpenTelemetry is used
-		//
-		// https://www.w3.org/TR/trace-context/#traceparent-header
-		if r.conf.Job.TraceParent != "" {
-			setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
-		}
-		// Buildkite backend may also provide a tracestate property on the job,
-		// which carries vendor-specific trace context alongside the traceparent.
-		//
-		// https://www.w3.org/TR/trace-context/#tracestate-header
-		if r.conf.Job.TraceState != "" {
-			setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
-		}
 		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
+			// Buildkite backend can provide a traceparent property on the job
+			// which can be propagated to the job tracing if OpenTelemetry is used.
+			//
+			// https://www.w3.org/TR/trace-context/#traceparent-header
+			if r.conf.Job.TraceParent != "" {
+				setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
+			}
+			// Buildkite backend may also provide a tracestate property on the job,
+			// which carries vendor-specific trace context alongside traceparent.
+			//
+			// https://www.w3.org/TR/trace-context/#tracestate-header
+			if r.conf.Job.TraceState != "" {
+				setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
+			}
 			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
 		}
+	}
+
+	if r.conf.AgentConfiguration.JobLogsOTLP {
+		setEnv("BUILDKITE_JOB_LOGS_OTLP", "true")
 	}
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))

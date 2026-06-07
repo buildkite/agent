@@ -7,12 +7,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/tracetools"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 type otlpJobLogTestExporter struct {
@@ -66,11 +62,10 @@ func TestOTLPJobLoggerEmitsStructuredLineRecords(t *testing.T) {
 				"BUILDKITE_LABEL":                 "Test",
 				"BUILDKITE_STEP_KEY":              "test",
 			},
-			TraceParent: "00-abcdef1234567890abcdef1234567890-1234567890abcdef-01",
 		},
 	}
 	logger := newOTLPJobLoggerWithLogger(
-		contextWithJobTraceparent(context.Background(), conf.Job.TraceParent, conf.Job.TraceState),
+		context.Background(),
 		provider.Logger("test"),
 		provider,
 		otlpJobLogAttributes(conf),
@@ -96,11 +91,11 @@ func TestOTLPJobLoggerEmitsStructuredLineRecords(t *testing.T) {
 	if got, want := records[0].Severity(), log.SeverityInfo; got != want {
 		t.Errorf("record severity = %v, want %v", got, want)
 	}
-	if got, want := records[0].TraceID().String(), "abcdef1234567890abcdef1234567890"; got != want {
-		t.Errorf("record trace ID = %q, want %q", got, want)
+	if records[0].TraceID().IsValid() {
+		t.Errorf("record trace ID = %q, want invalid", records[0].TraceID().String())
 	}
-	if got, want := records[0].SpanID().String(), "1234567890abcdef"; got != want {
-		t.Errorf("record span ID = %q, want %q", got, want)
+	if records[0].SpanID().IsValid() {
+		t.Errorf("record span ID = %q, want invalid", records[0].SpanID().String())
 	}
 
 	attrs := recordAttributes(records[0])
@@ -123,52 +118,6 @@ func TestOTLPJobLoggerEmitsStructuredLineRecords(t *testing.T) {
 		}
 	}
 	for _, key := range []string{"buildkite.build.url", "buildkite.job.url", "trace_id", "span_id"} {
-		if got := attrs[key]; got != "" {
-			t.Errorf("attribute %s = %q, want empty", key, got)
-		}
-	}
-}
-
-func TestOTLPJobLogContextCreatesTraceparentForBootstrapWhenServerDoesNotProvideOne(t *testing.T) {
-	oldTracerProvider := otel.GetTracerProvider()
-	tracerProvider := sdktrace.NewTracerProvider()
-	otel.SetTracerProvider(tracerProvider)
-	t.Cleanup(func() {
-		otel.SetTracerProvider(oldTracerProvider)
-		_ = tracerProvider.Shutdown(context.Background())
-	})
-
-	conf := JobRunnerConfig{
-		AgentConfiguration: AgentConfiguration{
-			TracingBackend:              tracetools.BackendOpenTelemetry,
-			TracingPropagateTraceparent: true,
-		},
-		Job: &api.Job{
-			ID:  "job-123",
-			Env: map[string]string{},
-		},
-	}
-
-	ctx, span := otlpJobLogContext(context.Background(), conf)
-	if span == nil {
-		t.Fatalf("otlpJobLogContext() span = nil, want fallback span")
-	}
-	t.Cleanup(func() { span.End() })
-
-	sc := oteltrace.SpanContextFromContext(ctx)
-	if !sc.IsValid() {
-		t.Fatalf("SpanContextFromContext(ctx).IsValid() = false, want true")
-	}
-	if got := conf.Job.TraceParent; got != "" {
-		t.Errorf("conf.Job.TraceParent = %q, want empty", got)
-	}
-	if got := conf.Job.TraceState; got != "" {
-		t.Errorf("conf.Job.TraceState = %q, want empty", got)
-	}
-
-	logger := newOTLPJobLoggerWithLogger(ctx, nil, nil, otlpJobLogAttributes(conf))
-	attrs := keyValues(logger.attrs)
-	for _, key := range []string{"trace_id", "span_id"} {
 		if got := attrs[key]; got != "" {
 			t.Errorf("attribute %s = %q, want empty", key, got)
 		}
@@ -203,12 +152,7 @@ func TestOTLPJobLoggerFlushesPartialLineOnClose(t *testing.T) {
 func TestOTLPJobLoggerDetachesEmitContextFromCancellation(t *testing.T) {
 	t.Parallel()
 
-	ctx := contextWithJobTraceparent(
-		context.Background(),
-		"00-abcdef1234567890abcdef1234567890-1234567890abcdef-01",
-		"",
-	)
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	exporter := &otlpJobLogTestExporter{}
@@ -217,9 +161,6 @@ func TestOTLPJobLoggerDetachesEmitContextFromCancellation(t *testing.T) {
 
 	if err := logger.ctx.Err(); err != nil {
 		t.Fatalf("logger ctx error = %v, want nil", err)
-	}
-	if got, want := oteltrace.SpanContextFromContext(logger.ctx).TraceID().String(), "abcdef1234567890abcdef1234567890"; got != want {
-		t.Fatalf("logger ctx trace ID = %q, want %q", got, want)
 	}
 }
 
@@ -240,29 +181,6 @@ func TestOTLPJobLoggerPreservesBodyWithoutTimestampPrefix(t *testing.T) {
 	}
 	if records[0].Timestamp().Before(before) {
 		t.Errorf("record timestamp = %v, want after %v", records[0].Timestamp(), before)
-	}
-}
-
-func TestOTLPJobLogContextDoesNotAcceptTraceparentWithoutPropagateOptIn(t *testing.T) {
-	t.Parallel()
-
-	conf := JobRunnerConfig{
-		AgentConfiguration: AgentConfiguration{
-			TracingBackend: tracetools.BackendOpenTelemetry,
-		},
-		Job: &api.Job{
-			ID:          "job-123",
-			Env:         map[string]string{},
-			TraceParent: "00-abcdef1234567890abcdef1234567890-1234567890abcdef-01",
-		},
-	}
-
-	ctx, span := otlpJobLogContext(context.Background(), conf)
-	if span != nil {
-		t.Fatalf("otlpJobLogContext() span = %v, want nil", span)
-	}
-	if sc := oteltrace.SpanContextFromContext(ctx); sc.IsValid() {
-		t.Fatalf("SpanContextFromContext(ctx).IsValid() = true, want false")
 	}
 }
 
@@ -297,8 +215,11 @@ func TestOTLPJobLoggerAddsCurrentHookScopeFromHeaders(t *testing.T) {
 	if got, want := commandAttrs["buildkite.phase"], "command"; got != want {
 		t.Errorf("command output buildkite.phase = %q, want %q", got, want)
 	}
-	if got := commandAttrs["buildkite.hook.name"]; got != "" {
-		t.Errorf("command output buildkite.hook.name = %q, want empty", got)
+	if got, want := commandAttrs["buildkite.hook.name"], "command"; got != want {
+		t.Errorf("command output buildkite.hook.name = %q, want %q", got, want)
+	}
+	if got, want := commandAttrs["buildkite.hook.scope"], "default"; got != want {
+		t.Errorf("command output buildkite.hook.scope = %q, want %q", got, want)
 	}
 }
 
@@ -358,13 +279,5 @@ func recordAttributes(record sdklog.Record) map[string]string {
 		attrs[kv.Key] = kv.Value.AsString()
 		return true
 	})
-	return attrs
-}
-
-func keyValues(kvs []log.KeyValue) map[string]string {
-	attrs := map[string]string{}
-	for _, kv := range kvs {
-		attrs[kv.Key] = kv.Value.AsString()
-	}
 	return attrs
 }
