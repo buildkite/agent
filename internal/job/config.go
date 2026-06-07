@@ -206,9 +206,9 @@ type ExecutorConfig struct {
 	TracingTraceParent string
 
 	// W3C tracestate accompanying TracingTraceParent. Plumbed through to the
-	// bootstrap environment whenever the server provides a value, but only
-	// attached to the OTel span context when TracingPropagateTraceparent is
-	// enabled (same opt-in gate as TracingTraceParent).
+	// bootstrap environment and attached to the OTel span context only when
+	// TracingPropagateTraceparent is enabled (same opt-in gate as
+	// TracingTraceParent).
 	TracingTraceState string
 
 	// Accept traceparent context from Buildkite control plane
@@ -219,6 +219,9 @@ type ExecutorConfig struct {
 
 	// Whether to start the JobAPI
 	JobAPI bool
+
+	// Whether to emit visible job process output as OTLP log records.
+	JobLogsOTLP bool
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string

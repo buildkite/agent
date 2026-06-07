@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 )
 
@@ -105,6 +106,47 @@ func TestStartTracing_Datadog(t *testing.T) {
 		t.Errorf("opentracing.SpanFromContext(ctx) = %v, want %v", got, want)
 	}
 	stopper()
+}
+
+func TestContextWithTraceparentIfEnabledDoesNotAcceptServerTraceparentWithoutPropagation(t *testing.T) {
+	t.Parallel()
+
+	sh, err := shell.New(shell.WithLogger(shell.DiscardLogger))
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+	e := New(ExecutorConfig{
+		TracingTraceParent: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+	})
+	e.shell = sh
+
+	ctx := e.contextWithTraceparentIfEnabled(context.Background())
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		t.Fatalf("SpanContextFromContext(ctx).IsValid() = true, want false")
+	}
+}
+
+func TestContextWithTraceparentIfEnabledAcceptsServerTraceparentWithPropagation(t *testing.T) {
+	t.Parallel()
+
+	sh, err := shell.New(shell.WithLogger(shell.DiscardLogger))
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+	e := New(ExecutorConfig{
+		TracingPropagateTraceparent: true,
+		TracingTraceParent:          "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+	})
+	e.shell = sh
+
+	ctx := e.contextWithTraceparentIfEnabled(context.Background())
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		t.Fatalf("SpanContextFromContext(ctx).IsValid() = false, want true")
+	}
+	if got, want := sc.TraceID().String(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; got != want {
+		t.Fatalf("SpanContextFromContext(ctx).TraceID() = %q, want %q", got, want)
+	}
 }
 
 // newCancelTestExecutor returns an Executor whose shell.Env starts empty,

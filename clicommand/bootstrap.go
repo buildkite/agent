@@ -117,6 +117,7 @@ type BootstrapConfig struct {
 	TracingPropagateTraceparent  bool     `cli:"tracing-propagate-traceparent"`
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
+	JobLogsOTLP                  bool     `cli:"job-logs-otlp"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
@@ -367,11 +368,15 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Accept traceparent from Buildkite control plane (default: false)",
 			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
 		},
-
 		cli.BoolFlag{
 			Name:   "no-job-api",
 			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job (default: false)",
 			EnvVar: "BUILDKITE_AGENT_NO_JOB_API",
+		},
+		cli.BoolFlag{
+			Name:   "job-logs-otlp",
+			EnvVar: "BUILDKITE_JOB_LOGS_OTLP",
+			Hidden: true,
 		},
 		cli.StringSliceFlag{
 			Name:   "disable-warnings-for",
@@ -508,6 +513,7 @@ var BootstrapCommand = cli.Command{
 			TracingTraceState:            cfg.TracingTraceState,
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
+			JobLogsOTLP:                  cfg.JobLogsOTLP,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			Secrets:                      cfg.Secrets,
 			CheckoutAttempts:             cfg.CheckoutAttempts,
