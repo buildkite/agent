@@ -17,6 +17,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		GitCloneFlags:                "--prune",
 		GitSparseCheckoutPaths:       []string{"old-path/"},
 		GitCleanFlags:                "-v",
+		GitSSHKey:                    "original-key",
 		AgentName:                    "myAgent",
 		CleanCheckout:                false,
 		PluginsAlwaysCloneFresh:      false,
@@ -30,6 +31,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_SOMETHING_ELSE=1",
 		"BUILDKITE_REPO=https://my.mirror/repo.git",
 		"BUILDKITE_CLEAN_CHECKOUT=true",
+		"BUILDKITE_GIT_SSH_KEY=new-key",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true",
 		"BUILDKITE_GIT_SUBMODULES=true",
 	})
@@ -41,6 +43,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":  ".buildkite/,src/",
 		"BUILDKITE_REPO":                       "https://my.mirror/repo.git",
 		"BUILDKITE_CLEAN_CHECKOUT":             "true",
+		"BUILDKITE_GIT_SSH_KEY":                "new-key",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH": "true",
 		"BUILDKITE_GIT_SUBMODULES":             "true",
 	}
@@ -55,6 +58,10 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 
 	if got, want := config.Repository, "https://my.mirror/repo.git"; got != want {
 		t.Errorf("config.Repository = %q, want %q", got, want)
+	}
+
+	if got, want := config.GitSSHKey, "new-key"; got != want {
+		t.Errorf("config.GitSSHKey = %q, want %q", got, want)
 	}
 
 	if got, want := config.CleanCheckout, true; got != want {

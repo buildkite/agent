@@ -107,6 +107,9 @@ type ExecutorConfig struct {
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 
+	// SSH private key to use for git checkout operations
+	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
+
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
 	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`
 

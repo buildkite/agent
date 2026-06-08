@@ -37,7 +37,7 @@ command phase that executes the specified command in the created environment.
 You can run only specific phases with the --phases flag.
 
 The bootstrap is also responsible for executing hooks around the phases.
-See https://buildkite.com/docs/agent/v3/hooks for more details.
+See https://buildkite.com/docs/agent/hooks for more details.
 
 Example:
 
@@ -78,6 +78,7 @@ type BootstrapConfig struct {
 	GitSparseCheckoutPaths       []string `cli:"git-sparse-checkout-paths" normalize:"list"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
+	GitSSHKey                    string   `cli:"git-ssh-key"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode        string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
@@ -245,6 +246,11 @@ var BootstrapCommand = cli.Command{
 		GitCleanFlagsFlag,
 		GitFetchFlagsFlag,
 		GitSparseCheckoutPathsFlag,
+		cli.StringFlag{
+			Name:   "git-ssh-key",
+			Usage:  "SSH private key to use for git checkout",
+			EnvVar: "BUILDKITE_GIT_SSH_KEY",
+		},
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
@@ -453,6 +459,7 @@ var BootstrapCommand = cli.Command{
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
+			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
@@ -500,7 +507,8 @@ var BootstrapCommand = cli.Command{
 		defer cancel()
 
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, os.Interrupt,
+		signal.Notify(
+			signals, os.Interrupt,
 			syscall.SIGHUP,
 			syscall.SIGTERM,
 			syscall.SIGINT,

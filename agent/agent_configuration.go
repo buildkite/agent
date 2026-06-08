@@ -77,6 +77,7 @@ type AgentConfiguration struct {
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
+	ArtifactUploadConcurrency    int
 
 	PingMode string
 }

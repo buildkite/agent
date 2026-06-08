@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	DefaultEndpoint = "https://agent-edge.buildkite.com/v3"
+	DefaultEndpoint                 = "https://agent-edge.buildkite.com/v3"
+	ArtifactUploadConcurrencyEnvVar = "BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"
 )
 
 var (
@@ -118,6 +119,12 @@ var (
 		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
 	}
 
+	AgentArtifactUploadConcurrencyFlag = cli.IntFlag{
+		Name:   "artifact-upload-concurrency",
+		Usage:  "Maximum number of concurrent artifact upload operations used by jobs started by this agent. When unset, artifact uploads use their default",
+		EnvVar: ArtifactUploadConcurrencyEnvVar,
+	}
+
 	ExperimentsFlag = cli.StringSliceFlag{
 		Name:   "experiment",
 		Value:  &cli.StringSlice{},
@@ -134,6 +141,7 @@ var (
 			"*_SECRET",
 			"*_TOKEN",
 			"*_PRIVATE_KEY",
+			"*_SSH_KEY",
 			"*_ACCESS_KEY",
 			"*_SECRET_KEY",
 			// Connection strings frequently contain passwords, e.g.
