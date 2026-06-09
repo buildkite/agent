@@ -87,10 +87,21 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
 
-	oldUmask, err := Umask(0) // set umask of socket file to 0o777 (world read-write-executable)
+	// Set umask to 0, so the socket is created with mode 0o777 (world
+	// read-write-executable).
+	// The other containers may be running under any arbitrary uid/gid, and
+	// the socket needs to be accessible to them.
+	// This is acceptable because the security boundary of the job is
+	// considered to be _the pod_. The socket is exposed by us only within
+	// the pod.
+	// Note that with or without accessing the socket, a rogue container or
+	// process within the pod can do all sorts of things to disrupt the
+	// normal operation of the job.
+	oldUmask, err := Umask(0)
 	if err != nil {
 		return fmt.Errorf("failed to set socket umask: %w", err)
 	}
+	defer Umask(oldUmask) //nolint:errcheck // Best-effort cleanup on failure
 	l, err := (&net.ListenConfig{}).Listen(ctx, "unix", r.conf.SocketPath)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
@@ -310,6 +321,13 @@ type ExitCode struct {
 // contains the env vars that would normally be in the environment of the
 // bootstrap subcommand, particularly, the agent session token.
 func (r *Runner) Register(id int, reply *RegisterResponse) error {
+	// Note that there is no authentication of the client.
+	// This is acceptable because the security boundary of the job is
+	// considered to be _the pod_. The socket is exposed by us only within
+	// the pod.
+	// Note that with or without accessing the socket, a rogue container or
+	// process within the pod can do all sorts of things to disrupt the
+	// normal operation of the job.
 	if id < 0 || id >= len(r.clients) {
 		return fmt.Errorf("unrecognized client id: %d", id)
 	}

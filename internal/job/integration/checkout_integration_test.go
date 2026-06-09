@@ -103,6 +103,85 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
+func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	const sshKey = "super-secret-key"
+	const existingGitSSHCommand = "ssh -F ~/.ssh/config"
+	var sshKeyPath string
+
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		switch i.Args[0] {
+		case "clone", "fetch":
+			var gitSSHCommand string
+			for _, envVar := range i.Env {
+				if after, ok := strings.CutPrefix(envVar, "GIT_SSH_COMMAND="); ok {
+					gitSSHCommand = after
+					break
+				}
+			}
+			if gitSSHCommand == "" {
+				return fmt.Errorf("GIT_SSH_COMMAND not set for git %q", i.Args[0])
+			}
+
+			const prefix = existingGitSSHCommand + " -i "
+			const suffix = " -o IdentitiesOnly=yes"
+			if !strings.HasPrefix(gitSSHCommand, prefix) || !strings.HasSuffix(gitSSHCommand, suffix) {
+				return fmt.Errorf("unexpected GIT_SSH_COMMAND %q", gitSSHCommand)
+			}
+
+			sshKeyPath = strings.Trim(strings.TrimSuffix(strings.TrimPrefix(gitSSHCommand, prefix), suffix), "'")
+			contents, err := os.ReadFile(sshKeyPath)
+			if err != nil {
+				return fmt.Errorf("reading ssh key file %q: %w", sshKeyPath, err)
+			}
+			if want := sshKey + "\n"; string(contents) != want {
+				return fmt.Errorf("ssh key file contents = %q, want %q", string(contents), want)
+			}
+			if runtime.GOOS != "windows" {
+				info, err := os.Stat(sshKeyPath)
+				if err != nil {
+					return fmt.Errorf("stating ssh key file %q: %w", sshKeyPath, err)
+				}
+				if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
+					return fmt.Errorf("ssh key permissions = %o, want %o", got, want)
+				}
+			}
+		}
+		return nil
+	})
+	git.Expect().AtLeastOnce().WithAnyArguments()
+
+	tester.RunAndCheck(
+		t,
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_SSH_KEY="+sshKey,
+		"GIT_SSH_COMMAND="+existingGitSSHCommand,
+	)
+
+	if sshKeyPath == "" {
+		t.Fatal("expected to observe an ssh key path during checkout")
+	}
+	if _, err := os.Stat(sshKeyPath); !os.IsNotExist(err) {
+		t.Fatalf("os.Stat(%q) error = %v, want not exist", sshKeyPath, err)
+	}
+	matches, err := filepath.Glob(filepath.Join(filepath.Dir(tester.CheckoutDir()), ".buildkite-ssh-key-*"))
+	if err != nil {
+		t.Fatalf("filepath.Glob() error = %v, want nil", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("ssh key files left behind: %v", matches)
+	}
+}
+
 func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	t.Parallel()
 
@@ -1227,6 +1306,101 @@ func TestMultipleRemoteURLsFallsBackToGetURL(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCommitVerificationWithValidCommit(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Get the real commit SHA from the test repo
+	commitHash, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// Expect the normal checkout flow with merge-base --is-ancestor inserted
+	// between fetch and checkout. Since this is a full clone (not shallow),
+	// merge-base succeeds immediately — no rev-parse --is-shallow-repository needed.
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", commitHash},
+		{"merge-base", "--is-ancestor", commitHash, "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", commitHash, "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Get the commit from the update-test-txt branch (not on main)
+	commitHash, err := tester.Repo.RevParse("update-test-txt")
+	if err != nil {
+		t.Fatalf("RevParse(update-test-txt) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// Expect fetch, then merge-base which should return exit 1 (not ancestor).
+	// No checkout should happen after verification fails.
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", commitHash},
+		{"merge-base", "--is-ancestor", commitHash, "main"},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+
+	// This should fail — the commit is not on main
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatalf("expected build to fail with commit verification error, but it passed")
+	}
 }
 
 type subDirMatcher struct {

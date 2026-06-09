@@ -10,7 +10,7 @@ dry_run() {
 }
 
 if [[ "${CODENAME:-}" == "" ]]; then
-  echo "Error: Missing \$CODENAME (stable, experimental or unstable)"
+  echo "Error: Missing \$CODENAME (stable, experimental, unstable, oldstable)"
   exit 1
 fi
 

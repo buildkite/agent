@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -117,6 +118,7 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 			// use the mock instead.
 			"BUILDKITE_OVERRIDE_SELF=buildkite-agent",
 		},
+		HomeDir:    homeDir,
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
 		HooksDir:   hooksDir,
@@ -356,39 +358,24 @@ func (e *ExecutorTester) Close() {
 	_ = e.CloseErr()
 }
 
-// CloseErr closes the tester and returns any cleanup error.
+// CloseErr closes the tester and returns all cleanup errors.
 func (e *ExecutorTester) CloseErr() error {
+	var errs []error
 	for _, mock := range e.mocks {
-		if err := mock.Close(); err != nil {
-			return err
-		}
+		errs = append(errs, mock.Close())
 	}
 	if e.Repo != nil {
-		if err := e.Repo.CloseErr(); err != nil {
-			return err
-		}
+		errs = append(errs, e.Repo.CloseErr())
 	}
-	if err := os.RemoveAll(e.HomeDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.BuildDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.HooksDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.PathDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.PluginsDir); err != nil {
-		return err
-	}
-	if e.GitMirrorsDir != "" {
-		if err := os.RemoveAll(e.GitMirrorsDir); err != nil {
-			return err
-		}
-	}
-	return nil
+	errs = append(errs,
+		os.RemoveAll(e.HomeDir),
+		os.RemoveAll(e.BuildDir),
+		os.RemoveAll(e.HooksDir),
+		os.RemoveAll(e.PathDir),
+		os.RemoveAll(e.PluginsDir),
+		os.RemoveAll(e.GitMirrorsDir),
+	)
+	return errors.Join(errs...)
 }
 
 func mockEnvAsJSONOnStdout(e *ExecutorTester) func(c *bintest.Call) {

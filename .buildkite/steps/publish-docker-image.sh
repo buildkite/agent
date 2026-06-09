@@ -80,14 +80,25 @@ fi
 
 echo "Tagging docker images for $variant/$codename (version $version build $build)"
 
-# variants of edge/experimental
-if [[ "${codename}" == "experimental" ]] ; then
+case "${codename}" in
+experimental)
+  # variants of edge/experimental
   release_image "edge-build-${build}${variant_suffix}"
   release_image "edge${variant_suffix}"
-fi
+  ;;
 
-# variants of stable - e.g 2.3.2
-if [[ "${codename}" == "stable" ]] ; then
+oldstable)
+  release_image "oldstable${variant_suffix}"
+  for tag in $(parse_version "${version}") ; do
+    release_image "${tag}${variant_suffix}"
+  done
+  if [[ "${variant}" == "alpine" ]] ; then
+    release_image "oldstable"
+  fi
+  ;;
+
+stable)
+  # variants of stable - e.g 2.3.2
   for tag in $(parse_version "${version}") ; do
     release_image "${tag}${variant_suffix}"
   done
@@ -106,12 +117,14 @@ if [[ "${codename}" == "stable" ]] ; then
     release_image "latest"
     release_image "stable"
   fi
-fi
+  ;;
 
-# variants of beta/unstable - e.g 3.0-beta.16
-if [[ "${codename}" == "unstable" ]] ; then
+unstable)
+  # variants of beta/unstable - e.g 3.0-beta.16
   release_image "beta${variant_suffix}"
   if [[ "${version}" =~ -(alpha|beta|rc)\.[0-9]+$ ]] ; then
     release_image "${version}${variant_suffix}"
   fi
-fi
+  ;;
+
+esac

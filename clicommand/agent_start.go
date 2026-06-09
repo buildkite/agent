@@ -166,6 +166,8 @@ type AgentStartConfig struct {
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
+	GitCheckoutTimeout          int      `cli:"git-checkout-timeout"`
+	GitCommitVerification       string   `cli:"git-commit-verification"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
@@ -204,6 +206,7 @@ type AgentStartConfig struct {
 	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
 	TraceContextEncoding            string        `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
+	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -376,7 +379,8 @@ var AgentStartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Starts a Buildkite agent",
 	Description: startDescription,
-	Flags: append(globalFlags(),
+	Flags: append(
+		globalFlags(),
 		cli.StringFlag{
 			Name:   "config",
 			Value:  "",
@@ -540,12 +544,14 @@ var AgentStartCommand = cli.Command{
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCleanFlagsFlag,
+		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitCloneMirrorFlagsFlag,
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
 		GitMirrorsSkipUpdateFlag,
+		GitCheckoutTimeoutFlag,
 		GitSubmoduleCloneConfigFlag,
 		GitSkipFetchExistingCommitsFlag,
 		CheckoutAttemptsFlag,
@@ -782,6 +788,7 @@ var AgentStartCommand = cli.Command{
 		StrictSingleHooksFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
+		AgentArtifactUploadConcurrencyFlag,
 
 		// Deprecated flags which will be removed in v4
 		KubernetesLogCollectionGracePeriodFlag,
@@ -865,6 +872,11 @@ var AgentStartCommand = cli.Command{
 					verificationFailureBehaviors,
 				)
 			}
+		}
+
+		// Validate the commit verification option input
+		if v := cfg.GitCommitVerification; v != "" && v != "strict" && v != "warn" {
+			return fmt.Errorf("invalid value for --git-commit-verification: %q (must be \"strict\" or \"warn\")", v)
 		}
 
 		// Force some settings if on Windows (these aren't supported yet)
@@ -1072,9 +1084,11 @@ var AgentStartCommand = cli.Command{
 			AdditionalHooksPaths:            cfg.AdditionalHooksPaths,
 			PluginsPath:                     cfg.PluginsPath,
 			GitCheckoutFlags:                cfg.GitCheckoutFlags,
+			GitCheckoutTimeout:              cfg.GitCheckoutTimeout,
 			GitCloneFlags:                   cfg.GitCloneFlags,
 			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                   cfg.GitCleanFlags,
+			GitCommitVerification:           cfg.GitCommitVerification,
 			GitFetchFlags:                   cfg.GitFetchFlags,
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
@@ -1111,6 +1125,7 @@ var AgentStartCommand = cli.Command{
 			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
 			TraceContextEncoding:            cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
+			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
 			KubernetesExec:                  cfg.KubernetesExec,
 			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
 			PingMode:                        cfg.PingMode,

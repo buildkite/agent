@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	DefaultEndpoint = "https://agent-edge.buildkite.com/v3"
+	DefaultEndpoint                 = "https://agent-edge.buildkite.com/v3"
+	ArtifactUploadConcurrencyEnvVar = "BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"
 )
 
 var (
@@ -118,6 +119,12 @@ var (
 		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
 	}
 
+	AgentArtifactUploadConcurrencyFlag = cli.IntFlag{
+		Name:   "artifact-upload-concurrency",
+		Usage:  "Maximum number of concurrent artifact upload operations used by jobs started by this agent. When unset, artifact uploads use their default",
+		EnvVar: ArtifactUploadConcurrencyEnvVar,
+	}
+
 	ExperimentsFlag = cli.StringSliceFlag{
 		Name:   "experiment",
 		Value:  &cli.StringSlice{},
@@ -134,6 +141,7 @@ var (
 			"*_SECRET",
 			"*_TOKEN",
 			"*_PRIVATE_KEY",
+			"*_SSH_KEY",
 			"*_ACCESS_KEY",
 			"*_SECRET_KEY",
 			// Connection strings frequently contain passwords, e.g.
@@ -235,6 +243,12 @@ var (
 		// -q: quiet, only report errors
 	}
 
+	GitCommitVerificationFlag = cli.StringFlag{
+		Name:   "git-commit-verification",
+		Usage:  "Enable git commit verification",
+		EnvVar: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+	}
+
 	GitFetchFlagsFlag = cli.StringFlag{
 		Name:   "git-fetch-flags",
 		Value:  "-v --prune",
@@ -274,6 +288,13 @@ var (
 		Value:  &cli.StringSlice{},
 		Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands such as ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead",
 		EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
+	}
+
+	GitCheckoutTimeoutFlag = cli.IntFlag{
+		Name:   "git-checkout-timeout",
+		Value:  0,
+		Usage:  "Seconds to allow for each git checkout attempt before it is killed and retried (0 means no timeout)",
+		EnvVar: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
 	}
 
 	GitSkipFetchExistingCommitsFlag = cli.BoolFlag{

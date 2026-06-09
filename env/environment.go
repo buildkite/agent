@@ -57,14 +57,26 @@ func Split(l string) (name, value string, ok bool) {
 	return l[:i], l[i+1:], true
 }
 
+// SeqSlice returns an iterator over all name/value pairs of env vars in a slice
+// of strings.
+func SeqSlice(s []string) iter.Seq2[string, string] {
+	return func(yield func(string, string) bool) {
+		for _, l := range s {
+			if k, v, ok := Split(l); ok {
+				if !yield(k, v) {
+					return
+				}
+			}
+		}
+	}
+}
+
 // FromSlice creates a new environment from a string slice of KEY=VALUE
 func FromSlice(s []string) *Environment {
 	env := NewWithLength(len(s))
 
-	for _, l := range s {
-		if k, v, ok := Split(l); ok {
-			env.Set(k, v)
-		}
+	for k, v := range SeqSlice(s) {
+		env.Set(k, v)
 	}
 
 	return env

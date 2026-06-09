@@ -138,6 +138,12 @@ type JobRunner struct {
 	// Files containing a copy of the job env
 	envShellFile *os.File
 	envJSONFile  *os.File
+
+	// jobTimeoutFilePath is the path to a marker file that, if present at
+	// post-command hook time, signals to the executor that the job was
+	// cancelled because of a Buildkite job-level timeout. The path is passed
+	// to the bootstrap subprocess via BUILDKITE_AGENT_JOB_TIMEOUT_FILE.
+	jobTimeoutFilePath string
 }
 
 // jobProcess is either a *process.Process, or a *kubernetes.Runner.
@@ -210,6 +216,12 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	if err != nil {
 		return nil, err
 	}
+
+	// Reserve a path for the job timeout marker file. It is only created on
+	// disk if the job is cancelled because of a Buildkite job-level timeout
+	// (see Cancel). The bootstrap subprocess reads this path from the
+	// BUILDKITE_AGENT_JOB_TIMEOUT_FILE env var.
+	r.jobTimeoutFilePath = jobTimeoutFilePath(r.conf.Job.ID, conf.KubernetesExec)
 
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
@@ -452,6 +464,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 			// Docker in particular tolerates undefined vars in an env file
 			// without complaints.
 			const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
+BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
@@ -477,6 +490,7 @@ BUILDKITE_TRACE_CONTEXT_ENCODING
 BUILDKITE_TRACING_BACKEND
 BUILDKITE_TRACING_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
+BUILDKITE_TRACING_TRACESTATE
 BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
 BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
@@ -488,6 +502,15 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 
 		for key, value := range env {
+			// Note that the value below is %q-quoted, and not shell-escaped.
+			// Env files are designed to be validated by the pre-bootstrap hook.
+			// Because the job env may contain untrusted or even dangerous env
+			// vars (suppose a user adds an env var in the "New Build" UI with a
+			// value that exploits a command injection in Bash), the
+			// pre-bootstrap hook should do this validation *without* sourcing
+			// the file. (If the job env was universally safe, then we wouldn't
+			// bother using a file - we'd load it straight into the subprocess
+			// env.)
 			if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
 				return nil, err
 			}
@@ -497,6 +520,8 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 	}
 	if r.envJSONFile != nil {
+		// key="value" format can be difficult to parse in some circumstances,
+		// so we also have a JSON formatted env file.
 		if err := json.NewEncoder(r.envJSONFile).Encode(env); err != nil {
 			return nil, err
 		}
@@ -511,6 +536,14 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	if r.envJSONFile != nil {
 		setEnv("BUILDKITE_ENV_JSON_FILE", r.envJSONFile.Name())
+	}
+
+	// Tell the bootstrap where to look for the job timeout marker. Cancel
+	// writes to this path only when cancellation is caused by a Buildkite
+	// job-level timeout, allowing the executor to expose
+	// BUILDKITE_JOB_TIMED_OUT=true to the post-command hook.
+	if r.jobTimeoutFilePath != "" {
+		setEnv("BUILDKITE_AGENT_JOB_TIMEOUT_FILE", r.jobTimeoutFilePath)
 	}
 
 	cache := r.conf.Job.Step.Cache
@@ -604,7 +637,11 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
 	setCheckoutEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
 	setCheckoutEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
+	if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
+		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
+	}
 	setCheckoutEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
+	setEnv("BUILDKITE_GIT_COMMIT_VERIFICATION", r.conf.AgentConfiguration.GitCommitVerification)
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
 	setEnv("BUILDKITE_HOOKS_SHELL", r.conf.AgentConfiguration.HooksShell)
@@ -617,6 +654,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 	if !r.conf.AgentConfiguration.AllowMultipartArtifactUpload {
 		setEnv("BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", "true")
+	}
+	if r.conf.AgentConfiguration.ArtifactUploadConcurrency > 0 {
+		setEnv("BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY", strconv.Itoa(r.conf.AgentConfiguration.ArtifactUploadConcurrency))
 	}
 
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
@@ -681,6 +721,13 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		// https://www.w3.org/TR/trace-context/#traceparent-header
 		if r.conf.Job.TraceParent != "" {
 			setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
+		}
+		// Buildkite backend may also provide a tracestate property on the job,
+		// which carries vendor-specific trace context alongside the traceparent.
+		//
+		// https://www.w3.org/TR/trace-context/#tracestate-header
+		if r.conf.Job.TraceState != "" {
+			setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
 		}
 		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
 			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
@@ -762,7 +809,13 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 
 	// This (plus inherited) is the only ENV that should be exposed
 	// to the pre-bootstrap hook.
-	// - Env files are designed to be validated by the pre-bootstrap hook
+	// - Env files are designed to be validated by the pre-bootstrap hook.
+	//   Because the job env may contain untrusted or even dangerous env vars
+	//   (suppose a user adds an env var in the "New Build" UI with a value that
+	//   exploits a command injection in Bash), the pre-bootstrap hook should do
+	//   this validation *without* sourcing the file. (If the job env was
+	//   universally safe to source, then we would just pre-populate this env
+	//   with it.)
 	// - The pre-bootstrap hook may want to create annotations, so it can also
 	//   have a few necessary and global args as env vars.
 	environ := envutil.New()
@@ -852,8 +905,13 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 			}
 			continue // the loop
 		}
-		if jobState.State == "canceling" || jobState.State == "canceled" {
+		switch jobState.State {
+		case "canceling", "canceled":
 			if err := r.Cancel(CancelReasonJobState); err != nil {
+				r.agentLogger.Errorf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
+			}
+		case "timing_out", "timed_out":
+			if err := r.Cancel(CancelReasonJobTimeout); err != nil {
 				r.agentLogger.Errorf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
 			}
 		}
@@ -912,4 +970,17 @@ func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shel
 	l.Debugf("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())
 
 	return shellFile, jsonFile, nil
+}
+
+// jobTimeoutFilePath returns a deterministic path within the job temp
+// directory used to signal to the bootstrap that the job was cancelled
+// because of a Buildkite job-level timeout. The file is not created until
+// the timeout actually fires; the bootstrap detects the timeout by checking
+// whether the file exists.
+func jobTimeoutFilePath(jobID string, kubernetesExec bool) string {
+	tempDir := os.TempDir()
+	if kubernetesExec {
+		tempDir = "/workspace"
+	}
+	return filepath.Join(tempDir, fmt.Sprintf("job-timeout-%s", jobID))
 }

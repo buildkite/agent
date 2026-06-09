@@ -86,6 +86,9 @@ type ExecutorConfig struct {
 	// This intentionally has no env tag so hooks cannot disable it at runtime.
 	NoCheckoutOverride bool
 
+	// Timeout in seconds for the git checkout phase (0 means no timeout)
+	GitCheckoutTimeout int `env:"BUILDKITE_GIT_CHECKOUT_TIMEOUT"`
+
 	// Flags to pass to "git checkout" command
 	GitCheckoutFlags string `env:"BUILDKITE_GIT_CHECKOUT_FLAGS"`
 
@@ -103,6 +106,12 @@ type ExecutorConfig struct {
 
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
+
+	// SSH private key to use for git checkout operations
+	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
+
+	// Enable git commit verification
+	GitCommitVerification string
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
 	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`
@@ -192,6 +201,12 @@ type ExecutorConfig struct {
 	// Traceing context information
 	TracingTraceParent string
 
+	// W3C tracestate accompanying TracingTraceParent. Plumbed through to the
+	// bootstrap environment whenever the server provides a value, but only
+	// attached to the OTel span context when TracingPropagateTraceparent is
+	// enabled (same opt-in gate as TracingTraceParent).
+	TracingTraceState string
+
 	// Accept traceparent context from Buildkite control plane
 	TracingPropagateTraceparent bool
 
@@ -252,6 +267,18 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 					break
 				}
 				v.SetBool(newBool)
+				changed[tag] = newStr
+
+			case reflect.Int:
+				newInt, err := strconv.Atoi(newStr)
+				if err != nil {
+					log.Printf("warning: cannot parse %s=%q as int, ignoring", tag, newStr)
+					break
+				}
+				if int64(newInt) == v.Int() {
+					break
+				}
+				v.SetInt(int64(newInt))
 				changed[tag] = newStr
 
 			case reflect.Slice:
