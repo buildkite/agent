@@ -72,7 +72,7 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 
 	// If you call opentracing.GlobalTracer() without having set it first, it returns a NoopTracer
 	// In this test case, we haven't touched opentracing at all, so we get the NoopTracer
-	if got, want := reflect.TypeOf(opentracing.GlobalTracer()), reflect.TypeOf(opentracing.NoopTracer{}); got != want {
+	if got, want := reflect.TypeOf(opentracing.GlobalTracer()), reflect.TypeFor[opentracing.NoopTracer](); got != want {
 		t.Errorf("opentracing.GlobalTracer() = %v, want %v", got, want)
 	}
 	stopper()
