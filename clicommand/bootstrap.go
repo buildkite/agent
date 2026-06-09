@@ -79,6 +79,7 @@ type BootstrapConfig struct {
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitSSHKey                    string   `cli:"git-ssh-key"`
+	GitCommitVerification        string   `cli:"git-commit-verification"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode        string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
@@ -244,6 +245,7 @@ var BootstrapCommand = cli.Command{
 		GitCloneFlagsFlag,
 		GitCloneMirrorFlagsFlag,
 		GitCleanFlagsFlag,
+		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitSparseCheckoutPathsFlag,
 		cli.StringFlag{
@@ -455,6 +457,7 @@ var BootstrapCommand = cli.Command{
 			Debug:                        cfg.Debug,
 			GitCheckoutFlags:             cfg.GitCheckoutFlags,
 			GitCleanFlags:                cfg.GitCleanFlags,
+			GitCommitVerification:        cfg.GitCommitVerification,
 			GitCloneFlags:                cfg.GitCloneFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
