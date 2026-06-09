@@ -25,6 +25,8 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const ArtifactFallbackMimeType = "binary/octet-stream"
@@ -121,6 +123,21 @@ func (t *artifactUploadTimings) addUploadBatch(stats artifactUploadBatchStats) {
 	t.maxWorkerCount = max(t.maxWorkerCount, stats.workerCount)
 }
 
+func (t *artifactUploadTimings) setSpanAttributes(ctx context.Context) {
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.Int("artifact.count", t.artifactCount),
+		attribute.Int64("artifact.bytes", t.artifactBytes),
+		attribute.Int("artifact.batch_count", t.batches),
+		attribute.Int("artifact.work_unit_count", t.workUnits),
+		attribute.Int("artifact.max_workers", t.maxWorkerCount),
+		attribute.Int("artifact.state_update_count", t.stateUpdateCount),
+		attribute.Int64("artifact.collect_ms", t.collectDuration.Milliseconds()),
+		attribute.Int64("artifact.create_ms", t.createDuration.Milliseconds()),
+		attribute.Int64("artifact.upload_ms", t.uploadDuration.Milliseconds()),
+		attribute.Int64("artifact.state_update_ms", t.stateDuration.Milliseconds()),
+	)
+}
+
 func (t *artifactUploadTimings) logSummary(l logger.Logger) {
 	l.Infof(
 		"Artifact upload timings: collect=%s create=%s upload=%s state_update=%s artifacts=%d bytes=%s batches=%d work_units=%d max_workers=%d state_updates=%d",
@@ -205,6 +222,7 @@ func (a *Uploader) Upload(ctx context.Context) error {
 		a.logger.Debugf("Uploaded %d artifact work units with %d workers in %s", stats.workUnits, stats.workerCount, stats.uploadDuration)
 	}
 
+	timings.setSpanAttributes(ctx)
 	timings.logSummary(a.logger)
 
 	return nil

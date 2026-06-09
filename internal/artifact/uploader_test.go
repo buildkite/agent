@@ -18,6 +18,8 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
@@ -513,6 +515,58 @@ func TestArtifactUploadTimingsSummary(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("timings summary = %q, want substring %q", got, want)
 		}
+	}
+}
+
+func TestArtifactUploadTimingsSpanAttributes(t *testing.T) {
+	t.Parallel()
+
+	timings := &artifactUploadTimings{
+		collectDuration: 1456 * time.Millisecond,
+		createDuration:  82 * time.Millisecond,
+		uploadDuration:  334 * time.Millisecond,
+		stateDuration:   11 * time.Millisecond,
+
+		artifactCount:    1296,
+		artifactBytes:    1296 * 4096,
+		batches:          44,
+		workUnits:        1296,
+		maxWorkerCount:   30,
+		stateUpdateCount: 44,
+	}
+
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+
+	ctx, span := provider.Tracer("test").Start(t.Context(), "artifact-upload")
+	timings.setSpanAttributes(ctx)
+	span.End()
+
+	spans := recorder.Ended()
+	if got, want := len(spans), 1; got != want {
+		t.Fatalf("ended spans = %d, want %d", got, want)
+	}
+
+	got := make(map[string]any)
+	for _, attr := range spans[0].Attributes() {
+		got[string(attr.Key)] = attr.Value.AsInterface()
+	}
+
+	want := map[string]any{
+		"artifact.count":              int64(1296),
+		"artifact.bytes":              int64(1296 * 4096),
+		"artifact.batch_count":        int64(44),
+		"artifact.work_unit_count":    int64(1296),
+		"artifact.max_workers":        int64(30),
+		"artifact.state_update_count": int64(44),
+		"artifact.collect_ms":         int64(1456),
+		"artifact.create_ms":          int64(82),
+		"artifact.upload_ms":          int64(334),
+		"artifact.state_update_ms":    int64(11),
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("span attributes diff (-want +got):\n%s", diff)
 	}
 }
 
