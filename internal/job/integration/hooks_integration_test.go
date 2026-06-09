@@ -192,6 +192,56 @@ func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
 	}
 }
 
+func TestEnvironmentHookCannotDisableNoCheckoutOverride(t *testing.T) {
+	t.Parallel()
+
+	// A hook must not be able to turn the lock off mid-job: exporting
+	// BUILDKITE_NO_CHECKOUT_OVERRIDE=false should be ignored, so a checkout-
+	// scoped var the same hook tries to set stays blocked.
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	filename := "environment"
+	script := []string{
+		"#!/usr/bin/env bash",
+		"export BUILDKITE_NO_CHECKOUT_OVERRIDE=false",
+		"export BUILDKITE_SKIP_CHECKOUT=true",
+	}
+	if runtime.GOOS == "windows" {
+		filename = "environment.bat"
+		script = []string{
+			"@echo off",
+			"set BUILDKITE_NO_CHECKOUT_OVERRIDE=false",
+			"set BUILDKITE_SKIP_CHECKOUT=true",
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got == "true" {
+			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the lock to stay on and block it\n", got)
+			c.Exit(1)
+			return
+		}
+		c.Exit(0)
+	})
+
+	tester.RunAndCheck(t, "BUILDKITE_NO_CHECKOUT_OVERRIDE=true")
+
+	// Both the lock var itself and the scoped var should be reported as blocked.
+	for _, want := range []string{"BUILDKITE_NO_CHECKOUT_OVERRIDE", "BUILDKITE_SKIP_CHECKOUT"} {
+		if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, want) {
+			t.Fatalf("output did not report %q as blocked\noutput: %s", want, tester.Output)
+		}
+	}
+}
+
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	t.Parallel()
 
