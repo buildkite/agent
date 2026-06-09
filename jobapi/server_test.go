@@ -401,7 +401,7 @@ func TestPatchEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testi
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride(true))
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestDeleteEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *test
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride(true))
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}

@@ -22,9 +22,9 @@ func WithDebug() ServerOpts {
 	}
 }
 
-func WithNoCheckoutOverride(enabled bool) ServerOpts {
+func WithNoCheckoutOverride() ServerOpts {
 	return func(s *Server) {
-		s.noCheckoutOverride = enabled
+		s.noCheckoutOverride = true
 	}
 }
 
