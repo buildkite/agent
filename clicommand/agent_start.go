@@ -167,6 +167,7 @@ type AgentStartConfig struct {
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
 	GitCheckoutTimeout          int      `cli:"git-checkout-timeout"`
+	GitCommitVerification       string   `cli:"git-commit-verification"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
@@ -371,7 +372,8 @@ var AgentStartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Starts a Buildkite agent",
 	Description: startDescription,
-	Flags: append(globalFlags(),
+	Flags: append(
+		globalFlags(),
 		cli.StringFlag{
 			Name:   "config",
 			Value:  "",
@@ -534,6 +536,7 @@ var AgentStartCommand = cli.Command{
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCleanFlagsFlag,
+		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitCloneMirrorFlagsFlag,
 		GitMirrorsPathFlag,
@@ -863,6 +866,11 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		// Validate the commit verification option input
+		if v := cfg.GitCommitVerification; v != "" && v != "strict" && v != "warn" {
+			return fmt.Errorf("invalid value for --git-commit-verification: %q (must be \"strict\" or \"warn\")", v)
+		}
+
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
@@ -1070,6 +1078,7 @@ var AgentStartCommand = cli.Command{
 			GitCloneFlags:                   cfg.GitCloneFlags,
 			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                   cfg.GitCleanFlags,
+			GitCommitVerification:           cfg.GitCommitVerification,
 			GitFetchFlags:                   cfg.GitFetchFlags,
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
