@@ -63,10 +63,31 @@ if [ "${BUILDKITE_BRANCH:-}" != "main" ]; then
   )
 fi
 
-BKTEC_PREVIEW_SELECTION=1 go tool test-engine-client plan \
+# `bktec plan --json` emits a JSON object to stdout of the shape:
+#   {"BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER":"<id>",
+#    "BUILDKITE_TEST_ENGINE_PARALLELISM":"<int-as-string>"}
+# Capture it so the plan identifier can be stashed as build metadata;
+# parallelism is ignored -- the gotest steps keep their declared values.
+plan_output=$(BKTEC_PREVIEW_SELECTION=1 go tool test-engine-client plan \
   --json \
   --collect-git-metadata \
-  "${selection_flags[@]}" \
-  > /dev/null
+  "${selection_flags[@]}")
 
 echo "Plan request issued -- git commit metadata sent to Test Engine."
+
+# TE-6071: when we requested an xgboost-ranked plan, stash the plan
+# identifier as build metadata so a follow-up can correlate the build with
+# the discarded plan it produced (mirrors the bk/bk-rspec
+# rspec_xgboost_plan_id metadata). Parse with ruby (present in this image;
+# jq is not) and skip silently if the field is absent -- this is a
+# measurement aid, not a build-correctness signal.
+if [ ${#selection_flags[@]} -gt 0 ]; then
+  plan_id=$(printf '%s' "$plan_output" \
+    | ruby -rjson -e 'puts (JSON.parse(STDIN.read)["BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"] rescue "")')
+  if [ -n "$plan_id" ]; then
+    buildkite-agent meta-data set "agent_xgboost_plan_id" "$plan_id"
+    echo "Stashed xgboost plan id as build metadata: $plan_id"
+  else
+    echo "No plan identifier returned; skipping agent_xgboost_plan_id metadata."
+  fi
+fi
