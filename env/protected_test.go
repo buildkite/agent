@@ -17,6 +17,8 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_COMMAND_EVAL",
 		"BUILDKITE_CONFIG_PATH",
 		"BUILDKITE_CONTAINER_COUNT",
+		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		"BUILDKITE_GIT_MIRRORS_PATH",
 		"BUILDKITE_HOOKS_PATH",
 		"BUILDKITE_KUBERNETES_EXEC",
 		"BUILDKITE_LOCAL_HOOKS_ENABLED",
@@ -25,6 +27,7 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_PLUGINS_PATH",
 		"BUILDKITE_SHELL",
 		"BUILDKITE_HOOKS_SHELL",
+		"BUILDKITE_SSH_KEYSCAN",
 	}
 
 	// Verify that all expected variables are protected
@@ -43,7 +46,6 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_GIT_CLONE_FLAGS",
 		"BUILDKITE_GIT_SUBMODULES",
 		"BUILDKITE_SKIP_CHECKOUT",
-		"BUILDKITE_SSH_KEYSCAN",
 		"BUILDKITE_BRANCH",  // This is a standard build env var, not protected
 		"BUILDKITE_COMMIT",  // This is a standard build env var, not protected
 		"BUILDKITE_MESSAGE", // This is a standard build env var, not protected
@@ -76,13 +78,10 @@ func TestCheckoutOverrideScope(t *testing.T) {
 		"BUILDKITE_GIT_CLEAN_FLAGS",
 		"BUILDKITE_GIT_FETCH_FLAGS",
 		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
-		"BUILDKITE_GIT_MIRRORS_PATH",
-		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		"BUILDKITE_GIT_SUBMODULES",
 		"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 		"BUILDKITE_SKIP_CHECKOUT",
-		"BUILDKITE_SSH_KEYSCAN",
 	}
 
 	for _, envVar := range scoped {
@@ -95,15 +94,18 @@ func TestCheckoutOverrideScope(t *testing.T) {
 		"BUILDKITE_GIT_CLONE_FLAGS",
 		"BUILDKITE_GIT_SUBMODULES",
 		"BUILDKITE_SKIP_CHECKOUT",
-		"BUILDKITE_SSH_KEYSCAN",
 	} {
 		if got := IsProtected(envVar); got {
 			t.Errorf("IsProtected(%q) = true, want false", envVar)
 		}
 	}
 
+	// Checkout infra vars are agent-only: protected, never in the override scope.
 	for _, envVar := range []string{
 		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_MIRRORS_PATH",
+		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		"BUILDKITE_SSH_KEYSCAN",
 		"BUILDKITE_COMMAND_EVAL",
 		"MY_CUSTOM_VAR",
 	} {

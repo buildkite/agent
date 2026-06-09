@@ -599,14 +599,15 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_CONFIG_PATH", r.conf.AgentConfiguration.ConfigPath)
 	setEnv("BUILDKITE_BUILD_PATH", r.conf.AgentConfiguration.BuildPath)
 	setEnv("BUILDKITE_SOCKETS_PATH", r.conf.AgentConfiguration.SocketsPath)
-	setCheckoutEnv("BUILDKITE_GIT_MIRRORS_PATH", r.conf.AgentConfiguration.GitMirrorsPath)
+	setEnv("BUILDKITE_GIT_MIRRORS_PATH", r.conf.AgentConfiguration.GitMirrorsPath)
 	setCheckoutEnv("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate))
 	setEnv("BUILDKITE_HOOKS_PATH", r.conf.AgentConfiguration.HooksPath)
 	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
-	setCheckoutEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
-	// Disable cloning submodules if specified in Agent config as precedence
-	// else allow pipeline/step env to control it via BUILDKITE_GIT_SUBMODULES
+	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
+	// Default submodules off when disabled in agent config, but let pipeline/
+	// step env override via BUILDKITE_GIT_SUBMODULES unless no-checkout-override
+	// is set.
 	if !r.conf.AgentConfiguration.GitSubmodules {
 		setCheckoutEnv("BUILDKITE_GIT_SUBMODULES", "false")
 	}
@@ -636,7 +637,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setCheckoutEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
 	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
 	setCheckoutEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
-	setCheckoutEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
+	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
 	if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
 		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
 	}

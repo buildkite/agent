@@ -378,6 +378,142 @@ func TestCheckoutScopedJobEnvOverrideHonorsNoCheckoutOverride(t *testing.T) {
 	}
 }
 
+func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
+	t.Parallel()
+
+	// SSH_KEYSCAN, GIT_MIRRORS_PATH and GIT_MIRRORS_LOCK_TIMEOUT are agent-only:
+	// job env cannot override them even with no-checkout-override disabled.
+	tests := []struct {
+		name         string
+		varName      string
+		jobEnvValue  string
+		agentCfg     agent.AgentConfiguration
+		wantEnvValue string
+	}{
+		{
+			name:         "ssh_keyscan",
+			varName:      "BUILDKITE_SSH_KEYSCAN",
+			jobEnvValue:  "false",
+			agentCfg:     agent.AgentConfiguration{SSHKeyscan: true},
+			wantEnvValue: "true",
+		},
+		{
+			name:         "git_mirrors_path",
+			varName:      "BUILDKITE_GIT_MIRRORS_PATH",
+			jobEnvValue:  "/tmp/attacker-mirrors",
+			agentCfg:     agent.AgentConfiguration{GitMirrorsPath: "/agent/mirrors"},
+			wantEnvValue: "/agent/mirrors",
+		},
+		{
+			name:         "git_mirrors_lock_timeout",
+			varName:      "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+			jobEnvValue:  "1",
+			agentCfg:     agent.AgentConfiguration{GitMirrorsLockTimeout: 300},
+			wantEnvValue: "300",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			job := &api.Job{
+				ID:                 "my-job-id",
+				ChunksMaxSizeBytes: 1024,
+				Env: map[string]string{
+					"BUILDKITE_COMMAND": "echo hello world",
+					tc.varName:          tc.jobEnvValue,
+				},
+				Token: "bkaj_job-token",
+			}
+
+			mb := mockBootstrap(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+			mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got, want := c.GetEnv(tc.varName), tc.wantEnvValue; got != want {
+					t.Errorf("c.GetEnv(%s) = %q, want %q", tc.varName, got, want)
+					c.Exit(1)
+					return
+				}
+
+				ignored := strings.Split(strings.TrimSpace(c.GetEnv("BUILDKITE_IGNORED_ENV")), ",")
+				if !slices.Contains(ignored, tc.varName) {
+					t.Errorf("BUILDKITE_IGNORED_ENV = %q, want it to contain %q", c.GetEnv("BUILDKITE_IGNORED_ENV"), tc.varName)
+					c.Exit(1)
+					return
+				}
+
+				c.Exit(0)
+			})
+
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+
+			if err := runJob(t, ctx, testRunJobConfig{
+				job:           job,
+				server:        server,
+				agentCfg:      tc.agentCfg,
+				mockBootstrap: mb,
+			}); err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestNoCheckoutOverrideFlagIgnoresJobEnvOverride(t *testing.T) {
+	t.Parallel()
+
+	// The agent's no-checkout-override setting is authoritative: a job that
+	// supplies BUILDKITE_NO_CHECKOUT_OVERRIDE cannot turn the lock off.
+	ctx := context.Background()
+	job := &api.Job{
+		ID:                 "my-job-id",
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_COMMAND":              "echo hello world",
+			"BUILDKITE_NO_CHECKOUT_OVERRIDE": "false",
+		},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got, want := c.GetEnv("BUILDKITE_NO_CHECKOUT_OVERRIDE"), "true"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_NO_CHECKOUT_OVERRIDE) = %q, want %q", got, want)
+			c.Exit(1)
+			return
+		}
+
+		ignored := strings.Split(strings.TrimSpace(c.GetEnv("BUILDKITE_IGNORED_ENV")), ",")
+		if !slices.Contains(ignored, "BUILDKITE_NO_CHECKOUT_OVERRIDE") {
+			t.Errorf("BUILDKITE_IGNORED_ENV = %q, want it to contain BUILDKITE_NO_CHECKOUT_OVERRIDE", c.GetEnv("BUILDKITE_IGNORED_ENV"))
+			c.Exit(1)
+			return
+		}
+
+		c.Exit(0)
+	})
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	if err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{NoCheckoutOverride: true},
+		mockBootstrap: mb,
+	}); err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+}
+
 func TestArtifactUploadConcurrencyFromAgentConfigIsSet(t *testing.T) {
 	t.Parallel()
 
