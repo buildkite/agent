@@ -37,8 +37,9 @@ go tool test-engine-client --version
 
 echo "+++ :test_tube: Collecting git commit metadata via bktec plan (discarded)"
 
-# bktec needs a writable RESULT_PATH for plan output config validation. The
-# --json output is redirected to /dev/null below so this file is never read.
+# bktec needs a writable RESULT_PATH for plan-output config validation. It
+# is the run-results file, distinct from the plan's stdout we capture below
+# -- this file is never read.
 export BUILDKITE_TEST_ENGINE_RESULT_PATH=/tmp/bktec-plan-metadata.json
 
 # Feature-branch builds (TE-6071): also request an xgboost-ranked plan so the
