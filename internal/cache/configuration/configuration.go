@@ -102,7 +102,7 @@ func loadTemplates() (map[string]Cache, error) {
 
 	decoder := json.NewDecoder(file)
 
-	rawTemplates := make(map[string]interface{})
+	rawTemplates := make(map[string]any)
 	err = decoder.Decode(&rawTemplates)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template file: %w", err)
@@ -123,8 +123,8 @@ func loadTemplates() (map[string]Cache, error) {
 }
 
 // extractTemplateCache safely extracts a Cache from raw template data
-func extractTemplateCache(templateName string, template interface{}) (Cache, error) {
-	templateMap, ok := template.(map[string]interface{})
+func extractTemplateCache(templateName string, template any) (Cache, error) {
+	templateMap, ok := template.(map[string]any)
 	if !ok {
 		return Cache{}, fmt.Errorf("template %s is not a valid object", templateName)
 	}
@@ -155,7 +155,7 @@ func extractTemplateCache(templateName string, template interface{}) (Cache, err
 }
 
 // extractStringField safely extracts a string field from a map
-func extractStringField(m map[string]interface{}, field string, required bool) (string, error) {
+func extractStringField(m map[string]any, field string, required bool) (string, error) {
 	value, exists := m[field]
 	if !exists {
 		if required {
@@ -174,7 +174,7 @@ func extractStringField(m map[string]interface{}, field string, required bool) (
 }
 
 // extractStringArrayField safely extracts a []string field from a map
-func extractStringArrayField(m map[string]interface{}, field string, required bool) ([]string, error) {
+func extractStringArrayField(m map[string]any, field string, required bool) ([]string, error) {
 	value, exists := m[field]
 	if !exists {
 		if required {
@@ -184,7 +184,7 @@ func extractStringArrayField(m map[string]interface{}, field string, required bo
 		}
 	}
 
-	array, ok := value.([]interface{})
+	array, ok := value.([]any)
 	if !ok {
 		return nil, fmt.Errorf("field '%s' must be an array, got %T", field, value)
 	}

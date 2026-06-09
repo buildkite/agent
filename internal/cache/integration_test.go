@@ -174,8 +174,8 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 	// Try fallback keys - check if the entry key matches any of the requested fallback keys
 	if req.FallbackKeys != "" {
 		// FallbackKeys is a comma-separated string
-		fallbackKeys := strings.Split(req.FallbackKeys, ",")
-		for _, fbKey := range fallbackKeys {
+		fallbackKeys := strings.SplitSeq(req.FallbackKeys, ",")
+		for fbKey := range fallbackKeys {
 			fbKey = strings.TrimSpace(fbKey)
 			if entry, exists := reg.cache[fbKey]; exists && entry.committed {
 				return api.CacheEntryRetrieveResp{
@@ -213,10 +213,7 @@ func createRandomFile(t *testing.T, path string, sizeBytes int64) {
 	remaining := sizeBytes
 
 	for remaining > 0 {
-		toWrite := int64(chunkSize)
-		if remaining < toWrite {
-			toWrite = remaining
-		}
+		toWrite := min(remaining, int64(chunkSize))
 
 		if _, err := rand.Read(buf[:toWrite]); err != nil {
 			t.Fatalf("rand.Read: %v", err)
