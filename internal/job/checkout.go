@@ -967,14 +967,15 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	if err := e.fetchSource(ctx); err != nil {
 		return err
 	}
-  
-  if err := e.verifyCommit(ctx); err != nil {
+
+	if err := e.verifyCommit(ctx); err != nil {
 		return err
 	}
-  
-  if err := e.setupSparseCheckout(ctx); err != nil {
-    return err
-  }
+
+	sparseCheckoutActive, err := e.setupSparseCheckout(ctx)
+	if err != nil {
+		return err
+	}
 
 	gitCheckoutFlags := e.GitCheckoutFlags
 
