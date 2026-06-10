@@ -331,14 +331,16 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 func TestNewClient_InvalidCacheIDs(t *testing.T) {
 	t.Parallel()
 
-	config := `dependencies:
+	config := `caches:
   - id: cache1
-    key: 'test-key-1'
-    paths:
+    cache_key:
+      - test-key-1
+    target_paths:
       - path1
   - id: cache2
-    key: 'test-key-2'
-    paths:
+    cache_key:
+      - test-key-2
+    target_paths:
       - path2
 `
 	configFile := createTempCacheConfig(t, config)
@@ -370,14 +372,16 @@ func TestNewClient_InvalidCacheIDs(t *testing.T) {
 func TestNewClient_ValidCacheIDs(t *testing.T) {
 	t.Parallel()
 
-	config := `dependencies:
+	config := `caches:
   - id: cache1
-    key: 'test-key-1'
-    paths:
+    cache_key:
+      - test-key-1
+    target_paths:
       - path1
   - id: cache2
-    key: 'test-key-2'
-    paths:
+    cache_key:
+      - test-key-2
+    target_paths:
       - path2
 `
 	configFile := createTempCacheConfig(t, config)
@@ -406,14 +410,16 @@ func TestNewClient_ValidCacheIDs(t *testing.T) {
 func TestNewClient_AllCaches(t *testing.T) {
 	t.Parallel()
 
-	config := `dependencies:
+	config := `caches:
   - id: cache1
-    key: 'test-key-1'
-    paths:
+    cache_key:
+      - test-key-1
+    target_paths:
       - path1
   - id: cache2
-    key: 'test-key-2'
-    paths:
+    cache_key:
+      - test-key-2
+    target_paths:
       - path2
 `
 	configFile := createTempCacheConfig(t, config)

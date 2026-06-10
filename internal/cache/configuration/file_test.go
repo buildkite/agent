@@ -20,14 +20,18 @@ func writeTempCacheFile(t *testing.T, content string) string {
 func TestLoadFile_Valid(t *testing.T) {
 	t.Parallel()
 
-	config := `dependencies:
+	config := `caches:
   - id: node
-    key: 'node-{{ checksum "package-lock.json" }}'
-    paths:
+    cache_key:
+      - node
+      - { checksum: package-lock.json }
+    target_paths:
       - node_modules
   - id: ruby
-    key: 'ruby-{{ checksum "Gemfile.lock" }}'
-    paths:
+    cache_key:
+      - ruby
+      - { checksum: Gemfile.lock }
+    target_paths:
       - vendor/bundle
 `
 	path := writeTempCacheFile(t, config)
@@ -50,10 +54,10 @@ func TestLoadFile_Valid(t *testing.T) {
 func TestLoadFile_InvalidYAML(t *testing.T) {
 	t.Parallel()
 
-	config := `dependencies:
+	config := `caches:
   - id: node
-    key: test
-    paths
+    cache_key: test
+    target_paths
       - invalid indentation here
     : wrong syntax
 `

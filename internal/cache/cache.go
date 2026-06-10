@@ -14,6 +14,8 @@ import (
 
 // Config holds the configuration for cache operations.
 type Config struct {
+	// Registry is the cache registry slug (URL path). "~" selects the cluster default.
+	Registry string
 	// BucketURL is the URL of the bucket (e.g., s3://bucket-name)
 	BucketURL string
 	// Branch is the branch associated with the cache

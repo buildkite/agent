@@ -16,7 +16,7 @@ type Blob interface {
 
 func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {
 	switch store {
-	case LocalS3Store:
+	case AgentManaged:
 		return NewS3Blob(ctx, bucketURL)
 	case LocalHostedAgents:
 		return NewNscStore()

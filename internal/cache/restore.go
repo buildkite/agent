@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -87,13 +86,20 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		return result, err
 	}
 
-	result.Key = cacheConfig.Key
+	result.Key = cacheID
+
+	cacheKey, err := c.resolveCacheKey(cacheConfig)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to resolve cache key")
+		return result, fmt.Errorf("failed to resolve cache key: %w", err)
+	}
 
 	span.SetAttributes(
-		attribute.String("cache.key", cacheConfig.Key),
+		attribute.String("cache.id", cacheID),
 		attribute.String("cache.registry", c.registry),
-		attribute.StringSlice("cache.fallback_keys", cacheConfig.FallbackKeys),
-		attribute.Int("cache.paths_count", len(cacheConfig.Paths)),
+		attribute.Int("cache.target_paths_count", len(cacheConfig.TargetPaths)),
+		attribute.Int("cache.key_parts_count", len(cacheKey)),
 	)
 
 	c.callProgress(cacheID, "validating", "Validating cache configuration", 0, 0)
@@ -117,9 +123,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
 		retrieveResp, exists, apiResp, err = c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
-			Key:          cacheConfig.Key,
-			Branch:       c.branch,
-			FallbackKeys: strings.Join(cacheConfig.FallbackKeys, ","),
+			TargetPaths: cacheConfig.TargetPaths,
+			CacheKey:    cacheKey,
 		})
 		if api.BreakOnNonRetryable(r, apiResp, err) {
 			return err
@@ -152,7 +157,6 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	}
 
 	// Cache found (either exact match or fallback)
-	result.Key = retrieveResp.Key
 	result.FallbackUsed = retrieveResp.Fallback
 	result.CacheHit = !retrieveResp.Fallback
 	result.ExpiresAt = retrieveResp.ExpiresAt
@@ -161,6 +165,14 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		attribute.Bool("cache.fallback_used", result.FallbackUsed),
 		attribute.String("cache.matched_key", result.Key),
 	)
+
+	// Validate the cache store configuration (e.g. BUILDKITE_AGENT_CACHE_STORE_URL
+	// is set for the S3 store) before attempting a download.
+	if err := validateCacheStore(retrieveResp.Store, c.bucketURL); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invalid cache store configuration")
+		return result, fmt.Errorf("invalid cache store configuration: %w", err)
+	}
 
 	c.callProgress(cacheID, "downloading", "Downloading cache archive", 0, 0)
 
@@ -187,7 +199,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 
 	c.callProgress(cacheID, "cleaning", "Cleaning paths", 0, 0)
 
-	for _, path := range cacheConfig.Paths {
+	for _, path := range cacheConfig.TargetPaths {
 		extractedPath, err := archive.ResolveHomeDir(path)
 		if err != nil {
 			span.RecordError(err)
@@ -207,7 +219,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	c.callProgress(cacheID, "extracting", "Extracting files from cache", 0, int(transferInfo.BytesTransferred))
 
 	// Extract files
-	archiveInfo, err := c.extractCache(ctx, archiveFile, transferInfo.BytesTransferred, cacheConfig.Paths)
+	archiveInfo, err := c.extractCache(ctx, archiveFile, transferInfo.BytesTransferred, cacheConfig.TargetPaths)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to extract cache")
@@ -221,7 +233,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		WrittenEntries:   archiveInfo.WrittenEntries,
 		CompressionRatio: float64(archiveInfo.WrittenBytes) / float64(archiveInfo.Size),
 		Duration:         archiveInfo.Duration,
-		Paths:            cacheConfig.Paths,
+		Paths:            cacheConfig.TargetPaths,
 	}
 
 	result.CacheRestored = true
@@ -252,9 +264,19 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	ctx, span := tracer.Start(ctx, "Client.downloadCache")
 	defer span.End()
 
+	// Content-addressed storage: the object name is the blob digest.
+	//
+	//Currently, a save always produces a single archive, so an entry has exactly one
+	// blob and we download blobs[0]. The blobs field is an array to leave room
+	// for content-defined chunking later (one entry → many chunk-blobs)
+	if len(retrieveResp.Blobs) == 0 {
+		return "", "", nil, fmt.Errorf("cache entry has no blobs to download")
+	}
+	storeObjectName := retrieveResp.Blobs[0].Digest.Value
+
 	span.SetAttributes(
 		attribute.String("cache.store_type", retrieveResp.Store),
-		attribute.String("cache.object_name", retrieveResp.StoreObjectName),
+		attribute.String("cache.object_name", storeObjectName),
 	)
 
 	// Create blob store
@@ -273,10 +295,10 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 		return "", "", nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	archiveFile = filepath.Join(tmpDir, retrieveResp.StoreObjectName)
+	archiveFile = filepath.Join(tmpDir, storeObjectName)
 
 	// Download archive
-	transferInfo, err = blobStore.Download(ctx, retrieveResp.StoreObjectName, archiveFile)
+	transferInfo, err = blobStore.Download(ctx, storeObjectName, archiveFile)
 	if err != nil {
 		// Clean up temporary directory on failure
 		_ = os.RemoveAll(tmpDir)
