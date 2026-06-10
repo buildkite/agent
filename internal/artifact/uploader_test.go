@@ -377,6 +377,8 @@ func TestCollect_Literal(t *testing.T) {
 		filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
 		filepath.Join("fixtures", "gifs", "Smile.gif"),
 	}
+	slices.Sort(got)
+	slices.Sort(want)
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("uploader.collect artifact paths diff (-got +want)\n%s", diff)
 	}
