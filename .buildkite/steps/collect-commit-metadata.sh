@@ -57,7 +57,7 @@ export BUILDKITE_TEST_ENGINE_RESULT_PATH=/tmp/bktec-plan-metadata.json
 # (rank) every candidate rather than capping at the default count_cutoff.
 # Mirrors the bk/bk-rspec xgboost path. Files are ranked, not filtered.
 selection_flags=()
-if [ "${BUILDKITE_BRANCH:-}" != "main" ]; then
+if [[ "${BUILDKITE_BRANCH:-}" != "main" ]]; then
   selection_flags=(
     --selection-strategy "xgboost"
     --selection-param "score_cutoff=0"
@@ -82,12 +82,12 @@ echo "Plan request issued -- git commit metadata sent to Test Engine."
 # rspec_xgboost_plan_id metadata). Parse with ruby (present in this image;
 # jq is not) and skip silently if the field is absent -- this is a
 # measurement aid, not a build-correctness signal.
-if [ ${#selection_flags[@]} -gt 0 ]; then
-  plan_id=$(printf '%s' "$plan_output" \
-    | ruby -rjson -e 'puts (JSON.parse(STDIN.read)["BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"] rescue "")')
-  if [ -n "$plan_id" ]; then
-    buildkite-agent meta-data set "agent_xgboost_plan_id" "$plan_id"
-    echo "Stashed xgboost plan id as build metadata: $plan_id"
+if [[ ${#selection_flags[@]} -gt 0 ]]; then
+  plan_id="$(printf '%s' "${plan_output}" \
+    | ruby -rjson -e 'puts (JSON.parse(STDIN.read)["BUILDKITE_TEST_ENGINE_PLAN_IDENTIFIER"] rescue "")')"
+  if [[ -n "${plan_id}" ]]; then
+    buildkite-agent meta-data set "agent_xgboost_plan_id" "${plan_id}"
+    echo "Stashed xgboost plan id as build metadata: ${plan_id}"
   else
     echo "No plan identifier returned; skipping agent_xgboost_plan_id metadata."
   fi
