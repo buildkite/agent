@@ -202,7 +202,7 @@ func TestContextCancelInterrupts(t *testing.T) {
 			defer cancel()
 
 			// Wait for the process to start before cancelling the context.
-			// This is more reliable than time.Sleep.
+			// This is more reliable than time.Sleep, but still not perfect.
 			started := make(chan struct{})
 
 			go func() {
@@ -210,6 +210,9 @@ func TestContextCancelInterrupts(t *testing.T) {
 				case <-time.After(1 * time.Minute):
 					t.Errorf("timeout waiting for process to start")
 				case <-started:
+					// TODO: figure out why this still needs a sleep to be
+					// reliable.
+					time.Sleep(100 * time.Millisecond)
 					// Now cancel the context, which should cause the interrupt.
 					cancel()
 				}
