@@ -1,7 +1,6 @@
 package archive
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,7 +18,7 @@ func TestBuildArchive(t *testing.T) {
 		t.Skip("archive byte layout is platform-specific")
 	}
 
-	_, err := trace.NewProvider(context.Background(), "noop", "test", "0.0.1")
+	_, err := trace.NewProvider(t.Context(), "noop", "test", "0.0.1")
 	if err != nil {
 		t.Fatalf("trace.NewProvider: %v", err)
 	}
@@ -31,7 +30,7 @@ func TestBuildArchive(t *testing.T) {
 
 	setHomeDir(t, home)
 
-	archiveInfo, err := BuildArchive(context.Background(), []string{"testdata"}, "test")
+	archiveInfo, err := BuildArchive(t.Context(), []string{"testdata"}, "test")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -52,7 +51,7 @@ func TestBuildArchive(t *testing.T) {
 }
 
 func TestBuildAndExtractArchive_MultipleHomeDirPaths(t *testing.T) {
-	_, err := trace.NewProvider(context.Background(), "noop", "test", "0.0.1")
+	_, err := trace.NewProvider(t.Context(), "noop", "test", "0.0.1")
 	if err != nil {
 		t.Fatalf("trace.NewProvider: %v", err)
 	}
@@ -87,7 +86,7 @@ func TestBuildAndExtractArchive_MultipleHomeDirPaths(t *testing.T) {
 		"~/go/pkg/mod",
 	}
 
-	archiveInfo, err := BuildArchive(context.Background(), paths, "go-cache")
+	archiveInfo, err := BuildArchive(t.Context(), paths, "go-cache")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -127,7 +126,7 @@ func TestBuildAndExtractArchive_MultipleHomeDirPaths(t *testing.T) {
 	}
 	defer func() { _ = zipFile.Close() }()
 
-	entries, err := ListArchive(context.Background(), zipFile, archiveInfo.Size)
+	entries, err := ListArchive(t.Context(), zipFile, archiveInfo.Size)
 	if err != nil {
 		t.Fatalf("ListArchive: %v", err)
 	}
@@ -143,7 +142,7 @@ func TestBuildAndExtractArchive_MultipleHomeDirPaths(t *testing.T) {
 		t.Fatalf("Seek: %v", err)
 	}
 
-	extractInfo, err := ExtractFiles(context.Background(), zipFile, archiveInfo.Size, paths)
+	extractInfo, err := ExtractFiles(t.Context(), zipFile, archiveInfo.Size, paths)
 	if err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
@@ -169,7 +168,7 @@ func TestBuildAndExtractArchive_MultipleHomeDirPaths(t *testing.T) {
 }
 
 func TestBuildArchive_MissingPathOnFilesystem(t *testing.T) {
-	_, err := trace.NewProvider(context.Background(), "noop", "test", "0.0.1")
+	_, err := trace.NewProvider(t.Context(), "noop", "test", "0.0.1")
 	if err != nil {
 		t.Fatalf("trace.NewProvider: %v", err)
 	}
@@ -193,7 +192,7 @@ func TestBuildArchive_MissingPathOnFilesystem(t *testing.T) {
 		"~/go/pkg/mod",
 	}
 
-	archiveInfo, err := BuildArchive(context.Background(), paths, "go-cache")
+	archiveInfo, err := BuildArchive(t.Context(), paths, "go-cache")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -205,7 +204,7 @@ func TestBuildArchive_MissingPathOnFilesystem(t *testing.T) {
 	}
 	defer func() { _ = zipFile.Close() }()
 
-	entries, err := ListArchive(context.Background(), zipFile, archiveInfo.Size)
+	entries, err := ListArchive(t.Context(), zipFile, archiveInfo.Size)
 	if err != nil {
 		t.Fatalf("ListArchive: %v", err)
 	}
@@ -221,7 +220,7 @@ func TestBuildArchive_MissingPathOnFilesystem(t *testing.T) {
 }
 
 func TestExtractArchive_MissingPathInArchive(t *testing.T) {
-	_, err := trace.NewProvider(context.Background(), "noop", "test", "0.0.1")
+	_, err := trace.NewProvider(t.Context(), "noop", "test", "0.0.1")
 	if err != nil {
 		t.Fatalf("trace.NewProvider: %v", err)
 	}
@@ -240,7 +239,7 @@ func TestExtractArchive_MissingPathInArchive(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	archiveInfo, err := BuildArchive(context.Background(), []string{"~/.go-build"}, "go-cache")
+	archiveInfo, err := BuildArchive(t.Context(), []string{"~/.go-build"}, "go-cache")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -257,7 +256,7 @@ func TestExtractArchive_MissingPathInArchive(t *testing.T) {
 	}
 	defer func() { _ = zipFile.Close() }()
 
-	entries, err := ListArchive(context.Background(), zipFile, archiveInfo.Size)
+	entries, err := ListArchive(t.Context(), zipFile, archiveInfo.Size)
 	if err != nil {
 		t.Fatalf("ListArchive: %v", err)
 	}
@@ -278,7 +277,7 @@ func TestExtractArchive_MissingPathInArchive(t *testing.T) {
 		"~/go/pkg/mod",
 	}
 
-	extractInfo, err := ExtractFiles(context.Background(), zipFile, archiveInfo.Size, pathsWithMissing)
+	extractInfo, err := ExtractFiles(t.Context(), zipFile, archiveInfo.Size, pathsWithMissing)
 	if err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}

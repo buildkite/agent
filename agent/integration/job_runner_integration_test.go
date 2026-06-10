@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -79,7 +78,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ctx := context.Background()
+			ctx := t.Context()
 
 			hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 			if err != nil {
@@ -138,7 +137,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 
 func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 	if err != nil {
@@ -197,7 +196,7 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 
 func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	exits := []int{0, 1, 2, 3}
 	for _, exit := range exits {
@@ -243,7 +242,7 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 
 func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jobToken := "bkaj_actually-llamas-are-only-okay"
 
@@ -285,7 +284,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 func TestJobRunnerPassesNoCheckoutOverrideToBootstrapAndEnvFile(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := experiments.Enable(context.Background(), experiments.PropagateAgentConfigVars)
+	ctx, _ := experiments.Enable(t.Context(), experiments.PropagateAgentConfigVars)
 
 	j := &api.Job{
 		ID:                 "my-job-id",
@@ -346,7 +345,7 @@ func TestJobRunnerPassesNoCheckoutOverrideToBootstrapAndEnvFile(t *testing.T) {
 // Maybe that the job runner pulls the access token from the API client? but that's all handled in the `runJob` helper...
 func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	j := &api.Job{
 		ID:                 "my-job-id",
@@ -385,7 +384,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 
 func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	j := &api.Job{
 		ID:                 "my-job-id",

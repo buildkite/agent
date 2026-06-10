@@ -14,8 +14,9 @@ import (
 	"github.com/urfave/cli"
 )
 
-// This context needs to be stored here in order to pass experiments to tests,
-// because testing.M can only Run (without passing arguments or context).
+// This root context needs to be stored here in order to pass experiments to tests,
+// because testing.M can only Run (without passing arguments or context), and
+// TestMain has no testing.T for t.Context.
 // In ordinary code, pass contexts as arguments!
 var mainCtx = context.Background()
 

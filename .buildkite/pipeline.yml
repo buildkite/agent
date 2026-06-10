@@ -63,6 +63,9 @@ steps:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           propagate-environment: true
+          # Mount the agent binary so the step can stash the xgboost plan
+          # identifier via `buildkite-agent meta-data set`. See TE-6071.
+          mount-buildkite-agent: true
           run: agent
 
   - group: ":go::scientist: Tests and Coverage"

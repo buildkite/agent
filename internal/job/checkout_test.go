@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestDefaultCheckoutPhase(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	shell, err := shell.New()
 	if err != nil {
@@ -307,8 +306,8 @@ func TestDefaultCheckoutPhase_CleansUpGitSSHKeyOnError(t *testing.T) {
 		}
 	})
 
-	if err := executor.defaultCheckoutPhase(context.Background()); err == nil {
-		t.Fatal("executor.defaultCheckoutPhase(context.Background()) error = nil, want non-nil")
+	if err := executor.defaultCheckoutPhase(t.Context()); err == nil {
+		t.Fatal("executor.defaultCheckoutPhase(t.Context()) error = nil, want non-nil")
 	}
 
 	matches, err := filepath.Glob(filepath.Join(checkoutParent, ".buildkite-ssh-key-*"))
@@ -323,7 +322,7 @@ func TestDefaultCheckoutPhase_CleansUpGitSSHKeyOnError(t *testing.T) {
 func TestSkipCheckout(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sh, err := shell.New()
 	if err != nil {

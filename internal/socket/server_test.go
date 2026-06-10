@@ -90,7 +90,7 @@ func TestServerStartStop(t *testing.T) {
 func TestServerHandler(t *testing.T) {
 	t.Parallel()
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	sockPath := testSocketPath()
