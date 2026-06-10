@@ -537,7 +537,7 @@ func TestArtifactUploadTimingsSpanAttributes(t *testing.T) {
 
 	recorder := tracetest.NewSpanRecorder()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) }) //nolint:usetesting // t.Context() is cancelled before Cleanup funcs
 
 	ctx, span := provider.Tracer("test").Start(t.Context(), "artifact-upload")
 	timings.setSpanAttributes(ctx)

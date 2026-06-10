@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -79,7 +78,7 @@ func TestVerifyCommit(t *testing.T) {
 				shell:          sh,
 				ExecutorConfig: tt.config,
 			}
-			err = e.verifyCommit(context.Background())
+			err = e.verifyCommit(t.Context())
 			if err != nil {
 				t.Errorf("verifyCommit() error = %v, want nil", err)
 			}
@@ -93,7 +92,7 @@ func TestVerifyCommit(t *testing.T) {
 		t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
 		t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
 
-		ctx := context.Background()
+		ctx := t.Context()
 
 		s := githttptest.NewServer()
 		defer s.Close()
@@ -158,7 +157,7 @@ func TestVerifyCommit(t *testing.T) {
 		t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
 		t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
 
-		ctx := context.Background()
+		ctx := t.Context()
 
 		s := githttptest.NewServer()
 		defer s.Close()
@@ -257,7 +256,7 @@ func TestVerifyCommit(t *testing.T) {
 		t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
 		t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
 
-		ctx := context.Background()
+		ctx := t.Context()
 
 		s := githttptest.NewServer()
 		defer s.Close()
@@ -353,7 +352,7 @@ func TestVerifyCommit(t *testing.T) {
 		t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
 		t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
 
-		ctx := context.Background()
+		ctx := t.Context()
 
 		s := githttptest.NewServer()
 		defer s.Close()

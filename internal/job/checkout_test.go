@@ -306,8 +306,8 @@ func TestDefaultCheckoutPhase_CleansUpGitSSHKeyOnError(t *testing.T) {
 		}
 	})
 
-	if err := executor.defaultCheckoutPhase(context.Background()); err == nil {
-		t.Fatal("executor.defaultCheckoutPhase(context.Background()) error = nil, want non-nil")
+	if err := executor.defaultCheckoutPhase(t.Context()); err == nil {
+		t.Fatal("executor.defaultCheckoutPhase(t.Context()) error = nil, want non-nil")
 	}
 
 	matches, err := filepath.Glob(filepath.Join(checkoutParent, ".buildkite-ssh-key-*"))
