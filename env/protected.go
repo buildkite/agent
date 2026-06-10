@@ -81,6 +81,7 @@ var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":          {},
 	"BUILDKITE_GIT_FETCH_FLAGS":                 {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":         {},
+	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":        {},
 	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": {},
 	"BUILDKITE_GIT_SUBMODULES":                  {},
 	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":      {},
