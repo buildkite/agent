@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -13,7 +12,7 @@ import (
 
 func TestStepCancel(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("success", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {

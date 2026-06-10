@@ -121,7 +121,7 @@ func TestProcessOutputPTY_PTYRawExperimentWritesBeforeRawMode(t *testing.T) {
 		t.Skip("PTY not supported on windows")
 	}
 
-	ctx, _ := experiments.Enable(context.Background(), experiments.PTYRaw)
+	ctx, _ := experiments.Enable(t.Context(), experiments.PTYRaw)
 
 	originalHook := processAfterPTYStartHookSwap(func() {
 		time.Sleep(50 * time.Millisecond)

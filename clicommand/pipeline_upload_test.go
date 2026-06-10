@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"context"
 	"os"
 	"runtime"
 	"strings"
@@ -190,7 +189,7 @@ steps:
 			},
 		}}
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var gotPipelines []*pipeline.Pipeline
 
@@ -243,7 +242,7 @@ steps:
 				RedactedVars:  []string{},
 				RejectSecrets: true,
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			if test.preferRuntimeEnv {
 				ctx, _ = experiments.Enable(ctx, experiments.InterpolationPrefersRuntimeEnv)
 			}
@@ -307,7 +306,7 @@ steps:
 				RedactedVars:    []string{},
 				RejectSecrets:   true,
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 
 			var gotCommands []string
 

@@ -53,7 +53,7 @@ func testServerAndClient(t *testing.T, ctx context.Context) (*agentapi.Server, *
 
 func TestLockUnlock(t *testing.T) {
 	t.Parallel()
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
@@ -90,7 +90,7 @@ func TestLockUnlock(t *testing.T) {
 
 func TestLocker(t *testing.T) {
 	t.Parallel()
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
@@ -123,7 +123,7 @@ func TestLocker(t *testing.T) {
 
 func TestDoOnce(t *testing.T) {
 	t.Parallel()
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)

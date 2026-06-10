@@ -2,7 +2,6 @@ package artifact
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -153,7 +152,7 @@ func TestS3Downloader_MultipartDownload_HappyPath(t *testing.T) {
 		AllowS3Multipart: true,
 	})
 
-	if err := d.Start(context.Background()); err != nil {
+	if err := d.Start(t.Context()); err != nil {
 		t.Fatalf("d.Start() = %v", err)
 	}
 
@@ -193,7 +192,7 @@ func TestS3Downloader_MultipartDownload_VerifyChecksumMismatch(t *testing.T) {
 		AllowS3Multipart: true,
 	})
 
-	err := d.Start(context.Background())
+	err := d.Start(t.Context())
 	if err == nil {
 		t.Fatal("d.Start() = nil, want checksum mismatch error")
 	}
@@ -231,7 +230,7 @@ func TestS3Downloader_MultipartDownload_VerifyChecksumSkippedWhenAbsent(t *testi
 		// ExpectedSHA256 deliberately empty — legacy artifacts have no digest.
 	})
 
-	if err := d.Start(context.Background()); err != nil {
+	if err := d.Start(t.Context()); err != nil {
 		t.Fatalf("d.Start() = %v", err)
 	}
 
@@ -265,7 +264,7 @@ func TestS3Downloader_DisableMultipartDispatchesSingleStream(t *testing.T) {
 			AllowS3Multipart: false,
 		})
 
-		if err := d.Start(context.Background()); err != nil {
+		if err := d.Start(t.Context()); err != nil {
 			t.Fatalf("d.Start() = %v", err)
 		}
 
@@ -292,7 +291,7 @@ func TestS3Downloader_DisableMultipartDispatchesSingleStream(t *testing.T) {
 			AllowS3Multipart: true,
 		})
 
-		if err := d.Start(context.Background()); err != nil {
+		if err := d.Start(t.Context()); err != nil {
 			t.Fatalf("d.Start() = %v", err)
 		}
 
@@ -326,7 +325,7 @@ func TestS3Downloader_MultipartDownload_CleansUpOnDownloadError(t *testing.T) {
 		Retries:          1,
 	})
 
-	if err := d.Start(context.Background()); err == nil {
+	if err := d.Start(t.Context()); err == nil {
 		t.Fatal("d.Start() = nil, want download error")
 	}
 

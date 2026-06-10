@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestDefaultCheckoutPhase(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	shell, err := shell.New()
 	if err != nil {
@@ -323,7 +322,7 @@ func TestDefaultCheckoutPhase_CleansUpGitSSHKeyOnError(t *testing.T) {
 func TestSkipCheckout(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sh, err := shell.New()
 	if err != nil {
