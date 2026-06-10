@@ -247,71 +247,53 @@ func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
 	}
 }
 
-func TestNoCheckoutOverrideEnabled(t *testing.T) {
+func TestAgentStartLockCheckoutWhenCommandEvalDisabled(t *testing.T) {
 	t.Parallel()
 
+	// AgentStartConfig uses NoCommandEval, so the zero value leaves command-eval
+	// enabled and the lock off.
 	tests := []struct {
 		name string
 		cfg  AgentStartConfig
-		bCfg BootstrapConfig
-		kind string
 		want bool
 	}{
-		{
-			name: "agent_start_explicit_flag",
-			cfg:  AgentStartConfig{NoCheckoutOverride: true},
-			kind: "agent",
-			want: true,
-		},
-		{
-			name: "agent_start_no_command_eval_forces_lock",
-			cfg:  AgentStartConfig{NoCommandEval: true},
-			kind: "agent",
-			want: true,
-		},
-		{
-			name: "agent_start_defaults_unlocked",
-			cfg:  AgentStartConfig{},
-			kind: "agent",
-			want: false,
-		},
-		{
-			name: "bootstrap_explicit_flag",
-			bCfg: BootstrapConfig{NoCheckoutOverride: true, CommandEval: true},
-			kind: "bootstrap",
-			want: true,
-		},
-		{
-			name: "bootstrap_command_eval_disabled_forces_lock",
-			bCfg: BootstrapConfig{CommandEval: false},
-			kind: "bootstrap",
-			want: true,
-		},
-		{
-			name: "bootstrap_defaults_unlocked",
-			bCfg: BootstrapConfig{CommandEval: true},
-			kind: "bootstrap",
-			want: false,
-		},
+		{name: "explicit_flag", cfg: AgentStartConfig{NoCheckoutOverride: true}, want: true},
+		{name: "no_command_eval_forces_lock", cfg: AgentStartConfig{NoCommandEval: true}, want: true},
+		{name: "defaults_unlocked", cfg: AgentStartConfig{}, want: false},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			tc.cfg.lockCheckoutWhenCommandEvalDisabled()
+			if got := tc.cfg.NoCheckoutOverride; got != tc.want {
+				t.Errorf("NoCheckoutOverride = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
-			switch tc.kind {
-			case "agent":
-				tc.cfg.lockCheckoutWhenCommandEvalDisabled()
-				if got := tc.cfg.NoCheckoutOverride; got != tc.want {
-					t.Errorf("NoCheckoutOverride = %v, want %v", got, tc.want)
-				}
-			case "bootstrap":
-				tc.bCfg.lockCheckoutWhenCommandEvalDisabled()
-				if got := tc.bCfg.NoCheckoutOverride; got != tc.want {
-					t.Errorf("NoCheckoutOverride = %v, want %v", got, tc.want)
-				}
-			default:
-				t.Fatalf("unknown test kind %q", tc.kind)
+func TestBootstrapLockCheckoutWhenCommandEvalDisabled(t *testing.T) {
+	t.Parallel()
+
+	// BootstrapConfig uses CommandEval, so the zero value disables command-eval
+	// and forces the lock on; "unlocked" cases must set CommandEval explicitly.
+	tests := []struct {
+		name string
+		cfg  BootstrapConfig
+		want bool
+	}{
+		{name: "explicit_flag", cfg: BootstrapConfig{NoCheckoutOverride: true, CommandEval: true}, want: true},
+		{name: "command_eval_disabled_forces_lock", cfg: BootstrapConfig{CommandEval: false}, want: true},
+		{name: "defaults_unlocked", cfg: BootstrapConfig{CommandEval: true}, want: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tc.cfg.lockCheckoutWhenCommandEvalDisabled()
+			if got := tc.cfg.NoCheckoutOverride; got != tc.want {
+				t.Errorf("NoCheckoutOverride = %v, want %v", got, tc.want)
 			}
 		})
 	}
