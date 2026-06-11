@@ -49,6 +49,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Usage:    "Interact with a Buildkite job",
 		Subcommands: []cli.Command{
 			JobUpdateCommand,
+			JobPromiseFailureCommand,
 		},
 	},
 	{
