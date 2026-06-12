@@ -313,6 +313,83 @@ func TestCheckoutScopedJobEnvOverrideHonorsNoCheckoutOverride(t *testing.T) {
 			wantEnvValue:       "true",
 			wantIgnoredEnvVars: []string{"BUILDKITE_SKIP_CHECKOUT"},
 		},
+		{
+			name:    "disabled_allows_job_env_to_override_sparse_checkout_paths",
+			varName: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": "job/path",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSparseCheckoutPaths: []string{"agent/path"},
+			},
+			wantEnvValue: "job/path",
+		},
+		{
+			name:    "enabled_locks_sparse_checkout_paths_to_agent_config",
+			varName: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": "job/path",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSparseCheckoutPaths: []string{"agent/path"},
+				NoCheckoutOverride:     true,
+			},
+			wantEnvValue:       "agent/path",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"},
+		},
+		// Inverse cases: when the agent config sits on the side that emits no var
+		// by default, the lock must still force the agent value (regression for the
+		// leak where backend job env survived under no-checkout-override).
+		{
+			name:    "enabled_locks_submodules_on_to_agent_config",
+			varName: "BUILDKITE_GIT_SUBMODULES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SUBMODULES": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSubmodules:      true,
+				NoCheckoutOverride: true,
+			},
+			wantEnvValue:       "true",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SUBMODULES"},
+		},
+		{
+			name:    "disabled_allows_job_env_to_disable_submodules",
+			varName: "BUILDKITE_GIT_SUBMODULES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SUBMODULES": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSubmodules: true,
+			},
+			wantEnvValue: "false",
+		},
+		{
+			name:    "enabled_locks_skip_checkout_off_to_agent_config",
+			varName: "BUILDKITE_SKIP_CHECKOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_SKIP_CHECKOUT": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				SkipCheckout:       false,
+				NoCheckoutOverride: true,
+			},
+			wantEnvValue:       "false",
+			wantIgnoredEnvVars: []string{"BUILDKITE_SKIP_CHECKOUT"},
+		},
+		{
+			name:    "enabled_locks_skip_fetch_existing_commits_to_agent_config",
+			varName: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSkipFetchExistingCommits: false,
+				NoCheckoutOverride:          true,
+			},
+			wantEnvValue:       "false",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"},
+		},
 	}
 
 	for _, tc := range tests {
@@ -380,8 +457,9 @@ func TestCheckoutScopedJobEnvOverrideHonorsNoCheckoutOverride(t *testing.T) {
 func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
 	t.Parallel()
 
-	// SSH_KEYSCAN, GIT_MIRRORS_PATH and GIT_MIRRORS_LOCK_TIMEOUT are agent-only:
-	// job env cannot override them even with no-checkout-override disabled.
+	// SSH_KEYSCAN, GIT_MIRRORS_PATH, GIT_MIRRORS_LOCK_TIMEOUT and
+	// GIT_MIRROR_CHECKOUT_MODE are agent-only: job env cannot override them even
+	// with no-checkout-override disabled.
 	tests := []struct {
 		name         string
 		varName      string
@@ -409,6 +487,13 @@ func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
 			jobEnvValue:  "1",
 			agentCfg:     agent.AgentConfiguration{GitMirrorsLockTimeout: 300},
 			wantEnvValue: "300",
+		},
+		{
+			name:         "git_mirror_checkout_mode",
+			varName:      "BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+			jobEnvValue:  "id",
+			agentCfg:     agent.AgentConfiguration{GitMirrorCheckoutMode: "raw"},
+			wantEnvValue: "raw",
 		},
 	}
 
