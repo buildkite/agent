@@ -207,7 +207,7 @@ var (
 
 	NoCheckoutOverrideFlag = cli.BoolFlag{
 		Name:   "no-checkout-override",
-		Usage:  "Don't allow hooks, plugins, Job API, and secrets to override scoped checkout settings (default: false)",
+		Usage:  "Don't allow pipeline/step env, hooks, plugins, the Job API, or secrets to override the agent's checkout settings (default: false)",
 		EnvVar: "BUILDKITE_NO_CHECKOUT_OVERRIDE",
 	}
 

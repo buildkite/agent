@@ -121,6 +121,10 @@ type BootstrapConfig struct {
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
 
+// lockCheckoutWhenCommandEvalDisabled forces no-checkout-override on when
+// command-eval is disabled, so git flags can't be used to bypass it.
+// BootstrapConfig stores this as CommandEval; the AgentStartConfig sibling uses
+// NoCommandEval, so its check is inverted. Keep the two in sync.
 func (cfg *BootstrapConfig) lockCheckoutWhenCommandEvalDisabled() {
 	if !cfg.CommandEval {
 		cfg.NoCheckoutOverride = true

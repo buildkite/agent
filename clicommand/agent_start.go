@@ -230,6 +230,10 @@ type AgentStartConfig struct {
 	DisconnectAfterJobTimeout          int           `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
+// lockCheckoutWhenCommandEvalDisabled forces no-checkout-override on when
+// command-eval is disabled, so git flags can't be used to bypass it.
+// AgentStartConfig stores this as NoCommandEval; the BootstrapConfig sibling
+// uses CommandEval, so its check is inverted. Keep the two in sync.
 func (cfg *AgentStartConfig) lockCheckoutWhenCommandEvalDisabled() {
 	if cfg.NoCommandEval {
 		cfg.NoCheckoutOverride = true
