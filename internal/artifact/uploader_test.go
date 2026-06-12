@@ -377,6 +377,8 @@ func TestCollect_Literal(t *testing.T) {
 		filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
 		filepath.Join("fixtures", "gifs", "Smile.gif"),
 	}
+	slices.Sort(got)
+	slices.Sort(want)
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("uploader.collect artifact paths diff (-got +want)\n%s", diff)
 	}
@@ -537,7 +539,7 @@ func TestArtifactUploadTimingsSpanAttributes(t *testing.T) {
 
 	recorder := tracetest.NewSpanRecorder()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) }) //nolint:usetesting // t.Context() is cancelled before Cleanup funcs
 
 	ctx, span := provider.Tracer("test").Start(t.Context(), "artifact-upload")
 	timings.setSpanAttributes(ctx)

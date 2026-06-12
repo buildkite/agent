@@ -49,7 +49,7 @@ func testServerAndClient(t *testing.T, ctx context.Context) (*Server, *Client) {
 
 func TestPing(t *testing.T) {
 	t.Parallel()
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
@@ -62,7 +62,7 @@ func TestPing(t *testing.T) {
 
 func TestLockOperations(t *testing.T) {
 	t.Parallel()
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)

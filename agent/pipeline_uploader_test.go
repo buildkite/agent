@@ -1,7 +1,6 @@
 package agent_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,7 +19,7 @@ import (
 func TestAsyncPipelineUpload(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	l := logger.NewBuffer()
 
 	for _, test := range []struct {
@@ -141,7 +140,7 @@ steps:
 func TestFallbackPipelineUpload(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	l := logger.NewBuffer()
 
 	genSleeps := func(n int, s time.Duration) []time.Duration {

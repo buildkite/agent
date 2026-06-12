@@ -60,7 +60,7 @@ func createTempCacheConfig(t *testing.T, content string) string {
 
 func TestSaveWithClient_CacheEntryCreated(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
 		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
@@ -88,7 +88,7 @@ func TestSaveWithClient_CacheEntryCreated(t *testing.T) {
 
 func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
 		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
@@ -107,7 +107,7 @@ func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 
 func TestSaveWithClient_MultipleCaches(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	callCount := 0
 	mock := &mockCacheClient{
@@ -140,7 +140,7 @@ func TestSaveWithClient_MultipleCaches(t *testing.T) {
 
 func TestSaveWithClient_Error(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	expectedErr := errors.New("save failed")
 	mock := &mockCacheClient{
@@ -163,7 +163,7 @@ func TestSaveWithClient_Error(t *testing.T) {
 
 func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
 		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
@@ -182,7 +182,7 @@ func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 
 func TestRestoreWithClient_CacheHit(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
 		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
@@ -212,7 +212,7 @@ func TestRestoreWithClient_CacheHit(t *testing.T) {
 
 func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
 		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
@@ -242,7 +242,7 @@ func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 
 func TestRestoreWithClient_CacheMiss(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
 		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
@@ -263,7 +263,7 @@ func TestRestoreWithClient_CacheMiss(t *testing.T) {
 
 func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	callCount := 0
 	mock := &mockCacheClient{
@@ -288,7 +288,7 @@ func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 
 func TestRestoreWithClient_Error(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	expectedErr := errors.New("restore failed")
 	mock := &mockCacheClient{
@@ -311,7 +311,7 @@ func TestRestoreWithClient_Error(t *testing.T) {
 
 func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
 		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {

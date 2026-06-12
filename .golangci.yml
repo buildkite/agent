@@ -1,0 +1,14 @@
+version: "2"
+
+linters:
+  enable:
+    - usetesting
+  settings:
+    usetesting:
+      os-create-temp: false
+      os-mkdir-temp: false
+      os-setenv: false
+      os-temp-dir: false
+      os-chdir: false
+      context-background: true
+      context-todo: false

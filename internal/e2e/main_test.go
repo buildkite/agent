@@ -16,6 +16,7 @@ func TestMain(m *testing.M) {
 	client := api.NewClient(l, api.Config{
 		Token: agentToken,
 	})
+	// TestMain has no testing.T, so this setup call intentionally uses a root context.
 	ctx := context.Background()
 	ident, _, err := client.GetTokenIdentity(ctx)
 	if err != nil {
