@@ -76,6 +76,9 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		t.Errorf("config.GitSubmodules = %t, want %t", got, want)
 	}
 
+	if got := len(config.GitSparseCheckoutPaths); got != 2 {
+		t.Fatalf("len(config.GitSparseCheckoutPaths) = %d, want 2 (%q)", got, strings.Join(config.GitSparseCheckoutPaths, ","))
+	}
 	if got, want := strings.Join(config.GitSparseCheckoutPaths, ","), ".buildkite/,src/"; got != want {
 		t.Errorf("config.GitSparseCheckoutPaths = %q, want %q", got, want)
 	}
