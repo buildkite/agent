@@ -972,6 +972,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
+	sparseCheckoutActive, err := e.setupSparseCheckout(ctx)
+	if err != nil {
+		return err
+	}
+
 	gitCheckoutFlags := e.GitCheckoutFlags
 
 	if e.Commit == "HEAD" {
@@ -986,10 +991,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 
 	gitSubmodules := false
 	if hasGitSubmodules(e.shell) {
-		if e.GitSubmodules {
+		switch {
+		case sparseCheckoutActive:
+			e.shell.Commentf("Submodule initialization skipped during sparse checkout")
+		case e.GitSubmodules:
 			e.shell.Commentf("Git submodules detected")
 			gitSubmodules = true
-		} else {
+		default:
 			e.shell.OptionalWarningf("submodules-disabled", "This repository has submodules, but submodules are disabled")
 		}
 	}
