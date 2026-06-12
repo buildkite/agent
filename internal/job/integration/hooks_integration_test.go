@@ -242,6 +242,53 @@ func TestEnvironmentHookCannotDisableNoCheckoutOverride(t *testing.T) {
 	}
 }
 
+func TestNoCommandEvalAutoLocksCheckoutVars(t *testing.T) {
+	t.Parallel()
+
+	// no-command-eval implies no-checkout-override: with command eval disabled
+	// the agent must lock checkout vars so git flags cannot be used to bypass
+	// the no-command-eval protection. The job never sets
+	// BUILDKITE_NO_CHECKOUT_OVERRIDE; the lock is derived purely from
+	// command-eval being off.
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	filename := "environment"
+	script := []string{
+		"#!/usr/bin/env bash",
+		"export BUILDKITE_SKIP_CHECKOUT=true",
+	}
+	if runtime.GOOS == "windows" {
+		filename = "environment.bat"
+		script = []string{
+			"@echo off",
+			"set BUILDKITE_SKIP_CHECKOUT=true",
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got == "true" {
+			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the no-command-eval lock to block it\n", got)
+			c.Exit(1)
+			return
+		}
+		c.Exit(0)
+	})
+
+	tester.RunAndCheck(t, "BUILDKITE_COMMAND_EVAL=false")
+
+	if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT") {
+		t.Fatalf("expected BUILDKITE_SKIP_CHECKOUT to be reported as blocked\noutput: %s", tester.Output)
+	}
+}
+
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	t.Parallel()
 
