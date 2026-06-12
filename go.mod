@@ -31,7 +31,7 @@ require (
 	github.com/buildkite/interpolate v0.1.5
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.1
-	github.com/creack/pty v1.1.24
+	github.com/creack/pty v1.1.19
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/dustinkirkland/golang-petname v0.0.0-20260215035315-f0c533e9ce9b
