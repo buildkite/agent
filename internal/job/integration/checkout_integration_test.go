@@ -29,6 +29,60 @@ var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit
 // We expect this arg multiple times, just define it once.
 const gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
 
+func skipIfGitSparseCheckoutUnsupported(t *testing.T) {
+	t.Helper()
+
+	out, err := exec.Command("git", "--version").Output()
+	if err != nil {
+		t.Skipf("git --version failed: %v", err)
+	}
+	var major, minor int
+	if _, err := fmt.Sscanf(string(out), "git version %d.%d", &major, &minor); err != nil {
+		t.Skipf("couldn't parse git version from %q: %v", strings.TrimSpace(string(out)), err)
+	}
+	if major < 2 || (major == 2 && minor < 26) {
+		t.Skipf("git sparse-checkout --cone requires git >= 2.26, got %s", strings.TrimSpace(string(out)))
+	}
+}
+
+func addSparseCheckoutFixture(t *testing.T, repo *gitRepository) {
+	t.Helper()
+
+	files := map[string]string{
+		".buildkite/pipeline.yml": "steps:\n  - command: true\n",
+		"src/main.txt":            "hello from src\n",
+		"docs/readme.md":          "hello from docs\n",
+	}
+	for name, contents := range files {
+		path := filepath.Join(repo.Path, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("os.MkdirAll(%q) error = %v, want nil", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatalf("os.WriteFile(%q) error = %v, want nil", path, err)
+		}
+		if err := repo.Add(name); err != nil {
+			t.Fatalf("repo.Add(%q) error = %v, want nil", name, err)
+		}
+	}
+	if err := repo.Commit("Add sparse checkout fixture"); err != nil {
+		t.Fatalf("repo.Commit(Add sparse checkout fixture) error = %v, want nil", err)
+	}
+}
+
+func requireCheckoutPath(t *testing.T, checkoutDir, name string, exists bool) {
+	t.Helper()
+
+	path := filepath.Join(checkoutDir, filepath.FromSlash(name))
+	_, err := os.Stat(path)
+	switch {
+	case exists && err != nil:
+		t.Fatalf("os.Stat(%q) error = %v, want nil", path, err)
+	case !exists && !errors.Is(err, os.ErrNotExist):
+		t.Fatalf("os.Stat(%q) error = %v, want not exist", path, err)
+	}
+}
+
 func TestWithResolvingCommitExperiment(t *testing.T) {
 	t.Parallel()
 
@@ -101,6 +155,50 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 }
 
 func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
@@ -182,6 +280,86 @@ func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
 	}
 }
 
+func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+	agent := tester.MockAgent(t)
+
+	// First run: create an initial sparse checkout.
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	tester.RunAndCheck(t, env...)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+
+	// Second run: keep the same checkout dir but switch the sparse paths.
+	env[len(env)-1] = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/"
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
+	git.ExpectAll([][]any{
+		{"config", "--get-all", "remote.origin.url"},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", ".buildkite/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+	})
+
+	tester.RunAndCheck(t, env...)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", false)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+
+	// Third run: disable sparse checkout entirely and restore the full tree.
+	env = env[:len(env)-1]
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
+	git.ExpectAll([][]any{
+		{"config", "--get-all", "remote.origin.url"},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"config", "--get", "core.sparseCheckout"},
+		{"sparse-checkout", "disable"},
+		{"config", "--worktree", "--list"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+	})
+
+	tester.RunAndCheck(t, env...)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", true)
+}
+
 func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	t.Parallel()
 
@@ -250,6 +428,71 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	// Git for windows seems to struggle with local submodules in the temp dir
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	submoduleRepo, err := createTestGitRespository()
+	if err != nil {
+		t.Fatalf("createTestGitRespository() error = %v", err)
+	}
+	defer submoduleRepo.Close()
+
+	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(submodule, add, %q) error = %v\nout = %s", submoduleRepo.Path, err, out)
+	}
+
+	out, err = tester.Repo.Execute("commit", "-am", "Add example submodule")
+	if err != nil {
+		t.Fatalf(`tester.Repo.Execute(commit, -am, "Add example submodule") error = %v\nout = %s`, err, out)
+	}
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+	git.Expect("submodule", "sync", "--recursive").NotCalled()
+	git.Expect("submodule", "update").WithAnyArguments().NotCalled()
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"submodule", "foreach", "--recursive", "git clean -fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+	if got, want := tester.Output, "Submodule initialization skipped during sparse checkout"; !strings.Contains(got, want) {
+		t.Fatalf("bootstrap output does not contain %q:\n%s", want, got)
+	}
 }
 
 func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
