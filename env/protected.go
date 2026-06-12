@@ -54,6 +54,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_GIT_COMMIT_VERIFICATION":     {},
 	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT":    {},
 	"BUILDKITE_GIT_MIRRORS_PATH":            {},
+	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":    {},
 	"BUILDKITE_HOOKS_PATH":                  {},
 	"BUILDKITE_HOOKS_SHELL":                 {},
 	"BUILDKITE_KUBERNETES_EXEC":             {},
@@ -71,7 +72,8 @@ var protectedEnv = map[string]protection{
 // checkoutOverrideScope contains checkout-related vars that remain mutable in
 // hooks, plugins, Job API, and secrets by default so jobs can tailor checkout
 // behavior. When checkout override is enabled, those same vars become locked so
-// agent checkout config wins and git flags cannot be used to undermine
+// agent checkout config wins: git is riddled with shell injections, so letting a
+// job set git flags would otherwise be a way to bypass protections like
 // no-command-eval. Vars here must not also appear in protectedEnv; the two maps
 // are disjoint.
 var checkoutOverrideScope = map[string]struct{}{
@@ -81,8 +83,8 @@ var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":          {},
 	"BUILDKITE_GIT_FETCH_FLAGS":                 {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":         {},
-	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":        {},
 	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": {},
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":       {},
 	"BUILDKITE_GIT_SUBMODULES":                  {},
 	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":      {},
 	"BUILDKITE_SKIP_CHECKOUT":                   {},
@@ -106,8 +108,9 @@ func IsProtectedFromWithinJob(name string) bool {
 	return !prot.mutableFromWithinJob
 }
 
-// IsCheckoutOverrideScoped reports whether name is a checkout-related env var
-// that is write-locked when no-checkout-override is enabled.
+// IsCheckoutOverrideScoped reports whether the environment variable is a
+// checkout-related var that is write-protected (against job env, secrets, hooks,
+// plugins, and the Job API) when no-checkout-override is enabled.
 func IsCheckoutOverrideScoped(name string) bool {
 	_, exists := checkoutOverrideScope[normalizeKeyName(name)]
 	return exists
