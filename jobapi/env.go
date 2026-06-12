@@ -41,7 +41,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	if len(protected) > 0 {
 		err := socket.WriteError(
 			w,
-			fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected),
+			s.protectedEnvError(protected),
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
@@ -110,7 +110,7 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	if len(protected) > 0 {
 		err := socket.WriteError(
 			w,
-			fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected),
+			s.protectedEnvError(protected),
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
@@ -149,4 +149,20 @@ func (s *Server) checkProtected(candidates []string) []string {
 		}
 	}
 	return protected
+}
+
+// protectedEnvError builds the rejection message for protected candidates,
+// noting when the rejection is due to the no-checkout-override lock rather than
+// an always-protected var.
+func (s *Server) protectedEnvError(protected []string) string {
+	msg := fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected)
+	if s.noCheckoutOverride {
+		for _, p := range protected {
+			if env.IsCheckoutOverrideScoped(p) {
+				msg += ". Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled"
+				break
+			}
+		}
+	}
+	return msg
 }

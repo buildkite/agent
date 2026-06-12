@@ -32,14 +32,14 @@ func WithNoCheckoutOverride() ServerOpts {
 // and allows jobs to introspect and mutate their own state
 type Server struct {
 	// SocketPath is the path to the socket that the server is (or will be) listening on
-	SocketPath string
-	Logger     shell.Logger
-	debug      bool
-
-	mtx                sync.RWMutex
-	environ            *env.Environment
-	redactors          *replacer.Mux
+	SocketPath         string
+	Logger             shell.Logger
+	debug              bool
 	noCheckoutOverride bool
+
+	mtx       sync.RWMutex
+	environ   *env.Environment
+	redactors *replacer.Mux
 
 	token   string
 	sockSvr *socket.Server

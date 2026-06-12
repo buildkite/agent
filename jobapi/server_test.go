@@ -431,7 +431,7 @@ func TestPatchEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testi
 	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
 		expectedStatus: http.StatusUnprocessableEntity,
 		expectedError: &jobapi.ErrorResponse{
-			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]",
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]. Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled",
 		},
 		expectedEnv: testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false").Dump(),
 	})
@@ -469,7 +469,7 @@ func TestDeleteEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *test
 	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvDeleteRequest, jobapi.EnvDeleteResponse]{
 		expectedStatus: http.StatusUnprocessableEntity,
 		expectedError: &jobapi.ErrorResponse{
-			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]",
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]. Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled",
 		},
 		expectedEnv: testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false").Dump(),
 	})
