@@ -152,7 +152,12 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Create an empty env for us to keep track of our env changes in
 	e.shell.Env = env.FromSlice(os.Environ())
 
-	if e.JobLogsOTLP && e.TracingBackend == tracetools.BackendOpenTelemetry {
+	// OTLP job log export lives entirely in the bootstrap process, which is the
+	// single home for this feature. When OpenTelemetry tracing is enabled, the
+	// per-command emit context carries the active hook/command span, so log
+	// records are trace-correlated. With tracing disabled, records are still
+	// emitted but remain uncorrelated.
+	if e.JobLogsOTLP {
 		jobLogger, err := newOTLPJobLogger(ctx, e)
 		if err != nil {
 			e.shell.Warningf("Failed to initialize OTLP job log exporter: %v", err)

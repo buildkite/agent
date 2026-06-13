@@ -26,7 +26,6 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/status"
-	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -126,9 +125,6 @@ type JobRunner struct {
 	// jobLogs is an io.Writer that sends data to the job logs
 	jobLogs io.Writer
 
-	// jobLogsOTLP exports job log lines to an OTLP logs endpoint when enabled.
-	jobLogsOTLP *OTLPJobLogger
-
 	// Job cancellation control
 	cancelLock sync.Mutex // prevent concurrent calls to Cancel
 
@@ -161,7 +157,7 @@ type jobProcess interface {
 }
 
 // Initializes the job runner
-func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (_ *JobRunner, err error) {
+func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
 	if conf.Job.Token != "" {
@@ -177,15 +173,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		client:      &core.Client{APIClient: apiClient, Logger: l},
 	}
 
-	defer func() {
-		if err != nil && r.jobLogsOTLP != nil {
-			if closeErr := r.jobLogsOTLP.Close(); closeErr != nil {
-				r.agentLogger.Warnf("Failed to close OTLP job log exporter after job runner initialization error: %v", closeErr)
-			}
-			r.jobLogsOTLP = nil
-		}
-	}()
-
+	var err error
 	r.VerificationFailureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.VerificationFailureBehaviour)
 	if err != nil {
 		return nil, fmt.Errorf("setting no signature behavior: %w", err)
@@ -235,16 +223,6 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// BUILDKITE_AGENT_JOB_TIMEOUT_FILE env var.
 	r.jobTimeoutFilePath = jobTimeoutFilePath(r.conf.Job.ID, conf.KubernetesExec)
 
-	var jobLogsOTLP *OTLPJobLogger
-	if conf.AgentConfiguration.JobLogsOTLP && conf.AgentConfiguration.TracingBackend != tracetools.BackendOpenTelemetry {
-		jobLogsOTLP, err = NewOTLPJobLogger(ctx, conf)
-		if err != nil {
-			r.agentLogger.Warnf("Failed to initialize OTLP job log exporter: %v", err)
-		} else {
-			r.jobLogsOTLP = jobLogsOTLP
-		}
-	}
-
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
 		return nil, err
@@ -284,9 +262,6 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	}
 
 	pr, pw := io.Pipe()
-	if jobLogsOTLP != nil {
-		allWriters = append(allWriters, jobLogsOTLP)
-	}
 
 	switch {
 	case conf.AgentConfiguration.ANSITimestamps:
