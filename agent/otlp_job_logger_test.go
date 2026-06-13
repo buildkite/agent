@@ -65,7 +65,7 @@ func TestOTLPJobLoggerEmitsStructuredLineRecords(t *testing.T) {
 		},
 	}
 	logger := newOTLPJobLoggerWithLogger(
-		context.Background(),
+		t.Context(),
 		provider.Logger("test"),
 		provider,
 		otlpJobLogAttributes(conf),
@@ -129,7 +129,7 @@ func TestOTLPJobLoggerFlushesPartialLineOnClose(t *testing.T) {
 
 	exporter := &otlpJobLogTestExporter{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
-	logger := newOTLPJobLoggerWithLogger(context.Background(), provider.Logger("test"), provider, nil)
+	logger := newOTLPJobLoggerWithLogger(t.Context(), provider.Logger("test"), provider, nil)
 
 	if _, err := logger.Write([]byte("partial")); err != nil {
 		t.Fatalf("logger.Write() = %v", err)
@@ -152,7 +152,7 @@ func TestOTLPJobLoggerFlushesPartialLineOnClose(t *testing.T) {
 func TestOTLPJobLoggerDetachesEmitContextFromCancellation(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	exporter := &otlpJobLogTestExporter{}
@@ -169,7 +169,7 @@ func TestOTLPJobLoggerPreservesBodyWithoutTimestampPrefix(t *testing.T) {
 
 	exporter := &otlpJobLogTestExporter{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
-	logger := newOTLPJobLoggerWithLogger(context.Background(), provider.Logger("test"), provider, nil)
+	logger := newOTLPJobLoggerWithLogger(t.Context(), provider.Logger("test"), provider, nil)
 
 	before := time.Now()
 	if _, err := logger.Write([]byte("hello from the command\n")); err != nil {
@@ -189,7 +189,7 @@ func TestOTLPJobLoggerAddsCurrentHookScopeFromHeaders(t *testing.T) {
 
 	exporter := &otlpJobLogTestExporter{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
-	logger := newOTLPJobLoggerWithLogger(context.Background(), provider.Logger("test"), provider, nil)
+	logger := newOTLPJobLoggerWithLogger(t.Context(), provider.Logger("test"), provider, nil)
 
 	if _, err := logger.Write([]byte("~~~ Running repository post-command hook\nhook output\n~~~ Running commands\ncommand output\n")); err != nil {
 		t.Fatalf("logger.Write() = %v", err)
@@ -228,7 +228,7 @@ func TestOTLPJobLoggerAddsPluginHookScopeFromHeaders(t *testing.T) {
 
 	exporter := &otlpJobLogTestExporter{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
-	logger := newOTLPJobLoggerWithLogger(context.Background(), provider.Logger("test"), provider, nil)
+	logger := newOTLPJobLoggerWithLogger(t.Context(), provider.Logger("test"), provider, nil)
 
 	if _, err := logger.Write([]byte("~~~ Running plugin docker#v5.12.0 pre-command hook\nplugin output\n")); err != nil {
 		t.Fatalf("logger.Write() = %v", err)
@@ -253,7 +253,7 @@ func TestOTLPJobLoggerDoesNotUpdateScopeFromOrdinaryOutput(t *testing.T) {
 
 	exporter := &otlpJobLogTestExporter{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
-	logger := newOTLPJobLoggerWithLogger(context.Background(), provider.Logger("test"), provider, nil)
+	logger := newOTLPJobLoggerWithLogger(t.Context(), provider.Logger("test"), provider, nil)
 
 	if _, err := logger.Write([]byte("Running plugin docker#v5.12.0 pre-command hook\nordinary output\n")); err != nil {
 		t.Fatalf("logger.Write() = %v", err)

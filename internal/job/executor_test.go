@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -121,7 +120,7 @@ func TestContextWithTraceparentIfEnabledDoesNotAcceptServerTraceparentWithoutPro
 	})
 	e.shell = sh
 
-	ctx := e.contextWithTraceparentIfEnabled(context.Background())
+	ctx := e.contextWithTraceparentIfEnabled(t.Context())
 	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
 		t.Fatalf("SpanContextFromContext(ctx).IsValid() = true, want false")
 	}
@@ -140,7 +139,7 @@ func TestContextWithTraceparentIfEnabledAcceptsServerTraceparentWithPropagation(
 	})
 	e.shell = sh
 
-	ctx := e.contextWithTraceparentIfEnabled(context.Background())
+	ctx := e.contextWithTraceparentIfEnabled(t.Context())
 	sc := trace.SpanContextFromContext(ctx)
 	if !sc.IsValid() {
 		t.Fatalf("SpanContextFromContext(ctx).IsValid() = false, want true")
