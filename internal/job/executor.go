@@ -97,15 +97,18 @@ type teeWriter struct {
 }
 
 func (w *teeWriter) Write(p []byte) (int, error) {
+	// Hold the lock for the whole write so that detaching the secondary sink
+	// (setSecondary(nil), called before the OTLP exporter is flushed and shut
+	// down) cannot complete while a write is still in flight. This guarantees
+	// no control output lands on the OTLP emitter after it has been flushed.
 	w.mu.Lock()
-	secondary := w.secondary
-	w.mu.Unlock()
+	defer w.mu.Unlock()
 
 	n, err := w.primary.Write(p)
-	if secondary != nil {
+	if w.secondary != nil {
 		// The secondary sink is best-effort: failures must not affect the
 		// primary (customer-facing) job log output.
-		_, _ = secondary.Write(p)
+		_, _ = w.secondary.Write(p)
 	}
 	return n, err
 }

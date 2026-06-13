@@ -80,6 +80,40 @@ func TestOTLPJobLoggerRedactsSecrets(t *testing.T) {
 	}
 }
 
+// TestOTLPJobLoggerRedactsNeedlesAddedMidStream ensures a secret added to the
+// live redactor Mux after the command writer is created (e.g. via the Job API)
+// is still redacted in OTLP output, not just secrets known at writer creation.
+func TestOTLPJobLoggerRedactsNeedlesAddedMidStream(t *testing.T) {
+	t.Parallel()
+
+	cap := &captureLogger{}
+	// Start with no needles, matching a command that adds a secret at runtime.
+	l := newTestOTLPJobLogger(cap)
+
+	w := l.Wrap(t.Context(), &bytes.Buffer{}, nil)
+
+	const secret = "late-bound-secret"
+	// Secret added to the live Mux after the writer was created.
+	l.redactors.Add(secret)
+
+	if _, err := w.Write([]byte("value " + secret + " end\n")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if f, ok := w.(interface{ Flush() }); ok {
+		f.Flush()
+	}
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+
+	if len(cap.bodies) != 1 {
+		t.Fatalf("emitted %d records, want 1: %q", len(cap.bodies), cap.bodies)
+	}
+	if body := cap.bodies[0]; strings.Contains(body, secret) {
+		t.Errorf("OTLP record body leaked mid-stream secret: %q", body)
+	}
+}
+
 // TestOTLPJobLoggerControlWriter ensures bootstrap control output (section
 // headers, prompts, comments) written through the control writer is emitted as
 // OTLP log records, giving parity with the downloadable Buildkite job log.
