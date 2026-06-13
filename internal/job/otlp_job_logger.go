@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/redact"
+	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/version"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -19,9 +21,10 @@ import (
 )
 
 type otlpJobLogger struct {
-	log      otellog.Logger
-	provider *sdklog.LoggerProvider
-	attrs    []otellog.KeyValue
+	log       otellog.Logger
+	provider  *sdklog.LoggerProvider
+	attrs     []otellog.KeyValue
+	redactors *replacer.Mux
 }
 
 func newOTLPJobLogger(ctx context.Context, e *Executor) (*otlpJobLogger, error) {
@@ -67,17 +70,27 @@ func newOTLPJobLogger(ctx context.Context, e *Executor) (*otlpJobLogger, error) 
 			otellog.WithInstrumentationVersion(version.Version()),
 			otellog.WithSchemaURL(semconv.SchemaURL),
 		),
-		provider: provider,
-		attrs:    otlpJobAttributes(e),
+		provider:  provider,
+		attrs:     otlpJobAttributes(e),
+		redactors: e.redactors,
 	}, nil
 }
 
 func (l *otlpJobLogger) Wrap(ctx context.Context, out io.Writer, attrs map[string]string) io.Writer {
-	return &otlpJobLogWriter{
+	emitter := &otlpLineEmitter{
 		ctx:   context.WithoutCancel(ctx),
-		out:   out,
 		log:   l.log,
 		attrs: appendLogAttrs(l.attrs, attrs),
+	}
+	// Redact OTLP output using the same secret needles as the job-log
+	// redactor, so secrets never reach the OTLP backend. A fresh per-command
+	// Replacer feeds the line emitter; it is seeded with the needles known at
+	// the time the command starts (which already include env-, secret- and Job
+	// API-derived needles added during earlier phases).
+	return &otlpJobLogWriter{
+		out:      out,
+		redactor: replacer.New(emitter, l.redactors.Needles(), redact.Redacted),
+		emitter:  emitter,
 	}
 }
 
@@ -96,13 +109,14 @@ func (l *otlpJobLogger) Close() error {
 	return shutdownErr
 }
 
+// otlpJobLogWriter tees process output to the normal (already redacting) job-log
+// writer and to a redacting OTLP line emitter, so OTLP records carry the same
+// redacted content as the customer-facing job log.
 type otlpJobLogWriter struct {
-	mu    sync.Mutex
-	ctx   context.Context
-	out   io.Writer
-	log   otellog.Logger
-	attrs []otellog.KeyValue
-	buf   []byte
+	mu       sync.Mutex
+	out      io.Writer
+	redactor *replacer.Replacer
+	emitter  *otlpLineEmitter
 }
 
 func (w *otlpJobLogWriter) Write(data []byte) (int, error) {
@@ -110,35 +124,56 @@ func (w *otlpJobLogWriter) Write(data []byte) (int, error) {
 	defer w.mu.Unlock()
 
 	n, err := w.out.Write(data)
-	origLen := len(data)
-	for len(data) > 0 {
-		i := bytes.IndexByte(data, '\n')
-		if i < 0 {
-			w.buf = append(w.buf, data...)
-			return n, err
-		}
-
-		line := append(w.buf, data[:i]...)
-		line = bytes.TrimSuffix(line, []byte{'\r'})
-		w.emit(string(line))
-		w.buf = w.buf[:0]
-		data = data[i+1:]
-	}
-
-	return origLen, err
+	// Feed the OTLP copy through the redactor, which streams redacted bytes to
+	// the line emitter. Errors here must not affect the primary job log.
+	_, _ = w.redactor.Write(data)
+	return n, err
 }
 
 func (w *otlpJobLogWriter) Flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if len(w.buf) == 0 {
-		return
-	}
-	w.emit(string(w.buf))
-	w.buf = w.buf[:0]
+	_ = w.redactor.Flush()
+	w.emitter.flush()
 }
 
-func (w *otlpJobLogWriter) emit(line string) {
+// otlpLineEmitter line-buffers (already redacted) output and emits each line as
+// an OpenTelemetry log record with a native timestamp.
+type otlpLineEmitter struct {
+	ctx   context.Context
+	log   otellog.Logger
+	attrs []otellog.KeyValue
+	buf   []byte
+}
+
+func (e *otlpLineEmitter) Write(data []byte) (int, error) {
+	origLen := len(data)
+	for len(data) > 0 {
+		i := bytes.IndexByte(data, '\n')
+		if i < 0 {
+			e.buf = append(e.buf, data...)
+			return origLen, nil
+		}
+
+		line := append(e.buf, data[:i]...)
+		line = bytes.TrimSuffix(line, []byte{'\r'})
+		e.emit(string(line))
+		e.buf = e.buf[:0]
+		data = data[i+1:]
+	}
+
+	return origLen, nil
+}
+
+func (e *otlpLineEmitter) flush() {
+	if len(e.buf) == 0 {
+		return
+	}
+	e.emit(string(e.buf))
+	e.buf = e.buf[:0]
+}
+
+func (e *otlpLineEmitter) emit(line string) {
 	now := time.Now()
 
 	var record otellog.Record
@@ -147,8 +182,8 @@ func (w *otlpJobLogWriter) emit(line string) {
 	record.SetSeverity(otellog.SeverityInfo)
 	record.SetSeverityText("INFO")
 	record.SetBody(otellog.StringValue(line))
-	record.AddAttributes(w.attrs...)
-	w.log.Emit(w.ctx, record)
+	record.AddAttributes(e.attrs...)
+	e.log.Emit(e.ctx, record)
 }
 
 func otlpJobAttributes(e *Executor) []otellog.KeyValue {
