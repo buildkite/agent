@@ -74,6 +74,42 @@ type Executor struct {
 	// redactors for the job logs. The will be populated with values both from environment variable and through the Job API.
 	// In order for the latter to happen, a reference is passed into the the Job API server as well
 	redactors *replacer.Mux
+
+	// loggerTee carries the redacted shell logger output (section headers,
+	// prompts, comments, warnings) to stderr and, when OTLP job logging is
+	// enabled, mirrors it into the OTLP exporter so the exported records match
+	// the customer-facing Buildkite job log.
+	loggerTee *teeWriter
+}
+
+// teeWriter writes to a primary writer and, when configured, also to a
+// secondary writer. The secondary sink can be attached after construction,
+// which lets the executor mirror already-redacted shell logger output into the
+// OTLP exporter once it has been initialised.
+type teeWriter struct {
+	mu        sync.Mutex
+	primary   io.Writer
+	secondary io.Writer
+}
+
+func (w *teeWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	secondary := w.secondary
+	w.mu.Unlock()
+
+	n, err := w.primary.Write(p)
+	if secondary != nil {
+		// The secondary sink is best-effort: failures must not affect the
+		// primary (customer-facing) job log output.
+		_, _ = secondary.Write(p)
+	}
+	return n, err
+}
+
+func (w *teeWriter) setSecondary(secondary io.Writer) {
+	w.mu.Lock()
+	w.secondary = secondary
+	w.mu.Unlock()
 }
 
 // New returns a new executor instance
@@ -163,7 +199,16 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			e.shell.Warningf("Failed to initialize OTLP job log exporter: %v", err)
 		} else {
 			e.shell.SetOutputInterceptor(jobLogger.Wrap)
+			// Mirror the redacted shell logger control output (section headers,
+			// prompts, comments, warnings) into OTLP so the exported records
+			// match the downloadable Buildkite job log and the UI stream.
+			if e.loggerTee != nil {
+				e.loggerTee.setSecondary(jobLogger.controlWriter())
+			}
 			defer func() {
+				if e.loggerTee != nil {
+					e.loggerTee.setSecondary(nil)
+				}
 				if err := jobLogger.Close(); err != nil {
 					e.shell.Warningf("Failed to close OTLP job log exporter: %v", err)
 				}
@@ -1427,7 +1472,12 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 
 	stdoutRedactor := replacer.New(stdout, needles, redact.Redacted)
 	e.redactors.Append(stdoutRedactor)
-	loggerRedactor := replacer.New(stderr, needles, redact.Redacted)
+	// The shell logger writes through this redactor into loggerTee, whose
+	// primary sink is stderr. When OTLP job logging is enabled, a secondary
+	// sink is attached so the same already-redacted control output is mirrored
+	// into the OTLP exporter.
+	e.loggerTee = &teeWriter{primary: stderr}
+	loggerRedactor := replacer.New(e.loggerTee, needles, redact.Redacted)
 	e.redactors.Append(loggerRedactor)
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)

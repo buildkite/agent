@@ -25,6 +25,11 @@ type otlpJobLogger struct {
 	provider  *sdklog.LoggerProvider
 	attrs     []otellog.KeyValue
 	redactors *replacer.Mux
+
+	// control mirrors bootstrap-generated control output (section headers,
+	// prompts, comments, warnings) into OTLP so the exported records match the
+	// Buildkite job log stream. It is created lazily by controlWriter.
+	control *otlpLineEmitter
 }
 
 func newOTLPJobLogger(ctx context.Context, e *Executor) (*otlpJobLogger, error) {
@@ -94,7 +99,28 @@ func (l *otlpJobLogger) Wrap(ctx context.Context, out io.Writer, attrs map[strin
 	}
 }
 
+// controlWriter returns an io.Writer that mirrors bootstrap control output
+// (section headers, prompts, comments, warnings) into OTLP as log records, so
+// the exported records contain the same lines a customer sees in the Buildkite
+// UI. It is fed post-redaction bytes from the shell logger's redactor, so it
+// does not redact again. Lines carry the base job attributes but no per-hook
+// phase or span context (control output is bootstrap narration, not the output
+// of a specific traced hook/command).
+func (l *otlpJobLogger) controlWriter() io.Writer {
+	if l.control == nil {
+		l.control = &otlpLineEmitter{
+			ctx:   context.Background(),
+			log:   l.log,
+			attrs: l.attrs,
+		}
+	}
+	return l.control
+}
+
 func (l *otlpJobLogger) Close() error {
+	if l.control != nil {
+		l.control.flush()
+	}
 	if l.provider == nil {
 		return nil
 	}
@@ -138,15 +164,21 @@ func (w *otlpJobLogWriter) Flush() {
 }
 
 // otlpLineEmitter line-buffers (already redacted) output and emits each line as
-// an OpenTelemetry log record with a native timestamp.
+// an OpenTelemetry log record with a native timestamp. Write and flush are
+// guarded by mu because control output may be written from multiple goroutines
+// (e.g. the cancellation handler emitting a comment).
 type otlpLineEmitter struct {
 	ctx   context.Context
 	log   otellog.Logger
 	attrs []otellog.KeyValue
+	mu    sync.Mutex
 	buf   []byte
 }
 
 func (e *otlpLineEmitter) Write(data []byte) (int, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	origLen := len(data)
 	for len(data) > 0 {
 		i := bytes.IndexByte(data, '\n')
@@ -166,6 +198,9 @@ func (e *otlpLineEmitter) Write(data []byte) (int, error) {
 }
 
 func (e *otlpLineEmitter) flush() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if len(e.buf) == 0 {
 		return
 	}
