@@ -90,10 +90,12 @@ func (l *otlpJobLogger) Wrap(ctx context.Context, out io.Writer, attrs map[strin
 	// Redact OTLP output using the same secret needles as the job-log
 	// redactor, so secrets never reach the OTLP backend. A fresh per-command
 	// Replacer feeds the line emitter; it is seeded with the needles known at
-	// the time the command starts (which already include env-, secret- and Job
-	// API-derived needles added during earlier phases).
+	// the time the command starts and kept in sync on every write with the
+	// live redactor Mux (see otlpJobLogWriter.Write), so secrets added mid
+	// command (e.g. via the Job API) are also redacted here.
 	return &otlpJobLogWriter{
 		out:      out,
+		live:     l.redactors,
 		redactor: replacer.New(emitter, l.redactors.Needles(), redact.Redacted),
 		emitter:  emitter,
 	}
@@ -141,6 +143,7 @@ func (l *otlpJobLogger) Close() error {
 type otlpJobLogWriter struct {
 	mu       sync.Mutex
 	out      io.Writer
+	live     *replacer.Mux
 	redactor *replacer.Replacer
 	emitter  *otlpLineEmitter
 }
@@ -150,6 +153,13 @@ func (w *otlpJobLogWriter) Write(data []byte) (int, error) {
 	defer w.mu.Unlock()
 
 	n, err := w.out.Write(data)
+	// Keep the OTLP redactor's needles in sync with the live job redactor
+	// before redacting, so secrets added mid-command (e.g. via the Job API)
+	// are redacted in OTLP output too. Replacer.Add deduplicates, so re-adding
+	// the full needle set each write is safe.
+	if w.live != nil {
+		w.redactor.Add(w.live.Needles()...)
+	}
 	// Feed the OTLP copy through the redactor, which streams redacted bytes to
 	// the line emitter. Errors here must not affect the primary job log.
 	_, _ = w.redactor.Write(data)
