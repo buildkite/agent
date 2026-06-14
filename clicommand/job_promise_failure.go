@@ -20,17 +20,22 @@ const jobPromiseFailureHelpDescription = `Usage:
 
 Description:
 
-Declare a promised (early) failure for the current job. This records a
-non-zero exit status that the job is expected to finish with, allowing the
-build to begin failing before the job actually completes. The job keeps
-running and finishes normally; only the build-failing cascade starts early.
+Promise the current job will finish with a failing exit status. This records
+a non-zero exit status that the job is expected to finish with, allowing the
+build to begin failing before the job actually completes.
+
+The promise is binding: it sets a floor on the job's outcome. If the job is
+later reported as a success, the promised exit status is recorded instead, so
+the job still fails. Likewise, if a hard failure was promised but the job
+reports a soft-failure status, the promised status is kept. Any other
+reported failure is recorded as reported.
 
 Repeated calls with the same exit status are idempotent. Declaring a
 different exit status once one is already recorded is rejected.
 
-This command requires the early-failure feature to be enabled for your
-organization. If it is not, the command logs a warning and exits
-successfully, so it can safely be added to pipelines ahead of rollout.
+The command exits non-zero if the promise is not accepted (for example, if
+the job is no longer running, or a different exit status was already
+promised). Append '|| true' if you would prefer to ignore that in a script.
 
 Example:
 
@@ -50,8 +55,9 @@ type JobPromiseFailureConfig struct {
 
 var JobPromiseFailureCommand = cli.Command{
 	Name:        "promise-failure",
-	Usage:       "Declare a promised (early) failure for a job",
+	Usage:       "Promise a job will finish with a failing exit status",
 	Description: jobPromiseFailureHelpDescription,
+	Hidden:      true, // hidden until the early-failure feature is generally available
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
@@ -109,25 +115,18 @@ var JobPromiseFailureCommand = cli.Command{
 			return nil
 		})
 		if err != nil {
-			// These statuses are expected during a gradual rollout and aren't
-			// worth failing the build over, so warn and exit successfully.
+			// The promise wasn't accepted. Exit non-zero so the outcome is
+			// visible to scripts; callers who consider a given case acceptable
+			// can append '|| true'.
 			switch {
 			case api.IsErrHavingStatus(err, http.StatusNotFound):
-				// The early-failure feature is not enabled for this organization.
-				l.Warnf("Promised job failure is not enabled for this organization; skipping declaration")
-				return nil
+				return fmt.Errorf("promised failures are not enabled for this organization: %w", err)
 
 			case api.IsErrHavingStatus(err, http.StatusConflict):
-				// A different promised exit status was already declared; the
-				// first declaration already took effect.
-				l.Warnf("A different promised exit status has already been declared for this job; ignoring")
-				return nil
+				return fmt.Errorf("a different promised exit status has already been declared for this job: %w", err)
 
 			case api.IsErrHavingStatus(err, http.StatusUnprocessableEntity):
-				// Most likely the job is no longer running (cancelled or timed
-				// out) by the time this declaration arrived: a benign race.
-				l.Warnf("Could not declare promised failure (the job may no longer be running); ignoring")
-				return nil
+				return fmt.Errorf("the job is no longer running and cannot accept a promised failure: %w", err)
 			}
 
 			return fmt.Errorf("failed to declare promised job failure: %w", err)
