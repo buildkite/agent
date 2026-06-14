@@ -39,6 +39,12 @@ type Server struct {
 	// process exits. Guarded by mtx.
 	pendingWorkdir string
 
+	// promisedFailures records the exit statuses that have already been claimed
+	// for a promised failure, so that repeated calls to
+	// 'buildkite-agent job promise-failure' only declare each exit status to the
+	// Buildkite API once. It is guarded by mtx.
+	promisedFailures map[int]struct{}
+
 	token   string
 	sockSvr *socket.Server
 }
@@ -59,11 +65,12 @@ func NewServer(
 	}
 
 	s := &Server{
-		SocketPath: socketPath,
-		Logger:     logger,
-		environ:    environ,
-		redactors:  redactors,
-		token:      token,
+		SocketPath:       socketPath,
+		Logger:           logger,
+		environ:          environ,
+		redactors:        redactors,
+		promisedFailures: make(map[int]struct{}),
+		token:            token,
 	}
 
 	for _, o := range opts {

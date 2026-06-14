@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	envURL        = "http://job/api/current-job/v0/env"
-	workdirURL    = "http://job/api/current-job/v0/workdir"
-	redactionsURL = "http://job/api/current-job/v0/redactions"
+	envURL            = "http://job/api/current-job/v0/env"
+	workdirURL        = "http://job/api/current-job/v0/workdir"
+	redactionsURL     = "http://job/api/current-job/v0/redactions"
+	promiseFailureURL = "http://job/api/current-job/v0/promise-failure"
 )
 
 var (
@@ -120,4 +121,19 @@ func (c *Client) RedactionCreate(ctx context.Context, text string) (string, erro
 		return "", err
 	}
 	return resp.Redacted, nil
+}
+
+// PromiseFailureClaim claims the given exit status for a promised failure. It
+// returns true if this caller is the first to claim the exit status for the job
+// (and so should declare the promised failure to the Buildkite API), or false
+// if the exit status has already been claimed by an earlier call.
+func (c *Client) PromiseFailureClaim(ctx context.Context, exitStatus int) (bool, error) {
+	req := PromiseFailureRequest{
+		ExitStatus: exitStatus,
+	}
+	var resp PromiseFailureResponse
+	if err := c.client.Do(ctx, http.MethodPost, promiseFailureURL, &req, &resp); err != nil {
+		return false, err
+	}
+	return resp.Claimed, nil
 }

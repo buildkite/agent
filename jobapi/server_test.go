@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -475,6 +477,139 @@ func TestCreateRedaction(t *testing.T) {
 
 	if got, want := writeBuf.String(), "Go from [REDACTED], until you get to Quito.\nFrom [REDACTED], go back to [REDACTED].\n"; got != want {
 		t.Fatalf("writeBuf.String() = %q, want %q", got, want)
+	}
+}
+
+func TestPromiseFailure(t *testing.T) {
+	t.Parallel()
+
+	env := testEnviron()
+	srv, token, err := testServer(t, env, replacer.NewMux())
+	if err != nil {
+		t.Fatalf("testServer(t, env) error = %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("srv.Start() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("srv.Stop() error = %v", err)
+		}
+	})
+
+	client := testSocketClient(srv.SocketPath)
+
+	claim := func(exitStatus int) bool {
+		t.Helper()
+
+		buf := &bytes.Buffer{}
+		if err := json.NewEncoder(buf).Encode(&jobapi.PromiseFailureRequest{ExitStatus: exitStatus}); err != nil {
+			t.Fatalf("encoding request: %v", err)
+		}
+
+		req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/promise-failure", buf)
+		if err != nil {
+			t.Fatalf("creating request: %v", err)
+		}
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("client.Do(req) error = %v", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("resp.StatusCode = %d, want %d", resp.StatusCode, http.StatusOK)
+		}
+
+		var got jobapi.PromiseFailureResponse
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatalf("decoding response: %v", err)
+		}
+		return got.Claimed
+	}
+
+	// The first claim of an exit status succeeds; repeated claims of the same
+	// exit status are debounced, but a different exit status can still be
+	// claimed.
+	if got := claim(1); !got {
+		t.Errorf("first claim(1) = %t, want true", got)
+	}
+	if got := claim(1); got {
+		t.Errorf("second claim(1) = %t, want false", got)
+	}
+	if got := claim(2); !got {
+		t.Errorf("first claim(2) = %t, want true", got)
+	}
+}
+
+func TestPromiseFailureConcurrent(t *testing.T) {
+	t.Parallel()
+
+	env := testEnviron()
+	srv, token, err := testServer(t, env, replacer.NewMux())
+	if err != nil {
+		t.Fatalf("testServer(t, env) error = %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("srv.Start() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("srv.Stop() error = %v", err)
+		}
+	})
+
+	client := testSocketClient(srv.SocketPath)
+
+	// Many processes claiming the same exit status concurrently must result in
+	// exactly one claim, so only one declares the promised failure to the
+	// Buildkite API.
+	const n = 50
+	var (
+		wg      sync.WaitGroup
+		claimed atomic.Int64
+	)
+	wg.Add(n)
+	for range n {
+		go func() {
+			defer wg.Done()
+
+			buf := &bytes.Buffer{}
+			if err := json.NewEncoder(buf).Encode(&jobapi.PromiseFailureRequest{ExitStatus: 1}); err != nil {
+				t.Errorf("encoding request: %v", err)
+				return
+			}
+
+			req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/promise-failure", buf)
+			if err != nil {
+				t.Errorf("creating request: %v", err)
+				return
+			}
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Errorf("client.Do(req) error = %v", err)
+				return
+			}
+
+			var got jobapi.PromiseFailureResponse
+			if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+				t.Errorf("decoding response: %v", err)
+				return
+			}
+			if got.Claimed {
+				claimed.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := claimed.Load(); got != 1 {
+		t.Errorf("number of claimed responses = %d, want exactly 1", got)
 	}
 }
 

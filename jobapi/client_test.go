@@ -19,6 +19,7 @@ import (
 
 type fakeServer struct {
 	env         map[string]string
+	promised    map[int]struct{}
 	sock, token string
 	svr         *http.Server
 }
@@ -31,8 +32,9 @@ func runFakeServer() (svr *fakeServer, err error) {
 			"YZMA":     "Villain",
 			"READONLY": "Should never change",
 		},
-		sock:  filepath.Join(os.TempDir(), fmt.Sprintf("testsocket-%d-%x", os.Getpid(), rand.Int())),
-		token: "to_the_secret_lab",
+		promised: map[int]struct{}{},
+		sock:     filepath.Join(os.TempDir(), fmt.Sprintf("testsocket-%d-%x", os.Getpid(), rand.Int())),
+		token:    "to_the_secret_lab",
 	}
 
 	f.svr = &http.Server{Handler: f}
@@ -54,6 +56,21 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = socket.WriteError(w, "invalid Authorization header", http.StatusForbidden)
 		return
 	}
+
+	if r.URL.Path == "/api/current-job/v0/promise-failure" {
+		var req PromiseFailureRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			_ = socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			return
+		}
+		_, seen := f.promised[req.ExitStatus]
+		f.promised[req.ExitStatus] = struct{}{}
+		if err := json.NewEncoder(w).Encode(&PromiseFailureResponse{Claimed: !seen}); err != nil {
+			_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+		}
+		return
+	}
+
 	if r.URL.Path != "/api/current-job/v0/env" {
 		_ = socket.WriteError(w, fmt.Sprintf("not found: %q", r.URL.Path), http.StatusNotFound)
 		return
@@ -122,6 +139,44 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		_ = socket.WriteError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest)
+	}
+}
+
+func TestClientPromiseFailureClaim(t *testing.T) {
+	t.Parallel()
+
+	svr, err := runFakeServer()
+	if err != nil {
+		t.Fatalf("runFakeServer() = %v", err)
+	}
+	defer svr.Close()
+
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
+	t.Cleanup(canc)
+
+	cli, err := NewClient(ctx, svr.sock, svr.token)
+	if err != nil {
+		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
+	}
+
+	// The first claim of an exit status returns true; repeated claims of the
+	// same exit status return false, while a different exit status returns true.
+	cases := []struct {
+		exitStatus int
+		want       bool
+	}{
+		{exitStatus: 1, want: true},
+		{exitStatus: 1, want: false},
+		{exitStatus: 2, want: true},
+	}
+	for _, c := range cases {
+		got, err := cli.PromiseFailureClaim(ctx, c.exitStatus)
+		if err != nil {
+			t.Fatalf("cli.PromiseFailureClaim(%d) error = %v", c.exitStatus, err)
+		}
+		if got != c.want {
+			t.Errorf("cli.PromiseFailureClaim(%d) = %t, want %t", c.exitStatus, got, c.want)
+		}
 	}
 }
 
