@@ -83,6 +83,9 @@ type ExecutorConfig struct {
 	// Skip the checkout phase entirely
 	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
 
+	// Comma-separated list of paths for git sparse checkout (cone mode).
+	GitSparseCheckoutPaths []string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"`
+
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
 
@@ -106,6 +109,12 @@ type ExecutorConfig struct {
 
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
+
+	// SSH private key to use for git checkout operations
+	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
+
+	// Enable git commit verification
+	GitCommitVerification string
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
 	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`

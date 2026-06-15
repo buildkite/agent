@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -58,7 +57,7 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 	// When there's no tracing backend, the tracer should be a no-op.
 	e := New(ExecutorConfig{})
 
-	oriCtx := context.Background()
+	oriCtx := t.Context()
 	e.shell, err = shell.New()
 	if err != nil {
 		t.Errorf("shell.New() error = %v, want nil", err)
@@ -72,7 +71,7 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 
 	// If you call opentracing.GlobalTracer() without having set it first, it returns a NoopTracer
 	// In this test case, we haven't touched opentracing at all, so we get the NoopTracer
-	if got, want := reflect.TypeOf(opentracing.GlobalTracer()), reflect.TypeOf(opentracing.NoopTracer{}); got != want {
+	if got, want := reflect.TypeOf(opentracing.GlobalTracer()), reflect.TypeFor[opentracing.NoopTracer](); got != want {
 		t.Errorf("opentracing.GlobalTracer() = %v, want %v", got, want)
 	}
 	stopper()
@@ -85,7 +84,7 @@ func TestStartTracing_Datadog(t *testing.T) {
 	cfg := ExecutorConfig{TracingBackend: "datadog"}
 	e := New(cfg)
 
-	oriCtx := context.Background()
+	oriCtx := t.Context()
 	e.shell, err = shell.New()
 	if err != nil {
 		t.Errorf("shell.New() error = %v, want nil", err)

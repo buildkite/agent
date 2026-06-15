@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	DefaultEndpoint = "https://agent-edge.buildkite.com/v3"
+	DefaultEndpoint                 = "https://agent-edge.buildkite.com/v3"
+	ArtifactUploadConcurrencyEnvVar = "BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"
 )
 
 var (
@@ -118,6 +119,12 @@ var (
 		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
 	}
 
+	AgentArtifactUploadConcurrencyFlag = cli.IntFlag{
+		Name:   "artifact-upload-concurrency",
+		Usage:  "Maximum number of concurrent artifact upload operations used by jobs started by this agent. When unset, artifact uploads use their default",
+		EnvVar: ArtifactUploadConcurrencyEnvVar,
+	}
+
 	ExperimentsFlag = cli.StringSliceFlag{
 		Name:   "experiment",
 		Value:  &cli.StringSlice{},
@@ -134,6 +141,7 @@ var (
 			"*_SECRET",
 			"*_TOKEN",
 			"*_PRIVATE_KEY",
+			"*_SSH_KEY",
 			"*_ACCESS_KEY",
 			"*_SECRET_KEY",
 			// Connection strings frequently contain passwords, e.g.
@@ -229,11 +237,24 @@ var (
 		// -q: quiet, only report errors
 	}
 
+	GitCommitVerificationFlag = cli.StringFlag{
+		Name:   "git-commit-verification",
+		Usage:  "Enable git commit verification",
+		EnvVar: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+	}
+
 	GitFetchFlagsFlag = cli.StringFlag{
 		Name:   "git-fetch-flags",
 		Value:  "-v --prune",
 		Usage:  "Flags to pass to \"git fetch\" command",
 		EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
+	}
+
+	GitSparseCheckoutPathsFlag = cli.StringSliceFlag{
+		Name:   "git-sparse-checkout-paths",
+		Value:  &cli.StringSlice{},
+		Usage:  "Comma-separated list of paths for git sparse checkout (cone mode). When set, only the listed paths are materialized in the working tree.",
+		EnvVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
 	}
 
 	GitMirrorsPathFlag = cli.StringFlag{

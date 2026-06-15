@@ -1,7 +1,6 @@
 package hook_test
 
 import (
-	"context"
 	"errors"
 	"io"
 	"os"
@@ -70,7 +69,7 @@ echo "hello world"
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
 			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
@@ -169,7 +168,7 @@ echo hello world
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
 			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))

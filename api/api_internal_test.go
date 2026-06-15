@@ -12,7 +12,7 @@ import (
 func TestNewRequestBuildkiteTimeoutMilliseconds(t *testing.T) {
 	c := NewClient(logger.NewBuffer(), Config{})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	r, err := c.newRequest(ctx, "GET", "/foo", nil)
@@ -35,7 +35,7 @@ func TestNewRequestBuildkiteTimeoutMilliseconds(t *testing.T) {
 func TestNewRequestWithoutBuildkiteTimeoutMilliseconds(t *testing.T) {
 	c := NewClient(logger.NewBuffer(), Config{})
 
-	ctx := context.Background() // no timeout/deadline
+	ctx := t.Context() // no timeout/deadline
 
 	r, err := c.newRequest(ctx, "GET", "/foo", nil)
 	if err != nil {

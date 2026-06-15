@@ -663,14 +663,29 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		return nil
 	}
 
-	p := process.New(processLogger, cmdCfg)
-	s.proc.Store(p)
-
-	if err := p.Run(ctx); err != nil {
-		return fmt.Errorf("error running %q: %w", process.FormatCommand(cmdCfg.Path, cmdCfg.Args), err)
+	// This sad retry loop is needed to work around the ETXTBSY race, which is
+	// common when using hook wrappers or other dynamic scripts.
+	// See https://github.com/golang/go/issues/22315
+	attempts := 0
+etxtbsyLoop:
+	for {
+		attempts++
+		p := process.New(processLogger, cmdCfg)
+		s.proc.Store(p)
+		err := p.Run(ctx)
+		if attempts <= 100 && errors.Is(err, syscall.ETXTBSY) {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+				continue etxtbsyLoop
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("error running %q: %w", process.FormatCommand(cmdCfg.Path, cmdCfg.Args), err)
+		}
+		return p.WaitResult()
 	}
-
-	return p.WaitResult()
 }
 
 // ExitCode extracts an exit code from an error where the platform supports it,

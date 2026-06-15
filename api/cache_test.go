@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -23,8 +22,8 @@ func newTestCacheClient(t *testing.T, endpoint string) *api.Client {
 
 func TestCacheEntryPeekExists_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("method = %q, want %q", r.Method, http.MethodGet)
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
 		}
 		if got, want := r.Header.Get("Authorization"), "Token test-token"; got != want {
 			t.Errorf("Authorization = %q, want %q", got, want)
@@ -41,9 +40,9 @@ func TestCacheEntryPeekExists_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
-		Key:    "test-key",
-		Branch: "main",
+	resp, exists, _, err := client.CacheEntryPeekExists(t.Context(), "test-slug", api.CacheEntryPeekReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryPeekExists error = %v, want nil", err)
@@ -66,9 +65,9 @@ func TestCacheEntryPeekExists_NotFound(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
-		Key:    "nonexistent-key",
-		Branch: "main",
+	resp, exists, _, err := client.CacheEntryPeekExists(t.Context(), "test-slug", api.CacheEntryPeekReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "nonexistent-key", Mandatory: true}},
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryPeekExists error = %v, want nil", err)
@@ -91,9 +90,9 @@ func TestCacheEntryPeekExists_WrongContentType(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, _, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
-		Key:    "test-key",
-		Branch: "main",
+	_, _, _, err := client.CacheEntryPeekExists(t.Context(), "test-slug", api.CacheEntryPeekReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
 	})
 	if err == nil {
 		t.Error("CacheEntryPeekExists error = nil, want non-nil for wrong content type")
@@ -110,9 +109,9 @@ func TestCacheEntryPeekExists_CacheRegistryNotFound(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, _, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
-		Key:    "test-key",
-		Branch: "main",
+	_, _, _, err := client.CacheEntryPeekExists(t.Context(), "test-slug", api.CacheEntryPeekReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
 	})
 	if err == nil {
 		t.Error("CacheEntryPeekExists error = nil, want non-nil for cache registry not found")
@@ -129,9 +128,9 @@ func TestCacheEntryPeekExists_ContentTypeWithCharset(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, exists, _, err := client.CacheEntryPeekExists(context.Background(), "test-slug", api.CacheEntryPeekReq{
-		Key:    "test-key",
-		Branch: "main",
+	resp, exists, _, err := client.CacheEntryPeekExists(t.Context(), "test-slug", api.CacheEntryPeekReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryPeekExists error = %v, want nil", err)
@@ -153,8 +152,11 @@ func TestCacheEntryCreate_Success(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
-		if got, want := req.Key, "test-key"; got != want {
-			t.Errorf("req.Key = %q, want %q", got, want)
+		if len(req.CacheKey) != 1 || req.CacheKey[0].Value != "test-key" {
+			t.Errorf("req.CacheKey = %+v, want single part with value %q", req.CacheKey, "test-key")
+		}
+		if len(req.Blobs) != 1 || req.Blobs[0].Digest.Value != "abc123" {
+			t.Errorf("req.Blobs = %+v, want single blob with digest %q", req.Blobs, "abc123")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -170,14 +172,15 @@ func TestCacheEntryCreate_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, _, err := client.CacheEntryCreate(context.Background(), "test-slug", api.CacheEntryCreateReq{
-		Key:          "test-key",
-		FallbackKeys: []string{"fallback-1", "fallback-2"},
-		Compression:  "gzip",
-		FileSize:     1024,
-		Digest:       "sha256:abc123",
-		Paths:        []string{"/path/1", "/path/2"},
-		Platform:     "linux",
+	resp, _, err := client.CacheEntryCreate(t.Context(), "test-slug", api.CacheEntryCreateReq{
+		TargetPaths: []string{"/path/1", "/path/2"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
+		Blobs: []api.CacheBlob{{
+			Digest:      api.CacheDigest{Algorithm: "sha256", Value: "abc123"},
+			FileSize:    1024,
+			Compression: "zstd",
+		}},
+		Platform:     "linux/amd64",
 		Pipeline:     "test-pipeline",
 		Branch:       "main",
 		Organization: "test-org",
@@ -195,17 +198,23 @@ func TestCacheEntryCreate_Success(t *testing.T) {
 
 func TestCacheEntryRetrieve_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("method = %q, want %q", r.Method, http.MethodGet)
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
 		}
-		if got, want := r.URL.Query().Get("key"), "test-key"; got != want {
-			t.Errorf("query key = %q, want %q", got, want)
+		var req api.CacheEntryRetrieveReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if len(req.CacheKey) != 1 || req.CacheKey[0].Value != "test-key" {
+			t.Errorf("req.CacheKey = %+v, want single part with value %q", req.CacheKey, "test-key")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(api.CacheEntryRetrieveResp{
-			Key:                  "test-key",
+			TargetPaths:          []string{"node_modules"},
+			CacheKey:             []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
+			Blobs:                []api.CacheBlob{{Digest: api.CacheDigest{Algorithm: "sha256", Value: "abc123"}, FileSize: 1024, Compression: "zstd"}},
 			Fallback:             false,
 			ExpiresAt:            time.Now().Add(24 * time.Hour),
 			Multipart:            false,
@@ -217,10 +226,9 @@ func TestCacheEntryRetrieve_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, found, _, err := client.CacheEntryRetrieve(context.Background(), "test-slug", api.CacheEntryRetrieveReq{
-		Key:          "test-key",
-		Branch:       "main",
-		FallbackKeys: "fallback-1,fallback-2",
+	resp, found, _, err := client.CacheEntryRetrieve(t.Context(), "test-slug", api.CacheEntryRetrieveReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryRetrieve error = %v, want nil", err)
@@ -228,8 +236,8 @@ func TestCacheEntryRetrieve_Success(t *testing.T) {
 	if !found {
 		t.Error("found = false, want true")
 	}
-	if got, want := resp.Key, "test-key"; got != want {
-		t.Errorf("resp.Key = %q, want %q", got, want)
+	if len(resp.CacheKey) != 1 || resp.CacheKey[0].Value != "test-key" {
+		t.Errorf("resp.CacheKey = %+v, want single part with value %q", resp.CacheKey, "test-key")
 	}
 	if resp.Fallback {
 		t.Error("resp.Fallback = true, want false")
@@ -246,9 +254,9 @@ func TestCacheEntryRetrieve_NotFound(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, found, _, err := client.CacheEntryRetrieve(context.Background(), "test-slug", api.CacheEntryRetrieveReq{
-		Key:    "nonexistent-key",
-		Branch: "main",
+	resp, found, _, err := client.CacheEntryRetrieve(t.Context(), "test-slug", api.CacheEntryRetrieveReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "nonexistent-key", Mandatory: true}},
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryRetrieve error = %v, want nil", err)
@@ -282,7 +290,7 @@ func TestCacheEntryCommit_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	resp, _, err := client.CacheEntryCommit(context.Background(), "test-slug", api.CacheEntryCommitReq{
+	resp, _, err := client.CacheEntryCommit(t.Context(), "test-slug", api.CacheEntryCommitReq{
 		UploadID: "upload-123",
 	})
 	if err != nil {
@@ -303,7 +311,7 @@ func TestCacheEntryCommit_Failure(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, _, err := client.CacheEntryCommit(context.Background(), "test-slug", api.CacheEntryCommitReq{
+	_, _, err := client.CacheEntryCommit(t.Context(), "test-slug", api.CacheEntryCommitReq{
 		UploadID: "invalid-upload-id",
 	})
 	if err == nil {

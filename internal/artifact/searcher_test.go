@@ -1,7 +1,6 @@
 package artifact
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -35,7 +34,7 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ac := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,

@@ -12,7 +12,7 @@ fi
 export BUILDKITE_TEST_ENGINE_SUITE_SLUG=buildkite-agent
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=gotest
 export BUILDKITE_TEST_ENGINE_RESULT_PATH="junit-${BUILDKITE_JOB_ID}.xml"
-export BUILDKITE_TEST_ENGINE_RETRY_COUNT=1
+export BUILDKITE_TEST_ENGINE_RETRY_COUNT=0
 if [[ "$(go env GOOS)" == "windows" ]]; then
   # I can't get windows to work with the $COVERAGE_DIR, I tried cygpath but no luck.
   # need a Windows VM to debug.

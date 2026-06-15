@@ -5,12 +5,13 @@ import (
 )
 
 const (
-	// local s3 store type
-	LocalS3Store = "local_s3"
 	// local hosted agents store type
 	LocalHostedAgents = "local_hosted_agents"
 	// local file store type
 	LocalFileStore = "local_file"
+	// agent-managed store type (cache v2): the agent manages the blob store
+	// itself via BUILDKITE_AGENT_CACHE_STORE_URL
+	AgentManaged = "agent_managed"
 )
 
 type TransferInfo struct {
@@ -24,7 +25,7 @@ type TransferInfo struct {
 
 func IsValidStore(storeType string) bool {
 	switch storeType {
-	case LocalS3Store, LocalHostedAgents, LocalFileStore:
+	case LocalHostedAgents, LocalFileStore, AgentManaged:
 		return true
 	default:
 		return false

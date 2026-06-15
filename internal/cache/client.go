@@ -64,7 +64,7 @@ type client struct {
 
 // newClient builds a client from apiClient and cfg: loads and expands the
 // cache configuration file, validates every cache definition, and returns the
-// client together with the cache IDs to operate on (filtered by cfg.Ids if
+// client together with the cache names to operate on (filtered by cfg.Names if
 // non-empty).
 //
 // Returns (nil, nil, nil) when the configuration file has no caches.
@@ -84,8 +84,15 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 	}
 	for _, c := range expanded {
 		if err := c.Validate(); err != nil {
-			return nil, nil, fmt.Errorf("%w: cache validation failed for ID %s: %w", ErrInvalidConfiguration, c.ID, err)
+			return nil, nil, fmt.Errorf("%w: cache validation failed for name %s: %w", ErrInvalidConfiguration, c.Name, err)
 		}
+	}
+
+	// Registry slug comes from BUILDKITE_AGENT_CACHE_REGISTRY; "~" selects the
+	// cluster default when unset.
+	registry := cfg.Registry
+	if registry == "" {
+		registry = "~"
 	}
 
 	c := &client{
@@ -96,7 +103,7 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		pipeline:     cfg.Pipeline,
 		organization: cfg.Organization,
 		platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
-		registry:     "~",
+		registry:     registry,
 		caches:       expanded,
 		onProgress: func(cacheID, stage, message string, _, _ int) {
 			l.WithFields(
@@ -107,36 +114,36 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		},
 	}
 
-	ids, err := c.resolveCacheIDs(cfg.Ids)
+	names, err := c.resolveCacheNames(cfg.Names)
 	if err != nil {
 		return nil, nil, err
 	}
-	return c, ids, nil
+	return c, names, nil
 }
 
-// resolveCacheIDs returns requested if non-empty (after validating every ID
-// exists), otherwise returns every cache ID configured on the client.
-func (c *client) resolveCacheIDs(requested []string) ([]string, error) {
+// resolveCacheNames returns requested if non-empty (after validating every name
+// exists), otherwise returns every cache name configured on the client.
+func (c *client) resolveCacheNames(requested []string) ([]string, error) {
 	if len(requested) == 0 {
-		ids := make([]string, 0, len(c.caches))
+		names := make([]string, 0, len(c.caches))
 		for _, cc := range c.caches {
-			ids = append(ids, cc.ID)
+			names = append(names, cc.Name)
 		}
-		return ids, nil
+		return names, nil
 	}
 
 	known := make(map[string]bool, len(c.caches))
 	for _, cc := range c.caches {
-		known[cc.ID] = true
+		known[cc.Name] = true
 	}
 	var invalid []string
-	for _, id := range requested {
-		if !known[id] {
-			invalid = append(invalid, id)
+	for _, name := range requested {
+		if !known[name] {
+			invalid = append(invalid, name)
 		}
 	}
 	if len(invalid) > 0 {
-		return nil, fmt.Errorf("cache IDs not found in configuration: %s", strings.Join(invalid, ", "))
+		return nil, fmt.Errorf("cache names not found in configuration: %s", strings.Join(invalid, ", "))
 	}
 	return requested, nil
 }
@@ -153,14 +160,20 @@ func (c *client) callProgress(cacheID, stage, message string, current, total int
 	c.onProgress(cacheID, stage, message, current, total)
 }
 
-// findCache returns the cache definition with the given ID, or ErrCacheNotFound.
-func (c *client) findCache(id string) (*configuration.Cache, error) {
+// findCache returns the cache definition with the given name, or ErrCacheNotFound.
+func (c *client) findCache(name string) (*configuration.Cache, error) {
 	for i := range c.caches {
-		if c.caches[i].ID == id {
+		if c.caches[i].Name == name {
 			return &c.caches[i], nil
 		}
 	}
 	return nil, ErrCacheNotFound
+}
+
+// resolveCacheKey resolves the structured cache_key to the flat wire shape the
+// backend expects, reading the live environment/filesystem (nil env = OS env).
+func (c *client) resolveCacheKey(cacheConfig *configuration.Cache) ([]api.CacheKeyPart, error) {
+	return configuration.ResolveCacheKey(cacheConfig.CacheKey, nil)
 }
 
 // ProgressCallback is invoked during Save and Restore to report progress.

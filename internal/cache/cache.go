@@ -14,6 +14,8 @@ import (
 
 // Config holds the configuration for cache operations.
 type Config struct {
+	// Registry is the cache registry slug (URL path). "~" selects the cluster default.
+	Registry string
 	// BucketURL is the URL of the bucket (e.g., s3://bucket-name)
 	BucketURL string
 	// Branch is the branch associated with the cache
@@ -24,8 +26,8 @@ type Config struct {
 	Organization string
 	// CacheConfigFile is the path to the cache configuration YAML file
 	CacheConfigFile string
-	// Ids is a list of cache IDs (if empty, processes all caches)
-	Ids []string
+	// Names is a list of cache names (if empty, processes all caches)
+	Names []string
 	// Concurrency is the number of concurrent cache operations
 	Concurrency int
 }

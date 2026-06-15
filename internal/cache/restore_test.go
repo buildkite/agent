@@ -24,7 +24,7 @@ func TestCleanPath(t *testing.T) {
 			t.Fatalf("WriteFile: %v", err)
 		}
 
-		if err := cleanPath(context.Background(), testDir); err != nil {
+		if err := cleanPath(t.Context(), testDir); err != nil {
 			t.Fatalf("cleanPath: %v", err)
 		}
 
@@ -51,7 +51,7 @@ func TestCleanPath(t *testing.T) {
 			t.Fatalf("Chmod: %v", err)
 		}
 
-		if err := cleanPath(context.Background(), testDir); err != nil {
+		if err := cleanPath(t.Context(), testDir); err != nil {
 			t.Fatalf("cleanPath: %v", err)
 		}
 
@@ -62,13 +62,13 @@ func TestCleanPath(t *testing.T) {
 	})
 
 	t.Run("succeeds on non-existent path", func(t *testing.T) {
-		if err := cleanPath(context.Background(), "/nonexistent/path/that/does/not/exist"); err != nil {
+		if err := cleanPath(t.Context(), "/nonexistent/path/that/does/not/exist"); err != nil {
 			t.Fatalf("cleanPath: %v", err)
 		}
 	})
 
 	t.Run("rejects empty path", func(t *testing.T) {
-		err := cleanPath(context.Background(), "")
+		err := cleanPath(t.Context(), "")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -78,7 +78,7 @@ func TestCleanPath(t *testing.T) {
 	})
 
 	t.Run("rejects root path", func(t *testing.T) {
-		err := cleanPath(context.Background(), "/")
+		err := cleanPath(t.Context(), "/")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -88,7 +88,7 @@ func TestCleanPath(t *testing.T) {
 	})
 
 	t.Run("rejects current directory", func(t *testing.T) {
-		err := cleanPath(context.Background(), ".")
+		err := cleanPath(t.Context(), ".")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -103,7 +103,7 @@ func TestCleanPath(t *testing.T) {
 			t.Fatalf("UserHomeDir: %v", err)
 		}
 
-		err = cleanPath(context.Background(), home)
+		err = cleanPath(t.Context(), home)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -119,7 +119,7 @@ func TestCleanPath(t *testing.T) {
 			t.Fatalf("MkdirAll: %v", err)
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
 		err := cleanPath(ctx, testDir)
@@ -137,7 +137,7 @@ func TestCleanPathWindowsDriveRoot(t *testing.T) {
 		t.Skip("Windows-specific test")
 	}
 
-	err := cleanPath(context.Background(), "C:\\")
+	err := cleanPath(t.Context(), "C:\\")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

@@ -39,7 +39,7 @@ type messageResponse struct {
 func TestClientDo(t *testing.T) {
 	t.Parallel()
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	sockPath := testSocketPath()
@@ -100,7 +100,7 @@ func TestClientDo(t *testing.T) {
 func TestClientDoErrors(t *testing.T) {
 	t.Parallel()
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	sockPath := testSocketPath()
