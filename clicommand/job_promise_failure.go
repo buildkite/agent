@@ -80,8 +80,10 @@ var JobPromiseFailureCommand = cli.Command{
 		if err != nil {
 			return fmt.Errorf("exit status must be an integer: %w", err)
 		}
-		if exitStatus == 0 {
-			return fmt.Errorf("exit status must be non-zero: a promised failure cannot have a successful (0) exit status")
+		// Only positive exit statuses are meaningful here: 0 is success, and
+		// negative values (such as -1) are reserved for internal use.
+		if exitStatus <= 0 {
+			return fmt.Errorf("exit status must be a positive integer: a promised failure cannot have a zero (successful) or negative exit status")
 		}
 
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
