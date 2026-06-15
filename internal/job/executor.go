@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/api"
@@ -38,7 +37,6 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/go-pipeline"
-	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
 
@@ -551,30 +549,13 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		e.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
 	}
 
-	const maxHookRetry = 30
-
-	// Run the wrapper script
-	err = roko.NewRetrier(
-		roko.WithStrategy(roko.Constant(100*time.Millisecond)),
-		roko.WithMaxAttempts(maxHookRetry),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		// Run the script and only retry on ETXTBSY.
-		// This error occurs because of an unavoidable race between forking
-		// (which acquires open file descriptors of the parent process) and
-		// writing an executable (the script wrapper).
-		// See https://github.com/golang/go/issues/22315.
+	err = func() error {
 		script, err := e.shell.Script(script.Path(), e.HooksShell)
 		if err != nil {
-			r.Break()
 			return err
 		}
-		err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
-		if errors.Is(err, syscall.ETXTBSY) {
-			return err
-		}
-		r.Break()
-		return err
-	})
+		return script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
+	}()
 	if err != nil {
 		exitCode := shell.ExitCode(err)
 		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
@@ -590,7 +571,8 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 
 		switch {
 		case errors.Is(err, syscall.ETXTBSY):
-			// If the underlying error is _still_ ETXTBSY, then inspect the file
+			// If the underlying error is _still_ ETXTBSY
+			// (after the retry within script.Run), then inspect the file
 			// to see what process had it open for write, to log something helpful
 			logOpenedHookInfo(e.shell.Logger, e.Debug, hookName, script.Path())
 
