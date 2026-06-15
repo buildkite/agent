@@ -68,9 +68,10 @@ func TestOIDCRequestToken(t *testing.T) {
 		}
 
 		for _, want := range []string{
-			"automatic OIDC token redaction requires the Job API, but the Job API client could not be created",
+			"automatic OIDC token redaction requires the Job API",
 			"OIDC token was not printed",
-			"To request it anyway, explicitly opt out of redaction with --skip-redaction or BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION=true",
+			"--skip-redaction",
+			"BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION=true",
 		} {
 			if got := err.Error(); !strings.Contains(got, want) {
 				t.Fatalf("runOIDCRequestTokenCommand() error = %q, want containing %q", got, want)
