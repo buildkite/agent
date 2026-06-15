@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -155,7 +156,15 @@ var OIDCRequestTokenCommand = cli.Command{
 		if !cfg.SkipRedaction {
 			jobClient, err := jobapi.NewDefaultClient(ctx)
 			if err != nil {
-				return fmt.Errorf("failed to create Job API client: %w", err)
+				reason := "the Job API client could not be created"
+				if errors.Is(err, jobapi.ErrJobAPIUnavailable) {
+					reason = "the Job API is unavailable on this machine. On older Windows versions, including Windows Server 2016, the Job API is unavailable because Unix domain sockets are not supported"
+				}
+				return fmt.Errorf(
+					"automatic OIDC token redaction requires the Job API, but %s. OIDC token was not printed. To request it anyway, explicitly opt out of redaction with --skip-redaction or BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION=true: %w",
+					reason,
+					err,
+				)
 			}
 
 			if err := AddToRedactor(ctx, l, jobClient, token.Token); err != nil {

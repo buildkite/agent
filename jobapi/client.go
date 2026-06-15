@@ -15,6 +15,8 @@ const (
 )
 
 var (
+	// ErrJobAPIUnavailable is returned when the current machine cannot support the Job API.
+	ErrJobAPIUnavailable = errors.New("job API is unavailable on this machine")
 	errNoJobAPISocketEnv = errors.New("BUILDKITE_AGENT_JOB_API_SOCKET empty or undefined")
 	errNoJobAPITokenEnv  = errors.New("BUILDKITE_AGENT_JOB_API_TOKEN empty or undefined")
 )
@@ -37,6 +39,10 @@ func NewDefaultClient(ctx context.Context) (*Client, error) {
 
 // DefaultSocketPath returns the socket path and access token, if available.
 func DefaultSocketPath() (path, token string, err error) {
+	if !socket.Available() {
+		return "", "", ErrJobAPIUnavailable
+	}
+
 	path = os.Getenv("BUILDKITE_AGENT_JOB_API_SOCKET")
 	if path == "" {
 		return "", "", errNoJobAPISocketEnv
