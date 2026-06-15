@@ -143,6 +143,31 @@ func TestRunWithStdin(t *testing.T) {
 	}
 }
 
+func TestCloneWithStdinPreservesOutputInterceptor(t *testing.T) {
+	t.Parallel()
+
+	out := &bytes.Buffer{}
+	intercepted := &bytes.Buffer{}
+	sh := newShellForTest(t,
+		shell.WithStdout(out),
+		shell.WithPTY(false),
+		shell.WithOutputInterceptor(func(_ context.Context, downstream io.Writer, _ map[string]string) io.Writer {
+			return io.MultiWriter(downstream, intercepted)
+		}),
+	)
+
+	cmd := sh.CloneWithStdin(strings.NewReader("hello stdin")).Command("tr", "hs", "HS")
+	if err := cmd.Run(t.Context()); err != nil {
+		t.Fatalf(`sh.CloneWithStdin("hello stdin").Command("tr", "hs", "HS").Run(ctx) error = %v`, err)
+	}
+	if got, want := out.String(), "Hello Stdin"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	if got, want := intercepted.String(), "Hello Stdin"; got != want {
+		t.Errorf("intercepted stdout = %q, want %q", got, want)
+	}
+}
+
 func TestContextCancelInterrupts(t *testing.T) {
 	t.Parallel()
 

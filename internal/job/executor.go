@@ -74,6 +74,45 @@ type Executor struct {
 	// redactors for the job logs. The will be populated with values both from environment variable and through the Job API.
 	// In order for the latter to happen, a reference is passed into the the Job API server as well
 	redactors *replacer.Mux
+
+	// loggerTee carries the redacted shell logger output (section headers,
+	// prompts, comments, warnings) to stderr and, when OTLP job logging is
+	// enabled, mirrors it into the OTLP exporter so the exported records match
+	// the customer-facing Buildkite job log.
+	loggerTee *teeWriter
+}
+
+// teeWriter writes to a primary writer and, when configured, also to a
+// secondary writer. The secondary sink can be attached after construction,
+// which lets the executor mirror already-redacted shell logger output into the
+// OTLP exporter once it has been initialised.
+type teeWriter struct {
+	mu        sync.Mutex
+	primary   io.Writer
+	secondary io.Writer
+}
+
+func (w *teeWriter) Write(p []byte) (int, error) {
+	// Hold the lock for the whole write so that detaching the secondary sink
+	// (setSecondary(nil), called before the OTLP exporter is flushed and shut
+	// down) cannot complete while a write is still in flight. This guarantees
+	// no control output lands on the OTLP emitter after it has been flushed.
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	n, err := w.primary.Write(p)
+	if w.secondary != nil {
+		// The secondary sink is best-effort: failures must not affect the
+		// primary (customer-facing) job log output.
+		_, _ = w.secondary.Write(p)
+	}
+	return n, err
+}
+
+func (w *teeWriter) setSecondary(secondary io.Writer) {
+	w.mu.Lock()
+	w.secondary = secondary
+	w.mu.Unlock()
 }
 
 // New returns a new executor instance
@@ -151,6 +190,34 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Create an empty env for us to keep track of our env changes in
 	e.shell.Env = env.FromSlice(os.Environ())
+
+	// OTLP job log export lives entirely in the bootstrap process, which is the
+	// single home for this feature. When OpenTelemetry tracing is enabled, the
+	// per-command emit context carries the active hook/command span, so log
+	// records are trace-correlated. With tracing disabled, records are still
+	// emitted but remain uncorrelated.
+	if e.JobLogsOTLP {
+		jobLogger, err := newOTLPJobLogger(ctx, e)
+		if err != nil {
+			e.shell.Warningf("Failed to initialize OTLP job log exporter: %v", err)
+		} else {
+			e.shell.SetOutputInterceptor(jobLogger.Wrap)
+			// Mirror the redacted shell logger control output (section headers,
+			// prompts, comments, warnings) into OTLP so the exported records
+			// match the downloadable Buildkite job log and the UI stream.
+			if e.loggerTee != nil {
+				e.loggerTee.setSecondary(jobLogger.controlWriter())
+			}
+			defer func() {
+				if e.loggerTee != nil {
+					e.loggerTee.setSecondary(nil)
+				}
+				if err := jobLogger.Close(); err != nil {
+					e.shell.Warningf("Failed to close OTLP job log exporter: %v", err)
+				}
+			}()
+		}
+	}
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
 	if e.JobAPI {
@@ -357,6 +424,18 @@ type HookConfig struct {
 	PluginName     string
 }
 
+func hookLogAttributes(hookCfg HookConfig) map[string]string {
+	attrs := map[string]string{
+		"buildkite.phase":      "hook",
+		"buildkite.hook.name":  hookCfg.Name,
+		"buildkite.hook.scope": hookCfg.Scope,
+	}
+	if hookCfg.PluginName != "" {
+		attrs["buildkite.hook.plugin"] = hookCfg.PluginName
+	}
+	return attrs
+}
+
 func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
 	if e.TracingBackend != tracetools.BackendDatadog {
 		return scope
@@ -459,7 +538,7 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ)); err != nil {
+	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ), shell.WithOutputAttributes(hookLogAttributes(hookCfg))); err != nil {
 		return err
 	}
 	// Passing an empty env changes through because in polyglot hook we can't detect
@@ -568,7 +647,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 			r.Break()
 			return err
 		}
-		err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
+		err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env), shell.WithOutputAttributes(hookLogAttributes(hookCfg)))
 		if errors.Is(err, syscall.ETXTBSY) {
 			return err
 		}
@@ -1293,7 +1372,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
+	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false), shell.WithOutputAttributes(map[string]string{
+		"buildkite.phase":      "command",
+		"buildkite.hook.name":  "command",
+		"buildkite.hook.scope": "default",
+	}))
 	return err
 }
 
@@ -1392,7 +1475,12 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 
 	stdoutRedactor := replacer.New(stdout, needles, redact.Redacted)
 	e.redactors.Append(stdoutRedactor)
-	loggerRedactor := replacer.New(stderr, needles, redact.Redacted)
+	// The shell logger writes through this redactor into loggerTee, whose
+	// primary sink is stderr. When OTLP job logging is enabled, a secondary
+	// sink is attached so the same already-redacted control output is mirrored
+	// into the OTLP exporter.
+	e.loggerTee = &teeWriter{primary: stderr}
+	loggerRedactor := replacer.New(e.loggerTee, needles, redact.Redacted)
 	e.redactors.Append(loggerRedactor)
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)
