@@ -79,19 +79,26 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, err
 	}
 
-	result.Key = cacheConfig.Key
+	result.Key = cacheID
+
+	cacheKey, err := c.resolveCacheKey(cacheConfig)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to resolve cache key")
+		return result, fmt.Errorf("failed to resolve cache key: %w", err)
+	}
 
 	span.SetAttributes(
-		attribute.String("cache.key", cacheConfig.Key),
+		attribute.String("cache.id", cacheID),
 		attribute.String("cache.registry", c.registry),
-		attribute.Int("cache.paths_count", len(cacheConfig.Paths)),
-		attribute.Int("cache.fallback_keys_count", len(cacheConfig.FallbackKeys)),
+		attribute.Int("cache.target_paths_count", len(cacheConfig.TargetPaths)),
+		attribute.Int("cache.key_parts_count", len(cacheKey)),
 	)
 
 	c.callProgress(cacheID, "validating", "Validating cache configuration", 0, 0)
 
 	// Validate cache paths exist
-	if err := checkPathsExist(cacheConfig.Paths); err != nil {
+	if err := checkPathsExist(cacheConfig.TargetPaths); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "invalid cache paths")
 		return result, fmt.Errorf("invalid cache paths: %w", err)
@@ -112,8 +119,8 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
 		_, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
-			Key:    cacheConfig.Key,
-			Branch: c.branch,
+			TargetPaths: cacheConfig.TargetPaths,
+			CacheKey:    cacheKey,
 		})
 		if api.BreakOnNonRetryable(r, peekApiResp, err) {
 			return err
@@ -185,10 +192,10 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("invalid cache store configuration: %w", err)
 	}
 
-	c.callProgress(cacheID, "building_archive", "Building archive", 0, len(cacheConfig.Paths))
+	c.callProgress(cacheID, "building_archive", "Building archive", 0, len(cacheConfig.TargetPaths))
 
 	// Build archive
-	archiveInfo, err := archive.BuildArchive(ctx, cacheConfig.Paths, cacheConfig.Key)
+	archiveInfo, err := archive.BuildArchive(ctx, cacheConfig.TargetPaths, cacheID)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to build archive")
@@ -203,7 +210,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		CompressionRatio: float64(archiveInfo.WrittenBytes) / float64(archiveInfo.Size),
 		Sha256Sum:        archiveInfo.Sha256sum,
 		Duration:         archiveInfo.Duration,
-		Paths:            cacheConfig.Paths,
+		Paths:            cacheConfig.TargetPaths,
 	}
 
 	span.SetAttributes(
@@ -230,18 +237,18 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
-		createResp, createApiResp, err = c.api.CacheEntryCreate(ctx, registryResp.Name, api.CacheEntryCreateReq{
-			Key:          cacheConfig.Key,
-			FallbackKeys: cacheConfig.FallbackKeys,
-			Compression:  c.format,
-			FileSize:     int(archiveInfo.Size),
-			Digest:       fmt.Sprintf("sha256:%s", archiveInfo.Sha256sum),
-			Paths:        cacheConfig.Paths,
+		createResp, createApiResp, err = c.api.CacheEntryCreate(ctx, c.registry, api.CacheEntryCreateReq{
+			TargetPaths: cacheConfig.TargetPaths,
+			CacheKey:    cacheKey,
+			Blobs: []api.CacheBlob{{
+				Digest:      api.CacheDigest{Algorithm: "sha256", Value: archiveInfo.Sha256sum},
+				FileSize:    archiveInfo.Size,
+				Compression: c.format,
+			}},
 			Platform:     c.platform,
 			Pipeline:     c.pipeline,
 			Branch:       c.branch,
 			Organization: c.organization,
-			Store:        registryResp.Store,
 		})
 		if api.BreakOnNonRetryable(r, createApiResp, err) {
 			return err
@@ -260,9 +267,13 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 
 	result.UploadID = createResp.UploadID
 
+	// Content-addressed storage: the object name is the archive's digest, which
+	// the agent derives itself (the backend no longer echoes a store object name).
+	storeObjectName := archiveInfo.Sha256sum
+
 	span.SetAttributes(
 		attribute.String("cache.upload_id", createResp.UploadID),
-		attribute.String("cache.object_name", createResp.StoreObjectName),
+		attribute.String("cache.object_name", storeObjectName),
 	)
 
 	c.callProgress(cacheID, "uploading", "Uploading cache archive", 0, int(archiveInfo.Size))
@@ -275,7 +286,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("failed to create blob store: %w", err)
 	}
 
-	transferInfo, err := blobStore.Upload(ctx, archiveInfo.ArchivePath, createResp.StoreObjectName)
+	transferInfo, err := blobStore.Upload(ctx, archiveInfo.ArchivePath, storeObjectName)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to upload cache")
@@ -311,6 +322,9 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
+		// ETags is intentionally unset in M1: the agent-managed (local) store
+		// adapter doesn't require multipart e-tags. It's populated only for
+		// backend-managed multipart uploads, which land in a later milestone.
 		_, commitApiResp, err = c.api.CacheEntryCommit(ctx, c.registry, api.CacheEntryCommitReq{
 			UploadID: createResp.UploadID,
 		})
@@ -376,9 +390,9 @@ func validateCacheStore(storeType, bucketURL string) error {
 	}
 
 	switch storeType {
-	case store.LocalS3Store:
+	case store.AgentManaged:
 		if bucketURL == "" {
-			return fmt.Errorf("bucket URL is required for S3 store")
+			return fmt.Errorf("BUILDKITE_AGENT_CACHE_STORE_URL must be set for the %s cache store", storeType)
 		}
 		// Note: We allow both s3:// and file:// for S3 store (file:// is for local testing)
 	case store.LocalHostedAgents:

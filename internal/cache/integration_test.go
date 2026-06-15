@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -28,20 +29,30 @@ type mockRegistry struct {
 }
 
 type mockCacheEntry struct {
-	key             string
+	targetPaths     []string
+	cacheKey        []api.CacheKeyPart
+	blobs           []api.CacheBlob
 	storeObjectName string
 	uploadID        string
-	digest          string
-	compression     string
-	fileSize        int
 	committed       bool
 	expiresAt       time.Time
-	fallbackKeys    []string
-	paths           []string
 	platform        string
 	pipeline        string
 	branch          string
 	organization    string
+}
+
+// cacheAddr builds the v2 entry address from the order-insensitive target_paths
+// set and the ordered cache_key, mirroring how the backend composes its key.
+func cacheAddr(targetPaths []string, cacheKey []api.CacheKeyPart) string {
+	paths := append([]string(nil), targetPaths...)
+	sort.Strings(paths)
+
+	values := make([]string, len(cacheKey))
+	for i, p := range cacheKey {
+		values[i] = p.Value
+	}
+	return strings.Join(paths, ",") + "#" + strings.Join(values, "#")
 }
 
 func newMockAPIClient(storageType string) *mockAPIClient {
@@ -78,28 +89,16 @@ func (m *mockAPIClient) CacheEntryPeekExists(ctx context.Context, registry strin
 		return api.CacheEntryPeekResp{}, false, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
-	entry, exists := reg.cache[req.Key]
+	entry, exists := reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)]
 	if !exists || !entry.committed {
 		return api.CacheEntryPeekResp{Message: api.CacheEntryNotFound}, false, nil, nil
 	}
 
 	return api.CacheEntryPeekResp{
-		Store:        reg.store,
-		Digest:       entry.digest,
-		ExpiresAt:    entry.expiresAt,
-		Compression:  entry.compression,
-		FileSize:     entry.fileSize,
-		Paths:        entry.paths,
-		Pipeline:     entry.pipeline,
-		Branch:       entry.branch,
-		Owner:        entry.organization,
-		Platform:     entry.platform,
-		Key:          entry.key,
-		FallbackKeys: entry.fallbackKeys,
-		CreatedAt:    entry.expiresAt.Add(-7 * 24 * time.Hour), // 7 days before expiry
-		AgentID:      "test-agent-id",
-		JobID:        "test-job-id",
-		BuildID:      "test-build-id",
+		Store:       reg.store,
+		TargetPaths: entry.targetPaths,
+		CacheKey:    entry.cacheKey,
+		Blobs:       entry.blobs,
 	}, true, nil, nil
 }
 
@@ -110,30 +109,31 @@ func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, r
 	}
 
 	uploadID := fmt.Sprintf("upload-%d", time.Now().UnixNano())
-	storeObjectName := fmt.Sprintf("%s/%s/%s/%s", req.Organization, req.Pipeline, req.Branch, req.Key)
+
+	// Content-addressed storage: the object name is the blob digest.
+	var storeObjectName string
+	if len(req.Blobs) > 0 {
+		storeObjectName = req.Blobs[0].Digest.Value
+	}
 
 	entry := &mockCacheEntry{
-		key:             req.Key,
+		targetPaths:     req.TargetPaths,
+		cacheKey:        req.CacheKey,
+		blobs:           req.Blobs,
 		storeObjectName: storeObjectName,
 		uploadID:        uploadID,
-		digest:          req.Digest,
-		compression:     req.Compression,
-		fileSize:        req.FileSize,
 		committed:       false,
 		expiresAt:       time.Now().Add(7 * 24 * time.Hour),
-		fallbackKeys:    req.FallbackKeys,
-		paths:           req.Paths,
 		platform:        req.Platform,
 		pipeline:        req.Pipeline,
 		branch:          req.Branch,
 		organization:    req.Organization,
 	}
 
-	reg.cache[req.Key] = entry
+	reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)] = entry
 
 	return api.CacheEntryCreateResp{
-		UploadID:        uploadID,
-		StoreObjectName: storeObjectName,
+		UploadID: uploadID,
 	}, nil, nil
 }
 
@@ -159,35 +159,16 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 		return api.CacheEntryRetrieveResp{}, false, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
-	// Try exact key match first
-	if entry, exists := reg.cache[req.Key]; exists && entry.committed {
+	// fallback walking will be implemented in the future, for now we only support exact key matches.
+	if entry, exists := reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)]; exists && entry.committed {
 		return api.CacheEntryRetrieveResp{
-			Store:           reg.store,
-			Key:             entry.key,
-			Fallback:        false,
-			StoreObjectName: entry.storeObjectName,
-			ExpiresAt:       entry.expiresAt,
-			CompressionType: entry.compression,
+			Store:       reg.store,
+			TargetPaths: entry.targetPaths,
+			CacheKey:    entry.cacheKey,
+			Blobs:       entry.blobs,
+			Fallback:    false,
+			ExpiresAt:   entry.expiresAt,
 		}, true, nil, nil
-	}
-
-	// Try fallback keys - check if the entry key matches any of the requested fallback keys
-	if req.FallbackKeys != "" {
-		// FallbackKeys is a comma-separated string
-		fallbackKeys := strings.SplitSeq(req.FallbackKeys, ",")
-		for fbKey := range fallbackKeys {
-			fbKey = strings.TrimSpace(fbKey)
-			if entry, exists := reg.cache[fbKey]; exists && entry.committed {
-				return api.CacheEntryRetrieveResp{
-					Store:           reg.store,
-					Key:             entry.key,
-					Fallback:        true,
-					StoreObjectName: entry.storeObjectName,
-					ExpiresAt:       entry.expiresAt,
-					CompressionType: entry.compression,
-				}, true, nil, nil
-			}
-		}
 	}
 
 	return api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound}, false, nil, nil
@@ -284,8 +265,6 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *client, cach
 	switch storageType {
 	case "local_file":
 		bucketURL = fmt.Sprintf("file://%s", urlPath)
-	case "local_s3":
-		bucketURL = fmt.Sprintf("file://%s", urlPath) // Use file:// for testing
 	default:
 		t.Fatalf("unsupported storage type: %s", storageType)
 	}
@@ -302,10 +281,9 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *client, cach
 		registry:     "~",
 		caches: []configuration.Cache{
 			{
-				ID:           "test-cache",
-				Key:          "v1-test-key",
-				Paths:        []string{cacheDir},
-				FallbackKeys: []string{"v1-fallback-key"},
+				ID:          "test-cache",
+				CacheKey:    []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "v1-test-key"}},
+				TargetPaths: []string{cacheDir},
 			},
 		},
 		onProgress: nil,
@@ -330,8 +308,8 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 		if !result.CacheEntryCreated {
 			t.Error("cache should be created")
 		}
-		if result.Key != "v1-test-key" {
-			t.Errorf("Key = %q, want %q", result.Key, "v1-test-key")
+		if result.Key != "test-cache" {
+			t.Errorf("Key = %q, want %q", result.Key, "test-cache")
 		}
 		if result.UploadID == "" {
 			t.Error("UploadID should not be empty")
@@ -412,8 +390,8 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 		if result.FallbackUsed {
 			t.Error("should not use fallback")
 		}
-		if result.Key != "v1-test-key" {
-			t.Errorf("Key = %q, want %q", result.Key, "v1-test-key")
+		if result.Key != "test-cache" {
+			t.Errorf("Key = %q, want %q", result.Key, "test-cache")
 		}
 		if result.Archive.Size <= 0 {
 			t.Errorf("archive should have size, got %d", result.Archive.Size)
@@ -488,8 +466,8 @@ func TestCacheIntegration_SaveAlreadyExists(t *testing.T) {
 	if result2.Transfer != nil {
 		t.Error("should not have transfer info when cache exists")
 	}
-	if result2.Key != "v1-test-key" {
-		t.Errorf("Key = %q, want %q", result2.Key, "v1-test-key")
+	if result2.Key != "test-cache" {
+		t.Errorf("Key = %q, want %q", result2.Key, "test-cache")
 	}
 }
 
@@ -513,71 +491,14 @@ func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
 	if result.FallbackUsed {
 		t.Error("should not use fallback")
 	}
-	if result.Key != "v1-test-key" {
-		t.Errorf("should return requested key, Key = %q, want %q", result.Key, "v1-test-key")
+	if result.Key != "test-cache" {
+		t.Errorf("should return requested key, Key = %q, want %q", result.Key, "test-cache")
 	}
 }
 
-func TestCacheIntegration_RestoreWithFallback(t *testing.T) {
-	ctx := t.Context()
-
-	// Use setupTestCache to create test environment
-	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
-
-	// Save the fallback cache first
-	cacheClient.caches[0].Key = "v1-fallback-key"
-	cacheClient.caches[0].FallbackKeys = []string{}
-	saveResult, err := cacheClient.Save(ctx, "test-cache")
-	if err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	if !saveResult.CacheEntryCreated {
-		t.Error("fallback cache should be created")
-	}
-	t.Logf("Saved fallback cache with key: %s", saveResult.Key)
-
-	// Clean up cache directory
-	if err := os.RemoveAll(cacheDir); err != nil {
-		t.Fatalf("RemoveAll: %v", err)
-	}
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-
-	// Now try to restore with a different key that has the fallback
-	cacheClient.caches[0].Key = "v1-test-key"
-	cacheClient.caches[0].FallbackKeys = []string{"v1-fallback-key"}
-	result, err := cacheClient.Restore(ctx, "test-cache")
-	if err != nil {
-		t.Fatalf("Restore: %v", err)
-	}
-
-	// Should use the fallback key
-	if !result.CacheRestored {
-		t.Error("cache should be restored")
-	}
-	if !result.FallbackUsed {
-		t.Error("should use fallback key")
-	}
-	if result.CacheHit {
-		t.Error("should not be exact hit")
-	}
-	if result.Key != "v1-fallback-key" {
-		t.Errorf("should return fallback key, Key = %q, want %q", result.Key, "v1-fallback-key")
-	}
-
-	t.Logf("Restore result: restored=%v, hit=%v, fallback=%v, key=%s",
-		result.CacheRestored, result.CacheHit, result.FallbackUsed, result.Key)
-
-	// Verify files were restored
-	entries, err := os.ReadDir(cacheDir)
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	if len(entries) == 0 {
-		t.Error("cache directory should have restored files")
-	}
-}
+// TODO: restore fallback-matching coverage (was TestCacheIntegration_RestoreWithFallback,
+// removed in the v2 migration) once agent-side fallbackLimit parsing lands and the agent
+// sends mandatory:false parts. Until then the agent only addresses exact matches.
 
 func TestCacheIntegration_LargeFileChecksum(t *testing.T) {
 	ctx := t.Context()

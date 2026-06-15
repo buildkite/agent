@@ -7,7 +7,7 @@ import "github.com/urfave/cli"
 type CacheConfig struct {
 	Ids             []string `cli:"ids"`
 	Registry        string   `cli:"registry"`
-	BucketURL       string   `cli:"bucket-url"`
+	BucketURL       string   `cli:"cache-store-url"`
 	Branch          string   `cli:"branch" validate:"required"`
 	Pipeline        string   `cli:"pipeline" validate:"required"`
 	Organization    string   `cli:"organization" validate:"required"`
@@ -26,14 +26,14 @@ func cacheFlags() []cli.Flag {
 		cli.StringFlag{
 			Name:   "registry",
 			Value:  "~",
-			Usage:  "The slug of the cache registry to use, defaults to the default registry (~)",
-			EnvVar: "BUILDKITE_CACHE_REGISTRY",
+			Usage:  "The slug of the cache registry to use; '~' selects the cluster's default registry",
+			EnvVar: "BUILDKITE_AGENT_CACHE_REGISTRY",
 		},
 		cli.StringFlag{
-			Name:   "bucket-url",
+			Name:   "cache-store-url",
 			Value:  "",
-			Usage:  "The URL of the bucket (e.g., s3://bucket-name)",
-			EnvVar: "BUILDKITE_CACHE_BUCKET_URL",
+			Usage:  "The URL of the cache store (e.g., s3://bucket-name); uploads/downloads use ambient credentials",
+			EnvVar: "BUILDKITE_AGENT_CACHE_STORE_URL",
 		},
 		cli.StringFlag{
 			Name:   "branch",

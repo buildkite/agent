@@ -20,9 +20,9 @@ Restores files from the cache for the current job based on the cache configurati
 defined in your cache config file (defaults to .buildkite/cache.yml).
 
 The cache configuration file defines which files or directories should be restored
-and their associated cache keys. Caches are scoped by organization, pipeline, and
-branch. If an exact cache match is not found, the command will attempt to use
-fallback keys if defined in your cache configuration.
+and their associated cache key. An entry is restored when its target_paths
+(an order-insensitive set) and cache_key match exactly. Fallback matching is not
+enabled yet — every key part is treated as mandatory.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
@@ -36,19 +36,25 @@ specific caches by providing their IDs:
 
     $ buildkite-agent cache restore --ids "node"
 
-The cache will be retrieved from the bucket specified by --bucket-url or your
-cache configuration.
+The cache is retrieved from BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url),
+downloaded directly using the agent's ambient credentials. The registry is
+selected by BUILDKITE_AGENT_CACHE_REGISTRY (or --registry); '~' selects the
+cluster default.
 
 Configuration File Format:
 
-The cache configuration file should be in YAML format:
+The cache configuration file should be in YAML format. cache_key is an ordered
+list of parts; each part is a literal string or one of { agent: os },
+{ agent: arch }, { checksum: <file> }, or { env: <VAR> }:
 
-    dependencies:
+    caches:
       - id: node
-        key: '{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum "package-lock.json" }}'
-        fallback_keys:
-          - '{{ id }}-{{ agent.os }}-{{ agent.arch }}-'
-        paths:
+        cache_key:
+          - node
+          - { agent: os }
+          - { agent: arch }
+          - { checksum: package-lock.json }
+        target_paths:
           - node_modules
 
 Cache Restoration Results:
@@ -88,6 +94,7 @@ var CacheRestoreCommand = cli.Command{
 
 		// Build cache configuration
 		cacheCfg := cache.Config{
+			Registry:        cfg.Registry,
 			BucketURL:       cfg.BucketURL,
 			Branch:          cfg.Branch,
 			Pipeline:        cfg.Pipeline,

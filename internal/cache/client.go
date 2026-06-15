@@ -88,6 +88,13 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		}
 	}
 
+	// Registry slug comes from BUILDKITE_AGENT_CACHE_REGISTRY; "~" selects the
+	// cluster default when unset.
+	registry := cfg.Registry
+	if registry == "" {
+		registry = "~"
+	}
+
 	c := &client{
 		api:          apiClient,
 		bucketURL:    cfg.BucketURL,
@@ -96,7 +103,7 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		pipeline:     cfg.Pipeline,
 		organization: cfg.Organization,
 		platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
-		registry:     "~",
+		registry:     registry,
 		caches:       expanded,
 		onProgress: func(cacheID, stage, message string, _, _ int) {
 			l.WithFields(
@@ -161,6 +168,12 @@ func (c *client) findCache(id string) (*configuration.Cache, error) {
 		}
 	}
 	return nil, ErrCacheNotFound
+}
+
+// resolveCacheKey resolves the structured cache_key to the flat wire shape the
+// backend expects, reading the live environment/filesystem (nil env = OS env).
+func (c *client) resolveCacheKey(cacheConfig *configuration.Cache) ([]api.CacheKeyPart, error) {
+	return configuration.ResolveCacheKey(cacheConfig.CacheKey, nil)
 }
 
 // ProgressCallback is invoked during Save and Restore to report progress.
