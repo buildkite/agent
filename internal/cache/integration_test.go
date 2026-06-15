@@ -281,7 +281,7 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *client, cach
 		registry:     "~",
 		caches: []configuration.Cache{
 			{
-				ID:          "test-cache",
+				Name:        "test-cache",
 				CacheKey:    []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "v1-test-key"}},
 				TargetPaths: []string{cacheDir},
 			},

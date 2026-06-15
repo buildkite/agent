@@ -34,7 +34,7 @@ Example:
 This will restore all caches defined in .buildkite/cache.yml. You can also restore
 specific caches by providing their IDs:
 
-    $ buildkite-agent cache restore --ids "node"
+    $ buildkite-agent cache restore --names "node"
 
 The cache is retrieved from BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url),
 downloaded directly using the agent's ambient credentials. The registry is
@@ -48,7 +48,7 @@ list of parts; each part is a literal string or one of { agent: os },
 { agent: arch }, { checksum: <file> }, or { env: <VAR> }:
 
     caches:
-      - id: node
+      - name: node
         cache_key:
           - node
           - { agent: os }
@@ -100,7 +100,7 @@ var CacheRestoreCommand = cli.Command{
 			Pipeline:        cfg.Pipeline,
 			Organization:    cfg.Organization,
 			CacheConfigFile: cfg.CacheConfigFile,
-			Ids:             cfg.Ids,
+			Names:           cfg.Names,
 		}
 
 		// Perform cache restore (logging happens inside)

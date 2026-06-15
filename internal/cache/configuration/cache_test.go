@@ -17,7 +17,7 @@ func TestCacheValidate(t *testing.T) {
 		{
 			name: "valid cache",
 			cache: Cache{
-				ID:          "node_modules",
+				Name:        "node_modules",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"node_modules"},
 			},
@@ -26,16 +26,16 @@ func TestCacheValidate(t *testing.T) {
 		{
 			name: "valid cache with underscores and numbers, multiple paths",
 			cache: Cache{
-				ID:          "test_123",
+				Name:        "test_123",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"./dist", "../cache"},
 			},
 			wantErr: false,
 		},
 		{
-			name: "invalid ID with hyphen",
+			name: "invalid name with hyphen",
 			cache: Cache{
-				ID:          "node-modules",
+				Name:        "node-modules",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"node_modules"},
 			},
@@ -43,9 +43,9 @@ func TestCacheValidate(t *testing.T) {
 			errMsg:  "can only contain letters, numbers, and underscores",
 		},
 		{
-			name: "invalid ID with space",
+			name: "invalid name with space",
 			cache: Cache{
-				ID:          "node modules",
+				Name:        "node modules",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"node_modules"},
 			},
@@ -53,29 +53,29 @@ func TestCacheValidate(t *testing.T) {
 			errMsg:  "can only contain letters, numbers, and underscores",
 		},
 		{
-			name: "empty ID",
+			name: "empty Name",
 			cache: Cache{
-				ID:          "",
+				Name:        "",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"node_modules"},
 			},
 			wantErr: true,
-			errMsg:  "id cannot be empty",
+			errMsg:  "name cannot be empty",
 		},
 		{
 			name: "whitespace only ID",
 			cache: Cache{
-				ID:          "   ",
+				Name:        "   ",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"node_modules"},
 			},
 			wantErr: true,
-			errMsg:  "id cannot be empty",
+			errMsg:  "name cannot be empty",
 		},
 		{
 			name: "empty cache_key",
 			cache: Cache{
-				ID:          "valid_id",
+				Name:        "valid_id",
 				CacheKey:    nil,
 				TargetPaths: []string{"node_modules"},
 			},
@@ -85,7 +85,7 @@ func TestCacheValidate(t *testing.T) {
 		{
 			name: "no target paths",
 			cache: Cache{
-				ID:          "valid_id",
+				Name:        "valid_id",
 				CacheKey:    literalKey,
 				TargetPaths: []string{},
 			},
@@ -95,7 +95,7 @@ func TestCacheValidate(t *testing.T) {
 		{
 			name: "empty target path",
 			cache: Cache{
-				ID:          "valid_id",
+				Name:        "valid_id",
 				CacheKey:    literalKey,
 				TargetPaths: []string{""},
 			},
@@ -105,7 +105,7 @@ func TestCacheValidate(t *testing.T) {
 		{
 			name: "target path with null byte",
 			cache: Cache{
-				ID:          "valid_id",
+				Name:        "valid_id",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"invalid\x00path"},
 			},
@@ -115,7 +115,7 @@ func TestCacheValidate(t *testing.T) {
 		{
 			name: "duplicate target paths",
 			cache: Cache{
-				ID:          "valid_id",
+				Name:        "valid_id",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"node_modules", "node_modules"},
 			},

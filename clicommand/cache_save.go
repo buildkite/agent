@@ -33,7 +33,7 @@ Example:
 This will save all caches defined in .buildkite/cache.yml. You can also save
 specific caches by providing their IDs:
 
-    $ buildkite-agent cache save --ids "node"
+    $ buildkite-agent cache save --names "node"
 
 The cache is stored at BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url).
 The registry is selected by BUILDKITE_AGENT_CACHE_REGISTRY (or --registry); '~'
@@ -47,7 +47,7 @@ list of parts; each part is a literal string or one of { agent: os },
 { agent: arch }, { checksum: <file> }, or { env: <VAR> }:
 
     caches:
-      - id: node
+      - name: node
         cache_key:
           - node
           - { agent: os }
@@ -97,7 +97,7 @@ var CacheSaveCommand = cli.Command{
 			Pipeline:        cfg.Pipeline,
 			Organization:    cfg.Organization,
 			CacheConfigFile: cfg.CacheConfigFile,
-			Ids:             cfg.Ids,
+			Names:           cfg.Names,
 			Concurrency:     cfg.Concurrency,
 		}
 

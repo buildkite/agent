@@ -332,12 +332,12 @@ func TestNewClient_InvalidCacheIDs(t *testing.T) {
 	t.Parallel()
 
 	config := `caches:
-  - id: cache1
+  - name: cache1
     cache_key:
       - test-key-1
     target_paths:
       - path1
-  - id: cache2
+  - name: cache2
     cache_key:
       - test-key-2
     target_paths:
@@ -347,7 +347,7 @@ func TestNewClient_InvalidCacheIDs(t *testing.T) {
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             []string{"cache1", "invalid1", "cache2", "invalid2"},
+		Names:           []string{"cache1", "invalid1", "cache2", "invalid2"},
 		BucketURL:       "s3://test-bucket",
 		Branch:          "main",
 		Pipeline:        "test-pipeline",
@@ -358,7 +358,7 @@ func TestNewClient_InvalidCacheIDs(t *testing.T) {
 	if err == nil {
 		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want non-nil error", err)
 	}
-	if want := "cache IDs not found in configuration"; !strings.Contains(err.Error(), want) {
+	if want := "cache names not found in configuration"; !strings.Contains(err.Error(), want) {
 		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want error containing %q", err, want)
 	}
 	if want := "invalid1"; !strings.Contains(err.Error(), want) {
@@ -373,12 +373,12 @@ func TestNewClient_ValidCacheIDs(t *testing.T) {
 	t.Parallel()
 
 	config := `caches:
-  - id: cache1
+  - name: cache1
     cache_key:
       - test-key-1
     target_paths:
       - path1
-  - id: cache2
+  - name: cache2
     cache_key:
       - test-key-2
     target_paths:
@@ -388,7 +388,7 @@ func TestNewClient_ValidCacheIDs(t *testing.T) {
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             []string{"cache1", "cache2"},
+		Names:           []string{"cache1", "cache2"},
 		BucketURL:       "s3://test-bucket",
 		Branch:          "main",
 		Pipeline:        "test-pipeline",
@@ -411,12 +411,12 @@ func TestNewClient_AllCaches(t *testing.T) {
 	t.Parallel()
 
 	config := `caches:
-  - id: cache1
+  - name: cache1
     cache_key:
       - test-key-1
     target_paths:
       - path1
-  - id: cache2
+  - name: cache2
     cache_key:
       - test-key-2
     target_paths:
@@ -426,7 +426,7 @@ func TestNewClient_AllCaches(t *testing.T) {
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             []string{},
+		Names:           []string{},
 		BucketURL:       "s3://test-bucket",
 		Branch:          "main",
 		Pipeline:        "test-pipeline",

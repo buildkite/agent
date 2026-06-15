@@ -26,8 +26,8 @@ type Config struct {
 	Organization string
 	// CacheConfigFile is the path to the cache configuration YAML file
 	CacheConfigFile string
-	// Ids is a list of cache IDs (if empty, processes all caches)
-	Ids []string
+	// Names is a list of cache names (if empty, processes all caches)
+	Names []string
 	// Concurrency is the number of concurrent cache operations
 	Concurrency int
 }
