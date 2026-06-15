@@ -15,6 +15,9 @@ import (
 type KeyPart struct {
 	Arg    string
 	Source Source
+	// FallbackLimit marks the fallback boundary: this part and every part before
+	// it are mandatory; parts after it are optional. At most one part may set it.
+	FallbackLimit bool
 }
 type Source string
 
@@ -52,11 +55,29 @@ func (k *KeyPart) unmarshalMapping(node *yaml.Node) error {
 	if err := node.Decode(&fields); err != nil {
 		return fmt.Errorf("cache_key: invalid entry: %w", err)
 	}
-	if len(fields) != 1 {
-		return fmt.Errorf("cache_key: invalid entry length: %d", len(fields))
+
+	// fallbackLimit is an optional modifier alongside the single source.
+	hasFallbackLimit := false
+	if raw, ok := fields["fallbackLimit"]; ok {
+		if err := raw.Decode(&k.FallbackLimit); err != nil {
+			return fmt.Errorf("cache_key: fallbackLimit must be a boolean")
+		}
+		hasFallbackLimit = true
+	}
+
+	// Exactly one source key; fallbackLimit is a modifier, not a source.
+	sourceCount := len(fields)
+	if hasFallbackLimit {
+		sourceCount--
+	}
+	if sourceCount != 1 {
+		return fmt.Errorf("cache_key: entry must name exactly one source (plus optional fallbackLimit)")
 	}
 
 	for src, val := range fields {
+		if src == "fallbackLimit" {
+			continue
+		}
 		switch Source(src) {
 		case SourceAgent:
 			if val.Kind != yaml.ScalarNode {
@@ -90,19 +111,31 @@ func (k *KeyPart) unmarshalMapping(node *yaml.Node) error {
 }
 
 // ResolveCacheKey resolves each KeyPart to its concrete value and returns the
-// flat wire shape the backend expects. Every part is mandatory in M1 (fallback
-// semantics land separately), which is why Mandatory is hard-coded true.
+// flat wire shape the backend expects. A part is mandatory iff it is at or
+// before the part declaring fallbackLimit; parts after it are optional. When no
+// part declares fallbackLimit, every part is mandatory. At most one part may
+// declare it (enforced by Validate).
 func ResolveCacheKey(keyParts []KeyPart, env map[string]string) ([]api.CacheKeyPart, error) {
 	if len(keyParts) == 0 {
 		return nil, fmt.Errorf("cache_key cannot be empty")
 	}
+
+	// Default boundary = last part → every part mandatory.
+	limit := len(keyParts) - 1
+	for i, keyPart := range keyParts {
+		if keyPart.FallbackLimit {
+			limit = i
+			break
+		}
+	}
+
 	out := make([]api.CacheKeyPart, len(keyParts))
 	for i, keyPart := range keyParts {
 		resolvedKeyPart, err := keyPart.Resolve(env)
 		if err != nil {
 			return nil, fmt.Errorf("cache_key[%d]: %w", i, err)
 		}
-		out[i] = api.CacheKeyPart{Value: resolvedKeyPart, Mandatory: true}
+		out[i] = api.CacheKeyPart{Value: resolvedKeyPart, Mandatory: i <= limit}
 	}
 	return out, nil
 }
