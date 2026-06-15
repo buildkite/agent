@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -451,7 +450,7 @@ func TestGitLFSBinaryMissing(t *testing.T) {
 	// Not parallel: the test manipulates PATH via t.Setenv, which modifies
 	// process-global state.
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Restrict PATH so exec.LookPath("git-lfs") fails. An empty temp dir
 	// suffices — the fail-fast check returns before any git call.
@@ -482,7 +481,7 @@ func TestGitLFSBinaryMissing(t *testing.T) {
 func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 	// Not parallel: subtests manipulate PATH via t.Setenv, which modifies
 	// process-global state.
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
 	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")

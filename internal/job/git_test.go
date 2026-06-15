@@ -313,7 +313,7 @@ func TestGitFetch(t *testing.T) {
 
 func TestGitLFSFetchCheckout(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var gotLog [][]string
 	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
