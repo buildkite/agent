@@ -282,6 +282,38 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 	}
 }
 
+func TestGitLFSBinaryMissing(t *testing.T) {
+	// Not parallel: the test manipulates PATH via t.Setenv, which modifies
+	// process-global state.
+
+	ctx := context.Background()
+
+	// Restrict PATH so exec.LookPath("git-lfs") fails. An empty temp dir
+	// suffices — the fail-fast check returns before any git call.
+	t.Setenv("PATH", t.TempDir())
+
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v, want nil", err)
+	}
+
+	executor := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			Repository:    "https://github.com/buildkite/agent.git",
+			GitLFSEnabled: true,
+		},
+	}
+
+	err = executor.checkout(ctx)
+	if err == nil {
+		t.Fatalf("executor.checkout(ctx) error = nil, want error containing %q", "git-lfs binary is not found on PATH")
+	}
+	if !strings.Contains(err.Error(), "git-lfs binary is not found on PATH") {
+		t.Errorf("executor.checkout(ctx) error = %q, want it to contain %q", err.Error(), "git-lfs binary is not found on PATH")
+	}
+}
+
 func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 	// Not parallel: subtests manipulate PATH via t.Setenv, which modifies
 	// process-global state.
@@ -353,14 +385,6 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 					t.Skip("git-lfs not installed")
 				}
 			},
-		},
-		{
-			name:       "LFS enabled binary missing",
-			lfsEnabled: true,
-			setupPath: func(t *testing.T) {
-				t.Setenv("PATH", gitOnlyBinDir(t))
-			},
-			wantErr: "git-lfs binary is not found on PATH",
 		},
 		{
 			name:       "LFS enabled git lfs command fails",
