@@ -5,7 +5,7 @@ import "github.com/urfave/cli"
 // CacheConfig includes cache-related shared options for easy inclusion across
 // cache command config structs (via embedding).
 type CacheConfig struct {
-	Ids             []string `cli:"ids"`
+	Names           []string `cli:"names"`
 	Registry        string   `cli:"registry"`
 	BucketURL       string   `cli:"cache-store-url"`
 	Branch          string   `cli:"branch" validate:"required"`
@@ -18,10 +18,10 @@ type CacheConfig struct {
 func cacheFlags() []cli.Flag {
 	return []cli.Flag{
 		cli.StringSliceFlag{
-			Name:   "ids",
+			Name:   "names",
 			Value:  &cli.StringSlice{},
-			Usage:  "Cache IDs to process (can be specified multiple times; if empty, processes all caches)",
-			EnvVar: "BUILDKITE_CACHE_IDS",
+			Usage:  "Cache names to process (can be specified multiple times; if empty, processes all caches)",
+			EnvVar: "BUILDKITE_CACHE_NAMES",
 		},
 		cli.StringFlag{
 			Name:   "registry",

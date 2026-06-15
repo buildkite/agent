@@ -7,8 +7,8 @@ import (
 )
 
 type Cache struct {
-	// ID of the cache entry to save.
-	ID string `yaml:"id"`
+	// Name of the cache entry to save.
+	Name string `yaml:"name"`
 	// Key of the cache entry to save, this can be a template string.
 	CacheKey []KeyPart `yaml:"cache_key"`
 	// Target Paths to remove.
@@ -19,11 +19,11 @@ type Cache struct {
 func (c Cache) Validate() error {
 	var errors []string
 
-	// ID validation: alphanumeric and underscore only
-	if strings.TrimSpace(c.ID) == "" {
-		errors = append(errors, "id cannot be empty")
-	} else if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(c.ID) {
-		errors = append(errors, fmt.Sprintf("id '%s' can only contain letters, numbers, and underscores", c.ID))
+	// Name validation: alphanumeric and underscore only
+	if strings.TrimSpace(c.Name) == "" {
+		errors = append(errors, "name cannot be empty")
+	} else if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(c.Name) {
+		errors = append(errors, fmt.Sprintf("name '%s' can only contain letters, numbers, and underscores", c.Name))
 	}
 
 	// Cache Key validation: non-empty
@@ -51,7 +51,7 @@ func (c Cache) Validate() error {
 	}
 
 	if len(errors) > 0 {
-		return fmt.Errorf("cache validation failed for id '%s': %s", c.ID, strings.Join(errors, "; "))
+		return fmt.Errorf("cache validation failed for name '%s': %s", c.Name, strings.Join(errors, "; "))
 	}
 
 	return nil

@@ -21,13 +21,13 @@ func TestLoadFile_Valid(t *testing.T) {
 	t.Parallel()
 
 	config := `caches:
-  - id: node
+  - name: node
     cache_key:
       - node
       - { checksum: package-lock.json }
     target_paths:
       - node_modules
-  - id: ruby
+  - name: ruby
     cache_key:
       - ruby
       - { checksum: Gemfile.lock }
@@ -43,11 +43,11 @@ func TestLoadFile_Valid(t *testing.T) {
 	if got, want := len(caches), 2; got != want {
 		t.Fatalf("len(caches) = %d, want %d", got, want)
 	}
-	if got, want := caches[0].ID, "node"; got != want {
-		t.Fatalf("caches[0].ID = %q, want %q", got, want)
+	if got, want := caches[0].Name, "node"; got != want {
+		t.Fatalf("caches[0].Name = %q, want %q", got, want)
 	}
-	if got, want := caches[1].ID, "ruby"; got != want {
-		t.Fatalf("caches[1].ID = %q, want %q", got, want)
+	if got, want := caches[1].Name, "ruby"; got != want {
+		t.Fatalf("caches[1].Name = %q, want %q", got, want)
 	}
 }
 
@@ -55,7 +55,7 @@ func TestLoadFile_InvalidYAML(t *testing.T) {
 	t.Parallel()
 
 	config := `caches:
-  - id: node
+  - name: node
     cache_key: test
     target_paths
       - invalid indentation here
