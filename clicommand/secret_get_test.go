@@ -198,7 +198,7 @@ func TestSecretGet(t *testing.T) {
 
 		for _, want := range []string{
 			"automatic secret redaction requires the Job API",
-			"secret values were not printed",
+			"could leak in logs without redaction",
 			"--skip-redaction",
 			"BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION=true",
 		} {

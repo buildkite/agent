@@ -156,13 +156,12 @@ var OIDCRequestTokenCommand = cli.Command{
 		if !cfg.SkipRedaction {
 			jobClient, err := jobapi.NewDefaultClient(ctx)
 			if err != nil {
-				reason := "the Job API client could not be created"
+				err = fmt.Errorf("the Job API client could not be created (error: %w)", err)
 				if errors.Is(err, jobapi.ErrJobAPIUnavailable) {
-					reason = "the Job API is unavailable on this machine. On older Windows versions, including Windows Server 2016, the Job API is unavailable because Unix domain sockets are not supported"
+					err = fmt.Errorf("the Job API is unavailable on this machine, as it requires Unix domain sockets to function. On Windows, Unix domain sockets require Windows build 17063 or newer (Windows 10 version 1803 / Windows Server 2019 onwards)")
 				}
 				return fmt.Errorf(
-					"automatic OIDC token redaction requires the Job API, but %s. OIDC token was not printed. To request it anyway, explicitly opt out of redaction with --skip-redaction or BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION=true: %w",
-					reason,
+					"automatic OIDC token redaction requires the Job API, but %w. The command failed instead of outputting the token because it could leak in logs without redaction. To output the token anyway, explicitly opt out of redaction with --skip-redaction or BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION=true",
 					err,
 				)
 			}

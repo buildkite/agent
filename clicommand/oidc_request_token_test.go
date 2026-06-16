@@ -69,7 +69,7 @@ func TestOIDCRequestToken(t *testing.T) {
 
 		for _, want := range []string{
 			"automatic OIDC token redaction requires the Job API",
-			"OIDC token was not printed",
+			"could leak in logs without redaction",
 			"--skip-redaction",
 			"BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION=true",
 		} {
