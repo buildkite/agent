@@ -1,0 +1,37 @@
+# cache save/restore round-trip against the customer-managed S3 bucket.
+# Region is pinned in the URL (cache S3 client defaults to us-east-1).
+# The cache config is shared via a base64 env var; its cache_key embeds
+# BUILDKITE_BUILD_ID so each build gets a unique, freshly-created entry.
+env:
+  BUILDKITE_AGENT_CACHE_STORE_URL: s3://buildkite-agent-e2e-tests-shared/cache-e2e-test?region=us-west-2
+  CACHE_CONFIG_B64: "{{ fixture "includes/cache_config.yml" | b64enc }}"
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: save
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - mkdir -p cache-src
+      - echo "hello cache" > cache-src/file.txt
+      - echo "$$CACHE_CONFIG_B64" | base64 -d > cache.yml
+      - {{ .buildkite_agent_binary }} cache save --cache-config-file cache.yml
+  - key: restore
+    depends_on: save
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - echo "$$CACHE_CONFIG_B64" | base64 -d > cache.yml
+      - {{ .buildkite_agent_binary }} cache restore --cache-config-file cache.yml
+      - test -f cache-src/file.txt
+      - if [[ $(cat cache-src/file.txt) == "hello cache" ]]; then exit 0; else exit 1; fi
