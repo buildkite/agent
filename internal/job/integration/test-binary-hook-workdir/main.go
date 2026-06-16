@@ -20,7 +20,7 @@ import (
 // records the expected directory in EXPECTED_WORKDIR so the test's command and
 // post-command hooks can assert they run there.
 func main() {
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	c, err := jobapi.NewDefaultClient(ctx)
 	if err != nil {

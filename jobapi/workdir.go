@@ -44,7 +44,7 @@ func (s *Server) setWorkdir(w http.ResponseWriter, r *http.Request) {
 	s.pendingWorkdir = req.Workdir
 	s.mtx.Unlock()
 
-	resp := WorkdirSetResponse{Workdir: req.Workdir}
+	resp := WorkdirSetResponse{Workdir: req.Workdir} //nolint:staticcheck // struct literal is clearer than conversion here
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
