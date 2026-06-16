@@ -150,4 +150,12 @@ var BuildkiteAgentCommands = []cli.Command{
 			ToolSignCommand,
 		},
 	},
+	{
+		Name:     "workdir",
+		Category: categoryJobCommands,
+		Usage:    "Interact with the working directory of the currently running job",
+		Subcommands: []cli.Command{
+			WorkdirSetCommand,
+		},
+	},
 }
