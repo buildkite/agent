@@ -32,3 +32,20 @@ func TestCacheBasicSaveRestore(t *testing.T) {
 		t.Errorf("Build state = %q, want %q", got, want)
 	}
 }
+
+// Test that a saved cache round-trips filesystem details: nested and empty
+// directories, file permissions, symlinks, and an absolute (home) target path.
+// The restore step deletes the targets before restoring so the assertions
+// prove the cache, not leftover state from the save step.
+func TestCacheFilesystemIntegrity(t *testing.T) {
+	ctx := t.Context()
+
+	tc := newTestCase(t, "cache_filesystem_integrity.yaml")
+
+	tc.startAgent()
+	build := tc.triggerBuild()
+	state := tc.waitForBuild(ctx, build)
+	if got, want := state, "passed"; got != want {
+		t.Errorf("Build state = %q, want %q", got, want)
+	}
+}
