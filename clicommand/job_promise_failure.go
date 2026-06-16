@@ -93,7 +93,7 @@ var JobPromiseFailureCommand = cli.Command{
 			return err
 		}
 		if redactedValue := redact.String(cfg.Reason, needles); redactedValue != cfg.Reason {
-			l.Warnf("The reason for job %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.Job)
+			l.Warnf("The promise-failure reason for job %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.Job)
 			cfg.Reason = redactedValue
 		}
 
@@ -121,9 +121,6 @@ var JobPromiseFailureCommand = cli.Command{
 			// visible to scripts; callers who consider a given case acceptable
 			// can append '|| true'.
 			switch {
-			case api.IsErrHavingStatus(err, http.StatusNotFound):
-				return fmt.Errorf("promised failures are not enabled for this organization: %w", err)
-
 			case api.IsErrHavingStatus(err, http.StatusConflict):
 				return fmt.Errorf("a different promised exit status has already been declared for this job: %w", err)
 
