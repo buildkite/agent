@@ -1,5 +1,6 @@
 .DS_Store
 
+/buildkite-agent
 /tmp
 /pkg
 /releases

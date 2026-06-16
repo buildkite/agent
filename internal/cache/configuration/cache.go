@@ -7,60 +7,62 @@ import (
 )
 
 type Cache struct {
-	// Template of the cache entry.
-	Template string
-	// The registry to use which defaults to "~".
-	Registry string
-	// ID of the cache entry to save.
-	ID string
+	// Name of the cache entry to save.
+	Name string `yaml:"name"`
 	// Key of the cache entry to save, this can be a template string.
-	Key string
-	// Fallback keys to use, this is a comma delimited list of key template strings.
-	FallbackKeys []string
-	// Paths to remove.
-	Paths []string
+	CacheKey []KeyPart `yaml:"cache_key"`
+	// Target Paths to remove.
+	TargetPaths []string `yaml:"target_paths"`
 }
 
 // Validate validates the cache configuration and returns an error if invalid.
 func (c Cache) Validate() error {
 	var errors []string
 
-	// ID validation: alphanumeric and underscore only
-	if strings.TrimSpace(c.ID) == "" {
-		errors = append(errors, "id cannot be empty")
-	} else if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(c.ID) {
-		errors = append(errors, fmt.Sprintf("id '%s' can only contain letters, numbers, and underscores", c.ID))
+	// Name validation: alphanumeric and underscore only
+	if strings.TrimSpace(c.Name) == "" {
+		errors = append(errors, "name cannot be empty")
+	} else if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(c.Name) {
+		errors = append(errors, fmt.Sprintf("name '%s' can only contain letters, numbers, and underscores", c.Name))
 	}
 
-	// Key validation: non-empty
-	if strings.TrimSpace(c.Key) == "" {
-		errors = append(errors, "key cannot be empty")
+	// Cache Key validation: non-empty
+	if len(c.CacheKey) == 0 {
+		errors = append(errors, "cache_key cannot be empty")
 	}
 
-	// FallbackKeys validation: no spaces allowed
-	for i, fallbackKey := range c.FallbackKeys {
-		if strings.TrimSpace(fallbackKey) == "" {
-			errors = append(errors, fmt.Sprintf("fallback key at index %d cannot be empty", i))
-		} else if strings.Contains(fallbackKey, " ") {
-			errors = append(errors, fmt.Sprintf("fallback key at index %d cannot contain spaces: '%s'", i, fallbackKey))
+	// At most one cache_key part may declare fallbackLimit.
+	fallbackLimits := 0
+	for _, part := range c.CacheKey {
+		if part.FallbackLimit {
+			fallbackLimits++
 		}
 	}
+	if fallbackLimits > 1 {
+		errors = append(errors, "cache_key: fallbackLimit may be set on at most one part")
+	}
 
-	// Paths validation: at least one valid path
-	if len(c.Paths) == 0 {
-		errors = append(errors, "at least one path must be specified")
+	// TargetPaths validation: non-empty set of valid, unique paths
+	if len(c.TargetPaths) == 0 {
+		errors = append(errors, "at least one target_paths entry must be specified")
 	} else {
-		for i, path := range c.Paths {
-			if strings.TrimSpace(path) == "" {
-				errors = append(errors, fmt.Sprintf("path at index %d cannot be empty", i))
-			} else if !isValidPath(path) {
-				errors = append(errors, fmt.Sprintf("path at index %d is not valid: '%s'", i, path))
+		seen := make(map[string]struct{}, len(c.TargetPaths))
+		for i, targetPath := range c.TargetPaths {
+			switch {
+			case strings.TrimSpace(targetPath) == "":
+				errors = append(errors, fmt.Sprintf("target_paths[%d] cannot be empty", i))
+			case !isValidPath(targetPath):
+				errors = append(errors, fmt.Sprintf("target_paths[%d] is not valid: '%s'", i, targetPath))
 			}
+			if _, dup := seen[targetPath]; dup {
+				errors = append(errors, fmt.Sprintf("target_paths[%d] '%s' is duplicated (target_paths is a set)", i, targetPath))
+			}
+			seen[targetPath] = struct{}{}
 		}
 	}
 
 	if len(errors) > 0 {
-		return fmt.Errorf("cache validation failed for id '%s': %s", c.ID, strings.Join(errors, "; "))
+		return fmt.Errorf("cache validation failed for name '%s': %s", c.Name, strings.Join(errors, "; "))
 	}
 
 	return nil

@@ -21,8 +21,7 @@ Saves files to the cache for the current build based on the cache configuration
 defined in your cache config file (defaults to .buildkite/cache.yml).
 
 The cache configuration file defines which files or directories should be cached
-and their associated cache keys. Caches are scoped by organization, pipeline, and
-branch.
+and their associated cache key.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
@@ -34,22 +33,27 @@ Example:
 This will save all caches defined in .buildkite/cache.yml. You can also save
 specific caches by providing their IDs:
 
-    $ buildkite-agent cache save --ids "node"
+    $ buildkite-agent cache save --names "node"
 
-The cache will be stored in the bucket specified by --bucket-url or your
-cache configuration. If a cache with the same key already exists, it will
-not be overwritten.
+The cache is stored at BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url).
+The registry is selected by BUILDKITE_AGENT_CACHE_REGISTRY (or --registry); '~'
+selects the cluster's default registry. If an entry already exists at the same
+address it is not overwritten.
 
 Configuration File Format:
 
-The cache configuration file should be in YAML format:
+The cache configuration file should be in YAML format. cache_key is an ordered
+list of parts; each part is a literal string or one of { agent: os },
+{ agent: arch }, { checksum: <file> }, or { env: <VAR> }:
 
-    dependencies:
-      - id: node
-        key: '{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum "package-lock.json" }}'
-        fallback_keys:
-          - '{{ id }}-{{ agent.os }}-{{ agent.arch }}-'
-        paths:
+    caches:
+      - name: node
+        cache_key:
+          - node
+          - { agent: os }
+          - { agent: arch }
+          - { checksum: package-lock.json }
+        target_paths:
           - node_modules
 
 The command automatically uses the following environment variables when available:
@@ -87,12 +91,13 @@ var CacheSaveCommand = cli.Command{
 
 		// Build cache configuration
 		cacheCfg := cache.Config{
+			Registry:        cfg.Registry,
 			BucketURL:       cfg.BucketURL,
 			Branch:          cfg.Branch,
 			Pipeline:        cfg.Pipeline,
 			Organization:    cfg.Organization,
 			CacheConfigFile: cfg.CacheConfigFile,
-			Ids:             cfg.Ids,
+			Names:           cfg.Names,
 			Concurrency:     cfg.Concurrency,
 		}
 

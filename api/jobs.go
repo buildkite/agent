@@ -137,6 +137,29 @@ func (c *Client) FinishJob(ctx context.Context, job *Job, ignoreAgentInDispatche
 	return c.doRequest(req, nil)
 }
 
+// JobPromiseFailureRequest declares a promised (early) exit-status failure for
+// a job. ExitStatus must be a non-zero integer; the server rejects zero,
+// non-integer, and out-of-range values.
+type JobPromiseFailureRequest struct {
+	ExitStatus int    `json:"exit_status"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+// PromiseFailure declares a promised (early) exit-status failure for a job,
+// allowing the build-failing cascade to begin before the job finishes. The job
+// itself keeps running and finishes normally. On success the endpoint responds
+// with 204 No Content and no body.
+func (c *Client) PromiseFailure(ctx context.Context, id string, req *JobPromiseFailureRequest) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/promise_failure", railsPathEscape(id))
+
+	r, err := c.newRequest(ctx, "PUT", u, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(r, nil)
+}
+
 // JobUpdateResponse is the response from updating a job
 type JobUpdateResponse struct {
 	ID string `json:"id"`

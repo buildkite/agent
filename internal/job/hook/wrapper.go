@@ -87,6 +87,13 @@ type EnvChanges struct {
 	afterWd string
 }
 
+// EnvChangesForWorkdir returns EnvChanges that only request a working directory
+// change (no env var diff). It's used to apply a working directory set by an
+// unwrapped hook via the Job API /workdir endpoint.
+func EnvChangesForWorkdir(wd string) EnvChanges {
+	return EnvChanges{afterWd: wd}
+}
+
 func (changes *EnvChanges) GetAfterWd() (string, error) {
 	if changes.afterWd == "" {
 		return "", fmt.Errorf("%q was not present in the hook after environment", hookWorkingDirEnv)

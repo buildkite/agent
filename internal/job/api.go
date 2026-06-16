@@ -37,6 +37,7 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API server: %w", err)
 	}
+	e.jobAPI = srv
 
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_TOKEN", token)
