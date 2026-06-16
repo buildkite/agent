@@ -29,8 +29,11 @@ const (
 )
 
 var supportedAgentArgs = map[string]struct{}{
-	"os":   {},
-	"arch": {},
+	"os":       {},
+	"arch":     {},
+	"branch":   {},
+	"step":     {},
+	"pipeline": {},
 }
 
 func (k *KeyPart) UnmarshalYAML(node *yaml.Node) error {
@@ -152,15 +155,20 @@ func (k KeyPart) Resolve(env map[string]string) (string, error) {
 			v = runtime.GOOS
 		case "arch":
 			v = runtime.GOARCH
+		case "branch":
+			v = lookupEnv(env, "BUILDKITE_BRANCH")
+		case "pipeline":
+			v = lookupEnv(env, "BUILDKITE_PIPELINE_SLUG")
+		case "step":
+			v = lookupEnv(env, "BUILDKITE_STEP_KEY")
+			if v == "" {
+				v = lookupEnv(env, "BUILDKITE_STEP_ID")
+			}
 		default:
 			return "", fmt.Errorf("cache_key: unsupported agent fact %q", k.Arg)
 		}
 	case SourceEnv:
-		if env != nil {
-			v = env[k.Arg]
-		} else {
-			v = os.Getenv(k.Arg)
-		}
+		v = lookupEnv(env, k.Arg)
 	case SourceChecksum:
 		// For now, support is for single regular file only. Multi-file checksums, globs, and
 		// directories are not supported. We have NOT yet considered symlinks, special files, or very large
@@ -173,6 +181,15 @@ func (k KeyPart) Resolve(env map[string]string) (string, error) {
 		return "", err
 	}
 	return v, nil
+}
+
+// lookupEnv reads name from the supplied env map, or from the process
+// environment when env is nil. Missing value resolves to "".
+func lookupEnv(env map[string]string, name string) string {
+	if env != nil {
+		return env[name]
+	}
+	return os.Getenv(name)
 }
 
 // sha256File returns the hex-encoded SHA-256 of the file's contents

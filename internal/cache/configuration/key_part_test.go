@@ -27,6 +27,9 @@ func TestKeyPartUnmarshal(t *testing.T) {
 		{name: "literal quoted", yaml: `"v3"`, want: KeyPart{Source: SourceLiteral, Arg: "v3"}},
 		{name: "agent os", yaml: `{ agent: os }`, want: KeyPart{Source: SourceAgent, Arg: "os"}},
 		{name: "agent arch", yaml: `{ agent: arch }`, want: KeyPart{Source: SourceAgent, Arg: "arch"}},
+		{name: "agent branch", yaml: `{ agent: branch }`, want: KeyPart{Source: SourceAgent, Arg: "branch"}},
+		{name: "agent step", yaml: `{ agent: step }`, want: KeyPart{Source: SourceAgent, Arg: "step"}},
+		{name: "agent pipeline", yaml: `{ agent: pipeline }`, want: KeyPart{Source: SourceAgent, Arg: "pipeline"}},
 		{name: "checksum", yaml: `{ checksum: go.mod }`, want: KeyPart{Source: SourceChecksum, Arg: "go.mod"}},
 		{name: "env", yaml: `{ env: GO_VERSION }`, want: KeyPart{Source: SourceEnv, Arg: "GO_VERSION"}},
 		{name: "fallbackLimit on agent", yaml: `{ agent: arch, fallbackLimit: true }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: true}},
@@ -35,7 +38,6 @@ func TestKeyPartUnmarshal(t *testing.T) {
 
 		// Out of M1 scope -> parse errors.
 		{name: "empty literal", yaml: `""`, wantErr: "literal entry cannot be empty"},
-		{name: "agent pipeline deferred", yaml: `{ agent: pipeline }`, wantErr: "unsupported agent argument"},
 		{name: "agent os_version deferred", yaml: `{ agent: os_version }`, wantErr: "unsupported agent argument"},
 		{name: "checksum array deferred", yaml: `{ checksum: [go.mod, go.sum] }`, wantErr: "single file path"},
 		{name: "cmd deferred", yaml: `{ cmd: ["go", "version"] }`, wantErr: "unknown source"},
@@ -88,6 +90,11 @@ func TestKeyPartResolve(t *testing.T) {
 		{name: "agent arch", part: KeyPart{Source: SourceAgent, Arg: "arch"}, want: runtime.GOARCH},
 		{name: "env from map", part: KeyPart{Source: SourceEnv, Arg: "FOO"}, env: map[string]string{"FOO": "bar"}, want: "bar"},
 		{name: "env missing from map", part: KeyPart{Source: SourceEnv, Arg: "MISSING"}, env: map[string]string{}, want: ""},
+		{name: "agent branch", part: KeyPart{Source: SourceAgent, Arg: "branch"}, env: map[string]string{"BUILDKITE_BRANCH": "main"}, want: "main"},
+		{name: "agent pipeline", part: KeyPart{Source: SourceAgent, Arg: "pipeline"}, env: map[string]string{"BUILDKITE_PIPELINE_SLUG": "my-pipeline"}, want: "my-pipeline"},
+		{name: "agent step from key", part: KeyPart{Source: SourceAgent, Arg: "step"}, env: map[string]string{"BUILDKITE_STEP_KEY": "build", "BUILDKITE_STEP_ID": "01ABC"}, want: "build"},
+		{name: "agent step falls back to id", part: KeyPart{Source: SourceAgent, Arg: "step"}, env: map[string]string{"BUILDKITE_STEP_ID": "01ABC"}, want: "01ABC"},
+		{name: "agent branch missing is empty", part: KeyPart{Source: SourceAgent, Arg: "branch"}, env: map[string]string{}, want: ""},
 		{name: "agent unsupported fact", part: KeyPart{Source: SourceAgent, Arg: "queue"}, wantErr: "unsupported agent fact"},
 	}
 
