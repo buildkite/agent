@@ -150,6 +150,12 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 			lastActionResult = nil
 			actionInProgress = false
 
+			// If the action errored, there's nothing special to do; fall
+			// through to (maybe) sending the next pending action.
+			if err != nil {
+				break // out of the select
+			}
+
 			// In disconnect-after-job mode, the action handler loop only
 			// disconnects when it handles the next action after running a job
 			// (this gives a pending "pause" the chance to keep the agent
@@ -158,7 +164,12 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 			// not deliver another message for a while. So if a job just ran
 			// and nothing else is pending, synthesise an idle action to let
 			// the action handler loop disconnect promptly.
-			if a.agentConfiguration.DisconnectAfterJob && lastActionWasJob && err == nil && !pending {
+			//
+			// This only covers disconnect-after-job. An acquire-job agent runs
+			// its single job before these loops even start (see
+			// AgentWorker.Start), so that job never passes through the
+			// debouncer and lastActionWasJob is never set for it.
+			if a.agentConfiguration.DisconnectAfterJob && lastActionWasJob && !pending {
 				a.logger.Debugf("[runDebouncer] Job ran in disconnect-after-job mode; enqueueing a synthetic idle action")
 				pending = true
 				pendingAction = ""
