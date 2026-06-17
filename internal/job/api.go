@@ -106,7 +106,7 @@ func (e *Executor) declarePromiseFailure(ctx context.Context, exitStatus int, re
 			return err
 		}
 		if err != nil {
-			e.shell.Logger.Warningf("Couldn't declare promised failure for job %s: %s (%s)", e.JobID, err, r)
+			e.shell.Warningf("Couldn't declare promised failure for job %s: %s (%s)", e.JobID, err, r)
 			return err
 		}
 		return nil

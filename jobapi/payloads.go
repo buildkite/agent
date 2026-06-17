@@ -74,3 +74,19 @@ type PromiseFailureRequest struct {
 	ExitStatus int    `json:"exit_status"`
 	Reason     string `json:"reason,omitempty"`
 }
+
+// Promise failure outcomes, reported in PromiseFailureResponse.Outcome.
+const (
+	// PromiseFailureDeclared means this call declared the exit status to the
+	// Buildkite API.
+	PromiseFailureDeclared = "declared"
+	// PromiseFailureDebounced means an earlier call already declared this exit
+	// status, so this call shared that result without calling the Buildkite API.
+	PromiseFailureDebounced = "debounced"
+)
+
+// PromiseFailureResponse is the response body for the POST /promise-failure endpoint
+type PromiseFailureResponse struct {
+	// Outcome is PromiseFailureDeclared or PromiseFailureDebounced.
+	Outcome string `json:"outcome"`
+}

@@ -68,7 +68,9 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_ = socket.WriteError(w, "a different exit status was already declared", http.StatusConflict)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(&PromiseFailureResponse{Outcome: PromiseFailureDeclared}); err != nil {
+			_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -160,15 +162,19 @@ func TestClientDeclarePromiseFailure(t *testing.T) {
 		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
 	}
 
-	// A successful declaration returns no error and forwards the exit status and
-	// reason to the server.
-	if err := cli.DeclarePromiseFailure(ctx, 1, "tests failed"); err != nil {
+	// A successful declaration returns the outcome and no error, and forwards the
+	// exit status and reason to the server.
+	outcome, err := cli.DeclarePromiseFailure(ctx, 1, "tests failed")
+	if err != nil {
 		t.Fatalf("cli.DeclarePromiseFailure(1) error = %v", err)
+	}
+	if outcome != PromiseFailureDeclared {
+		t.Errorf("cli.DeclarePromiseFailure(1) outcome = %q, want %q", outcome, PromiseFailureDeclared)
 	}
 
 	// A rejected declaration surfaces a socket.APIErr carrying the Buildkite API
 	// status code, so the caller can produce an accurate message.
-	err = cli.DeclarePromiseFailure(ctx, 99, "")
+	_, err = cli.DeclarePromiseFailure(ctx, 99, "")
 	var apiErr socket.APIErr
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("cli.DeclarePromiseFailure(99) error = %v, want a socket.APIErr", err)

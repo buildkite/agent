@@ -113,5 +113,13 @@ func (s *Server) promiseFailure(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Success: an empty 200, which the client treats as acceptance.
+	// Success. A leading caller (found == false) declared it; any other caller
+	// shared that result without calling the Buildkite API.
+	outcome := PromiseFailureDeclared
+	if found {
+		outcome = PromiseFailureDebounced
+	}
+	if err := json.NewEncoder(w).Encode(&PromiseFailureResponse{Outcome: outcome}); err != nil {
+		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
+	}
 }

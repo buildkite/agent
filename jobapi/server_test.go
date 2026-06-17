@@ -501,8 +501,8 @@ func startPromiseFailureServer(t *testing.T, declarer jobapi.PromiseFailureDecla
 }
 
 // promiseFailureRequest POSTs a promise-failure declaration to the Job API and
-// returns the HTTP status code.
-func promiseFailureRequest(t *testing.T, client *http.Client, token string, exitStatus int) int {
+// returns the HTTP status code and, on success, the outcome from the response body.
+func promiseFailureRequest(t *testing.T, client *http.Client, token string, exitStatus int) (int, string) {
 	t.Helper()
 
 	buf := &bytes.Buffer{}
@@ -520,8 +520,16 @@ func promiseFailureRequest(t *testing.T, client *http.Client, token string, exit
 	if err != nil {
 		t.Fatalf("client.Do(req) error = %v", err)
 	}
-	defer resp.Body.Close()
-	return resp.StatusCode
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return resp.StatusCode, ""
+	}
+	var body jobapi.PromiseFailureResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	return resp.StatusCode, body.Outcome
 }
 
 func TestPromiseFailure(t *testing.T) {
@@ -538,12 +546,22 @@ func TestPromiseFailure(t *testing.T) {
 		return http.StatusNoContent, nil
 	})
 
-	// The first declaration of an exit status calls the Buildkite API; repeated
-	// calls for the same exit status are debounced (no extra API call), but a
-	// different exit status is declared on its own. All callers see success.
-	for _, exitStatus := range []int{1, 1, 2} {
-		if got := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusOK {
+	// The first declaration of an exit status calls the Buildkite API and reports
+	// "declared"; a repeated call for the same exit status is debounced (no extra
+	// API call) and reports "debounced"; a different exit status is declared on
+	// its own. All callers see success.
+	wantOutcomes := []string{
+		jobapi.PromiseFailureDeclared,
+		jobapi.PromiseFailureDebounced,
+		jobapi.PromiseFailureDeclared,
+	}
+	for i, exitStatus := range []int{1, 1, 2} {
+		got, outcome := promiseFailureRequest(t, client, token, exitStatus)
+		if got != http.StatusOK {
 			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusOK)
+		}
+		if outcome != wantOutcomes[i] {
+			t.Errorf("promiseFailureRequest(%d) outcome = %q, want %q", exitStatus, outcome, wantOutcomes[i])
 		}
 	}
 
@@ -566,7 +584,7 @@ func TestPromiseFailureInvalidExitStatus(t *testing.T) {
 	// A non-positive exit status is rejected at the boundary, without reaching
 	// the declarer (and therefore the Buildkite API).
 	for _, exitStatus := range []int{0, -1} {
-		if got := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusBadRequest {
+		if got, _ := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusBadRequest {
 			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusBadRequest)
 		}
 	}
@@ -586,10 +604,10 @@ func TestPromiseFailureNotCachedOnError(t *testing.T) {
 
 	// A failed declaration is surfaced with the Buildkite API's status code, and
 	// isn't cached: a later call for the same exit status retries.
-	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
 		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
 	}
-	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
 		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
 	}
 
@@ -615,7 +633,7 @@ func TestPromiseFailureStatusNormalization(t *testing.T) {
 
 	// Both are normalized to 502, so a caller never reads an error as success.
 	for _, exitStatus := range []int{1, 2} {
-		if got := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusBadGateway {
+		if got, _ := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusBadGateway {
 			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusBadGateway)
 		}
 	}
@@ -634,12 +652,12 @@ func TestPromiseFailurePanicRecovers(t *testing.T) {
 
 	// The first call panics inside the declarer; the recovery middleware turns it
 	// into a 500 rather than leaving the caller (and any waiters) hung.
-	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusInternalServerError {
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusInternalServerError {
 		t.Errorf("panicking promiseFailureRequest(1) status = %d, want %d", got, http.StatusInternalServerError)
 	}
 	// The poisoned entry was dropped, so a later call gets a fresh attempt and
 	// succeeds instead of blocking forever.
-	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
 		t.Errorf("retried promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
 	}
 	if got := calls.Load(); got != 2 {
@@ -667,7 +685,7 @@ func TestPromiseFailurePanicConcurrent(t *testing.T) {
 	for range n {
 		go func() {
 			defer wg.Done()
-			if got := promiseFailureRequest(t, client, token, 1); got != http.StatusInternalServerError {
+			if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusInternalServerError {
 				t.Errorf("promiseFailureRequest(1) status = %d, want %d", got, http.StatusInternalServerError)
 			}
 		}()
@@ -700,7 +718,7 @@ func TestPromiseFailureConcurrent(t *testing.T) {
 	for range n {
 		go func() {
 			defer wg.Done()
-			if got := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+			if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
 				t.Errorf("promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
 			}
 		}()
@@ -715,12 +733,17 @@ func TestPromiseFailureConcurrent(t *testing.T) {
 func TestPromiseFailureConcurrentError(t *testing.T) {
 	t.Parallel()
 
-	// The declarer sleeps then fails, so a burst of concurrent callers coalesce
-	// onto the single in-flight attempt and all observe the same failure.
+	// The declarer blocks until released, then fails. Holding the in-flight
+	// attempt open lets a burst of concurrent callers reliably coalesce onto it
+	// and all observe the same failure.
 	var calls atomic.Int64
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var startOnce sync.Once
 	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
 		calls.Add(1)
-		time.Sleep(20 * time.Millisecond)
+		startOnce.Do(func() { close(started) })
+		<-release
 		return http.StatusUnprocessableEntity, fmt.Errorf("the job is no longer running")
 	})
 
@@ -730,11 +753,17 @@ func TestPromiseFailureConcurrentError(t *testing.T) {
 	for range n {
 		go func() {
 			defer wg.Done()
-			if got := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
+			if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
 				t.Errorf("concurrent promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
 			}
 		}()
 	}
+
+	// Once the leader is declaring (and holding the entry), give the other
+	// callers time to coalesce onto it, then release the attempt.
+	<-started
+	time.Sleep(100 * time.Millisecond)
+	close(release)
 	wg.Wait()
 
 	// The burst coalesced into a single declaration...
@@ -742,7 +771,7 @@ func TestPromiseFailureConcurrentError(t *testing.T) {
 		t.Errorf("declarer calls during burst = %d, want exactly 1", got)
 	}
 	// ...but because the failure wasn't cached, a later call retries.
-	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
 		t.Errorf("later promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
 	}
 	if got := calls.Load(); got != 2 {
