@@ -36,6 +36,9 @@ type DownloaderConfig struct {
 	DebugHTTP    bool
 	TraceHTTP    bool
 	DisableHTTP2 bool
+
+	// Whether to allow multipart downloads to the custom s3 bucket
+	AllowS3Multipart bool
 }
 
 type Downloader struct {
@@ -62,7 +65,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 	destination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(destination)
 	if err != nil {
-		return fmt.Errorf("Could not find information about destination: %s %v",
+		return fmt.Errorf("could not find information about destination: %s %v",
 			destination, err)
 	}
 	if !fileInfo.IsDir() {
@@ -78,10 +81,10 @@ func (a *Downloader) Download(ctx context.Context) error {
 	artifactCount := len(artifacts)
 
 	if artifactCount == 0 {
-		return errors.New("No artifacts found for downloading")
+		return errors.New("no artifacts found for downloading")
 	}
 
-	a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
+	a.logger.Infof("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
 
 	s3Clients, err := a.generateS3Clients(ctx, artifacts)
 	if err != nil {
@@ -109,10 +112,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 	var wg sync.WaitGroup
 	artifactsCh := make(chan *api.Artifact)
 	for range min(10*runtime.GOMAXPROCS(0), len(artifacts)) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				var artifact *api.Artifact
 				var open bool
@@ -137,7 +137,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 				dler := a.createDownloader(artifact, path, destination, s3Clients)
 
 				if err := dler.Start(ctx); err != nil {
-					a.logger.Error("Failed to download artifact: %s", err)
+					a.logger.Errorf("Failed to download artifact: %s", err)
 					select {
 					case errorsCh <- err:
 						// error sent
@@ -146,7 +146,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 					}
 				}
 			}
-		}()
+		})
 	}
 
 	// Send the artifacts to the workers then signal completion by closing the
@@ -172,7 +172,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 	select {
 	case errors := <-errorsOutCh:
 		if len(errors) > 0 {
-			return fmt.Errorf("There were errors with downloading some of the artifacts")
+			return fmt.Errorf("there were errors downloading some of the artifacts")
 		}
 
 	case <-ctx.Done():
@@ -216,13 +216,15 @@ func (a *Downloader) createDownloader(artifact *api.Artifact, path, destination 
 	case strings.HasPrefix(artifact.UploadDestination, "s3://"):
 		bucketName, _ := ParseS3Destination(artifact.UploadDestination)
 		return NewS3Downloader(a.logger, S3DownloaderConfig{
-			S3Client:    s3Clients[bucketName],
-			Path:        path,
-			S3Path:      artifact.UploadDestination,
-			Destination: destination,
-			Retries:     5,
-			DebugHTTP:   a.conf.DebugHTTP,
-			TraceHTTP:   a.conf.TraceHTTP,
+			S3Client:         s3Clients[bucketName],
+			Path:             path,
+			S3Path:           artifact.UploadDestination,
+			Destination:      destination,
+			Retries:          5,
+			DebugHTTP:        a.conf.DebugHTTP,
+			TraceHTTP:        a.conf.TraceHTTP,
+			ExpectedSHA256:   artifact.Sha256Sum,
+			AllowS3Multipart: a.conf.AllowS3Multipart,
 		})
 
 	case strings.HasPrefix(artifact.UploadDestination, "gs://"):

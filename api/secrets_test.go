@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
-	"gotest.tools/v3/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestGetSecret(t *testing.T) {
@@ -29,7 +28,7 @@ func TestGetSecret(t *testing.T) {
 		nonAccessToken = "alpacas"
 	)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, test := range []struct {
 		name             string
@@ -103,7 +102,9 @@ func TestGetSecret(t *testing.T) {
 					_, err := io.WriteString(
 						rw, fmt.Sprintf(`{"key":%q,"value":%q,"uuid":%q}`, secretKey, secretValue, secretUUID),
 					)
-					assert.NilError(t, err)
+					if err != nil {
+						t.Fatalf("io.WriteString(rw, %q) error = %v, want nil", fmt.Sprintf(`{"key":%q,"value":%q,"uuid":%q}`, secretKey, secretValue, secretUUID), err)
+					}
 					return
 				}
 
@@ -128,13 +129,21 @@ func TestGetSecret(t *testing.T) {
 			})
 
 			secret, resp, err := client.GetSecret(ctx, test.getSecretRequest)
-			assert.Check(t, resp.StatusCode == test.expectedCode, "expected status code %d, got %d", test.expectedCode, resp.StatusCode)
+			if got := resp.StatusCode == test.expectedCode; !got {
+				t.Errorf("expected status code %d, got %d", test.expectedCode, resp.StatusCode)
+			}
 			if test.expectedError == nil {
-				assert.DeepEqual(t, secret, test.expectedSecret)
+				if diff := cmp.Diff(test.expectedSecret, secret); diff != "" {
+					t.Fatalf("test.expectedSecret diff (-got +want):\n%s", diff)
+				}
 			} else if aerr := new(api.ErrorResponse); errors.As(err, &aerr) {
-				assert.DeepEqual(t, aerr.Message, test.expectedError.Error())
+				if diff := cmp.Diff(test.expectedError.Error(), aerr.Message); diff != "" {
+					t.Fatalf("test.expectedError.Error() diff (-got +want):\n%s", diff)
+				}
 			} else {
-				assert.ErrorIs(t, err, test.expectedError)
+				if want := test.expectedError; !errors.Is(err, want) {
+					t.Fatalf("client.GetSecret(ctx, test.getSecretRequest) error = %v, want %v", err, want)
+				}
 			}
 		})
 	}

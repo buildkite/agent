@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,9 +14,9 @@ import (
 	"connectrpc.com/connect"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/roko"
 )
@@ -168,12 +169,15 @@ func (e *errUnrecoverable) Error() string {
 	return fmt.Sprintf("%s failed with unrecoverable status: %s, mesage: %q", e.action, status, e.err)
 }
 
-// See https://connectrpc.com/docs/protocol/#http-to-error-code
+// See https://connectrpc.com/docs/protocol/#error-codes
 var codeUnrecoverable = map[connect.Code]bool{
-	connect.CodeInternal:         true, // 400
-	connect.CodeUnauthenticated:  true, // 401
-	connect.CodePermissionDenied: true, // 403
-	connect.CodeUnimplemented:    true, // 404
+	connect.CodeUnauthenticated:  true, // invalid credentials
+	connect.CodePermissionDenied: true, // not authorized
+	connect.CodeUnimplemented:    true, // RPC not supported
+	// CodeInternal is intentionally NOT here. While it semantically means
+	// "server invariant broken," it is also produced by transient HTTP/2
+	// transport errors (e.g. RST_STREAM INTERNAL_ERROR from a load balancer)
+	// that ConnectRPC maps to CodeInternal.
 	// All other codes are implicitly false, but particularly:
 	// Unavailable (429, 502, 503, 504) and Unknown (all other HTTP statuses).
 }
@@ -272,7 +276,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 			// If the job acquisition was rejected, we can exit with an error
 			// so that supervisor knows that the job was not acquired due to the job being rejected.
 			if errors.Is(err, core.ErrJobAcquisitionRejected) {
-				return fmt.Errorf("Failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
+				return fmt.Errorf("failed to acquire job %q: %w", a.agentConfiguration.AcquireJob, err)
 			}
 
 			// If the job itself exited with nonzero code, then we want to exit
@@ -284,7 +288,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				}()
 			}
 
-			a.logger.Error("Failed to acquire and run job: %v", err)
+			a.logger.Errorf("Failed to acquire and run job: %v", err)
 		}
 	}
 
@@ -298,17 +302,12 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	fromStreamingLoopCh := make(chan actionMessage) // streaming loop to debouncer
 	fromDebouncerCh := make(chan actionMessage)     // debouncer to action handler
 
-	// Start the loops and block until they have all stopped.
 	// Based on configuration, we have our choice of ping loop,
 	// streaming loop+debouncer loop, or both.
-	var wg sync.WaitGroup
-
 	pingLoop := func() {
-		defer wg.Done()
 		errCh <- a.runPingLoop(ctx, bat, fromPingLoopCh)
 	}
 	streamingLoop := func() {
-		defer wg.Done()
 		err := a.runStreamingPingLoop(ctx, fromStreamingLoopCh)
 		if err != nil {
 			switch a.agentConfiguration.PingMode {
@@ -316,12 +315,12 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				// In streaming-only mode, an unrecoverable failure
 				// in the streaming loop should be reported and should
 				// terminate the agent worker.
-				a.logger.Error("Streaming ping mode failed due to an unrecoverable error: %v", err)
+				a.logger.Errorf("Streaming ping mode failed due to an unrecoverable error: %v", err)
 			default:
 				// In auto mode, the worker should fall back to the ping loop
 				// and carry on. The user might find that interesting (especially if
 				// they are expecting streaming to work).
-				a.logger.Info("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err)
+				a.logger.Infof("Streaming ping mode is unavailable, permanently falling back to polling-based ping mode (the underlying error was: %v)", err)
 				// If the ping loop then has its own unrecoverable error, then
 				// *that* will terminate the worker. But the streaming loop shouldn't.
 				// So treat the error from the streaming loop as "business as usual".
@@ -331,7 +330,6 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 		errCh <- err
 	}
 	debouncerLoop := func() {
-		defer wg.Done()
 		errCh <- a.runDebouncer(ctx, bat, fromDebouncerCh, fromStreamingLoopCh)
 	}
 
@@ -339,7 +337,8 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	switch a.agentConfiguration.PingMode {
 	case "", PingModeAuto: // note: "" can happen in some tests
 		loops = []func(){pingLoop, streamingLoop, debouncerLoop}
-		bat.Acquire(actorDebouncer)
+		<-bat.Acquire()
+		bat.Acquired(actorDebouncer)
 
 	case PingModePollOnly:
 		loops = []func(){pingLoop}
@@ -348,7 +347,8 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	case PingModeStreamOnly:
 		loops = []func(){streamingLoop, debouncerLoop}
 		fromPingLoopCh = nil // prevent action loop listening to ping side
-		bat.Acquire(actorDebouncer)
+		<-bat.Acquire()
+		bat.Acquired(actorDebouncer)
 
 	default:
 		return fmt.Errorf("unknown ping mode %q", a.agentConfiguration.PingMode)
@@ -356,15 +356,14 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 
 	// There's always an action handler.
 	actionLoop := func() {
-		defer wg.Done()
 		errCh <- a.runActionLoop(ctx, idleMon, fromPingLoopCh, fromDebouncerCh)
 	}
 	loops = append(loops, actionLoop)
 
-	// Go loops!
-	wg.Add(len(loops))
+	// Start the loops and block until they have all stopped.
+	var wg sync.WaitGroup
 	for _, l := range loops {
-		go l()
+		wg.Go(l)
 	}
 	wg.Wait()
 
@@ -394,7 +393,7 @@ func (a *AgentWorker) internalStop() {
 func (a *AgentWorker) StopGracefully() {
 	select {
 	case <-a.stop:
-		a.logger.Warn("Agent is already gracefully stopping...")
+		a.logger.Warnf("Agent is already gracefully stopping...")
 		return
 
 	default:
@@ -404,9 +403,9 @@ func (a *AgentWorker) StopGracefully() {
 	// If we have a job, tell the user that we'll wait for it to finish
 	// before disconnecting
 	if a.jobRunner.Load() != nil {
-		a.logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
+		a.logger.Infof("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
 	} else {
-		a.logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+		a.logger.Infof("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 	}
 
 	a.internalStop()
@@ -419,16 +418,16 @@ func (a *AgentWorker) StopUngracefully() {
 
 	// If there's a job running, kill it, then disconnect.
 	if jr := a.jobRunner.Load(); jr != nil {
-		a.logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
+		a.logger.Infof("Forcefully stopping agent. The current job will be canceled before disconnecting...")
 
 		// Kill the current job. Doesn't do anything if the job
 		// is already being killed, so it's safe to call
 		// multiple times.
 		if err := jr.Cancel(CancelReasonAgentStopping); err != nil {
-			a.logger.Error("Unexpected error canceling job (err: %s)", err)
+			a.logger.Errorf("Unexpected error canceling job (err: %s)", err)
 		}
 	} else {
-		a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+		a.logger.Infof("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 	}
 }
 
@@ -454,7 +453,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
 			}
 
-			a.logger.Warn("%s (%s)", err, r)
+			a.logger.Warnf("%s (%s)", err, r)
 			return nil, err
 		}
 		return b, nil
@@ -472,7 +471,7 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	// Track a timestamp for the successful heartbeat for better errors
 	a.stats.lastHeartbeat = time.Now()
 
-	a.logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
+	a.logger.Debugf("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
 	return nil
 }
 
@@ -508,42 +507,55 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 	a.setBusy(acceptResponse.ID)
 	defer a.setIdle()
 
+	priorityLabel := strconv.Itoa(acceptResponse.Priority)
+	queueLabel := acceptResponse.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]
+
+	// Legacy unlabelled counters; kept incrementing in lockstep with the
+	// labelled counters below so existing scrape consumers see no shape change.
 	jobsStarted.Inc()
 	defer jobsEnded.Inc()
+
+	jobsStartedWithLabels.WithLabelValues(priorityLabel, queueLabel).Inc()
+	defer jobsEndedWithLabels.WithLabelValues(priorityLabel, queueLabel).Inc()
+
+	running := jobsRunning.WithLabelValues(priorityLabel, queueLabel)
+	running.Inc()
+	defer running.Dec()
 
 	jobMetricsScope := a.metrics.With(metrics.Tags{
 		"pipeline": acceptResponse.Env["BUILDKITE_PIPELINE_SLUG"],
 		"org":      acceptResponse.Env["BUILDKITE_ORGANIZATION_SLUG"],
 		"branch":   acceptResponse.Env["BUILDKITE_BRANCH"],
 		"source":   acceptResponse.Env["BUILDKITE_SOURCE"],
-		"queue":    acceptResponse.Env["BUILDKITE_AGENT_META_DATA_QUEUE"],
+		"queue":    queueLabel,
 	})
 
 	// Now that we've got a job to do, we can start it.
 	jr, err := NewJobRunner(ctx, a.logger, a.apiClient, JobRunnerConfig{
-		Job:                acceptResponse,
-		JWKS:               a.agentConfiguration.VerificationJWKS,
-		Debug:              a.debug,
-		DebugHTTP:          a.debugHTTP,
-		CancelSignal:       a.cancelSig,
-		MetricsScope:       jobMetricsScope,
-		JobStatusInterval:  time.Duration(a.agent.JobStatusInterval) * time.Second,
-		AgentConfiguration: a.agentConfiguration,
-		AgentStdout:        a.agentStdout,
-		KubernetesExec:     a.agentConfiguration.KubernetesExec,
+		Job:                             acceptResponse,
+		JWKS:                            a.agentConfiguration.VerificationJWKS,
+		Debug:                           a.debug,
+		DebugHTTP:                       a.debugHTTP,
+		CancelSignal:                    a.cancelSig,
+		MetricsScope:                    jobMetricsScope,
+		JobStatusInterval:               time.Duration(a.agent.JobStatusInterval) * time.Second,
+		AgentConfiguration:              a.agentConfiguration,
+		AgentStdout:                     a.agentStdout,
+		KubernetesExec:                  a.agentConfiguration.KubernetesExec,
+		KubernetesContainerStartTimeout: a.agentConfiguration.KubernetesContainerStartTimeout,
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to initialize job: %w", err)
+		return fmt.Errorf("failed to initialize job: %w", err)
 	}
 	if !a.jobRunner.CompareAndSwap(nil, jr) {
-		return fmt.Errorf("Agent worker already has a job running")
+		return fmt.Errorf("agent worker already has a job running")
 	}
 	// No more job, no more runner.
 	defer a.jobRunner.Store(nil)
 
 	// Start running the job
 	if err := jr.Run(ctx, ignoreAgentInDispatches); err != nil {
-		return fmt.Errorf("Failed to run job: %w", err)
+		return fmt.Errorf("failed to run job: %w", err)
 	}
 
 	return nil
@@ -563,12 +575,12 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 
 		if a.stats.lastHeartbeatError != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "ERROR: last heartbeat failed: %v. last successful was %v ago", a.stats.lastHeartbeatError, time.Since(a.stats.lastHeartbeat))
+			_, _ = fmt.Fprintf(w, "ERROR: last heartbeat failed: %v. last successful was %v ago", a.stats.lastHeartbeatError, time.Since(a.stats.lastHeartbeat))
 		} else {
 			if a.stats.lastHeartbeat.IsZero() {
-				fmt.Fprintf(w, "OK: no heartbeat yet")
+				_, _ = fmt.Fprintf(w, "OK: no heartbeat yet")
 			} else {
-				fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat))
+				_, _ = fmt.Fprintf(w, "OK: last heartbeat successful %v ago", time.Since(a.stats.lastHeartbeat))
 			}
 		}
 	}
@@ -576,12 +588,12 @@ func (a *AgentWorker) healthHandler() http.HandlerFunc {
 
 // Internal error values that should not escape to the user.
 var (
-	// internalStop is used when stopping.
-	internalStop = errors.New("stop")
+	// errInternalStop is used when stopping.
+	errInternalStop = errors.New("stop")
 
-	// internalBreak is used to stop an inner loop but continue
+	// errInternalBreak is used to stop an inner loop but continue
 	// an outer loop.
-	internalBreak = errors.New("break")
+	errInternalBreak = errors.New("break")
 )
 
 const (

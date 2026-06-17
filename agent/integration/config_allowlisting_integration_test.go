@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"maps"
 	"regexp"
 	"strings"
@@ -132,7 +131,7 @@ func TestConfigAllowlisting(t *testing.T) {
 			tc.mockBootstrapExpectation(mb)
 			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
-			err := runJob(t, context.Background(), testRunJobConfig{
+			err := runJob(t, t.Context(), testRunJobConfig{
 				job:           job,
 				server:        server,
 				agentCfg:      tc.agentConfig,

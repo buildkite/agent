@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const (
@@ -115,6 +116,8 @@ var AnnotateCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotateConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "annotate")
+		defer span.End()
 
 		if err := annotate(ctx, cfg, l); err != nil {
 			return err
@@ -130,7 +133,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 	if cfg.Body != "" {
 		body = cfg.Body
 	} else if stdin.IsReadable() {
-		l.Info("Reading annotation body from STDIN")
+		l.Infof("Reading annotation body from STDIN")
 
 		// Actually read the file from STDIN
 		stdin, err := io.ReadAll(os.Stdin)
@@ -148,12 +151,12 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		return err
 	}
 	if redactedBody := redact.String(body, needles); redactedBody != body {
-		l.Warn("Annotation body contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret")
+		l.Warnf("Annotation body contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret")
 		body = redactedBody
 	}
 
 	if bodySize := len(body); bodySize > maxBodySize {
-		return fmt.Errorf("annotation body size (%dB) exceeds maximum (%dB)", bodySize, maxBodySize)
+		return annotationTooBigError{bodySize}
 	}
 
 	// Create the API client
@@ -178,15 +181,11 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		// Attempt to create the annotation
 		resp, err := client.Annotate(ctx, cfg.Job, annotation)
 
-		// Don't bother retrying if the response was one of these statuses
-		if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
-			r.Break()
+		if api.BreakOnNonRetryable(r, resp, err) {
 			return err
 		}
-
-		// Show the unexpected error
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return err
 		}
 		return nil
@@ -194,7 +193,15 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		return fmt.Errorf("failed to annotate build: %w", err)
 	}
 
-	l.Debug("Successfully annotated build")
+	l.Debugf("Successfully annotated build")
 
 	return nil
+}
+
+type annotationTooBigError struct {
+	bodySize int
+}
+
+func (e annotationTooBigError) Error() string {
+	return fmt.Sprintf("annotation body size (%dB) exceeds maximum (%dB)", e.bodySize, maxBodySize)
 }

@@ -3,8 +3,8 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
 	"slices"
 	"time"
 
@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 type OIDCTokenConfig struct {
@@ -26,6 +27,7 @@ type OIDCTokenConfig struct {
 	// TODO: enumerate possible values, perhaps by adding a link to the documentation
 	Claims         []string `cli:"claim"           normalize:"list"`
 	AWSSessionTags []string `cli:"aws-session-tag" normalize:"list"`
+	SubjectClaim   string   `cli:"subject-claim"`
 }
 
 const (
@@ -68,6 +70,12 @@ var OIDCRequestTokenCommand = cli.Command{
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
+		cli.StringFlag{
+			Name:   "subject-claim",
+			Usage:  "An immutable claim to use as the token's subject (e.g. pipeline_id, cluster_id). If omitted, the default compound subject is used.",
+			EnvVar: "BUILDKITE_OIDC_TOKEN_SUBJECT_CLAIM",
+		},
+
 		cli.StringSliceFlag{
 			Name:   "claim",
 			Value:  &cli.StringSlice{},
@@ -97,10 +105,12 @@ var OIDCRequestTokenCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "oidc-request-token")
+		defer span.End()
 
 		// Note: if --lifetime is omitted, cfg.Lifetime = 0
 		if cfg.Lifetime < 0 {
-			return fmt.Errorf("lifetime %d must be a non-negative integer.", cfg.Lifetime)
+			return fmt.Errorf("lifetime %d must be a non-negative integer", cfg.Lifetime)
 		}
 
 		if cfg.Format != "jwt" && cfg.Format != "gcp" {
@@ -122,28 +132,23 @@ var OIDCRequestTokenCommand = cli.Command{
 				Lifetime:       cfg.Lifetime,
 				Claims:         cfg.Claims,
 				AWSSessionTags: cfg.AWSSessionTags,
+				SubjectClaim:   cfg.SubjectClaim,
 			}
 
 			token, resp, err := client.OIDCToken(ctx, req)
-			if resp != nil {
-				switch resp.StatusCode {
-				// Don't bother retrying if the response was one of these statuses
-				case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusUnprocessableEntity:
-					r.Break()
-					return nil, err
-				}
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return nil, err
 			}
-
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			}
 			return token, err
 		})
 		if err != nil {
 			if len(cfg.Audience) > 0 {
-				l.Error("Could not obtain OIDC token for audience %s", cfg.Audience)
+				l.Errorf("Could not obtain OIDC token for audience %s", cfg.Audience)
 			} else {
-				l.Error("Could not obtain OIDC token for default audience")
+				l.Errorf("Could not obtain OIDC token for default audience")
 			}
 			return err
 		}
@@ -151,7 +156,14 @@ var OIDCRequestTokenCommand = cli.Command{
 		if !cfg.SkipRedaction {
 			jobClient, err := jobapi.NewDefaultClient(ctx)
 			if err != nil {
-				return fmt.Errorf("failed to create Job API client: %w", err)
+				err = fmt.Errorf("the Job API client could not be created (error: %w)", err)
+				if errors.Is(err, jobapi.ErrJobAPIUnavailable) {
+					err = fmt.Errorf("the Job API is unavailable on this machine, as it requires Unix domain sockets to function. On Windows, Unix domain sockets require Windows build 17063 or newer (Windows 10 version 1803 / Windows Server 2019 onwards)")
+				}
+				return fmt.Errorf(
+					"automatic OIDC token redaction requires the Job API, but %w. The command failed instead of outputting the token because it could leak in logs without redaction. To output the token anyway, explicitly opt out of redaction with --skip-redaction or BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION=true",
+					err,
+				)
 			}
 
 			if err := AddToRedactor(ctx, l, jobClient, token.Token); err != nil {

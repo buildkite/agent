@@ -15,7 +15,7 @@ import (
 
 func TestLogStreamer(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	logger := logger.NewConsoleLogger(
 		logger.NewTextPrinter(os.Stderr),

@@ -22,12 +22,16 @@ func Find(root *os.Root, hookDir, name string) (string, error) {
 
 	// exts is a list of file extensions to check.
 	var exts []string
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		// check for windows types first
-		exts = []string{".bat", ".cmd", ".ps1", ".exe"}
+		exts = []string{".bat", ".cmd", ".ps1", ".exe", ""}
+
+	default:
+		// always check for an extensionless file
+		// PowerShell 7 is cross-platform
+		exts = []string{"", ".ps1"}
 	}
-	// always check for an extensionless file
-	exts = append(exts, "")
 
 	// Check for a file named name+ext in hookDir.
 	for _, ext := range exts {

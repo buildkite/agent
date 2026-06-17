@@ -1,13 +1,12 @@
 package clicommand
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func newAgentStopTestServer(t *testing.T) *httptest.Server {
@@ -25,7 +24,7 @@ func TestAgentStop(t *testing.T) {
 	server := newAgentStopTestServer(t)
 	defer server.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := AgentStopConfig{
 		APIConfig: APIConfig{
 			AgentAccessToken: "agentaccesstoken",
@@ -35,6 +34,10 @@ func TestAgentStop(t *testing.T) {
 	l := logger.NewBuffer()
 
 	err := stop(ctx, cfg, l)
-	assert.NoError(t, err)
-	assert.Contains(t, l.Messages, "[info] Successfully stopped agent")
+	if err != nil {
+		t.Errorf("stop(ctx, cfg, l) error = %v, want nil", err)
+	}
+	if got, want := l.Messages, "[info] Successfully stopped agent"; !slices.Contains(got, want) {
+		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	}
 }

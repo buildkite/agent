@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -90,7 +89,7 @@ func TestOIDCToken(t *testing.T) {
 	const audience = "sts.amazonaws.com"
 	const lifetime = 600
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		OIDCTokenRequest *api.OIDCTokenRequest
@@ -140,6 +139,15 @@ func TestOIDCToken(t *testing.T) {
 				AWSSessionTags: []string{"organization_id", "pipeline_id"},
 			},
 			ExpectedBody: []byte(`{"aws_session_tags":["organization_id","pipeline_id"]}` + "\n"),
+			OIDCToken:    &api.OIDCToken{Token: oidcToken},
+		},
+		{
+			AccessToken: accessToken,
+			OIDCTokenRequest: &api.OIDCTokenRequest{
+				Job:          jobID,
+				SubjectClaim: "cluster_id",
+			},
+			ExpectedBody: []byte(`{"subject_claim":"cluster_id"}` + "\n"),
 			OIDCToken:    &api.OIDCToken{Token: oidcToken},
 		},
 	}
@@ -200,7 +208,7 @@ func TestOIDCTokenError(t *testing.T) {
 	const accessToken = "llamas"
 	const audience = "sts.amazonaws.com"
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		OIDCTokenRequest *api.OIDCTokenRequest

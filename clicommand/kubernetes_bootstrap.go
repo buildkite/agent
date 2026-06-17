@@ -7,13 +7,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"slices"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/kubernetes"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
 )
 
@@ -87,21 +87,21 @@ var KubernetesBootstrapCommand = cli.Command{
 		}
 		defer socket.Close()
 
-		// Start with the registration response env, then override with our
-		// existing env.
-		// This is important because we're given higher-priority info from
-		// agent-stack-k8s or the container's default setup. Examples:
-		// - agent-stack-k8s interprets the job definition itself, and sets
-		//   BUILDKITE_COMMAND to one that could be radically different to the
-		//   one the agent normally sets.
-		// - Similarly, bootstrap phases varies depending on whether this is a
-		//   checkout or command container. The agent would have us run all
-		//   phases.
-		// - Container ID should be preserved in case of Hyrum's Law.
-		// - Sockets path is set by agent-stack-k8s as it varies by container
-		//   name.
-		// - We don't want to use the agent container's HOME, KUBERNETES_*, etc.
-		environ := env.FromSlice(slices.Concat(regResp.Env, os.Environ()))
+		// Build the subprocess env by starting with the current env, then
+		// overriding mainly with the registration response env. Nearly all of
+		// the registration env is higher priority than existing env, but we're
+		// given some higher-priority info from agent-stack-k8s or the
+		// container's default setup.
+		environ := env.FromSlice(os.Environ())
+		for name, val := range env.SeqSlice(regResp.Env) {
+			if _, skip := existingEnvPriority[name]; skip {
+				continue
+			}
+			if strings.HasPrefix(name, "KUBERNETES_") {
+				continue
+			}
+			environ.Set(name, val)
+		}
 
 		// Capture parameters from the agent that affect how the subprocess
 		// should be run: build path, PTY, cancel signal, and signal grace period.
@@ -112,6 +112,16 @@ var KubernetesBootstrapCommand = cli.Command{
 			cs, err := process.ParseSignal(sig)
 			if err != nil {
 				return err
+			}
+			// CancelSignal == SIGKILL means the user wants the command to be
+			// killed instead of signaled more gracefully (SIGTERM, SIGINT,
+			// etc).
+			// We don't send SIGKILL to the bootstrap itself as a cancel signal,
+			// because that would kill the bootstrap immediately, which would
+			// prevent capturing the exit status of the command, executing
+			// various pre-exit hooks, and other cleanup.
+			if cs == process.SIGKILL {
+				cs = process.SIGTERM
 			}
 			cancelSignal = cs
 		}
@@ -159,9 +169,9 @@ var KubernetesBootstrapCommand = cli.Command{
 			// is in state interrupted or the connection died or ...), we should
 			// cancel the job.
 			if err != nil {
-				l.Error("kubernetes-bootstrap: Error waiting for client interrupt: %v; cancelling work", err)
+				l.Errorf("kubernetes-bootstrap: Error waiting for client interrupt: %v; cancelling work", err)
 			} else {
-				l.Warn("kubernetes-bootstrap: Either the job was cancelled or the pod is being deleted; cancelling work")
+				l.Warnf("kubernetes-bootstrap: Either the job was cancelled or the pod is being deleted; cancelling work")
 			}
 			// The context cancellation handler in process.Run first calls
 			// Interrupt, waits for its signalGracePeriod, and then calls
@@ -177,7 +187,7 @@ var KubernetesBootstrapCommand = cli.Command{
 				// in that case is superfluous.)
 				time.Sleep(cancelGracePeriod)
 				// We get here if the main goroutine hasn't returned yet.
-				l.Info("kubernetes-bootstrap: Timed out waiting for subprocess to exit; exiting immediately with status 1")
+				l.Infof("kubernetes-bootstrap: Timed out waiting for subprocess to exit; exiting immediately with status 1")
 				os.Exit(1)
 			}()
 		}); err != nil {
@@ -185,7 +195,7 @@ var KubernetesBootstrapCommand = cli.Command{
 		}
 
 		phases := environ.GetString("BUILDKITE_BOOTSTRAP_PHASES", "(unknown)")
-		fmt.Fprintf(socket, "~~~ Bootstrapping phases %s\n", phases)
+		_, _ = fmt.Fprintf(socket, "~~~ Bootstrapping phases %s\n", phases)
 
 		// Now we can run the real `buildkite-agent bootstrap`.
 		// Compare with the setup in [agent.NewJobRunner].
@@ -229,21 +239,55 @@ var KubernetesBootstrapCommand = cli.Command{
 					return
 				case sig := <-signals:
 					// Log but otherwise swallow the signal
-					l.Info("kubernetes-bootstrap: Received %v; awaiting interrupt from agent", sig)
+					l.Infof("kubernetes-bootstrap: Received %v; awaiting interrupt from agent", sig)
 				}
 			}
 		}()
 
 		exitCode := -1
-		defer func() { socket.Exit(exitCode) }()
+		defer func() { _ = socket.Exit(exitCode) }()
 
 		// NB: Run blocks until the subprocess exits.
 		if err := proc.Run(ctx); err != nil {
-			fmt.Fprintf(socket, "Couldn't execute bootstrap: %v\n", err)
+			_, _ = fmt.Fprintf(socket, "Couldn't execute bootstrap: %v\n", err)
 			return &ExitError{1, err}
 		}
 
 		exitCode = proc.WaitStatus().ExitStatus()
 		return &SilentExitError{code: exitCode}
 	},
+}
+
+// existingEnvPriority lists existing env vars (the ones this process started
+// with) that should take priority over the registration response env. This is
+// vaguely similar to the "protectedEnv" map, but is distinct and inverted.
+//
+// The two reasons for including an env var in this map are:
+//
+//   - The value is set by agent-stack-k8s in the env config of the container,
+//     and the value would be different to the one computed by the agent.
+//   - The value is provided by the underlying container and could be breakingly
+//     different from the agent container's value.
+var existingEnvPriority = map[string]struct{}{
+	// BUILDKITE_BOOTSTRAP_PHASES varies depending on whether this is a checkout
+	// or command container. The agent would have us run all phases.
+	"BUILDKITE_BOOTSTRAP_PHASES": {},
+	// agent-stack-k8s interprets the job definition itself, and sets
+	// BUILDKITE_COMMAND to one that could be radically different to the one the
+	// agent normally sets.
+	"BUILDKITE_COMMAND": {},
+	// BUILDKITE_CONTAINER_ID is preserved in case of Hyrum's Law.
+	"BUILDKITE_CONTAINER_ID": {},
+	// BUILDKITE_SOCKETS_PATH is set by agent-stack-k8s and varies by container
+	// name.
+	"BUILDKITE_SOCKETS_PATH": {},
+	// We don't want to use the agent container's HOME, HOSTNAME, PWD, PATH,
+	// KUBERNETES_*, etc.
+	"HOME":     {},
+	"HOSTNAME": {},
+	"PATH":     {},
+	"PWD":      {},
+	"SHLVL":    {},
+	"TERM":     {},
+	// "KUBERNETES_*": {}, // implemented as a strings.HasPrefix check
 }

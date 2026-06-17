@@ -44,7 +44,7 @@ var LockDoneCommand = cli.Command{
 
 func lockDoneAction(c *cli.Context) error {
 	if c.NArg() != 1 {
-		fmt.Fprint(c.App.ErrWriter, lockDoneHelpDescription)
+		_, _ = fmt.Fprint(c.App.ErrWriter, lockDoneHelpDescription)
 		return &SilentExitError{code: 1}
 	}
 	key := c.Args()[0]
@@ -53,7 +53,7 @@ func lockDoneAction(c *cli.Context) error {
 	defer done()
 
 	if cfg.LockScope != "machine" {
-		return errors.New("only 'machine' scope for locks is supported in this version.")
+		return errors.New("only 'machine' scope for locks is supported in this version")
 	}
 
 	client, err := lock.NewClient(ctx, cfg.SocketsPath)

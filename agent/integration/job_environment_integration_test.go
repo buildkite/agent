@@ -1,7 +1,7 @@
 package integration
 
 import (
-	"context"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/agent"
@@ -14,7 +14,7 @@ import (
 func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	job := &api.Job{
 		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
@@ -52,6 +52,134 @@ func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 	}
 }
 
+func TestCacheSettingsOnSelfHosted_LogsMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	jobID := "cache-self-hosted-job"
+	job := &api.Job{
+		ID:                 jobID,
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_COMPUTE_TYPE": "self-hosted",
+		},
+		Step: pipeline.CommandStep{
+			Cache: &pipeline.Cache{
+				Paths: []string{"vendor", "node_modules"},
+			},
+		},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().Once().AndExitWith(0)
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	logs := e.logsFor(t, jobID)
+	if !strings.Contains(logs, "Cache settings detected on self-hosted agent") {
+		t.Errorf("expected logs to contain cache warning for self-hosted agent, got %q", logs)
+	}
+	if !strings.Contains(logs, "vendor, node_modules") {
+		t.Errorf("expected logs to contain cache paths, got %q", logs)
+	}
+}
+
+func TestCacheSettingsOnHosted_DoesNotLogMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	jobID := "cache-hosted-job"
+	job := &api.Job{
+		ID:                 jobID,
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_COMPUTE_TYPE": "hosted",
+		},
+		Step: pipeline.CommandStep{
+			Cache: &pipeline.Cache{
+				Paths: []string{"vendor", "node_modules"},
+			},
+		},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().Once().AndExitWith(0)
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	logs := e.logsFor(t, jobID)
+	if strings.Contains(logs, "Cache settings detected on self-hosted agent") {
+		t.Errorf("expected logs to NOT contain cache warning for hosted agent, got %q", logs)
+	}
+}
+
+func TestNoCacheSettings_DoesNotLogMessage(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	jobID := "no-cache-job"
+	job := &api.Job{
+		ID:                 jobID,
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_COMPUTE_TYPE": "self-hosted",
+		},
+		Step:  pipeline.CommandStep{},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().Once().AndExitWith(0)
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	logs := e.logsFor(t, jobID)
+	if strings.Contains(logs, "Cache settings detected on self-hosted agent") {
+		t.Errorf("expected logs to NOT contain cache warning when no cache settings, got %q", logs)
+	}
+}
+
 func TestBuildkiteRequestHeaders(t *testing.T) {
 	t.Parallel()
 
@@ -84,7 +212,7 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err := runJob(t, context.Background(), testRunJobConfig{
+	err := runJob(t, t.Context(), testRunJobConfig{
 		job: &api.Job{
 			ID:                 "00000000-0000-0000-0000-000000000123",
 			ChunksMaxSizeBytes: 1024,
@@ -95,6 +223,83 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 		agentCfg:      agent.AgentConfiguration{},
 		mockBootstrap: mb,
 		client:        client,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+}
+
+func TestArtifactUploadConcurrencyFromAgentConfigIsSet(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	job := &api.Job{
+		ID:                 "artifact-upload-concurrency-job",
+		ChunksMaxSizeBytes: 1024,
+		Step:               pipeline.CommandStep{},
+		Token:              "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got, want := c.GetEnv("BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"), "7"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY) = %q, want %q", got, want)
+		}
+		c.Exit(0)
+	})
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:    job,
+		server: server,
+		agentCfg: agent.AgentConfiguration{
+			ArtifactUploadConcurrency: 7,
+		},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+}
+
+func TestArtifactUploadConcurrencyFromJobEnvIsPreservedWhenAgentConfigUnset(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	job := &api.Job{
+		ID:                 "artifact-upload-concurrency-env-job",
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY": "5",
+		},
+		Step:  pipeline.CommandStep{},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got, want := c.GetEnv("BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"), "5"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY) = %q, want %q", got, want)
+		}
+		c.Exit(0)
+	})
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
 	})
 	if err != nil {
 		t.Fatalf("runJob() error = %v", err)

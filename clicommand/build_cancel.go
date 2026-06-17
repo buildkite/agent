@@ -66,19 +66,15 @@ func cancelBuild(ctx context.Context, cfg BuildCancelConfig, l logger.Logger) er
 		// Attempt to cancel the build
 		build, resp, err := client.CancelBuild(ctx, cfg.Build)
 
-		// Don't bother retrying if the response was one of these statuses
-		if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
-			r.Break()
+		if api.BreakOnNonRetryable(r, resp, err) {
 			return err
 		}
-
-		// Show the unexpected error
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return err
 		}
 
-		l.Info("Successfully cancelled build %s", build.UUID)
+		l.Infof("Successfully cancelled build %s", build.UUID)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to cancel build: %w", err)

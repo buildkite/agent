@@ -16,10 +16,11 @@ func TestMain(m *testing.M) {
 	client := api.NewClient(l, api.Config{
 		Token: agentToken,
 	})
+	// TestMain has no testing.T, so this setup call intentionally uses a root context.
 	ctx := context.Background()
 	ident, _, err := client.GetTokenIdentity(ctx)
 	if err != nil {
-		l.Fatal("Could not read token identity: %v", err)
+		l.Fatalf("Could not read token identity: %v", err)
 	}
 	targetOrg = ident.OrganizationSlug
 	targetCluster = ident.ClusterUUID

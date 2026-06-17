@@ -1,0 +1,1 @@
+timeout /t 60

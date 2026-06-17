@@ -9,24 +9,26 @@ import (
 
 // Job represents a Buildkite Agent API Job
 type Job struct {
-	ID                    string                     `json:"id,omitempty"`
+	ID                    string                     `json:"id"`
 	Endpoint              string                     `json:"endpoint"`
-	State                 string                     `json:"state,omitempty"`
-	Env                   map[string]string          `json:"env,omitempty"`
+	State                 string                     `json:"state"`
+	Env                   map[string]string          `json:"env"`
 	Step                  pipeline.CommandStep       `json:"step"`
-	MatrixPermutation     pipeline.MatrixPermutation `json:"matrix_permutation,omitempty"`
-	ChunksMaxSizeBytes    uint64                     `json:"chunks_max_size_bytes,omitempty"`
-	ChunksIntervalSeconds int                        `json:"chunks_interval_seconds,omitempty"`
-	LogMaxSizeBytes       uint64                     `json:"log_max_size_bytes,omitempty"`
-	Token                 string                     `json:"token,omitempty"`
-	ExitStatus            string                     `json:"exit_status,omitempty"`
-	Signal                string                     `json:"signal,omitempty"`
-	SignalReason          string                     `json:"signal_reason,omitempty"`
-	StartedAt             string                     `json:"started_at,omitempty"`
-	FinishedAt            string                     `json:"finished_at,omitempty"`
-	RunnableAt            string                     `json:"runnable_at,omitempty"`
-	ChunksFailedCount     int                        `json:"chunks_failed_count,omitempty"`
+	MatrixPermutation     pipeline.MatrixPermutation `json:"matrix_permutation"`
+	ChunksMaxSizeBytes    uint64                     `json:"chunks_max_size_bytes"`
+	ChunksIntervalSeconds int                        `json:"chunks_interval_seconds"`
+	LogMaxSizeBytes       uint64                     `json:"log_max_size_bytes"`
+	Token                 string                     `json:"token"`
+	ExitStatus            string                     `json:"exit_status"`
+	Signal                string                     `json:"signal"`
+	SignalReason          string                     `json:"signal_reason"`
+	StartedAt             string                     `json:"started_at"`
+	FinishedAt            string                     `json:"finished_at"`
+	RunnableAt            string                     `json:"runnable_at"`
+	ChunksFailedCount     int                        `json:"chunks_failed_count"`
 	TraceParent           string                     `json:"traceparent"`
+	TraceState            string                     `json:"tracestate"`
+	Priority              int                        `json:"priority"`
 }
 
 type JobState struct {
@@ -133,6 +135,29 @@ func (c *Client) FinishJob(ctx context.Context, job *Job, ignoreAgentInDispatche
 	}
 
 	return c.doRequest(req, nil)
+}
+
+// JobPromiseFailureRequest declares a promised (early) exit-status failure for
+// a job. ExitStatus must be a non-zero integer; the server rejects zero,
+// non-integer, and out-of-range values.
+type JobPromiseFailureRequest struct {
+	ExitStatus int    `json:"exit_status"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+// PromiseFailure declares a promised (early) exit-status failure for a job,
+// allowing the build-failing cascade to begin before the job finishes. The job
+// itself keeps running and finishes normally. On success the endpoint responds
+// with 204 No Content and no body.
+func (c *Client) PromiseFailure(ctx context.Context, id string, req *JobPromiseFailureRequest) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/promise_failure", railsPathEscape(id))
+
+	r, err := c.newRequest(ctx, "PUT", u, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(r, nil)
 }
 
 // JobUpdateResponse is the response from updating a job

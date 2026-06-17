@@ -1,0 +1,13 @@
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: upload
+    commands:
+      - mkdir -p artifacts
+      - for i in $$(seq 1 100); do echo "content-$$i" > "artifacts/file-$$i.txt"; done
+      - {{ .buildkite_agent_binary }} artifact upload 'artifacts/*'
+  - key: download
+    depends_on: upload
+    commands:
+      - {{ .buildkite_agent_binary }} artifact download 'artifacts/*' .
+      - test "$$(ls artifacts/ | wc -l | tr -d ' ')" -eq 100

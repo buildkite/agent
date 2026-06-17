@@ -15,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/bintest/v3"
-	"gotest.tools/v3/assert"
 )
 
 // Example commit info:
@@ -29,6 +28,60 @@ var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\nabbrev-commit
 
 // We expect this arg multiple times, just define it once.
 const gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae>%n%n%w(0,4,4)%B"
+
+func skipIfGitSparseCheckoutUnsupported(t *testing.T) {
+	t.Helper()
+
+	out, err := exec.Command("git", "--version").Output()
+	if err != nil {
+		t.Skipf("git --version failed: %v", err)
+	}
+	var major, minor int
+	if _, err := fmt.Sscanf(string(out), "git version %d.%d", &major, &minor); err != nil {
+		t.Skipf("couldn't parse git version from %q: %v", strings.TrimSpace(string(out)), err)
+	}
+	if major < 2 || (major == 2 && minor < 26) {
+		t.Skipf("git sparse-checkout --cone requires git >= 2.26, got %s", strings.TrimSpace(string(out)))
+	}
+}
+
+func addSparseCheckoutFixture(t *testing.T, repo *gitRepository) {
+	t.Helper()
+
+	files := map[string]string{
+		".buildkite/pipeline.yml": "steps:\n  - command: true\n",
+		"src/main.txt":            "hello from src\n",
+		"docs/readme.md":          "hello from docs\n",
+	}
+	for name, contents := range files {
+		path := filepath.Join(repo.Path, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("os.MkdirAll(%q) error = %v, want nil", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatalf("os.WriteFile(%q) error = %v, want nil", path, err)
+		}
+		if err := repo.Add(name); err != nil {
+			t.Fatalf("repo.Add(%q) error = %v, want nil", name, err)
+		}
+	}
+	if err := repo.Commit("Add sparse checkout fixture"); err != nil {
+		t.Fatalf("repo.Commit(Add sparse checkout fixture) error = %v, want nil", err)
+	}
+}
+
+func requireCheckoutPath(t *testing.T, checkoutDir, name string, exists bool) {
+	t.Helper()
+
+	path := filepath.Join(checkoutDir, filepath.FromSlash(name))
+	_, err := os.Stat(path)
+	switch {
+	case exists && err != nil:
+		t.Fatalf("os.Stat(%q) error = %v, want nil", path, err)
+	case !exists && !errors.Is(err, os.ErrNotExist):
+		t.Fatalf("os.Stat(%q) error = %v, want not exist", path, err)
+	}
+}
 
 func TestWithResolvingCommitExperiment(t *testing.T) {
 	t.Parallel()
@@ -57,7 +110,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
 	})
@@ -91,7 +144,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -102,6 +155,209 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+}
+
+func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	const sshKey = "super-secret-key"
+	const existingGitSSHCommand = "ssh -F ~/.ssh/config"
+	var sshKeyPath string
+
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		switch i.Args[0] {
+		case "clone", "fetch":
+			var gitSSHCommand string
+			for _, envVar := range i.Env {
+				if after, ok := strings.CutPrefix(envVar, "GIT_SSH_COMMAND="); ok {
+					gitSSHCommand = after
+					break
+				}
+			}
+			if gitSSHCommand == "" {
+				return fmt.Errorf("GIT_SSH_COMMAND not set for git %q", i.Args[0])
+			}
+
+			const prefix = existingGitSSHCommand + " -i "
+			const suffix = " -o IdentitiesOnly=yes"
+			if !strings.HasPrefix(gitSSHCommand, prefix) || !strings.HasSuffix(gitSSHCommand, suffix) {
+				return fmt.Errorf("unexpected GIT_SSH_COMMAND %q", gitSSHCommand)
+			}
+
+			sshKeyPath = strings.Trim(strings.TrimSuffix(strings.TrimPrefix(gitSSHCommand, prefix), suffix), "'")
+			contents, err := os.ReadFile(sshKeyPath)
+			if err != nil {
+				return fmt.Errorf("reading ssh key file %q: %w", sshKeyPath, err)
+			}
+			if want := sshKey + "\n"; string(contents) != want {
+				return fmt.Errorf("ssh key file contents = %q, want %q", string(contents), want)
+			}
+			if runtime.GOOS != "windows" {
+				info, err := os.Stat(sshKeyPath)
+				if err != nil {
+					return fmt.Errorf("stating ssh key file %q: %w", sshKeyPath, err)
+				}
+				if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
+					return fmt.Errorf("ssh key permissions = %o, want %o", got, want)
+				}
+			}
+		}
+		return nil
+	})
+	git.Expect().AtLeastOnce().WithAnyArguments()
+
+	tester.RunAndCheck(
+		t,
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_SSH_KEY="+sshKey,
+		"GIT_SSH_COMMAND="+existingGitSSHCommand,
+	)
+
+	if sshKeyPath == "" {
+		t.Fatal("expected to observe an ssh key path during checkout")
+	}
+	if _, err := os.Stat(sshKeyPath); !os.IsNotExist(err) {
+		t.Fatalf("os.Stat(%q) error = %v, want not exist", sshKeyPath, err)
+	}
+	matches, err := filepath.Glob(filepath.Join(filepath.Dir(tester.CheckoutDir()), ".buildkite-ssh-key-*"))
+	if err != nil {
+		t.Fatalf("filepath.Glob() error = %v, want nil", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("ssh key files left behind: %v", matches)
+	}
+}
+
+func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+	agent := tester.MockAgent(t)
+
+	// First run: create an initial sparse checkout.
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	tester.RunAndCheck(t, env...)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+
+	// Second run: keep the same checkout dir but switch the sparse paths.
+	env[len(env)-1] = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/"
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
+	git.ExpectAll([][]any{
+		{"config", "--get-all", "remote.origin.url"},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", ".buildkite/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+	})
+
+	tester.RunAndCheck(t, env...)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", false)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+
+	// Third run: disable sparse checkout entirely and restore the full tree.
+	env = env[:len(env)-1]
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
+	git.ExpectAll([][]any{
+		{"config", "--get-all", "remote.origin.url"},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"config", "--get", "core.sparseCheckout"},
+		{"sparse-checkout", "disable"},
+		{"config", "--worktree", "--list"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+	})
+
+	tester.RunAndCheck(t, env...)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", true)
 }
 
 func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
@@ -122,7 +378,11 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
-	defer submoduleRepo.Close()
+	defer func() {
+		if err := submoduleRepo.CloseErr(); err != nil {
+			t.Errorf("submoduleRepo.Close() = %v", err)
+		}
+	}()
 
 	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
@@ -152,7 +412,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
 		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force"},
@@ -168,6 +428,71 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	// Git for windows seems to struggle with local submodules in the temp dir
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	submoduleRepo, err := createTestGitRespository()
+	if err != nil {
+		t.Fatalf("createTestGitRespository() error = %v", err)
+	}
+	defer submoduleRepo.Close()
+
+	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(submodule, add, %q) error = %v\nout = %s", submoduleRepo.Path, err, out)
+	}
+
+	out, err = tester.Repo.Execute("commit", "-am", "Add example submodule")
+	if err != nil {
+		t.Fatalf(`tester.Repo.Execute(commit, -am, "Add example submodule") error = %v\nout = %s`, err, out)
+	}
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+	git.Expect("submodule", "sync", "--recursive").NotCalled()
+	git.Expect("submodule", "update").WithAnyArguments().NotCalled()
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"submodule", "foreach", "--recursive", "git clean -fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+	if got, want := tester.Output, "Submodule initialization skipped during sparse checkout"; !strings.Contains(got, want) {
+		t.Fatalf("bootstrap output does not contain %q:\n%s", want, got)
+	}
 }
 
 func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
@@ -218,7 +543,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -257,7 +582,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 		{"clone", "--depth=1", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "--depth=1", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -274,7 +599,9 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewExecutorTester(mainCtx)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("NewExecutorTester(mainCtx) error = %v, want nil", err)
+	}
 	defer tester.Close()
 
 	// Do one checkout
@@ -284,10 +611,14 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	err = tester.Repo.ExecuteAll([][]string{
 		{"commit", "--allow-empty", "-m", "Another commit"},
 	})
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.ExecuteAll([][]string{\n\t{\"commit\", \"--allow-empty\", \"-m\", \"Another commit\"},\n}) error = %v, want nil", err)
+	}
 
 	commitHash, err := tester.Repo.RevParse("HEAD")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
 	shortCommitHash := commitHash[:7]
 
 	git := tester.
@@ -299,10 +630,10 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", shortCommitHash},
+		{"fetch", "-v", "--prune", "--", "origin", shortCommitHash},
 		{"config", "remote.origin.fetch"},
-		{"fetch", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
-		{"checkout", "-f", shortCommitHash},
+		{"fetch", "-v", "--prune", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", shortCommitHash},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", shortCommitHash, "-s", "--no-color", gitShowFormatArg},
 	})
@@ -320,9 +651,13 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
 
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if got, want := commitHash, checkoutRepoCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "HEAD", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
@@ -335,7 +670,9 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/head", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -350,8 +687,12 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
+	if got, want := commitHash, checkoutRepoCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/head", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
@@ -364,7 +705,9 @@ func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/head", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local",                               // Disable the fast local clone method, which automatically copies all refs
@@ -380,13 +723,21 @@ func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
+	if got, want := commitHash, checkoutRepoCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/head", got, want)
+	}
 
 	// This local ref should match remote refs/pull/123/head
 	localPullRefCommit, err := checkoutRepo.RevParse("refs/pull/origin/123/head")
-	assert.NilError(t, err)
-	assert.Equal(t, localPullRefCommit, commitHash)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "refs/pull/origin/123/head", err)
+	}
+	if got, want := commitHash, localPullRefCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/head", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) {
@@ -399,7 +750,9 @@ func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) 
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/head", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -411,31 +764,45 @@ func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) 
 
 	// Amend the pull request, so commitHash is no longer reachable from refs/pull/123/head
 	err = tester.Repo.CheckoutBranch("update-test-txt")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.CheckoutBranch(%q) error = %v, want nil", "update-test-txt", err)
+	}
 
 	err = os.WriteFile(
 		filepath.Join(tester.Repo.Path, "test.txt"),
 		[]byte("This is an amended test pull request"),
 		0o600,
 	)
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("os.WriteFile(%q, []byte(\"This is an amended test pull request\"), %d) error = %v, want nil", filepath.Join(tester.Repo.Path, "test.txt"), 0o600, err)
+	}
 
 	err = tester.Repo.Add("test.txt")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.Add(%q) error = %v, want nil", "test.txt", err)
+	}
 
 	_, err = tester.Repo.Execute("commit", "--amend", "-m", "Amended PR Commit")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(%q, %q, %q, %q) error = %v, want nil", "commit", "--amend", "-m", "Amended PR Commit", err)
+	}
 
 	_, err = tester.Repo.Execute("update-ref", "refs/pull/123/head", "HEAD")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(%q, %q, %q) error = %v, want nil", "update-ref", "refs/pull/123/head", "HEAD", err)
+	}
 
 	tester.RunAndCheck(t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
+	if got, want := commitHash, checkoutRepoCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/head", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
@@ -448,7 +815,9 @@ func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/head", err)
+	}
 	shortCommitHash := commitHash[:7]
 
 	env := []string{
@@ -464,8 +833,12 @@ func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
+	if got, want := commitHash, checkoutRepoCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/head", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
@@ -478,7 +851,9 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/head", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -493,8 +868,12 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
+	if got, want := commitHash, checkoutRepoCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/head", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
@@ -507,7 +886,9 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/merge")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/merge", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -524,8 +905,8 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "--no-local", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "refs/pull/123/merge"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/merge"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "FETCH_HEAD"},
 	})
@@ -535,8 +916,12 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
+	if got, want := commitHash, checkoutRepoCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/merge", got, want)
+	}
 }
 
 func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
@@ -549,11 +934,15 @@ func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
 	defer tester.Close()
 
 	commitHash, err := tester.Repo.RevParse("refs/pull/123/head")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/head", err)
+	}
 
 	// Remove the branch ref to simulate this being a PR from a fork
 	_, err = tester.Repo.Execute("branch", "-D", "update-test-txt")
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("tester.Repo.Execute(%q, %q, %q) error = %v, want nil", "branch", "-D", "update-test-txt", err)
+	}
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
@@ -568,8 +957,12 @@ func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
 	checkoutRepoCommit, err := checkoutRepo.RevParse("HEAD")
-	assert.NilError(t, err)
-	assert.Equal(t, checkoutRepoCommit, commitHash)
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v, want nil", "HEAD", err)
+	}
+	if got, want := commitHash, checkoutRepoCommit; got != want {
+		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/head", got, want)
+	}
 }
 
 func TestCheckoutErrorIsRetried(t *testing.T) {
@@ -618,11 +1011,11 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -684,7 +1077,7 @@ func TestFetchErrorIsRetried(t *testing.T) {
 		{"clone", "-v", "--depth=1", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -845,7 +1238,7 @@ func TestForcingACleanCheckout(t *testing.T) {
 	tester.RunAndCheck(t, "BUILDKITE_CLEAN_CHECKOUT=true")
 
 	if !strings.Contains(tester.Output, "Cleaning pipeline checkout") {
-		t.Fatal(`tester.Output does not contain "Cleaning pipeline checkout"`)
+		t.Fatalf(`tester.Output does not contain "Cleaning pipeline checkout"`)
 	}
 }
 
@@ -861,12 +1254,17 @@ func TestSkippingCheckout(t *testing.T) {
 	tester.RunAndCheck(t, "BUILDKITE_SKIP_CHECKOUT=true")
 
 	if !strings.Contains(tester.Output, "Skipping checkout") {
-		t.Fatal(`tester.Output does not contain "Skipping checkout"`)
+		t.Errorf(`tester.Output does not contain "Skipping checkout"`)
 	}
 
 	// Verify no git commands were run (no clone, fetch, checkout)
 	if strings.Contains(tester.Output, "git clone") {
-		t.Fatal(`tester.Output should not contain "git clone" when checkout is skipped`)
+		t.Errorf(`tester.Output should not contain "git clone" when checkout is skipped`)
+	}
+
+	// Verify no git commit metadata was checked or sent when checkout is skipped
+	if strings.Contains(tester.Output, "Checking to see if git commit information needs to be sent to Buildkite") {
+		t.Errorf(`tester.Output should not contain "Checking to see if git commit information needs to be sent to Buildkite" when checkout is skipped`)
 	}
 }
 
@@ -964,9 +1362,9 @@ func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		counter := atomic.AddInt32(&checkoutCounter, 1)
-		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
+		_, _ = fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
 		if counter == 1 {
-			fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
+			_, _ = fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -1029,8 +1427,8 @@ func TestGitCheckoutWithCommitResolved(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"fetch", "-v", "--prune", "--", "origin", "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 	})
 
@@ -1056,8 +1454,8 @@ func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"fetch", "-v", "--prune", "--", "origin", "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 	})
 
@@ -1083,8 +1481,8 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"fetch", "-v", "--prune", "--", "origin", "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -1140,7 +1538,7 @@ func TestMultipleRemoteURLsFallsBackToGetURL(t *testing.T) {
 		{"remote", "get-url", "origin"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -1151,6 +1549,101 @@ func TestMultipleRemoteURLsFallsBackToGetURL(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCommitVerificationWithValidCommit(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Get the real commit SHA from the test repo
+	commitHash, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// Expect the normal checkout flow with merge-base --is-ancestor inserted
+	// between fetch and checkout. Since this is a full clone (not shallow),
+	// merge-base succeeds immediately — no rev-parse --is-shallow-repository needed.
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", commitHash},
+		{"merge-base", "--is-ancestor", commitHash, "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", commitHash, "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Get the commit from the update-test-txt branch (not on main)
+	commitHash, err := tester.Repo.RevParse("update-test-txt")
+	if err != nil {
+		t.Fatalf("RevParse(update-test-txt) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// Expect fetch, then merge-base which should return exit 1 (not ancestor).
+	// No checkout should happen after verification fails.
+	git.ExpectAll([][]any{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", commitHash},
+		{"merge-base", "--is-ancestor", commitHash, "main"},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+
+	// This should fail — the commit is not on main
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatalf("expected build to fail with commit verification error, but it passed")
+	}
 }
 
 type subDirMatcher struct {

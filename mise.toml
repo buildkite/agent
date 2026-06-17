@@ -1,0 +1,15 @@
+[tools]
+go = "1.25.9"
+golangci-lint = "2.9.0"
+ruby = "3.4.9"
+
+[tasks.test]
+description = "Run automated tests"
+run = "go tool gotestsum --format pkgname --"
+
+[tasks.lint]
+description = "Run formatting and lint checks"
+run = [
+  "go tool gofumpt -extra -w .",
+  "golangci-lint run",
+]

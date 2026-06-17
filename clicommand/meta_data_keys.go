@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const metaDataKeysHelpDescription = `Usage:
@@ -54,6 +55,8 @@ var MetaDataKeysCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataKeysConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-keys")
+		defer span.End()
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
@@ -73,11 +76,11 @@ var MetaDataKeysCommand = cli.Command{
 		)
 		keys, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) ([]string, error) {
 			keys, resp, err := client.MetaDataKeys(ctx, scope, id)
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return keys, err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 			}
 			return keys, err
 		})
@@ -86,7 +89,7 @@ var MetaDataKeysCommand = cli.Command{
 		}
 
 		for _, key := range keys {
-			fmt.Fprintf(c.App.Writer, "%s\n", key)
+			_, _ = fmt.Fprintf(c.App.Writer, "%s\n", key)
 		}
 
 		return nil

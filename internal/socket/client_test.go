@@ -18,15 +18,15 @@ func (yesNoJSONServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.URL.Path {
 	case "/yes":
-		w.Write([]byte(`{"message":"Yes!"}\n`))
+		_, _ = w.Write([]byte(`{"message":"Yes!"}\n`))
 	case "/no":
-		w.Write([]byte(`{"message":"No."}\n`))
+		_, _ = w.Write([]byte(`{"message":"No."}\n`))
 	case "/secret":
 		if r.Header.Get("Authorization") != "Bearer llama" {
 			http.Error(w, `{"error":"invalid authorization token"}\n`, http.StatusUnauthorized)
 			return
 		}
-		w.Write([]byte(`{"message":"seekruts"}\n`))
+		_, _ = w.Write([]byte(`{"message":"seekruts"}\n`))
 	default:
 		http.Error(w, `{"error":"not found"}\n`, http.StatusNotFound)
 	}
@@ -39,7 +39,7 @@ type messageResponse struct {
 func TestClientDo(t *testing.T) {
 	t.Parallel()
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	sockPath := testSocketPath()
@@ -51,7 +51,11 @@ func TestClientDo(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("srv.Start() = %v", err)
 	}
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	cli, err := NewClient(ctx, sockPath, "llama")
 	if err != nil {
@@ -96,7 +100,7 @@ func TestClientDo(t *testing.T) {
 func TestClientDoErrors(t *testing.T) {
 	t.Parallel()
 
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	sockPath := testSocketPath()
@@ -108,7 +112,11 @@ func TestClientDoErrors(t *testing.T) {
 	if err := svr.Start(); err != nil {
 		t.Fatalf("srv.Start() = %v", err)
 	}
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	cli, err := NewClient(ctx, sockPath, "alpaca")
 	if err != nil {

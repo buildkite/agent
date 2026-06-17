@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -28,13 +29,14 @@ import (
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
@@ -72,6 +74,8 @@ var (
 		agent.PingModeStreamOnly,
 	}
 
+	mirrorCheckoutModes = []string{"dissociate", "reference"}
+
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
 		regexp.MustCompile("^BUILDKITE$"),
 		regexp.MustCompile("^BUILDKITE_.*$"),
@@ -102,6 +106,7 @@ type AgentStartConfig struct {
 
 	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
 	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
@@ -129,6 +134,7 @@ type AgentStartConfig struct {
 	PluginsPath          string   `cli:"plugins-path" normalize:"filepath"`
 
 	Shell           string `cli:"shell"`
+	HooksShell      string `cli:"hooks-shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
 	NoPTY           bool   `cli:"no-pty"`
 
@@ -145,22 +151,29 @@ type AgentStartConfig struct {
 	TagsFromGCPMetaDataPaths  []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
 	TagsFromGCPLabels         bool     `cli:"tags-from-gcp-labels"`
 	TagsFromHost              bool     `cli:"tags-from-host"`
+	FailOnMissingTags         bool     `cli:"fail-on-missing-tags"`
 	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
 	WaitForEC2MetaDataTimeout string   `cli:"wait-for-ec2-meta-data-timeout"`
 	WaitForECSMetaDataTimeout string   `cli:"wait-for-ecs-meta-data-timeout"`
 	WaitForGCPLabelsTimeout   string   `cli:"wait-for-gcp-labels-timeout"`
 
-	GitCheckoutFlags            string `cli:"git-checkout-flags"`
-	GitCloneFlags               string `cli:"git-clone-flags"`
-	GitCloneMirrorFlags         string `cli:"git-clone-mirror-flags"`
-	GitCleanFlags               string `cli:"git-clean-flags"`
-	GitFetchFlags               string `cli:"git-fetch-flags"`
-	GitMirrorsPath              string `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout       int    `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate        bool   `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules             bool   `cli:"no-git-submodules"`
-	SkipCheckout                bool   `cli:"skip-checkout"`
-	GitSkipFetchExistingCommits bool   `cli:"git-skip-fetch-existing-commits"`
+	GitCheckoutFlags            string   `cli:"git-checkout-flags"`
+	GitCloneFlags               string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
+	GitCleanFlags               string   `cli:"git-clean-flags"`
+	GitFetchFlags               string   `cli:"git-fetch-flags"`
+	GitSparseCheckoutPaths      []string `cli:"git-sparse-checkout-paths" normalize:"list"`
+	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
+	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
+	GitCheckoutTimeout          int      `cli:"git-checkout-timeout"`
+	GitCommitVerification       string   `cli:"git-commit-verification"`
+	NoGitSubmodules             bool     `cli:"no-git-submodules"`
+	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
+	SkipCheckout                bool     `cli:"skip-checkout"`
+	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
+	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval           bool     `cli:"no-command-eval"`
@@ -188,10 +201,12 @@ type AgentStartConfig struct {
 	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
 
 	// Other shared flags
-	StrictSingleHooks         bool   `cli:"strict-single-hooks"`
-	KubernetesExec            bool   `cli:"kubernetes-exec"`
-	TraceContextEncoding      string `cli:"trace-context-encoding"`
-	NoMultipartArtifactUpload bool   `cli:"no-multipart-artifact-upload"`
+	StrictSingleHooks               bool          `cli:"strict-single-hooks"`
+	KubernetesExec                  bool          `cli:"kubernetes-exec"`
+	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
+	TraceContextEncoding            string        `cli:"trace-context-encoding"`
+	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
+	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -219,10 +234,16 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		return []string{}
 	}
 
-	features := make([]string, 0, 8)
+	features := make([]string, 0, 9)
 
 	if asc.GitMirrorsPath != "" {
 		features = append(features, "git-mirrors")
+	}
+
+	if endpointURL, err := url.Parse(asc.Endpoint); err == nil {
+		if endpointURL.Host == "agent-edge.buildkite.com" && asc.PingMode != agent.PingModePollOnly {
+			features = append(features, "streaming-pings")
+		}
 	}
 
 	if asc.AcquireJob != "" {
@@ -293,7 +314,7 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 }
 
 func DefaultShell() string {
-	// https://github.com/golang/go/blob/master/src/go/build/syslist.go#L7
+	// https://github.com/golang/go/blob/master/src/internal/syslist/syslist.go#L17
 	switch runtime.GOOS {
 	case "windows":
 		return `C:\Windows\System32\CMD.exe /S /C`
@@ -352,7 +373,8 @@ var AgentStartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Starts a Buildkite agent",
 	Description: startDescription,
-	Flags: append(globalFlags(),
+	Flags: append(
+		globalFlags(),
 		cli.StringFlag{
 			Name:   "config",
 			Value:  "",
@@ -422,6 +444,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_SHELL",
 		},
 		cli.StringFlag{
+			Name:   "hooks-shell",
+			Usage:  "The shell command used to interpret hooks commands, e.g pwsh -Command",
+			EnvVar: "BUILDKITE_HOOKS_SHELL",
+		},
+		cli.StringFlag{
 			Name:   "queue",
 			Usage:  "The queue the agent will listen to for jobs. If not set, the agent will use the default queue. Overwrites the queue tag in the agent's tags",
 			EnvVar: "BUILDKITE_AGENT_QUEUE",
@@ -437,9 +464,8 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Include tags from the host (hostname, machine-id, os) (default: false)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_HOST",
 		},
-		cli.StringSliceFlag{
+		cli.BoolFlag{
 			Name:   "tags-from-ec2-meta-data",
-			Value:  &cli.StringSlice{},
 			Usage:  "Include the default set of host EC2 meta-data as tags (instance-id, instance-type, ami-id, and instance-life-cycle)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA",
 		},
@@ -500,88 +526,44 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
 		},
-		cli.StringFlag{
-			Name:   "git-checkout-flags",
-			Value:  "-f",
-			Usage:  "Flags to pass to \"git checkout\" command",
-			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to the \"git clone\" command",
-			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clean-flags",
-			Value:  "-ffxdq",
-			Usage:  "Flags to pass to \"git clean\" command",
-			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
-			// -ff: delete files and directories, including untracked nested git repositories
-			// -x: don't use .gitignore rules
-			// -d: recurse into untracked directories
-			// -q: quiet, only report errors
-		},
-		cli.StringFlag{
-			Name:   "git-fetch-flags",
-			Value:  "-v --prune",
-			Usage:  "Flags to pass to \"git fetch\" command",
-			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-mirror-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
-			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-mirrors-path",
-			Value:  "",
-			Usage:  "Path to where mirrors of git repositories are stored",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
-		},
-		cli.IntFlag{
-			Name:   "git-mirrors-lock-timeout",
-			Value:  300,
-			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
-		},
 		cli.BoolFlag{
-			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror (default: false)",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+			Name:   "fail-on-missing-tags",
+			Usage:  "Exit the agent with an error if any enabled cloud tag source (EC2, ECS, GCP) fails to return tags (default: false)",
+			EnvVar: "BUILDKITE_AGENT_FAIL_ON_MISSING_TAGS",
 		},
+
+		// Various git related flags shared with bootstrap
+		SkipCheckoutFlag,
+		GitCheckoutFlagsFlag,
+		GitCloneFlagsFlag,
+		GitCleanFlagsFlag,
+		GitCommitVerificationFlag,
+		GitFetchFlagsFlag,
+		GitSparseCheckoutPathsFlag,
+		GitCloneMirrorFlagsFlag,
+		GitMirrorsPathFlag,
+		GitMirrorCheckoutModeFlag,
+		GitMirrorsLockTimeoutFlag,
+		GitMirrorsSkipUpdateFlag,
+		GitCheckoutTimeoutFlag,
+		GitSubmoduleCloneConfigFlag,
+		GitSkipFetchExistingCommitsFlag,
+		CheckoutAttemptsFlag,
+
 		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
 			Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
-		cli.StringFlag{
-			Name:   "build-path",
-			Value:  "",
-			Usage:  "Path to where the builds will run from",
-			EnvVar: "BUILDKITE_BUILD_PATH",
-		},
-		cli.StringFlag{
-			Name:   "hooks-path",
-			Value:  "",
-			Usage:  "Directory where the hook scripts are found",
-			EnvVar: "BUILDKITE_HOOKS_PATH",
-		},
-		cli.StringSliceFlag{
-			Name:   "additional-hooks-paths",
-			Value:  &cli.StringSlice{},
-			Usage:  "Additional directories to look for agent hooks",
-			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
-		},
+
+		// Various file path flags shared with agent start
+		BuildPathFlag,
+		HooksPathFlag,
+		AdditionalHooksPathsFlag,
 		SocketsPathFlag,
-		cli.StringFlag{
-			Name:   "plugins-path",
-			Value:  "",
-			Usage:  "Directory where the plugins are saved to",
-			EnvVar: "BUILDKITE_PLUGINS_PATH",
-		},
+		PluginsPathFlag,
+
 		cli.BoolFlag{
 			Name:   "no-ansi-timestamps",
 			Usage:  "Do not insert ANSI timestamp codes at the start of each line of job output (default: false)",
@@ -632,20 +614,10 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow local hooks to be run from checked out repositories (default: false)",
 			EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
 		},
-		cli.BoolFlag{
+		cli.BoolFlag{ // git-submodules in bootstrap
 			Name:   "no-git-submodules",
 			Usage:  "Don't automatically checkout git submodules (default: false)",
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
-		},
-		cli.BoolFlag{
-			Name:   "skip-checkout",
-			Usage:  "Skip the git checkout phase entirely",
-			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-skip-fetch-existing-commits",
-			Usage:  "Skip git fetch if the commit already exists in the local git directory (default: false)",
-			EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 		},
 		cli.BoolFlag{
 			Name:   "no-feature-reporting",
@@ -753,6 +725,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The KMS KMS key ID, or key alias used when signing and verifying the pipeline.",
 			EnvVar: "BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY",
 		},
+		cli.StringFlag{
+			Name:   "signing-gcp-kms-key",
+			Usage:  "The GCP KMS key resource name used when signing and verifying the pipeline. Format: projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
+			EnvVar: "BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
@@ -793,12 +770,19 @@ var AgentStartCommand = cli.Command{
 				"logs and exit statuses between containers in a pod (default: false)",
 			EnvVar: "BUILDKITE_KUBERNETES_EXEC",
 		},
+		cli.DurationFlag{
+			Name:   "kubernetes-container-start-timeout",
+			Usage:  "Timeout for waiting for all containers to start in a Kubernetes pod (default: 5m)",
+			EnvVar: "BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT",
+			Value:  5 * time.Minute,
+		},
 
 		// Other shared flags
 		RedactedVars,
 		StrictSingleHooksFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
+		AgentArtifactUploadConcurrencyFlag,
 
 		// Deprecated flags which will be removed in v4
 		KubernetesLogCollectionGracePeriodFlag,
@@ -861,6 +845,10 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("failed to unset config from environment: %w", err)
 		}
 
+		if !slices.Contains(mirrorCheckoutModes, cfg.GitMirrorCheckoutMode) {
+			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
+		}
+
 		if !slices.Contains(pingModes, cfg.PingMode) {
 			return fmt.Errorf("invalid ping mode %q, must be one of %v", cfg.PingMode, pingModes)
 		}
@@ -878,6 +866,11 @@ var AgentStartCommand = cli.Command{
 					verificationFailureBehaviors,
 				)
 			}
+		}
+
+		// Validate the commit verification option input
+		if v := cfg.GitCommitVerification; v != "" && v != "strict" && v != "warn" {
+			return fmt.Errorf("invalid value for --git-commit-verification: %q (must be \"strict\" or \"warn\")", v)
 		}
 
 		// Force some settings if on Windows (these aren't supported yet)
@@ -910,9 +903,9 @@ var AgentStartCommand = cli.Command{
 
 			switch {
 			case cfg.NoCommandEval:
-				l.Warn(msg, "no-command-eval")
+				l.Warnf(msg, "no-command-eval")
 			case cfg.NoLocalHooks:
-				l.Warn(msg, "no-local-hooks")
+				l.Warnf(msg, "no-local-hooks")
 			}
 		}
 
@@ -1026,14 +1019,21 @@ var AgentStartCommand = cli.Command{
 			// assign a crypto signer which uses the KMS key to sign the pipeline
 			verificationJWKS, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
 			if err != nil {
-				return fmt.Errorf("couldn't create KMS signer: %w", err)
+				return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+			}
+
+		case cfg.SigningGCPKMSKey != "":
+			// assign a crypto signer which uses the GCP KMS key to sign the pipeline
+			verificationJWKS, err = gcpsigner.NewKMS(ctx, cfg.SigningGCPKMSKey)
+			if err != nil {
+				return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
 			}
 
 		case cfg.VerificationJWKSFile != "":
 			var err error
 			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
 			if err != nil {
-				l.Fatal("Verification JWKS failed validation: %v", err)
+				l.Fatalf("Verification JWKS failed validation: %v", err)
 			}
 		}
 
@@ -1041,12 +1041,12 @@ var AgentStartCommand = cli.Command{
 			// The actual JWKS itself doesn't get used until `buildkite-agent pipeline upload` is called, but validate it here anyway
 			_, err := parseAndValidateJWKS(ctx, "signing", cfg.SigningJWKSFile)
 			if err != nil {
-				l.Fatal("Signing JWKS failed validation: %v", err)
+				l.Fatalf("Signing JWKS failed validation: %v", err)
 			}
 		}
 
 		if len(cfg.AllowedEnvironmentVariables) > 0 && !cfg.EnableEnvironmentVariableAllowList {
-			l.Fatal("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
+			l.Fatalf("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
 		}
 
 		var allowedEnvironmentVariables []*regexp.Regexp
@@ -1056,7 +1056,7 @@ var AgentStartCommand = cli.Command{
 			for _, v := range cfg.AllowedEnvironmentVariables {
 				re, err := regexp.Compile(v)
 				if err != nil {
-					l.Fatal("Regex %s in allowed-environment-variables failed to compile: %v", v, err)
+					l.Fatalf("Regex %s in allowed-environment-variables failed to compile: %v", v, err)
 				}
 
 				allowedEnvironmentVariables = append(allowedEnvironmentVariables, re)
@@ -1065,57 +1065,67 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:              cfg.BootstrapScript,
-			BuildPath:                    cfg.BuildPath,
-			SocketsPath:                  cfg.SocketsPath,
-			GitMirrorsPath:               cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
-			HooksPath:                    cfg.HooksPath,
-			AdditionalHooksPaths:         cfg.AdditionalHooksPaths,
-			PluginsPath:                  cfg.PluginsPath,
-			GitCheckoutFlags:             cfg.GitCheckoutFlags,
-			GitCloneFlags:                cfg.GitCloneFlags,
-			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
-			GitCleanFlags:                cfg.GitCleanFlags,
-			GitFetchFlags:                cfg.GitFetchFlags,
-			GitSubmodules:                !cfg.NoGitSubmodules,
-			SkipCheckout:                 cfg.SkipCheckout,
-			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
-			SSHKeyscan:                   !cfg.NoSSHKeyscan,
-			CommandEval:                  !cfg.NoCommandEval,
-			PluginsEnabled:               !cfg.NoPlugins,
-			PluginValidation:             !cfg.NoPluginValidation,
-			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
-			LocalHooksEnabled:            !cfg.NoLocalHooks,
-			AllowedEnvironmentVariables:  allowedEnvironmentVariables,
-			StrictSingleHooks:            cfg.StrictSingleHooks,
-			RunInPty:                     !cfg.NoPTY,
-			ANSITimestamps:               !cfg.NoANSITimestamps,
-			TimestampLines:               cfg.TimestampLines,
-			DisconnectAfterJob:           cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:   time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
-			DisconnectAfterUptime:        time.Duration(cfg.DisconnectAfterUptime) * time.Second,
-			CancelGracePeriod:            cfg.CancelGracePeriod,
-			SignalGracePeriod:            signalGracePeriod,
-			EnableJobLogTmpfile:          cfg.EnableJobLogTmpfile,
-			JobLogPath:                   cfg.JobLogPath,
-			WriteJobLogsToStdout:         cfg.WriteJobLogsToStdout,
-			LogFormat:                    cfg.LogFormat,
-			Shell:                        cfg.Shell,
-			RedactedVars:                 cfg.RedactedVars,
-			AcquireJob:                   cfg.AcquireJob,
-			TracingBackend:               cfg.TracingBackend,
-			TracingServiceName:           cfg.TracingServiceName,
-			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
-			TraceContextEncoding:         cfg.TraceContextEncoding,
-			AllowMultipartArtifactUpload: !cfg.NoMultipartArtifactUpload,
-			KubernetesExec:               cfg.KubernetesExec,
-			PingMode:                     cfg.PingMode,
+			BootstrapScript:                 cfg.BootstrapScript,
+			BuildPath:                       cfg.BuildPath,
+			SocketsPath:                     cfg.SocketsPath,
+			GitMirrorsPath:                  cfg.GitMirrorsPath,
+			GitMirrorCheckoutMode:           cfg.GitMirrorCheckoutMode,
+			GitMirrorsLockTimeout:           cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:            cfg.GitMirrorsSkipUpdate,
+			HooksPath:                       cfg.HooksPath,
+			AdditionalHooksPaths:            cfg.AdditionalHooksPaths,
+			PluginsPath:                     cfg.PluginsPath,
+			GitCheckoutFlags:                cfg.GitCheckoutFlags,
+			GitCheckoutTimeout:              cfg.GitCheckoutTimeout,
+			GitCloneFlags:                   cfg.GitCloneFlags,
+			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                   cfg.GitCleanFlags,
+			GitCommitVerification:           cfg.GitCommitVerification,
+			GitFetchFlags:                   cfg.GitFetchFlags,
+			GitSparseCheckoutPaths:          cfg.GitSparseCheckoutPaths,
+			GitSubmodules:                   !cfg.NoGitSubmodules,
+			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
+			SkipCheckout:                    cfg.SkipCheckout,
+			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
+			CheckoutAttempts:                cfg.CheckoutAttempts,
+			SSHKeyscan:                      !cfg.NoSSHKeyscan,
+			CommandEval:                     !cfg.NoCommandEval,
+			PluginsEnabled:                  !cfg.NoPlugins,
+			PluginValidation:                !cfg.NoPluginValidation,
+			PluginsAlwaysCloneFresh:         cfg.PluginsAlwaysCloneFresh,
+			LocalHooksEnabled:               !cfg.NoLocalHooks,
+			AllowedEnvironmentVariables:     allowedEnvironmentVariables,
+			StrictSingleHooks:               cfg.StrictSingleHooks,
+			RunInPty:                        !cfg.NoPTY,
+			ANSITimestamps:                  !cfg.NoANSITimestamps,
+			TimestampLines:                  cfg.TimestampLines,
+			DisconnectAfterJob:              cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:      time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
+			DisconnectAfterUptime:           time.Duration(cfg.DisconnectAfterUptime) * time.Second,
+			CancelGracePeriod:               cfg.CancelGracePeriod,
+			SignalGracePeriod:               signalGracePeriod,
+			EnableJobLogTmpfile:             cfg.EnableJobLogTmpfile,
+			JobLogPath:                      cfg.JobLogPath,
+			WriteJobLogsToStdout:            cfg.WriteJobLogsToStdout,
+			LogFormat:                       cfg.LogFormat,
+			Shell:                           cfg.Shell,
+			HooksShell:                      cfg.HooksShell,
+			RedactedVars:                    cfg.RedactedVars,
+			AcquireJob:                      cfg.AcquireJob,
+			TracingBackend:                  cfg.TracingBackend,
+			TracingServiceName:              cfg.TracingServiceName,
+			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
+			TraceContextEncoding:            cfg.TraceContextEncoding,
+			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
+			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
+			KubernetesExec:                  cfg.KubernetesExec,
+			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
+			PingMode:                        cfg.PingMode,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
 			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
+			SigningGCPKMSKey: cfg.SigningGCPKMSKey,
 			DebugSigning:     cfg.DebugSigning,
 
 			VerificationJWKS:             verificationJWKS,
@@ -1146,53 +1156,53 @@ var AgentStartCommand = cli.Command{
 			}
 		} else if cfg.LogFormat != "json" {
 			// TODO If/when cli is upgraded to v2, choice validation can be done with per-argument Actions.
-			return fmt.Errorf("invalid log format %q. Only 'text' or 'json' are allowed.", cfg.LogFormat)
+			return fmt.Errorf("invalid log format %q; only 'text' or 'json' are allowed", cfg.LogFormat)
 		}
 
-		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), strconv.Itoa(os.Getpid()))
-		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
-		l.Notice("For questions and support, email us at: hello@buildkite.com")
+		l.Noticef("Starting buildkite-agent v%s with PID: %s", version.Version(), strconv.Itoa(os.Getpid()))
+		l.Noticef("The agent source code can be found here: https://github.com/buildkite/agent")
+		l.Noticef("For questions and support, email us at: hello@buildkite.com")
 
 		if agentConf.ConfigPath != "" {
-			l.WithFields(logger.StringField(`path`, agentConf.ConfigPath)).Info("Configuration loaded")
+			l.WithFields(logger.StringField(`path`, agentConf.ConfigPath)).Infof("Configuration loaded")
 		}
 
-		l.Debug("Bootstrap command: %s", agentConf.BootstrapScript)
-		l.Debug("Build path: %s", agentConf.BuildPath)
-		l.Debug("Hooks directory: %s", agentConf.HooksPath)
-		l.Debug("Additional hooks directories: %v", agentConf.AdditionalHooksPaths)
-		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
+		l.Debugf("Bootstrap command: %s", agentConf.BootstrapScript)
+		l.Debugf("Build path: %s", agentConf.BuildPath)
+		l.Debugf("Hooks directory: %s", agentConf.HooksPath)
+		l.Debugf("Additional hooks directories: %v", agentConf.AdditionalHooksPaths)
+		l.Debugf("Plugins directory: %s", agentConf.PluginsPath)
 
 		if exps := experiments.KnownAndEnabled(ctx); len(exps) > 0 {
-			l.WithFields(logger.StringField("experiments", fmt.Sprintf("%v", exps))).Info("Experiments are enabled")
+			l.WithFields(logger.StringField("experiments", fmt.Sprintf("%v", exps))).Infof("Experiments are enabled")
 		}
 
 		if !agentConf.SSHKeyscan {
-			l.Info("Automatic ssh-keyscan has been disabled")
+			l.Infof("Automatic ssh-keyscan has been disabled")
 		}
 
 		if !agentConf.CommandEval {
-			l.Info("Evaluating console commands has been disabled")
+			l.Infof("Evaluating console commands has been disabled")
 		}
 
 		if !agentConf.PluginsEnabled {
-			l.Info("Plugins have been disabled")
+			l.Infof("Plugins have been disabled")
 		}
 
 		if !agentConf.RunInPty {
-			l.Info("Running builds within a pseudoterminal (PTY) has been disabled")
+			l.Infof("Running builds within a pseudoterminal (PTY) has been disabled")
 		}
 
 		if agentConf.DisconnectAfterJob {
-			l.Info("Agents will disconnect after a job run has completed")
+			l.Infof("Agents will disconnect after a job run has completed")
 		}
 
 		if agentConf.DisconnectAfterIdleTimeout > 0 {
-			l.Info("Agents will disconnect after %v of inactivity", agentConf.DisconnectAfterIdleTimeout)
+			l.Infof("Agents will disconnect after %v of inactivity", agentConf.DisconnectAfterIdleTimeout)
 		}
 
 		if agentConf.DisconnectAfterUptime > 0 {
-			l.Info("Agents will disconnect after %v of uptime and shut down after any running jobs complete", agentConf.DisconnectAfterUptime)
+			l.Infof("Agents will disconnect after %v of uptime and shut down after any running jobs complete", agentConf.DisconnectAfterUptime)
 		}
 
 		if len(cfg.AllowedRepositories) > 0 {
@@ -1200,11 +1210,11 @@ var AgentStartCommand = cli.Command{
 			for _, v := range cfg.AllowedRepositories {
 				r, err := regexp.Compile(v)
 				if err != nil {
-					l.Fatal("Regex %s is allowed-repositories failed to compile: %v", v, err)
+					l.Fatalf("Regex %s is allowed-repositories failed to compile: %v", v, err)
 				}
 				agentConf.AllowedRepositories = append(agentConf.AllowedRepositories, r)
 			}
-			l.Info("Allowed repositories patterns: %q", agentConf.AllowedRepositories)
+			l.Infof("Allowed repositories patterns: %q", agentConf.AllowedRepositories)
 		}
 
 		if len(cfg.AllowedPlugins) > 0 {
@@ -1212,11 +1222,11 @@ var AgentStartCommand = cli.Command{
 			for _, v := range cfg.AllowedPlugins {
 				r, err := regexp.Compile(v)
 				if err != nil {
-					l.Fatal("Regex %s in allowed-plugins failed to compile: %v", v, err)
+					l.Fatalf("Regex %s in allowed-plugins failed to compile: %v", v, err)
 				}
 				agentConf.AllowedPlugins = append(agentConf.AllowedPlugins, r)
 			}
-			l.Info("Allowed plugins patterns: %q", agentConf.AllowedPlugins)
+			l.Infof("Allowed plugins patterns: %q", agentConf.AllowedPlugins)
 		}
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
@@ -1224,7 +1234,7 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
-		tags := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
+		tags, err := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 			Tags:                      cfg.Tags,
 			TagsFromK8s:               cfg.KubernetesExec,
 			TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
@@ -1235,11 +1245,15 @@ var AgentStartCommand = cli.Command{
 			TagsFromGCPMetaDataPaths:  cfg.TagsFromGCPMetaDataPaths,
 			TagsFromGCPLabels:         cfg.TagsFromGCPLabels,
 			TagsFromHost:              cfg.TagsFromHost,
+			FailOnMissingTags:         cfg.FailOnMissingTags,
 			WaitForEC2TagsTimeout:     ec2TagTimeout,
 			WaitForEC2MetaDataTimeout: ec2MetaDataTimeout,
 			WaitForECSMetaDataTimeout: ecsMetaDataTimeout,
 			WaitForGCPLabelsTimeout:   gcpLabelsTimeout,
 		})
+		if err != nil {
+			l.Fatalf("%v", err)
+		}
 
 		// Munge the value from --queue (if it exists) into the tags slice
 		if cfg.Queue != "" {
@@ -1247,7 +1261,7 @@ var AgentStartCommand = cli.Command{
 				return strings.HasPrefix(strings.TrimSpace(s), "queue=")
 			})
 			if i != -1 {
-				l.Fatal("Queue must be present in only one of the --tags or the --queue flags")
+				l.Fatalf("Queue must be present in only one of the --tags or the --queue flags")
 			}
 			tags = append(tags, "queue="+cfg.Queue)
 		}
@@ -1255,7 +1269,7 @@ var AgentStartCommand = cli.Command{
 		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
 		// so we may as well check that'll work now and fail early if it's a problem
 		if !osutil.FileExists(agentConf.BuildPath) {
-			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
+			l.Infof("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
 			// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
 			if err := os.MkdirAll(agentConf.BuildPath, 0o777); err != nil {
 				return fmt.Errorf("failed to create builds path: %w", err)
@@ -1281,7 +1295,7 @@ var AgentStartCommand = cli.Command{
 
 		if cfg.SpawnPerCPU > 0 {
 			if cfg.Spawn > 1 {
-				return errors.New("You can't specify spawn and spawn-per-cpu at the same time")
+				return errors.New("you can't specify spawn and spawn-per-cpu at the same time")
 			}
 			cfg.Spawn = runtime.NumCPU() * cfg.SpawnPerCPU
 		}
@@ -1289,16 +1303,16 @@ var AgentStartCommand = cli.Command{
 		// Spawning multiple agents doesn't work if the agent is being
 		// booted in acquisition mode
 		if cfg.Spawn > 1 && cfg.AcquireJob != "" {
-			return errors.New("You can't spawn multiple agents and acquire a job at the same time")
+			return errors.New("you can't spawn multiple agents and acquire a job at the same time")
 		}
 
 		var workers []*agent.AgentWorker
 
 		for i := 1; i <= cfg.Spawn; i++ {
 			if cfg.Spawn == 1 {
-				l.Info("Registering agent with Buildkite...")
+				l.Infof("Registering agent with Buildkite...")
 			} else {
-				l.Info("Registering agent %d of %d with Buildkite...", i, cfg.Spawn)
+				l.Infof("Registering agent %d of %d with Buildkite...", i, cfg.Spawn)
 			}
 
 			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
@@ -1311,7 +1325,7 @@ var AgentStartCommand = cli.Command{
 					// in cases where the value of --spawn varies between hosts.
 					p = -i
 				}
-				l.Info("Assigning priority %d for agent %d", p, i)
+				l.Infof("Assigning priority %d for agent %d", p, i)
 				registerReq.Priority = strconv.Itoa(p)
 			}
 
@@ -1362,8 +1376,8 @@ var AgentStartCommand = cli.Command{
 		signals := poolSigs.handle(ctx)
 		defer close(signals)
 
-		l.Info("Starting %d Agent(s)", cfg.Spawn)
-		l.Info("You can press Ctrl-C to stop the agents")
+		l.Infof("Starting %d Agent(s)", cfg.Spawn)
+		l.Infof("You can press Ctrl-C to stop the agents")
 
 		// Determine the health check listening address and port for this agent
 		if cfg.HealthCheckAddr != "" {
@@ -1405,16 +1419,16 @@ var AgentStartCommand = cli.Command{
 func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set, error) {
 	jwksBytes, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read job %s keyset: %w", keysetType, err)
+		return nil, fmt.Errorf("failed to read job %s keyset: %w", keysetType, err)
 	}
 
 	jwks, err := jwk.Parse(jwksBytes)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse job %s keyset: %w", keysetType, err)
+		return nil, fmt.Errorf("failed to parse job %s keyset: %w", keysetType, err)
 	}
 
 	if jwks.Len() == 0 {
-		return nil, fmt.Errorf("Job %s keyset is empty", keysetType)
+		return nil, fmt.Errorf("job %s keyset is empty", keysetType)
 	}
 
 	iter := jwks.Keys(ctx)
@@ -1422,11 +1436,11 @@ func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set
 		keyI := iter.Pair().Value
 		key, ok := keyI.(jwk.Key)
 		if !ok {
-			return nil, fmt.Errorf("Job %s keyset contains a non-key at index %d", keysetType, iter.Pair().Index)
+			return nil, fmt.Errorf("job %s keyset contains a non-key at index %d", keysetType, iter.Pair().Index)
 		}
 
 		if _, ok = key.Get(jwk.AlgorithmKey); !ok {
-			return nil, fmt.Errorf("Job %s keyset contains a key without an algorithm at index %d. All keys used for signing and verification in the agent must have their `alg` key set", keysetType, iter.Pair().Index)
+			return nil, fmt.Errorf("job %s keyset contains a key without an algorithm at index %d. all keys used for signing and verification in the agent must have their `alg` key set", keysetType, iter.Pair().Index)
 		}
 	}
 
@@ -1475,13 +1489,13 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 			// allow 1 second to send agent disconnects.
 			time.Sleep(ps.cancelGracePeriod + 1*time.Second)
 			// We get here if the main goroutine hasn't returned yet.
-			ps.log.Info("Timed out waiting for agents to exit; exiting immediately with status 1")
+			ps.log.Infof("Timed out waiting for agents to exit; exiting immediately with status 1")
 			os.Exit(1)
 		}()
 	}
 
 	for sig := range signals {
-		ps.log.Debug("Received signal `%v`", sig)
+		ps.log.Debugf("Received signal `%v`", sig)
 		setStatus(fmt.Sprintf("Received signal `%v`", sig))
 
 		switch sig {
@@ -1492,23 +1506,23 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 			interruptCount++
 			switch interruptCount {
 			case 1:
-				ps.log.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
+				ps.log.Infof("Received CTRL-C, send again to forcefully kill the agent(s)")
 				ps.pool.StopGracefully()
 
 			case 2:
-				ps.log.Info("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod)
+				ps.log.Infof("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod)
 				if !ps.skipGraceful {
-					ps.log.Info("Press Ctrl-C one more time to exit immediately without disconnecting - note that agents will be considered lost!")
+					ps.log.Infof("Press Ctrl-C one more time to exit immediately without disconnecting - note that agents will be considered lost!")
 				}
 				ungracefulStop()
 
 			case 3:
-				ps.log.Info("Exiting immediately with status 1")
+				ps.log.Infof("Exiting immediately with status 1")
 				os.Exit(1)
 			}
 
 		default:
-			ps.log.Debug("Ignoring signal `%s`", sig.String())
+			ps.log.Debugf("Ignoring signal `%s`", sig.String())
 		}
 	}
 }
@@ -1530,7 +1544,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	p, err := hook.Find(nil, cfg.HooksPath, hookName)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Error("Error finding %q hook: %v", hookName, err)
+			log.Errorf("Error finding %q hook: %v", hookName, err)
 			return err
 		}
 	} else {
@@ -1542,11 +1556,15 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		p, err = hook.Find(nil, h, hookName)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				log.Error("Error finding %q hook: %v", hookName, err)
+				log.Errorf("Error finding %q hook: %v", hookName, err)
 			}
 		} else {
 			hooks = append(hooks, p)
 		}
+	}
+
+	if len(hooks) == 0 {
+		return nil
 	}
 
 	// pipe from hook output to logger
@@ -1556,38 +1574,36 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		shell.WithLogger(shell.NewWriterLogger(w, !cfg.NoColor, nil)), // for Promptf
 	)
 	if err != nil {
-		log.Error("creating shell for %q hook: %v", hookName, err)
+		log.Errorf("creating shell for %q hook: %v", hookName, err)
 		return err
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		scan := bufio.NewScanner(r) // log each line separately
 		log = log.WithFields(logger.StringField("hook", hookName))
 		for scan.Scan() {
-			log.Info(scan.Text())
+			log.Infof(scan.Text())
 		}
+	})
+	defer func() {
+		_ = w.Close() // closing the writer ends scan.Scan and lets wg.Wait return
+		wg.Wait()
 	}()
 
 	// run hooks
 	for _, p = range hooks {
-		script, err := sh.Script(p)
+		script, err := sh.Script(p, cfg.HooksShell)
 		if err != nil {
-			log.Error("%q hook: %v", hookName, err)
+			log.Errorf("%q hook: %v", hookName, err)
 			return err
 		}
 		// For these hooks, hide the interpreter from the "prompt".
 		sh.Promptf("%s", p)
 		if err := script.Run(context.TODO(), shell.ShowPrompt(false)); err != nil {
-			log.Error("%q hook: %v", hookName, err)
+			log.Errorf("%q hook: %v", hookName, err)
 			return err
 		}
-		w.Close() // goroutine scans until pipe is closed
-
-		// wait for hook to finish and output to flush to logger
-		wg.Wait()
 	}
 	return nil
 }
@@ -1608,7 +1624,7 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 	// There should be only one Agent API socket per agent process.
 	// If a previous agent crashed and left behind a socket, we can
 	// remove it.
-	os.Remove(path)
+	_ = os.Remove(path)
 
 	svr, err := agentapi.NewServer(path, l)
 	if err != nil {
@@ -1622,16 +1638,18 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 	// Try to be the leader - no worries if this fails.
 	leaderPath := agentapi.LeaderPath(socketsPath)
 	if err := os.Symlink(path, leaderPath); err == nil {
-		l.Info("Agent API: This agent became leader")
+		l.Infof("Agent API: This agent became leader")
 	}
 
 	// Whoever the leader is, ping them every so often as a health-check.
 	go leaderPinger(ctx, l, path, leaderPath)
 
 	return func() {
-		svr.Shutdown(ctx)
+		if err := svr.Shutdown(ctx); err != nil {
+			l.Warnf("Agent API: error shutting down server: %v", err)
+		}
 		if d, err := os.Readlink(leaderPath); err == nil && d == path {
-			os.Remove(leaderPath)
+			_ = os.Remove(leaderPath)
 		}
 	}, nil
 }
@@ -1662,10 +1680,12 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 
 	for range time.Tick(100 * time.Millisecond) {
 		if err := pingLeader(); err != nil {
-			l.Warn("Agent API: Leader ping failed, staging coup: %v", err)
-			l.Warn("Agent API: Leader state (locks) has been lost!")
-			os.Remove(leaderPath)
-			os.Symlink(path, leaderPath)
+			l.Warnf("Agent API: Leader ping failed, staging coup: %v", err)
+			l.Warnf("Agent API: Leader state (locks) has been lost!")
+			_ = os.Remove(leaderPath)
+			if err := os.Symlink(path, leaderPath); err != nil {
+				l.Warnf("Agent API: Failed to become leader: %v", err)
+			}
 		}
 	}
 }

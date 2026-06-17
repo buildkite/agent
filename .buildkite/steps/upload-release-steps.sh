@@ -6,6 +6,7 @@ set -euo pipefail
 trigger_step() {
   local name="$1"
   local trigger_pipeline="$2"
+  local skip="${3:-skip: false}"
   local branch="$BUILDKITE_BRANCH"
   local message_suffix=""
 
@@ -15,6 +16,7 @@ trigger_step() {
 
   cat <<YAML
   - name: ":rocket: Release ${name}${message_suffix}"
+    ${skip}
     trigger: "${trigger_pipeline}"
     async: false
     branches: "${branch}"
@@ -39,36 +41,62 @@ trigger_step() {
 YAML
 }
 
-block_step() {
-  local label="$1"
+wait_step() {
   cat <<YAML
   - wait
-  - block: "${label}"
 YAML
 }
 
 edge_steps_yaml() {
   echo "steps:"
 
-  trigger_step \
-    "edge ${agent_version}.${build_version}" \
-    "agent-release-edge"
+  case "${agent_version}" in
+    4.*)
+      # Only release v4 to edge.
+      trigger_step \
+        "edge ${agent_version}.${build_version}" \
+        "agent-release-edge"
+      ;;
+
+    *)
+      # Do not release other versions to edge (upload the step with "skip" so
+      # it can still be inspected in the UI).
+      trigger_step \
+        "edge ${agent_version}.${build_version}" \
+        "agent-release-edge" \
+        "skip: \"Not releasing ${agent_version} to edge\""
+      ;;
+  esac
 }
 
 output_steps_yaml() {
-  block_step "beta?"
+  wait_step
 
-  trigger_step \
-    "beta ${agent_version}" \
-    "agent-release-beta"
+  case "${agent_version}" in
+    *beta*|*rc*)
+      trigger_step \
+        "beta ${agent_version}" \
+        "agent-release-beta"
+      ;;
 
-  if [[ ! "$agent_version" =~ (beta|rc) ]] ; then
-    block_step "stable?"
+    4.*)
+      # This case shouldn't be reached while the v4 branch version string
+      # includes "beta".
+      trigger_step \
+        "beta ${agent_version}" \
+        "agent-release-beta"
+      ;;
 
-    trigger_step \
-      "stable ${agent_version}" \
-      "agent-release-stable"
-  fi
+    3.*)
+      # TODO(v4 release): move stable release to v4
+      trigger_step \
+        "oldstable ${agent_version}" \
+        "agent-release-oldstable"
+      trigger_step \
+        "stable ${agent_version}" \
+        "agent-release-stable"
+      ;;
+  esac
 }
 
 agent_version=$(buildkite-agent meta-data get "agent-version")

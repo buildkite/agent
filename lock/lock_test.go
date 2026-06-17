@@ -53,11 +53,15 @@ func testServerAndClient(t *testing.T, ctx context.Context) (*agentapi.Server, *
 
 func TestLockUnlock(t *testing.T) {
 	t.Parallel()
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	// Lock it
 	token, err := cli.Lock(ctx, "llama")
@@ -86,11 +90,15 @@ func TestLockUnlock(t *testing.T) {
 
 func TestLocker(t *testing.T) {
 	t.Parallel()
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	// This constitutes a test by virtue of Lock/Unlock panicking on any
 	// internal error.
@@ -99,13 +107,11 @@ func TestLocker(t *testing.T) {
 	var wg sync.WaitGroup
 	var locks int
 	for range 10 {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			l.Lock()
 			locks++
 			l.Unlock()
-			wg.Done()
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -117,24 +123,26 @@ func TestLocker(t *testing.T) {
 
 func TestDoOnce(t *testing.T) {
 	t.Parallel()
-	ctx, canc := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(canc)
 
 	svr, cli := testServerAndClient(t, ctx)
-	t.Cleanup(func() { svr.Close() })
+	t.Cleanup(func() {
+		if err := svr.Close(); err != nil {
+			t.Errorf("svr.Close() = %v", err)
+		}
+	})
 
 	var wg sync.WaitGroup
 	var calls atomic.Int32
 	for range 10 {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			if err := cli.DoOnce(ctx, "once", func() {
 				calls.Add(1)
 			}); err != nil {
 				t.Errorf("Client.DoOnce(ctx, once, inc) = %v", err)
 			}
-			wg.Done()
-		}()
+		})
 	}
 
 	wg.Wait()

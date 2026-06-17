@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestArtifactoryDownloaderRepositoryPath(t *testing.T) {
@@ -13,12 +12,16 @@ func TestArtifactoryDownloaderRepositoryPath(t *testing.T) {
 	rtUploader := NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/foo/bar",
 	})
-	assert.Equal(t, rtUploader.RepositoryPath(), "foo/bar")
+	if got, want := rtUploader.RepositoryPath(), "foo/bar"; got != want {
+		t.Errorf("rtUploader.RepositoryPath() = %q, want %q", got, want)
+	}
 
 	rtUploader = NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
 		Repository: "rt://starts-with-an-s/and-this-is-its/folder",
 	})
-	assert.Equal(t, rtUploader.RepositoryPath(), "and-this-is-its/folder")
+	if got, want := rtUploader.RepositoryPath(), "and-this-is-its/folder"; got != want {
+		t.Errorf("rtUploader.RepositoryPath() = %q, want %q", got, want)
+	}
 }
 
 func TestArtifactoryDownloaderRepositoryName(t *testing.T) {
@@ -27,12 +30,16 @@ func TestArtifactoryDownloaderRepositoryName(t *testing.T) {
 	rtUploader := NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/foo/bar",
 	})
-	assert.Equal(t, rtUploader.RepositoryName(), "my-bucket-name")
+	if got, want := rtUploader.RepositoryName(), "my-bucket-name"; got != want {
+		t.Errorf("rtUploader.RepositoryName() = %q, want %q", got, want)
+	}
 
 	rtUploader = NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
 		Repository: "rt://starts-with-an-s",
 	})
-	assert.Equal(t, rtUploader.RepositoryName(), "starts-with-an-s")
+	if got, want := rtUploader.RepositoryName(), "starts-with-an-s"; got != want {
+		t.Errorf("rtUploader.RepositoryName() = %q, want %q", got, want)
+	}
 }
 
 func TestArtifactoryDownloaderRepositoryFileLocation(t *testing.T) {
@@ -42,11 +49,15 @@ func TestArtifactoryDownloaderRepositoryFileLocation(t *testing.T) {
 		Repository: "rt://my-bucket-name/rt/folder",
 		Path:       "here/please/right/now/",
 	})
-	assert.Equal(t, rtUploader.RepositoryFileLocation(), "rt/folder/here/please/right/now")
+	if got, want := rtUploader.RepositoryFileLocation(), "rt/folder/here/please/right/now"; got != want {
+		t.Errorf("rtUploader.RepositoryFileLocation() = %q, want %q", got, want)
+	}
 
 	rtUploader = NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/rt/folder",
 		Path:       "",
 	})
-	assert.Equal(t, rtUploader.RepositoryFileLocation(), "rt/folder")
+	if got, want := rtUploader.RepositoryFileLocation(), "rt/folder"; got != want {
+		t.Errorf("rtUploader.RepositoryFileLocation() = %q, want %q", got, want)
+	}
 }

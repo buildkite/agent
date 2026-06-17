@@ -6,7 +6,7 @@ We frequently introduce new experimental features to the agent. You can use the 
 buildkite-agent start --experiment experiment1 --experiment experiment2
 ```
 
-Or you can set them in your [agent configuration file](https://buildkite.com/docs/agent/v3/configuration):
+Or you can set them in your [agent configuration file](https://buildkite.com/docs/agent/self-hosted/configure):
 
 ```
 experiment="experiment1,experiment2"
@@ -109,3 +109,9 @@ When using `--spawn` with `--spawn-with-priority`, the agent assigns ascending p
 Prepends agent configuration variables (such as `BUILDKITE_GIT_*`, `BUILDKITE_SHELL`, `BUILDKITE_CANCEL_GRACE_PERIOD`, etc.) to the environment file used by the job runner. This is useful in environments like Docker where the agent configuration is not otherwise available to the job process.
 
 **Status:** Experimental while we test the impact on job environments
+
+### `zip-plugins`
+
+Allows plugins to be downloaded as zip archives instead of being cloned from a Git repository. This is useful for plugins hosted as zip files on HTTP(S) URLs.
+
+**Status:** Experimental while we test zip archive support for plugins.

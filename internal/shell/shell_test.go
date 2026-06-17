@@ -11,25 +11,29 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
-	"gotest.tools/v3/assert"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer func() {
+		if err := sshKeygen.Close(); err != nil {
+			t.Errorf("sshKeygen.Close() = %v", err)
+		}
+	}()
 
 	// WithPTY(true) should be overriden by RunAndCapture.
 	sh := newShellForTest(t, shell.WithPTY(true))
@@ -41,25 +45,28 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}()
 
 	cmd := sh.Command(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com")
-	got, err := cmd.RunAndCaptureStdout(ctx)
+	got, err := cmd.RunAndCaptureStdout(t.Context())
 	if err != nil {
-		t.Errorf(`sh.RunAndCapture(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") error = %v`, err)
+		t.Errorf(`sh.Command(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com").RunAndCaptureStdout(t.Context()) error = %v`, err)
 	}
 
 	if want := "Llama party! 🎉"; got != want {
-		t.Errorf(`sh.RunAndCapture(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") output = %q, want %q`, got, want)
+		t.Errorf(`sh.Command(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com").RunAndCaptureStdout(t.Context()) output = %q, want %q`, got, want)
 	}
 }
 
 func TestRunAndCaptureWithExitCode(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer func() {
+		if err := sshKeygen.Close(); err != nil {
+			t.Errorf("sshKeygen.Close() = %v", err)
+		}
+	}()
 
 	sh := newShellForTest(t, shell.WithPTY(false))
 
@@ -69,9 +76,9 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 		call.Exit(24)
 	}()
 
-	_, err = sh.Command(sshKeygen.Path).RunAndCaptureStdout(ctx)
+	_, err = sh.Command(sshKeygen.Path).RunAndCaptureStdout(t.Context())
 	if err == nil {
-		t.Errorf("sh.Command(ssh-keygen).RunAndCaptureStdout(ctx) error = %v, want non-nil error", err)
+		t.Errorf("sh.Command(ssh-keygen).RunAndCaptureStdout(t.Context()) error = %v, want non-nil error", err)
 	}
 
 	if got, want := shell.ExitCode(err), 24; got != want {
@@ -81,13 +88,16 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
-	defer sshKeygen.Close()
+	defer func() {
+		if err := sshKeygen.Close(); err != nil {
+			t.Errorf("sshKeygen.Close() = %v", err)
+		}
+	}()
 
 	out := &bytes.Buffer{}
 
@@ -99,13 +109,13 @@ func TestRun(t *testing.T) {
 
 	go func() {
 		call := <-sshKeygen.Ch
-		fmt.Fprintln(call.Stdout, "Llama party! 🎉")
+		_, _ = fmt.Fprintln(call.Stdout, "Llama party! 🎉")
 		call.Exit(0)
 	}()
 
 	cmd := sh.Command(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com")
-	if err := cmd.Run(ctx); err != nil {
-		t.Errorf(`sh.Run(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") error = %v`, err)
+	if err := cmd.Run(t.Context()); err != nil {
+		t.Errorf(`sh.Command(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com").Run(t.Context()) error = %v`, err)
 	}
 
 	promptPrefix := "$"
@@ -121,12 +131,11 @@ func TestRun(t *testing.T) {
 
 func TestRunWithStdin(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	out := &bytes.Buffer{}
 	sh := newShellForTest(t, shell.WithStdout(out), shell.WithPTY(false))
 	cmd := sh.CloneWithStdin(strings.NewReader("hello stdin")).Command("tr", "hs", "HS")
-	if err := cmd.Run(ctx); err != nil {
+	if err := cmd.Run(t.Context()); err != nil {
 		t.Fatalf(`sh.WithStdin("hello stdin").Run("tr", "hs", "HS") error = %v`, err)
 	}
 	if got, want := out.String(), "Hello Stdin"; want != got {
@@ -134,81 +143,200 @@ func TestRunWithStdin(t *testing.T) {
 	}
 }
 
-func TestContextCancelTerminates(t *testing.T) {
+func TestContextCancelInterrupts(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
-	if runtime.GOOS == "windows" {
-		t.Skip("Not supported in windows")
+	tests := []struct {
+		name              string
+		cmdWindows        string
+		newConsole        bool
+		interruptSignal   process.Signal
+		wantSignal        syscall.Signal
+		wantSignalWindows syscall.Signal
+	}{
+		{
+			name: "default",
+			// The usual timeout command should obey Ctrl-Break.
+			cmdWindows: ".\\fixtures\\sleep60.bat",
+			// The default interrupt signal is SIGTERM.
+			wantSignal:        syscall.SIGTERM,
+			wantSignalWindows: -1,
+		},
+		{
+			name: "SIGINT",
+			// SIGINT does nothing different on Windows.
+			cmdWindows:        ".\\fixtures\\sleep60.bat",
+			interruptSignal:   process.SIGINT,
+			wantSignal:        syscall.SIGINT,
+			wantSignalWindows: -1,
+		},
+		{
+			name: "SIGKILL",
+			// SIGKILL should bypass the Ctrl-Break handler in the process.
+			cmdWindows:        ".\\fixtures\\sleep60nobreak.bat",
+			interruptSignal:   process.SIGKILL,
+			wantSignal:        syscall.SIGKILL,
+			wantSignalWindows: -1,
+		},
 	}
 
-	sleepCmd, err := bintest.CompileProxy("sleep")
-	if err != nil {
-		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
-	}
-	defer sleepCmd.Close()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+			opts := []shell.NewShellOpt{
+				shell.WithSignalGracePeriod(10 * time.Second),
+			}
+			if test.interruptSignal != 0 {
+				opts = append(opts, shell.WithInterruptSignal(test.interruptSignal))
+			}
 
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatalf("shell.New() error = %v", err)
-	}
+			sh, err := shell.New(opts...)
+			if err != nil {
+				t.Fatalf("shell.New(%v) error = %v", opts, err)
+			}
 
-	sh.Logger = shell.DiscardLogger
+			sh.Logger = shell.DiscardLogger
 
-	go func() {
-		call := <-sleepCmd.Ch
-		time.Sleep(time.Second * 60)
-		call.Exit(0)
-	}()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 
-	cancel()
+			// Wait for the process to start before cancelling the context.
+			// This is more reliable than time.Sleep, but still not perfect.
+			started := make(chan struct{})
 
-	if err := sh.Command(sleepCmd.Path).Run(ctx); !shell.IsExitSignaled(err) {
-		t.Errorf("sh.Run(ctx, sleep) error = %v, want shell.IsExitSignaled(err) = true", err)
+			go func() {
+				select {
+				case <-time.After(1 * time.Minute):
+					t.Errorf("timeout waiting for process to start")
+				case <-started:
+					// TODO: figure out why this still needs a sleep to be
+					// reliable.
+					time.Sleep(100 * time.Millisecond)
+					// Now cancel the context, which should cause the interrupt.
+					cancel()
+				}
+			}()
+
+			cmd := "fixtures/sleep60.sh"
+			if runtime.GOOS == "windows" {
+				cmd = test.cmdWindows
+			}
+
+			// The process returns an exit error, except on Windows. 🙄
+			wantSignaled := runtime.GOOS != "windows"
+
+			err = sh.Command(cmd).Run(ctx, shell.WithStarted(started))
+			if got, want := shell.IsExitSignaled(err), wantSignaled; got != want {
+				t.Errorf("sh.Command(%q).Run(ctx) = %v, want shell.IsExitSignaled(err) = %t", cmd, err, want)
+			}
+
+			status, err := sh.WaitStatus()
+			if err != nil {
+				t.Errorf("sh.WaitStatus() error = %v", err)
+			}
+			wantSignal := test.wantSignal
+			if runtime.GOOS == "windows" {
+				wantSignal = test.wantSignalWindows
+			}
+			if got, want := status.Signal(), wantSignal; got != want {
+				t.Errorf("sh.WaitStatus().Signal() = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
 func TestInterrupt(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
-	if runtime.GOOS == "windows" {
-		t.Skip("Not supported in windows")
+	tests := []struct {
+		name              string
+		cmdWindows        string
+		interruptSignal   process.Signal
+		wantSignal        syscall.Signal
+		wantSignalWindows syscall.Signal
+	}{
+		{
+			name: "default",
+			// The usual timeout command should obey Ctrl-Break.
+			cmdWindows:        ".\\fixtures\\sleep60.bat",
+			wantSignal:        syscall.SIGTERM,
+			wantSignalWindows: -1,
+		},
+		{
+			name:              "SIGINT",
+			cmdWindows:        ".\\fixtures\\sleep60.bat",
+			interruptSignal:   process.SIGINT,
+			wantSignal:        syscall.SIGINT,
+			wantSignalWindows: -1,
+		},
+		{
+			name:              "SIGKILL",
+			cmdWindows:        ".\\fixtures\\sleep60nobreak.bat",
+			interruptSignal:   process.SIGKILL,
+			wantSignal:        syscall.SIGKILL,
+			wantSignalWindows: -1,
+		},
 	}
 
-	sleepCmd, err := bintest.CompileProxy("sleep")
-	if err != nil {
-		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
-	}
-	defer sleepCmd.Close()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+			opts := []shell.NewShellOpt{
+				shell.WithSignalGracePeriod(10 * time.Second),
+			}
+			if test.interruptSignal != 0 {
+				opts = append(opts, shell.WithInterruptSignal(test.interruptSignal))
+			}
+			sh, err := shell.New(opts...)
+			if err != nil {
+				t.Fatalf("shell.New(%v) error = %v", opts, err)
+			}
 
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatalf("shell.New() error = %v", err)
-	}
+			sh.Logger = shell.DiscardLogger
 
-	sh.Logger = shell.DiscardLogger
+			// Wait for the process to start before interrupting.
+			// This is more reliable than time.Sleep.
+			started := make(chan struct{})
 
-	go func() {
-		call := <-sleepCmd.Ch
-		time.Sleep(time.Second * 10)
-		call.Exit(0)
-	}()
+			go func() {
+				select {
+				case <-time.After(1 * time.Minute):
+					t.Errorf("timeout waiting for process to start")
+				case <-started:
+					// Now interrupt the process.
+					if err := sh.Interrupt(); err != nil {
+						t.Errorf("sh.Interrupt() = %v", err)
+					}
+				}
+			}()
 
-	// interrupt the process after 50ms
-	go func() {
-		<-time.After(time.Millisecond * 50)
-		sh.Interrupt()
-	}()
+			cmd := "fixtures/sleep60.sh"
+			if runtime.GOOS == "windows" {
+				cmd = test.cmdWindows
+			}
 
-	if err := sh.Command(sleepCmd.Path).Run(ctx); err == nil {
-		t.Errorf("sh.Run(ctx, sleep) = %v, want non-nil error", err)
+			// The process returns an exit error, except on Windows. 🙄
+			wantSignaled := runtime.GOOS != "windows"
+
+			err = sh.Command(cmd).Run(t.Context(), shell.WithStarted(started))
+			if got, want := shell.IsExitSignaled(err), wantSignaled; got != want {
+				t.Errorf("sh.Command(%q).Run(t.Context()) = %v, want shell.IsExitSignaled(err) = %t", cmd, err, want)
+			}
+
+			status, err := sh.WaitStatus()
+			if err != nil {
+				t.Errorf("sh.WaitStatus() error = %v", err)
+			}
+			wantSignal := test.wantSignal
+			if runtime.GOOS == "windows" {
+				wantSignal = test.wantSignalWindows
+			}
+			if got, want := status.Signal(), wantSignal; got != want {
+				t.Errorf("sh.WaitStatus().Signal() = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -231,7 +359,7 @@ func TestDefaultWorkingDirFromSystem(t *testing.T) {
 
 func TestWorkingDir(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tempDir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {
@@ -313,7 +441,6 @@ func TestWorkingDir(t *testing.T) {
 
 func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	if runtime.GOOS == "windows" {
 		t.Skip("Flakey on windows")
@@ -335,14 +462,22 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	lockPath := filepath.Join(dir, "my.lock")
 
 	cmd := acquireLockInOtherProcess(t, lockPath)
-	defer func() { assert.NilError(t, cmd.Process.Kill()) }()
+	defer func() {
+		if err := cmd.Process.Kill(); err != nil {
+			t.Fatalf("cmd.Process.Kill() error = %v, want nil", err)
+		}
+	}()
 
-	ctx, canc := context.WithTimeout(ctx, 2*time.Second)
+	ctx, canc := context.WithTimeout(t.Context(), 2*time.Second)
 	defer canc()
 
 	lock, err := sh.LockFile(ctx, lockPath)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Equal(t, lock, nil)
+	if want := context.DeadlineExceeded; !errors.Is(err, want) {
+		t.Fatalf("sh.LockFile(ctx, %q) error = %v, want %v", lockPath, err, want)
+	}
+	if lock != nil {
+		t.Fatalf("sh.LockFile(ctx, %q) = %v, want nil", lockPath, lock)
+	}
 }
 
 func acquireLockInOtherProcess(t *testing.T, lockfile string) *exec.Cmd {
@@ -363,7 +498,9 @@ func acquireLockInOtherProcess(t *testing.T, lockfile string) *exec.Cmd {
 	cmd.Stderr = search
 
 	err := cmd.Start()
-	assert.NilError(t, err)
+	if err != nil {
+		t.Fatalf("cmd.Start() error = %v, want nil", err)
+	}
 
 	// wait for the above process to get a lock
 	// This used to be a stat loop, checking for the existence of the lock file.
@@ -453,11 +590,12 @@ func TestRunWithOlfactor(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			ctx := context.Background()
 
 			out := &bytes.Buffer{}
 			sh, err := shell.New(shell.WithStdout(out))
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("shell.New(shell.WithStdout(out)) error = %v, want nil", err)
+			}
 
 			smelled := make(map[string]bool)
 			for _, s := range test.smellsToSniff {
@@ -465,11 +603,13 @@ func TestRunWithOlfactor(t *testing.T) {
 			}
 
 			err = sh.Command(test.command[0], test.command[1:]...).Run(
-				ctx,
+				t.Context(),
 				shell.WithStringSearch(smelled),
 			)
 			if eerr := new(exec.ExitError); !errors.As(err, &eerr) {
-				assert.NilError(t, err)
+				if err != nil {
+					t.Fatalf("sh.Command(test.command[0], test.command[1:]...).Run(t.Context(), shell.WithStringSearch(smelled)) error = %v, want nil", err)
+				}
 			}
 
 			if diff := cmp.Diff(out.String(), test.output); diff != "" {
@@ -493,7 +633,6 @@ func TestRunWithOlfactor(t *testing.T) {
 
 func TestRunWithoutPrompt(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
 	out := &bytes.Buffer{}
 	sh, err := shell.New(shell.WithStdout(out))
@@ -501,7 +640,7 @@ func TestRunWithoutPrompt(t *testing.T) {
 		t.Fatalf("shell.New() error = %v", err)
 	}
 
-	if err := sh.Command("echo", "hi").Run(ctx, shell.ShowPrompt(false)); err != nil {
+	if err := sh.Command("echo", "hi").Run(t.Context(), shell.ShowPrompt(false)); err != nil {
 		t.Fatalf(`sh.Command("echo", "hi").Run(ctx, shell.ShowPrompt(false)) = %v`, err)
 	}
 	if got, want := out.String(), "hi\n"; got != want {
@@ -509,7 +648,7 @@ func TestRunWithoutPrompt(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := sh.Command("asdasdasdasdzxczxczxzxc").Run(ctx, shell.ShowPrompt(false)); err == nil {
+	if err := sh.Command("asdasdasdasdzxczxczxzxc").Run(t.Context(), shell.ShowPrompt(false)); err == nil {
 		t.Errorf("sh.RunWithoutPrompt(asdasdasdasdzxczxczxzxc) = %v, want non-nil error", err)
 	}
 }

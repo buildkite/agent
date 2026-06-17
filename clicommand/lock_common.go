@@ -2,10 +2,9 @@ package clicommand
 
 import "github.com/urfave/cli"
 
-const lockClientErrMessage = `Could not connect to Agent API: %v
-This command can only be used when at least one agent is running with the
-"agent-api" experiment enabled.
-`
+const lockClientErrMessage = `could not connect to Agent API: %v
+this command can only be used when at least one agent is running with the
+"agent-api" experiment enabled`
 
 // Flags used by all lock subcommands.
 func lockCommonFlags() []cli.Flag {

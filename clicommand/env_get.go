@@ -10,9 +10,9 @@ import (
 	"github.com/urfave/cli"
 )
 
-const envClientErrMessage = `Could not create Job API client: %w
-This command can only be used from hooks or plugins running under a job executor
-where the agent's job API is available (in version v3.64.0 and later of the Buildkite Agent).`
+const envClientErrMessage = `could not create Job API client: %w
+this command can only be used from hooks or plugins running under a job executor
+where the agent's job API is available in Buildkite Agent v3.64.0 and later`
 
 const envGetHelpDescription = `Usage:
 
@@ -103,7 +103,7 @@ func envGetAction(c *cli.Context) error {
 			v, ok := envMap[arg]
 			if !ok {
 				notFound = true
-				l.Warn("%q is not set", arg)
+				l.Warnf("%q is not set", arg)
 				continue
 			}
 			em[arg] = v
@@ -116,14 +116,14 @@ func envGetAction(c *cli.Context) error {
 		if len(c.Args()) == 1 {
 			// Just print the value.
 			for _, v := range envMap {
-				fmt.Fprintln(c.App.Writer, v)
+				_, _ = fmt.Fprintln(c.App.Writer, v)
 			}
 			break
 		}
 
 		// Print everything.
 		for _, v := range env.FromMap(envMap).ToSlice() {
-			fmt.Fprintln(c.App.Writer, v)
+			_, _ = fmt.Fprintln(c.App.Writer, v)
 		}
 
 	case "json", "json-pretty":
@@ -136,7 +136,7 @@ func envGetAction(c *cli.Context) error {
 		}
 
 	default:
-		l.Error("Invalid output format %q\n", cfg.Format)
+		l.Errorf("Invalid output format %q\n", cfg.Format)
 	}
 
 	if notFound {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
 )
 
 func init() {
@@ -81,23 +82,42 @@ type Runner struct {
 
 // Run runs the socket server.
 func (r *Runner) Run(ctx context.Context) error {
-	r.server.Register(r)
+	if err := r.server.Register(r); err != nil {
+		return fmt.Errorf("registering kubernetes RPC server: %w", err)
+	}
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
 
-	oldUmask, err := Umask(0) // set umask of socket file to 0o777 (world read-write-executable)
+	// Set umask to 0, so the socket is created with mode 0o777 (world
+	// read-write-executable).
+	// The other containers may be running under any arbitrary uid/gid, and
+	// the socket needs to be accessible to them.
+	// This is acceptable because the security boundary of the job is
+	// considered to be _the pod_. The socket is exposed by us only within
+	// the pod.
+	// Note that with or without accessing the socket, a rogue container or
+	// process within the pod can do all sorts of things to disrupt the
+	// normal operation of the job.
+	oldUmask, err := Umask(0)
 	if err != nil {
 		return fmt.Errorf("failed to set socket umask: %w", err)
 	}
+	defer Umask(oldUmask) //nolint:errcheck // Best-effort cleanup on failure
 	l, err := (&net.ListenConfig{}).Listen(ctx, "unix", r.conf.SocketPath)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
-	defer l.Close()
-	defer os.Remove(r.conf.SocketPath)
+	defer func() { _ = l.Close() }()
+	defer func() { _ = os.Remove(r.conf.SocketPath) }()
 
-	Umask(oldUmask) // change back to regular umask
+	if _, err := Umask(oldUmask); err != nil { // change back to regular umask
+		return fmt.Errorf("failed to restore socket umask: %w", err)
+	}
 	r.listener = l
-	go http.Serve(l, r.mux)
+	go func() {
+		if err := http.Serve(l, r.mux); err != nil && !errors.Is(err, net.ErrClosed) {
+			r.logger.Errorf("kubernetes runner HTTP server stopped: %v", err)
+		}
+	}()
 
 	if r.conf.ClientLostTimeout > 0 {
 		go r.livenessCheck(ctx)
@@ -107,8 +127,12 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	<-r.done
-	return nil
+	select {
+	case <-r.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // startupCheck blocks until all containers have connected, or times out.
@@ -162,9 +186,11 @@ func (r *Runner) livenessCheck(ctx context.Context) {
 				// we can just terminate.
 				lhf := time.Since(client.LastHeardFrom)
 				if client.State == StateConnected && lhf > r.conf.ClientLostTimeout {
-					r.logger.Error("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf)
+					r.logger.Errorf("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf)
 					client.State = StateLost
-					r.Terminate()
+					if err := r.Terminate(); err != nil {
+						r.logger.Errorf("terminating lost kubernetes runner: %v", err)
+					}
 				}
 				client.mu.Unlock()
 			}
@@ -253,7 +279,7 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 		return fmt.Errorf("unrecognized client id: %d", args.ID)
 	}
 	client := r.clients[args.ID]
-	r.logger.Info("client %d exited with code %d", args.ID, args.ExitStatus)
+	r.logger.Infof("client %d exited with code %d", args.ID, args.ExitStatus)
 
 	client.mu.Lock()
 	client.ExitStatus = args.ExitStatus
@@ -261,7 +287,9 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	client.mu.Unlock()
 
 	if args.ExitStatus != 0 {
-		r.Terminate()
+		if err := r.Terminate(); err != nil {
+			return fmt.Errorf("terminating runner after non-zero exit: %w", err)
+		}
 	}
 
 	allTerminal := true
@@ -276,7 +304,9 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 		}
 	}
 	if allTerminal {
-		r.Terminate()
+		if err := r.Terminate(); err != nil {
+			return fmt.Errorf("terminating runner after all clients exited: %w", err)
+		}
 	}
 	return nil
 }
@@ -291,6 +321,13 @@ type ExitCode struct {
 // contains the env vars that would normally be in the environment of the
 // bootstrap subcommand, particularly, the agent session token.
 func (r *Runner) Register(id int, reply *RegisterResponse) error {
+	// Note that there is no authentication of the client.
+	// This is acceptable because the security boundary of the job is
+	// considered to be _the pod_. The socket is exposed by us only within
+	// the pod.
+	// Note that with or without accessing the socket, a rogue container or
+	// process within the pod can do all sorts of things to disrupt the
+	// normal operation of the job.
 	if id < 0 || id >= len(r.clients) {
 		return fmt.Errorf("unrecognized client id: %d", id)
 	}
@@ -305,7 +342,7 @@ func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	if client.State != StateNotYetConnected {
 		return fmt.Errorf("client id %d already registered", id)
 	}
-	r.logger.Info("client %d connected", id)
+	r.logger.Infof("client %d connected", id)
 	client.LastHeardFrom = time.Now()
 	client.State = StateConnected
 

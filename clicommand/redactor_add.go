@@ -106,12 +106,12 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 			if err != nil {
 				return fmt.Errorf("failed to open file %s: %w", fileName, err)
 			}
-			defer secretsFile.Close()
+			defer func() { _ = secretsFile.Close() }()
 
 			secretsReader = bufio.NewReader(secretsFile)
 		}
 
-		l.Info("Reading secrets from %s for redaction", fileName)
+		l.Infof("Reading secrets from %s for redaction", fileName)
 
 		secrets, err := ParseSecrets(l, cfg, secretsReader)
 		if err != nil {

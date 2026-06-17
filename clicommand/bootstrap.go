@@ -6,14 +6,15 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/job"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/urfave/cli"
 )
@@ -36,7 +37,7 @@ command phase that executes the specified command in the created environment.
 You can run only specific phases with the --phases flag.
 
 The bootstrap is also responsible for executing hooks around the phases.
-See https://buildkite.com/docs/agent/v3/hooks for more details.
+See https://buildkite.com/docs/agent/hooks for more details.
 
 Example:
 
@@ -69,16 +70,21 @@ type BootstrapConfig struct {
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
 	SkipCheckout                 bool     `cli:"skip-checkout"`
+	GitCheckoutTimeout           int      `cli:"git-checkout-timeout"`
 	GitSkipFetchExistingCommits  bool     `cli:"git-skip-fetch-existing-commits"`
 	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
+	GitSparseCheckoutPaths       []string `cli:"git-sparse-checkout-paths" normalize:"list"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
+	GitSSHKey                    string   `cli:"git-ssh-key"`
+	GitCommitVerification        string   `cli:"git-commit-verification"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorCheckoutMode        string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
-	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config"`
+	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config" normalize:"list"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -95,6 +101,7 @@ type BootstrapConfig struct {
 	LogLevel                     string   `cli:"log-level"`
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
+	HooksShell                   string   `cli:"hooks-shell"`
 	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
@@ -105,10 +112,12 @@ type BootstrapConfig struct {
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
 	TracingTraceParent           string   `cli:"tracing-traceparent"`
+	TracingTraceState            string   `cli:"tracing-tracestate"`
 	TracingPropagateTraceparent  bool     `cli:"tracing-propagate-traceparent"`
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
+	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -229,100 +238,44 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command (default: false)",
 			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
 		},
-		cli.BoolFlag{
-			Name:   "skip-checkout",
-			Usage:  "Skip the git checkout phase entirely",
-			EnvVar: "BUILDKITE_SKIP_CHECKOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-skip-fetch-existing-commits",
-			Usage:  "Skip git fetch if the commit already exists in the local git directory",
-			EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
-		},
+
+		// Various git related flags shared with agent start
+		SkipCheckoutFlag,
+		GitCheckoutFlagsFlag,
+		GitCloneFlagsFlag,
+		GitCloneMirrorFlagsFlag,
+		GitCleanFlagsFlag,
+		GitCommitVerificationFlag,
+		GitFetchFlagsFlag,
+		GitSparseCheckoutPathsFlag,
 		cli.StringFlag{
-			Name:   "git-checkout-flags",
-			Value:  "-f",
-			Usage:  "Flags to pass to \"git checkout\" command",
-			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
+			Name:   "git-ssh-key",
+			Usage:  "SSH private key to use for git checkout",
+			EnvVar: "BUILDKITE_GIT_SSH_KEY",
 		},
-		cli.StringFlag{
-			Name:   "git-clone-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to \"git clone\" command",
-			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-mirror-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to \"git clone\" command when mirroring",
-			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clean-flags",
-			Value:  "-ffxdq",
-			Usage:  "Flags to pass to \"git clean\" command",
-			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-fetch-flags",
-			Value:  "",
-			Usage:  "Flags to pass to \"git fetch\" command",
-			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
-		},
-		cli.StringSliceFlag{
-			Name:   "git-submodule-clone-config",
-			Value:  &cli.StringSlice{},
-			Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands. For example, ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead.",
-			EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
-		},
-		cli.StringFlag{
-			Name:   "git-mirrors-path",
-			Value:  "",
-			Usage:  "Path to where mirrors of git repositories are stored",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
-		},
-		cli.IntFlag{
-			Name:   "git-mirrors-lock-timeout",
-			Value:  300,
-			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror (default: false)",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-		},
+		GitMirrorsPathFlag,
+		GitMirrorCheckoutModeFlag,
+		GitMirrorsLockTimeoutFlag,
+		GitMirrorsSkipUpdateFlag,
+		GitSubmoduleCloneConfigFlag,
+		GitCheckoutTimeoutFlag,
+		GitSkipFetchExistingCommitsFlag,
+		CheckoutAttemptsFlag,
+
 		cli.StringFlag{
 			Name:   "bin-path",
 			Value:  "",
 			Usage:  "Directory where the buildkite-agent binary lives",
 			EnvVar: "BUILDKITE_BIN_PATH",
 		},
-		cli.StringFlag{
-			Name:   "build-path",
-			Value:  "",
-			Usage:  "Directory where builds will be created",
-			EnvVar: "BUILDKITE_BUILD_PATH",
-		},
-		cli.StringFlag{
-			Name:   "hooks-path",
-			Value:  "",
-			Usage:  "Directory where the hook scripts are found",
-			EnvVar: "BUILDKITE_HOOKS_PATH",
-		},
-		cli.StringSliceFlag{
-			Name:   "additional-hooks-paths",
-			Value:  &cli.StringSlice{},
-			Usage:  "Any additional directories to look for agent hooks",
-			EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
-		},
+
+		// Various file path flags shared with agent start
+		BuildPathFlag,
+		HooksPathFlag,
+		AdditionalHooksPathsFlag,
 		SocketsPathFlag,
-		cli.StringFlag{
-			Name:   "plugins-path",
-			Value:  "",
-			Usage:  "Directory where the plugins are saved to",
-			EnvVar: "BUILDKITE_PLUGINS_PATH",
-		},
+		PluginsPathFlag,
+
 		cli.BoolTFlag{
 			Name:   "command-eval",
 			Usage:  "Allow running of arbitrary commands (default: true)",
@@ -353,7 +306,7 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Automatically run ssh-keyscan before checkout (default: true)",
 			EnvVar: "BUILDKITE_SSH_KEYSCAN",
 		},
-		cli.BoolTFlag{
+		cli.BoolTFlag{ // no-git-submodules in agent start
 			Name:   "git-submodules",
 			Usage:  "Enable git submodules (default: true)",
 			EnvVar: "BUILDKITE_GIT_SUBMODULES",
@@ -368,6 +321,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The shell to use to interpret build commands",
 			EnvVar: "BUILDKITE_SHELL",
 			Value:  DefaultShell(),
+		},
+		cli.StringFlag{
+			Name:   "hooks-shell",
+			Usage:  "The shell to use to interpret hooks commands",
+			EnvVar: "BUILDKITE_HOOKS_SHELL",
 		},
 		cli.StringSliceFlag{
 			Name:   "phases",
@@ -390,6 +348,12 @@ var BootstrapCommand = cli.Command{
 			Name:   "tracing-traceparent",
 			Usage:  "W3C Trace Parent for tracing",
 			EnvVar: "BUILDKITE_TRACING_TRACEPARENT",
+			Value:  "",
+		},
+		cli.StringFlag{
+			Name:   "tracing-tracestate",
+			Usage:  "W3C Trace State for tracing",
+			EnvVar: "BUILDKITE_TRACING_TRACESTATE",
 			Value:  "",
 		},
 		cli.BoolFlag{
@@ -453,6 +417,10 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
+		if !slices.Contains(mirrorCheckoutModes, cfg.GitMirrorCheckoutMode) {
+			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
+		}
+
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
@@ -481,6 +449,7 @@ var BootstrapCommand = cli.Command{
 			SignalGracePeriod:            signalGracePeriod,
 			CleanCheckout:                cfg.CleanCheckout,
 			SkipCheckout:                 cfg.SkipCheckout,
+			GitCheckoutTimeout:           cfg.GitCheckoutTimeout,
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
@@ -488,11 +457,15 @@ var BootstrapCommand = cli.Command{
 			Debug:                        cfg.Debug,
 			GitCheckoutFlags:             cfg.GitCheckoutFlags,
 			GitCleanFlags:                cfg.GitCleanFlags,
+			GitCommitVerification:        cfg.GitCommitVerification,
 			GitCloneFlags:                cfg.GitCloneFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
+			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
+			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
@@ -518,23 +491,27 @@ var BootstrapCommand = cli.Command{
 			RunInPty:                     runInPty,
 			SSHKeyscan:                   cfg.SSHKeyscan,
 			Shell:                        cfg.Shell,
+			HooksShell:                   cfg.HooksShell,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
 			TracingServiceName:           cfg.TracingServiceName,
 			TraceContextCodec:            traceContextCodec,
 			TracingTraceParent:           cfg.TracingTraceParent,
+			TracingTraceState:            cfg.TracingTraceState,
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			Secrets:                      cfg.Secrets,
+			CheckoutAttempts:             cfg.CheckoutAttempts,
 		})
 
 		cctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, os.Interrupt,
+		signal.Notify(
+			signals, os.Interrupt,
 			syscall.SIGHUP,
 			syscall.SIGTERM,
 			syscall.SIGINT,
@@ -556,7 +533,7 @@ var BootstrapCommand = cli.Command{
 
 			// Cancel the bootstrap
 			if err := bootstrap.Cancel(); err != nil {
-				l.Debug("Failed to cancel bootstrap: %v", err)
+				l.Debugf("Failed to cancel bootstrap: %v", err)
 			}
 
 			// Track the state and signal used
@@ -584,7 +561,7 @@ var BootstrapCommand = cli.Command{
 				return &SilentExitError{code: 131} // 128 + 3 (SIGQUIT).
 			}
 			if err := signalSelf(l, received); err != nil {
-				l.Error("Failed to signal self: %v", err)
+				l.Errorf("Failed to signal self: %v", err)
 			}
 		}
 
@@ -598,7 +575,7 @@ func signalSelf(l logger.Logger, sig os.Signal) error {
 		return fmt.Errorf("failed to find current process: %w", err)
 	}
 
-	l.Debug("Terminating bootstrap after cancellation with %v", sig)
+	l.Debugf("Terminating bootstrap after cancellation with %v", sig)
 	err = p.Signal(sig)
 	if err != nil {
 		return fmt.Errorf("failed to signal self: %v", err)

@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -25,8 +24,10 @@ func TestAddingToKnownHosts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen(tcp, %q) error = %v", svr.Addr, err)
 	}
-	go svr.Serve(ln)
-	defer svr.Close()
+	go func() {
+		_ = svr.Serve(ln)
+	}()
+	defer func() { _ = svr.Close() }()
 
 	hostAddr := ln.Addr().String()
 	repoURL := fmt.Sprintf("ssh://git@%s/var/cache/git/project.git", hostAddr)
@@ -62,7 +63,7 @@ func TestAddingToKnownHosts(t *testing.T) {
 
 	// Add the host - this resolves any SSH client configuration
 	// (in case the URL contains an alias), and runs ssh-keyscan to get its key.
-	if err := kh.AddFromRepository(context.Background(), repoURL); err != nil {
+	if err := kh.AddFromRepository(t.Context(), repoURL); err != nil {
 		t.Errorf("kh.AddFromRespository(%q) = %v", repoURL, err)
 	}
 

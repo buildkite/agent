@@ -78,19 +78,15 @@ func pause(ctx context.Context, cfg AgentPauseConfig, l logger.Logger) error {
 			TimeoutInMinutes: cfg.TimeoutInMinutes,
 		})
 
-		// Don't bother retrying if the response was one of these statuses
-		if resp != nil && resp.StatusCode == 422 {
-			r.Break()
+		if api.BreakOnNonRetryable(r, resp, err) {
 			return err
 		}
-
-		// Show the unexpected error
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return err
 		}
 
-		l.Info("Successfully paused agent")
+		l.Infof("Successfully paused agent")
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to pause agent: %w", err)

@@ -4,10 +4,11 @@ import (
 	"log"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/tracetools"
 )
 
@@ -19,6 +20,7 @@ import (
 // To add a new config option that is mapped from an environment variable, add a
 // struct tag, then don't forget to add a corresponding CLI flag over in the
 // clicommand/bootstrap.go(BootstrapConfig) struct, otherwise it won't work.
+// Also check the protectedEnv map in env/protected.go.
 
 type ExecutorConfig struct {
 	// The command to run
@@ -78,8 +80,14 @@ type ExecutorConfig struct {
 	// Skip the checkout phase entirely
 	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
 
+	// Comma-separated list of paths for git sparse checkout (cone mode).
+	GitSparseCheckoutPaths []string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"`
+
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
+
+	// Timeout in seconds for the git checkout phase (0 means no timeout)
+	GitCheckoutTimeout int `env:"BUILDKITE_GIT_CHECKOUT_TIMEOUT"`
 
 	// Flags to pass to "git checkout" command
 	GitCheckoutFlags string `env:"BUILDKITE_GIT_CHECKOUT_FLAGS"`
@@ -93,11 +101,20 @@ type ExecutorConfig struct {
 	// Flags to pass to "git clone" command for mirroring
 	GitCloneMirrorFlags string `env:"BUILDKITE_GIT_CLONE_MIRROR_FLAGS"`
 
+	// Selects among preconfigured sets of flags for clones from a mirror
+	GitMirrorCheckoutMode string `env:"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE"`
+
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 
+	// SSH private key to use for git checkout operations
+	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
+
+	// Enable git commit verification
+	GitCommitVerification string
+
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
-	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG" normalize:"list"`
+	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`
 
 	// Whether or not to run the hooks/commands in a PTY
 	RunInPty bool
@@ -159,6 +176,9 @@ type ExecutorConfig struct {
 	// The shell used to execute commands
 	Shell string
 
+	// The shell used to execute agent hooks
+	HooksShell string
+
 	// Phases to execute, defaults to all phases
 	Phases []string
 
@@ -181,6 +201,12 @@ type ExecutorConfig struct {
 	// Traceing context information
 	TracingTraceParent string
 
+	// W3C tracestate accompanying TracingTraceParent. Plumbed through to the
+	// bootstrap environment whenever the server provides a value, but only
+	// attached to the OTel span context when TracingPropagateTraceparent is
+	// enabled (same opt-in gate as TracingTraceParent).
+	TracingTraceState string
+
 	// Accept traceparent context from Buildkite control plane
 	TracingPropagateTraceparent bool
 
@@ -195,6 +221,10 @@ type ExecutorConfig struct {
 
 	// Secrets definition for the job step
 	Secrets string
+
+	// Number of checkout attempts (including the initial attempt).
+	// Uses exponential backoff with jitter between retries.
+	CheckoutAttempts int
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
@@ -203,7 +233,7 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 	changed := map[string]string{}
 
 	// Use reflection for the type and values
-	fields := reflect.TypeOf(*c)
+	fields := reflect.TypeFor[ExecutorConfig]()
 	values := reflect.ValueOf(c).Elem()
 
 	// Iterate over all available fields and read the tag value
@@ -222,10 +252,11 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 				}
 				v.SetString(newStr)
 				changed[tag] = newStr
+
 			case reflect.Bool:
 				newBool, err := strconv.ParseBool(newStr)
 				if err != nil {
-					log.Printf("warning: cannot parse %s=%s as bool, ignoring", tag, newStr)
+					log.Printf("warning: cannot parse %s=%q as bool, ignoring", tag, newStr)
 					break
 				}
 				if newBool == v.Bool() {
@@ -233,6 +264,28 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 				}
 				v.SetBool(newBool)
 				changed[tag] = newStr
+
+			case reflect.Int:
+				newInt, err := strconv.Atoi(newStr)
+				if err != nil {
+					log.Printf("warning: cannot parse %s=%q as int, ignoring", tag, newStr)
+					break
+				}
+				if int64(newInt) == v.Int() {
+					break
+				}
+				v.SetInt(int64(newInt))
+				changed[tag] = newStr
+
+			case reflect.Slice:
+				if v.Type().Elem() != reflect.TypeFor[string]() {
+					log.Printf("warning: cannot parse %s=%q as %v, ignoring", tag, newStr, v.Type())
+					break
+				}
+				slice := strings.Split(newStr, ",")
+				v.Set(reflect.ValueOf(slice))
+				changed[tag] = newStr
+
 			default:
 				log.Printf("warning: job.ExecutorConfig.ReadFromEnvironment does not support %v for %s", v.Kind(), tag)
 			}

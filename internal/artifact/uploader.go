@@ -25,6 +25,8 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
 	"github.com/dustin/go-humanize"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const ArtifactFallbackMimeType = "binary/octet-stream"
@@ -61,6 +63,10 @@ type UploaderConfig struct {
 
 	// Whether to allow multipart uploads to the BK-hosted bucket
 	AllowMultipart bool
+
+	// How many upload operations to run concurrently. When zero, defaults to
+	// DefaultUploadConcurrency.
+	UploadConcurrency int
 }
 
 type Uploader struct {
@@ -74,6 +80,80 @@ type Uploader struct {
 	apiClient APIClient
 }
 
+type artifactUploadTimings struct {
+	collectDuration time.Duration
+	createDuration  time.Duration
+	uploadDuration  time.Duration
+	stateDuration   time.Duration
+
+	artifactCount    int
+	artifactBytes    int64
+	batches          int
+	workUnits        int
+	maxWorkerCount   int
+	stateUpdateCount int
+}
+
+type artifactUploadBatchStats struct {
+	workUnits      int
+	workerCount    int
+	uploadDuration time.Duration
+
+	stateUpdateDuration time.Duration
+	stateUpdateCount    int
+}
+
+func (t *artifactUploadTimings) addArtifacts(artifacts []*api.Artifact) {
+	t.artifactCount = len(artifacts)
+	for _, artifact := range artifacts {
+		t.artifactBytes += artifact.FileSize
+	}
+}
+
+func (t *artifactUploadTimings) addCreateBatch(duration time.Duration) {
+	t.createDuration += duration
+	t.batches++
+}
+
+func (t *artifactUploadTimings) addUploadBatch(stats artifactUploadBatchStats) {
+	t.uploadDuration += stats.uploadDuration
+	t.stateDuration += stats.stateUpdateDuration
+	t.workUnits += stats.workUnits
+	t.stateUpdateCount += stats.stateUpdateCount
+	t.maxWorkerCount = max(t.maxWorkerCount, stats.workerCount)
+}
+
+func (t *artifactUploadTimings) setSpanAttributes(ctx context.Context) {
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.Int("artifact.count", t.artifactCount),
+		attribute.Int64("artifact.bytes", t.artifactBytes),
+		attribute.Int("artifact.batch_count", t.batches),
+		attribute.Int("artifact.work_unit_count", t.workUnits),
+		attribute.Int("artifact.max_workers", t.maxWorkerCount),
+		attribute.Int("artifact.state_update_count", t.stateUpdateCount),
+		attribute.Int64("artifact.collect_ms", t.collectDuration.Milliseconds()),
+		attribute.Int64("artifact.create_ms", t.createDuration.Milliseconds()),
+		attribute.Int64("artifact.upload_ms", t.uploadDuration.Milliseconds()),
+		attribute.Int64("artifact.state_update_ms", t.stateDuration.Milliseconds()),
+	)
+}
+
+func (t *artifactUploadTimings) logSummary(l logger.Logger) {
+	l.Infof(
+		"Artifact upload timings: collect=%s create=%s upload=%s state_update=%s artifacts=%d bytes=%s batches=%d work_units=%d max_workers=%d state_updates=%d",
+		t.collectDuration,
+		t.createDuration,
+		t.uploadDuration,
+		t.stateDuration,
+		t.artifactCount,
+		humanize.IBytes(uint64(t.artifactBytes)),
+		t.batches,
+		t.workUnits,
+		t.maxWorkerCount,
+		t.stateUpdateCount,
+	)
+}
+
 func NewUploader(l logger.Logger, ac APIClient, c UploaderConfig) *Uploader {
 	return &Uploader{
 		logger:    l,
@@ -82,19 +162,27 @@ func NewUploader(l logger.Logger, ac APIClient, c UploaderConfig) *Uploader {
 	}
 }
 
+func DefaultUploadConcurrency() int {
+	return runtime.GOMAXPROCS(0)
+}
+
 func (a *Uploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
+	timings := &artifactUploadTimings{}
+	collectStart := time.Now()
 	artifacts, err := a.collect(ctx)
+	timings.collectDuration = time.Since(collectStart)
 	if err != nil {
 		return fmt.Errorf("collecting artifacts: %w", err)
 	}
 
 	if len(artifacts) == 0 {
-		a.logger.Info("No files matched paths: %s", a.conf.Paths)
+		a.logger.Infof("No files matched paths: %s", a.conf.Paths)
 		return nil
 	}
 
-	a.logger.Info("Found %d files that match %q", len(artifacts), a.conf.Paths)
+	a.logger.Infof("Found %d files that match %q", len(artifacts), a.conf.Paths)
+	timings.addArtifacts(artifacts)
 
 	// Determine what uploader to use
 	uploader, err := a.createUploader(ctx)
@@ -107,22 +195,35 @@ func (a *Uploader) Upload(ctx context.Context) error {
 		artifact.URL = uploader.URL(artifact)
 	}
 
-	// Batch-create the artifact records on Buildkite
+	// Batch-create artifact records on Buildkite and upload each batch
+	// immediately. This keeps presigned upload URLs fresh — if all
+	// artifacts were were created upfront in a single batch, URLs for artifacts near the
+	// end of the queue could expire before the agent gets to them.
 	batchCreator := NewArtifactBatchCreator(a.logger, a.apiClient, BatchCreatorConfig{
 		JobID:                  a.conf.JobID,
 		Artifacts:              artifacts,
 		UploadDestination:      a.conf.Destination,
 		CreateArtifactsTimeout: 10 * time.Second,
 		AllowMultipart:         a.conf.AllowMultipart,
+		OnBatchCreated: func(count int, duration time.Duration) {
+			timings.addCreateBatch(duration)
+			a.logger.Debugf("Created %d artifacts in %s", count, duration)
+		},
 	})
-	artifacts, err = batchCreator.Create(ctx)
-	if err != nil {
-		return err
+	for chunk, err := range batchCreator.Batches(ctx) {
+		if err != nil {
+			return err
+		}
+		stats, err := a.upload(ctx, chunk, uploader)
+		timings.addUploadBatch(stats)
+		if err != nil {
+			return fmt.Errorf("uploading artifacts: %w", err)
+		}
+		a.logger.Debugf("Uploaded %d artifact work units with %d workers in %s", stats.workUnits, stats.workerCount, stats.uploadDuration)
 	}
 
-	if err := a.upload(ctx, artifacts, uploader); err != nil {
-		return fmt.Errorf("uploading artifacts: %w", err)
-	}
+	timings.setSpanAttributes(ctx)
+	timings.logSummary(a.logger)
 
 	return nil
 }
@@ -165,14 +266,11 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 	defer cancel(nil)
 	var wg sync.WaitGroup
 	for range runtime.GOMAXPROCS(0) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			if err := ac.worker(wctx, filesCh); err != nil {
 				cancel(err)
 			}
-		}()
+		})
 	}
 
 	fileFinder := a.glob
@@ -181,12 +279,16 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 	}
 
 	// Start resolving globs (or not) and sending file paths to workers.
-	a.logger.Debug("Searching for %s", a.conf.Paths)
+	a.logger.Debugf("Searching for %s", a.conf.Paths)
+	searchStart := time.Now()
 	if err := fileFinder(wctx, a.paths(), filesCh); err != nil {
 		cancel(err)
 	}
+	a.logger.Debugf("Artifact path discovery finished in %s", time.Since(searchStart))
 
+	drainStart := time.Now()
 	wg.Wait()
+	a.logger.Debugf("Artifact collection workers drained in %s", time.Since(drainStart))
 
 	if err := context.Cause(wctx); err != nil {
 		return nil, err
@@ -222,7 +324,11 @@ func (a *Uploader) literal(ctx context.Context, paths iter.Seq[string], filesCh 
 		if path == "" {
 			continue
 		}
-		filesCh <- path
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case filesCh <- path:
+		}
 	}
 	return nil
 }
@@ -249,15 +355,19 @@ func (a *Uploader) glob(ctx context.Context, paths iter.Seq[string], filesCh cha
 
 	walkDirFunc := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			a.logger.Warn("Couldn't walk path %s", path)
+			a.logger.Warnf("Couldn't walk path %s", path)
 			return nil
 		}
 		if d != nil && d.IsDir() {
-			a.logger.Warn("One of the glob patterns matched a directory: %s", path)
+			a.logger.Warnf("One of the glob patterns matched a directory: %s", path)
 			return nil
 		}
-		filesCh <- path
-		return nil
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case filesCh <- path:
+			return nil
+		}
 	}
 	err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
 	if err != nil {
@@ -297,18 +407,18 @@ func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) e
 		c.mu.Unlock()
 
 		if seen {
-			c.logger.Debug("Skipping duplicate path %s", file)
+			c.logger.Debugf("Skipping duplicate path %s", file)
 			continue
 		}
 
 		// Ignore directories, we only want files
 		if isDir(absolutePath) {
-			c.logger.Debug("Skipping directory %s", file)
+			c.logger.Debugf("Skipping directory %s", file)
 			continue
 		}
 
 		if c.conf.UploadSkipSymlinks && isSymlink(absolutePath) {
-			c.logger.Debug("Skipping symlink %s", file)
+			c.logger.Debugf("Skipping symlink %s", file)
 			continue
 		}
 
@@ -397,12 +507,12 @@ func (a *Uploader) createUploader(ctx context.Context) (_ workCreator, err error
 		if err != nil || dest == "" {
 			return
 		}
-		a.logger.Info("Uploading to %s (%q), using your agent configuration", dest, a.conf.Destination)
+		a.logger.Infof("Uploading to %s (%q), using your agent configuration", dest, a.conf.Destination)
 	}()
 
 	switch {
 	case a.conf.Destination == "":
-		a.logger.Info("Uploading to default Buildkite artifact storage")
+		a.logger.Infof("Uploading to default Buildkite artifact storage")
 		return NewBKUploader(a.logger, BKUploaderConfig{
 			DebugHTTP:    a.conf.DebugHTTP,
 			TraceHTTP:    a.conf.TraceHTTP,
@@ -476,13 +586,13 @@ type workUnitResult struct {
 type artifactUploadWorker struct {
 	*Uploader
 
-	// Counts the worker goroutines.
-	wg sync.WaitGroup
-
 	// A tracker for every artifact.
 	// The map is written at the start of upload, and other goroutines only read
 	// afterwards.
 	trackers map[*api.Artifact]*artifactTracker
+
+	stateUpdateDuration time.Duration
+	stateUpdateCount    int
 }
 
 // artifactTracker tracks the amount of work pending for an artifact.
@@ -523,19 +633,22 @@ type artifactTracker struct {
 	api.ArtifactState
 }
 
-func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, uploader workCreator) error {
+func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, uploader workCreator) (artifactUploadBatchStats, error) {
 	worker := &artifactUploadWorker{
 		Uploader: a,
 		trackers: make(map[*api.Artifact]*artifactTracker),
 	}
+	stats := artifactUploadBatchStats{}
 
 	// Create work and trackers for each artifact.
+	var workUnitCount int
 	for _, artifact := range artifacts {
 		workUnits, err := uploader.CreateWork(artifact)
 		if err != nil {
-			a.logger.Error("Couldn't create upload workers for artifact %q: %v", artifact.Path, err)
-			return err
+			a.logger.Errorf("Couldn't create upload workers for artifact %q: %v", artifact.Path, err)
+			return stats, err
 		}
+		workUnitCount += len(workUnits)
 
 		actx, acancel := context.WithCancelCause(ctx)
 		worker.trackers[artifact] = &artifactTracker{
@@ -550,6 +663,14 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 		}
 	}
 
+	workerCount := a.uploadWorkerCount(workUnitCount)
+	stats.workUnits = workUnitCount
+	stats.workerCount = workerCount
+	if workerCount == 0 {
+		return stats, nil
+	}
+	a.logger.Debugf("Uploading %d artifact work units with %d workers", workUnitCount, workerCount)
+
 	// unitsCh: work unit creation --(work unit to be run)--> multiple worker goroutines
 	unitsCh := make(chan workUnit)
 	// resultsCh: multiple worker goroutines --(work unit result)--> state updater
@@ -562,18 +683,19 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	go worker.stateUpdater(ctx, resultsCh, errCh)
 
 	// Worker goroutines that work on work units.
-	for range runtime.GOMAXPROCS(0) {
-		worker.wg.Add(1)
-		go worker.doWorkUnits(ctx, unitsCh, resultsCh)
+	var wg sync.WaitGroup
+	for range workerCount {
+		wg.Go(func() { worker.doWorkUnits(ctx, unitsCh, resultsCh) })
 	}
 
 	// Send the work units for each artifact to the workers.
 	// This must happen after creating worker goroutines listening on workUnitsCh.
+	uploadStart := time.Now()
 	for _, tracker := range worker.trackers {
 		for _, workUnit := range tracker.work {
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return stats, ctx.Err()
 			case unitsCh <- workUnit:
 			}
 		}
@@ -582,30 +704,46 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	// All work units have been sent to workers.
 	close(unitsCh)
 
-	a.logger.Debug("Waiting for uploads to complete...")
+	a.logger.Debugf("Waiting for uploads to complete...")
 
 	// Wait for the workers to finish
-	worker.wg.Wait()
+	wg.Wait()
+	stats.uploadDuration = time.Since(uploadStart)
 
 	// Since the workers are done, all work unit states have been sent to the
 	// state updater.
 	close(resultsCh)
 
-	a.logger.Debug("Uploads complete, waiting for upload status to be sent to Buildkite...")
+	a.logger.Debugf("Uploads complete, waiting for upload status to be sent to Buildkite...")
 
 	// Wait for the statuses to finish uploading
 	if err := <-errCh; err != nil {
-		return fmt.Errorf("errors uploading artifacts: %w", err)
+		stats.stateUpdateDuration = worker.stateUpdateDuration
+		stats.stateUpdateCount = worker.stateUpdateCount
+		return stats, fmt.Errorf("errors uploading artifacts: %w", err)
+	}
+	stats.stateUpdateDuration = worker.stateUpdateDuration
+	stats.stateUpdateCount = worker.stateUpdateCount
+
+	a.logger.Infof("Artifact uploads completed successfully")
+
+	return stats, nil
+}
+
+func (a *Uploader) uploadWorkerCount(workUnitCount int) int {
+	if workUnitCount <= 0 {
+		return 0
 	}
 
-	a.logger.Info("Artifact uploads completed successfully")
+	concurrency := a.conf.UploadConcurrency
+	if concurrency <= 0 {
+		concurrency = DefaultUploadConcurrency()
+	}
 
-	return nil
+	return min(concurrency, workUnitCount)
 }
 
 func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan workUnit, resultsCh chan<- workUnitResult) {
-	defer a.wg.Done()
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -617,7 +755,7 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 			}
 			tracker := a.trackers[workUnit.Artifact()]
 			// Show a nice message that we're starting to upload the file
-			a.logger.Info("Uploading %s", workUnit.Description())
+			a.logger.Infof("Uploading %s", workUnit.Description())
 
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
@@ -629,13 +767,13 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 			partETag, err := roko.DoFunc(tracker.ctx, r, func(r *roko.Retrier) (*api.ArtifactPartETag, error) {
 				etag, err := workUnit.DoWork(tracker.ctx)
 				if err != nil {
-					a.logger.Warn("%s (%s)", err, r)
+					a.logger.Warnf("%s (%s)", err, r)
 				}
 				return etag, err
 			})
 			// If it failed, abort any other work items for this artifact.
 			if err != nil {
-				a.logger.Info("Upload failed for %s: %v", workUnit.Description(), err)
+				a.logger.Infof("Upload failed for %s: %v", workUnit.Description(), err)
 				tracker.cancel(err)
 				// then the error is sent to the status updater
 			}
@@ -684,7 +822,7 @@ selectLoop:
 					artifactUploadFailures.Inc()
 				}
 				tracker.State = "error"
-				a.logger.Debug("Artifact %s has entered state %s", tracker.ID, tracker.State)
+				a.logger.Debugf("Artifact %s has entered state %s", tracker.ID, tracker.State)
 				continue
 			}
 
@@ -703,7 +841,7 @@ selectLoop:
 			tracker.State = "finished"
 			artifactsUploaded.Inc()
 			artifactBytesUploaded.Add(float64(artifact.FileSize))
-			a.logger.Debug("Artifact %s has entered state %s", tracker.ID, tracker.State)
+			a.logger.Debugf("Artifact %s has entered state %s", tracker.ID, tracker.State)
 		}
 	}
 
@@ -751,6 +889,7 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 	timeout := 5 * time.Second
 
 	// Update the states of the artifacts in bulk.
+	started := time.Now()
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
@@ -764,7 +903,7 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 
 		_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, statesToUpload)
 		if err != nil {
-			a.logger.Warn("%s (%s)", err, r)
+			a.logger.Warnf("%s (%s)", err, r)
 		}
 
 		// after four attempts (0, 1, 2, 3)...
@@ -772,14 +911,17 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 			// The short timeout has given us fast feedback on the first couple of attempts,
 			// but perhaps the server needs more time to complete the request, so fall back to
 			// the default HTTP client timeout.
-			a.logger.Debug("UpdateArtifacts timeout (%s) removed for subsequent attempts", timeout)
+			a.logger.Debugf("UpdateArtifacts timeout (%s) removed for subsequent attempts", timeout)
 			timeout = 0
 		}
 
 		return err
 	})
+	duration := time.Since(started)
+	a.stateUpdateDuration += duration
+	a.stateUpdateCount++
 	if err != nil {
-		a.logger.Error("Error updating artifact states: %v", err)
+		a.logger.Errorf("Error updating artifact states: %v", err)
 		return err
 	}
 
@@ -787,7 +929,7 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 		// Don't send this state again.
 		tracker.State = "sent"
 	}
-	a.logger.Debug("Updated %d artifact states", len(statesToUpload))
+	a.logger.Debugf("Updated %d artifact states in %s", len(statesToUpload), duration)
 	return nil
 }
 

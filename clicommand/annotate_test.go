@@ -1,22 +1,22 @@
 package clicommand
 
 import (
-	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func newAnnotateTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
 		case "/jobs/jobid/annotations":
-			io.WriteString(rw, `{"context":"", style:"", body:"abc"}`)
+			_, _ = io.WriteString(rw, `{"context":"", style:"", body:"abc"}`)
 		default:
 			t.Errorf("unexpected HTTP request: %s %v", req.Method, req.URL.RequestURI())
 		}
@@ -27,7 +27,6 @@ func TestAnnotate(t *testing.T) {
 	server := newAnnotateTestServer(t)
 	defer server.Close()
 
-	ctx := context.Background()
 	cfg := AnnotateConfig{
 		Body: "abc",
 		Job:  "jobid",
@@ -39,18 +38,24 @@ func TestAnnotate(t *testing.T) {
 	}
 	l := logger.NewBuffer()
 
-	err := annotate(ctx, cfg, l)
-	assert.NoError(t, err)
-	assert.Contains(t, l.Messages, "[debug] Successfully annotated build")
+	err := annotate(t.Context(), cfg, l)
+	if err != nil {
+		t.Errorf("annotate(ctx, %v, l) error = %v", cfg, err)
+	}
+	if want := "[debug] Successfully annotated build"; !slices.Contains(l.Messages, want) {
+		t.Errorf("annotate(ctx, %v, l) logged messages = %q, missing %q", cfg, l.Messages, want)
+	}
 }
 
 func TestAnnotateMaxBodySize(t *testing.T) {
-	ctx := context.Background()
 	cfg := AnnotateConfig{
 		Body: strings.Repeat("a", 1048577),
 	}
 	l := logger.NewBuffer()
 
-	err := annotate(ctx, cfg, l)
-	assert.Error(t, err, "Annotation body size (1048577) exceeds maximum (1048576)")
+	err := annotate(t.Context(), cfg, l)
+	wantErr := annotationTooBigError{bodySize: 1048577}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("annotate(ctx, AnnotateConfig{Body: \"aaa...aaa\"}, l) error = %v, want %[2]T %[2]v", err, wantErr)
+	}
 }

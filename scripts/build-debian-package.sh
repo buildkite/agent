@@ -52,7 +52,7 @@ mkdir -p "$DESTINATION_PATH"
 
 info "Installing dependencies"
 
-bundle check || bundle
+bundle check || bundle install
 
 info "Building debian package $PACKAGE_NAME to $DESTINATION_PATH"
 

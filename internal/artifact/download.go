@@ -15,6 +15,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/agenthttp"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
@@ -24,9 +25,6 @@ import (
 const (
 	headerUserAgent = "User-Agent"
 )
-
-// Real umask set by init func in download_unix.go. 0o022 is a common default.
-var umask = os.FileMode(0o022)
 
 type DownloadConfig struct {
 	// The actual URL to get the file from
@@ -81,7 +79,7 @@ func (d Download) Start(ctx context.Context) error {
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		if err := d.try(ctx); err != nil {
-			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, r)
+			d.logger.Warnf("Error trying to download %s (%s) %s", d.conf.URL, err, r)
 			return err
 		}
 		return nil
@@ -132,7 +130,7 @@ func (d Download) try(ctx context.Context) error {
 	targetDirectory, targetFile := filepath.Split(targetPath)
 
 	// Show a nice message that we're starting to download the file
-	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetPath)
+	d.logger.Debugf("Downloading %s to %s", d.conf.URL, targetPath)
 
 	method := cmp.Or(d.conf.Method, http.MethodGet)
 
@@ -194,7 +192,7 @@ func (d Download) try(ctx context.Context) error {
 	// os.CreateTemp uses 0o600 permissions, but in the past we used os.Create
 	// which uses 0x666. Since these are set at open time, they are restricted
 	// by umask.
-	if err := temp.Chmod(0o666 &^ umask); err != nil {
+	if err := temp.Chmod(0o666 &^ osutil.Umask); err != nil {
 		return fmt.Errorf("setting file permissions (%T: %w)", err, err)
 	}
 
@@ -217,7 +215,7 @@ func (d Download) try(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
 	}
 
-	d.logger.Info("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
+	d.logger.Infof("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
 
 	return nil
 }

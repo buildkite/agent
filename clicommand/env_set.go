@@ -69,7 +69,7 @@ var EnvSetCommand = cli.Command{
 
 func envSetAction(c *cli.Context) error {
 	ctx := context.Background()
-	ctx, cfg, l, _, done := setupLoggerAndConfig[EnvSetConfig](ctx, c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[EnvSetConfig](ctx, c)
 	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)
@@ -129,7 +129,7 @@ func envSetAction(c *cli.Context) error {
 
 	resp, err := client.EnvUpdate(ctx, req)
 	if err != nil {
-		l.Error("Couldn't update the job executor environment: %v", err)
+		return fmt.Errorf("couldn't update the job executor environment: %w", err)
 	}
 
 	switch cfg.OutputFormat {
@@ -138,19 +138,19 @@ func envSetAction(c *cli.Context) error {
 
 	case "plain":
 		if len(resp.Added) > 0 {
-			fmt.Fprintln(c.App.Writer, "Added:")
+			_, _ = fmt.Fprintln(c.App.Writer, "Added:")
 			for _, a := range resp.Added {
-				fmt.Fprintf(c.App.Writer, "+ %s\n", a)
+				_, _ = fmt.Fprintf(c.App.Writer, "+ %s\n", a)
 			}
 		}
 		if len(resp.Updated) > 0 {
-			fmt.Fprintln(c.App.Writer, "Updated:")
+			_, _ = fmt.Fprintln(c.App.Writer, "Updated:")
 			for _, u := range resp.Updated {
-				fmt.Fprintf(c.App.Writer, "~ %s\n", u)
+				_, _ = fmt.Fprintf(c.App.Writer, "~ %s\n", u)
 			}
 		}
 		if len(resp.Added) == 0 && len(resp.Updated) == 0 {
-			fmt.Fprintln(c.App.Writer, "No variables added or updated.")
+			_, _ = fmt.Fprintln(c.App.Writer, "No variables added or updated.")
 		}
 
 	case "json", "json-pretty":

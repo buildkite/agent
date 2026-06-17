@@ -57,7 +57,9 @@ func NewClient(ctx context.Context, path, token string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("socket test connection: %w", err)
 	}
-	test.Close()
+	if err := test.Close(); err != nil {
+		return nil, fmt.Errorf("closing socket test connection: %w", err)
+	}
 
 	return &Client{
 		cli: &http.Client{
@@ -98,7 +100,7 @@ func (c *Client) Do(ctx context.Context, method, url string, req, resp any) erro
 	if err != nil {
 		return err
 	}
-	defer hresp.Body.Close()
+	defer func() { _ = hresp.Body.Close() }()
 	dec := json.NewDecoder(hresp.Body)
 
 	switch hresp.StatusCode / 100 {

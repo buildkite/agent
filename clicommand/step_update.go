@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const stepUpdateHelpDescription = `Usage:
@@ -82,10 +83,12 @@ var StepUpdateCommand = cli.Command{
 	Action: func(c *cli.Context) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[StepUpdateConfig](context.Background(), c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "step-update")
+		defer span.End()
 
 		// Read the value from STDIN if argument omitted entirely
 		if len(c.Args()) < 2 {
-			l.Info("Reading value from STDIN")
+			l.Infof("Reading value from STDIN")
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
@@ -103,7 +106,7 @@ var StepUpdateCommand = cli.Command{
 			return err
 		}
 		if redactedValue := redact.String(cfg.Value, needles); redactedValue != cfg.Value {
-			l.Warn("New value for step %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.StepOrKey, cfg.Attribute)
+			l.Warnf("New value for step %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.StepOrKey, cfg.Attribute)
 			cfg.Value = redactedValue
 		}
 
@@ -127,11 +130,11 @@ var StepUpdateCommand = cli.Command{
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			resp, err := client.StepUpdate(ctx, cfg.StepOrKey, update)
-			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 				return err
 			}
 			return nil

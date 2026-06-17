@@ -67,7 +67,7 @@ var EnvUnsetCommand = cli.Command{
 
 func envUnsetAction(c *cli.Context) error {
 	ctx := context.Background()
-	ctx, cfg, l, _, done := setupLoggerAndConfig[EnvUnsetConfig](ctx, c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[EnvUnsetConfig](ctx, c)
 	defer done()
 
 	client, err := jobapi.NewDefaultClient(ctx)
@@ -92,7 +92,7 @@ func envUnsetAction(c *cli.Context) error {
 		}
 
 	default:
-		fmt.Fprintf(c.App.ErrWriter, "Invalid input format %q\n", c.String("input-format"))
+		_, _ = fmt.Fprintf(c.App.ErrWriter, "Invalid input format %q\n", c.String("input-format"))
 	}
 
 	// Inspect each arg, which could either be "-" for stdin, or "KEY"
@@ -120,7 +120,7 @@ func envUnsetAction(c *cli.Context) error {
 
 	unset, err := client.EnvDelete(ctx, del)
 	if err != nil {
-		l.Error("couldn't unset the job executor environment variables: %v", err)
+		return fmt.Errorf("couldn't unset the job executor environment variables: %w", err)
 	}
 
 	switch cfg.OutputFormat {
@@ -129,12 +129,12 @@ func envUnsetAction(c *cli.Context) error {
 
 	case "plain":
 		if len(unset) > 0 {
-			fmt.Fprintln(c.App.Writer, "Unset:")
+			_, _ = fmt.Fprintln(c.App.Writer, "Unset:")
 			for _, d := range unset {
-				fmt.Fprintf(c.App.Writer, "- %s\n", d)
+				_, _ = fmt.Fprintf(c.App.Writer, "- %s\n", d)
 			}
 		} else {
-			fmt.Fprintln(c.App.Writer, "No variables unset.")
+			_, _ = fmt.Fprintln(c.App.Writer, "No variables unset.")
 		}
 
 	case "json", "json-pretty":

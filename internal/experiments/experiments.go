@@ -32,6 +32,7 @@ const (
 	PTYRaw                         = "pty-raw"
 	ResolveCommitAfterCheckout     = "resolve-commit-after-checkout"
 	PropagateAgentConfigVars       = "propagate-agent-config-vars"
+	ZipPlugins                     = "zip-plugins"
 
 	// Promoted experiments
 	ANSITimestamps         = "ansi-timestamps"
@@ -57,6 +58,7 @@ var (
 		PTYRaw:                         {},
 		ResolveCommitAfterCheckout:     {},
 		PropagateAgentConfigVars:       {},
+		ZipPlugins:                     {},
 	}
 
 	Promoted = map[string]string{
@@ -93,9 +95,9 @@ func EnableWithWarnings(ctx context.Context, l logger.Logger, key string) (conte
 	case StateKnown:
 	// Noop
 	case StateUnknown:
-		l.Warn("Unknown experiment %q", key)
+		l.Warnf("Unknown experiment %q", key)
 	case StatePromoted:
-		l.Warn(Promoted[key])
+		l.Warnf(Promoted[key])
 	}
 	return newctx, state
 }

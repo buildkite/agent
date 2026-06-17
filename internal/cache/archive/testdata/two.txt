@@ -1,0 +1,33 @@
+%  go test -v -cover ./...
+        github.com/wolfeidau/zipstash              coverage: 0.0% of statements
+        github.com/wolfeidau/zipstash/internal/commands            coverage: 0.0% of statements
+        github.com/wolfeidau/zipstash/internal/api         coverage: 0.0% of statements
+        github.com/wolfeidau/zipstash/internal/commands/client             coverage: 0.0% of statements
+        github.com/wolfeidau/zipstash/internal/ciauth              coverage: 0.0% of statements
+        github.com/wolfeidau/zipstash/internal/uploader            coverage: 0.0% of statements
+        github.com/wolfeidau/zipstash/pkg/trace               coverage: 0.0% of statements
+        github.com/wolfeidau/zipstash/pkg/client           coverage: 0.0% of statements
+=== RUN   TestIsUnderHome
+=== RUN   TestIsUnderHome/path_under_home_directory
+=== RUN   TestIsUnderHome/path_not_under_home_directory
+=== RUN   TestIsUnderHome/relative_path_under_home
+=== RUN   TestIsUnderHome/empty_path
+=== RUN   TestIsUnderHome/path_with_symlinks
+--- PASS: TestIsUnderHome (0.00s)
+    --- PASS: TestIsUnderHome/path_under_home_directory (0.00s)
+    --- PASS: TestIsUnderHome/path_not_under_home_directory (0.00s)
+    --- PASS: TestIsUnderHome/relative_path_under_home (0.00s)
+    --- PASS: TestIsUnderHome/empty_path (0.00s)
+    --- PASS: TestIsUnderHome/path_with_symlinks (0.00s)
+PASS
+coverage: 15.0% of statements
+ok      github.com/wolfeidau/zipstash/internal/archive     0.268s  coverage: 15.0% of statements
+=== RUN   TestOffsetsForDownload
+=== RUN   TestOffsetsForDownload/10MB
+=== RUN   TestOffsetsForDownload/14MB
+--- PASS: TestOffsetsForDownload (0.00s)
+    --- PASS: TestOffsetsForDownload/10MB (0.00s)
+    --- PASS: TestOffsetsForDownload/14MB (0.00s)
+PASS
+coverage: 9.8% of statements
+ok      github.com/wolfeidau/zipstash/internal/server      0.458s  coverage: 9.8% of statements

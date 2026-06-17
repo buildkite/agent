@@ -114,18 +114,19 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 		return nil, err
 	}
 
-	// Create an uploader with the session and default options
+	// Create an uploader with the session and default options.
+	//nolint:staticcheck // The pinned aws-sdk-go-v2 feature/s3 module in this repo does not yet provide transfermanager.
 	uploader := manager.NewUploader(u.client)
 
 	// Open file from filesystem
-	u.logger.Debug("Reading file %q", u.artifact.AbsolutePath)
+	u.logger.Debugf("Reading file %q", u.artifact.AbsolutePath)
 	f, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to S3.
-	u.logger.Debug("Uploading %q to bucket with permission %q", u.artifactPath(u.artifact), permission)
+	u.logger.Debugf("Uploading %q to bucket with permission %q", u.artifactPath(u.artifact), permission)
 
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(u.BucketName),
@@ -140,6 +141,7 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 		params.ServerSideEncryption = types.ServerSideEncryptionAes256
 	}
 
+	//nolint:staticcheck // The pinned aws-sdk-go-v2 feature/s3 module in this repo does not yet provide transfermanager.
 	_, err = uploader.Upload(ctx, params)
 	return nil, err
 }

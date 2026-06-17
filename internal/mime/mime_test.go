@@ -7,7 +7,7 @@ import (
 
 func TestTypeByExtension(t *testing.T) {
 	if len(types) == 0 {
-		t.Error("Mime types list is empty")
+		t.Errorf("Mime types list is empty")
 	}
 	for ext, expectedType := range types {
 		if ext[0:1] != "." {

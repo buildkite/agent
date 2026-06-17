@@ -16,7 +16,11 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer func() {
+		if err := tester.CloseErr(); err != nil {
+			t.Errorf("tester.Close() = %v", err)
+		}
+	}()
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
@@ -45,7 +49,11 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer func() {
+		if err := tester.CloseErr(); err != nil {
+			t.Errorf("tester.Close() = %v", err)
+		}
+	}()
 
 	tester.MustMock(t, "my-command").Expect().AndCallFunc(func(c *bintest.Call) {
 		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0o700)
@@ -79,7 +87,11 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
 	}
-	defer tester.Close()
+	defer func() {
+		if err := tester.CloseErr(); err != nil {
+			t.Errorf("tester.Close() = %v", err)
+		}
+	}()
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {

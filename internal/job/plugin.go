@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -57,18 +57,18 @@ func (e *Executor) preparePlugins() error {
 	// Check if we can run plugins (disabled via --no-plugins)
 	if !e.PluginsEnabled {
 		if !e.LocalHooksEnabled {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
+			return fmt.Errorf("plugins have been disabled on this agent with `--no-local-hooks`")
 		} else if !e.CommandEval {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
+			return fmt.Errorf("plugins have been disabled on this agent with `--no-command-eval`")
 		} else {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
+			return fmt.Errorf("plugins have been disabled on this agent with `--no-plugins`")
 		}
 	}
 
 	var err error
 	e.plugins, err = plugin.CreateFromJSON(e.Plugins)
 	if err != nil {
-		return fmt.Errorf("Failed to parse a plugin definition: %w", err)
+		return fmt.Errorf("failed to parse a plugin definition: %w", err)
 	}
 
 	if e.Debug {
@@ -147,7 +147,7 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 
 		checkout, err := e.checkoutPlugin(ctx, p)
 		if err != nil {
-			return fmt.Errorf("Failed to checkout plugin %s: %w", p.Name(), err)
+			return fmt.Errorf("failed to checkout plugin %s: %w", p.Name(), err)
 		}
 
 		err = e.validatePluginCheckout(ctx, checkout)
@@ -183,13 +183,13 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 
 		// Check that the plugin exists in the checkout.
 		if fi, err := e.checkoutRoot.Stat(p.Location); err != nil || !fi.IsDir() {
-			return fmt.Errorf("Vendored plugin path %q must be a directory within the checked-out repository: %w", p.Location, err)
+			return fmt.Errorf("vendored plugin path %q must be a directory within the checked-out repository: %w", p.Location, err)
 		}
 
 		// Similarly, check that the plugin's hooks exists in the checkout.
 		hooksPath := filepath.Join(p.Location, "hooks")
 		if fi, err := e.checkoutRoot.Stat(hooksPath); err != nil || !fi.IsDir() {
-			return fmt.Errorf("Vendored plugin hooks path %q must be a directory within the checked-out repository: %w", hooksPath, err)
+			return fmt.Errorf("vendored plugin hooks path %q must be a directory within the checked-out repository: %w", hooksPath, err)
 		}
 
 		checkout := &pluginCheckout{
@@ -274,7 +274,7 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 			Name:       name,
 			Path:       hookPath,
 			Env:        envMap,
-			PluginName: p.Plugin.DisplayName(),
+			PluginName: p.DisplayName(),
 			SpanAttributes: map[string]string{
 				"plugin.name":        p.Plugin.Name(),
 				"plugin.version":     p.Version,
@@ -304,7 +304,7 @@ func (e *Executor) hasPluginHook(name string) bool {
 func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*pluginCheckout, error) {
 	// Make sure we have a plugin path before trying to do anything
 	if e.PluginsPath == "" {
-		return nil, fmt.Errorf("Can't checkout plugin without a `plugins-path`")
+		return nil, fmt.Errorf("can't checkout plugin without a `plugins-path`")
 	}
 
 	id, err := p.Identifier()
@@ -345,6 +345,15 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		e.shell.Commentf("Plugin checkout paths - PluginDir: %q, HooksDir: %q", checkout.PluginDir, checkout.HooksDir)
 	}
 
+	// Route zip plugins to zip handler
+	if p.IsZipPlugin() {
+		if !experiments.IsEnabled(ctx, experiments.ZipPlugins) {
+			return nil, fmt.Errorf("zip plugins require the %q experiment to be enabled", experiments.ZipPlugins)
+		}
+		e.shell.Commentf("Plugin %q will be downloaded as zip archive", p.DisplayName())
+		return checkout, e.checkoutZipPlugin(ctx, p, checkout, pluginDirectory)
+	}
+
 	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
 	// BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true).
 	//
@@ -358,16 +367,26 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
 	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
 	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
-	if e.PluginsAlwaysCloneFresh && osutil.FileExists(pluginDirectory) {
-		e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
-		if err := os.RemoveAll(pluginDirectory); err != nil {
-			e.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
-			return nil, err
+	if e.PluginsAlwaysCloneFresh {
+		_, statErr := os.Stat(pluginDirectory)
+		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+			return nil, fmt.Errorf("checking plugin directory %q: %w", pluginDirectory, statErr)
+		}
+		if statErr == nil {
+			e.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
+			if err := os.RemoveAll(pluginDirectory); err != nil {
+				e.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
+				return nil, err
+			}
 		}
 	}
 
-	// Does the .git directory exist? (i.e. it's already checkout out?)
-	if osutil.FileExists(pluginGitDirectory) {
+	// Does the .git directory exist? (i.e. it's already checked out?)
+	_, statErr := os.Stat(pluginGitDirectory)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return nil, fmt.Errorf("checking plugin git directory %q: %w", pluginGitDirectory, statErr)
+	}
+	if statErr == nil {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
 		headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, pluginDirectory, "--short=7", "HEAD")
@@ -382,7 +401,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		if err != nil {
 			return nil, fmt.Errorf("opening plugin directory as a root: %w", err)
 		}
-		runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
+		runtime.AddCleanup(checkout, func(r *os.Root) { _ = r.Close() }, pluginRoot)
 		checkout.Root = pluginRoot
 
 		// Ensure hooks is a directory that exists within the checkout.
@@ -448,7 +467,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// Switch to the version if we need to
 	if p.Version != "" {
 		e.shell.Commentf("Checking out `%s`", p.Version)
-		if err = e.shell.Command("git", "checkout", "-f", p.Version).Run(ctx); err != nil {
+		if err = e.shell.Command("git", "-c", "advice.detachedHead=false", "checkout", "-f", p.Version).Run(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -466,7 +485,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	if err != nil {
 		return nil, fmt.Errorf("opening plugin directory as a root: %w", err)
 	}
-	runtime.AddCleanup(checkout, func(r *os.Root) { r.Close() }, pluginRoot)
+	runtime.AddCleanup(checkout, func(r *os.Root) { _ = r.Close() }, pluginRoot)
 	checkout.Root = pluginRoot
 
 	// Ensure hooks is a directory that exists within the checkout.

@@ -1,14 +1,12 @@
 package job
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
-	"github.com/stretchr/testify/assert"
 )
 
 func init() {
@@ -25,7 +23,7 @@ func TestFindingSSHTools(t *testing.T) {
 
 	sh.Logger = shell.TestingLogger{T: t}
 
-	if _, err := findPathToSSHTools(context.Background(), sh); err != nil {
+	if _, err := findPathToSSHTools(t.Context(), sh); err != nil {
 		t.Errorf("findPathToSSHTools(sh) error = %v", err)
 	}
 }
@@ -48,10 +46,14 @@ func TestSSHKeyscanReturnsOutput(t *testing.T) {
 		AndWriteToStdout("github.com ssh-rsa xxx=").
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
+	keyScanOutput, err := sshKeyScan(t.Context(), sh, "github.com")
 
-	assert.Equal(t, keyScanOutput, "github.com ssh-rsa xxx=")
-	assert.NoError(t, err)
+	if got, want := keyScanOutput, "github.com ssh-rsa xxx="; got != want {
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) = %q, want %q", "github.com", got, want)
+	}
+	if err != nil {
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) error = %v, want nil", "github.com", err)
+	}
 }
 
 func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
@@ -72,10 +74,14 @@ func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
 		AndWriteToStdout("github.com ssh-rsa xxx=").
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com:123")
+	keyScanOutput, err := sshKeyScan(t.Context(), sh, "github.com:123")
 
-	assert.Equal(t, keyScanOutput, "github.com ssh-rsa xxx=")
-	assert.NoError(t, err)
+	if got, want := keyScanOutput, "github.com ssh-rsa xxx="; got != want {
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) = %q, want %q", "github.com:123", got, want)
+	}
+	if err != nil {
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) error = %v, want nil", "github.com:123", err)
+	}
 }
 
 func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
@@ -97,10 +103,14 @@ func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
 		Exactly(3).
 		AndExitWith(1)
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
+	keyScanOutput, err := sshKeyScan(t.Context(), sh, "github.com")
 
-	assert.Equal(t, keyScanOutput, "")
-	assert.EqualError(t, err, "`ssh-keyscan \"github.com\"` failed")
+	if got, want := keyScanOutput, ""; got != want {
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) = %q, want %q", "github.com", got, want)
+	}
+	if want := "`ssh-keyscan \"github.com\"` failed"; err == nil || err.Error() != want {
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) error = %v, want error with message %q", "github.com", err, want)
+	}
 }
 
 func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
@@ -112,7 +122,11 @@ func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
 	}
-	defer keyScan.CheckAndClose(t)
+	t.Cleanup(func() {
+		if err := keyScan.CheckAndClose(t); err != nil {
+			t.Errorf("keyScan.CheckAndClose(t) = %v", err)
+		}
+	})
 	//nolint:errcheck // bintest logs to t
 	sh.Env.Set("PATH", filepath.Dir(keyScan.Path))
 
@@ -122,8 +136,12 @@ func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
 		Exactly(3).
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
+	keyScanOutput, err := sshKeyScan(t.Context(), sh, "github.com")
 
-	assert.Equal(t, keyScanOutput, "")
-	assert.EqualError(t, err, "`ssh-keyscan \"github.com\"` returned nothing")
+	if got, want := keyScanOutput, ""; got != want {
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) = %q, want %q", "github.com", got, want)
+	}
+	if want := "`ssh-keyscan \"github.com\"` returned nothing"; err == nil || err.Error() != want {
+		t.Errorf("sshKeyScan(t.Context(), sh, %q) error = %v, want error with message %q", "github.com", err, want)
+	}
 }

@@ -3,22 +3,19 @@ package cache
 import (
 	"context"
 	"fmt"
-	"os"
 	"runtime"
-	"strings"
 	"sync"
 
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/internal/cache/configuration"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/version"
-	"github.com/buildkite/zstash"
-	"github.com/buildkite/zstash/api"
-	"github.com/buildkite/zstash/cache"
 	"github.com/dustin/go-humanize"
-	"gopkg.in/yaml.v3"
 )
 
-// Config holds the configuration for cache operations
+// Config holds the configuration for cache operations.
 type Config struct {
+	// Registry is the cache registry slug (URL path). "~" selects the cluster default.
+	Registry string
 	// BucketURL is the URL of the bucket (e.g., s3://bucket-name)
 	BucketURL string
 	// Branch is the branch associated with the cache
@@ -29,139 +26,55 @@ type Config struct {
 	Organization string
 	// CacheConfigFile is the path to the cache configuration YAML file
 	CacheConfigFile string
-	// Ids is a list of cache IDs (if empty, processes all caches)
-	Ids []string
-	// APIEndpoint is the Agent API endpoint
-	APIEndpoint string
-	// APIToken is the access token used to authenticate
-	APIToken string
+	// Names is a list of cache names (if empty, processes all caches)
+	Names []string
 	// Concurrency is the number of concurrent cache operations
 	Concurrency int
 }
 
-// FileConfig represents the structure of the cache configuration YAML file
-type FileConfig struct {
-	// Dependencies is the list of dependency caches to restore/save
-	Dependencies []cache.Cache `yaml:"dependencies"`
+// cacheOps is the subset of *client used by saveWithClient and restoreWithClient.
+// It exists so the dispatch loops can be tested with a fake.
+type cacheOps interface {
+	Save(ctx context.Context, cacheID string) (SaveResult, error)
+	Restore(ctx context.Context, cacheID string) (RestoreResult, error)
+	ListCaches() []configuration.Cache
 }
 
-// CacheClient defines the interface for cache operations
-type CacheClient interface {
-	Save(ctx context.Context, cacheID string) (zstash.SaveResult, error)
-	Restore(ctx context.Context, cacheID string) (zstash.RestoreResult, error)
-	ListCaches() []cache.Cache
-}
-
-// Save saves caches based on the provided configuration and logs results as each cache is processed
-func Save(ctx context.Context, l logger.Logger, cfg Config) error {
-	cacheClient, cacheIDs, err := setupCacheClient(ctx, l, cfg)
+// RunSave saves caches based on the provided configuration and logs results as
+// each cache is processed.
+func RunSave(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
+	c, cacheIDs, err := newClient(l, apiClient, cfg)
 	if err != nil {
 		return err
 	}
-
-	if cacheClient == nil {
-		l.Info("No caches defined in the cache configuration file, nothing to save")
+	if c == nil {
+		l.Infof("No caches defined in the cache configuration file, nothing to save")
 		return nil
 	}
-
-	return saveWithClient(ctx, l, cacheClient, cacheIDs, cfg.Concurrency)
+	return saveWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
 }
 
-// Restore restores caches based on the provided configuration and logs results as each cache is processed
-func Restore(ctx context.Context, l logger.Logger, cfg Config) error {
-	cacheClient, cacheIDs, err := setupCacheClient(ctx, l, cfg)
+// RunRestore restores caches based on the provided configuration and logs results
+// as each cache is processed.
+func RunRestore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
+	c, cacheIDs, err := newClient(l, apiClient, cfg)
 	if err != nil {
 		return err
 	}
-
-	if cacheClient == nil {
-		l.Info("No caches defined in the cache configuration file, nothing to restore")
+	if c == nil {
+		l.Infof("No caches defined in the cache configuration file, nothing to restore")
 		return nil
 	}
-
-	return restoreWithClient(ctx, l, cacheClient, cacheIDs, cfg.Concurrency)
+	return restoreWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
 }
 
-// loadCacheConfiguration loads cache configuration from a YAML file
-func loadCacheConfiguration(cacheConfigFile string) (*FileConfig, error) {
-	data, err := os.ReadFile(cacheConfigFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read cache config file: %w", err)
-	}
-
-	var config FileConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cache config file: %w", err)
-	}
-
-	return &config, nil
+// ListCaches returns all cache definitions configured on the client.
+func (c *client) ListCaches() []configuration.Cache {
+	return c.caches
 }
 
-// setupCacheClient creates a cache client and determines which cache IDs to process
-func setupCacheClient(ctx context.Context, l logger.Logger, cfg Config) (*zstash.Cache, []string, error) {
-	client := api.NewClient(ctx, version.Version(), cfg.APIEndpoint, cfg.APIToken)
-
-	fileConfig, err := loadCacheConfiguration(cfg.CacheConfigFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load cache configuration: %w", err)
-	}
-
-	if len(fileConfig.Dependencies) == 0 {
-		return nil, nil, nil
-	}
-
-	cacheClient, err := zstash.NewCache(zstash.Config{
-		Client:       client,
-		BucketURL:    cfg.BucketURL,
-		Format:       "zip",
-		Branch:       cfg.Branch,
-		Pipeline:     cfg.Pipeline,
-		Organization: cfg.Organization,
-		Caches:       fileConfig.Dependencies,
-		OnProgress: func(cacheID, stage, message string, _, _ int) {
-			l.WithFields(
-				logger.StringField("cache_id", cacheID),
-				logger.StringField("stage", stage),
-				logger.StringField("message", message),
-			).Info("Cache progress")
-		},
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create cache client: %w", err)
-	}
-
-	// Determine which cache IDs to process
-	if len(cfg.Ids) > 0 {
-		// Validate that specified cache IDs exist
-		validIDs := make(map[string]bool)
-		for _, cache := range cacheClient.ListCaches() {
-			validIDs[cache.ID] = true
-		}
-
-		var invalidIDs []string
-		for _, id := range cfg.Ids {
-			if !validIDs[id] {
-				invalidIDs = append(invalidIDs, id)
-			}
-		}
-
-		if len(invalidIDs) > 0 {
-			return nil, nil, fmt.Errorf("cache IDs not found in configuration: %s", strings.Join(invalidIDs, ", "))
-		}
-
-		return cacheClient, cfg.Ids, nil
-	}
-
-	var cacheDs []string
-	for _, cache := range cacheClient.ListCaches() {
-		cacheDs = append(cacheDs, cache.ID)
-	}
-
-	return cacheClient, cacheDs, nil
-}
-
-// restoreWithClient performs the restore operation for the given cache IDs using the provided client
-func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient, cacheIDs []string, concurrency int) error {
+// restoreWithClient performs the restore operation for the given cache IDs using the provided client.
+func restoreWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs []string, concurrency int) error {
 	if concurrency <= 0 {
 		concurrency = runtime.GOMAXPROCS(0)
 	}
@@ -174,10 +87,7 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 	var wg sync.WaitGroup
 
 	for range workerCount {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				select {
 				case cacheID, open := <-cacheIDsCh:
@@ -185,8 +95,8 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 						return
 					}
 
-					l.Info("Restoring cache: %s", cacheID)
-					result, err := client.Restore(wctx, cacheID)
+					l.Infof("Restoring cache: %s", cacheID)
+					result, err := c.Restore(wctx, cacheID)
 					if err != nil {
 						cancel(fmt.Errorf("failed to restore cache %q: %w", cacheID, err))
 						return
@@ -205,19 +115,19 @@ func restoreWithClient(ctx context.Context, l logger.Logger, client CacheClient,
 							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
 							logger.IntField("part_count", result.Transfer.PartCount),
 							logger.IntField("concurrency", result.Transfer.Concurrency),
-						).Info("Cache restored")
+						).Infof("Cache restored")
 					default:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
 							logger.StringField("cache_key", result.Key),
-						).Info("Cache not restored (not found)")
+						).Infof("Cache not restored (not found)")
 					}
 
 				case <-wctx.Done():
 					return
 				}
 			}
-		}()
+		})
 	}
 
 sendLoop:
@@ -239,8 +149,8 @@ sendLoop:
 	return nil
 }
 
-// saveWithClient performs the save operation for the given cache IDs using the provided client
-func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, cacheIDs []string, concurrency int) error {
+// saveWithClient performs the save operation for the given cache IDs using the provided client.
+func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs []string, concurrency int) error {
 	if concurrency <= 0 {
 		concurrency = runtime.GOMAXPROCS(0)
 	}
@@ -253,10 +163,7 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 	var wg sync.WaitGroup
 
 	for range workerCount {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				select {
 				case cacheID, open := <-cacheIDsCh:
@@ -264,15 +171,15 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 						return
 					}
 
-					l.Info("Saving cache: %s", cacheID)
-					result, err := client.Save(wctx, cacheID)
+					l.Infof("Saving cache: %s", cacheID)
+					result, err := c.Save(wctx, cacheID)
 					if err != nil {
 						cancel(fmt.Errorf("failed to save cache %q: %w", cacheID, err))
 						return
 					}
 
 					switch {
-					case result.CacheCreated:
+					case result.CacheEntryCreated:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
 							logger.StringField("cache_key", result.Key),
@@ -283,19 +190,19 @@ func saveWithClient(ctx context.Context, l logger.Logger, client CacheClient, ca
 							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
 							logger.IntField("part_count", result.Transfer.PartCount),
 							logger.IntField("concurrency", result.Transfer.Concurrency),
-						).Info("Cache created")
+						).Infof("Cache created")
 					default:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
 							logger.StringField("cache_key", result.Key),
-						).Info("Cache already exists, not saving")
+						).Infof("Cache already exists, not saving")
 					}
 
 				case <-wctx.Done():
 					return
 				}
 			}
-		}()
+		})
 	}
 
 sendLoop:

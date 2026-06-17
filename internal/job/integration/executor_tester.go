@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -23,7 +24,6 @@ import (
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/shell"
-	"gotest.tools/v3/assert"
 
 	"github.com/buildkite/bintest/v3"
 )
@@ -118,6 +118,7 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 			// use the mock instead.
 			"BUILDKITE_OVERRIDE_SELF=buildkite-agent",
 		},
+		HomeDir:    homeDir,
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
 		HooksDir:   hooksDir,
@@ -344,45 +345,37 @@ func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Helper()
 
 	if err := e.Run(t, env...); shell.ExitCode(err) != 0 {
-		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
+		if err != nil {
+			t.Fatalf("bootstrap output:\n%s", e.Output)
+		}
 	}
 
 	e.CheckMocks(t)
 }
 
-// Close the tester, delete all the directories and mocks
-func (e *ExecutorTester) Close() error {
+// Close the tester, delete all the directories and mocks.
+func (e *ExecutorTester) Close() {
+	_ = e.CloseErr()
+}
+
+// CloseErr closes the tester and returns all cleanup errors.
+func (e *ExecutorTester) CloseErr() error {
+	var errs []error
 	for _, mock := range e.mocks {
-		if err := mock.Close(); err != nil {
-			return err
-		}
+		errs = append(errs, mock.Close())
 	}
 	if e.Repo != nil {
-		if err := e.Repo.Close(); err != nil {
-			return err
-		}
+		errs = append(errs, e.Repo.CloseErr())
 	}
-	if err := os.RemoveAll(e.HomeDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.BuildDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.HooksDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.PathDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.PluginsDir); err != nil {
-		return err
-	}
-	if e.GitMirrorsDir != "" {
-		if err := os.RemoveAll(e.GitMirrorsDir); err != nil {
-			return err
-		}
-	}
-	return nil
+	errs = append(errs,
+		os.RemoveAll(e.HomeDir),
+		os.RemoveAll(e.BuildDir),
+		os.RemoveAll(e.HooksDir),
+		os.RemoveAll(e.PathDir),
+		os.RemoveAll(e.PluginsDir),
+		os.RemoveAll(e.GitMirrorsDir),
+	)
+	return errors.Join(errs...)
 }
 
 func mockEnvAsJSONOnStdout(e *ExecutorTester) func(c *bintest.Call) {
@@ -405,7 +398,11 @@ func mockEnvAsJSONOnStdout(e *ExecutorTester) func(c *bintest.Call) {
 			c.Exit(1)
 		}
 
-		c.Stdout.Write(envJSON)
+		if _, err := c.Stdout.Write(envJSON); err != nil {
+			fmt.Println("Failed to write env map in mocked agent call:", err)
+			c.Exit(1)
+			return
+		}
 		c.Exit(0)
 	}
 }
@@ -434,7 +431,7 @@ func newTestLogWriter(t *testing.T) *testLogWriter {
 			r.CloseWithError(err)
 			return
 		}
-		r.Close()
+		_ = r.Close()
 	}()
 
 	return lw

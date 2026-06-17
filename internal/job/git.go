@@ -32,6 +32,7 @@ const (
 	gitErrorFetchBadReference
 	gitErrorClean
 	gitErrorCleanSubmodules
+	gitErrorRepack
 )
 
 const (
@@ -64,7 +65,7 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 		return fmt.Errorf("%q %w", reference, errInvalidRef)
 	}
 
-	commandArgs := []string{"checkout"}
+	commandArgs := []string{"-c", "advice.detachedHead=false", "checkout"}
 	commandArgs = append(commandArgs, individualCheckoutFlags...)
 	commandArgs = append(commandArgs, reference)
 
@@ -88,14 +89,9 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	return nil
 }
 
-func gitClone(ctx context.Context, sh *shell.Shell, gitCloneFlags, repository, dir string) error {
-	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
-	if err != nil {
-		return err
-	}
-
+func gitClone(ctx context.Context, sh *shell.Shell, gitCloneFlags []string, repository, dir string) error {
 	commandArgs := []string{"clone"}
-	commandArgs = append(commandArgs, individualCloneFlags...)
+	commandArgs = append(commandArgs, gitCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
 	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
@@ -134,6 +130,16 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 		return &gitError{error: err, Type: gitErrorCleanSubmodules}
 	}
 
+	return nil
+}
+
+func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
+	commandArgs := []string{"repack"}
+	commandArgs = append(commandArgs, args...)
+
+	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+		return &gitError{error: err, Type: gitErrorRepack}
+	}
 	return nil
 }
 
@@ -256,7 +262,7 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 	for line := range lines {
 		tokens := strings.SplitN(line, "\n", 2)
 		if len(tokens) != 2 {
-			return nil, fmt.Errorf("Failed to parse .gitmodules line %q", line)
+			return nil, fmt.Errorf("failed to parse .gitmodules line %q", line)
 		}
 		urls = append(urls, tokens[1])
 	}

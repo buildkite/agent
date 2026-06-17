@@ -47,10 +47,12 @@ services:
       - CI_E2E_TESTS_AGENT_TOKEN
 
   ruby:
-    image: ruby:2.7.6
+    build:
+      context: .
+      dockerfile: Dockerfile-ruby
     volumes:
       - ..:/work
-      - ruby-2-7-6-agent-gem-cache:/usr/local/bundle
+      - ruby-agent-gem-cache:/usr/local/bundle
     working_dir: /work
     command: /bin/bash
     environment:
@@ -59,4 +61,4 @@ services:
       - BUILD_VERSION
 
 volumes:
-  ruby-2-7-6-agent-gem-cache: ~
+  ruby-agent-gem-cache: ~

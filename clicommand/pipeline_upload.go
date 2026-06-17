@@ -23,6 +23,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/replacer"
@@ -36,6 +37,7 @@ import (
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/buildkite/interpolate"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 	"gopkg.in/yaml.v3"
 )
 
@@ -97,6 +99,7 @@ type PipelineUploadConfig struct {
 	JWKSFile         string `cli:"jwks-file"`
 	JWKSKeyID        string `cli:"jwks-key-id"`
 	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
 	DebugSigning     bool   `cli:"debug-signing"`
 }
 
@@ -175,6 +178,12 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
 			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
 		},
+		cli.StringFlag{
+			Name: "signing-gcp-kms-key",
+			Usage: "The GCP KMS key identifier which is used to sign pipelines. " +
+				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
+			EnvVar: "BUILDKITE_AGENT_GCP_KMS_KEY",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
@@ -186,6 +195,8 @@ var PipelineUploadCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "pipeline-upload")
+		defer span.End()
 
 		// Find the pipeline either from STDIN or the non-flag arguments
 		type input struct {
@@ -196,25 +207,25 @@ var PipelineUploadCommand = cli.Command{
 
 		switch {
 		case len(cfg.FilePaths) > 0:
-			l.Info("Reading pipeline configs from %q", cfg.FilePaths)
+			l.Infof("Reading pipeline configs from %q", cfg.FilePaths)
 
 			for _, fn := range cfg.FilePaths {
 				file, err := os.Open(fn)
 				if err != nil {
 					return fmt.Errorf("failed to read file: %w", err)
 				}
-				defer file.Close()
+				defer func() { _ = file.Close() }()
 				inputs = append(inputs, input{file, filepath.Base(fn)})
 			}
 
 		case stdin.IsReadable():
-			l.Info("Reading pipeline config from STDIN")
+			l.Infof("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
 			inputs = []input{{os.Stdin, "(stdin)"}}
 
 		default:
-			l.Info("Searching for pipeline config...")
+			l.Infof("Searching for pipeline config...")
 
 			paths := []string{
 				"buildkite.yml",
@@ -239,22 +250,22 @@ var PipelineUploadCommand = cli.Command{
 			// If more than 1 of the config files exist, throw an
 			// error. There can only be one!!
 			if len(exists) > 1 {
-				return fmt.Errorf("found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
+				return fmt.Errorf("found multiple configuration files: %s; please keep only 1 configuration file present", strings.Join(exists, ", "))
 			}
 			if len(exists) == 0 {
-				return fmt.Errorf("could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
+				return fmt.Errorf("could not find a default pipeline configuration file; see `buildkite-agent pipeline upload --help` for more information")
 			}
 
 			found := exists[0]
 
-			l.Info("Found config file %q", found)
+			l.Infof("Found config file %q", found)
 
 			// Read the default file
 			file, err := os.Open(found)
 			if err != nil {
 				return fmt.Errorf("failed to read file %q: %w", found, err)
 			}
-			defer file.Close()
+			defer func() { _ = file.Close() }()
 			inputs = []input{{file, filepath.Base(found)}}
 		}
 
@@ -327,7 +338,7 @@ var PipelineUploadCommand = cli.Command{
 					if w == nil {
 						return err
 					}
-					l.Warn("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
+					l.Warnf("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
 				}
 
 				if len(cfg.RedactedVars) > 0 {
@@ -348,10 +359,17 @@ var PipelineUploadCommand = cli.Command{
 						return err
 					}
 
-					// assign a crypto signer which uses the KMS key to sign the pipeline
+					// assign a crypto signer which uses the AWS KMS key to sign the pipeline
 					key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
 					if err != nil {
-						return fmt.Errorf("couldn't create KMS signer: %w", err)
+						return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+					}
+
+				case cfg.SigningGCPKMSKey != "":
+					// assign a crypto signer which uses the GCP KMS key to sign the pipeline
+					key, err = gcpsigner.NewKMS(ctx, cfg.SigningGCPKMSKey)
+					if err != nil {
+						return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
 					}
 
 				case cfg.JWKSFile != "":
@@ -368,7 +386,7 @@ var PipelineUploadCommand = cli.Command{
 						key,
 						os.Getenv("BUILDKITE_REPO"),
 						signature.WithEnv(result.Env.ToMap()),
-						signature.WithLogger(l),
+						signature.WithLogger(logger.DeprecatedLogger{Logger: l}),
 						signature.WithDebugSigning(cfg.DebugSigning),
 					)
 					if err != nil {
@@ -394,12 +412,12 @@ var PipelineUploadCommand = cli.Command{
 
 				// Check we have a job id set if not in dry run
 				if cfg.Job == "" {
-					return errors.New("missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
+					return errors.New("missing job parameter; this is usually set in the environment for a Buildkite job via BUILDKITE_JOB_ID")
 				}
 
 				// Check we have an agent access token if not in dry run
 				if cfg.AgentAccessToken == "" {
-					return errors.New("missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
+					return errors.New("missing agent-access-token parameter; this is usually set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN")
 				}
 
 				uploader := &agent.PipelineUploader{
@@ -413,10 +431,11 @@ var PipelineUploadCommand = cli.Command{
 					RetrySleepFunc: time.Sleep,
 				}
 				if err := uploader.Upload(ctx, l); err != nil {
-					return err
+					l.Errorf(err.Error())
+					return NewSilentExitError(1)
 				}
 
-				l.Info("Successfully parsed and uploaded pipeline #%d from %q", count, input.name)
+				l.Infof("Successfully parsed and uploaded pipeline #%d from %q", count, input.name)
 				count++
 			}
 		}
@@ -433,11 +452,11 @@ func resolveCommit(l logger.Logger, environ *env.Environment) {
 	}
 	cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
 	if err != nil {
-		l.Warn("Error running git rev-parse %q: %v", commitRef, err)
+		l.Warnf("Error running git rev-parse %q: %v", commitRef, err)
 		return
 	}
 	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-	l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
+	l.Infof("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
 	environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
 }
 
@@ -448,7 +467,7 @@ func allEnvVars(o any, f func(p env.Pair)) {
 	switch x := o.(type) {
 	case *pipeline.Pipeline:
 		// First iterate through all pipeline env vars.
-		x.Env.Range(func(k, v string) error {
+		_ = x.Env.Range(func(k, v string) error {
 			f(env.Pair{Name: k, Value: v})
 			return nil
 		})
@@ -522,7 +541,7 @@ func searchForSecrets(
 	// So we can declare the secrets to be found if they match the usual rules.
 	matched, short, err := redact.Vars(cfg.RedactedVars, allVars)
 	if err != nil {
-		l.Warn("Couldn't match environment variable names against redacted-vars: %v", err)
+		l.Warnf("Couldn't match environment variable names against redacted-vars: %v", err)
 	}
 
 	for _, name := range short {
@@ -536,7 +555,7 @@ func searchForSecrets(
 	// Filter these down to the vars normally redacted.
 	matched, short, err = redact.Vars(cfg.RedactedVars, environ.DumpPairs())
 	if err != nil {
-		l.Warn("Couldn't match environment variable names against redacted-vars: %v", err)
+		l.Warnf("Couldn't match environment variable names against redacted-vars: %v", err)
 	}
 	for _, name := range short {
 		shortValues[name] = struct{}{}
@@ -569,7 +588,7 @@ func searchForSecrets(
 	if len(shortValues) > 0 {
 		vars := slices.Collect(maps.Keys(shortValues))
 		slices.Sort(vars)
-		l.Warn("Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(vars, ", "))
+		l.Warnf("Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(vars, ", "))
 	}
 
 	if len(secretsFound) > 0 {
@@ -580,9 +599,9 @@ func searchForSecrets(
 			return fmt.Errorf("pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
 		}
 
-		l.Warn("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
-		l.Warn("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
-		l.Warn("The behaviour in the above flags will become default in Buildkite Agent v4")
+		l.Warnf("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
+		l.Warnf("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
+		l.Warnf("The behaviour in the above flags will become default in Buildkite Agent v4")
 	}
 
 	return nil
@@ -642,7 +661,7 @@ func readChangedFilesFromPath(l logger.Logger, path string) ([]string, error) {
 	if len(changedPaths) == 1 {
 		plural = "file"
 	}
-	l.Info("if_changed read %d changed %s from %q", len(changedPaths), plural, path)
+	l.Infof("if_changed read %d changed %s from %q", len(changedPaths), plural, path)
 	return changedPaths, nil
 }
 
@@ -668,8 +687,8 @@ func computeGitDiff(l logger.Logger, diffBase string) (changedPaths []string, er
 		// and its parent (the first parent, if it is a merge commit).
 		// If _multiple_ commits were pushed at once, then this approach will
 		// miss changes from earlier commits. Thus, log a warning.
-		l.Warn("Applying if_changed conditions relative to the first parent of HEAD (because HEAD = %q)", diffBase)
-		l.Warn("If this build is intended to include more than one commit on this branch, if_changed may calculate an incomplete diff. You may need to adjust the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var to choose a different base commit for calculating diffs.")
+		l.Warnf("Applying if_changed conditions relative to the first parent of HEAD (because HEAD = %q)", diffBase)
+		l.Warnf("If this build is intended to include more than one commit on this branch, if_changed may calculate an incomplete diff. You may need to adjust the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var to choose a different base commit for calculating diffs.")
 
 		// Flag Explainer:
 		// `--first-parent`: when reaching a merge commit, follow the first parent
@@ -690,7 +709,7 @@ func computeGitDiff(l logger.Logger, diffBase string) (changedPaths []string, er
 			return nil, gitMergeBaseError{diffBase: diffBase, wrapped: err}
 		}
 		mergeBase := strings.TrimSpace(string(mergeBaseOut))
-		l.Info("Applying if_changed conditions relative to %q (the merge-base of %q and HEAD)", mergeBase, diffBase)
+		l.Infof("Applying if_changed conditions relative to %q (the merge-base of %q and HEAD)", mergeBase, diffBase)
 
 		gitDiff, err := exec.Command("git", "diff", "--name-only", mergeBase).Output()
 		if err != nil {
@@ -705,7 +724,7 @@ func computeGitDiff(l logger.Logger, diffBase string) (changedPaths []string, er
 	if len(changedPaths) == 1 {
 		plural = "file"
 	}
-	l.Info("if_changed found %d changed %s", len(changedPaths), plural)
+	l.Infof("if_changed found %d changed %s", len(changedPaths), plural)
 	return changedPaths, nil
 }
 
@@ -829,13 +848,13 @@ stepsLoop:
 			//   exclude: (optional; string or list)
 			inclVal, has := x.Get("include")
 			if !has {
-				l.Warn("The value for if_changed was a mapping, but it didn't have an `include` key. The step will not be skipped.")
+				l.Warnf("The value for if_changed was a mapping, but it didn't have an `include` key. The step will not be skipped.")
 				continue stepsLoop
 			}
 			var err error
 			include, err = ifChangedPatterns(inclVal)
 			if err != nil {
-				l.Warn("Couldn't parse if_changed.include patterns: %v. The step will not be skipped.", err)
+				l.Warnf("Couldn't parse if_changed.include patterns: %v. The step will not be skipped.", err)
 				continue stepsLoop
 			}
 			exclVal, has := x.Get("exclude")
@@ -844,7 +863,7 @@ stepsLoop:
 			}
 			exclude, err = ifChangedPatterns(exclVal)
 			if err != nil {
-				l.Warn("Couldn't parse if_changed.exclude patterns: %v. The step will not be skipped.", err)
+				l.Warnf("Couldn't parse if_changed.exclude patterns: %v. The step will not be skipped.", err)
 				continue stepsLoop
 			}
 
@@ -852,7 +871,7 @@ stepsLoop:
 			// Should be either a simple string or a list of strings.
 			inc, err := ifChangedPatterns(x)
 			if err != nil {
-				l.Warn("Couldn't parse if_changed patterns: %v. The step will not be skipped.", err)
+				l.Warnf("Couldn't parse if_changed patterns: %v. The step will not be skipped.", err)
 				continue stepsLoop
 			}
 			include = inc
@@ -889,7 +908,7 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l logger.Logger) ([]string, e
 		// Read changed files from the provided file path.
 		cps, err := readChangedFilesFromPath(l, ica.changedFilesPath)
 		if err != nil {
-			l.Error("Couldn't read changed files from %q, not skipping any pipeline steps: %v", ica.changedFilesPath, err)
+			l.Errorf("Couldn't read changed files from %q, not skipping any pipeline steps: %v", ica.changedFilesPath, err)
 			return nil, err
 		}
 		return cps, nil
@@ -899,45 +918,45 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l logger.Logger) ([]string, e
 		// First, fetch the remote refspec specified by diffBase.
 		remote, refspec, slash := strings.Cut(ica.diffBase, "/")
 		if !slash {
-			l.Warn("The diff-base %q was not in 'remote/refspec' form - continuing with the remote 'origin'", ica.diffBase)
+			l.Warnf("The diff-base %q was not in 'remote/refspec' form - continuing with the remote 'origin'", ica.diffBase)
 			remote = "origin"
 			refspec = ica.diffBase
 		}
 		if err := exec.Command("git", "fetch", "--", remote, refspec).Run(); err != nil {
-			l.Error("Couldn't fetch %q from origin: %v", err)
+			l.Errorf("Couldn't fetch %q from origin: %v", err)
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 				// stderr came from git, which is typically human readable
-				l.Error("git: %s", exitErr.Stderr)
+				l.Errorf("git: %s", exitErr.Stderr)
 			}
-			l.Info("if_changed will continue processing, but the diff may fail, or produce more paths than expected.")
+			l.Infof("if_changed will continue processing, but the diff may fail, or produce more paths than expected.")
 		}
 	}
 
 	// Determine changed files using git.
 	cps, err := computeGitDiff(l, ica.diffBase)
 	if err != nil {
-		l.Error("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
+		l.Errorf("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err)
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 			// stderr came from git, which is typically human readable
-			l.Error("git: %s", exitErr.Stderr)
+			l.Errorf("git: %s", exitErr.Stderr)
 		}
 		switch err := err.(type) {
 		case gitRevParseError:
-			l.Error("This could be because %q might not be a commit in the repository.\n"+
+			l.Errorf("This could be because %q might not be a commit in the repository.\n"+
 				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var, or add --fetch-diff-base.",
 				err.arg,
 			)
 
 		case gitMergeBaseError:
-			l.Error("This could be because %q might not be a commit in the repository.\n"+
+			l.Errorf("This could be because %q might not be a commit in the repository.\n"+
 				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var, or add --fetch-diff-base.",
 				err.diffBase,
 			)
 
 		case gitDiffError:
-			l.Error("This could be because the merge-base that Git found, %q, might be invalid.\n"+
+			l.Errorf("This could be because the merge-base that Git found, %q, might be invalid.\n"+
 				"You may need to change the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var, or add --fetch-diff-base.",
 				err.mergeBase,
 			)

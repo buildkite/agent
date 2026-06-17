@@ -2,11 +2,13 @@ package tracetools
 
 import (
 	"errors"
+	"reflect"
+	"slices"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
-	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -88,12 +90,18 @@ func TestAddAttribute_OpenTracing(t *testing.T) {
 
 	span := newTestOpenTracingSpan()
 	implSpan, ok := span.Span.(*TestOpenTracingSpan)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("span.Span.(*TestOpenTracingSpan) = %t, want true", got)
+	}
 
-	assert.Empty(t, implSpan.tags)
+	if got := len(implSpan.tags); got != 0 {
+		t.Errorf("implSpan.tags = %v, want 0", got)
+	}
 
 	span.AddAttributes(map[string]string{"colour": "green", "flavour": "spicy"})
-	assert.Equal(t, map[string]any{"colour": "green", "flavour": "spicy"}, implSpan.tags)
+	if diff := cmp.Diff(implSpan.tags, map[string]any{"colour": "green", "flavour": "spicy"}); diff != "" {
+		t.Errorf("implSpan.tags diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestAddAttributeToSpan_OpenTelemetry(t *testing.T) {
@@ -101,13 +109,21 @@ func TestAddAttributeToSpan_OpenTelemetry(t *testing.T) {
 
 	span := newTestOtelSpan()
 	implSpan, ok := span.Span.(*TestOtelSpan)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("span.Span.(*TestOtelSpan) = %t, want true", got)
+	}
 
-	assert.Empty(t, implSpan.attributes)
+	if got := len(implSpan.attributes); got != 0 {
+		t.Errorf("implSpan.attributes = %v, want 0", got)
+	}
 
 	span.AddAttributes(map[string]string{"colour": "blue", "flavour": "bittersweet"})
-	assert.Contains(t, implSpan.attributes, attribute.String("colour", "blue"))
-	assert.Contains(t, implSpan.attributes, attribute.String("flavour", "bittersweet"))
+	if got, want := implSpan.attributes, attribute.String("colour", "blue"); !slices.Contains(got, want) {
+		t.Errorf("implSpan.attributes = %v, want containing %v", got, want)
+	}
+	if got, want := implSpan.attributes, attribute.String("flavour", "bittersweet"); !slices.Contains(got, want) {
+		t.Errorf("implSpan.attributes = %v, want containing %v", got, want)
+	}
 }
 
 func TestFinishWithError_OpenTracing(t *testing.T) {
@@ -116,21 +132,39 @@ func TestFinishWithError_OpenTracing(t *testing.T) {
 
 	span := newTestOpenTracingSpan()
 	implSpan, ok := span.Span.(*TestOpenTracingSpan)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("span.Span.(*TestOpenTracingSpan) = %t, want true", got)
+	}
 
 	span.FinishWithError(err)
-	assert.True(t, implSpan.finished)
-	assert.Equal(t, true, implSpan.tags["error"])
-	assert.Equal(t, []log.Field{log.Event("error"), log.Error(err)}, implSpan.fields)
+	if got := implSpan.finished; !got {
+		t.Errorf("implSpan.finished = %t, want true", got)
+	}
+	if diff := cmp.Diff(implSpan.tags["error"], true); diff != "" {
+		t.Errorf("implSpan.tags[\"error\"] diff (-got +want):\n%s", diff)
+	}
+	if got, want := implSpan.fields, []log.Field{log.Event("error"), log.Error(err)}; !reflect.DeepEqual(got, want) {
+		t.Errorf("implSpan.fields = %v, want %v", got, want)
+	}
 
 	span = newTestOpenTracingSpan()
 	implSpan, ok = span.Span.(*TestOpenTracingSpan)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("span.Span.(*TestOpenTracingSpan) = %t, want true", got)
+	}
 
 	span.FinishWithError(nil)
-	assert.True(t, implSpan.finished)
-	assert.NotContains(t, implSpan.tags, "error")
-	assert.Empty(t, implSpan.fields)
+	if got := implSpan.finished; !got {
+		t.Errorf("implSpan.finished = %t, want true", got)
+	}
+	got := implSpan.tags
+	want := "error"
+	if _, has := got[want]; has {
+		t.Errorf("implSpan.tags = %v, want containing %q", got, want)
+	}
+	if got := len(implSpan.fields); got != 0 {
+		t.Errorf("implSpan.fields = %v, want 0", got)
+	}
 }
 
 func TestFinishWithError_OpenTelemetry(t *testing.T) {
@@ -139,20 +173,38 @@ func TestFinishWithError_OpenTelemetry(t *testing.T) {
 
 	span := newTestOtelSpan()
 	implSpan, ok := span.Span.(*TestOtelSpan)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("span.Span.(*TestOtelSpan) = %t, want true", got)
+	}
 
 	span.FinishWithError(err)
-	assert.True(t, implSpan.finished)
-	assert.ErrorIs(t, implSpan.err, err)
-	assert.Equal(t, implSpan.statusCode, codes.Error)
-	assert.Equal(t, implSpan.statusDesc, "failed")
+	if got := implSpan.finished; !got {
+		t.Errorf("implSpan.finished = %t, want true", got)
+	}
+	if err, want := implSpan.err, err; !errors.Is(err, want) {
+		t.Errorf("implSpan.err error = %v, want %v", err, want)
+	}
+	if got, want := codes.Error, implSpan.statusCode; got != want {
+		t.Errorf("codes.Error = %d, want %d", got, want)
+	}
+	if got, want := implSpan.statusDesc, "failed"; got != want {
+		t.Errorf("implSpan.statusDesc = %q, want %q", got, want)
+	}
 
 	span = newTestOtelSpan()
 	implSpan, ok = span.Span.(*TestOtelSpan)
-	assert.True(t, ok)
+	if got := ok; !got {
+		t.Errorf("span.Span.(*TestOtelSpan) = %t, want true", got)
+	}
 
 	span.FinishWithError(nil)
-	assert.True(t, implSpan.finished)
-	assert.NoError(t, implSpan.err)
-	assert.Equal(t, implSpan.statusCode, codes.Unset)
+	if got := implSpan.finished; !got {
+		t.Errorf("implSpan.finished = %t, want true", got)
+	}
+	if err := implSpan.err; err != nil {
+		t.Errorf("implSpan.err error = %v, want nil", err)
+	}
+	if got, want := codes.Unset, implSpan.statusCode; got != want {
+		t.Errorf("codes.Unset = %d, want %d", got, want)
+	}
 }

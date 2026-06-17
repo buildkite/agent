@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
 )
 
 const metaDataExistsHelpDescription = `Usage:
@@ -55,6 +56,8 @@ var MetaDataExistsCommand = cli.Command{
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataExistsConfig](ctx, c)
 		defer done()
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-exists")
+		defer span.End()
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
@@ -74,11 +77,11 @@ var MetaDataExistsCommand = cli.Command{
 		)
 		exists, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.MetaDataExists, error) {
 			exists, resp, err := client.ExistsMetaData(ctx, scope, id, cfg.Key)
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
-				r.Break()
+			if api.BreakOnNonRetryable(r, resp, err) {
+				return nil, err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				l.Warnf("%s (%s)", err, r)
 				return nil, err
 			}
 			return exists, nil

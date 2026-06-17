@@ -44,9 +44,9 @@ func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", "refs/pull/123/head"},
+		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/head"},
 		{"rev-parse", "FETCH_HEAD"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -91,7 +91,7 @@ func TestWithResolvingCommitExperiment_WithGitMirrors(t *testing.T) {
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
 	})
@@ -130,7 +130,7 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -141,6 +141,55 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutLocalGitProjectWithSparseCheckout_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 }
 
 func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
@@ -165,7 +214,11 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
-	defer submoduleRepo.Close()
+	defer func() {
+		if err := submoduleRepo.CloseErr(); err != nil {
+			t.Errorf("submoduleRepo.Close() = %v", err)
+		}
+	}()
 
 	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
@@ -197,10 +250,10 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force", "--reference", submoduleRepo.Path},
+		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force", "--reference", matchSubDir(tester.GitMirrorsDir)},
 		{"submodule", "foreach", "--recursive", "git reset --hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -237,7 +290,11 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 	if err != nil {
 		t.Fatalf("createTestGitRespository() error = %v", err)
 	}
-	defer submoduleRepo.Close()
+	defer func() {
+		if err := submoduleRepo.CloseErr(); err != nil {
+			t.Errorf("submoduleRepo.Close() = %v", err)
+		}
+	}()
 
 	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
@@ -268,7 +325,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -312,7 +369,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject_WithGitMirrors(t *testing.T) {
 		{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "--depth=1", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -497,7 +554,7 @@ func TestForcingACleanCheckout_WithGitMirrors(t *testing.T) {
 	tester.RunAndCheck(t, "BUILDKITE_CLEAN_CHECKOUT=true")
 
 	if !strings.Contains(tester.Output, "Cleaning pipeline checkout") {
-		t.Fatal(`tester.Output does not contain "Cleaning pipeline checkout"`)
+		t.Fatalf(`tester.Output does not contain "Cleaning pipeline checkout"`)
 	}
 }
 
@@ -611,9 +668,9 @@ func TestCheckoutDoesNotRetryOnHookFailure_WithGitMirrors(t *testing.T) {
 
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		counter := atomic.AddInt32(&checkoutCounter, 1)
-		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
+		_, _ = fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
 		if counter == 1 {
-			fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
+			_, _ = fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -702,7 +759,7 @@ func TestGitMirrorEnv(t *testing.T) {
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
@@ -781,8 +838,8 @@ func TestCheckingOutWithCustomRefspec_WithGitMirrors(t *testing.T) {
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)
-		{"checkout", "-f", "FETCH_HEAD"},
+		{"fetch", "-v", "--prune", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})

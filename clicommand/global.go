@@ -12,14 +12,19 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
-	DefaultEndpoint = "https://agent.buildkite.com/v3"
+	DefaultEndpoint                 = "https://agent-edge.buildkite.com/v3"
+	ArtifactUploadConcurrencyEnvVar = "BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY"
 )
 
 var (
@@ -93,13 +98,6 @@ var (
 		EnvVar: "BUILDKITE_STRICT_SINGLE_HOOKS",
 	}
 
-	SocketsPathFlag = cli.StringFlag{
-		Name:   "sockets-path",
-		Value:  defaultSocketsPath(),
-		Usage:  "Directory where the agent will place sockets",
-		EnvVar: "BUILDKITE_SOCKETS_PATH",
-	}
-
 	KubernetesContainerIDFlag = cli.IntFlag{
 		Name: "kubernetes-container-id",
 		Usage: "This is intended to be used only by the Buildkite k8s stack " +
@@ -121,6 +119,12 @@ var (
 		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
 	}
 
+	AgentArtifactUploadConcurrencyFlag = cli.IntFlag{
+		Name:   "artifact-upload-concurrency",
+		Usage:  "Maximum number of concurrent artifact upload operations used by jobs started by this agent. When unset, artifact uploads use their default",
+		EnvVar: ArtifactUploadConcurrencyEnvVar,
+	}
+
 	ExperimentsFlag = cli.StringSliceFlag{
 		Name:   "experiment",
 		Value:  &cli.StringSlice{},
@@ -137,11 +141,13 @@ var (
 			"*_SECRET",
 			"*_TOKEN",
 			"*_PRIVATE_KEY",
+			"*_SSH_KEY",
 			"*_ACCESS_KEY",
 			"*_SECRET_KEY",
 			// Connection strings frequently contain passwords, e.g.
 			// https://user:pass@host/ or Server=foo;Database=my-db;User Id=user;Password=pass;
 			"*_CONNECTION_STRING",
+			"*_API_KEY",
 		},
 	}
 
@@ -150,6 +156,159 @@ var (
 		Usage:  "Sets the inner encoding for BUILDKITE_TRACE_CONTEXT. Must be either json or gob",
 		Value:  "gob",
 		EnvVar: "BUILDKITE_TRACE_CONTEXT_ENCODING",
+	}
+)
+
+// File path flags shared between agent start and bootstrap
+var (
+	BuildPathFlag = cli.StringFlag{
+		Name:   "build-path",
+		Value:  "",
+		Usage:  "Path to where the builds will run from",
+		EnvVar: "BUILDKITE_BUILD_PATH",
+	}
+
+	HooksPathFlag = cli.StringFlag{
+		Name:   "hooks-path",
+		Value:  "",
+		Usage:  "Directory where the hook scripts are found",
+		EnvVar: "BUILDKITE_HOOKS_PATH",
+	}
+
+	AdditionalHooksPathsFlag = cli.StringSliceFlag{
+		Name:   "additional-hooks-paths",
+		Value:  &cli.StringSlice{},
+		Usage:  "Additional directories to look for agent hooks",
+		EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
+	}
+
+	SocketsPathFlag = cli.StringFlag{
+		Name:   "sockets-path",
+		Value:  defaultSocketsPath(),
+		Usage:  "Directory where the agent will place sockets",
+		EnvVar: "BUILDKITE_SOCKETS_PATH",
+	}
+
+	PluginsPathFlag = cli.StringFlag{
+		Name:   "plugins-path",
+		Value:  "",
+		Usage:  "Directory where the plugins are saved to",
+		EnvVar: "BUILDKITE_PLUGINS_PATH",
+	}
+)
+
+// Git related flags shared between agent start and bootstrap
+var (
+	SkipCheckoutFlag = cli.BoolFlag{
+		Name:   "skip-checkout",
+		Usage:  "Skip the git checkout phase entirely",
+		EnvVar: "BUILDKITE_SKIP_CHECKOUT",
+	}
+
+	GitCheckoutFlagsFlag = cli.StringFlag{
+		Name:   "git-checkout-flags",
+		Value:  "-f",
+		Usage:  "Flags to pass to \"git checkout\" command",
+		EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
+	}
+
+	GitCloneFlagsFlag = cli.StringFlag{
+		Name:   "git-clone-flags",
+		Value:  "-v",
+		Usage:  "Flags to pass to \"git clone\" command",
+		EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
+	}
+
+	GitCloneMirrorFlagsFlag = cli.StringFlag{
+		Name:   "git-clone-mirror-flags",
+		Value:  "-v",
+		Usage:  "Flags to pass to \"git clone\" command when mirroring",
+		EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+	}
+
+	GitCleanFlagsFlag = cli.StringFlag{
+		Name:   "git-clean-flags",
+		Value:  "-ffxdq",
+		Usage:  "Flags to pass to \"git clean\" command",
+		EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+		// -ff: delete files and directories, including untracked nested git repositories
+		// -x: don't use .gitignore rules
+		// -d: recurse into untracked directories
+		// -q: quiet, only report errors
+	}
+
+	GitCommitVerificationFlag = cli.StringFlag{
+		Name:   "git-commit-verification",
+		Usage:  "Enable git commit verification",
+		EnvVar: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+	}
+
+	GitFetchFlagsFlag = cli.StringFlag{
+		Name:   "git-fetch-flags",
+		Value:  "-v --prune",
+		Usage:  "Flags to pass to \"git fetch\" command",
+		EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
+	}
+
+	GitSparseCheckoutPathsFlag = cli.StringSliceFlag{
+		Name:   "git-sparse-checkout-paths",
+		Value:  &cli.StringSlice{},
+		Usage:  "Comma-separated list of paths for git sparse checkout (cone mode). When set, only the listed paths are materialized in the working tree.",
+		EnvVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+	}
+
+	GitMirrorsPathFlag = cli.StringFlag{
+		Name:   "git-mirrors-path",
+		Value:  "",
+		Usage:  "Path to where mirrors of git repositories are stored",
+		EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+	}
+
+	GitMirrorCheckoutModeFlag = cli.StringFlag{
+		Name:   "git-mirror-checkout-mode",
+		Value:  "reference",
+		Usage:  fmt.Sprintf("Changes how clones of a mirror are made; available modes are %v. In ′dissociate′ mode, clones from a mirror uses the git clone ′--dissociate′ flag, which copies underlying objects from the mirror, making the clone robust to changes in the mirror such as garbage collection, at the expense of additional disk usage and setup time. ′reference′ mode does not pass ′--dissociate′, which causes the clone to directly use objects from the mirror, which is more fragile and can cause the clone to break under entirely normal operation of the mirror, but is slightly faster to clone and uses less disk space.", mirrorCheckoutModes),
+		EnvVar: "BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+	}
+
+	GitMirrorsLockTimeoutFlag = cli.IntFlag{
+		Name:   "git-mirrors-lock-timeout",
+		Value:  300,
+		Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+		EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+	}
+
+	GitMirrorsSkipUpdateFlag = cli.BoolFlag{
+		Name:   "git-mirrors-skip-update",
+		Usage:  "Skip updating the Git mirror (default: false)",
+		EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+	}
+
+	GitSubmoduleCloneConfigFlag = cli.StringSliceFlag{
+		Name:   "git-submodule-clone-config",
+		Value:  &cli.StringSlice{},
+		Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands such as ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead",
+		EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
+	}
+
+	GitCheckoutTimeoutFlag = cli.IntFlag{
+		Name:   "git-checkout-timeout",
+		Value:  0,
+		Usage:  "Seconds to allow for each git checkout attempt before it is killed and retried (0 means no timeout)",
+		EnvVar: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+	}
+
+	GitSkipFetchExistingCommitsFlag = cli.BoolFlag{
+		Name:   "git-skip-fetch-existing-commits",
+		Usage:  "Skip git fetch if the commit already exists in the local git directory (default: false)",
+		EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+	}
+
+	CheckoutAttemptsFlag = cli.IntFlag{
+		Name:   "checkout-attempts",
+		Value:  6,
+		Usage:  "Number of checkout attempts (including the initial attempt). Failed attempts are retried with exponential backoff (factor of 2, starting at 1s: 1s, 2s, 4s, ...)",
+		EnvVar: "BUILDKITE_CHECKOUT_ATTEMPTS",
 	}
 )
 
@@ -240,7 +399,7 @@ func CreateLogger(cfg any) logger.Logger {
 
 	err := handleLogLevelFlag(l, cfg)
 	if err != nil {
-		l.Warn("Error when setting log level: %v. Defaulting log level to NOTICE", err)
+		l.Warnf("Error when setting log level: %v. Defaulting log level to NOTICE", err)
 	}
 
 	// Enable debugging if a Debug option is present
@@ -276,7 +435,7 @@ func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.C
 	for _, name := range experimentNamesSlice {
 		nctx, state := experiments.EnableWithWarnings(ctx, l, name)
 		if state == experiments.StateKnown {
-			l.Debug("Enabled experiment %q", name)
+			l.Debugf("Enabled experiment %q", name)
 		}
 		ctx = nctx
 	}
@@ -317,7 +476,7 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 		// split comma delimited env
 		if envVars := f.String(); envVars != "" {
 			for env := range strings.SplitSeq(envVars, ",") {
-				os.Unsetenv(env)
+				_ = os.Unsetenv(env)
 			}
 		}
 	}
@@ -391,7 +550,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 
 	warnings, err := loader.Load()
 	if err != nil {
-		fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
+		_, _ = fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
 		os.Exit(1)
 	}
 
@@ -401,14 +560,58 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 		l = l.WithFields(logger.StringField("command", c.Command.FullName()))
 	}
 
-	l.Debug("Loaded config")
+	l.Debugf("Loaded config")
 
 	// Now that we have a logger, log out the warnings that loading config generated
 	for _, warning := range warnings {
-		l.Warn("%s", warning)
+		l.Warnf("%s", warning)
 	}
 
 	// Setup any global configuration options
 	ctx, done = HandleGlobalFlags(ctx, l, cfg)
+
+	// When OpenTelemetry tracing is enabled, always initialize a TracerProvider
+	// so that every command (bootstrap or standalone subcommand) can emit spans.
+	tracingBackend := os.Getenv("BUILDKITE_TRACING_BACKEND")
+	if tb, err := reflections.GetField(cfg, "TracingBackend"); err == nil {
+		if tbStr, ok := tb.(string); ok && tbStr != "" {
+			tracingBackend = tbStr
+		}
+	}
+
+	if tracingBackend == tracetools.BackendOpenTelemetry {
+		serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
+		if sn, err := reflections.GetField(cfg, "TracingServiceName"); err == nil {
+			if snStr, ok := sn.(string); ok && snStr != "" {
+				serviceName = snStr
+			}
+		}
+		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, nil)
+		if err != nil {
+			l.Warnf("Failed to initialize tracing: %v", err)
+		} else {
+			// Extract any incoming trace context so spans created in this process
+			// are linked to the parent job's trace.
+			carrier := propagation.MapCarrier{}
+			if traceParent := os.Getenv("TRACEPARENT"); traceParent != "" {
+				carrier["traceparent"] = traceParent
+			}
+			if traceState := os.Getenv("TRACESTATE"); traceState != "" {
+				carrier["tracestate"] = traceState
+			}
+			if len(carrier) > 0 {
+				ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+			}
+			prevDone := done
+			done = func() {
+				prevDone()
+				flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = traceProvider.ForceFlush(flushCtx)
+				_ = traceProvider.Shutdown(flushCtx)
+			}
+		}
+	}
+
 	return ctx, cfg, l, loader.File, done
 }

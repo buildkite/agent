@@ -1,6 +1,7 @@
 package job
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
@@ -14,7 +15,9 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		Repository:                   "https://original.host/repo.git",
 		AutomaticArtifactUploadPaths: "llamas/",
 		GitCloneFlags:                "--prune",
+		GitSparseCheckoutPaths:       []string{"old-path/"},
 		GitCleanFlags:                "-v",
+		GitSSHKey:                    "original-key",
 		AgentName:                    "myAgent",
 		CleanCheckout:                false,
 		PluginsAlwaysCloneFresh:      false,
@@ -24,9 +27,11 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	environ := env.FromSlice([]string{
 		"BUILDKITE_ARTIFACT_PATHS=newpath",
 		"BUILDKITE_GIT_CLONE_FLAGS=-f",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
 		"BUILDKITE_SOMETHING_ELSE=1",
 		"BUILDKITE_REPO=https://my.mirror/repo.git",
 		"BUILDKITE_CLEAN_CHECKOUT=true",
+		"BUILDKITE_GIT_SSH_KEY=new-key",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true",
 		"BUILDKITE_GIT_SUBMODULES=true",
 	})
@@ -35,8 +40,10 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	wantChanges := map[string]string{
 		"BUILDKITE_ARTIFACT_PATHS":             "newpath",
 		"BUILDKITE_GIT_CLONE_FLAGS":            "-f",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":  ".buildkite/,src/",
 		"BUILDKITE_REPO":                       "https://my.mirror/repo.git",
 		"BUILDKITE_CLEAN_CHECKOUT":             "true",
+		"BUILDKITE_GIT_SSH_KEY":                "new-key",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH": "true",
 		"BUILDKITE_GIT_SUBMODULES":             "true",
 	}
@@ -53,6 +60,10 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		t.Errorf("config.Repository = %q, want %q", got, want)
 	}
 
+	if got, want := config.GitSSHKey, "new-key"; got != want {
+		t.Errorf("config.GitSSHKey = %q, want %q", got, want)
+	}
+
 	if got, want := config.CleanCheckout, true; got != want {
 		t.Errorf("config.CleanCheckout = %t, want %t", got, want)
 	}
@@ -63,6 +74,13 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 
 	if got, want := config.GitSubmodules, true; got != want {
 		t.Errorf("config.GitSubmodules = %t, want %t", got, want)
+	}
+
+	if got := len(config.GitSparseCheckoutPaths); got != 2 {
+		t.Fatalf("len(config.GitSparseCheckoutPaths) = %d, want 2 (%q)", got, strings.Join(config.GitSparseCheckoutPaths, ","))
+	}
+	if got, want := strings.Join(config.GitSparseCheckoutPaths, ","), ".buildkite/,src/"; got != want {
+		t.Errorf("config.GitSparseCheckoutPaths = %q, want %q", got, want)
 	}
 }
 

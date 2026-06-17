@@ -107,7 +107,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 			c.Exit(1)
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
@@ -135,7 +135,7 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 
 	tester.ExpectGlobalHook("post-command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got, want := c.GetEnv("MOUNTAIN"), "chimborazo"; got != want {
-			fmt.Fprintf(c.Stderr, "MOUNTAIN = %q, want %q\n", got, want)
+			_, _ = fmt.Fprintf(c.Stderr, "MOUNTAIN = %q, want %q\n", got, want)
 			c.Exit(1)
 		} else {
 			c.Exit(0)

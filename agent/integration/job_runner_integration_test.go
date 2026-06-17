@@ -1,23 +1,22 @@
 package integration
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/bintest/v3"
-	"gotest.tools/v3/assert"
 )
 
 func TestPreBootstrapHookScripts(t *testing.T) {
@@ -78,21 +77,27 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ctx := context.Background()
+			ctx := t.Context()
 
 			hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
-			assert.NilError(t, err, "making bootstrap-hooks directory: %v", err)
+			if err != nil {
+				t.Fatalf("making bootstrap-hooks directory: %v", err)
+			}
 			t.Cleanup(func() { _ = os.RemoveAll(hooksDir) })
 
 			hookPath := filepath.Join(hooksDir, "pre-bootstrap"+tc.ext)
 			testMainPath, err := os.Executable()
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("os.Executable() error = %v, want nil", err)
+			}
 
 			// Write pre-bootstrap hook in a subprocess to avoid intermittent ETXTBSY errors on Linux
 			cmd := exec.Command(testMainPath, "write-exec", hookPath)
 			cmd.Stdin = strings.NewReader(tc.contents)
 			err = cmd.Run()
-			assert.NilError(t, err)
+			if err != nil {
+				t.Fatalf("cmd.Run() error = %v, want nil", err)
+			}
 
 			// Creates a mock agent API
 			e := createTestAgentEndpoint()
@@ -131,7 +136,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 
 func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 	if err != nil {
@@ -190,7 +195,7 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 
 func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	exits := []int{0, 1, 2, 3}
 	for _, exit := range exits {
@@ -236,7 +241,7 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 
 func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	jobToken := "bkaj_actually-llamas-are-only-okay"
 
@@ -279,7 +284,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 // Maybe that the job runner pulls the access token from the API client? but that's all handled in the `runJob` helper...
 func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	j := &api.Job{
 		ID:                 "my-job-id",
@@ -318,7 +323,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 
 func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	j := &api.Job{
 		ID:                 "my-job-id",
@@ -362,21 +367,15 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 
 	runTestWithInterval := func(t *testing.T, intervalSeconds int) int {
 		t.Helper()
-		ctx := context.Background()
 
-		var (
-			chunkCount int
-			mu         sync.Mutex
-		)
+		var chunkCount atomic.Int64
 
 		e := createTestAgentEndpoint()
 		server := e.server(route{
 			Method: "POST",
 			Path:   "/jobs/{id}/chunks",
 			HandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
-				mu.Lock()
-				chunkCount++
-				mu.Unlock()
+				chunkCount.Add(1)
 				e.chunksHandler()(rw, req)
 			},
 		})
@@ -394,13 +393,13 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 		mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 			start := time.Now()
 			for time.Since(start) < 4*time.Second {
-				fmt.Fprintf(c.Stdout, "Log output at %v\n", time.Now())
+				_, _ = fmt.Fprintf(c.Stdout, "Log output at start+%v\n", time.Since(start))
 				time.Sleep(100 * time.Millisecond)
 			}
 			c.Exit(0)
 		})
 
-		if err := runJob(t, ctx, testRunJobConfig{
+		if err := runJob(t, t.Context(), testRunJobConfig{
 			job:           j,
 			server:        server,
 			agentCfg:      agent.AgentConfiguration{},
@@ -411,42 +410,33 @@ func TestChunksIntervalSeconds_ControlsUploadTiming(t *testing.T) {
 
 		mb.CheckAndClose(t) //nolint:errcheck
 
-		mu.Lock()
-		defer mu.Unlock()
-
-		t.Logf("Interval %ds: %d chunks uploaded", intervalSeconds, chunkCount)
-		return chunkCount
+		t.Logf("Interval %ds: %d chunks uploaded", intervalSeconds, chunkCount.Load())
+		return int(chunkCount.Load())
 	}
 
-	t.Run("2s interval should upload fewer chunks than 1s interval", func(t *testing.T) {
-		var count1s, count2s int
-
-		wg := &sync.WaitGroup{}
-		wg.Add(2)
-
-		// these run for 4 seconds, so we run them in parallel to not quite so much wall-clock time
-		go func() {
-			defer wg.Done()
-			count1s = runTestWithInterval(t, 1)
-		}()
-
-		go func() {
-			defer wg.Done()
-			count2s = runTestWithInterval(t, 2)
-		}()
-
-		wg.Wait()
-
-		t.Logf("1s interval: %d chunks, 2s interval: %d chunks", count1s, count2s)
+	t.Run("1s interval", func(t *testing.T) {
+		t.Parallel()
 
 		// With a 4s job:
-		// 1s interval: first chunk + chunks at ~1s, ~2s, ~3s, ~4s = 5 chunks
-		// 2s interval: first chunk + chunks at ~2s, ~4s = 3 chunks
-		if count1s != 5 {
-			t.Errorf("1s interval: got %d chunks, expected 5", count1s)
+		// 1s interval:
+		//   first chunk + (chunks at +1s, +2s, +3s) + final chunk = 5 chunks
+		// Except if the first chunk is made at 1s, in which case there could be
+		// only 4 chunks (at around 1s, 2s, 3s, and a final chunk after 4s).
+		if got, want := runTestWithInterval(t, 1), []int{4, 5}; !slices.Contains(want, got) {
+			t.Errorf("runTestWithInterval(t, 1) = %d chunks, want one of %v", got, want)
 		}
-		if count2s != 3 {
-			t.Errorf("2s interval: got %d chunks, expected 3", count2s)
+	})
+
+	t.Run("2s interval", func(t *testing.T) {
+		t.Parallel()
+
+		// With a 4s job:
+		// 2s interval:
+		//   first chunk + chunk at +2s + final chunk around 4s = 3 chunks
+		// Except if the first chunk is made at 2s, in which case there could be
+		// only 2 chunks (at around 2s and a final chunk after 4s).
+		if got, want := runTestWithInterval(t, 2), []int{2, 3}; !slices.Contains(want, got) {
+			t.Errorf("runTestWithInterval(t, 2) = %d chunks, want one of %v", got, want)
 		}
 	})
 }

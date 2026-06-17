@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/awslib"
 	"github.com/buildkite/agent/v3/internal/bkgql"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
+	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/stdin"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/go-pipeline"
@@ -40,6 +41,9 @@ type ToolSignConfig struct {
 
 	// AWS KMS key used for signing pipelines
 	AWSKMSKeyID string `cli:"signing-aws-kms-key"`
+
+	// GCP KMS key used for signing pipelines
+	GCPKMSKeyID string `cli:"signing-gcp-kms-key"`
 
 	// Enable debug logging for pipeline signing, this depends on debug logging also being enabled
 	DebugSigning bool `cli:"debug-signing"`
@@ -134,6 +138,12 @@ Signing a pipeline from a file:
 			Usage:  "The AWS KMS key identifier which is used to sign pipelines.",
 			EnvVar: "BUILDKITE_AGENT_AWS_KMS_KEY",
 		},
+		cli.StringFlag{
+			Name: "signing-gcp-kms-key",
+			Usage: "The GCP KMS key identifier which is used to sign pipelines. " +
+				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
+			EnvVar: "BUILDKITE_AGENT_GCP_KMS_KEY",
+		},
 		cli.BoolFlag{
 			Name:   "debug-signing",
 			Usage:  "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
@@ -186,7 +196,14 @@ Signing a pipeline from a file:
 			// assign a crypto signer which uses the KMS key to sign the pipeline
 			key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.AWSKMSKeyID)
 			if err != nil {
-				return fmt.Errorf("couldn't create KMS signer: %w", err)
+				return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+			}
+
+		case cfg.GCPKMSKeyID != "":
+			// assign a crypto signer which uses the GCP KMS key to sign the pipeline
+			key, err = gcpsigner.NewKMS(ctx, cfg.GCPKMSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
 			}
 
 		default:
@@ -244,19 +261,19 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 
 	switch {
 	case cfg.PipelineFile != "":
-		l.Info("Reading pipeline config from %q", cfg.PipelineFile)
+		l.Infof("Reading pipeline config from %q", cfg.PipelineFile)
 
 		file, err := os.Open(cfg.PipelineFile)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		input = file
 		filename = cfg.PipelineFile
 
 	case stdin.IsReadable():
-		l.Info("Reading pipeline config from STDIN")
+		l.Infof("Reading pipeline config from STDIN")
 
 		input = os.Stdin
 		filename = "(stdin)"
@@ -281,7 +298,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		if w == nil {
 			return fmt.Errorf("pipeline parsing of %q failed: %w", filename, err)
 		}
-		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
+		l.Warnf("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
 	}
 
 	if cfg.Debug {
@@ -290,7 +307,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		if err := enc.Encode(parsedPipeline); err != nil {
 			return fmt.Errorf("couldn't encode pipeline: %w", err)
 		}
-		l.Debug("Pipeline parsed successfully:\n%v", parsedPipeline)
+		l.Debugf("Pipeline parsed successfully:\n%v", parsedPipeline)
 	}
 
 	// Merge pipeline-level secrets with step-level secrets before signing
@@ -306,7 +323,7 @@ func signOffline(ctx context.Context, c *cli.Context, l logger.Logger, key signa
 		key,
 		cfg.Repository,
 		signature.WithEnv(parsedPipeline.Env.ToMap()),
-		signature.WithLogger(l),
+		signature.WithLogger(logger.DeprecatedLogger{Logger: l}),
 		signature.WithDebugSigning(cfg.DebugSigning),
 	)
 	if err != nil {
@@ -322,7 +339,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 	orgPipelineSlug := fmt.Sprintf("%s/%s", cfg.OrganizationSlug, cfg.PipelineSlug)
 	debugL := l.WithFields(logger.StringField("orgPipelineSlug", orgPipelineSlug))
 
-	l.Info("Retrieving pipeline from the GraphQL API")
+	l.Infof("Retrieving pipeline from the GraphQL API")
 
 	client := bkgql.NewClient(cfg.GraphQLEndpoint, cfg.GraphQLToken)
 
@@ -340,7 +357,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 		)
 	}
 
-	debugL.Debug("Pipeline retrieved successfully: %#v", resp)
+	debugL.Debugf("Pipeline retrieved successfully: %#v", resp)
 
 	pipelineString := resp.Pipeline.Steps.Yaml
 	err = validateNoInterpolations(pipelineString)
@@ -354,7 +371,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 		if w == nil {
 			return fmt.Errorf("pipeline parsing failed: %w", err)
 		}
-		l.Warn("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
+		l.Warnf("There were some issues with the pipeline input - signing will be attempted but might not succeed:\n%v", w)
 	}
 
 	if cfg.Debug {
@@ -363,10 +380,19 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 		if err := enc.Encode(parsedPipeline); err != nil {
 			return fmt.Errorf("couldn't encode pipeline: %w", err)
 		}
-		debugL.Debug("Pipeline parsed successfully: %v", parsedPipeline)
+		debugL.Debugf("Pipeline parsed successfully: %v", parsedPipeline)
 	}
 
-	if err := signature.SignSteps(ctx, parsedPipeline.Steps, key, resp.Pipeline.Repository.Url, signature.WithEnv(parsedPipeline.Env.ToMap()), signature.WithLogger(debugL), signature.WithDebugSigning(cfg.DebugSigning)); err != nil {
+	err = signature.SignSteps(
+		ctx,
+		parsedPipeline.Steps,
+		key,
+		resp.Pipeline.Repository.Url,
+		signature.WithEnv(parsedPipeline.Env.ToMap()),
+		signature.WithLogger(logger.DeprecatedLogger{Logger: debugL}),
+		signature.WithDebugSigning(cfg.DebugSigning),
+	)
+	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
 
@@ -384,7 +410,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 	}
 
 	signedPipelineYaml := strings.TrimSpace(signedPipelineYamlBuilder.String())
-	l.Info("Replacing pipeline with signed version:\n%s", signedPipelineYaml)
+	l.Infof("Replacing pipeline with signed version:\n%s", signedPipelineYaml)
 
 	updatePipeline, err := promptConfirm(
 		c, cfg, "\n\x1b[1mAre you sure you want to update the pipeline? This may break your builds!\x1b[0m",
@@ -394,7 +420,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 	}
 
 	if !updatePipeline {
-		l.Info("Aborting without updating pipeline")
+		l.Infof("Aborting without updating pipeline")
 		return nil
 	}
 
@@ -403,7 +429,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Context, l logger.Logger, key s
 		return err
 	}
 
-	l.Info("Pipeline updated successfully")
+	l.Infof("Pipeline updated successfully")
 
 	return nil
 }

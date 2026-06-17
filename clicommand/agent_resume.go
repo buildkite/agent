@@ -58,19 +58,15 @@ func resume(ctx context.Context, cfg AgentResumeConfig, l logger.Logger) error {
 		// Attempt to resume the agent
 		resp, err := client.Resume(ctx)
 
-		// Don't bother retrying if the response was one of these statuses
-		if resp != nil && resp.StatusCode == 422 {
-			r.Break()
+		if api.BreakOnNonRetryable(r, resp, err) {
 			return err
 		}
-
-		// Show the unexpected error
 		if err != nil {
-			l.Warn("%s (%s)", err, r)
+			l.Warnf("%s (%s)", err, r)
 			return err
 		}
 
-		l.Info("Successfully resumed agent")
+		l.Infof("Successfully resumed agent")
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to resume agent: %w", err)

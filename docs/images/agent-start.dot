@@ -68,7 +68,7 @@ digraph {
 
     subgraph cluster_process {
         label="process"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/process"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/internal/process"
 
         "Scanner.ScanLines"
         "Process.Run"
@@ -95,7 +95,7 @@ digraph {
 
     "AgentPool.Start" -> "AgentPool.runWorker" [label="go * N" style=dotted]
     "AgentPool.Start" -> "AgentPool.Start.<wait>" [label="go" style=dotted]
-    
+
     "AgentPool.runWorker" -> "AgentWorker.Connect", "AgentWorker.Start", "AgentWorker.Disconnect"
 
     "AgentWorker.Start" -> "AgentWorker.heartbeatLoop" [label="go" style=dotted]
