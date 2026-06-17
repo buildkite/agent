@@ -59,6 +59,10 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 	// pending is true when the action is pending, false otherwise
 	var pending bool
 
+	// lastActionWasJob is true when the most recently sent action included a
+	// job to run. Used for disconnect-after-job, below.
+	var lastActionWasJob bool
+
 	// Is the stream healthy?
 	// If so, take the baton (which blocks the ping loop).
 	// If not, return the baton (unblocking the ping loop).
@@ -139,12 +143,37 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 
 			// continue below to send it
 
-		case <-lastActionResult: // most recent action has completed
+		case err := <-lastActionResult: // most recent action has completed
 			a.logger.Debugf("[runDebouncer] Last action has completed")
 			// Set the channel variable to nil so we don't spinloop.
 			// (Operations on a nil channel block forever.)
 			lastActionResult = nil
 			actionInProgress = false
+
+			// If the action errored, there's nothing special to do; fall
+			// through to (maybe) sending the next pending action.
+			if err != nil {
+				break // out of the select
+			}
+
+			// In disconnect-after-job mode, the action handler loop only
+			// disconnects when it handles the next action after running a job
+			// (this gives a pending "pause" the chance to keep the agent
+			// alive). The ping loop pings the backend immediately after a job,
+			// so it produces that next action promptly, but the stream might
+			// not deliver another message for a while. So if a job just ran
+			// and nothing else is pending, synthesise an idle action to let
+			// the action handler loop disconnect promptly.
+			//
+			// This only covers disconnect-after-job. An acquire-job agent runs
+			// its single job before these loops even start (see
+			// AgentWorker.Start), so that job never passes through the
+			// debouncer and lastActionWasJob is never set for it.
+			if a.agentConfiguration.DisconnectAfterJob && lastActionWasJob && !pending {
+				a.logger.Debugf("[runDebouncer] Job ran in disconnect-after-job mode; enqueueing a synthetic idle action")
+				pending = true
+				pendingAction = ""
+			}
 
 			// continue below to send a pending message
 		}
@@ -169,6 +198,7 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 		case outCh <- newMsg:
 			// sent!
 			pending = false
+			lastActionWasJob = newMsg.jobID != ""
 			if newMsg.jobID != "" {
 				pendingJobs = pendingJobs[1:]
 				pending = len(pendingJobs) > 0

@@ -1293,6 +1293,105 @@ func TestAgentWorker_Streaming_DisconnectAfterJob_Start_Pause_Unpause(t *testing
 	}
 }
 
+func TestAgentWorker_Streaming_DisconnectAfterJob_PromptDisconnect(t *testing.T) {
+	t.Parallel()
+
+	buildPath := filepath.Join(os.TempDir(), t.Name(), "build")
+	hooksPath := filepath.Join(os.TempDir(), t.Name(), "hooks")
+	if err := errors.Join(os.MkdirAll(buildPath, 0o777), os.MkdirAll(hooksPath, 0o777)); err != nil {
+		t.Fatalf("Couldn't create directories: %v", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(filepath.Join(os.TempDir(), t.Name())) //nolint:errcheck // Best-effort cleanup
+	})
+
+	server := NewFakeAPIServer(WithStreaming)
+	t.Cleanup(server.Close)
+
+	job := server.AddJob(map[string]string{
+		"BUILDKITE_COMMAND": "echo echo",
+	})
+
+	// Pre-register the agent.
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+	// Unblock the fake server's stream handler at the end of the test.
+	// (Registered after server.Close so that it runs first.)
+	t.Cleanup(func() { close(agent.PingStream) })
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		return api.Ping{}, errors.New("too many pings")
+	}
+	go func() {
+		// Send the job, then nothing else: the agent shouldn't depend on
+		// receiving another stream message to disconnect after the job.
+		agent.PingStream <- &agentedgev1.StreamPingsResponse{
+			Action: &agentedgev1.StreamPingsResponse_JobAssigned{
+				JobAssigned: &agentedgev1.JobAssignedAction{
+					Job: &agentedgev1.Job{
+						Id: job.Job.ID,
+					},
+				},
+			},
+		}
+	}()
+
+	server.Assign(agent, job)
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       "alpacas",
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 1,
+			HeartbeatInterval: 10,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{
+			SpawnIndex: 1,
+			AgentConfiguration: AgentConfiguration{
+				BootstrapScript:    dummyBootstrap,
+				BuildPath:          buildPath,
+				HooksPath:          hooksPath,
+				DisconnectAfterJob: true,
+			},
+		},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	done := make(chan error, 1)
+	go func() {
+		done <- worker.Start(t.Context(), nil)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("worker.Start() = %v", err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("worker.Start() did not return: disconnect-after-job stalled waiting for the next stream message")
+	}
+
+	if got, want := agent.Pings, 0; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+	if got, want := agent.IgnoreInDispatches, true; got != want {
+		t.Errorf("agent.IgnoreInDispatches = %t, want %t", got, want)
+	}
+	if got, want := job.State, JobStateFinished; got != want {
+		t.Errorf("job.State = %q, want %q", got, want)
+	}
+}
+
 func TestAgentWorker_Streaming_UnrecoverableError_Fallback(t *testing.T) {
 	t.Parallel()
 
