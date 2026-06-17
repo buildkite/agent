@@ -8,14 +8,12 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -167,26 +165,8 @@ func declarePromiseFailureDirectly(ctx context.Context, l logger.Logger, cfg Job
 		Reason:     reason,
 	}
 
-	err := roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		resp, err := client.PromiseFailure(ctx, jobID, req)
-		if api.BreakOnNonRetryable(r, resp, err) {
-			return err
-		}
-		if err != nil {
-			l.Warnf("%s (%s)", err, r)
-			return err
-		}
-		return nil
-	})
+	status, err := client.PromiseFailureWithRetry(ctx, jobID, req, l.Warnf)
 	if err != nil {
-		status := 0
-		var apiErr *api.ErrorResponse
-		if errors.As(err, &apiErr) {
-			status = apiErr.Response.StatusCode
-		}
 		return promiseFailureError(status, err)
 	}
 

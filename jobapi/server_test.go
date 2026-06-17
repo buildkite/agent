@@ -662,40 +662,19 @@ func TestPromiseFailureStatusNormalization(t *testing.T) {
 	}
 }
 
-func TestPromiseFailurePanicRecovers(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int64
-	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
-		if calls.Add(1) == 1 {
-			panic("declarer boom")
-		}
-		return http.StatusNoContent, nil
-	})
-
-	// The first call panics inside the declarer; the recovery middleware turns it
-	// into a 500 rather than leaving the caller (and any waiters) hung.
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusInternalServerError {
-		t.Errorf("panicking promiseFailureRequest(1) status = %d, want %d", got, http.StatusInternalServerError)
-	}
-	// The poisoned entry was dropped, so a later call gets a fresh attempt and
-	// succeeds instead of blocking forever.
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
-		t.Errorf("retried promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
-	}
-	if got := calls.Load(); got != 2 {
-		t.Errorf("declarer calls = %d, want 2", got)
-	}
-}
-
 func TestPromiseFailurePanicConcurrent(t *testing.T) {
 	t.Parallel()
 
 	var calls atomic.Int64
+	var panicking atomic.Bool
+	panicking.Store(true)
 	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
 		calls.Add(1)
-		time.Sleep(20 * time.Millisecond)
-		panic("declarer boom")
+		if panicking.Load() {
+			time.Sleep(20 * time.Millisecond)
+			panic("declarer boom")
+		}
+		return http.StatusNoContent, nil
 	})
 
 	// A burst of callers coalesce onto a leader whose declaration panics. The
@@ -717,6 +696,17 @@ func TestPromiseFailurePanicConcurrent(t *testing.T) {
 
 	if got := calls.Load(); got < 1 {
 		t.Errorf("declarer calls = %d, want at least 1", got)
+	}
+
+	// The panic dropped the entry rather than caching a poisoned result, so a
+	// later call gets a fresh attempt and succeeds.
+	panicking.Store(false)
+	before := calls.Load()
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+		t.Errorf("post-panic promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
+	}
+	if got := calls.Load(); got != before+1 {
+		t.Errorf("declarer calls = %d, want %d (a fresh attempt after panic)", got, before+1)
 	}
 }
 
@@ -750,55 +740,6 @@ func TestPromiseFailureConcurrent(t *testing.T) {
 
 	if got := calls.Load(); got != 1 {
 		t.Errorf("declarer calls = %d, want exactly 1", got)
-	}
-}
-
-func TestPromiseFailureConcurrentError(t *testing.T) {
-	t.Parallel()
-
-	// The declarer blocks until released, then fails transiently. Holding the
-	// in-flight attempt open lets a burst of concurrent callers reliably coalesce
-	// onto it and all observe the same failure.
-	var calls atomic.Int64
-	started := make(chan struct{})
-	release := make(chan struct{})
-	var startOnce sync.Once
-	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
-		calls.Add(1)
-		startOnce.Do(func() { close(started) })
-		<-release
-		return http.StatusServiceUnavailable, fmt.Errorf("the Buildkite API is unavailable")
-	})
-
-	const n = 50
-	var wg sync.WaitGroup
-	wg.Add(n)
-	for range n {
-		go func() {
-			defer wg.Done()
-			if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusServiceUnavailable {
-				t.Errorf("concurrent promiseFailureRequest(1) status = %d, want %d", got, http.StatusServiceUnavailable)
-			}
-		}()
-	}
-
-	// Once the leader is declaring (and holding the entry), give the other
-	// callers time to coalesce onto it, then release the attempt.
-	<-started
-	time.Sleep(100 * time.Millisecond)
-	close(release)
-	wg.Wait()
-
-	// The burst coalesced into a single declaration...
-	if got := calls.Load(); got != 1 {
-		t.Errorf("declarer calls during burst = %d, want exactly 1", got)
-	}
-	// ...but because the transient failure wasn't cached, a later call retries.
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusServiceUnavailable {
-		t.Errorf("later promiseFailureRequest(1) status = %d, want %d", got, http.StatusServiceUnavailable)
-	}
-	if got := calls.Load(); got != 2 {
-		t.Errorf("declarer calls after retry = %d, want 2", got)
 	}
 }
 

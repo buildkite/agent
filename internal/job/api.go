@@ -3,14 +3,12 @@ package job
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/roko"
 )
 
 // startJobAPI starts the job API server, iff the OS of the box supports it otherwise it returns a
@@ -83,6 +81,8 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 // recent API response (0 if none was received, e.g. a network error) and an
 // error describing any failure.
 func (e *Executor) declarePromiseFailure(ctx context.Context, exitStatus int, reason string) (int, error) {
+	// logger.Discard keeps the access token (in HTTP debug dumps) out of the job
+	// log; retry warnings still go to the shell logger.
 	apiClient := api.NewClient(logger.Discard, api.Config{
 		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
 		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
@@ -93,24 +93,5 @@ func (e *Executor) declarePromiseFailure(ctx context.Context, exitStatus int, re
 		Reason:     reason,
 	}
 
-	var statusCode int
-	err := roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		resp, err := apiClient.PromiseFailure(ctx, e.JobID, req)
-		if resp != nil {
-			statusCode = resp.StatusCode
-		}
-		if api.BreakOnNonRetryable(r, resp, err) {
-			return err
-		}
-		if err != nil {
-			e.shell.Warningf("Couldn't declare promised failure for job %s: %s (%s)", e.JobID, err, r)
-			return err
-		}
-		return nil
-	})
-
-	return statusCode, err
+	return apiClient.PromiseFailureWithRetry(ctx, e.JobID, req, e.shell.Warningf)
 }
