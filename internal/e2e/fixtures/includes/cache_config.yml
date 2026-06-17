@@ -1,0 +1,7 @@
+caches:
+  - name: relative_paths
+    cache_key:
+      - cache-e2e-relative
+      - { env: BUILDKITE_BUILD_ID }
+    target_paths:
+      - cache-src
