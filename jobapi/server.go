@@ -57,8 +57,9 @@ type Server struct {
 
 	// promiseFailures coalesces concurrent and repeated promise-failure calls so
 	// each exit status is declared to the Buildkite API at most once
-	// successfully. Each entry is an in-flight or successful declaration; failed
-	// ones are removed so a later call can retry. Guarded by mtx.
+	// successfully. Each entry is an in-flight declaration or a cached success or
+	// terminal failure; transient failures are removed so a later call can retry.
+	// Guarded by mtx.
 	promiseFailures map[int]*promiseFailure
 
 	// declarePromiseFailure declares a promised failure to the Buildkite API.

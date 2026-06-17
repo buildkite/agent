@@ -593,26 +593,49 @@ func TestPromiseFailureInvalidExitStatus(t *testing.T) {
 	}
 }
 
-func TestPromiseFailureNotCachedOnError(t *testing.T) {
+func TestPromiseFailureNotCachedOnTransientError(t *testing.T) {
 	t.Parallel()
 
 	var calls atomic.Int64
 	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
 		calls.Add(1)
-		return http.StatusUnprocessableEntity, fmt.Errorf("the job is no longer running")
+		return http.StatusServiceUnavailable, fmt.Errorf("the Buildkite API is unavailable")
 	})
 
-	// A failed declaration is surfaced with the Buildkite API's status code, and
+	// A transient failure is surfaced with the Buildkite API's status code, and
 	// isn't cached: a later call for the same exit status retries.
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
-		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusServiceUnavailable {
+		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusServiceUnavailable)
 	}
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
-		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusServiceUnavailable {
+		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusServiceUnavailable)
 	}
 
 	if got := calls.Load(); got != 2 {
-		t.Errorf("declarer calls = %d, want 2 (failures must not be cached)", got)
+		t.Errorf("declarer calls = %d, want 2 (transient failures must not be cached)", got)
+	}
+}
+
+func TestPromiseFailureCachedOnTerminalError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int64
+	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
+		calls.Add(1)
+		return http.StatusConflict, fmt.Errorf("a different exit status was already declared")
+	})
+
+	// A terminal failure is cached: a later call for the same exit status returns
+	// the same status without re-hitting the Buildkite API.
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusConflict {
+		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusConflict)
+	}
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusConflict {
+		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusConflict)
+	}
+
+	if got := calls.Load(); got != 1 {
+		t.Errorf("declarer calls = %d, want 1 (terminal failures must be cached)", got)
 	}
 }
 
@@ -733,9 +756,9 @@ func TestPromiseFailureConcurrent(t *testing.T) {
 func TestPromiseFailureConcurrentError(t *testing.T) {
 	t.Parallel()
 
-	// The declarer blocks until released, then fails. Holding the in-flight
-	// attempt open lets a burst of concurrent callers reliably coalesce onto it
-	// and all observe the same failure.
+	// The declarer blocks until released, then fails transiently. Holding the
+	// in-flight attempt open lets a burst of concurrent callers reliably coalesce
+	// onto it and all observe the same failure.
 	var calls atomic.Int64
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -744,7 +767,7 @@ func TestPromiseFailureConcurrentError(t *testing.T) {
 		calls.Add(1)
 		startOnce.Do(func() { close(started) })
 		<-release
-		return http.StatusUnprocessableEntity, fmt.Errorf("the job is no longer running")
+		return http.StatusServiceUnavailable, fmt.Errorf("the Buildkite API is unavailable")
 	})
 
 	const n = 50
@@ -753,8 +776,8 @@ func TestPromiseFailureConcurrentError(t *testing.T) {
 	for range n {
 		go func() {
 			defer wg.Done()
-			if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
-				t.Errorf("concurrent promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
+			if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusServiceUnavailable {
+				t.Errorf("concurrent promiseFailureRequest(1) status = %d, want %d", got, http.StatusServiceUnavailable)
 			}
 		}()
 	}
@@ -770,9 +793,9 @@ func TestPromiseFailureConcurrentError(t *testing.T) {
 	if got := calls.Load(); got != 1 {
 		t.Errorf("declarer calls during burst = %d, want exactly 1", got)
 	}
-	// ...but because the failure wasn't cached, a later call retries.
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
-		t.Errorf("later promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
+	// ...but because the transient failure wasn't cached, a later call retries.
+	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusServiceUnavailable {
+		t.Errorf("later promiseFailureRequest(1) status = %d, want %d", got, http.StatusServiceUnavailable)
 	}
 	if got := calls.Load(); got != 2 {
 		t.Errorf("declarer calls after retry = %d, want 2", got)

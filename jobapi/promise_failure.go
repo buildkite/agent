@@ -18,12 +18,20 @@ type promiseFailure struct {
 	err        error         // declaration result; nil means accepted
 }
 
+// terminalStatus reports whether an HTTP status is a definitive client error
+// that won't change on retry (e.g. 409, 422), so the result can be cached. A 429
+// is excluded because it's retryable.
+func terminalStatus(status int) bool {
+	return status >= 400 && status < 500 && status != http.StatusTooManyRequests
+}
+
 // promiseFailure declares a promised failure to the Buildkite API for
 // 'buildkite-agent job promise-failure', debouncing repeated and concurrent
 // calls so each exit status is declared at most once successfully. The first
 // caller declares it (blocking on the API so it can return an accurate result),
-// concurrent callers wait and share that outcome, and callers after a success
-// return from the cache. Failures aren't cached, so a later call can retry.
+// concurrent callers wait and share that outcome, and callers after a success or
+// a terminal failure return from the cache. Transient failures aren't cached, so
+// a later call can retry.
 func (s *Server) promiseFailure(w http.ResponseWriter, r *http.Request) {
 	payload := &PromiseFailureRequest{}
 	if err := json.NewDecoder(r.Body).Decode(payload); err != nil {
@@ -91,9 +99,11 @@ func (s *Server) promiseFailure(w http.ResponseWriter, r *http.Request) {
 		completed = true
 
 		s.mtx.Lock()
-		if pf.err != nil {
-			// Don't cache failures, so a later call can retry. Waiters already
-			// hold pf and still see this result.
+		if pf.err != nil && !terminalStatus(pf.statusCode) {
+			// Evict transient failures (5xx, network, 429) so a later call can
+			// retry. Terminal failures (other 4xx, e.g. 409/422) stay cached so
+			// repeated calls don't keep hitting the Buildkite API. Waiters
+			// already hold pf and still see this result either way.
 			delete(s.promiseFailures, payload.ExitStatus)
 		}
 		close(pf.done)
