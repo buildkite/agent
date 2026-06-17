@@ -1,0 +1,64 @@
+# cache save/restore filesystem integrity: nested + empty dirs, file
+# permissions, symlinks, and a literal absolute target path. The cache config
+# is shared via a base64 env var; its cache_key embeds BUILDKITE_BUILD_ID so
+# each build gets a unique, freshly-created entry. The config's __HOME__
+# placeholder is replaced with the resolved $HOME when cache.yml is written,
+# so the absolute path exercises the IsAbs branch (not tilde expansion).
+env:
+  BUILDKITE_AGENT_CACHE_STORE_URL: s3://buildkite-agent-e2e-tests-shared/cache-e2e-test?region=us-west-2
+  CACHE_CONFIG_B64: "{{ fixture "includes/cache_filesystem_config.yml" | b64enc }}"
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: save
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - |
+        set -euo pipefail
+        rm -rf fs-test ~/cache-abs-fs
+        mkdir -p fs-test/nested/deep fs-test/empty-dir ~/cache-abs-fs
+        echo data > fs-test/data.txt
+        echo deep > fs-test/nested/deep/file.txt
+        printf '#!/bin/sh\necho hi\n' > fs-test/exec.sh
+        chmod 0644 fs-test/data.txt fs-test/nested/deep/file.txt
+        chmod 0755 fs-test/exec.sh
+        ln -s nested/deep/file.txt fs-test/link
+        echo abs > ~/cache-abs-fs/abs-file.txt
+      - echo "$$CACHE_CONFIG_B64" | base64 -d | sed "s|__HOME__|$$HOME|g" > cache.yml
+      - {{ .buildkite_agent_binary }} cache save --cache-config-file cache.yml
+  - key: restore
+    depends_on: save
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - rm -rf fs-test ~/cache-abs-fs
+      - echo "$$CACHE_CONFIG_B64" | base64 -d | sed "s|__HOME__|$$HOME|g" > cache.yml
+      - {{ .buildkite_agent_binary }} cache restore --cache-config-file cache.yml
+      - |
+        set -euo pipefail
+        # nested directories + content
+        [[ "$(cat fs-test/data.txt)" == "data" ]]
+        [[ "$(cat fs-test/nested/deep/file.txt)" == "deep" ]]
+        # empty directory preserved
+        test -d fs-test/empty-dir
+        [[ -z "$(ls -A fs-test/empty-dir)" ]]
+        # file permissions preserved
+        [[ "$(ls -ld fs-test/exec.sh | cut -c1-10)" == "-rwxr-xr-x" ]]
+        [[ "$(ls -ld fs-test/data.txt | cut -c1-10)" == "-rw-r--r--" ]]
+        # symlink preserved (type + target)
+        test -L fs-test/link
+        [[ "$(readlink fs-test/link)" == "nested/deep/file.txt" ]]
+        # absolute (home) target path
+        [[ "$(cat ~/cache-abs-fs/abs-file.txt)" == "abs" ]]
+        rm -rf ~/cache-abs-fs
