@@ -22,6 +22,22 @@ func WithDebug() ServerOpts {
 	}
 }
 
+// WithPromiseFailureDeclarer sets the function the /promise-failure endpoint
+// uses to declare promised failures to the Buildkite API. Debouncing means it's
+// called at most once per successfully-declared exit status. If unset (e.g. in
+// tests), the endpoint returns an error.
+func WithPromiseFailureDeclarer(d PromiseFailureDeclarer) ServerOpts {
+	return func(s *Server) {
+		s.declarePromiseFailure = d
+	}
+}
+
+// PromiseFailureDeclarer declares a promised failure for the current job to the
+// Buildkite API. It returns the status code of the most recent API response (0
+// if none was received, e.g. a network error after exhausting retries) and an
+// error describing any failure. A nil error means the declaration was accepted.
+type PromiseFailureDeclarer func(ctx context.Context, exitStatus int, reason string) (statusCode int, err error)
+
 // Server is a Job API server. It provides an HTTP API with which to interact with the job currently running in the buildkite agent
 // and allows jobs to introspect and mutate their own state
 type Server struct {
@@ -39,11 +55,16 @@ type Server struct {
 	// process exits. Guarded by mtx.
 	pendingWorkdir string
 
-	// promisedFailures records the exit statuses that have already been claimed
-	// for a promised failure, so that repeated calls to
-	// 'buildkite-agent job promise-failure' only declare each exit status to the
-	// Buildkite API once. It is guarded by mtx.
-	promisedFailures map[int]struct{}
+	// promiseFailures coalesces concurrent and repeated promise-failure calls so
+	// each exit status is declared to the Buildkite API at most once
+	// successfully. Each entry is an in-flight or successful declaration; failed
+	// ones are removed so a later call can retry. Guarded by mtx.
+	promiseFailures map[int]*promiseFailure
+
+	// declarePromiseFailure declares a promised failure to the Buildkite API.
+	// It's nil if the server wasn't configured with a declarer (e.g. in tests),
+	// in which case the /promise-failure endpoint returns an error.
+	declarePromiseFailure PromiseFailureDeclarer
 
 	token   string
 	sockSvr *socket.Server
@@ -65,12 +86,12 @@ func NewServer(
 	}
 
 	s := &Server{
-		SocketPath:       socketPath,
-		Logger:           logger,
-		environ:          environ,
-		redactors:        redactors,
-		promisedFailures: make(map[int]struct{}),
-		token:            token,
+		SocketPath:      socketPath,
+		Logger:          logger,
+		environ:         environ,
+		redactors:       redactors,
+		promiseFailures: make(map[int]*promiseFailure),
+		token:           token,
 	}
 
 	for _, o := range opts {

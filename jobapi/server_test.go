@@ -37,12 +37,12 @@ func testEnviron() *env.Environment {
 	return e
 }
 
-func testServer(t *testing.T, e *env.Environment, mux *replacer.Mux) (*jobapi.Server, string, error) {
+func testServer(t *testing.T, e *env.Environment, mux *replacer.Mux, opts ...jobapi.ServerOpts) (*jobapi.Server, string, error) {
 	sockName, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
 		return nil, "", fmt.Errorf("creating socket path: %w", err)
 	}
-	return jobapi.NewServer(shell.TestingLogger{T: t}, sockName, e, mux)
+	return jobapi.NewServer(shell.TestingLogger{T: t}, sockName, e, mux, opts...)
 }
 
 func testSocketClient(socketPath string) *http.Client {
@@ -480,136 +480,273 @@ func TestCreateRedaction(t *testing.T) {
 	}
 }
 
-func TestPromiseFailure(t *testing.T) {
-	t.Parallel()
+// startPromiseFailureServer starts a Job API server with the given promised-
+// failure declarer and returns a socket client and auth token for it.
+func startPromiseFailureServer(t *testing.T, declarer jobapi.PromiseFailureDeclarer) (*http.Client, string) {
+	t.Helper()
 
-	env := testEnviron()
-	srv, token, err := testServer(t, env, replacer.NewMux())
+	srv, token, err := testServer(t, testEnviron(), replacer.NewMux(), jobapi.WithPromiseFailureDeclarer(declarer))
 	if err != nil {
-		t.Fatalf("testServer(t, env) error = %v", err)
+		t.Fatalf("testServer() error = %v", err)
 	}
-
 	if err := srv.Start(); err != nil {
 		t.Fatalf("srv.Start() error = %v", err)
 	}
 	t.Cleanup(func() {
 		if err := srv.Stop(); err != nil {
-			t.Fatalf("srv.Stop() error = %v", err)
+			t.Errorf("srv.Stop() error = %v", err)
 		}
 	})
+	return testSocketClient(srv.SocketPath), token
+}
 
-	client := testSocketClient(srv.SocketPath)
+// promiseFailureRequest POSTs a promise-failure declaration to the Job API and
+// returns the HTTP status code.
+func promiseFailureRequest(t *testing.T, client *http.Client, token string, exitStatus int) int {
+	t.Helper()
 
-	claim := func(exitStatus int) bool {
-		t.Helper()
-
-		buf := &bytes.Buffer{}
-		if err := json.NewEncoder(buf).Encode(&jobapi.PromiseFailureRequest{ExitStatus: exitStatus}); err != nil {
-			t.Fatalf("encoding request: %v", err)
-		}
-
-		req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/promise-failure", buf)
-		if err != nil {
-			t.Fatalf("creating request: %v", err)
-		}
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("client.Do(req) error = %v", err)
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("resp.StatusCode = %d, want %d", resp.StatusCode, http.StatusOK)
-		}
-
-		var got jobapi.PromiseFailureResponse
-		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
-			t.Fatalf("decoding response: %v", err)
-		}
-		return got.Claimed
+	buf := &bytes.Buffer{}
+	if err := json.NewEncoder(buf).Encode(&jobapi.PromiseFailureRequest{ExitStatus: exitStatus}); err != nil {
+		t.Fatalf("encoding request: %v", err)
 	}
 
-	// The first claim of an exit status succeeds; repeated claims of the same
-	// exit status are debounced, but a different exit status can still be
-	// claimed.
-	if got := claim(1); !got {
-		t.Errorf("first claim(1) = %t, want true", got)
+	req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/promise-failure", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
 	}
-	if got := claim(1); got {
-		t.Errorf("second claim(1) = %t, want false", got)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("client.Do(req) error = %v", err)
 	}
-	if got := claim(2); !got {
-		t.Errorf("first claim(2) = %t, want true", got)
+	defer resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestPromiseFailure(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu    sync.Mutex
+		calls []int // exit statuses passed to the declarer
+	)
+	client, token := startPromiseFailureServer(t, func(_ context.Context, exitStatus int, _ string) (int, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls = append(calls, exitStatus)
+		return http.StatusNoContent, nil
+	})
+
+	// The first declaration of an exit status calls the Buildkite API; repeated
+	// calls for the same exit status are debounced (no extra API call), but a
+	// different exit status is declared on its own. All callers see success.
+	for _, exitStatus := range []int{1, 1, 2} {
+		if got := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusOK {
+			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusOK)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if diff := cmp.Diff([]int{1, 2}, calls); diff != "" {
+		t.Errorf("declarer calls diff (-want +got):\n%s", diff)
+	}
+}
+
+func TestPromiseFailureInvalidExitStatus(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int64
+	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
+		calls.Add(1)
+		return http.StatusNoContent, nil
+	})
+
+	// A non-positive exit status is rejected at the boundary, without reaching
+	// the declarer (and therefore the Buildkite API).
+	for _, exitStatus := range []int{0, -1} {
+		if got := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusBadRequest {
+			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusBadRequest)
+		}
+	}
+	if got := calls.Load(); got != 0 {
+		t.Errorf("declarer calls = %d, want 0", got)
+	}
+}
+
+func TestPromiseFailureNotCachedOnError(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int64
+	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
+		calls.Add(1)
+		return http.StatusUnprocessableEntity, fmt.Errorf("the job is no longer running")
+	})
+
+	// A failed declaration is surfaced with the Buildkite API's status code, and
+	// isn't cached: a later call for the same exit status retries.
+	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
+		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
+	}
+	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
+		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
+	}
+
+	if got := calls.Load(); got != 2 {
+		t.Errorf("declarer calls = %d, want 2 (failures must not be cached)", got)
+	}
+}
+
+func TestPromiseFailureStatusNormalization(t *testing.T) {
+	t.Parallel()
+
+	// The declarer reports errors with statuses that aren't usable HTTP error
+	// codes: a missing status (network error) and a non-error status.
+	client, token := startPromiseFailureServer(t, func(_ context.Context, exitStatus int, _ string) (int, error) {
+		switch exitStatus {
+		case 1:
+			return 0, fmt.Errorf("network error after retries")
+		case 2:
+			return http.StatusNoContent, fmt.Errorf("error with a non-error status")
+		}
+		return http.StatusNoContent, nil
+	})
+
+	// Both are normalized to 502, so a caller never reads an error as success.
+	for _, exitStatus := range []int{1, 2} {
+		if got := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusBadGateway {
+			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusBadGateway)
+		}
+	}
+}
+
+func TestPromiseFailurePanicRecovers(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int64
+	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
+		if calls.Add(1) == 1 {
+			panic("declarer boom")
+		}
+		return http.StatusNoContent, nil
+	})
+
+	// The first call panics inside the declarer; the recovery middleware turns it
+	// into a 500 rather than leaving the caller (and any waiters) hung.
+	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusInternalServerError {
+		t.Errorf("panicking promiseFailureRequest(1) status = %d, want %d", got, http.StatusInternalServerError)
+	}
+	// The poisoned entry was dropped, so a later call gets a fresh attempt and
+	// succeeds instead of blocking forever.
+	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+		t.Errorf("retried promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Errorf("declarer calls = %d, want 2", got)
+	}
+}
+
+func TestPromiseFailurePanicConcurrent(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int64
+	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
+		calls.Add(1)
+		time.Sleep(20 * time.Millisecond)
+		panic("declarer boom")
+	})
+
+	// A burst of callers coalesce onto a leader whose declaration panics. The
+	// leader is recovered to 500 and every waiter must also unblock with 500,
+	// rather than hanging on a channel that's never closed. (If any caller hung,
+	// the wait below would never return and the test would time out.)
+	const n = 50
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for range n {
+		go func() {
+			defer wg.Done()
+			if got := promiseFailureRequest(t, client, token, 1); got != http.StatusInternalServerError {
+				t.Errorf("promiseFailureRequest(1) status = %d, want %d", got, http.StatusInternalServerError)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := calls.Load(); got < 1 {
+		t.Errorf("declarer calls = %d, want at least 1", got)
 	}
 }
 
 func TestPromiseFailureConcurrent(t *testing.T) {
 	t.Parallel()
 
-	env := testEnviron()
-	srv, token, err := testServer(t, env, replacer.NewMux())
-	if err != nil {
-		t.Fatalf("testServer(t, env) error = %v", err)
-	}
-
-	if err := srv.Start(); err != nil {
-		t.Fatalf("srv.Start() error = %v", err)
-	}
-	t.Cleanup(func() {
-		if err := srv.Stop(); err != nil {
-			t.Fatalf("srv.Stop() error = %v", err)
-		}
+	// The declarer sleeps briefly so concurrent callers pile up behind the first
+	// one and exercise the coalescing wait path.
+	var calls atomic.Int64
+	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
+		calls.Add(1)
+		time.Sleep(20 * time.Millisecond)
+		return http.StatusNoContent, nil
 	})
 
-	client := testSocketClient(srv.SocketPath)
-
-	// Many processes claiming the same exit status concurrently must result in
-	// exactly one claim, so only one declares the promised failure to the
-	// Buildkite API.
+	// Many processes declaring the same exit status concurrently must result in
+	// exactly one declaration to the Buildkite API, while every caller still
+	// sees the successful outcome.
 	const n = 50
-	var (
-		wg      sync.WaitGroup
-		claimed atomic.Int64
-	)
+	var wg sync.WaitGroup
 	wg.Add(n)
 	for range n {
 		go func() {
 			defer wg.Done()
-
-			buf := &bytes.Buffer{}
-			if err := json.NewEncoder(buf).Encode(&jobapi.PromiseFailureRequest{ExitStatus: 1}); err != nil {
-				t.Errorf("encoding request: %v", err)
-				return
-			}
-
-			req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/promise-failure", buf)
-			if err != nil {
-				t.Errorf("creating request: %v", err)
-				return
-			}
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-
-			resp, err := client.Do(req)
-			if err != nil {
-				t.Errorf("client.Do(req) error = %v", err)
-				return
-			}
-
-			var got jobapi.PromiseFailureResponse
-			if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
-				t.Errorf("decoding response: %v", err)
-				return
-			}
-			if got.Claimed {
-				claimed.Add(1)
+			if got := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+				t.Errorf("promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
 			}
 		}()
 	}
 	wg.Wait()
 
-	if got := claimed.Load(); got != 1 {
-		t.Errorf("number of claimed responses = %d, want exactly 1", got)
+	if got := calls.Load(); got != 1 {
+		t.Errorf("declarer calls = %d, want exactly 1", got)
+	}
+}
+
+func TestPromiseFailureConcurrentError(t *testing.T) {
+	t.Parallel()
+
+	// The declarer sleeps then fails, so a burst of concurrent callers coalesce
+	// onto the single in-flight attempt and all observe the same failure.
+	var calls atomic.Int64
+	client, token := startPromiseFailureServer(t, func(_ context.Context, _ int, _ string) (int, error) {
+		calls.Add(1)
+		time.Sleep(20 * time.Millisecond)
+		return http.StatusUnprocessableEntity, fmt.Errorf("the job is no longer running")
+	})
+
+	const n = 50
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for range n {
+		go func() {
+			defer wg.Done()
+			if got := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
+				t.Errorf("concurrent promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// The burst coalesced into a single declaration...
+	if got := calls.Load(); got != 1 {
+		t.Errorf("declarer calls during burst = %d, want exactly 1", got)
+	}
+	// ...but because the failure wasn't cached, a later call retries.
+	if got := promiseFailureRequest(t, client, token, 1); got != http.StatusUnprocessableEntity {
+		t.Errorf("later promiseFailureRequest(1) status = %d, want %d", got, http.StatusUnprocessableEntity)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Errorf("declarer calls after retry = %d, want 2", got)
 	}
 }
 

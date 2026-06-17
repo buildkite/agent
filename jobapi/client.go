@@ -123,17 +123,17 @@ func (c *Client) RedactionCreate(ctx context.Context, text string) (string, erro
 	return resp.Redacted, nil
 }
 
-// PromiseFailureClaim claims the given exit status for a promised failure. It
-// returns true if this caller is the first to claim the exit status for the job
-// (and so should declare the promised failure to the Buildkite API), or false
-// if the exit status has already been claimed by an earlier call.
-func (c *Client) PromiseFailureClaim(ctx context.Context, exitStatus int) (bool, error) {
+// DeclarePromiseFailure asks the Job API to declare a promised failure with the
+// given exit status and reason to the Buildkite API, blocking until it
+// completes. The server debounces repeated and concurrent calls for the same
+// exit status: concurrent callers share one in-flight call, and once it succeeds
+// later calls return from the cache. A nil error means the promise was accepted.
+// A failed declaration is returned as a socket.APIErr carrying the HTTP status
+// code (the Buildkite API's status when it responded, otherwise 502).
+func (c *Client) DeclarePromiseFailure(ctx context.Context, exitStatus int, reason string) error {
 	req := PromiseFailureRequest{
 		ExitStatus: exitStatus,
+		Reason:     reason,
 	}
-	var resp PromiseFailureResponse
-	if err := c.client.Do(ctx, http.MethodPost, promiseFailureURL, &req, &resp); err != nil {
-		return false, err
-	}
-	return resp.Claimed, nil
+	return c.client.Do(ctx, http.MethodPost, promiseFailureURL, &req, nil)
 }

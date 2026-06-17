@@ -71,13 +71,6 @@ type RedactionCreateResponse struct {
 
 // PromiseFailureRequest is the request body for the POST /promise-failure endpoint
 type PromiseFailureRequest struct {
-	ExitStatus int `json:"exit_status"`
-}
-
-// PromiseFailureResponse is the response body for the POST /promise-failure endpoint
-type PromiseFailureResponse struct {
-	// Claimed is true if this caller is the first to claim the given exit
-	// status for the job, and so is responsible for declaring the promised
-	// failure to the Buildkite API.
-	Claimed bool `json:"claimed"`
+	ExitStatus int    `json:"exit_status"`
+	Reason     string `json:"reason,omitempty"`
 }

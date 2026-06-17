@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/redact"
+	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/roko"
@@ -84,98 +86,106 @@ var JobPromiseFailureCommand = cli.Command{
 			return fmt.Errorf("exit status must be a positive integer: a promised failure cannot have a zero (successful) or negative exit status")
 		}
 
-		// A promised failure only makes sense for the current job: the API
-		// authenticates with the job's own token and rejects declarations for
-		// any other job, so we always use BUILDKITE_JOB_ID.
+		// Always target the current job (BUILDKITE_JOB_ID): the API requires a
+		// job token and rejects (403) any other job, and a promised failure only
+		// makes sense for the job that's running.
 		jobID := os.Getenv("BUILDKITE_JOB_ID")
 		if jobID == "" {
 			return fmt.Errorf("BUILDKITE_JOB_ID is not set: this command must be run from within a job")
 		}
 
-		// Debounce repeated calls via the Job API: customers may call this on
-		// every test failure, but each exit status only needs declaring to the
-		// Buildkite API once. The first caller to claim an exit status declares
-		// it; later callers skip without touching the API.
-		if promiseFailureAlreadyClaimed(ctx, l, exitStatus) {
-			return nil
-		}
-
-		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-
 		needles, _, err := redact.NeedlesFromEnv(cfg.RedactedVars)
 		if err != nil {
 			return err
 		}
-		if redactedValue := redact.String(cfg.Reason, needles); redactedValue != cfg.Reason {
+		reason := cfg.Reason
+		if redactedValue := redact.String(reason, needles); redactedValue != reason {
 			l.Warnf("The promise-failure reason for job %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", jobID)
-			cfg.Reason = redactedValue
+			reason = redactedValue
 		}
 
-		req := &api.JobPromiseFailureRequest{
-			ExitStatus: exitStatus,
-			Reason:     cfg.Reason,
-		}
-
-		err = roko.NewRetrier(
-			roko.WithMaxAttempts(10),
-			roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			resp, err := client.PromiseFailure(ctx, jobID, req)
-			if api.BreakOnNonRetryable(r, resp, err) {
-				return err
-			}
-			if err != nil {
-				l.Warnf("%s (%s)", err, r)
-				return err
-			}
-			return nil
-		})
+		// Prefer the Job API: it debounces repeated and concurrent calls (this
+		// may be called on every test failure) so the failure is declared at most
+		// once successfully, blocking for an accurate result. Declare directly
+		// only when the Job API can't be used (--no-job-api, or old Windows
+		// without Unix sockets) or can't be reached.
+		client, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
-			// The promise wasn't accepted. Exit non-zero so the outcome is
-			// visible to scripts; callers who consider a given case acceptable
-			// can append '|| true'.
-			switch {
-			case api.IsErrHavingStatus(err, http.StatusConflict):
-				return fmt.Errorf("a different promised exit status has already been declared for this job: %w", err)
-
-			case api.IsErrHavingStatus(err, http.StatusUnprocessableEntity):
-				return fmt.Errorf("the job is no longer running and cannot accept a promised failure: %w", err)
-			}
-
-			return fmt.Errorf("failed to declare promised job failure: %w", err)
+			l.Debugf("Job API unavailable, declaring promised failure directly: %v", err)
+			return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
 		}
 
-		l.Infof("Declared promised exit status %d for job %s", exitStatus, jobID)
-		return nil
+		err = client.DeclarePromiseFailure(ctx, exitStatus, reason)
+		if err == nil {
+			l.Infof("Declared promised exit status %d for job %s", exitStatus, jobID)
+			return nil
+		}
+
+		// The Job API returned a definitive HTTP error: the Buildkite API
+		// rejected the declaration (409, 422) or was unreachable after retries
+		// (502). Surface it rather than declaring again.
+		var apiErr socket.APIErr
+		if errors.As(err, &apiErr) {
+			return promiseFailureError(apiErr.StatusCode, err)
+		}
+
+		// We couldn't reach the Job API (or its response was lost). Declare
+		// directly so the promise still lands; the endpoint is idempotent for the
+		// same exit status, so a duplicate is safe.
+		l.Warnf("Couldn't reach the Job API to declare the promised failure; declaring it directly: %v", err)
+		return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
 	},
 }
 
-// promiseFailureAlreadyClaimed consults the Job API to debounce repeated
-// promise-failure calls: customers may call this on every test failure, but
-// each exit status only needs declaring to the Buildkite API once.
-//
-// It returns true if this exit status has already been claimed by an earlier
-// call and the caller should skip declaring it. It returns false when the
-// caller should go ahead and declare: either because this is the first call to
-// claim the exit status, or because the Job API isn't usable (--no-job-api, or
-// old Windows versions without Unix-socket support) and we declare directly
-// without debouncing.
-func promiseFailureAlreadyClaimed(ctx context.Context, l logger.Logger, exitStatus int) bool {
-	client, err := jobapi.NewDefaultClient(ctx)
-	if err != nil {
-		l.Debugf("Job API unavailable, declaring promised failure without debouncing: %v", err)
-		return false
+// promiseFailureError wraps err with a human-readable message for the Buildkite
+// API status code. The command exits non-zero so the failure is visible to
+// scripts, which can append '|| true' to ignore it.
+func promiseFailureError(status int, err error) error {
+	switch status {
+	case http.StatusConflict:
+		return fmt.Errorf("a different promised exit status has already been declared for this job: %w", err)
+
+	case http.StatusUnprocessableEntity:
+		return fmt.Errorf("the job is no longer running and cannot accept a promised failure: %w", err)
 	}
 
-	claimed, err := client.PromiseFailureClaim(ctx, exitStatus)
-	if err != nil {
-		l.Warnf("Couldn't reach the Job API to debounce the promised failure; declaring it directly: %v", err)
-		return false
-	}
-	if !claimed {
-		l.Debugf("Promised exit status %d has already been claimed; skipping duplicate", exitStatus)
-		return true
+	return fmt.Errorf("failed to declare promised job failure: %w", err)
+}
+
+// declarePromiseFailureDirectly declares a promised failure straight to the
+// Buildkite API, without debouncing via the Job API. It's used as a fallback
+// when the Job API can't be used or reached.
+func declarePromiseFailureDirectly(ctx context.Context, l logger.Logger, cfg JobPromiseFailureConfig, jobID string, exitStatus int, reason string) error {
+	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
+
+	req := &api.JobPromiseFailureRequest{
+		ExitStatus: exitStatus,
+		Reason:     reason,
 	}
 
-	return false
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		resp, err := client.PromiseFailure(ctx, jobID, req)
+		if api.BreakOnNonRetryable(r, resp, err) {
+			return err
+		}
+		if err != nil {
+			l.Warnf("%s (%s)", err, r)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		status := 0
+		var apiErr *api.ErrorResponse
+		if errors.As(err, &apiErr) {
+			status = apiErr.Response.StatusCode
+		}
+		return promiseFailureError(status, err)
+	}
+
+	l.Infof("Declared promised exit status %d for job %s", exitStatus, jobID)
+	return nil
 }
