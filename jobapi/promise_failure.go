@@ -25,14 +25,17 @@ func terminalStatus(status int) bool {
 	return status >= 400 && status < 500 && status != http.StatusTooManyRequests
 }
 
-// promiseFailure declares a promised failure to the Buildkite API for
+// handlePromiseFailure declares a promised failure to the Buildkite API for
 // 'buildkite-agent job promise-failure', debouncing repeated and concurrent
 // calls so each exit status is declared at most once successfully. The first
 // caller declares it (blocking on the API so it can return an accurate result),
 // concurrent callers wait and share that outcome, and callers after a success or
 // a terminal failure return from the cache. Transient failures aren't cached, so
 // a later call can retry.
-func (s *Server) promiseFailure(w http.ResponseWriter, r *http.Request) {
+//
+// Debouncing keys on exit status only, so for a given exit status the first
+// caller's reason wins and later callers' reasons are ignored.
+func (s *Server) handlePromiseFailure(w http.ResponseWriter, r *http.Request) {
 	payload := &PromiseFailureRequest{}
 	if err := json.NewDecoder(r.Body).Decode(payload); err != nil {
 		if err := socket.WriteError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest); err != nil {
