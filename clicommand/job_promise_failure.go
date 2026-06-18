@@ -116,7 +116,8 @@ var JobPromiseFailureCommand = cli.Command{
 		outcome, err := client.DeclarePromiseFailure(ctx, exitStatus, reason)
 		if err == nil {
 			if outcome == jobapi.PromiseFailureDebounced {
-				l.Infof("Promised exit status %d already declared for job %s (debounced)", exitStatus, jobID)
+				// Log at debug to avoid spamming job logs on repeated calls.
+				l.Debugf("Promised exit status %d already declared for job %s (debounced)", exitStatus, jobID)
 			} else {
 				l.Infof("Declared promised exit status %d for job %s", exitStatus, jobID)
 			}
