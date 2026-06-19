@@ -631,7 +631,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
 		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
 	}
-	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
+	if len(r.conf.AgentConfiguration.GitSubmoduleCloneConfig) > 0 {
+		setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
+	}
 	setEnv("BUILDKITE_GIT_COMMIT_VERIFICATION", r.conf.AgentConfiguration.GitCommitVerification)
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
