@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
@@ -40,6 +41,22 @@ func writeAgentHook(t *testing.T, dir, hookName, msg string) string {
 		t.Fatalf("%+v", err)
 	}
 	t.Log("Providing the path with file created")
+	return filepath
+}
+
+func writeAgentHookScript(t *testing.T, dir, hookName, script string) string {
+	t.Helper()
+
+	filename := hookName
+	if runtime.GOOS == "windows" {
+		filename = hookName + ".bat"
+	}
+
+	filepath := filepath.Join(dir, filename)
+	t.Logf("Creating %q", filepath)
+	if err := os.WriteFile(filepath, []byte(script), 0o755); err != nil {
+		t.Fatalf("%+v", err)
+	}
 	return filepath
 }
 
@@ -146,6 +163,62 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
 	})
+}
+
+func TestAgentPostRegistrationHook(t *testing.T) {
+	t.Parallel()
+
+	cfg := func(hooksPath string) AgentStartConfig {
+		return AgentStartConfig{
+			HooksPath:    hooksPath,
+			GlobalConfig: GlobalConfig{NoColor: true},
+		}
+	}
+	prompt := "$"
+	if runtime.GOOS == "windows" {
+		prompt = ">"
+	}
+
+	hooksPath, closer := setupHooksPath(t)
+	defer closer()
+
+	var script string
+	if runtime.GOOS == "windows" {
+		script = `@echo off
+echo id=%BUILDKITE_AGENT_ID%
+echo name=%BUILDKITE_AGENT_NAME%
+echo meta=%BUILDKITE_AGENT_META_DATA%`
+	} else {
+		script = `echo id=$BUILDKITE_AGENT_ID
+echo name=$BUILDKITE_AGENT_NAME
+echo meta=$BUILDKITE_AGENT_META_DATA`
+	}
+	filepath := writeAgentHookScript(t, hooksPath, "post-registration", script)
+
+	regs := []*api.AgentRegisterResponse{
+		{UUID: "agent-123", Name: "test-agent-1", Tags: []string{"queue=default", "os=linux"}},
+		{UUID: "agent-456", Name: "test-agent-2", Tags: []string{"queue=priority", "os=linux"}},
+	}
+
+	log := logger.NewBuffer()
+	for _, reg := range regs {
+		if err := agentPostRegistrationHook(log, cfg(hooksPath), reg); err != nil {
+			t.Fatalf("%+v", log.Messages)
+		}
+	}
+
+	if diff := cmp.Diff(log.Messages, []string{
+		"[info] " + prompt + " " + filepath,
+		"[info] id=agent-123",
+		"[info] name=test-agent-1",
+		"[info] meta=queue=default,os=linux",
+		"[info] " + prompt + " " + filepath,
+		"[info] id=agent-456",
+		"[info] name=test-agent-2",
+		"[info] meta=queue=priority,os=linux",
+	}); diff != "" {
+		t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestAgentShutdownHook(t *testing.T) {
