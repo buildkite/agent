@@ -79,7 +79,9 @@ var CacheSaveCommand = cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-save")
 		defer span.End()
 
-		l.Infof("Cache save command executed")
+		// Emit a Buildkite group header as raw job-log output so the cache
+		// output is collapsed into its own group.
+		fmt.Println("--- :package: Saving cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 

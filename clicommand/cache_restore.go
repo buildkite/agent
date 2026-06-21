@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/buildkite/agent/v3/api"
@@ -93,7 +94,9 @@ var CacheRestoreCommand = cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")
 		defer span.End()
 
-		l.Infof("Cache restore command executed")
+		// Emit a Buildkite group header as raw job-log output so the cache
+		// output is collapsed into its own group.
+		fmt.Println("--- :package: Restoring cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 		apiClient := api.NewClient(l, apiCfg)
