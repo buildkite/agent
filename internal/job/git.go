@@ -187,7 +187,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 	})
 
 	if err != nil && args.Retry {
-		return &gitError{error: err, Type: gitErrorLFS, WasRetried: true}
+		return &gitError{error: err, Type: gitErrorLFS, WasRetried: args.Retry}
 	}
 	return err
 }
