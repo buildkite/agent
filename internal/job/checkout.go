@@ -264,9 +264,16 @@ func (e *Executor) checkout(ctx context.Context) error {
 
 		// Fail fast before any git work if git-lfs is required but missing.
 		// This operation only handles default checkout behavior, so it's possible for a custom checkout hook to require git-lfs but not have this check. That's a bit unfortunate, but we can add it to custom hooks later if needed.
+		//
+		// We probe via `git lfs version` rather than looking up `git-lfs` on
+		// PATH directly: git resolves subcommands via GIT_EXEC_PATH before
+		// falling back to PATH, so on platforms where git-lfs is bundled
+		// alongside git (notably Git for Windows) the binary is reachable to
+		// `git lfs ...` even when a PATH lookup would miss it. This matches
+		// the resolution path used by the actual LFS commands later.
 		if e.GitLFSEnabled {
-			if _, err := e.shell.AbsolutePath("git-lfs"); err != nil {
-				return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but git-lfs binary is not found on PATH: %w", err)
+			if _, err := e.shell.Command("git", "lfs", "version").RunAndCaptureStdout(ctx, shell.ShowStderr(false)); err != nil {
+				return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: %w", err)
 			}
 		}
 

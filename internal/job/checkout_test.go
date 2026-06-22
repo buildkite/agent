@@ -450,15 +450,24 @@ func TestGitLFSBinaryMissing(t *testing.T) {
 	// Not parallel: the test manipulates PATH via t.Setenv, which modifies
 	// process-global state.
 
+	if runtime.GOOS == "windows" {
+		// Git for Windows bundles git-lfs.exe inside GIT_EXEC_PATH, which
+		// `git lfs ...` resolves before PATH. We can't reliably simulate
+		// "git-lfs unavailable to git" by restricting PATH on Windows.
+		t.Skip("Git for Windows bundles git-lfs.exe inside GIT_EXEC_PATH; precheck can't be broken via PATH")
+	}
+
 	ctx := t.Context()
+
+	// Provide a PATH where `git` is reachable but `git-lfs` is not, so the
+	// precheck's `git lfs version` exits non-zero with `'lfs' is not a git
+	// command`. This is the failure the precheck is meant to catch.
+	t.Setenv("PATH", gitOnlyBinDir(t))
 
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v, want nil", err)
 	}
-
-	// Use an empty PATH to simulate git-lfs not being installed
-	sh.Env.Set("PATH", "")
 
 	executor := &Executor{
 		shell: sh,
@@ -470,11 +479,36 @@ func TestGitLFSBinaryMissing(t *testing.T) {
 
 	err = executor.checkout(ctx)
 	if err == nil {
-		t.Fatalf("executor.checkout(ctx) error = nil, want error containing %q", "git-lfs binary is not found on PATH")
+		t.Fatalf("executor.checkout(ctx) error = nil, want error containing %q", "git lfs version")
 	}
-	if !strings.Contains(err.Error(), "git-lfs binary is not found on PATH") {
-		t.Errorf("executor.checkout(ctx) error = %q, want it to contain %q", err.Error(), "git-lfs binary is not found on PATH")
+	if !strings.Contains(err.Error(), "git lfs version") {
+		t.Errorf("executor.checkout(ctx) error = %q, want it to contain %q", err.Error(), "git lfs version")
 	}
+}
+
+// gitOnlyBinDir returns a temp dir containing git (via a symlink on Unix or
+// a .bat wrapper on Windows) but no git-lfs, so `git lfs ...` will fail with
+// "'lfs' is not a git command" while plain git commands still work.
+func gitOnlyBinDir(t *testing.T) string {
+	t.Helper()
+	gitBin, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("exec.LookPath(\"git\") error = %v", err)
+	}
+	binDir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		// Use a .bat wrapper to avoid copying the multi-MB binary and to
+		// sidestep the symlink-privilege requirement on Windows.
+		wrapper := fmt.Sprintf("@echo off\r\n\"%s\" %%*\r\n", gitBin)
+		if err := os.WriteFile(filepath.Join(binDir, "git.bat"), []byte(wrapper), 0o755); err != nil {
+			t.Fatalf("os.WriteFile() error = %v", err)
+		}
+	} else {
+		if err := os.Symlink(gitBin, filepath.Join(binDir, "git")); err != nil {
+			t.Fatalf("os.Symlink() error = %v", err)
+		}
+	}
+	return binDir
 }
 
 func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
@@ -486,31 +520,6 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
 	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
-
-	// gitOnlyBinDir returns a temp dir containing git (via a symlink on Unix or
-	// a .bat wrapper on Windows) but no git-lfs, so exec.LookPath("git-lfs")
-	// will fail while git commands still work.
-	gitOnlyBinDir := func(t *testing.T) string {
-		t.Helper()
-		gitBin, err := exec.LookPath("git")
-		if err != nil {
-			t.Fatalf("exec.LookPath(\"git\") error = %v", err)
-		}
-		binDir := t.TempDir()
-		if runtime.GOOS == "windows" {
-			// Use a .bat wrapper to avoid copying the multi-MB binary and to
-			// sidestep the symlink-privilege requirement on Windows.
-			wrapper := fmt.Sprintf("@echo off\r\n\"%s\" %%*\r\n", gitBin)
-			if err := os.WriteFile(filepath.Join(binDir, "git.bat"), []byte(wrapper), 0o755); err != nil {
-				t.Fatalf("os.WriteFile() error = %v", err)
-			}
-		} else {
-			if err := os.Symlink(gitBin, filepath.Join(binDir, "git")); err != nil {
-				t.Fatalf("os.Symlink() error = %v", err)
-			}
-		}
-		return binDir
-	}
 
 	// fakeLFSBinDir returns a temp dir that has git (via gitOnlyBinDir) plus a
 	// fake git-lfs whose behaviour is defined by the provided scripts.
