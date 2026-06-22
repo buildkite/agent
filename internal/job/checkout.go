@@ -272,7 +272,10 @@ func (e *Executor) checkout(ctx context.Context) error {
 		// `git lfs ...` even when a PATH lookup would miss it. This matches
 		// the resolution path used by the actual LFS commands later.
 		if e.GitLFSEnabled {
-			if _, err := e.shell.Command("git", "lfs", "version").RunAndCaptureStdout(ctx, shell.ShowStderr(false)); err != nil {
+			// Leave stderr visible: when this probe fails it is almost always
+			// a misconfigured agent environment, and git's specific message
+			// (e.g. "'lfs' is not a git command") is the fastest diagnostic.
+			if _, err := e.shell.Command("git", "lfs", "version").RunAndCaptureStdout(ctx, shell.ShowStderr(true)); err != nil {
 				return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: %w", err)
 			}
 		}

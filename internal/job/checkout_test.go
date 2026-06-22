@@ -463,6 +463,10 @@ func TestGitLFSBinaryMissing(t *testing.T) {
 	// precheck's `git lfs version` exits non-zero with `'lfs' is not a git
 	// command`. This is the failure the precheck is meant to catch.
 	t.Setenv("PATH", gitOnlyBinDir(t))
+	// Also clear GIT_EXEC_PATH so an inherited value (e.g. from Apple Git or
+	// a distro git package that bundles git-lfs in libexec/git-core) can't
+	// satisfy `git lfs ...` behind our back.
+	t.Setenv("GIT_EXEC_PATH", "")
 
 	sh, err := shell.New()
 	if err != nil {
