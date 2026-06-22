@@ -18,7 +18,8 @@ const cacheRestoreHelpDescription = `Usage:
 Description:
 
 Restores files from the cache for the current job based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml).
+defined in your cache config file (defaults to .buildkite/cache.yml or
+.buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be restored
 and their associated cache key. An entry is restored when its target_paths
@@ -33,8 +34,8 @@ Example:
 
     $ buildkite-agent cache restore
 
-This will restore all caches defined in .buildkite/cache.yml. You can also restore
-specific caches by providing their IDs:
+This will restore all caches defined in the cache configuration file.
+You can also restore specific caches by providing their IDs:
 
     $ buildkite-agent cache restore --names "node"
 
@@ -101,6 +102,11 @@ var CacheRestoreCommand = cli.Command{
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 		apiClient := api.NewClient(l, apiCfg)
 
+		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		if err != nil {
+			return err
+		}
+
 		// Build cache configuration
 		cacheCfg := cache.Config{
 			Registry:        cfg.Registry,
@@ -108,7 +114,7 @@ var CacheRestoreCommand = cli.Command{
 			Branch:          cfg.Branch,
 			Pipeline:        cfg.Pipeline,
 			Organization:    cfg.Organization,
-			CacheConfigFile: cfg.CacheConfigFile,
+			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 		}
 
