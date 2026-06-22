@@ -34,6 +34,7 @@ const (
 	hookExitStatusEnv = "BUILDKITE_HOOK_EXIT_STATUS"
 	hookWorkingDirEnv = "BUILDKITE_HOOK_WORKING_DIR"
 	hookWrapperDir    = "buildkite-agent-hook-wrapper"
+	testJobID         = "1111-1111-1111-1111"
 
 	batchWrapper = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
@@ -85,6 +86,13 @@ type WrapperTemplateInput struct {
 type EnvChanges struct {
 	Diff    env.Diff
 	afterWd string
+}
+
+// EnvChangesForWorkdir returns EnvChanges that only request a working directory
+// change (no env var diff). It's used to apply a working directory set by an
+// unwrapped hook via the Job API /workdir endpoint.
+func EnvChangesForWorkdir(wd string) EnvChanges {
+	return EnvChanges{afterWd: wd}
 }
 
 func (changes *EnvChanges) GetAfterWd() (string, error) {
@@ -247,7 +255,7 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
-	buildkiteAgent, err := os.Executable()
+	buildkiteAgent, err := resolveBuildkiteAgentBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +280,18 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 	wrap.wrapperPath = wrapperPath
 
 	return wrap, nil
+}
+
+func resolveBuildkiteAgentBinary() (string, error) {
+	// Integration tests override self-execution to a bintest mock so hook wrappers
+	// do not need to spin up the full test binary just to run `env dump`.
+	if os.Getenv("BUILDKITE_JOB_ID") == testJobID {
+		if overrideSelf := os.Getenv("BUILDKITE_OVERRIDE_SELF"); overrideSelf != "" {
+			return overrideSelf, nil
+		}
+	}
+
+	return os.Executable()
 }
 
 // WriteHookWrapper will write a hook wrapper script to a temporary file with the same extension as,

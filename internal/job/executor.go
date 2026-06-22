@@ -34,6 +34,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
+	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/go-pipeline"
@@ -72,6 +73,11 @@ type Executor struct {
 	// redactors for the job logs. The will be populated with values both from environment variable and through the Job API.
 	// In order for the latter to happen, a reference is passed into the the Job API server as well
 	redactors *replacer.Mux
+
+	// jobAPI is the Job API server for this job. It's retained so the executor
+	// can consume out-of-band requests made by hooks, such as a working
+	// directory set by an unwrapped hook via the /workdir endpoint.
+	jobAPI *jobapi.Server
 }
 
 // New returns a new executor instance
@@ -463,7 +469,19 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	// Passing an empty env changes through because in polyglot hook we can't detect
 	// env change.
 	// But we call this method anyway because a hook might use buildkite-agent env set to update environment.
-	e.applyEnvironmentChanges(hook.EnvChanges{})
+	//
+	// Unwrapped hooks can also request a working directory change via
+	// `buildkite-agent workdir set`, which the Job API records as a pending
+	// workdir. Consume it here and apply it via applyEnvironmentChanges (which
+	// calls shell.Chdir). Once applied it persists in shell.wd, so subsequent
+	// hooks and the command phase run in the new directory.
+	changes := hook.EnvChanges{}
+	if e.jobAPI != nil {
+		if wd, ok := e.jobAPI.TakePendingWorkdir(); ok {
+			changes = hook.EnvChangesForWorkdir(wd)
+		}
+	}
+	e.applyEnvironmentChanges(changes)
 	return nil
 }
 

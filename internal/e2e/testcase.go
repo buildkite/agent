@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"context"
 	"embed"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -57,6 +58,26 @@ func nopCleanup() error { return nil }
 //go:embed fixtures
 var fixturesFS embed.FS
 
+// fixtureFuncs are template helpers available to fixture pipeline templates.
+// They let a fixture inline the contents of another fixture file (e.g. a shared
+// cache config) so it doesn't have to be duplicated across steps. Pairing
+// fixture with b64enc lets a fixture carry a whole file in a single env var
+// (decode it at runtime with `base64 -d`), avoiding fragile heredoc indentation.
+var fixtureFuncs = template.FuncMap{
+	// fixture returns the raw contents of a file under fixtures/.
+	"fixture": func(name string) (string, error) {
+		b, err := fixturesFS.ReadFile(path.Join("fixtures", name))
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	},
+	// b64enc base64-encodes s so it can be embedded as a single-line scalar.
+	"b64enc": func(s string) string {
+		return base64.StdEncoding.EncodeToString([]byte(s))
+	},
+}
+
 // testCase bundles the information needed to run an end-to-end test.
 // Note that it embeds testing.TB - each test should create its own testCase.
 type testCase struct {
@@ -85,7 +106,7 @@ func newTestCase(t testing.TB, file string) *testCase {
 		t.Fatalf("fixturesFS.ReadFile(%q) error = %v", file, err)
 	}
 
-	tmpl, err := template.New("pipeline").Parse(string(pipelineCfgTmpl))
+	tmpl, err := template.New("pipeline").Funcs(fixtureFuncs).Parse(string(pipelineCfgTmpl))
 	if err != nil {
 		t.Fatalf("template.New(pipeline).Parse(%q) error = %v", pipelineCfgTmpl, err)
 	}

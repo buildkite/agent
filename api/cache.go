@@ -32,7 +32,7 @@ var ErrCacheEntryNotFound = errors.New("cache entry not found")
 var cacheTracer = otel.Tracer("github.com/buildkite/agent/v3/api/cache")
 
 // CacheKeyPart is one element of the structured cache_key sent on the wire.
-// Every part ships with mandatory=true for now; fallback ability lands later.
+// Mandatory parts must match for a cache hit.
 type CacheKeyPart struct {
 	Value     string `json:"value"`
 	Mandatory bool   `json:"mandatory"`

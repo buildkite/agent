@@ -31,6 +31,17 @@ func (c Cache) Validate() error {
 		errors = append(errors, "cache_key cannot be empty")
 	}
 
+	// At most one cache_key part may declare fallbackLimit.
+	fallbackLimits := 0
+	for _, part := range c.CacheKey {
+		if part.FallbackLimit {
+			fallbackLimits++
+		}
+	}
+	if fallbackLimits > 1 {
+		errors = append(errors, "cache_key: fallbackLimit may be set on at most one part")
+	}
+
 	// TargetPaths validation: non-empty set of valid, unique paths
 	if len(c.TargetPaths) == 0 {
 		errors = append(errors, "at least one target_paths entry must be specified")

@@ -49,6 +49,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Usage:    "Interact with a Buildkite job",
 		Subcommands: []cli.Command{
 			JobUpdateCommand,
+			JobPromiseFailureCommand,
 		},
 	},
 	{
@@ -99,6 +100,7 @@ var BuildkiteAgentCommands = []cli.Command{
 		Usage:    "Get/set metadata from Buildkite jobs",
 		Subcommands: []cli.Command{
 			MetaDataSetCommand,
+			MetaDataSetBatchCommand,
 			MetaDataGetCommand,
 			MetaDataExistsCommand,
 			MetaDataKeysCommand,
@@ -147,6 +149,14 @@ var BuildkiteAgentCommands = []cli.Command{
 		Subcommands: []cli.Command{
 			ToolKeygenCommand,
 			ToolSignCommand,
+		},
+	},
+	{
+		Name:     "workdir",
+		Category: categoryJobCommands,
+		Usage:    "Interact with the working directory of the currently running job",
+		Subcommands: []cli.Command{
+			WorkdirSetCommand,
 		},
 	},
 }

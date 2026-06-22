@@ -49,6 +49,16 @@ func (e EnvDeleteResponse) Normalize() {
 	sort.Strings(e.Deleted)
 }
 
+// WorkdirSetRequest is the request body for the PUT /workdir endpoint
+type WorkdirSetRequest struct {
+	Workdir string `json:"workdir"`
+}
+
+// WorkdirSetResponse echoes the absolute working directory.
+type WorkdirSetResponse struct {
+	Workdir string `json:"workdir"`
+}
+
 // RedactionCreateRequest is the request body for the POST /redactions endpoint
 type RedactionCreateRequest struct {
 	Redact string `json:"redact"`

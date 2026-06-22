@@ -27,18 +27,24 @@ func TestKeyPartUnmarshal(t *testing.T) {
 		{name: "literal quoted", yaml: `"v3"`, want: KeyPart{Source: SourceLiteral, Arg: "v3"}},
 		{name: "agent os", yaml: `{ agent: os }`, want: KeyPart{Source: SourceAgent, Arg: "os"}},
 		{name: "agent arch", yaml: `{ agent: arch }`, want: KeyPart{Source: SourceAgent, Arg: "arch"}},
+		{name: "agent branch", yaml: `{ agent: branch }`, want: KeyPart{Source: SourceAgent, Arg: "branch"}},
+		{name: "agent step", yaml: `{ agent: step }`, want: KeyPart{Source: SourceAgent, Arg: "step"}},
+		{name: "agent pipeline", yaml: `{ agent: pipeline }`, want: KeyPart{Source: SourceAgent, Arg: "pipeline"}},
 		{name: "checksum", yaml: `{ checksum: go.mod }`, want: KeyPart{Source: SourceChecksum, Arg: "go.mod"}},
 		{name: "env", yaml: `{ env: GO_VERSION }`, want: KeyPart{Source: SourceEnv, Arg: "GO_VERSION"}},
+		{name: "fallbackLimit on agent", yaml: `{ agent: arch, fallbackLimit: true }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: true}},
+		{name: "fallbackLimit on checksum", yaml: `{ checksum: go.mod, fallbackLimit: true }`, want: KeyPart{Source: SourceChecksum, Arg: "go.mod", FallbackLimit: true}},
+		{name: "fallbackLimit false is a no-op", yaml: `{ agent: arch, fallbackLimit: false }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: false}},
 
 		// Out of M1 scope -> parse errors.
 		{name: "empty literal", yaml: `""`, wantErr: "literal entry cannot be empty"},
-		{name: "agent pipeline deferred", yaml: `{ agent: pipeline }`, wantErr: "unsupported agent argument"},
 		{name: "agent os_version deferred", yaml: `{ agent: os_version }`, wantErr: "unsupported agent argument"},
 		{name: "checksum array deferred", yaml: `{ checksum: [go.mod, go.sum] }`, wantErr: "single file path"},
 		{name: "cmd deferred", yaml: `{ cmd: ["go", "version"] }`, wantErr: "unknown source"},
 		{name: "unknown source", yaml: `{ bogus: x }`, wantErr: "unknown source"},
-		{name: "fallbackLimit deferred", yaml: `{ agent: arch, fallbackLimit: true }`, wantErr: "invalid entry length"},
-		{name: "empty map", yaml: `{}`, wantErr: "invalid entry length"},
+		{name: "fallbackLimit non-bool", yaml: `{ agent: arch, fallbackLimit: 7 }`, wantErr: "fallbackLimit must be a boolean"},
+		{name: "fallbackLimit without source", yaml: `{ fallbackLimit: true }`, wantErr: "exactly one source"},
+		{name: "empty map", yaml: `{}`, wantErr: "exactly one source"},
 		{name: "sequence", yaml: `[a, b]`, wantErr: "must be a string or a { source: arg } map"},
 	}
 
@@ -84,6 +90,11 @@ func TestKeyPartResolve(t *testing.T) {
 		{name: "agent arch", part: KeyPart{Source: SourceAgent, Arg: "arch"}, want: runtime.GOARCH},
 		{name: "env from map", part: KeyPart{Source: SourceEnv, Arg: "FOO"}, env: map[string]string{"FOO": "bar"}, want: "bar"},
 		{name: "env missing from map", part: KeyPart{Source: SourceEnv, Arg: "MISSING"}, env: map[string]string{}, want: ""},
+		{name: "agent branch", part: KeyPart{Source: SourceAgent, Arg: "branch"}, env: map[string]string{"BUILDKITE_BRANCH": "main"}, want: "main"},
+		{name: "agent pipeline", part: KeyPart{Source: SourceAgent, Arg: "pipeline"}, env: map[string]string{"BUILDKITE_PIPELINE_SLUG": "my-pipeline"}, want: "my-pipeline"},
+		{name: "agent step from key", part: KeyPart{Source: SourceAgent, Arg: "step"}, env: map[string]string{"BUILDKITE_STEP_KEY": "build", "BUILDKITE_STEP_ID": "01ABC"}, want: "build"},
+		{name: "agent step falls back to id", part: KeyPart{Source: SourceAgent, Arg: "step"}, env: map[string]string{"BUILDKITE_STEP_ID": "01ABC"}, want: "01ABC"},
+		{name: "agent branch missing is empty", part: KeyPart{Source: SourceAgent, Arg: "branch"}, env: map[string]string{}, want: ""},
 		{name: "agent unsupported fact", part: KeyPart{Source: SourceAgent, Arg: "queue"}, wantErr: "unsupported agent fact"},
 	}
 
@@ -185,6 +196,50 @@ func TestResolveCacheKey(t *testing.T) {
 			if got[i] != want[i] {
 				t.Fatalf("ResolveCacheKey()[%d] = %+v, want %+v", i, got[i], want[i])
 			}
+		}
+	})
+
+	t.Run("fallbackLimit splits mandatory from optional", func(t *testing.T) {
+		t.Parallel()
+		parts := []KeyPart{
+			{Source: SourceLiteral, Arg: "node"},
+			{Source: SourceAgent, Arg: "os", FallbackLimit: true},
+			{Source: SourceEnv, Arg: "FOO"},
+		}
+		got, err := ResolveCacheKey(parts, map[string]string{"FOO": "bar"})
+		if err != nil {
+			t.Fatalf("ResolveCacheKey() unexpected error = %v", err)
+		}
+
+		// The part declaring fallbackLimit (os) is itself mandatory;
+		// only parts after it are optional.
+		want := []api.CacheKeyPart{
+			{Value: "node", Mandatory: true},
+			{Value: runtime.GOOS, Mandatory: true},
+			{Value: "bar", Mandatory: false},
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("ResolveCacheKey()[%d] = %+v, want %+v", i, got[i], want[i])
+			}
+		}
+	})
+
+	t.Run("fallbackLimit on first part makes only later parts optional", func(t *testing.T) {
+		t.Parallel()
+		parts := []KeyPart{
+			{Source: SourceLiteral, Arg: "node", FallbackLimit: true},
+			{Source: SourceAgent, Arg: "os"},
+		}
+		got, err := ResolveCacheKey(parts, nil)
+		if err != nil {
+			t.Fatalf("ResolveCacheKey() unexpected error = %v", err)
+		}
+		if !got[0].Mandatory {
+			t.Fatalf("got[0].Mandatory = false, want true")
+		}
+		if got[1].Mandatory {
+			t.Fatalf("got[1].Mandatory = true, want false")
 		}
 	})
 

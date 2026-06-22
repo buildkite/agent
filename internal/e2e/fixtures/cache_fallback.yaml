@@ -1,0 +1,50 @@
+# cache key fallbackLimit behavior. Two caches share a BUILD_ID-anchored key
+# but differ in an optional CACHE_VARIANT part: one declares fallbackLimit on
+# BUILD_ID (variant optional), the other does not (variant mandatory). The
+# variant changes between save and restore, so only the fallbackLimit cache
+# falls back to the BUILD_ID match; the other is a hard miss.
+env:
+  BUILDKITE_AGENT_CACHE_STORE_URL: s3://buildkite-agent-e2e-tests-shared/cache-e2e-test?region=us-west-2
+  CACHE_CONFIG_B64: "{{ fixture "includes/cache_fallback_config.yml" | b64enc }}"
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: save
+    env:
+      CACHE_VARIANT: v1
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - mkdir -p fallback-src nofallback-src
+      - echo "fallback payload" > fallback-src/file.txt
+      - echo "nofallback payload" > nofallback-src/file.txt
+      - echo "$$CACHE_CONFIG_B64" | base64 -d > cache.yml
+      - {{ .buildkite_agent_binary }} cache save --cache-config-file cache.yml
+  - key: restore
+    depends_on: save
+    env:
+      CACHE_VARIANT: v2
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - rm -rf fallback-src nofallback-src
+      - echo "$$CACHE_CONFIG_B64" | base64 -d > cache.yml
+      - {{ .buildkite_agent_binary }} cache restore --cache-config-file cache.yml
+      - |
+        set -euo pipefail
+        # fallbackLimit makes CACHE_VARIANT optional, so the v1/v2 mismatch
+        # falls back to the BUILD_ID match and restores the saved content.
+        [[ "$(cat fallback-src/file.txt)" == "fallback payload" ]]
+        # Without fallbackLimit every part is mandatory, so the variant
+        # mismatch is a hard miss and nothing is restored.
+        [[ ! -e nofallback-src ]]

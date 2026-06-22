@@ -116,7 +116,14 @@ func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.L
 	if !cfg.SkipRedaction {
 		jobClient, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to create Job API client: %w", err)
+			err = fmt.Errorf("the Job API client could not be created (error: %w)", err)
+			if errors.Is(err, jobapi.ErrJobAPIUnavailable) {
+				err = fmt.Errorf("the Job API is unavailable on this machine, as it requires Unix domain sockets to function. On Windows, Unix domain sockets require Windows build 17063 or newer (Windows 10 version 1803 / Windows Server 2019 onwards)")
+			}
+			return fmt.Errorf(
+				"automatic secret redaction requires the Job API, but %w. The command failed instead of outputting secret values because they could leak in logs without redaction. To output the secret values anyway, explicitly opt out of redaction with --skip-redaction or BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION=true",
+				err,
+			)
 		}
 
 		for _, secret := range fetchedSecrets {

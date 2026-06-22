@@ -175,4 +175,36 @@ func TestSecretGet(t *testing.T) {
 			t.Fatalf("err.Error() = %q, want containing %q", got, want)
 		}
 	})
+
+	t.Run("requires explicit opt out when redaction cannot be set up", func(t *testing.T) {
+		t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+		t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")
+
+		server := newSecretGetTestServer(t, map[string]string{"deploy_key": "shhsecret"})
+		defer server.Close()
+
+		cfg := baseSecretGetConfig(server.URL, []string{"deploy_key"}, "default")
+		cfg.SkipRedaction = false
+
+		var out bytes.Buffer
+		err := secretGet(t.Context(), cfg, &out, logger.NewBuffer())
+		if err == nil {
+			t.Fatal("secretGet(t.Context(), cfg, &out, logger.NewBuffer()) error = nil, want non-nil")
+		}
+
+		if out.String() != "" {
+			t.Fatalf("out.String() = %q, want empty", out.String())
+		}
+
+		for _, want := range []string{
+			"automatic secret redaction requires the Job API",
+			"could leak in logs without redaction",
+			"--skip-redaction",
+			"BUILDKITE_AGENT_SECRET_GET_SKIP_SECRET_REDACTION=true",
+		} {
+			if got := err.Error(); !strings.Contains(got, want) {
+				t.Fatalf("err.Error() = %q, want containing %q", got, want)
+			}
+		}
+	})
 }

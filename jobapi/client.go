@@ -11,10 +11,13 @@ import (
 
 const (
 	envURL        = "http://job/api/current-job/v0/env"
+	workdirURL    = "http://job/api/current-job/v0/workdir"
 	redactionsURL = "http://job/api/current-job/v0/redactions"
 )
 
 var (
+	// ErrJobAPIUnavailable is returned when the current machine cannot support the Job API.
+	ErrJobAPIUnavailable = errors.New("job API is unavailable on this machine")
 	errNoJobAPISocketEnv = errors.New("BUILDKITE_AGENT_JOB_API_SOCKET empty or undefined")
 	errNoJobAPITokenEnv  = errors.New("BUILDKITE_AGENT_JOB_API_TOKEN empty or undefined")
 )
@@ -37,6 +40,10 @@ func NewDefaultClient(ctx context.Context) (*Client, error) {
 
 // DefaultSocketPath returns the socket path and access token, if available.
 func DefaultSocketPath() (path, token string, err error) {
+	if !socket.Available() {
+		return "", "", ErrJobAPIUnavailable
+	}
+
 	path = os.Getenv("BUILDKITE_AGENT_JOB_API_SOCKET")
 	if path == "" {
 		return "", "", errNoJobAPISocketEnv
@@ -89,6 +96,18 @@ func (c *Client) EnvDelete(ctx context.Context, del []string) (deleted []string,
 	}
 	resp.Normalize()
 	return resp.Deleted, nil
+}
+
+// SetWorkdir requests that subsequent hooks and the command phase run in dir.
+// dir must be an absolute path. It returns the absolute working directory as
+// recorded by the executor.
+func (c *Client) SetWorkdir(ctx context.Context, dir string) (string, error) {
+	req := WorkdirSetRequest{Workdir: dir}
+	var resp WorkdirSetResponse
+	if err := c.client.Do(ctx, http.MethodPut, workdirURL, &req, &resp); err != nil {
+		return "", err
+	}
+	return resp.Workdir, nil
 }
 
 // RedactionCreate creates a redaction in the job executor.

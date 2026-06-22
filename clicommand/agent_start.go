@@ -28,6 +28,7 @@ import (
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/awslib"
+	"github.com/buildkite/agent/v3/internal/concurrently"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
@@ -1302,41 +1303,54 @@ var AgentStartCommand = cli.Command{
 
 		// Spawning multiple agents doesn't work if the agent is being
 		// booted in acquisition mode
-		if cfg.Spawn > 1 && cfg.AcquireJob != "" {
-			return errors.New("you can't spawn multiple agents and acquire a job at the same time")
+		if cfg.AcquireJob != "" {
+			if cfg.Spawn != 1 {
+				return errors.New("you can't spawn multiple agents and acquire a job at the same time")
+			}
+		} else { // not acquire-job mode
+			if cfg.Spawn < 1 {
+				return fmt.Errorf("invalid spawn %d, must be at least 1", cfg.Spawn)
+			}
 		}
 
-		var workers []*agent.AgentWorker
+		// Create register requests.
+		regReqs := make([]api.AgentRegisterRequest, 0, cfg.Spawn)
 
-		for i := 1; i <= cfg.Spawn; i++ {
+		for i := range cfg.Spawn {
+			index := i + 1
 			if cfg.Spawn == 1 {
 				l.Infof("Registering agent with Buildkite...")
 			} else {
-				l.Infof("Registering agent %d of %d with Buildkite...", i, cfg.Spawn)
+				l.Infof("Registering agent %d of %d with Buildkite...", index, cfg.Spawn)
 			}
 
 			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
-			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
+			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(index))
 
 			if cfg.SpawnWithPriority {
-				p := i
+				p := index
 				if experiments.IsEnabled(ctx, experiments.DescendingSpawnPriority) {
 					// This experiment helps jobs be assigned across all hosts
 					// in cases where the value of --spawn varies between hosts.
-					p = -i
+					p = -index
 				}
-				l.Infof("Assigning priority %d for agent %d", p, i)
+				l.Infof("Assigning priority %d for agent %d", p, index)
 				registerReq.Priority = strconv.Itoa(p)
 			}
 
+			regReqs = append(regReqs, registerReq)
+		}
+
+		// Send register requests.
+		workers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*agent.AgentWorker, error) {
 			// Register the agent with the buildkite API
-			reg, err := client.Register(ctx, registerReq)
+			reg, err := client.Register(ctx, regReq)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			// Create an agent worker to run the agent
-			workers = append(workers, agent.NewAgentWorker(
+			return agent.NewAgentWorker(
 				l.WithFields(logger.StringField("agent", reg.Name)),
 				reg,
 				mc,
@@ -1347,10 +1361,13 @@ var AgentStartCommand = cli.Command{
 					SignalGracePeriod:  signalGracePeriod,
 					Debug:              cfg.Debug,
 					DebugHTTP:          cfg.DebugHTTP,
-					SpawnIndex:         i,
+					SpawnIndex:         i + 1,
 					AgentStdout:        os.Stdout,
 				},
-			))
+			), nil
+		})
+		if err != nil {
+			return err
 		}
 
 		// Setup the agent pool that spawns agent workers
@@ -1411,7 +1428,6 @@ var AgentStartCommand = cli.Command{
 
 		default:
 			return err
-
 		}
 	},
 }
