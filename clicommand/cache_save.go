@@ -18,7 +18,8 @@ const cacheSaveHelpDescription = `Usage:
 Description:
 
 Saves files to the cache for the current build based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml).
+defined in your cache config file (defaults to .buildkite/cache.yml or
+.buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be cached
 and their associated cache key.
@@ -30,8 +31,8 @@ Example:
 
     $ buildkite-agent cache save
 
-This will save all caches defined in .buildkite/cache.yml. You can also save
-specific caches by providing their IDs:
+This will save all caches defined in the cache configuration file.
+You can also save specific caches by providing their IDs:
 
     $ buildkite-agent cache save --names "node"
 
@@ -91,6 +92,11 @@ var CacheSaveCommand = cli.Command{
 
 		apiClient := api.NewClient(l, apiCfg)
 
+		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		if err != nil {
+			return err
+		}
+
 		// Build cache configuration
 		cacheCfg := cache.Config{
 			Registry:        cfg.Registry,
@@ -98,7 +104,7 @@ var CacheSaveCommand = cli.Command{
 			Branch:          cfg.Branch,
 			Pipeline:        cfg.Pipeline,
 			Organization:    cfg.Organization,
-			CacheConfigFile: cfg.CacheConfigFile,
+			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 			Concurrency:     cfg.Concurrency,
 		}
