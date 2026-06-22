@@ -452,14 +452,13 @@ func TestGitLFSBinaryMissing(t *testing.T) {
 
 	ctx := t.Context()
 
-	// Restrict PATH so exec.LookPath("git-lfs") fails. An empty temp dir
-	// suffices — the fail-fast check returns before any git call.
-	t.Setenv("PATH", t.TempDir())
-
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatalf("shell.New() error = %v, want nil", err)
 	}
+
+	// Use an empty PATH to simulate git-lfs not being installed
+	sh.Env.Set("PATH", "")
 
 	executor := &Executor{
 		shell: sh,

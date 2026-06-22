@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -266,7 +265,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 		// Fail fast before any git work if git-lfs is required but missing.
 		// This operation only handles default checkout behavior, so it's possible for a custom checkout hook to require git-lfs but not have this check. That's a bit unfortunate, but we can add it to custom hooks later if needed.
 		if e.GitLFSEnabled {
-			if _, err := exec.LookPath("git-lfs"); err != nil {
+			if _, err := e.shell.AbsolutePath("git-lfs"); err != nil {
 				return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but git-lfs binary is not found on PATH: %w", err)
 			}
 		}
