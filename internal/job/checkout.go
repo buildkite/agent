@@ -1098,11 +1098,19 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 	}
 
+	// When sparse-checkout is active, scope LFS to the same paths so we don't
+	// pull objects outside the sparse set (SUP-6529). If sparse fell back to a
+	// full checkout (e.g. git < 2.26), fetch unscoped so files outside the
+	// requested paths still get their LFS content.
 	if e.GitLFSEnabled {
-		if err := gitLFSFetchCheckout(ctx, gitLFSFetchCheckoutArgs{
+		lfsArgs := gitLFSFetchCheckoutArgs{
 			Shell: e.shell,
 			Retry: true,
-		}); err != nil {
+		}
+		if sparseCheckoutActive {
+			lfsArgs.Include = cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
+		}
+		if err := gitLFSFetchCheckout(ctx, lfsArgs); err != nil {
 			return err
 		}
 	}

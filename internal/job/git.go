@@ -139,6 +139,10 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 type gitLFSFetchCheckoutArgs struct {
 	Shell *shell.Shell
 	Retry bool // Whether to retry the fetch+checkout on failure
+	// Include scopes LFS to these paths: passed as --include=<csv> to
+	// `git lfs fetch` and as positional pathspecs to `git lfs checkout`.
+	// Empty means fetch/checkout all LFS objects.
+	Include []string
 }
 
 // gitLFSFetchCheckout fetches LFS objects for the current HEAD then materialises
@@ -170,14 +174,21 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		)
 	}
 
+	fetchCmd := []string{"lfs", "fetch"}
+	checkoutCmd := []string{"lfs", "checkout"}
+	if len(args.Include) > 0 {
+		fetchCmd = append(fetchCmd, "--include="+strings.Join(args.Include, ","))
+		checkoutCmd = append(checkoutCmd, args.Include...)
+	}
+
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := args.Shell.Command("git", "lfs", "fetch").Run(ctx); err != nil {
+		if err := args.Shell.Command("git", fetchCmd...).Run(ctx); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
 			}
 			return fmt.Errorf("git lfs fetch: %w", err)
 		}
-		if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx); err != nil {
+		if err := args.Shell.Command("git", checkoutCmd...).Run(ctx); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
 			}
