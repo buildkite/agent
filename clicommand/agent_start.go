@@ -1342,14 +1342,8 @@ var AgentStartCommand = cli.Command{
 			regReqs = append(regReqs, registerReq)
 		}
 
-		type registeredAgentWorker struct {
-			agentID   string
-			agentName string
-			worker    *agent.AgentWorker
-		}
-
 		// Send register requests.
-		registeredWorkers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*registeredAgentWorker, error) {
+		workers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*agent.AgentWorker, error) {
 			// Register the agent with the buildkite API
 			reg, err := client.Register(ctx, regReq)
 			if err != nil {
@@ -1357,7 +1351,7 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Create an agent worker to run the agent
-			worker := agent.NewAgentWorker(
+			return agent.NewAgentWorker(
 				l.WithFields(logger.StringField("agent", reg.Name)),
 				reg,
 				mc,
@@ -1371,26 +1365,10 @@ var AgentStartCommand = cli.Command{
 					SpawnIndex:         i + 1,
 					AgentStdout:        os.Stdout,
 				},
-			)
-
-			return &registeredAgentWorker{
-				agentID:   reg.UUID,
-				agentName: reg.Name,
-				worker:    worker,
-			}, nil
+			), nil
 		})
 		if err != nil {
 			return err
-		}
-
-		workers := make([]*agent.AgentWorker, 0, len(registeredWorkers))
-		registeredAgents := make([]registeredAgent, 0, len(registeredWorkers))
-		for _, registeredWorker := range registeredWorkers {
-			workers = append(workers, registeredWorker.worker)
-			registeredAgents = append(registeredAgents, registeredAgent{
-				ID:   registeredWorker.agentID,
-				Name: registeredWorker.agentName,
-			})
 		}
 
 		// Setup the agent pool that spawns agent workers
@@ -1400,7 +1378,7 @@ var AgentStartCommand = cli.Command{
 		defer agentShutdownHook(l, cfg)
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
-		if err := agentStartupHook(l, cfg, registeredAgents); err != nil {
+		if err := agentStartupHook(l, cfg, workers); err != nil {
 			return fmt.Errorf("failed to run startup hook: %w", err)
 		}
 
@@ -1566,22 +1544,17 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 	}
 }
 
-type registeredAgent struct {
-	ID   string
-	Name string
+func agentStartupHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) error {
+	return agentLifecycleHook("agent-startup", log, cfg, agentStartupHookEnv(workers))
 }
 
-func agentStartupHook(log logger.Logger, cfg AgentStartConfig, registeredAgents []registeredAgent) error {
-	return agentLifecycleHook("agent-startup", log, cfg, agentStartupHookEnv(registeredAgents))
-}
-
-func agentStartupHookEnv(registeredAgents []registeredAgent) *env.Environment {
+func agentStartupHookEnv(workers []*agent.AgentWorker) *env.Environment {
 	environ := env.New()
-	agentIDs := make([]string, 0, len(registeredAgents))
-	agentNames := make([]string, 0, len(registeredAgents))
-	for _, registeredAgent := range registeredAgents {
-		agentIDs = append(agentIDs, registeredAgent.ID)
-		agentNames = append(agentNames, registeredAgent.Name)
+	agentIDs := make([]string, 0, len(workers))
+	agentNames := make([]string, 0, len(workers))
+	for _, worker := range workers {
+		agentIDs = append(agentIDs, worker.AgentID())
+		agentNames = append(agentNames, worker.AgentName())
 	}
 
 	environ.Set("BUILDKITE_AGENT_IDS", strings.Join(agentIDs, ","))

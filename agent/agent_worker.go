@@ -217,6 +217,16 @@ func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.
 	}
 }
 
+// AgentID returns the registered agent ID for this worker.
+func (a *AgentWorker) AgentID() string {
+	return a.agent.UUID
+}
+
+// AgentName returns the registered agent name for this worker.
+func (a *AgentWorker) AgentName() string {
+	return a.agent.Name
+}
+
 const workerStatusPart = `{{if le .LastPing.Seconds 2.0}}✅{{else}}❌{{end}} Last ping: {{.LastPing}} ago <br/>
 {{if le .LastHeartbeat.Seconds 60.0}}✅{{else}}❌{{end}} Last heartbeat: {{.LastHeartbeat}} ago<br/>
 {{if .LastHeartbeatError}}❌{{else}}✅{{end}} Last heartbeat error: {{printf "%v" .LastHeartbeatError}}`

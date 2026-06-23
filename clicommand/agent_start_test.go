@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
@@ -57,6 +59,16 @@ func writeAgentHookScript(t *testing.T, dir, hookName, script string) string {
 		t.Fatalf("%+v", err)
 	}
 	return filepath
+}
+
+func testAgentWorker(id, name string) *agent.AgentWorker {
+	return agent.NewAgentWorker(
+		logger.Discard,
+		&api.AgentRegisterResponse{UUID: id, Name: name},
+		nil,
+		api.NewClient(logger.Discard, api.Config{}),
+		agent.AgentWorkerConfig{},
+	)
 }
 
 func TestAgentStartupHook(t *testing.T) {
@@ -169,7 +181,7 @@ func TestAgentStartupHookEnv(t *testing.T) {
 
 	for _, tc := range []struct {
 		desc      string
-		agents    []registeredAgent
+		workers   []*agent.AgentWorker
 		wantIDs   string
 		wantNames string
 	}{
@@ -178,15 +190,15 @@ func TestAgentStartupHookEnv(t *testing.T) {
 		},
 		{
 			desc:      "single agent",
-			agents:    []registeredAgent{{ID: "agent-123", Name: "test-agent-1"}},
+			workers:   []*agent.AgentWorker{testAgentWorker("agent-123", "test-agent-1")},
 			wantIDs:   "agent-123",
 			wantNames: "test-agent-1",
 		},
 		{
 			desc: "multiple agents",
-			agents: []registeredAgent{
-				{ID: "agent-123", Name: "test-agent-1"},
-				{ID: "agent-456", Name: "test-agent-2"},
+			workers: []*agent.AgentWorker{
+				testAgentWorker("agent-123", "test-agent-1"),
+				testAgentWorker("agent-456", "test-agent-2"),
 			},
 			wantIDs:   "agent-123,agent-456",
 			wantNames: "test-agent-1,test-agent-2",
@@ -195,7 +207,7 @@ func TestAgentStartupHookEnv(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
-			env := agentStartupHookEnv(tc.agents)
+			env := agentStartupHookEnv(tc.workers)
 			gotIDs, hasIDs := env.Get("BUILDKITE_AGENT_IDS")
 			if !hasIDs {
 				t.Fatal("BUILDKITE_AGENT_IDS is not set")
@@ -243,9 +255,9 @@ echo names=$BUILDKITE_AGENT_NAMES`
 	filepath := writeAgentHookScript(t, hooksPath, "agent-startup", script)
 
 	log := logger.NewBuffer()
-	err := agentStartupHook(log, cfg(hooksPath), []registeredAgent{
-		{ID: "agent-123", Name: "test-agent-1"},
-		{ID: "agent-456", Name: "test-agent-2"},
+	err := agentStartupHook(log, cfg(hooksPath), []*agent.AgentWorker{
+		testAgentWorker("agent-123", "test-agent-1"),
+		testAgentWorker("agent-456", "test-agent-2"),
 	})
 	if err != nil {
 		t.Fatalf("%+v", log.Messages)
