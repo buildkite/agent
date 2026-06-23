@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	"github.com/buildkite/agent/v3/internal/concurrently"
@@ -1341,8 +1342,14 @@ var AgentStartCommand = cli.Command{
 			regReqs = append(regReqs, registerReq)
 		}
 
+		type registeredAgentWorker struct {
+			agentID   string
+			agentName string
+			worker    *agent.AgentWorker
+		}
+
 		// Send register requests.
-		workers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*agent.AgentWorker, error) {
+		registeredWorkers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*registeredAgentWorker, error) {
 			// Register the agent with the buildkite API
 			reg, err := client.Register(ctx, regReq)
 			if err != nil {
@@ -1350,7 +1357,7 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Create an agent worker to run the agent
-			return agent.NewAgentWorker(
+			worker := agent.NewAgentWorker(
 				l.WithFields(logger.StringField("agent", reg.Name)),
 				reg,
 				mc,
@@ -1364,10 +1371,26 @@ var AgentStartCommand = cli.Command{
 					SpawnIndex:         i + 1,
 					AgentStdout:        os.Stdout,
 				},
-			), nil
+			)
+
+			return &registeredAgentWorker{
+				agentID:   reg.UUID,
+				agentName: reg.Name,
+				worker:    worker,
+			}, nil
 		})
 		if err != nil {
 			return err
+		}
+
+		workers := make([]*agent.AgentWorker, 0, len(registeredWorkers))
+		registeredAgents := make([]registeredAgent, 0, len(registeredWorkers))
+		for _, registeredWorker := range registeredWorkers {
+			workers = append(workers, registeredWorker.worker)
+			registeredAgents = append(registeredAgents, registeredAgent{
+				ID:   registeredWorker.agentID,
+				Name: registeredWorker.agentName,
+			})
 		}
 
 		// Setup the agent pool that spawns agent workers
@@ -1377,7 +1400,7 @@ var AgentStartCommand = cli.Command{
 		defer agentShutdownHook(l, cfg)
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
-		if err := agentStartupHook(l, cfg); err != nil {
+		if err := agentStartupHook(l, cfg, registeredAgents); err != nil {
 			return fmt.Errorf("failed to run startup hook: %w", err)
 		}
 
@@ -1543,18 +1566,38 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 	}
 }
 
-func agentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
-	return agentLifecycleHook("agent-startup", log, cfg)
+type registeredAgent struct {
+	ID   string
+	Name string
+}
+
+func agentStartupHook(log logger.Logger, cfg AgentStartConfig, registeredAgents []registeredAgent) error {
+	return agentLifecycleHook("agent-startup", log, cfg, agentStartupHookEnv(registeredAgents))
+}
+
+func agentStartupHookEnv(registeredAgents []registeredAgent) *env.Environment {
+	environ := env.New()
+	agentIDs := make([]string, 0, len(registeredAgents))
+	agentNames := make([]string, 0, len(registeredAgents))
+	for _, agent := range registeredAgents {
+		agentIDs = append(agentIDs, agent.ID)
+		agentNames = append(agentNames, agent.Name)
+	}
+
+	environ.Set("BUILDKITE_AGENT_IDS", strings.Join(agentIDs, ","))
+	environ.Set("BUILDKITE_AGENT_NAMES", strings.Join(agentNames, ","))
+
+	return environ
 }
 
 func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
-	_ = agentLifecycleHook("agent-shutdown", log, cfg)
+	_ = agentLifecycleHook("agent-shutdown", log, cfg, nil)
 }
 
 // agentLifecycleHook looks for a hook script in the hooks path
 // and executes it if found. Output (stdout + stderr) is streamed into the main
 // agent logger. Exit status failure is logged and returned for the caller to handle
-func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig) error {
+func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig, hookEnv *env.Environment) error {
 	// search for hook (including .bat & .ps1 files on Windows)
 	hooks := []string{}
 	p, err := hook.Find(nil, cfg.HooksPath, hookName)
@@ -1593,6 +1636,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		log.Errorf("creating shell for %q hook: %v", hookName, err)
 		return err
 	}
+	sh.Env.Merge(hookEnv)
 
 	var wg sync.WaitGroup
 	wg.Go(func() {

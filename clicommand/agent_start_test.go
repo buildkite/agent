@@ -43,6 +43,22 @@ func writeAgentHook(t *testing.T, dir, hookName, msg string) string {
 	return filepath
 }
 
+func writeAgentHookScript(t *testing.T, dir, hookName, script string) string {
+	t.Helper()
+
+	filename := hookName
+	if runtime.GOOS == "windows" {
+		filename = hookName + ".bat"
+	}
+
+	filepath := filepath.Join(dir, filename)
+	t.Logf("Creating %q", filepath)
+	if err := os.WriteFile(filepath, []byte(script), 0o755); err != nil {
+		t.Fatalf("%+v", err)
+	}
+	return filepath
+}
+
 func TestAgentStartupHook(t *testing.T) {
 	t.Parallel()
 
@@ -64,7 +80,7 @@ func TestAgentStartupHook(t *testing.T) {
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello world")
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg(hooksPath))
+		err := agentStartupHook(log, cfg(hooksPath), nil)
 		if err != nil {
 			t.Fatalf("%+v", log.Messages)
 		}
@@ -83,7 +99,7 @@ func TestAgentStartupHook(t *testing.T) {
 		defer closer()
 
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg(hooksPath))
+		err := agentStartupHook(log, cfg(hooksPath), nil)
 		if err != nil {
 			t.Fatalf("%+v", log.Messages)
 		}
@@ -96,7 +112,7 @@ func TestAgentStartupHook(t *testing.T) {
 		t.Parallel()
 
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg("zxczxczxc"))
+		err := agentStartupHook(log, cfg("zxczxczxc"), nil)
 		if err != nil {
 			t.Fatalf("%+v", log.Messages)
 		}
@@ -133,7 +149,7 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 		defer additionalCloser()
 
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg(hooksPath, additionalHooksPath))
+		err := agentStartupHook(log, cfg(hooksPath, additionalHooksPath), nil)
 		if err != nil {
 			t.Fatalf("%+v", log.Messages)
 		}
@@ -146,6 +162,51 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
 	})
+}
+
+func TestAgentStartupHookWithRegisteredAgentsEnv(t *testing.T) {
+	t.Parallel()
+
+	cfg := func(hooksPath string) AgentStartConfig {
+		return AgentStartConfig{
+			HooksPath:    hooksPath,
+			GlobalConfig: GlobalConfig{NoColor: true},
+		}
+	}
+	prompt := "$"
+	if runtime.GOOS == "windows" {
+		prompt = ">"
+	}
+
+	hooksPath, closer := setupHooksPath(t)
+	defer closer()
+
+	var script string
+	if runtime.GOOS == "windows" {
+		script = `@echo off
+echo ids=%BUILDKITE_AGENT_IDS%
+echo names=%BUILDKITE_AGENT_NAMES%`
+	} else {
+		script = `echo ids=$BUILDKITE_AGENT_IDS
+echo names=$BUILDKITE_AGENT_NAMES`
+	}
+	filepath := writeAgentHookScript(t, hooksPath, "agent-startup", script)
+
+	log := logger.NewBuffer()
+	err := agentStartupHook(log, cfg(hooksPath), []registeredAgent{
+		{ID: "agent-123", Name: "test-agent-1"},
+		{ID: "agent-456", Name: "test-agent-2"},
+	})
+	if err != nil {
+		t.Fatalf("%+v", log.Messages)
+	}
+	if diff := cmp.Diff(log.Messages, []string{
+		"[info] " + prompt + " " + filepath,
+		"[info] ids=agent-123,agent-456",
+		"[info] names=test-agent-1,test-agent-2",
+	}); diff != "" {
+		t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+	}
 }
 
 func TestAgentShutdownHook(t *testing.T) {
