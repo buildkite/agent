@@ -1579,9 +1579,9 @@ func agentStartupHookEnv(registeredAgents []registeredAgent) *env.Environment {
 	environ := env.New()
 	agentIDs := make([]string, 0, len(registeredAgents))
 	agentNames := make([]string, 0, len(registeredAgents))
-	for _, agent := range registeredAgents {
-		agentIDs = append(agentIDs, agent.ID)
-		agentNames = append(agentNames, agent.Name)
+	for _, registeredAgent := range registeredAgents {
+		agentIDs = append(agentIDs, registeredAgent.ID)
+		agentNames = append(agentNames, registeredAgent.Name)
 	}
 
 	environ.Set("BUILDKITE_AGENT_IDS", strings.Join(agentIDs, ","))

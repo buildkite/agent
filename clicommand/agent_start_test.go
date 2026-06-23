@@ -164,6 +164,56 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 	})
 }
 
+func TestAgentStartupHookEnv(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		desc      string
+		agents    []registeredAgent
+		wantIDs   string
+		wantNames string
+	}{
+		{
+			desc: "empty",
+		},
+		{
+			desc:      "single agent",
+			agents:    []registeredAgent{{ID: "agent-123", Name: "test-agent-1"}},
+			wantIDs:   "agent-123",
+			wantNames: "test-agent-1",
+		},
+		{
+			desc: "multiple agents",
+			agents: []registeredAgent{
+				{ID: "agent-123", Name: "test-agent-1"},
+				{ID: "agent-456", Name: "test-agent-2"},
+			},
+			wantIDs:   "agent-123,agent-456",
+			wantNames: "test-agent-1,test-agent-2",
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+
+			env := agentStartupHookEnv(tc.agents)
+			gotIDs, hasIDs := env.Get("BUILDKITE_AGENT_IDS")
+			if !hasIDs {
+				t.Fatal("BUILDKITE_AGENT_IDS is not set")
+			}
+			if got := gotIDs; got != tc.wantIDs {
+				t.Errorf("BUILDKITE_AGENT_IDS = %q, want %q", got, tc.wantIDs)
+			}
+			gotNames, hasNames := env.Get("BUILDKITE_AGENT_NAMES")
+			if !hasNames {
+				t.Fatal("BUILDKITE_AGENT_NAMES is not set")
+			}
+			if got := gotNames; got != tc.wantNames {
+				t.Errorf("BUILDKITE_AGENT_NAMES = %q, want %q", got, tc.wantNames)
+			}
+		})
+	}
+}
+
 func TestAgentStartupHookWithRegisteredAgentsEnv(t *testing.T) {
 	t.Parallel()
 
