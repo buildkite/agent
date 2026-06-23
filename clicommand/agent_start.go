@@ -1375,7 +1375,7 @@ var AgentStartCommand = cli.Command{
 		pool := agent.NewAgentPool(workers, &agentConf)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer agentShutdownHook(l, cfg)
+		defer agentShutdownHook(l, cfg, workers)
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
 		if err := agentStartupHook(l, cfg, workers); err != nil {
@@ -1545,10 +1545,10 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 }
 
 func agentStartupHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) error {
-	return agentLifecycleHook("agent-startup", log, cfg, agentStartupHookEnv(workers))
+	return agentLifecycleHook("agent-startup", log, cfg, agentLifecycleHookEnv(workers))
 }
 
-func agentStartupHookEnv(workers []*agent.AgentWorker) *env.Environment {
+func agentLifecycleHookEnv(workers []*agent.AgentWorker) *env.Environment {
 	environ := env.New()
 	agentIDs := make([]string, 0, len(workers))
 	agentNames := make([]string, 0, len(workers))
@@ -1563,8 +1563,8 @@ func agentStartupHookEnv(workers []*agent.AgentWorker) *env.Environment {
 	return environ
 }
 
-func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
-	_ = agentLifecycleHook("agent-shutdown", log, cfg, nil)
+func agentShutdownHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) {
+	_ = agentLifecycleHook("agent-shutdown", log, cfg, agentLifecycleHookEnv(workers))
 }
 
 // agentLifecycleHook looks for a hook script in the hooks path

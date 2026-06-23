@@ -207,7 +207,7 @@ func TestAgentStartupHookEnv(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
-			env := agentStartupHookEnv(tc.workers)
+			env := agentLifecycleHookEnv(tc.workers)
 			gotIDs, hasIDs := env.Get("BUILDKITE_AGENT_IDS")
 			if !hasIDs {
 				t.Fatal("BUILDKITE_AGENT_IDS is not set")
@@ -292,7 +292,7 @@ func TestAgentShutdownHook(t *testing.T) {
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-shutdown", "hello world")
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg(hooksPath))
+		agentShutdownHook(log, cfg(hooksPath), nil)
 
 		if diff := cmp.Diff(log.Messages, []string{
 			"[info] " + prompt + " " + filepath,
@@ -309,7 +309,7 @@ func TestAgentShutdownHook(t *testing.T) {
 		defer closer()
 
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg(hooksPath))
+		agentShutdownHook(log, cfg(hooksPath), nil)
 		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
 			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
@@ -319,8 +319,40 @@ func TestAgentShutdownHook(t *testing.T) {
 		t.Parallel()
 
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg("zxczxczxc"))
+		agentShutdownHook(log, cfg("zxczxczxc"), nil)
 		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
+			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		}
+	})
+
+	t.Run("with registered agents env", func(t *testing.T) {
+		t.Parallel()
+
+		hooksPath, closer := setupHooksPath(t)
+		defer closer()
+
+		var script string
+		if runtime.GOOS == "windows" {
+			script = `@echo off
+echo ids=%BUILDKITE_AGENT_IDS%
+echo names=%BUILDKITE_AGENT_NAMES%`
+		} else {
+			script = `echo ids=$BUILDKITE_AGENT_IDS
+echo names=$BUILDKITE_AGENT_NAMES`
+		}
+		filepath := writeAgentHookScript(t, hooksPath, "agent-shutdown", script)
+
+		log := logger.NewBuffer()
+		agentShutdownHook(log, cfg(hooksPath), []*agent.AgentWorker{
+			testAgentWorker("agent-123", "test-agent-1"),
+			testAgentWorker("agent-456", "test-agent-2"),
+		})
+
+		if diff := cmp.Diff(log.Messages, []string{
+			"[info] " + prompt + " " + filepath,
+			"[info] ids=agent-123,agent-456",
+			"[info] names=test-agent-1,test-agent-2",
+		}); diff != "" {
 			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
 	})

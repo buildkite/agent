@@ -23,9 +23,10 @@ The effect is that `AgentPool` returns either `nil` once all workers have
 stopped without error, or the first non-nil error.
 
 Once all workers have registered, the once-per-process `agent-startup` hook runs
-before the `AgentPool` starts. The hook receives `BUILDKITE_AGENT_IDS` and
-`BUILDKITE_AGENT_NAMES` as comma-separated lists in spawn order, allowing hook
-scripts to identify the registered spawned agents without querying the API.
+before the `AgentPool` starts. The `agent-startup` and `agent-shutdown` hooks
+receive `BUILDKITE_AGENT_IDS` and `BUILDKITE_AGENT_NAMES` as comma-separated
+lists in spawn order, allowing hook scripts to identify the registered spawned
+agents without querying the API.
 
 After connecting, `AgentWorker` runs two main goroutines: one periodically 
 calls `Heartbeat`, the other more frequently calls `Ping`. `Ping` is how the 
