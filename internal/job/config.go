@@ -3,6 +3,7 @@ package job
 import (
 	"log"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -282,8 +283,14 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 					log.Printf("warning: cannot parse %s=%q as %v, ignoring", tag, newStr, v.Type())
 					break
 				}
-				slice := strings.Split(newStr, ",")
-				v.Set(reflect.ValueOf(slice))
+				var newSlice []string
+				if newStr != "" {
+					newSlice = strings.Split(newStr, ",")
+				}
+				if slices.Equal(newSlice, v.Interface().([]string)) {
+					break
+				}
+				v.Set(reflect.ValueOf(newSlice))
 				changed[tag] = newStr
 
 			default:
