@@ -442,7 +442,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if r.envShellFile != nil {
 		// Note that some variables in this list might not be defined later,
 		// when something comes to read the file. See below where they are
-		// added conditionally, e.g. BUILDKITE_TRACING_BACKEND.
+		// added conditionally, e.g. BUILDKITE_OPENTELEMETRY_TRACING.
 		// Docker in particular tolerates undefined vars in an env file
 		// without complaints.
 		const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
@@ -468,11 +468,10 @@ BUILDKITE_SHELL
 BUILDKITE_HOOKS_SHELL
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
-BUILDKITE_TRACING_BACKEND
-BUILDKITE_TRACING_SERVICE_NAME
+BUILDKITE_OPENTELEMETRY_TRACING
+BUILDKITE_TELEMETRY_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
 BUILDKITE_TRACING_TRACESTATE
-BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
 BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
@@ -711,26 +710,23 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	setEnv("BUILDKITE_PLUGIN_VALIDATION", fmt.Sprint(enablePluginValidation))
 
-	if r.conf.AgentConfiguration.TracingBackend != "" {
-		setEnv("BUILDKITE_TRACING_BACKEND", r.conf.AgentConfiguration.TracingBackend)
-		setEnv("BUILDKITE_TRACING_SERVICE_NAME", r.conf.AgentConfiguration.TracingServiceName)
+	if r.conf.AgentConfiguration.OpenTelemetryTracing {
+		setEnv("BUILDKITE_OPENTELEMETRY_TRACING", "true")
+		setEnv("BUILDKITE_TELEMETRY_SERVICE_NAME", r.conf.AgentConfiguration.TelemetryServiceName)
 
-		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
-			// Buildkite backend can provide a traceparent property on the job
-			// which can be propagated to the job tracing if OpenTelemetry is used.
-			//
-			// https://www.w3.org/TR/trace-context/#traceparent-header
-			if r.conf.Job.TraceParent != "" {
-				setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
-			}
-			// Buildkite backend may also provide a tracestate property on the job,
-			// which carries vendor-specific trace context alongside traceparent.
-			//
-			// https://www.w3.org/TR/trace-context/#tracestate-header
-			if r.conf.Job.TraceState != "" {
-				setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
-			}
-			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
+		// Buildkite backend can provide a traceparent property on the job
+		// which can be propagated to the job tracing if OpenTelemetry is used
+		//
+		// https://www.w3.org/TR/trace-context/#traceparent-header
+		if r.conf.Job.TraceParent != "" {
+			setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
+		}
+		// Buildkite backend may also provide a tracestate property on the job,
+		// which carries vendor-specific trace context alongside the traceparent.
+		//
+		// https://www.w3.org/TR/trace-context/#tracestate-header
+		if r.conf.Job.TraceState != "" {
+			setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
 		}
 	}
 
