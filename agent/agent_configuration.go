@@ -73,9 +73,8 @@ type AgentConfiguration struct {
 	Profile                      string
 	RedactedVars                 []string
 	AcquireJob                   string
-	TracingBackend               string
-	TracingServiceName           string
-	TracingPropagateTraceparent  bool
+	OpenTelemetryTracing         bool
+	TelemetryServiceName         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
 	ArtifactUploadConcurrency    int
