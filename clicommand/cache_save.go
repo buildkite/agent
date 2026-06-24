@@ -18,7 +18,8 @@ const cacheSaveHelpDescription = `Usage:
 Description:
 
 Saves files to the cache for the current build based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml).
+defined in your cache config file (defaults to .buildkite/cache.yml or
+.buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be cached
 and their associated cache key.
@@ -30,10 +31,10 @@ Example:
 
     $ buildkite-agent cache save
 
-This will save all caches defined in .buildkite/cache.yml. You can also save
-specific caches by providing their IDs:
+This will save all caches defined in the cache configuration file.
+You can also save specific caches by providing their names:
 
-    $ buildkite-agent cache save --names "node"
+    $ buildkite-agent cache save --name "node"
 
 The cache is stored at BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url).
 The registry is selected by BUILDKITE_AGENT_CACHE_REGISTRY (or --registry); '~'
@@ -79,7 +80,9 @@ var CacheSaveCommand = cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-save")
 		defer span.End()
 
-		l.Infof("Cache save command executed")
+		// Emit a Buildkite group header as raw job-log output so the cache
+		// output is collapsed into its own group.
+		fmt.Println("--- :package: Saving cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 
@@ -89,6 +92,11 @@ var CacheSaveCommand = cli.Command{
 
 		apiClient := api.NewClient(l, apiCfg)
 
+		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		if err != nil {
+			return err
+		}
+
 		// Build cache configuration
 		cacheCfg := cache.Config{
 			Registry:        cfg.Registry,
@@ -96,7 +104,7 @@ var CacheSaveCommand = cli.Command{
 			Branch:          cfg.Branch,
 			Pipeline:        cfg.Pipeline,
 			Organization:    cfg.Organization,
-			CacheConfigFile: cfg.CacheConfigFile,
+			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 			Concurrency:     cfg.Concurrency,
 		}

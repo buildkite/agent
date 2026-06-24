@@ -1,6 +1,7 @@
 package job
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -220,6 +221,44 @@ func TestGitSubmodulesBidirectionalControl(t *testing.T) {
 				if len(changes) != 0 {
 					t.Errorf("changes = %v, want none (value unchanged)", changes)
 				}
+			}
+		})
+	}
+}
+
+func TestReadFromEnvironmentSlice(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		initial     []string
+		envValue    string
+		wantChanged bool
+		wantField   []string
+	}{
+		{"nil unchanged when env empty", nil, "", false, nil},
+		{"slice unchanged matches CSV", []string{"protocol.file.allow=always", "http.sslVerify=false"}, "protocol.file.allow=always,http.sslVerify=false", false, []string{"protocol.file.allow=always", "http.sslVerify=false"}},
+		{"nil to non-empty CSV", nil, "a,b", true, []string{"a", "b"}},
+		{"non-empty cleared by empty env", []string{"a"}, "", true, nil},
+		{"different values", []string{"a"}, "b", true, []string{"b"}},
+		{"reorder counts as change", []string{"a", "b"}, "b,a", true, []string{"b", "a"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			config := &ExecutorConfig{GitSubmoduleCloneConfig: tc.initial}
+			environ := env.FromSlice([]string{
+				"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=" + tc.envValue,
+			})
+			changes := config.ReadFromEnvironment(environ)
+
+			_, gotChanged := changes["BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"]
+			if gotChanged != tc.wantChanged {
+				t.Errorf("changed = %v, want %v (changes=%v)", gotChanged, tc.wantChanged, changes)
+			}
+			if !slices.Equal(config.GitSubmoduleCloneConfig, tc.wantField) {
+				t.Errorf("GitSubmoduleCloneConfig = %v, want %v", config.GitSubmoduleCloneConfig, tc.wantField)
 			}
 		})
 	}

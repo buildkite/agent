@@ -1,11 +1,18 @@
 package clicommand
 
-import "github.com/urfave/cli"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/urfave/cli"
+)
 
 // CacheConfig includes cache-related shared options for easy inclusion across
 // cache command config structs (via embedding).
 type CacheConfig struct {
-	Names           []string `cli:"names"`
+	Names           []string `cli:"name"`
 	Registry        string   `cli:"registry"`
 	BucketURL       string   `cli:"cache-store-url"`
 	Branch          string   `cli:"branch" validate:"required"`
@@ -18,9 +25,9 @@ type CacheConfig struct {
 func cacheFlags() []cli.Flag {
 	return []cli.Flag{
 		cli.StringSliceFlag{
-			Name:   "names",
+			Name:   "name",
 			Value:  &cli.StringSlice{},
-			Usage:  "Cache names to process (can be specified multiple times; if empty, processes all caches)",
+			Usage:  "Cache name to process (can be specified multiple times; if empty, processes all caches)",
 			EnvVar: "BUILDKITE_CACHE_NAMES",
 		},
 		cli.StringFlag{
@@ -55,8 +62,8 @@ func cacheFlags() []cli.Flag {
 		},
 		cli.StringFlag{
 			Name:   "cache-config-file",
-			Value:  ".buildkite/cache.yml",
-			Usage:  "Path to the cache configuration YAML file",
+			Value:  "",
+			Usage:  "Path to the cache configuration YAML file (defaults to .buildkite/cache.yml or .buildkite/cache.yaml)",
 			EnvVar: "BUILDKITE_CACHE_CONFIG_FILE",
 		},
 		cli.IntFlag{
@@ -65,5 +72,38 @@ func cacheFlags() []cli.Flag {
 			Usage:  "Number of concurrent cache operations",
 			EnvVar: "BUILDKITE_CACHE_CONCURRENCY",
 		},
+	}
+}
+
+// defaultCacheConfigPaths lists the candidate cache configuration files, in
+// precedence order, used when --cache-config-file is not provided.
+var defaultCacheConfigPaths = []string{
+	filepath.FromSlash(".buildkite/cache.yml"),
+	filepath.FromSlash(".buildkite/cache.yaml"),
+}
+
+// resolveCacheConfigFile returns the cache configuration path to load. An
+// explicitly provided path is used as-is. Otherwise it searches the default
+// locations, returning the one that exists and erroring if more than one, or
+// none, are present.
+func resolveCacheConfigFile(explicit string) (string, error) {
+	if explicit != "" {
+		return explicit, nil
+	}
+
+	var exists []string
+	for _, path := range defaultCacheConfigPaths {
+		if _, err := os.Stat(path); err == nil {
+			exists = append(exists, path)
+		}
+	}
+
+	switch len(exists) {
+	case 0:
+		return "", fmt.Errorf("could not find a default cache configuration file; tried %s", strings.Join(defaultCacheConfigPaths, ", "))
+	case 1:
+		return exists[0], nil
+	default:
+		return "", fmt.Errorf("found multiple cache configuration files: %s; please keep only 1 configuration file present", strings.Join(exists, ", "))
 	}
 }

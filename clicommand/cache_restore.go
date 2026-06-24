@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/buildkite/agent/v3/api"
@@ -17,7 +18,8 @@ const cacheRestoreHelpDescription = `Usage:
 Description:
 
 Restores files from the cache for the current job based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml).
+defined in your cache config file (defaults to .buildkite/cache.yml or
+.buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be restored
 and their associated cache key. An entry is restored when its target_paths
@@ -32,10 +34,10 @@ Example:
 
     $ buildkite-agent cache restore
 
-This will restore all caches defined in .buildkite/cache.yml. You can also restore
-specific caches by providing their IDs:
+This will restore all caches defined in the cache configuration file.
+You can also restore specific caches by providing their names:
 
-    $ buildkite-agent cache restore --names "node"
+    $ buildkite-agent cache restore --name "node"
 
 The cache is retrieved from BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url),
 downloaded directly using the agent's ambient credentials. The registry is
@@ -93,10 +95,17 @@ var CacheRestoreCommand = cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")
 		defer span.End()
 
-		l.Infof("Cache restore command executed")
+		// Emit a Buildkite group header as raw job-log output so the cache
+		// output is collapsed into its own group.
+		fmt.Println("--- :package: Restoring cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 		apiClient := api.NewClient(l, apiCfg)
+
+		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		if err != nil {
+			return err
+		}
 
 		// Build cache configuration
 		cacheCfg := cache.Config{
@@ -105,7 +114,7 @@ var CacheRestoreCommand = cli.Command{
 			Branch:          cfg.Branch,
 			Pipeline:        cfg.Pipeline,
 			Organization:    cfg.Organization,
-			CacheConfigFile: cfg.CacheConfigFile,
+			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 		}
 
