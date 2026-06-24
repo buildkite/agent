@@ -203,7 +203,7 @@ type ExecutorConfig struct {
 	TracingBackend string
 
 	// Service name to use when reporting traces.
-	TracingServiceName string
+	TelemetryServiceName string
 
 	// Traceing context information
 	TracingTraceParent string
@@ -213,9 +213,6 @@ type ExecutorConfig struct {
 	// TracingPropagateTraceparent is enabled (same opt-in gate as
 	// TracingTraceParent).
 	TracingTraceState string
-
-	// Accept traceparent context from Buildkite control plane
-	TracingPropagateTraceparent bool
 
 	// Whether to start the JobAPI
 	JobAPI bool
