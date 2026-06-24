@@ -441,6 +441,9 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 		env[name] = value
 	}
+	// For some checkout env vars, we allow the Job env (if present) to
+	// have higher precedence than the agent configuration, unless
+	// NoCheckoutOverride is set.
 	setCheckoutEnv := func(name, value string) {
 		if !r.conf.AgentConfiguration.NoCheckoutOverride {
 			if _, exists := env[name]; exists {
