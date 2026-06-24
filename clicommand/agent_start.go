@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/url"
 	"os"
 	"os/signal"
@@ -40,7 +39,6 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
-	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/shellwords"
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -189,15 +187,12 @@ type AgentStartConfig struct {
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
-	// Datadog statsd metrics config
-	MetricsDatadog              bool   `cli:"metrics-datadog"`
-	MetricsDatadogHost          string `cli:"metrics-datadog-host"`
-	MetricsDatadogDistributions bool   `cli:"metrics-datadog-distributions"`
+	// Metrics config
+	OpenTelemetryMetrics bool `cli:"opentelemetry-metrics"`
 
 	// Tracing config
-	TracingBackend              string `cli:"tracing-backend"`
-	TracingServiceName          string `cli:"tracing-service-name"`
-	TracingPropagateTraceparent bool   `cli:"tracing-propagate-traceparent"`
+	OpenTelemetryTracing bool   `cli:"opentelemetry-tracing"`
+	TelemetryServiceName string `cli:"telemetry-service-name"`
 
 	// Other shared flags
 	StrictSingleHooks               bool          `cli:"strict-single-hooks"`
@@ -238,12 +233,8 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "acquire-job")
 	}
 
-	if asc.TracingBackend == tracetools.BackendOpenTelemetry {
+	if asc.OpenTelemetryTracing {
 		features = append(features, "opentelemetry-tracing")
-	}
-
-	if asc.TracingPropagateTraceparent {
-		features = append(features, "propagate-traceparent")
 	}
 
 	if asc.DisconnectAfterJob {
@@ -290,8 +281,8 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "env-godebug")
 	}
 
-	if asc.MetricsDatadog {
-		features = append(features, "datadog-metrics")
+	if asc.OpenTelemetryMetrics {
+		features = append(features, "opentelemetry-metrics")
 	}
 
 	return features
@@ -622,20 +613,9 @@ var AgentStartCommand = &cli.Command{
 			Sources: cli.EnvVars("BUILDKITE_ALLOWED_PLUGINS"),
 		},
 		&cli.BoolFlag{
-			Name:    "metrics-datadog",
-			Usage:   "Send metrics to DogStatsD for Datadog (default: false)",
-			Sources: cli.EnvVars("BUILDKITE_METRICS_DATADOG"),
-		},
-		&cli.StringFlag{
-			Name:    "metrics-datadog-host",
-			Usage:   "The dogstatsd instance to send metrics to using udp",
-			Sources: cli.EnvVars("BUILDKITE_METRICS_DATADOG_HOST"),
-			Value:   "127.0.0.1:8125",
-		},
-		&cli.BoolFlag{
-			Name:    "metrics-datadog-distributions",
-			Usage:   "Use Datadog Distributions for Timing metrics (default: false)",
-			Sources: cli.EnvVars("BUILDKITE_METRICS_DATADOG_DISTRIBUTIONS"),
+			Name:    "opentelemetry-metrics",
+			Usage:   "Enable agent metrics export over OpenTelemetry OTLP. Configure OTLP with standard OTEL_EXPORTER_OTLP_* env vars (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_OPENTELEMETRY_METRICS"),
 		},
 		&cli.StringFlag{
 			Name:    "log-format",
@@ -663,21 +643,15 @@ var AgentStartCommand = &cli.Command{
 		},
 		cancelSignalFlag,
 		cancelCleanupTimeoutFlag,
-		&cli.StringFlag{
-			Name:    "tracing-backend",
-			Usage:   `Enable tracing for build jobs by specifying a backend. Currently only "opentelemetry" (or empty) is supported`,
-			Sources: cli.EnvVars("BUILDKITE_TRACING_BACKEND"),
-			Value:   "",
-		},
 		&cli.BoolFlag{
-			Name:    "tracing-propagate-traceparent",
-			Usage:   `Enable accepting traceparent context from Buildkite control plane (only supported for OpenTelemetry backend) (default: false)`,
-			Sources: cli.EnvVars("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"),
+			Name:    "opentelemetry-tracing",
+			Usage:   "Enable tracing for build jobs with OpenTelemetry OTLP. Configure OTLP with standard OTEL_EXPORTER_OTLP_* env vars (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_OPENTELEMETRY_TRACING"),
 		},
 		&cli.StringFlag{
-			Name:    "tracing-service-name",
-			Usage:   "Service name to use when reporting traces.",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_SERVICE_NAME"),
+			Name:    "telemetry-service-name",
+			Usage:   "Service name to use when reporting telemetry.",
+			Sources: cli.EnvVars("BUILDKITE_TELEMETRY_SERVICE_NAME"),
 			Value:   "buildkite-agent",
 		},
 		&cli.StringFlag{
@@ -856,19 +830,9 @@ var AgentStartCommand = &cli.Command{
 		}
 
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
-			Datadog:              cfg.MetricsDatadog,
-			DatadogHost:          cfg.MetricsDatadogHost,
-			DatadogDistributions: cfg.MetricsDatadogDistributions,
+			Enabled:     cfg.OpenTelemetryMetrics,
+			ServiceName: cfg.TelemetryServiceName,
 		})
-
-		// Sense check supported tracing backends, we don't want bootstrapped jobs to silently have no tracing
-		if _, has := tracetools.ValidTracingBackends[cfg.TracingBackend]; !has {
-			return fmt.Errorf(
-				"the given tracing backend %q is not supported. Valid backends are: %q",
-				cfg.TracingBackend,
-				slices.Collect(maps.Keys(tracetools.ValidTracingBackends)),
-			)
-		}
 
 		if experiments.IsEnabled(ctx, experiments.AgentAPI) {
 			shutdown, err := runAgentAPI(ctx, l, cfg.SocketsPath)
@@ -998,9 +962,8 @@ var AgentStartCommand = &cli.Command{
 			HooksShell:                      cfg.HooksShell,
 			RedactedVars:                    cfg.RedactedVars,
 			AcquireJob:                      cfg.AcquireJob,
-			TracingBackend:                  cfg.TracingBackend,
-			TracingServiceName:              cfg.TracingServiceName,
-			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
+			OpenTelemetryTracing:            cfg.OpenTelemetryTracing,
+			TelemetryServiceName:            cfg.TelemetryServiceName,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
 			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
 			KubernetesExec:                  cfg.KubernetesExec,
