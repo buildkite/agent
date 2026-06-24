@@ -310,3 +310,60 @@ func TestGitFetch(t *testing.T) {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
 	}
 }
+
+func TestGitLFSFetchCheckout(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	if err := gitLFSFetchCheckout(ctx, gitLFSFetchCheckoutArgs{
+		Shell: sh,
+		Retry: true,
+	}); err != nil {
+		t.Fatalf("gitLFSFetchCheckout(ctx, ...) = %v", err)
+	}
+
+	wantLog := [][]string{
+		{absoluteGit, "lfs", "fetch"},
+		{absoluteGit, "lfs", "checkout"},
+	}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestGitLFSFetchCheckoutWithInclude(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	if err := gitLFSFetchCheckout(ctx, gitLFSFetchCheckoutArgs{
+		Shell:   sh,
+		Retry:   true,
+		Include: []string{"src/", "docs/"},
+	}); err != nil {
+		t.Fatalf("gitLFSFetchCheckout(ctx, ...) = %v", err)
+	}
+
+	wantLog := [][]string{
+		{absoluteGit, "lfs", "fetch", "--include=src/,docs/"},
+		{absoluteGit, "lfs", "checkout", "src/", "docs/"},
+	}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
