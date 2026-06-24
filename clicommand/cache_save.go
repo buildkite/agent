@@ -32,9 +32,9 @@ Example:
     $ buildkite-agent cache save
 
 This will save all caches defined in the cache configuration file.
-You can also save specific caches by providing their IDs:
+You can also save specific caches by providing their names:
 
-    $ buildkite-agent cache save --names "node"
+    $ buildkite-agent cache save --name "node"
 
 The cache is stored at BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url).
 The registry is selected by BUILDKITE_AGENT_CACHE_REGISTRY (or --registry); '~'
