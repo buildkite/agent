@@ -35,9 +35,9 @@ Example:
     $ buildkite-agent cache restore
 
 This will restore all caches defined in the cache configuration file.
-You can also restore specific caches by providing their IDs:
+You can also restore specific caches by providing their names:
 
-    $ buildkite-agent cache restore --names "node"
+    $ buildkite-agent cache restore --name "node"
 
 The cache is retrieved from BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url),
 downloaded directly using the agent's ambient credentials. The registry is
