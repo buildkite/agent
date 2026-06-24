@@ -28,7 +28,7 @@ func WithDebug() ServerOpts {
 // tests), the endpoint returns an error.
 func WithPromiseFailureDeclarer(d PromiseFailureDeclarer) ServerOpts {
 	return func(s *Server) {
-		s.declarePromiseFailure = d
+		s.promiseFailures.declare = d
 	}
 }
 
@@ -55,17 +55,8 @@ type Server struct {
 	// process exits. Guarded by mtx.
 	pendingWorkdir string
 
-	// promiseFailures coalesces concurrent and repeated promise-failure calls so
-	// each exit status is declared to the Buildkite API at most once
-	// successfully. Each entry is an in-flight declaration or a cached success or
-	// terminal failure; transient failures are removed so a later call can retry.
-	// Guarded by mtx.
-	promiseFailures map[int]*promiseFailure
-
-	// declarePromiseFailure declares a promised failure to the Buildkite API.
-	// It's nil if the server wasn't configured with a declarer (e.g. in tests),
-	// in which case the /promise-failure endpoint returns an error.
-	declarePromiseFailure PromiseFailureDeclarer
+	// promiseFailures coalesces concurrent and repeated promise-failure calls.
+	promiseFailures *promiseFailureCoordinator
 
 	token   string
 	sockSvr *socket.Server
@@ -91,7 +82,7 @@ func NewServer(
 		Logger:          logger,
 		environ:         environ,
 		redactors:       redactors,
-		promiseFailures: make(map[int]*promiseFailure),
+		promiseFailures: newPromiseFailureCoordinator(nil),
 		token:           token,
 	}
 

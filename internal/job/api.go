@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/version"
 )
 
 // startJobAPI starts the job API server, iff the OS of the box supports it otherwise it returns a
@@ -84,8 +85,10 @@ func (e *Executor) declarePromiseFailure(ctx context.Context, exitStatus int, re
 	// logger.Discard keeps the access token (in HTTP debug dumps) out of the job
 	// log; retry warnings still go to the shell logger.
 	apiClient := api.NewClient(logger.Discard, api.Config{
-		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
-		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
+		Endpoint:     e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
+		Token:        e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
+		DisableHTTP2: e.shell.Env.GetBool("BUILDKITE_NO_HTTP2", false),
+		UserAgent:    version.UserAgent(),
 	})
 
 	req := &api.JobPromiseFailureRequest{

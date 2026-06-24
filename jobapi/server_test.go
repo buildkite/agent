@@ -501,8 +501,8 @@ func startPromiseFailureServer(t *testing.T, declarer jobapi.PromiseFailureDecla
 }
 
 // promiseFailureRequest POSTs a promise-failure declaration to the Job API and
-// returns the HTTP status code and, on success, the outcome from the response body.
-func promiseFailureRequest(t *testing.T, client *http.Client, token string, exitStatus int) (int, string) {
+// returns the HTTP status code and, on success, the response body.
+func promiseFailureRequest(t *testing.T, client *http.Client, token string, exitStatus int) (int, *jobapi.PromiseFailureResponse) {
 	t.Helper()
 
 	buf := &bytes.Buffer{}
@@ -523,13 +523,13 @@ func promiseFailureRequest(t *testing.T, client *http.Client, token string, exit
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return resp.StatusCode, ""
+		return resp.StatusCode, nil
 	}
 	var body jobapi.PromiseFailureResponse
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
-	return resp.StatusCode, body.Outcome
+	return resp.StatusCode, &body
 }
 
 func TestPromiseFailure(t *testing.T) {
@@ -556,12 +556,15 @@ func TestPromiseFailure(t *testing.T) {
 		jobapi.PromiseFailureDeclared,
 	}
 	for i, exitStatus := range []int{1, 1, 2} {
-		got, outcome := promiseFailureRequest(t, client, token, exitStatus)
+		got, result := promiseFailureRequest(t, client, token, exitStatus)
 		if got != http.StatusOK {
 			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusOK)
 		}
-		if outcome != wantOutcomes[i] {
-			t.Errorf("promiseFailureRequest(%d) outcome = %q, want %q", exitStatus, outcome, wantOutcomes[i])
+		if result.Outcome != wantOutcomes[i] {
+			t.Errorf("promiseFailureRequest(%d) outcome = %q, want %q", exitStatus, result.Outcome, wantOutcomes[i])
+		}
+		if !result.Accepted {
+			t.Errorf("promiseFailureRequest(%d) accepted = false, want true", exitStatus)
 		}
 	}
 
@@ -602,13 +605,17 @@ func TestPromiseFailureNotCachedOnTransientError(t *testing.T) {
 		return http.StatusServiceUnavailable, fmt.Errorf("the Buildkite API is unavailable")
 	})
 
-	// A transient failure is surfaced with the Buildkite API's status code, and
-	// isn't cached: a later call for the same exit status retries.
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusServiceUnavailable {
-		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusServiceUnavailable)
+	// A transient failure is surfaced in the response body, and isn't cached: a
+	// later call for the same exit status retries.
+	if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
+	} else if result.Accepted || result.UpstreamStatus != http.StatusServiceUnavailable || result.Terminal {
+		t.Errorf("first promiseFailureRequest(1) result = %+v, want rejected transient 503", result)
 	}
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusServiceUnavailable {
-		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusServiceUnavailable)
+	if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
+	} else if result.Accepted || result.UpstreamStatus != http.StatusServiceUnavailable || result.Terminal {
+		t.Errorf("second promiseFailureRequest(1) result = %+v, want rejected transient 503", result)
 	}
 
 	if got := calls.Load(); got != 2 {
@@ -626,12 +633,16 @@ func TestPromiseFailureCachedOnTerminalError(t *testing.T) {
 	})
 
 	// A terminal failure is cached: a later call for the same exit status returns
-	// the same status without re-hitting the Buildkite API.
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusConflict {
-		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusConflict)
+	// the same result without re-hitting the Buildkite API.
+	if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
+	} else if result.Accepted || result.UpstreamStatus != http.StatusConflict || !result.Terminal || result.Outcome != jobapi.PromiseFailureDeclared {
+		t.Errorf("first promiseFailureRequest(1) result = %+v, want declared terminal 409", result)
 	}
-	if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusConflict {
-		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusConflict)
+	if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
+	} else if result.Accepted || result.UpstreamStatus != http.StatusConflict || !result.Terminal || result.Outcome != jobapi.PromiseFailureDebounced {
+		t.Errorf("second promiseFailureRequest(1) result = %+v, want debounced terminal 409", result)
 	}
 
 	if got := calls.Load(); got != 1 {
@@ -654,10 +665,12 @@ func TestPromiseFailureStatusNormalization(t *testing.T) {
 		return http.StatusNoContent, nil
 	})
 
-	// Both are normalized to 502, so a caller never reads an error as success.
+	// Both are reported as rejected, so a caller never reads them as accepted.
 	for _, exitStatus := range []int{1, 2} {
-		if got, _ := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusBadGateway {
-			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusBadGateway)
+		if got, result := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusOK {
+			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusOK)
+		} else if result.Accepted || result.UpstreamStatus != map[int]int{1: 0, 2: http.StatusNoContent}[exitStatus] || result.Terminal {
+			t.Errorf("promiseFailureRequest(%d) result = %+v, want rejected transient", exitStatus, result)
 		}
 	}
 }
@@ -678,7 +691,7 @@ func TestPromiseFailurePanicConcurrent(t *testing.T) {
 	})
 
 	// A burst of callers coalesce onto a leader whose declaration panics. The
-	// leader is recovered to 500 and every waiter must also unblock with 500,
+	// leader is recovered to a rejected result and every waiter must also unblock,
 	// rather than hanging on a channel that's never closed. (If any caller hung,
 	// the wait below would never return and the test would time out.)
 	const n = 50
@@ -687,8 +700,10 @@ func TestPromiseFailurePanicConcurrent(t *testing.T) {
 	for range n {
 		go func() {
 			defer wg.Done()
-			if got, _ := promiseFailureRequest(t, client, token, 1); got != http.StatusInternalServerError {
-				t.Errorf("promiseFailureRequest(1) status = %d, want %d", got, http.StatusInternalServerError)
+			if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
+				t.Errorf("promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
+			} else if result.Accepted || result.UpstreamStatus != http.StatusInternalServerError {
+				t.Errorf("promiseFailureRequest(1) result = %+v, want rejected panic result", result)
 			}
 		}()
 	}

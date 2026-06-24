@@ -89,4 +89,18 @@ const (
 type PromiseFailureResponse struct {
 	// Outcome is PromiseFailureDeclared or PromiseFailureDebounced.
 	Outcome string `json:"outcome"`
+
+	// Accepted reports whether the Buildkite API accepted the promised failure.
+	Accepted bool `json:"accepted"`
+
+	// UpstreamStatus is the Buildkite API status, when one was received.
+	// Network errors that never received a response leave this as 0.
+	UpstreamStatus int `json:"upstream_status,omitempty"`
+
+	// Error is the Buildkite API declaration error, if Accepted is false.
+	Error string `json:"error,omitempty"`
+
+	// Terminal reports whether repeating this declaration is expected to return
+	// the same error, so the result can be cached.
+	Terminal bool `json:"terminal,omitempty"`
 }
