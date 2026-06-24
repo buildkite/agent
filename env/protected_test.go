@@ -20,6 +20,7 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		"BUILDKITE_GIT_MIRRORS_PATH",
 		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		"BUILDKITE_HOOKS_PATH",
 		"BUILDKITE_KUBERNETES_EXEC",
 		"BUILDKITE_LOCAL_HOOKS_ENABLED",
@@ -78,7 +79,6 @@ func TestCheckoutOverrideScope(t *testing.T) {
 		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
 		"BUILDKITE_GIT_CLEAN_FLAGS",
 		"BUILDKITE_GIT_FETCH_FLAGS",
-		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		"BUILDKITE_GIT_SUBMODULES",
 		"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
@@ -97,11 +97,13 @@ func TestCheckoutOverrideScope(t *testing.T) {
 
 	// Mirror infra is agent-only: always protected and never in the override
 	// scope, so a job can't relocate the mirror, stretch its lock timeout, or
-	// change the mirror checkout mode.
+	// change the mirror checkout mode. Submodule clone config is likewise
+	// always protected (a `git -c` injection vector with no backend knob).
 	for _, envVar := range []string{
 		"BUILDKITE_GIT_MIRRORS_PATH",
 		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		"BUILDKITE_SSH_KEYSCAN",
 		"BUILDKITE_COMMAND_EVAL",
 	} {

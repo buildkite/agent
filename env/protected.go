@@ -22,6 +22,10 @@ type protection struct {
 // disables plugins, but even if it is changed by a hook, the agent doesn't
 // reconfigure no-command-eval based on any changes.)
 //
+// BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG is applied as `git -c <value>` before
+// submodule clones (an injection vector) and has no backend customization, so
+// it stays agent-authoritative rather than in checkoutOverrideScope.
+//
 // The actual enforcement of protected env within the agent level (overriding
 // job-level env vars based on agent configuration) happens implicitly rather
 // than relying on this map - see createEnvironment in agent/job_runner.go.
@@ -55,6 +59,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT":    {},
 	"BUILDKITE_GIT_MIRRORS_PATH":            {},
 	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":    {},
+	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":  {},
 	"BUILDKITE_HOOKS_PATH":                  {},
 	"BUILDKITE_HOOKS_SHELL":                 {},
 	"BUILDKITE_KUBERNETES_EXEC":             {},
@@ -86,7 +91,6 @@ var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": {},
 	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":       {},
 	"BUILDKITE_GIT_SUBMODULES":                  {},
-	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":      {},
 	"BUILDKITE_SKIP_CHECKOUT":                   {},
 }
 
