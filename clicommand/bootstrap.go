@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/urfave/cli/v3"
 )
 
@@ -108,11 +109,10 @@ type BootstrapConfig struct {
 	CancelSignalTimeout          time.Duration `cli:"cancel-signal-timeout"`
 	CancelCleanupTimeout         time.Duration `cli:"cancel-cleanup-timeout"`
 	RedactedVars                 []string      `cli:"redacted-vars" normalize:"list"`
-	TracingBackend               string        `cli:"tracing-backend"`
-	TracingServiceName           string        `cli:"tracing-service-name"`
+	OpenTelemetryTracing         bool          `cli:"opentelemetry-tracing"`
+	TelemetryServiceName         string        `cli:"telemetry-service-name"`
 	TracingTraceParent           string        `cli:"tracing-traceparent"`
 	TracingTraceState            string        `cli:"tracing-tracestate"`
-	TracingPropagateTraceparent  bool          `cli:"tracing-propagate-traceparent"`
 	NoJobAPI                     bool          `cli:"no-job-api"`
 	DisableWarningsFor           []string      `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts             int           `cli:"checkout-attempts"`
@@ -336,16 +336,15 @@ var BootstrapCommand = &cli.Command{
 			Usage:   "The specific phases to execute. The order they're defined is irrelevant.",
 			Sources: cli.EnvVars("BUILDKITE_BOOTSTRAP_PHASES"),
 		},
-		&cli.StringFlag{
-			Name:    "tracing-backend",
-			Usage:   "The name of the tracing backend to use.",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_BACKEND"),
-			Value:   "",
+		&cli.BoolFlag{
+			Name:    "opentelemetry-tracing",
+			Usage:   "Enable tracing for build jobs with OpenTelemetry OTLP. Configure OTLP with standard OTEL_EXPORTER_OTLP_* env vars (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_OPENTELEMETRY_TRACING"),
 		},
 		&cli.StringFlag{
-			Name:    "tracing-service-name",
+			Name:    "telemetry-service-name",
 			Usage:   "Service name to use when reporting traces.",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_SERVICE_NAME"),
+			Sources: cli.EnvVars("BUILDKITE_TELEMETRY_SERVICE_NAME"),
 			Value:   "buildkite-agent",
 		},
 		&cli.StringFlag{
@@ -359,11 +358,6 @@ var BootstrapCommand = &cli.Command{
 			Usage:   "W3C Trace State for tracing",
 			Sources: cli.EnvVars("BUILDKITE_TRACING_TRACESTATE"),
 			Value:   "",
-		},
-		&cli.BoolFlag{
-			Name:    "tracing-propagate-traceparent",
-			Usage:   "Accept traceparent from Buildkite control plane (default: false)",
-			Sources: cli.EnvVars("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"),
 		},
 
 		&cli.BoolFlag{
@@ -428,6 +422,11 @@ var BootstrapCommand = &cli.Command{
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
+		tracingBackend := tracetools.BackendNone
+		if cfg.OpenTelemetryTracing {
+			tracingBackend = tracetools.BackendOpenTelemetry
+		}
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
 			AgentName:                    cfg.AgentName,
@@ -486,11 +485,10 @@ var BootstrapCommand = &cli.Command{
 			HooksShell:                   cfg.HooksShell,
 			StrictSingleHooks:            cfg.StrictSingleHooks,
 			Tag:                          cfg.Tag,
-			TracingBackend:               cfg.TracingBackend,
-			TracingServiceName:           cfg.TracingServiceName,
+			TracingBackend:               tracingBackend,
+			TelemetryServiceName:         cfg.TelemetryServiceName,
 			TracingTraceParent:           cfg.TracingTraceParent,
 			TracingTraceState:            cfg.TracingTraceState,
-			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			Secrets:                      cfg.Secrets,
