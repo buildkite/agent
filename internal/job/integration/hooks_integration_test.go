@@ -124,17 +124,32 @@ func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                string
-		noCheckoutOverride  bool
-		wantSkipCheckoutEnv string
-		wantBlockedWarning  bool
+		name               string
+		envVar             string
+		envValue           string
+		noCheckoutOverride bool
+		wantEnv            string
+		wantBlockedWarning bool
 	}{
 		{
-			name:                "disabled_allows_mutation",
-			wantSkipCheckoutEnv: "true",
+			name:     "disabled_allows_skip_checkout",
+			envVar:   "BUILDKITE_SKIP_CHECKOUT",
+			envValue: "true",
+			wantEnv:  "true",
 		},
 		{
-			name:               "enabled_blocks_mutation",
+			name:               "enabled_blocks_skip_checkout",
+			envVar:             "BUILDKITE_SKIP_CHECKOUT",
+			envValue:           "true",
+			noCheckoutOverride: true,
+			wantBlockedWarning: true,
+		},
+		{
+			// Sparse paths is only exercised in the blocked direction: the lock
+			// strips it before checkout, so the real checkout is unaffected.
+			name:               "enabled_blocks_sparse_checkout_paths",
+			envVar:             "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+			envValue:           "a/b",
 			noCheckoutOverride: true,
 			wantBlockedWarning: true,
 		},
@@ -153,13 +168,13 @@ func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
 			filename := "environment"
 			script := []string{
 				"#!/usr/bin/env bash",
-				"export BUILDKITE_SKIP_CHECKOUT=true",
+				fmt.Sprintf("export %s=%s", tc.envVar, tc.envValue),
 			}
 			if runtime.GOOS == "windows" {
 				filename = "environment.bat"
 				script = []string{
 					"@echo off",
-					"set BUILDKITE_SKIP_CHECKOUT=true",
+					fmt.Sprintf("set %s=%s", tc.envVar, tc.envValue),
 				}
 			}
 
@@ -168,8 +183,8 @@ func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
 			}
 
 			tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-				if got, want := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"), tc.wantSkipCheckoutEnv; got != want {
-					_, _ = fmt.Fprintf(c.Stderr, "Expected BUILDKITE_SKIP_CHECKOUT=%q, got %q\n", want, got)
+				if got, want := c.GetEnv(tc.envVar), tc.wantEnv; got != want {
+					_, _ = fmt.Fprintf(c.Stderr, "Expected %s=%q, got %q\n", tc.envVar, want, got)
 					c.Exit(1)
 					return
 				}
@@ -184,7 +199,7 @@ func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
 			tester.RunAndCheck(t, env...)
 
 			containsWarning := strings.Contains(tester.Output, "env vars were blocked") &&
-				strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT")
+				strings.Contains(tester.Output, tc.envVar)
 			if containsWarning != tc.wantBlockedWarning {
 				t.Fatalf("blocked warning presence = %t, want %t\noutput: %s", containsWarning, tc.wantBlockedWarning, tester.Output)
 			}

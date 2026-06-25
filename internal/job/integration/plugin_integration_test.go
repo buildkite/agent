@@ -85,11 +85,14 @@ func TestPluginEnvironmentHookNoCheckoutOverride(t *testing.T) {
 	// default, but no-checkout-override must block that mutation.
 	tests := []struct {
 		name               string
+		envVar             string
+		envValue           string
 		noCheckoutOverride bool
 		wantBlocked        bool
 	}{
-		{name: "disabled_allows_plugin_to_override_clone_flags"},
-		{name: "enabled_blocks_plugin_clone_flags_override", noCheckoutOverride: true, wantBlocked: true},
+		{name: "disabled_allows_plugin_to_override_skip_checkout", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true"},
+		{name: "enabled_blocks_plugin_skip_checkout_override", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true", noCheckoutOverride: true, wantBlocked: true},
+		{name: "enabled_blocks_plugin_sparse_checkout_paths_override", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", envValue: "a/b", noCheckoutOverride: true, wantBlocked: true},
 	}
 
 	for _, tc := range tests {
@@ -102,20 +105,21 @@ func TestPluginEnvironmentHookNoCheckoutOverride(t *testing.T) {
 			}
 			defer tester.Close()
 
-			// SKIP_CHECKOUT is a benign scoped var to assert on: setting it true
-			// just skips cloning, so the build still succeeds either way. Setting
-			// a real clone flag would break the checkout when the override lands.
+			// These scoped vars keep the checkout safe: SKIP_CHECKOUT just skips
+			// cloning, and sparse paths is only exercised in the blocked direction
+			// where the lock strips it before checkout. Setting a real clone flag
+			// in the allowed direction would break the checkout.
 			hooks := map[string][]string{
 				"environment": {
 					"#!/usr/bin/env bash",
-					"export BUILDKITE_SKIP_CHECKOUT=true",
+					fmt.Sprintf("export %s=%s", tc.envVar, tc.envValue),
 				},
 			}
 			if runtime.GOOS == "windows" {
 				hooks = map[string][]string{
 					"environment.bat": {
 						"@echo off",
-						"set BUILDKITE_SKIP_CHECKOUT=true",
+						fmt.Sprintf("set %s=%s", tc.envVar, tc.envValue),
 					},
 				}
 			}
@@ -127,14 +131,14 @@ func TestPluginEnvironmentHookNoCheckoutOverride(t *testing.T) {
 			}
 
 			tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-				got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT")
-				if tc.wantBlocked && got == "true" {
-					_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the plugin override to be blocked\n", got)
+				got := c.GetEnv(tc.envVar)
+				if tc.wantBlocked && got == tc.envValue {
+					_, _ = fmt.Fprintf(c.Stderr, "%s=%q, want the plugin override to be blocked\n", tc.envVar, got)
 					c.Exit(1)
 					return
 				}
-				if !tc.wantBlocked && got != "true" {
-					_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want %q\n", got, "true")
+				if !tc.wantBlocked && got != tc.envValue {
+					_, _ = fmt.Fprintf(c.Stderr, "%s=%q, want %q\n", tc.envVar, got, tc.envValue)
 					c.Exit(1)
 					return
 				}
@@ -149,7 +153,7 @@ func TestPluginEnvironmentHookNoCheckoutOverride(t *testing.T) {
 			tester.RunAndCheck(t, env...)
 
 			containsWarning := strings.Contains(tester.Output, "env vars were blocked") &&
-				strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT")
+				strings.Contains(tester.Output, tc.envVar)
 			if containsWarning != tc.wantBlocked {
 				t.Fatalf("blocked warning presence = %t, want %t\noutput: %s", containsWarning, tc.wantBlocked, tester.Output)
 			}

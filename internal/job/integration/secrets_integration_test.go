@@ -569,11 +569,14 @@ func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
 
 	tests := []struct {
 		name               string
+		envVar             string
+		secretValue        string
 		noCheckoutOverride bool
 		wantErr            bool
 	}{
-		{name: "disabled_allows_checkout_scoped_secret"},
-		{name: "enabled_rejects_checkout_locked_secret", noCheckoutOverride: true, wantErr: true},
+		{name: "disabled_allows_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror"},
+		{name: "enabled_rejects_checkout_locked_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", noCheckoutOverride: true, wantErr: true},
+		{name: "enabled_rejects_sparse_checkout_paths_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", secretValue: "a/b", noCheckoutOverride: true, wantErr: true},
 	}
 
 	for _, tc := range tests {
@@ -586,12 +589,12 @@ func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
 			}
 			defer tester.Close()
 
-			apiServer := setupSecretsAPIServer(t, map[string]string{"CLONE_FLAGS_SECRET": "--mirror"})
+			apiServer := setupSecretsAPIServer(t, map[string]string{"CHECKOUT_SECRET": tc.secretValue})
 			defer apiServer.Close()
 
 			secretsJSON, err := json.Marshal([]pipeline.Secret{{
-				Key:                 "CLONE_FLAGS_SECRET",
-				EnvironmentVariable: "BUILDKITE_GIT_CLONE_FLAGS",
+				Key:                 "CHECKOUT_SECRET",
+				EnvironmentVariable: tc.envVar,
 			}})
 			if err != nil {
 				t.Fatalf("marshaling secrets: %v", err)
@@ -599,8 +602,8 @@ func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
 
 			if !tc.wantErr {
 				tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-					if got, want := c.GetEnv("BUILDKITE_GIT_CLONE_FLAGS"), "--mirror"; got != want {
-						_, _ = fmt.Fprintf(c.Stderr, "Expected BUILDKITE_GIT_CLONE_FLAGS=%q, got %q\n", want, got)
+					if got, want := c.GetEnv(tc.envVar), tc.secretValue; got != want {
+						_, _ = fmt.Fprintf(c.Stderr, "Expected %s=%q, got %q\n", tc.envVar, want, got)
 						c.Exit(1)
 						return
 					}
@@ -621,7 +624,7 @@ func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected job to fail due to checkout-locked secret mapping, but it succeeded. Full output: %s", tester.Output)
 				}
-				if !strings.Contains(tester.Output, "checkout-locked environment variable") || !strings.Contains(tester.Output, "BUILDKITE_GIT_CLONE_FLAGS") {
+				if !strings.Contains(tester.Output, "checkout-locked environment variable") || !strings.Contains(tester.Output, tc.envVar) {
 					t.Fatalf("expected output to mention checkout-locked env rejection, got: %s", tester.Output)
 				}
 				return
