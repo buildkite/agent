@@ -1,10 +1,13 @@
 package store
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestNscStore_Interface(t *testing.T) {
@@ -211,107 +214,100 @@ func TestRunCommandValidation(t *testing.T) {
 	}
 }
 
-// TestNscStore_MockUpload tests the Upload method with mocked command execution
-// Note: This test will fail if nsc is not installed, but shows the structure
-func TestNscStore_Upload_Validation(t *testing.T) {
-	store, err := NewNscStore()
-	if err != nil {
-		t.Fatalf("NewNscStore: %v", err)
+func TestParseNscNamespace(t *testing.T) {
+	tests := []struct {
+		name      string
+		url       string
+		namespace string
+		wantErr   bool
+	}{
+		{name: "nsc with namespace", url: "nsc://my-namespace", namespace: "my-namespace"},
+		{name: "not nsc", url: "s3://my-bucket", wantErr: true},
+		{name: "nsc without namespace", url: "nsc://", wantErr: true},
+		{name: "invalid url", url: "nsc://host:notaport", wantErr: true},
 	}
 
-	ctx := t.Context()
-
-	// Create a temporary test file
-	tmpDir, err := os.MkdirTemp("", "nsc-test")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	testFile := filepath.Join(tmpDir, "test.txt")
-	err = os.WriteFile(testFile, []byte("test content"), 0o600)
-	if err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	// Test invalid file path
-	_, err = store.Upload(ctx, "invalid;path", "valid-key")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "invalid file path") {
-		t.Errorf("error %q does not contain %q", err.Error(), "invalid file path")
-	}
-
-	// Test invalid key
-	_, err = store.Upload(ctx, testFile, "invalid key with spaces")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "invalid key") {
-		t.Errorf("error %q does not contain %q", err.Error(), "invalid key")
-	}
-
-	// Test valid inputs (will fail with nsc command error, but validation passes)
-	_, err = store.Upload(ctx, testFile, "valid-key")
-	// This will error because nsc command likely doesn't exist or isn't configured
-	// but the error should be about command execution, not validation
-	if err != nil {
-		if strings.Contains(err.Error(), "invalid file path") {
-			t.Errorf("error %q should not contain %q", err.Error(), "invalid file path")
-		}
-		if strings.Contains(err.Error(), "invalid key") {
-			t.Errorf("error %q should not contain %q", err.Error(), "invalid key")
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			namespace, err := parseNscNamespace(tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseNscNamespace(%q) err = %v, wantErr %v", tt.url, err, tt.wantErr)
+			}
+			if namespace != tt.namespace {
+				t.Errorf("parseNscNamespace(%q) namespace = %q, want %q", tt.url, namespace, tt.namespace)
+			}
+		})
 	}
 }
 
-// TestNscStore_Download_Validation tests the Download method validation
-func TestNscStore_Download_Validation(t *testing.T) {
-	store, err := NewNscStore()
-	if err != nil {
-		t.Fatalf("NewNscStore: %v", err)
+// fakeRunner records the args of the last command and returns a successful result.
+func fakeRunner(captured *[]string) commandRunner {
+	return func(_ context.Context, _ string, args ...string) (*CommandResult, error) {
+		*captured = args
+		return &CommandResult{}, nil
 	}
+}
 
+func TestNscStore_PassesNamespace(t *testing.T) {
 	ctx := t.Context()
 
-	tmpDir, err := os.MkdirTemp("", "nsc-test")
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var captured []string
+	store := &NscStore{namespace: "my-namespace", run: fakeRunner(&captured)}
+
+	if _, err := store.Upload(ctx, testFile, "key"); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	wantArgs := []string{"nsc", "artifact", "upload", testFile, "key", "--expires_in", "24h", "--namespace", "my-namespace"}
+	if diff := cmp.Diff(wantArgs, captured); diff != "" {
+		t.Errorf("upload args mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestNewNscStore_RequiresNamespace(t *testing.T) {
+	if _, err := NewNscStore("nsc://"); err == nil {
+		t.Error(`NewNscStore("nsc://"): expected error, got nil`)
+	}
+}
+
+// TestNscStore_ValidationShortCircuits ensures unsafe inputs are rejected before
+// the CLI is ever invoked.
+func TestNscStore_ValidationShortCircuits(t *testing.T) {
+	ctx := t.Context()
+	ran := false
+	store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+		ran = true
+		return &CommandResult{}, nil
+	}}
+
+	if _, err := store.Upload(ctx, "invalid;path", "valid-key"); err == nil {
+		t.Error("Upload with unsafe path: expected error, got nil")
+	}
+	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt"); err == nil {
+		t.Error("Download with unsafe key: expected error, got nil")
+	}
+	if ran {
+		t.Error("nsc CLI should not run when input validation fails")
+	}
+}
+
+func TestNewBlobStore_NscScheme(t *testing.T) {
+	blob, err := NewBlobStore(t.Context(), AgentManaged, "nsc://my-namespace")
 	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
+		t.Fatalf("NewBlobStore: %v", err)
 	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	destFile := filepath.Join(tmpDir, "download.txt")
-
-	// Test invalid key
-	_, err = store.Download(ctx, "invalid key with spaces", destFile)
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	nsc, ok := blob.(*NscStore)
+	if !ok {
+		t.Fatalf("NewBlobStore returned %T, want *NscStore", blob)
 	}
-	if !strings.Contains(err.Error(), "invalid key") {
-		t.Errorf("error %q does not contain %q", err.Error(), "invalid key")
-	}
-
-	// Test invalid file path
-	_, err = store.Download(ctx, "valid-key", "invalid;path")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "invalid file path") {
-		t.Errorf("error %q does not contain %q", err.Error(), "invalid file path")
-	}
-
-	// Test valid inputs (will fail with nsc command error, but validation passes)
-	_, err = store.Download(ctx, "valid-key", destFile)
-	// This will error because nsc command likely doesn't exist or isn't configured
-	// but the error should be about command execution, not validation
-	if err != nil {
-		if strings.Contains(err.Error(), "invalid key") {
-			t.Errorf("error %q should not contain %q", err.Error(), "invalid key")
-		}
-		if strings.Contains(err.Error(), "invalid file path") {
-			t.Errorf("error %q should not contain %q", err.Error(), "invalid file path")
-		}
+	if nsc.namespace != "my-namespace" {
+		t.Errorf("namespace = %q, want %q", nsc.namespace, "my-namespace")
 	}
 }
 
@@ -323,7 +319,8 @@ func TestNscStore_Integration(t *testing.T) {
 		t.Skip("Skipping NSC integration test (set NSC_INTEGRATION_TEST=1 to run)")
 	}
 
-	store, err := NewNscStore()
+	// "main" is the nsc CLI's default namespace.
+	store, err := NewNscStore("nsc://main")
 	if err != nil {
 		t.Fatalf("NewNscStore: %v", err)
 	}
