@@ -70,7 +70,6 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Accepted:       false,
 				UpstreamStatus: http.StatusConflict,
 				Error:          "a different exit status was already declared",
-				Terminal:       true,
 			}); err != nil {
 				_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
 			}

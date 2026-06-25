@@ -99,8 +99,4 @@ type PromiseFailureResponse struct {
 
 	// Error is the Buildkite API declaration error, if Accepted is false.
 	Error string `json:"error,omitempty"`
-
-	// Terminal reports whether repeating this declaration is expected to return
-	// the same error, so the result can be cached.
-	Terminal bool `json:"terminal,omitempty"`
 }

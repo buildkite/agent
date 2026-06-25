@@ -95,7 +95,6 @@ func (c *promiseFailureCoordinator) Declare(ctx context.Context, req PromiseFail
 			Accepted:       false,
 			UpstreamStatus: http.StatusInternalServerError,
 			Error:          fmt.Sprintf("declaring promised failure panicked: %v", v),
-			Terminal:       false,
 		}
 		c.mu.Lock()
 		delete(c.entries, req.ExitStatus)
@@ -113,12 +112,12 @@ func (c *promiseFailureCoordinator) Declare(ctx context.Context, req PromiseFail
 	}
 	if err != nil {
 		pf.result.Error = err.Error()
-		pf.result.Terminal = terminalStatus(statusCode)
 	}
 	completed = true
+	terminal := terminalStatus(statusCode)
 
 	c.mu.Lock()
-	if !pf.result.Accepted && !pf.result.Terminal {
+	if !pf.result.Accepted && !terminal {
 		// Evict transient failures (5xx, network, 429) so a later call can retry.
 		// Terminal failures (other 4xx, e.g. 409/422) stay cached so repeated
 		// calls don't keep hitting the Buildkite API. Waiters already hold pf and

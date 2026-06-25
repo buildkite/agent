@@ -609,12 +609,12 @@ func TestPromiseFailureNotCachedOnTransientError(t *testing.T) {
 	// later call for the same exit status retries.
 	if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
 		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
-	} else if result.Accepted || result.UpstreamStatus != http.StatusServiceUnavailable || result.Terminal {
+	} else if result.Accepted || result.UpstreamStatus != http.StatusServiceUnavailable {
 		t.Errorf("first promiseFailureRequest(1) result = %+v, want rejected transient 503", result)
 	}
 	if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
 		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
-	} else if result.Accepted || result.UpstreamStatus != http.StatusServiceUnavailable || result.Terminal {
+	} else if result.Accepted || result.UpstreamStatus != http.StatusServiceUnavailable {
 		t.Errorf("second promiseFailureRequest(1) result = %+v, want rejected transient 503", result)
 	}
 
@@ -636,12 +636,12 @@ func TestPromiseFailureCachedOnTerminalError(t *testing.T) {
 	// the same result without re-hitting the Buildkite API.
 	if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
 		t.Errorf("first promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
-	} else if result.Accepted || result.UpstreamStatus != http.StatusConflict || !result.Terminal || result.Outcome != jobapi.PromiseFailureDeclared {
+	} else if result.Accepted || result.UpstreamStatus != http.StatusConflict || result.Outcome != jobapi.PromiseFailureDeclared {
 		t.Errorf("first promiseFailureRequest(1) result = %+v, want declared terminal 409", result)
 	}
 	if got, result := promiseFailureRequest(t, client, token, 1); got != http.StatusOK {
 		t.Errorf("second promiseFailureRequest(1) status = %d, want %d", got, http.StatusOK)
-	} else if result.Accepted || result.UpstreamStatus != http.StatusConflict || !result.Terminal || result.Outcome != jobapi.PromiseFailureDebounced {
+	} else if result.Accepted || result.UpstreamStatus != http.StatusConflict || result.Outcome != jobapi.PromiseFailureDebounced {
 		t.Errorf("second promiseFailureRequest(1) result = %+v, want debounced terminal 409", result)
 	}
 
@@ -669,7 +669,7 @@ func TestPromiseFailureStatusNormalization(t *testing.T) {
 	for _, exitStatus := range []int{1, 2} {
 		if got, result := promiseFailureRequest(t, client, token, exitStatus); got != http.StatusOK {
 			t.Errorf("promiseFailureRequest(%d) status = %d, want %d", exitStatus, got, http.StatusOK)
-		} else if result.Accepted || result.UpstreamStatus != map[int]int{1: 0, 2: http.StatusNoContent}[exitStatus] || result.Terminal {
+		} else if result.Accepted || result.UpstreamStatus != map[int]int{1: 0, 2: http.StatusNoContent}[exitStatus] {
 			t.Errorf("promiseFailureRequest(%d) result = %+v, want rejected transient", exitStatus, result)
 		}
 	}
