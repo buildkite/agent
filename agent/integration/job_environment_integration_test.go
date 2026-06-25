@@ -390,6 +390,129 @@ func TestCheckoutScopedJobEnvOverrideHonorsNoCheckoutOverride(t *testing.T) {
 			wantEnvValue:       "false",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"},
 		},
+		// The remaining checkout-scoped vars all flow through setCheckoutEnv; cover
+		// each in both directions so a regression in any one is caught. The git flag
+		// vars are the injection vectors the lock exists to contain.
+		{
+			name:    "disabled_allows_job_env_to_override_checkout_flags",
+			varName: "BUILDKITE_GIT_CHECKOUT_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CHECKOUT_FLAGS": "--quiet",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCheckoutFlags: "-f",
+			},
+			wantEnvValue: "--quiet",
+		},
+		{
+			name:    "enabled_locks_checkout_flags_to_agent_config",
+			varName: "BUILDKITE_GIT_CHECKOUT_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CHECKOUT_FLAGS": "--quiet",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCheckoutFlags:   "-f",
+				NoCheckoutOverride: true,
+			},
+			wantEnvValue:       "-f",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CHECKOUT_FLAGS"},
+		},
+		{
+			name:    "disabled_allows_job_env_to_override_fetch_flags",
+			varName: "BUILDKITE_GIT_FETCH_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_FETCH_FLAGS": "--prune",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitFetchFlags: "-v",
+			},
+			wantEnvValue: "--prune",
+		},
+		{
+			name:    "enabled_locks_fetch_flags_to_agent_config",
+			varName: "BUILDKITE_GIT_FETCH_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_FETCH_FLAGS": "--prune",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitFetchFlags:      "-v",
+				NoCheckoutOverride: true,
+			},
+			wantEnvValue:       "-v",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_FETCH_FLAGS"},
+		},
+		{
+			name:    "disabled_allows_job_env_to_override_clean_flags",
+			varName: "BUILDKITE_GIT_CLEAN_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CLEAN_FLAGS": "-fdq",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCleanFlags: "-ffxdq",
+			},
+			wantEnvValue: "-fdq",
+		},
+		{
+			name:    "enabled_locks_clean_flags_to_agent_config",
+			varName: "BUILDKITE_GIT_CLEAN_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CLEAN_FLAGS": "-fdq",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCleanFlags:      "-ffxdq",
+				NoCheckoutOverride: true,
+			},
+			wantEnvValue:       "-ffxdq",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLEAN_FLAGS"},
+		},
+		{
+			name:    "disabled_allows_job_env_to_override_clone_mirror_flags",
+			varName: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CLONE_MIRROR_FLAGS": "--mirror",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCloneMirrorFlags: "--bare",
+			},
+			wantEnvValue: "--mirror",
+		},
+		{
+			name:    "enabled_locks_clone_mirror_flags_to_agent_config",
+			varName: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CLONE_MIRROR_FLAGS": "--mirror",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCloneMirrorFlags: "--bare",
+				NoCheckoutOverride:  true,
+			},
+			wantEnvValue:       "--bare",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_MIRROR_FLAGS"},
+		},
+		{
+			name:    "disabled_allows_job_env_to_override_mirrors_skip_update",
+			varName: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitMirrorsSkipUpdate: false,
+			},
+			wantEnvValue: "true",
+		},
+		{
+			name:    "enabled_locks_mirrors_skip_update_to_agent_config",
+			varName: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitMirrorsSkipUpdate: false,
+				NoCheckoutOverride:   true,
+			},
+			wantEnvValue:       "false",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"},
+		},
 	}
 
 	for _, tc := range tests {
