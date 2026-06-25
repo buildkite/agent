@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/buildkite/go-pipeline"
+	"github.com/buildkite/roko"
 )
 
 // Job represents a Buildkite Agent API Job
@@ -158,6 +160,33 @@ func (c *Client) PromiseFailure(ctx context.Context, id string, req *JobPromiseF
 	}
 
 	return c.doRequest(r, nil)
+}
+
+// PromiseFailureWithRetry declares a promised failure for the job, retrying
+// transient errors with the agent's standard backoff. It returns the HTTP
+// status of the most recent response (0 if none was received, e.g. a network
+// error) and an error describing any failure. Retry attempts are logged via
+// warnf.
+func (c *Client) PromiseFailureWithRetry(ctx context.Context, id string, req *JobPromiseFailureRequest, warnf func(string, ...any)) (int, error) {
+	var statusCode int
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		resp, err := c.PromiseFailure(ctx, id, req)
+		if resp != nil {
+			statusCode = resp.StatusCode
+		}
+		if BreakOnNonRetryable(r, resp, err) {
+			return err
+		}
+		if err != nil {
+			warnf("Couldn't declare promised failure for job %s: %s (%s)", id, err, r)
+			return err
+		}
+		return nil
+	})
+	return statusCode, err
 }
 
 // JobUpdateResponse is the response from updating a job
