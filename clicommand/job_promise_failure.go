@@ -11,7 +11,6 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
@@ -113,31 +112,35 @@ var JobPromiseFailureCommand = cli.Command{
 			return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
 		}
 
-		outcome, err := client.DeclarePromiseFailure(ctx, exitStatus, reason)
-		if err == nil {
-			if outcome == jobapi.PromiseFailureDebounced {
-				// Log at debug to avoid spamming job logs on repeated calls.
-				l.Debugf("Promised exit status %d already declared for job %s (debounced)", exitStatus, jobID)
-			} else {
-				l.Infof("Declared promised exit status %d for job %s", exitStatus, jobID)
-			}
-			return nil
+		result, err := client.DeclarePromiseFailure(ctx, exitStatus, reason)
+		if err != nil {
+			// We couldn't reach or use the Job API (or its response was lost).
+			// Declare directly so the promise still lands; the endpoint is idempotent
+			// for the same exit status, so a duplicate is safe.
+			l.Warnf("Couldn't reach the Job API to declare the promised failure; declaring it directly: %v", err)
+			return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
 		}
 
-		// The Job API returned a definitive HTTP error: the Buildkite API
-		// rejected the declaration (409, 422) or was unreachable after retries
-		// (502). Surface it rather than declaring again.
-		var apiErr socket.APIErr
-		if errors.As(err, &apiErr) {
-			return promiseFailureError(apiErr.StatusCode, err)
+		if !result.Accepted {
+			return promiseFailureResultError(result)
 		}
 
-		// We couldn't reach the Job API (or its response was lost). Declare
-		// directly so the promise still lands; the endpoint is idempotent for the
-		// same exit status, so a duplicate is safe.
-		l.Warnf("Couldn't reach the Job API to declare the promised failure; declaring it directly: %v", err)
-		return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
+		if result.Outcome == jobapi.PromiseFailureDebounced {
+			// Log at debug to avoid spamming job logs on repeated calls.
+			l.Debugf("Promised exit status %d already declared for job %s (debounced)", exitStatus, jobID)
+		} else {
+			l.Infof("Declared promised exit status %d for job %s", exitStatus, jobID)
+		}
+		return nil
 	},
+}
+
+func promiseFailureResultError(result *jobapi.PromiseFailureResponse) error {
+	err := errors.New(result.Error)
+	if result.Error == "" {
+		err = errors.New("buildkite API rejected the promised failure")
+	}
+	return promiseFailureError(result.UpstreamStatus, err)
 }
 
 // promiseFailureError wraps err with a human-readable message for the Buildkite

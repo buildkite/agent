@@ -3,8 +3,10 @@ package jobapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/buildkite/agent/v3/internal/socket"
 )
@@ -13,9 +15,24 @@ import (
 // Buildkite API. The first caller declares it; concurrent callers wait on done
 // and share the result.
 type promiseFailure struct {
-	done       chan struct{} // closed when the attempt completes
-	statusCode int           // most recent Buildkite API status (0 if none received)
-	err        error         // declaration result; nil means accepted
+	done   chan struct{}          // closed when the attempt completes
+	result PromiseFailureResponse // declaration result
+}
+
+// promiseFailureCoordinator owns promise-failure coalescing and caching. Each
+// entry is an in-flight declaration or a cached success or terminal failure;
+// transient failures are removed so a later call can retry.
+type promiseFailureCoordinator struct {
+	mu      sync.Mutex
+	entries map[int]*promiseFailure
+	declare PromiseFailureDeclarer
+}
+
+func newPromiseFailureCoordinator(declare PromiseFailureDeclarer) *promiseFailureCoordinator {
+	return &promiseFailureCoordinator{
+		entries: make(map[int]*promiseFailure),
+		declare: declare,
+	}
 }
 
 // terminalStatus reports whether an HTTP status is a definitive client error
@@ -25,9 +42,8 @@ func terminalStatus(status int) bool {
 	return status >= 400 && status < 500 && status != http.StatusTooManyRequests
 }
 
-// handlePromiseFailure declares a promised failure to the Buildkite API for
-// 'buildkite-agent job promise-failure', debouncing repeated and concurrent
-// calls so each exit status is declared at most once successfully. The first
+// Declare declares a promised failure through the configured declarer,
+// coalescing repeated and concurrent calls for the same exit status. The first
 // caller declares it (blocking on the API so it can return an accurate result),
 // concurrent callers wait and share that outcome, and callers after a success or
 // a terminal failure return from the cache. Transient failures aren't cached, so
@@ -35,6 +51,87 @@ func terminalStatus(status int) bool {
 //
 // Debouncing keys on exit status only, so for a given exit status the first
 // caller's reason wins and later callers' reasons are ignored.
+func (c *promiseFailureCoordinator) Declare(ctx context.Context, req PromiseFailureRequest) (result PromiseFailureResponse, err error) {
+	if c == nil || c.declare == nil {
+		return PromiseFailureResponse{}, errors.New("promise-failure coordinator is not configured")
+	}
+
+	c.mu.Lock()
+	pf, found := c.entries[req.ExitStatus]
+	if !found {
+		pf = &promiseFailure{done: make(chan struct{})}
+		c.entries[req.ExitStatus] = pf
+	}
+	c.mu.Unlock()
+
+	if found {
+		// A declaration is already in progress or done; wait for it and share
+		// the outcome, unless this caller gives up first.
+		select {
+		case <-pf.done:
+		case <-ctx.Done():
+			return PromiseFailureResponse{}, ctx.Err()
+		}
+
+		result := pf.result
+		result.Outcome = PromiseFailureDebounced
+		return result, nil
+	}
+
+	// We're the first caller, so we declare while others wait on pf.done. Use a
+	// background context so the declaration isn't abandoned if this caller
+	// disconnects; the waiters depend on it.
+	completed := false
+	defer func() {
+		if completed {
+			return
+		}
+		// If the declarer panics, release waiters with an error and drop the entry
+		// so a later call can retry.
+		// Otherwise pf.done never closes and callers block forever.
+		v := recover()
+		pf.result = PromiseFailureResponse{
+			Outcome:        PromiseFailureDeclared,
+			Accepted:       false,
+			UpstreamStatus: http.StatusInternalServerError,
+			Error:          fmt.Sprintf("declaring promised failure panicked: %v", v),
+		}
+		c.mu.Lock()
+		delete(c.entries, req.ExitStatus)
+		close(pf.done)
+		c.mu.Unlock()
+		result = pf.result
+		err = nil
+	}()
+
+	statusCode, err := c.declare(context.Background(), req.ExitStatus, req.Reason)
+	pf.result = PromiseFailureResponse{
+		Outcome:        PromiseFailureDeclared,
+		Accepted:       err == nil,
+		UpstreamStatus: statusCode,
+	}
+	if err != nil {
+		pf.result.Error = err.Error()
+	}
+	completed = true
+	terminal := terminalStatus(statusCode)
+
+	c.mu.Lock()
+	if !pf.result.Accepted && !terminal {
+		// Evict transient failures (5xx, network, 429) so a later call can retry.
+		// Terminal failures (other 4xx, e.g. 409/422) stay cached so repeated
+		// calls don't keep hitting the Buildkite API. Waiters already hold pf and
+		// still see this result either way.
+		delete(c.entries, req.ExitStatus)
+	}
+	close(pf.done)
+	c.mu.Unlock()
+
+	return pf.result, nil
+}
+
+// handlePromiseFailure handles HTTP concerns for 'buildkite-agent job
+// promise-failure'. The coordinator owns declaration, debouncing, and caching.
 func (s *Server) handlePromiseFailure(w http.ResponseWriter, r *http.Request) {
 	payload := &PromiseFailureRequest{}
 	if err := json.NewDecoder(r.Body).Decode(payload); err != nil {
@@ -53,86 +150,19 @@ func (s *Server) handlePromiseFailure(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.declarePromiseFailure == nil {
-		if err := socket.WriteError(w, fmt.Errorf("the Job API server has no promised-failure declarer configured"), http.StatusInternalServerError); err != nil {
-			s.Logger.Errorf("Job API: couldn't write error: %v", err)
-		}
-		return
-	}
-
-	s.mtx.Lock()
-	pf, found := s.promiseFailures[payload.ExitStatus]
-	if !found {
-		pf = &promiseFailure{done: make(chan struct{})}
-		s.promiseFailures[payload.ExitStatus] = pf
-	}
-	s.mtx.Unlock()
-
-	if found {
-		// A declaration is already in progress or done; wait for it and share
-		// the outcome, unless this caller gives up first.
-		select {
-		case <-pf.done:
-		case <-r.Context().Done():
+	result, err := s.promiseFailures.Declare(r.Context(), *payload)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return
 		}
-	} else {
-		// We're the first caller, so we declare while others wait on pf.done.
-		// Use a background context so the declaration isn't abandoned if this
-		// caller disconnects; the waiters depend on it.
-		completed := false
-		defer func() {
-			if completed {
-				return
-			}
-			// If the declarer panics, release waiters with an error and drop the
-			// entry so a later call can retry, then re-panic for the recovery
-			// middleware. Otherwise pf.done never closes and callers block forever.
-			v := recover()
-			pf.statusCode = http.StatusInternalServerError
-			pf.err = fmt.Errorf("declaring promised failure panicked: %v", v)
-			s.mtx.Lock()
-			delete(s.promiseFailures, payload.ExitStatus)
-			close(pf.done)
-			s.mtx.Unlock()
-			panic(v)
-		}()
 
-		pf.statusCode, pf.err = s.declarePromiseFailure(context.Background(), payload.ExitStatus, payload.Reason)
-		completed = true
-
-		s.mtx.Lock()
-		if pf.err != nil && !terminalStatus(pf.statusCode) {
-			// Evict transient failures (5xx, network, 429) so a later call can
-			// retry. Terminal failures (other 4xx, e.g. 409/422) stay cached so
-			// repeated calls don't keep hitting the Buildkite API. Waiters
-			// already hold pf and still see this result either way.
-			delete(s.promiseFailures, payload.ExitStatus)
-		}
-		close(pf.done)
-		s.mtx.Unlock()
-	}
-
-	if pf.err != nil {
-		status := pf.statusCode
-		if status < 400 || status > 599 {
-			// No usable error status (e.g. a network error, or an unexpected
-			// non-error status); report a bad gateway.
-			status = http.StatusBadGateway
-		}
-		if err := socket.WriteError(w, pf.err, status); err != nil {
+		if err := socket.WriteError(w, err, http.StatusInternalServerError); err != nil {
 			s.Logger.Errorf("Job API: couldn't write error: %v", err)
 		}
 		return
 	}
 
-	// Success. A leading caller (found == false) declared it; any other caller
-	// shared that result without calling the Buildkite API.
-	outcome := PromiseFailureDeclared
-	if found {
-		outcome = PromiseFailureDebounced
-	}
-	if err := json.NewEncoder(w).Encode(&PromiseFailureResponse{Outcome: outcome}); err != nil {
+	if err := json.NewEncoder(w).Encode(&result); err != nil {
 		s.Logger.Errorf("Job API: couldn't encode or write response: %v", err)
 	}
 }

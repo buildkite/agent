@@ -127,18 +127,18 @@ func (c *Client) RedactionCreate(ctx context.Context, text string) (string, erro
 // given exit status and reason to the Buildkite API, blocking until it
 // completes. The server debounces repeated and concurrent calls for the same
 // exit status: concurrent callers share one in-flight call, and once it succeeds
-// later calls return from the cache. On success it returns the outcome
-// (PromiseFailureDeclared or PromiseFailureDebounced). A failed declaration is
-// returned as a socket.APIErr carrying the HTTP status code (the Buildkite API's
-// status when it responded, otherwise 502).
-func (c *Client) DeclarePromiseFailure(ctx context.Context, exitStatus int, reason string) (string, error) {
+// later calls return from the cache. If the Job API handles the request, the
+// returned response describes whether the Buildkite API accepted or rejected the
+// declaration. Errors are reserved for Job API transport/request failures.
+func (c *Client) DeclarePromiseFailure(ctx context.Context, exitStatus int, reason string) (*PromiseFailureResponse, error) {
 	req := PromiseFailureRequest{
 		ExitStatus: exitStatus,
 		Reason:     reason,
 	}
 	var resp PromiseFailureResponse
 	if err := c.client.Do(ctx, http.MethodPost, promiseFailureURL, &req, &resp); err != nil {
-		return "", err
+		return nil, err
 	}
-	return resp.Outcome, nil
+
+	return &resp, nil
 }
