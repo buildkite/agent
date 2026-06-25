@@ -42,33 +42,32 @@ func WithPromiseFailureDeclarer(d PromiseFailureDeclarer) ServerOpts {
 // Buildkite API. It returns the status code of the most recent API response (0
 // if none was received, e.g. a network error after exhausting retries) and an
 // error describing any failure. A nil error means the declaration was accepted.
-type (
-	PromiseFailureDeclarer func(ctx context.Context, exitStatus int, reason string) (statusCode int, err error)
-	// Server is a Job API server. It provides an HTTP API with which to interact with the job currently running in the buildkite agent
-	// and allows jobs to introspect and mutate their own state
-	Server struct {
-		// SocketPath is the path to the socket that the server is (or will be) listening on
-		SocketPath         string
-		Logger             shell.Logger
-		debug              bool
-		noCheckoutOverride bool
+type PromiseFailureDeclarer func(ctx context.Context, exitStatus int, reason string) (statusCode int, err error)
 
-		mtx       sync.RWMutex
-		environ   *env.Environment
-		redactors *replacer.Mux
+// Server is a Job API server. It provides an HTTP API with which to interact with the job currently running in the buildkite agent
+// and allows jobs to introspect and mutate their own state
+type Server struct {
+	// SocketPath is the path to the socket that the server is (or will be) listening on
+	SocketPath         string
+	Logger             shell.Logger
+	debug              bool
+	noCheckoutOverride bool
 
-		// pendingWorkdir holds an absolute working directory requested by a hook via
-		// the /workdir endpoint, waiting to be applied by the executor once the hook
-		// process exits. Guarded by mtx.
-		pendingWorkdir string
+	mtx       sync.RWMutex
+	environ   *env.Environment
+	redactors *replacer.Mux
 
-		// promiseFailures coalesces concurrent and repeated promise-failure calls.
-		promiseFailures *promiseFailureCoordinator
+	// pendingWorkdir holds an absolute working directory requested by a hook via
+	// the /workdir endpoint, waiting to be applied by the executor once the hook
+	// process exits. Guarded by mtx.
+	pendingWorkdir string
 
-		token   string
-		sockSvr *socket.Server
-	}
-)
+	// promiseFailures coalesces concurrent and repeated promise-failure calls.
+	promiseFailures *promiseFailureCoordinator
+
+	token   string
+	sockSvr *socket.Server
+}
 
 // NewServer creates a new Job API server
 // socketPath is the path to the socket on which the server will listen
