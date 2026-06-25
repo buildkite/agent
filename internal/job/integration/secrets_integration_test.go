@@ -577,6 +577,8 @@ func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
 		{name: "disabled_allows_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror"},
 		{name: "enabled_rejects_checkout_locked_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", noCheckoutOverride: true, wantErr: true},
 		{name: "enabled_rejects_sparse_checkout_paths_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", secretValue: "a/b", noCheckoutOverride: true, wantErr: true},
+		// The lock must not over-block: a non-checkout secret is still allowed.
+		{name: "enabled_allows_unscoped_secret", envVar: "MY_CUSTOM_VAR", secretValue: "hello", noCheckoutOverride: true},
 	}
 
 	for _, tc := range tests {

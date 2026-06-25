@@ -515,6 +515,45 @@ func TestPatchEnvRejectsSparseCheckoutPathsWhenNoCheckoutOverrideEnabled(t *test
 	})
 }
 
+func TestPatchEnvAllowsUnscopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+	t.Parallel()
+
+	// The lock must not over-block: a normal, non-checkout var stays writable
+	// while BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled.
+	environ := testEnviron()
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	if err != nil {
+		t.Fatalf("creating server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("starting server: %v", err)
+	}
+	defer func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("stopping server: %v", err)
+		}
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(&jobapi.EnvUpdateRequestPayload{
+		Env: map[string]*string{"MY_CUSTOM_VAR": pt("hello")},
+	}); err != nil {
+		t.Fatalf("encoding request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "http://job/api/current-job/v0/env", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
+		expectedStatus: http.StatusOK,
+		expectedEnv:    testEnvironWith("MY_CUSTOM_VAR", "hello").Dump(),
+	})
+}
+
 func TestGetEnv(t *testing.T) {
 	t.Parallel()
 
