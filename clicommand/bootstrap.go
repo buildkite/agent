@@ -60,6 +60,7 @@ type BootstrapConfig struct {
 	PullRequest                  string   `cli:"pullrequest"`
 	PullRequestUsingMergeRefspec bool     `cli:"pull-request-using-merge-refspec"`
 	GitSubmodules                bool     `cli:"git-submodules"`
+	GitLFSEnabled                bool     `cli:"git-lfs-enabled"`
 	SSHKeyscan                   bool     `cli:"ssh-keyscan"`
 	AgentName                    string   `cli:"agent" validate:"required"`
 	Queue                        string   `cli:"queue"`
@@ -323,6 +324,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Enable git submodules (default: true)",
 			EnvVar: "BUILDKITE_GIT_SUBMODULES",
 		},
+		cli.BoolFlag{
+			Name:   "git-lfs-enabled",
+			Usage:  "Enable Git LFS object download during checkout (default: false)",
+			EnvVar: "BUILDKITE_GIT_LFS_ENABLED",
+		},
 		cli.BoolTFlag{
 			Name:   "pty",
 			Usage:  "Run jobs within a pseudo terminal (default: true)",
@@ -476,6 +482,7 @@ var BootstrapCommand = cli.Command{
 			GitCloneFlags:                cfg.GitCloneFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
+			GitLFSEnabled:                cfg.GitLFSEnabled,
 			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
 			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,

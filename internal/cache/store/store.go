@@ -5,8 +5,6 @@ import (
 )
 
 const (
-	// local hosted agents store type
-	LocalHostedAgents = "local_hosted_agents"
 	// local file store type
 	LocalFileStore = "local_file"
 	// agent-managed store type (cache v2): the agent manages the blob store
@@ -25,7 +23,7 @@ type TransferInfo struct {
 
 func IsValidStore(storeType string) bool {
 	switch storeType {
-	case LocalHostedAgents, LocalFileStore, AgentManaged:
+	case LocalFileStore, AgentManaged:
 		return true
 	default:
 		return false

@@ -54,6 +54,9 @@ type ExecutorConfig struct {
 	// Should git submodules be checked out
 	GitSubmodules bool `env:"BUILDKITE_GIT_SUBMODULES"`
 
+	// Whether to enable Git LFS operations during checkout
+	GitLFSEnabled bool `env:"BUILDKITE_GIT_LFS_ENABLED"`
+
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
 
