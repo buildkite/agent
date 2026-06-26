@@ -204,6 +204,7 @@ type AgentStartConfig struct {
 	// Other shared flags
 	StrictSingleHooks               bool          `cli:"strict-single-hooks"`
 	KubernetesExec                  bool          `cli:"kubernetes-exec"`
+	KubernetesDrainOnSigterm        bool          `cli:"kubernetes-drain-on-sigterm"`
 	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
 	TraceContextEncoding            string        `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
@@ -770,6 +771,14 @@ var AgentStartCommand = cli.Command{
 				"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
 				"logs and exit statuses between containers in a pod (default: false)",
 			EnvVar: "BUILDKITE_KUBERNETES_EXEC",
+		},
+		cli.BoolFlag{
+			Name: "kubernetes-drain-on-sigterm",
+			Usage: "When set, on SIGTERM the agent finishes the running job before disconnecting " +
+				"(drains) instead of cancelling it immediately. Only applies under kubernetes-exec. " +
+				"The pod's terminationGracePeriodSeconds must be large enough for the job to finish, " +
+				"or it will be SIGKILLed (default: false)",
+			EnvVar: "BUILDKITE_KUBERNETES_DRAIN_ON_SIGTERM",
 		},
 		cli.DurationFlag{
 			Name:   "kubernetes-container-start-timeout",
@@ -1387,8 +1396,10 @@ var AgentStartCommand = cli.Command{
 			pool:              pool,
 			cancelGracePeriod: time.Duration(cfg.CancelGracePeriod) * time.Second,
 			// Under Kubernetes, there is no user interactively signalling us,
-			// so on SIGTERM, stop un-gracefully.
-			skipGraceful: cfg.KubernetesExec,
+			// so on SIGTERM, stop un-gracefully (cancel the running job).
+			// The opt-in kubernetes-drain-on-sigterm flag restores the graceful
+			// drain path, letting the current job finish before disconnecting.
+			skipGraceful: skipGracefulStop(cfg.KubernetesExec, cfg.KubernetesDrainOnSigterm),
 		}
 		signals := poolSigs.handle(ctx)
 		defer close(signals)
@@ -1468,6 +1479,15 @@ type poolSignals struct {
 	pool              *agent.AgentPool
 	cancelGracePeriod time.Duration
 	skipGraceful      bool
+}
+
+// skipGracefulStop decides whether the agent should skip the graceful drain
+// path on SIGTERM. Under kubernetes-exec there is no user interactively
+// signalling us, so by default we stop un-gracefully (cancel the running job).
+// The opt-in kubernetesDrainOnSigterm flag re-enables the graceful drain path,
+// letting the current job finish before disconnecting.
+func skipGracefulStop(kubernetesExec, kubernetesDrainOnSigterm bool) bool {
+	return kubernetesExec && !kubernetesDrainOnSigterm
 }
 
 func (ps *poolSignals) handle(ctx context.Context) chan os.Signal {

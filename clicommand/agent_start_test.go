@@ -225,6 +225,52 @@ func TestAgentStartJobLocked_ExitCode28(t *testing.T) {
 	}
 }
 
+func TestSkipGracefulStop(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                     string
+		kubernetesExec           bool
+		kubernetesDrainOnSigterm bool
+		want                     bool
+	}{
+		{
+			name:                     "not kubernetes: graceful (drain) stop",
+			kubernetesExec:           false,
+			kubernetesDrainOnSigterm: false,
+			want:                     false,
+		},
+		{
+			name:                     "kubernetes default: skip graceful (cancel job)",
+			kubernetesExec:           true,
+			kubernetesDrainOnSigterm: false,
+			want:                     true,
+		},
+		{
+			name:                     "kubernetes with drain opt-in: graceful (drain) stop",
+			kubernetesExec:           true,
+			kubernetesDrainOnSigterm: true,
+			want:                     false,
+		},
+		{
+			name:                     "drain opt-in without kubernetes: graceful (drain) stop",
+			kubernetesExec:           false,
+			kubernetesDrainOnSigterm: true,
+			want:                     false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := skipGracefulStop(test.kubernetesExec, test.kubernetesDrainOnSigterm); got != test.want {
+				t.Errorf("skipGracefulStop(%t, %t) = %t, want %t",
+					test.kubernetesExec, test.kubernetesDrainOnSigterm, got, test.want)
+			}
+		})
+	}
+}
+
 func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
 	t.Parallel()
 
