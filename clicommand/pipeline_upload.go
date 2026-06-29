@@ -622,7 +622,11 @@ func (cfg *PipelineUploadConfig) handleParseError(l logger.Logger, src string, e
 	}
 
 	if cfg.RejectParseWarnings {
-		return NewExitError(1, fmt.Errorf("pipeline %q had parsing warnings, and --reject-parse-warnings is enabled:\n%v", src, w))
+return NewExitError(1, fmt.Errorf(
+	"pipeline %q parsed with warnings; refusing upload because --reject-parse-warnings is enabled:\n%v",
+	src,
+	w,
+))
 	}
 
 	l.Warnf("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
