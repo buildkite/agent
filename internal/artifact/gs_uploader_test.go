@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -90,22 +91,39 @@ func TestGSUploaderArtifactPathNoLeadingSlash(t *testing.T) {
 // TestGSUploaderUploadKeyMatchesURL asserts that, for a bucket-root
 // destination, the object name used at upload (artifactPath) equals the key
 // portion of the generated download URL (after the host and bucket name), so
-// the two can never diverge again.
+// the two can never diverge again. Both the trailing-slash and no-slash forms
+// of a bucket-root destination are covered.
 func TestGSUploaderUploadKeyMatchesURL(t *testing.T) {
-	bucket, bucketPath := ParseGSDestination("gs://my-bucket")
-	u := &GSUploader{BucketName: bucket, BucketPath: bucketPath}
-	artifact := &api.Artifact{Path: "index.html"}
-
-	uploadKey := u.artifactPath(artifact)
-
-	url := u.URL(artifact)
-	prefix := "https://storage.googleapis.com/" + bucket + "/"
-	urlKey, ok := strings.CutPrefix(url, prefix)
-	if !ok {
-		t.Fatalf("URL() = %q, want prefix %q", url, prefix)
+	// URL() reads BUILDKITE_GCS_ACCESS_HOST and BUILDKITE_GCS_PATH_PREFIX via
+	// os.LookupEnv; the expected prefix below assumes the default environment,
+	// so unset them for the duration of the test.
+	for _, key := range []string{"BUILDKITE_GCS_ACCESS_HOST", "BUILDKITE_GCS_PATH_PREFIX"} {
+		if orig, ok := os.LookupEnv(key); ok {
+			os.Unsetenv(key) //nolint:errcheck // Best-effort.
+			t.Cleanup(func() {
+				os.Setenv(key, orig) //nolint:errcheck // Best-effort restore.
+			})
+		}
 	}
 
-	if uploadKey != urlKey {
-		t.Errorf("upload key %q does not match URL key %q (URL %q)", uploadKey, urlKey, url)
+	for _, dest := range []string{"gs://my-bucket", "gs://my-bucket/"} {
+		t.Run(dest, func(t *testing.T) {
+			bucket, bucketPath := ParseGSDestination(dest)
+			u := &GSUploader{BucketName: bucket, BucketPath: bucketPath}
+			artifact := &api.Artifact{Path: "index.html"}
+
+			uploadKey := u.artifactPath(artifact)
+
+			url := u.URL(artifact)
+			prefix := "https://storage.googleapis.com/" + bucket + "/"
+			urlKey, ok := strings.CutPrefix(url, prefix)
+			if !ok {
+				t.Fatalf("URL() = %q, want prefix %q", url, prefix)
+			}
+
+			if uploadKey != urlKey {
+				t.Errorf("upload key %q does not match URL key %q (URL %q)", uploadKey, urlKey, url)
+			}
+		})
 	}
 }
