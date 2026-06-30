@@ -61,6 +61,18 @@ func writeAgentHookScript(t *testing.T, dir, hookName, script string) string {
 	return filepath
 }
 
+// envEchoHookScript is a hook script fixture that echoes the agent identity
+// env vars injected into lifecycle hooks.
+func envEchoHookScript() string {
+	if runtime.GOOS == "windows" {
+		return `@echo off
+echo ids=%BUILDKITE_AGENT_IDS%
+echo names=%BUILDKITE_AGENT_NAMES%`
+	}
+	return `echo ids=$BUILDKITE_AGENT_IDS
+echo names=$BUILDKITE_AGENT_NAMES`
+}
+
 func testAgentWorker(id, name string) *agent.AgentWorker {
 	return agent.NewAgentWorker(
 		logger.Discard,
@@ -243,16 +255,7 @@ func TestAgentStartupHookWithRegisteredAgentsEnv(t *testing.T) {
 	hooksPath, closer := setupHooksPath(t)
 	defer closer()
 
-	var script string
-	if runtime.GOOS == "windows" {
-		script = `@echo off
-echo ids=%BUILDKITE_AGENT_IDS%
-echo names=%BUILDKITE_AGENT_NAMES%`
-	} else {
-		script = `echo ids=$BUILDKITE_AGENT_IDS
-echo names=$BUILDKITE_AGENT_NAMES`
-	}
-	filepath := writeAgentHookScript(t, hooksPath, "agent-startup", script)
+	filepath := writeAgentHookScript(t, hooksPath, "agent-startup", envEchoHookScript())
 
 	log := logger.NewBuffer()
 	err := agentStartupHook(log, cfg(hooksPath), []*agent.AgentWorker{
@@ -331,16 +334,7 @@ func TestAgentShutdownHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
-		var script string
-		if runtime.GOOS == "windows" {
-			script = `@echo off
-echo ids=%BUILDKITE_AGENT_IDS%
-echo names=%BUILDKITE_AGENT_NAMES%`
-		} else {
-			script = `echo ids=$BUILDKITE_AGENT_IDS
-echo names=$BUILDKITE_AGENT_NAMES`
-		}
-		filepath := writeAgentHookScript(t, hooksPath, "agent-shutdown", script)
+		filepath := writeAgentHookScript(t, hooksPath, "agent-shutdown", envEchoHookScript())
 
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg(hooksPath), []*agent.AgentWorker{
