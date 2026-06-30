@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/buildkite/agent/v3/lock"
-	"github.com/urfave/cli"
+	"github.com/buildkite/agent/v4/lock"
+	"github.com/urfave/cli/v3"
 )
 
 const lockGetHelpDescription = `Usage:
@@ -35,7 +35,7 @@ type LockGetConfig struct {
 	LockCommonConfig
 }
 
-var LockGetCommand = cli.Command{
+var LockGetCommand = &cli.Command{
 	Name:        "get",
 	Usage:       "Gets a lock value from the agent leader",
 	Description: lockGetHelpDescription,
@@ -43,14 +43,14 @@ var LockGetCommand = cli.Command{
 	Action:      lockGetAction,
 }
 
-func lockGetAction(c *cli.Context) error {
+func lockGetAction(ctx context.Context, c *cli.Command) error {
 	if c.NArg() != 1 {
-		_, _ = fmt.Fprint(c.App.ErrWriter, lockGetHelpDescription)
+		_, _ = fmt.Fprint(c.ErrWriter, lockGetHelpDescription)
 		return &SilentExitError{code: 1}
 	}
-	key := c.Args()[0]
+	key := c.Args().Get(0)
 
-	ctx, cfg, _, _, done := setupLoggerAndConfig[LockGetConfig](context.Background(), c)
+	ctx, cfg, _, _, done := setupLoggerAndConfig[LockGetConfig](ctx, c)
 	defer done()
 
 	if cfg.LockScope != "machine" {
@@ -67,7 +67,7 @@ func lockGetAction(c *cli.Context) error {
 		return fmt.Errorf("couldn't get lock state: %w", err)
 	}
 
-	_, _ = fmt.Fprintln(c.App.Writer, v)
+	_, _ = fmt.Fprintln(c.Writer, v)
 
 	return nil
 }

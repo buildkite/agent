@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/clicommand"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/clicommand"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -50,7 +50,7 @@ func TestParseSecrets(t *testing.T) {
 			cfg := clicommand.RedactorAddConfig{
 				Format:          tc.formatString,
 				ApplyVarsFilter: tc.applyVarsFilter,
-				RedactedVars:    *clicommand.RedactedVars.Value,
+				RedactedVars:    clicommand.RedactedVars.Value,
 			}
 			secrets, err := clicommand.ParseSecrets(logger.Discard, cfg, input)
 			if err != nil {

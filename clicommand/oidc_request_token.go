@@ -8,10 +8,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -51,58 +51,57 @@ Requests and prints an OIDC token from Buildkite that claims the Job ID
 (amongst other things) and the audience "sts.amazonaws.com".`
 )
 
-var OIDCRequestTokenCommand = cli.Command{
+var OIDCRequestTokenCommand = &cli.Command{
 	Name:        "request-token",
 	Usage:       "Requests and prints an OIDC token from Buildkite with the specified audience,",
 	Description: oidcTokenDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "audience",
 			Usage: "The audience that will consume the OIDC token. The API will choose a default audience if it is omitted.",
 		},
-		cli.IntFlag{
+		&cli.IntFlag{
 			Name:  "lifetime",
 			Usage: "The time (in seconds) the OIDC token will be valid for before expiry. Must be a non-negative integer. If the flag is omitted or set to 0, the API will choose a default finite lifetime.",
 		},
-		cli.StringFlag{
-			Name:   "job",
-			Usage:  "Buildkite Job Id to claim in the OIDC token",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Usage:   "Buildkite Job Id to claim in the OIDC token",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 
-		cli.StringFlag{
-			Name:   "subject-claim",
-			Usage:  "An immutable claim to use as the token's subject (e.g. pipeline_id, cluster_id). If omitted, the default compound subject is used.",
-			EnvVar: "BUILDKITE_OIDC_TOKEN_SUBJECT_CLAIM",
+		&cli.StringFlag{
+			Name:    "subject-claim",
+			Usage:   "An immutable claim to use as the token's subject (e.g. pipeline_id, cluster_id). If omitted, the default compound subject is used.",
+			Sources: cli.EnvVars("BUILDKITE_OIDC_TOKEN_SUBJECT_CLAIM"),
 		},
 
-		cli.StringSliceFlag{
-			Name:   "claim",
-			Value:  &cli.StringSlice{},
-			Usage:  "Claims to add to the OIDC token",
-			EnvVar: "BUILDKITE_OIDC_TOKEN_CLAIMS",
+		&cli.StringSliceFlag{
+			Name:    "claim",
+			Value:   nil,
+			Usage:   "Claims to add to the OIDC token",
+			Sources: cli.EnvVars("BUILDKITE_OIDC_TOKEN_CLAIMS"),
 		},
 
-		cli.StringSliceFlag{
-			Name:   "aws-session-tag",
-			Value:  &cli.StringSlice{},
-			Usage:  "Add claims as AWS Session Tags",
-			EnvVar: "BUILDKITE_OIDC_TOKEN_AWS_SESSION_TAGS",
+		&cli.StringSliceFlag{
+			Name:    "aws-session-tag",
+			Value:   nil,
+			Usage:   "Add claims as AWS Session Tags",
+			Sources: cli.EnvVars("BUILDKITE_OIDC_TOKEN_AWS_SESSION_TAGS"),
 		},
 
-		cli.BoolFlag{
-			Name:   "skip-redaction",
-			Usage:  "Skip redacting the OIDC token from the logs. Then, the command will print the token to the Job's logs if called directly (default: false)",
-			EnvVar: "BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION",
+		&cli.BoolFlag{
+			Name:    "skip-redaction",
+			Usage:   "Skip redacting the OIDC token from the logs. Then, the command will print the token to the Job's logs if called directly (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_OIDC_REQUEST_TOKEN_SKIP_TOKEN_REDACTION"),
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "format",
 			Value: "jwt",
 			Usage: "The format to output the token in. Supported values are 'jwt' (the default) and 'gcp'. When 'gcp' is specified, the token will be output in a JSON structure compatible with GCP's workload identity federation.",
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[OIDCTokenConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "oidc-request-token")
@@ -176,7 +175,7 @@ var OIDCRequestTokenCommand = cli.Command{
 
 		switch cfg.Format {
 		case "jwt":
-			_, _ = fmt.Fprintln(c.App.Writer, token.Token)
+			_, _ = fmt.Fprintln(c.Writer, token.Token)
 
 		case "gcp":
 			type gcpOIDCTokenResponse struct {
@@ -196,7 +195,7 @@ var OIDCRequestTokenCommand = cli.Command{
 				return fmt.Errorf("failed to marshal GCP response: %w", err)
 			}
 
-			_, _ = fmt.Fprintln(c.App.Writer, string(jsonOutput))
+			_, _ = fmt.Fprintln(c.Writer, string(jsonOutput))
 
 		default:
 			// This should never happen because we validate the format earlier

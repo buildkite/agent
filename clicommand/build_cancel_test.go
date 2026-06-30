@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestBuildCancel(t *testing.T) {

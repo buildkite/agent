@@ -21,22 +21,23 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/buildkite/agent/v3/agent/plugin"
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/file"
-	"github.com/buildkite/agent/v3/internal/job/hook"
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/replacer"
-	"github.com/buildkite/agent/v3/internal/secrets"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/internal/shellscript"
-	"github.com/buildkite/agent/v3/internal/tempfile"
-	"github.com/buildkite/agent/v3/jobapi"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/agent/plugin"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/file"
+	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/secrets"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/internal/shellscript"
+	"github.com/buildkite/agent/v4/internal/tempfile"
+	"github.com/buildkite/agent/v4/jobapi"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/shellwords"
 )
@@ -60,7 +61,8 @@ type Executor struct {
 	plugins []*plugin.Plugin
 
 	// Plugin checkouts from the plugin phases
-	pluginCheckouts []*pluginCheckout
+	pluginCheckouts         []*pluginCheckout
+	pluginCheckoutsReversed []*pluginCheckout
 
 	// Directories to clean up at end of job execution
 	cleanupDirs []string
@@ -129,7 +131,6 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			shell.WithPTY(e.RunInPty),
 			shell.WithStdout(preRedactedStdout), // shell -> redactor -> real stdout
 			shell.WithSignalGracePeriod(e.SignalGracePeriod),
-			shell.WithTraceContextCodec(e.TraceContextCodec),
 		)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
@@ -141,7 +142,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	var retErr error
 	span, ctx, stopper := e.startTracing(ctx)
 	defer stopper()
-	defer func() { span.FinishWithError(retErr) }()
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	// Listen for cancellation. Once ctx is cancelled, some tasks can run
 	// afterwards during the signal grace period. These use graceCtx.
@@ -279,7 +280,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		// shouldn't override each other in reporting.
 		if commandErr != nil {
 			e.shell.Printf("user command error: %v", commandErr)
-			span.RecordError(commandErr)
+			tracetools.RecordError(span, commandErr)
 		}
 
 		// Only upload artifacts as part of the command phase.
@@ -361,35 +362,17 @@ type HookConfig struct {
 	PluginName     string
 }
 
-func (e *Executor) tracingImplementationSpecificHookScope(scope string) string {
-	if e.TracingBackend != tracetools.BackendDatadog {
-		return scope
-	}
-
-	// In olden times, when the datadog tracing backend was written, these hook scopes were named "local" and "global"
-	// We need to maintain backwards compatibility with the old names for span attribute reasons, so we map them here
-	switch scope {
-	case HookScopeRepository:
-		return "local"
-	case HookScopeAgent:
-		return "global"
-	default:
-		return scope
-	}
-}
-
 // executeHook runs a hook script with the hookRunner
 func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr error) {
-	scopeName := e.tracingImplementationSpecificHookScope(hookCfg.Scope)
-	spanName := e.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
+	spanName := fmt.Sprintf("%s %s hook", hookCfg.Scope, hookCfg.Name)
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(retErr) }()
-	span.AddAttributes(map[string]string{
-		"hook.type":    scopeName,
+	defer func() { tracetools.FinishWithError(span, retErr) }()
+	tracetools.AddAttributes(span, map[string]string{
+		"hook.type":    hookCfg.Scope,
 		"hook.name":    hookCfg.Name,
 		"hook.command": hookCfg.Path,
 	})
-	span.AddAttributes(hookCfg.SpanAttributes)
+	tracetools.AddAttributes(span, hookCfg.SpanAttributes)
 
 	hookName := hookCfg.Scope
 	if hookCfg.PluginName != "" {
@@ -846,29 +829,11 @@ func dirForRepository(repository string) string {
 	return badCharsRE.ReplaceAllString(repository, "-")
 }
 
-// Given a repository, it will add the host to the set of SSH known_hosts on the machine
-func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repository string) {
-	if osutil.FileExists(repository) {
-		return
-	}
-
-	knownHosts, err := findKnownHosts(sh)
-	if err != nil {
-		sh.Warningf("Failed to find SSH known_hosts file: %v", err)
-		return
-	}
-
-	if err = knownHosts.AddFromRepository(ctx, repository); err != nil {
-		sh.Warningf("Error adding to known_hosts: %v", err)
-		return
-	}
-}
-
 // setUp is run before all the phases run. It's responsible for initializing the
 // job environment
 func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
-	defer func() { span.FinishWithError(retErr) }()
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if e.BinPath != "" {
@@ -919,6 +884,11 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	// Force-set GIT_LFS_SKIP_SMUDGE=1 before any git operations so LFS
 	// objects are not downloaded automatically during checkout.
 	e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
+
+	// Configure SSH to automatically accept new host keys (TOFU - Trust On First Use)
+	// This replaces the previous ssh-keyscan approach with a simpler mechanism that
+	// achieves the same security model: accept new hosts, reject changed keys.
+	e.configureSSHKeyChecking(e.SSHKeyscan)
 
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {
@@ -1012,7 +982,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 // tearDown is called before the executor exits, even on error
 func (e *Executor) tearDown(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.TracingBackend)
-	defer func() { span.FinishWithError(retErr) }()
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	// In vanilla agent usage, there's always a command phase.
 	// But over in agent-stack-k8s, which splits the agent phases among
@@ -1021,22 +991,17 @@ func (e *Executor) tearDown(ctx context.Context) (retErr error) {
 	// Unfortunately pre-exit hooks are often not written with this split in
 	// mind.
 	if e.includePhase("command") {
-		if err := e.executeGlobalHook(ctx, "pre-exit"); err != nil {
-			return err
+		if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+			// Legacy order = same order as pre-checkout
+			if err := e.executeHooksForward(ctx, "pre-exit"); err != nil {
+				return err
+			}
+		} else {
+			// Modern order = reverse, to make composition easier
+			if err := e.executeHooksReverse(ctx, "pre-exit"); err != nil {
+				return err
+			}
 		}
-
-		if err := e.executeLocalHook(ctx, "pre-exit"); err != nil {
-			return err
-		}
-
-		if err := e.executePluginHook(ctx, "pre-exit", e.pluginCheckouts); err != nil {
-			return err
-		}
-	}
-
-	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDeprecatedDockerIntegration(e.shell) {
-		return tearDownDeprecatedDockerIntegration(ctx, e.shell)
 	}
 
 	for _, dir := range e.cleanupDirs {
@@ -1050,17 +1015,10 @@ func (e *Executor) tearDown(ctx context.Context) (retErr error) {
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
 func (e *Executor) runPreCommandHooks(ctx context.Context) (retErr error) {
-	spanName := e.implementationSpecificSpanName("pre-command", "pre-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(retErr) }()
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-command", e.TracingBackend)
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
-	if err := e.executeGlobalHook(ctx, "pre-command"); err != nil {
-		return err
-	}
-	if err := e.executeLocalHook(ctx, "pre-command"); err != nil {
-		return err
-	}
-	return e.executePluginHook(ctx, "pre-command", e.pluginCheckouts)
+	return e.executeHooksForward(ctx, "pre-command")
 }
 
 // runCommand runs the command and adds tracing spans.
@@ -1080,17 +1038,21 @@ func (e *Executor) runCommand(ctx context.Context) error {
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
 func (e *Executor) runPostCommandHooks(ctx context.Context) (retErr error) {
-	spanName := e.implementationSpecificSpanName("post-command", "post-command hooks")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(retErr) }()
+	span, ctx := tracetools.StartSpanFromContext(ctx, "post-command", e.TracingBackend)
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
-	if err := e.executeGlobalHook(ctx, "post-command"); err != nil {
-		return err
+	if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+		// Legacy order = same order as pre-checkout
+		if err := e.executeHooksForward(ctx, "post-command"); err != nil {
+			return err
+		}
+	} else {
+		// Modern order = reverse, to make composition easier
+		if err := e.executeHooksReverse(ctx, "post-command"); err != nil {
+			return err
+		}
 	}
-	if err := e.executeLocalHook(ctx, "post-command"); err != nil {
-		return err
-	}
-	return e.executePluginHook(ctx, "post-command", e.pluginCheckouts)
+	return nil
 }
 
 // CommandPhase determines how to run the build, and then runs it
@@ -1100,9 +1062,9 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.TracingBackend)
 	defer func() {
 		if hookErr != nil {
-			span.FinishWithError(hookErr)
+			tracetools.FinishWithError(span, hookErr)
 		} else {
-			span.FinishWithError(commandErr)
+			tracetools.FinishWithError(span, commandErr)
 		}
 	}()
 
@@ -1170,10 +1132,9 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		}
 	}()
 
-	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
-	defer func() { span.FinishWithError(retErr) }()
-	span.AddAttributes(map[string]string{
+	span, ctx := tracetools.StartSpanFromContext(ctx, "default command hook", e.TracingBackend)
+	defer func() { tracetools.FinishWithError(span, retErr) }()
+	tracetools.AddAttributes(span, map[string]string{
 		"hook.name": "command",
 		"hook.type": "default",
 	})
@@ -1186,7 +1147,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
 	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && osutil.FileExists(pathToCommand)
-	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
+	tracetools.AddAttributes(span, map[string]string{"hook.command": pathToCommand})
 
 	// If the command isn't a script, then it's something we need
 	// to eval. But before we even try running it, we should double
@@ -1276,15 +1237,6 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	} else {
 		e.shell.Headerf("Running commands")
 		cmdToExec = e.Command
-	}
-
-	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDeprecatedDockerIntegration(e.shell) {
-		if e.Debug {
-			e.shell.Commentf("Detected deprecated docker environment variables")
-		}
-		err = runDeprecatedDockerIntegration(ctx, e.shell, []string{cmdToExec})
-		return err
 	}
 
 	var cmd []string

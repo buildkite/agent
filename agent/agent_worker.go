@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/metrics"
+	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/roko"
 )
 
@@ -510,13 +510,8 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 	priorityLabel := strconv.Itoa(acceptResponse.Priority)
 	queueLabel := acceptResponse.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]
 
-	// Legacy unlabelled counters; kept incrementing in lockstep with the
-	// labelled counters below so existing scrape consumers see no shape change.
-	jobsStarted.Inc()
-	defer jobsEnded.Inc()
-
-	jobsStartedWithLabels.WithLabelValues(priorityLabel, queueLabel).Inc()
-	defer jobsEndedWithLabels.WithLabelValues(priorityLabel, queueLabel).Inc()
+	jobsStarted.WithLabelValues(priorityLabel, queueLabel).Inc()
+	defer jobsEnded.WithLabelValues(priorityLabel, queueLabel).Inc()
 
 	running := jobsRunning.WithLabelValues(priorityLabel, queueLabel)
 	running.Inc()

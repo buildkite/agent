@@ -5,13 +5,23 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 
-	"github.com/buildkite/agent/v3/core"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
+
+func TestAgentStartFeatures_OpenTelemetryTracing(t *testing.T) {
+	t.Parallel()
+
+	features := AgentStartConfig{OpenTelemetryTracing: true}.Features(t.Context())
+	if !slices.Contains(features, "opentelemetry-tracing") {
+		t.Fatalf("Features() = %v, want opentelemetry-tracing", features)
+	}
+}
 
 func setupHooksPath(t *testing.T) (string, func()) {
 	t.Helper()
@@ -213,12 +223,12 @@ func TestAgentStartJobLocked_ExitCode28(t *testing.T) {
 	var cliErr error
 	if errors.Is(testErr, core.ErrJobLocked) {
 		const jobLockedExitCode = 28
-		cliErr = cli.NewExitError(testErr, jobLockedExitCode)
+		cliErr = cli.Exit(testErr, jobLockedExitCode)
 	}
 
-	var exitErr *cli.ExitError
+	var exitErr cli.ExitCoder
 	if got := errors.As(cliErr, &exitErr); !got {
-		t.Errorf("Expected cli.ExitError, got: %v", cliErr)
+		t.Errorf("Expected cli.ExitCoder, got: %v", cliErr)
 	}
 	if got, want := exitErr.ExitCode(), 28; got != want {
 		t.Errorf("Expected exit code 28 for job locked, got: %d", exitErr.ExitCode())
@@ -235,12 +245,12 @@ func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
 	var cliErr error
 	if errors.Is(testErr, core.ErrJobAcquisitionRejected) {
 		const acquisitionFailedExitCode = 27
-		cliErr = cli.NewExitError(testErr, acquisitionFailedExitCode)
+		cliErr = cli.Exit(testErr, acquisitionFailedExitCode)
 	}
 
-	var exitErr *cli.ExitError
+	var exitErr cli.ExitCoder
 	if got := errors.As(cliErr, &exitErr); !got {
-		t.Errorf("Expected cli.ExitError, got: %v", cliErr)
+		t.Errorf("Expected cli.ExitCoder, got: %v", cliErr)
 	}
 	if got, want := exitErr.ExitCode(), 27; got != want {
 		t.Errorf("Expected exit code 27 for job acquisition rejected, got: %d", exitErr.ExitCode())

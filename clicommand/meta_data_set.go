@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/redact"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -47,28 +47,27 @@ type MetaDataSetConfig struct {
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 }
 
-var MetaDataSetCommand = cli.Command{
+var MetaDataSetCommand = &cli.Command{
 	Name:        "set",
 	Usage:       "Set data on a build",
 	Description: metaDataSetHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job's build should the meta-data be set on",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job's build should the meta-data be set on",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 		RedactedVars,
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-set")
 		defer span.End()
 
 		// Read the value from STDIN if argument omitted entirely
-		if len(c.Args()) < 2 {
+		if c.Args().Len() < 2 {
 			l.Infof("Reading meta-data value from STDIN")
 
 			input, err := io.ReadAll(os.Stdin)

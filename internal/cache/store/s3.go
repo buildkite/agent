@@ -17,7 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
-	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
+	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
 	"go.opentelemetry.io/otel/attribute"
 )
 
