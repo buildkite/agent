@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithy "github.com/aws/smithy-go"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
 	"github.com/buildkite/roko"
@@ -110,13 +111,21 @@ type objectDownloader interface {
 	Download(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, options ...func(*manager.Downloader)) (int64, error) //nolint:staticcheck // SA1019: pending migration to transfermanager
 }
 
-// isPreconditionFailed reports whether err is an S3 412 PreconditionFailed,
-// which happens when the object's ETag changes mid-download (e.g. a concurrent
-// restore's TTL-refresh CopyObject) and invalidates the SDK's If-Match guard.
+// isPreconditionFailed reports whether err is an S3 412 PreconditionFailed. It
+// arises in two places: a download whose object ETag changes mid-transfer (a
+// concurrent restore's TTL-refresh CopyObject invalidates the SDK's If-Match
+// guard), surfaced as an *awshttp.ResponseError with HTTP status 412; and a
+// self-CopyObject whose CopySourceIfUnmodifiedSince precondition signals the
+// object was modified too recently to refresh, surfaced as a smithy.APIError
+// with code "PreconditionFailed". Both carriers are matched.
 func isPreconditionFailed(err error) bool {
 	var respErr *awshttp.ResponseError
 	if errors.As(err, &respErr) {
 		return respErr.HTTPStatusCode() == http.StatusPreconditionFailed
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorCode() == "PreconditionFailed"
 	}
 	return false
 }
@@ -358,6 +367,15 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 	}, nil
 }
 
+// restoreRefreshInterval is the minimum age (time since last modification)
+// before a restore refreshes a cache object's lifecycle expiration via a
+// self-CopyObject that resets LastModified. Objects modified more recently are
+// left untouched (the copy is skipped by S3 via a precondition), so an
+// actively-restored cache is refreshed at most about once per interval instead
+// of on every restore. The actual S3 bucket lifecycle window isn't known to the
+// agent, so this is a heuristic: keep it comfortably below that window.
+const restoreRefreshInterval = 12 * time.Hour
+
 // Download downloads a file from S3 using parallel range requests for large files
 func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferInfo, error) {
 	ctx, span := trace.Start(ctx, "S3Blob.Download")
@@ -427,23 +445,30 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		attribute.Int("concurrency", b.downloadConcurrency),
 	)
 
-	// Copy the object to itself to reset the LastModified timestamp,
-	// which extends the lifecycle expiration.
+	// Refresh the object's lifecycle expiration by copying it to itself, which
+	// resets LastModified. The if-unmodified-since precondition makes S3 skip the
+	// copy (412) when the object was modified within restoreRefreshInterval, so a
+	// hot cache isn't rewritten on every restore. The refresh is best-effort: any
+	// failure (incl. objects over S3's 5GB CopyObject limit) must not fail the
+	// restore.
 	copySource := fmt.Sprintf("%s/%s", b.bucketName, fullKey)
 	_, err = b.client.CopyObject(ctx, &s3.CopyObjectInput{
-		Bucket:            aws.String(b.bucketName),
-		Key:               aws.String(fullKey),
-		CopySource:        aws.String(copySource),
-		MetadataDirective: "REPLACE",
+		Bucket:                      aws.String(b.bucketName),
+		Key:                         aws.String(fullKey),
+		CopySource:                  aws.String(copySource),
+		MetadataDirective:           "REPLACE",
+		CopySourceIfUnmodifiedSince: aws.Time(time.Now().Add(-restoreRefreshInterval)),
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to refresh object expiration: %w", err)
+	switch {
+	case err == nil:
+		slog.Debug("refreshed object expiration", "key", fullKey, "bucket", b.bucketName)
+	case isPreconditionFailed(err):
+		slog.Debug("skipping cache TTL refresh, blob modified recently",
+			"key", fullKey, "bucket", b.bucketName)
+	default:
+		slog.Warn("failed to refresh object expiration, continuing (non-fatal)",
+			"key", fullKey, "bucket", b.bucketName, "error", err)
 	}
-
-	slog.Debug("refreshed object expiration",
-		"key", fullKey,
-		"bucket", b.bucketName,
-	)
 
 	return &TransferInfo{
 		BytesTransferred: bytesWritten,
