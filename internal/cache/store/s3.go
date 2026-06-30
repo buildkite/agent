@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -13,12 +14,22 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
 	"go.opentelemetry.io/otel/attribute"
+)
+
+// Download defaults tuned for restore performance. Restore is dominated by
+// many parallel range requests, so it benefits from far more concurrency and
+// larger parts than the SDK's upload-oriented defaults (5 streams x 5 MB).
+// Benchmarks showed c32/p32 reaching ~757 MB/s vs ~179 MB/s at the defaults.
+const (
+	defaultDownloadConcurrency = 32
+	defaultDownloadPartSizeMB  = 32
 )
 
 // Options holds configuration for S3Blob and can be constructed from an S3 URL in a similar way to gocloud.dev
@@ -92,13 +103,13 @@ func OptionsFromURL(s3url string) (*Options, error) {
 
 // S3Blob implements the Blob interface using AWS S3
 type S3Blob struct {
-	client      *s3.Client
-	uploader    *manager.Uploader   //nolint:staticcheck // SA1019: pending migration to transfermanager
-	downloader  *manager.Downloader //nolint:staticcheck // SA1019: pending migration to transfermanager
-	bucketName  string
-	prefix      string
-	concurrency int
-	partSize    int64
+	client              *s3.Client
+	uploader            *manager.Uploader   //nolint:staticcheck // SA1019: pending migration to transfermanager
+	downloader          *manager.Downloader //nolint:staticcheck // SA1019: pending migration to transfermanager
+	bucketName          string
+	prefix              string
+	uploadConcurrency   int
+	downloadConcurrency int
 }
 
 // NewS3Blob creates a new S3Blob instance using an S3 URL and prefix
@@ -120,10 +131,23 @@ func NewS3Blob(ctx context.Context, s3url string) (*S3Blob, error) {
 		"prefix", opts.Prefix,
 		"endpoint", opts.S3Endpoint)
 
+	settings := resolveTransferSettings(opts)
+
+	// Keep at least as many idle connections warm per host as the highest
+	// concurrency we use, so parallel parts reuse connections instead of
+	// re-establishing them (the SDK default of 10 throttles higher concurrency).
+	httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(t *http.Transport) {
+		t.MaxIdleConnsPerHost = settings.maxIdleConnsPerHost
+		if t.MaxIdleConns < settings.maxIdleConnsPerHost {
+			t.MaxIdleConns = settings.maxIdleConnsPerHost
+		}
+	})
+
 	// Create a new S3 client
 	client := s3.NewFromConfig(cfg,
 		func(o *s3.Options) {
 			o.Region = opts.Region
+			o.HTTPClient = httpClient
 			if opts.UsePathStyle {
 				o.UsePathStyle = true
 			}
@@ -134,43 +158,71 @@ func NewS3Blob(ctx context.Context, s3url string) (*S3Blob, error) {
 			}
 		})
 
-	// Determine concurrency (default to SDK default if not specified)
-	concurrency := opts.Concurrency
-	if concurrency == 0 {
-		concurrency = manager.DefaultUploadConcurrency
-	}
-
-	// Determine part size (default to SDK default if not specified)
-	// Convert MB to bytes
-	partSize := manager.DefaultUploadPartSize
-	if opts.PartSizeMB > 0 {
-		partSize = int64(opts.PartSizeMB) * 1024 * 1024
-	}
-
-	// Create the uploader and downloader with configured settings
+	// Create the uploader and downloader with their resolved settings
 	uploader := manager.NewUploader(client, func(u *manager.Uploader) { //nolint:staticcheck // SA1019: pending migration to transfermanager
-		u.Concurrency = concurrency
-		u.PartSize = partSize
+		u.Concurrency = settings.uploadConcurrency
+		u.PartSize = settings.uploadPartSize
 	})
 	downloader := manager.NewDownloader(client, func(d *manager.Downloader) { //nolint:staticcheck // SA1019: pending migration to transfermanager
-		d.Concurrency = concurrency
-		d.PartSize = partSize
+		d.Concurrency = settings.downloadConcurrency
+		d.PartSize = settings.downloadPartSize
 	})
 
 	slog.Debug("configured S3 transfer manager",
-		"concurrency", concurrency,
-		"part_size_bytes", partSize,
+		"upload_concurrency", settings.uploadConcurrency,
+		"upload_part_size_bytes", settings.uploadPartSize,
+		"download_concurrency", settings.downloadConcurrency,
+		"download_part_size_bytes", settings.downloadPartSize,
+		"max_idle_conns_per_host", settings.maxIdleConnsPerHost,
 	)
 
 	return &S3Blob{
-		client:      client,
-		uploader:    uploader,
-		downloader:  downloader,
-		bucketName:  opts.Bucket,
-		prefix:      opts.Prefix,
-		concurrency: concurrency,
-		partSize:    partSize,
+		client:              client,
+		uploader:            uploader,
+		downloader:          downloader,
+		bucketName:          opts.Bucket,
+		prefix:              opts.Prefix,
+		uploadConcurrency:   settings.uploadConcurrency,
+		downloadConcurrency: settings.downloadConcurrency,
 	}, nil
+}
+
+// transferSettings holds the resolved concurrency and part sizes for uploads
+// and downloads, plus the connection-pool size that supports them.
+type transferSettings struct {
+	uploadConcurrency   int
+	uploadPartSize      int64
+	downloadConcurrency int
+	downloadPartSize    int64
+	maxIdleConnsPerHost int
+}
+
+// resolveTransferSettings turns parsed Options into concrete transfer settings.
+// An explicit concurrency or part_size_mb override applies to both uploads and
+// downloads; otherwise uploads use the SDK's upload defaults and downloads use
+// the download-tuned defaults.
+func resolveTransferSettings(opts *Options) transferSettings {
+	uploadConcurrency := manager.DefaultUploadConcurrency
+	downloadConcurrency := defaultDownloadConcurrency
+	if opts.Concurrency > 0 {
+		uploadConcurrency = opts.Concurrency
+		downloadConcurrency = opts.Concurrency
+	}
+
+	uploadPartSize := manager.DefaultUploadPartSize
+	downloadPartSize := int64(defaultDownloadPartSizeMB) * 1024 * 1024
+	if opts.PartSizeMB > 0 {
+		uploadPartSize = int64(opts.PartSizeMB) * 1024 * 1024
+		downloadPartSize = int64(opts.PartSizeMB) * 1024 * 1024
+	}
+
+	return transferSettings{
+		uploadConcurrency:   uploadConcurrency,
+		uploadPartSize:      uploadPartSize,
+		downloadConcurrency: downloadConcurrency,
+		downloadPartSize:    downloadPartSize,
+		maxIdleConnsPerHost: max(uploadConcurrency, downloadConcurrency),
+	}
 }
 
 // Upload uploads a file to S3 using multipart upload for parallel transfers
@@ -203,7 +255,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 	slog.Debug("starting S3 upload",
 		"key", fullKey,
 		"file_size", bytesWritten,
-		"concurrency", b.concurrency,
+		"concurrency", b.uploadConcurrency,
 	)
 
 	// Upload the file to S3 using the multipart uploader
@@ -233,7 +285,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 		"key", fullKey,
 		"bytes_transferred", bytesWritten,
 		"parts_uploaded", partCount,
-		"concurrency", b.concurrency,
+		"concurrency", b.uploadConcurrency,
 		"duration", duration,
 		"transfer_speed_mbps", fmt.Sprintf("%.2f", averageSpeed),
 	)
@@ -243,7 +295,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 		attribute.String("transfer_speed", fmt.Sprintf("%.2fMB/s", averageSpeed)),
 		attribute.String("request_id", requestID),
 		attribute.Int("part_count", partCount),
-		attribute.Int("concurrency", b.concurrency),
+		attribute.Int("concurrency", b.uploadConcurrency),
 	)
 
 	return &TransferInfo{
@@ -252,7 +304,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 		RequestID:        requestID,
 		Duration:         duration,
 		PartCount:        partCount,
-		Concurrency:      b.concurrency,
+		Concurrency:      b.uploadConcurrency,
 	}, nil
 }
 
@@ -277,7 +329,7 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 
 	slog.Debug("starting S3 download",
 		"key", fullKey,
-		"concurrency", b.concurrency,
+		"concurrency", b.downloadConcurrency,
 	)
 
 	// Track number of GetObject requests (parts) made during download
@@ -317,7 +369,7 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		"key", fullKey,
 		"bytes_transferred", bytesWritten,
 		"parts_downloaded", actualPartCount,
-		"concurrency", b.concurrency,
+		"concurrency", b.downloadConcurrency,
 		"duration", duration,
 		"transfer_speed_mbps", fmt.Sprintf("%.2f", averageSpeed),
 	)
@@ -326,7 +378,7 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		attribute.Int64("bytes_transferred", bytesWritten),
 		attribute.String("transfer_speed", fmt.Sprintf("%.2fMB/s", averageSpeed)),
 		attribute.Int("part_count", actualPartCount),
-		attribute.Int("concurrency", b.concurrency),
+		attribute.Int("concurrency", b.downloadConcurrency),
 	)
 
 	// Copy the object to itself to reset the LastModified timestamp,
@@ -353,7 +405,7 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		RequestID:        "", // Download doesn't return a single request ID for parallel downloads
 		Duration:         duration,
 		PartCount:        actualPartCount,
-		Concurrency:      b.concurrency,
+		Concurrency:      b.downloadConcurrency,
 	}, nil
 }
 
