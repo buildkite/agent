@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Blob interface defines the operations for blob storage
@@ -11,8 +12,10 @@ type Blob interface {
 	// Upload uploads a file to blob storage
 	Upload(ctx context.Context, filePath, key string) (*TransferInfo, error)
 
-	// Download downloads a file from blob storage
-	Download(ctx context.Context, key, destPath string) (*TransferInfo, error)
+	// Download downloads a file from blob storage. expiresAt is the blob's
+	// expiry time from the retrieve response (zero if unknown); stores may use
+	// it to decide whether to refresh the object's lifecycle expiration.
+	Download(ctx context.Context, key, destPath string, expiresAt time.Time) (*TransferInfo, error)
 }
 
 func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {

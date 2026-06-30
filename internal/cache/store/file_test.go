@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewLocalFileBlob(t *testing.T) {
@@ -237,7 +238,7 @@ func TestLocalFileBlobDownload(t *testing.T) {
 
 	// Then download
 	destFile := filepath.Join(destDir, "downloaded.txt")
-	info, err := blob.Download(ctx, key, destFile)
+	info, err := blob.Download(ctx, key, destFile, time.Time{})
 	if err != nil {
 		t.Fatalf("Download: %v", err)
 	}
@@ -332,7 +333,7 @@ func TestLocalFileBlobDownloadNonExistent(t *testing.T) {
 	}
 
 	destFile := filepath.Join(destDir, "nonexistent.txt")
-	_, err = blob.Download(ctx, "nonexistent/key", destFile)
+	_, err = blob.Download(ctx, "nonexistent/key", destFile, time.Time{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -388,7 +389,7 @@ func TestLocalFileBlobDownloadInvalidKey(t *testing.T) {
 	}
 
 	destFile := filepath.Join(destDir, "test.txt")
-	_, err = blob.Download(ctx, "cache//invalid", destFile)
+	_, err = blob.Download(ctx, "cache//invalid", destFile, time.Time{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

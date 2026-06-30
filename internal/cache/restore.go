@@ -298,7 +298,7 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	archiveFile = filepath.Join(tmpDir, storeObjectName)
 
 	// Download archive
-	transferInfo, err = blobStore.Download(ctx, storeObjectName, archiveFile)
+	transferInfo, err = blobStore.Download(ctx, storeObjectName, archiveFile, retrieveResp.ExpiresAt)
 	if err != nil {
 		// Clean up temporary directory on failure
 		_ = os.RemoveAll(tmpDir)

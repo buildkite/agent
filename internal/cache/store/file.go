@@ -287,7 +287,7 @@ func (b *LocalFileBlob) Upload(ctx context.Context, srcPath, key string) (*Trans
 //
 // Returns TransferInfo with bytes transferred, transfer speed, and duration.
 // Returns an error if the cache key doesn't exist or file operations fail.
-func (b *LocalFileBlob) Download(ctx context.Context, key, destPath string) (*TransferInfo, error) {
+func (b *LocalFileBlob) Download(ctx context.Context, key, destPath string, _ time.Time) (*TransferInfo, error) {
 	_, span := trace.Start(ctx, "LocalFileBlob.Download")
 	defer span.End()
 
