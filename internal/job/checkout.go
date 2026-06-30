@@ -964,6 +964,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 			}
 		}
 
+		// When sparse checkout paths are present, use a partial clone so blobs
+		// outside the sparse set aren't downloaded if not yet specified.
+		if e.enableCloneFlagsForSparseCheckout(gitCloneFlags) {
+			gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
+		}
+
 		// Do the clone.
 		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
 			return fmt.Errorf("cloning git repository: %w", err)
