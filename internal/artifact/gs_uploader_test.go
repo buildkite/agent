@@ -26,8 +26,14 @@ func TestGSUploaderURLAppendsPathSuffix(t *testing.T) {
 func TestGSUploaderURLWithoutPathSuffix(t *testing.T) {
 	// Defensively ensure the suffix var is not set for this test.
 	if v, ok := os.LookupEnv("BUILDKITE_GCS_PATH_SUFFIX"); ok {
-		os.Unsetenv("BUILDKITE_GCS_PATH_SUFFIX")
-		t.Cleanup(func() { os.Setenv("BUILDKITE_GCS_PATH_SUFFIX", v) })
+		if err := os.Unsetenv("BUILDKITE_GCS_PATH_SUFFIX"); err != nil {
+			t.Fatalf("failed to unset BUILDKITE_GCS_PATH_SUFFIX: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Setenv("BUILDKITE_GCS_PATH_SUFFIX", v); err != nil {
+				t.Errorf("failed to restore BUILDKITE_GCS_PATH_SUFFIX: %v", err)
+			}
+		})
 	}
 
 	u := &GSUploader{
