@@ -61,16 +61,29 @@ func writeAgentHookScript(t *testing.T, dir, hookName, script string) string {
 	return filepath
 }
 
-// envEchoHookScript is a hook script fixture that echoes the agent identity
-// env vars injected into lifecycle hooks.
-func envEchoHookScript() string {
+// envEchoHookScript reads the lifecycle-hook fixture that echoes the agent
+// identity env vars injected into agent-startup and agent-shutdown hooks. The
+// fixtures live in $REPO_ROOT/test/fixtures/agent-hook; the test working dir is
+// $REPO_ROOT/clicommand, so we go up one level to reach the repo root.
+func envEchoHookScript(t *testing.T) string {
+	t.Helper()
+
+	name := "env-hook.sh"
 	if runtime.GOOS == "windows" {
-		return `@echo off
-echo ids=%BUILDKITE_AGENT_IDS%
-echo names=%BUILDKITE_AGENT_NAMES%`
+		name = "env-hook.bat"
 	}
-	return `echo ids=$BUILDKITE_AGENT_IDS
-echo names=$BUILDKITE_AGENT_NAMES`
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() = %v", err)
+	}
+	path := filepath.Join(wd, "..", "test", "fixtures", "agent-hook", name)
+
+	script, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) = %v", path, err)
+	}
+	return string(script)
 }
 
 func testAgentWorker(id, name string) *agent.AgentWorker {
@@ -255,7 +268,7 @@ func TestAgentStartupHookWithRegisteredAgentsEnv(t *testing.T) {
 	hooksPath, closer := setupHooksPath(t)
 	defer closer()
 
-	filepath := writeAgentHookScript(t, hooksPath, "agent-startup", envEchoHookScript())
+	filepath := writeAgentHookScript(t, hooksPath, "agent-startup", envEchoHookScript(t))
 
 	log := logger.NewBuffer()
 	err := agentStartupHook(log, cfg(hooksPath), []*agent.AgentWorker{
@@ -334,7 +347,7 @@ func TestAgentShutdownHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
-		filepath := writeAgentHookScript(t, hooksPath, "agent-shutdown", envEchoHookScript())
+		filepath := writeAgentHookScript(t, hooksPath, "agent-shutdown", envEchoHookScript(t))
 
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg(hooksPath), []*agent.AgentWorker{
