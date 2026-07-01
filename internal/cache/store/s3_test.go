@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -323,6 +324,70 @@ func TestGetFullKey(t *testing.T) {
 			got := blob.getFullKey(tt.key)
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveTransferSettings(t *testing.T) {
+	const mb = int64(1024 * 1024)
+
+	tests := []struct {
+		name string
+		opts *Options
+		want transferSettings
+	}{
+		{
+			name: "defaults differ between upload and download",
+			opts: &Options{},
+			want: transferSettings{
+				uploadConcurrency:   manager.DefaultUploadConcurrency,
+				uploadPartSize:      manager.DefaultUploadPartSize,
+				downloadConcurrency: defaultDownloadConcurrency,
+				downloadPartSize:    int64(defaultDownloadPartSizeMB) * mb,
+				maxIdleConnsPerHost: defaultDownloadConcurrency,
+			},
+		},
+		{
+			name: "concurrency override applies to both",
+			opts: &Options{Concurrency: 50},
+			want: transferSettings{
+				uploadConcurrency:   50,
+				uploadPartSize:      manager.DefaultUploadPartSize,
+				downloadConcurrency: 50,
+				downloadPartSize:    int64(defaultDownloadPartSizeMB) * mb,
+				maxIdleConnsPerHost: 50,
+			},
+		},
+		{
+			name: "part size override applies to both",
+			opts: &Options{PartSizeMB: 64},
+			want: transferSettings{
+				uploadConcurrency:   manager.DefaultUploadConcurrency,
+				uploadPartSize:      64 * mb,
+				downloadConcurrency: defaultDownloadConcurrency,
+				downloadPartSize:    64 * mb,
+				maxIdleConnsPerHost: defaultDownloadConcurrency,
+			},
+		},
+		{
+			name: "both overrides applied",
+			opts: &Options{Concurrency: 8, PartSizeMB: 16},
+			want: transferSettings{
+				uploadConcurrency:   8,
+				uploadPartSize:      16 * mb,
+				downloadConcurrency: 8,
+				downloadPartSize:    16 * mb,
+				maxIdleConnsPerHost: 8,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveTransferSettings(tt.opts)
+			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(transferSettings{})); diff != "" {
+				t.Errorf("resolveTransferSettings() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
