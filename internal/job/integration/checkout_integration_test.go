@@ -186,33 +186,47 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit(t *testin
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
 	}
 
-	git := tester.
-		MustMock(t, "git").
-		PassthroughToLocalCommand()
+	// bintest's mock dispatch always prefers a mock-level passthrough over any
+	// per-expectation AndCallFunc (see bintest Mock.Invoke), so we can't set
+	// PassthroughToLocalCommand on the mock — it would run real git for
+	// `--version` and skip our lie. Instead, register each expectation
+	// individually and passthrough to real git per-expectation, leaving
+	// `--version` free to use AndCallFunc.
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("exec.LookPath(git) error = %v", err)
+	}
 
-	// AndCallFunc takes over the call instead of falling through to real git
-	// for `git --version`, so we can lie about the version.
+	git := tester.MustMock(t, "git")
+
 	git.Expect("--version").AndCallFunc(func(c *bintest.Call) {
 		_, _ = fmt.Fprintln(c.Stdout, "git version 2.20.0")
 		c.Exit(0)
 	})
 
+	expect := func(args ...any) *bintest.Expectation {
+		return git.Expect(args...).AndPassthroughToLocalCommand(realGit)
+	}
+
 	// `git clone --sparse` initialises a sparse-checkout config, so the
 	// fallback path runs `sparse-checkout disable` to undo it. Crucially,
 	// `sparse-checkout set --cone ...` must NOT appear — its absence from
 	// this sequence is what proves the fallback worked.
-	git.ExpectAll([][]any{
-		{"clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
-		{"config", "--get", "core.sparseCheckout"},
-		{"sparse-checkout", "disable"},
-		{"config", "--worktree", "--list"},
-		{"config", "--unset", "extensions.worktreeConfig"},
-		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
-		{"clean", "-fdq"},
-		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
-	})
+	expect("clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, ".")
+	expect("clean", "-fdq")
+	expect("fetch", "-v", "--", "origin", "main")
+	expect("config", "--get", "core.sparseCheckout")
+	expect("sparse-checkout", "disable")
+	expect("config", "--worktree", "--list")
+	// Whether `config --unset extensions.worktreeConfig` fires depends on the
+	// real git version: `sparse-checkout disable` on git >= ~2.36 leaves
+	// core.sparsecheckout=false (and friends) in the worktree config, so
+	// `config --worktree --list` returns non-empty and the unset is skipped.
+	// On older git the worktree config is empty and the unset does fire.
+	expect("config", "--unset", "extensions.worktreeConfig").Optionally()
+	expect("-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD")
+	expect("clean", "-fdq")
+	expect("--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg)
 
 	agent := tester.MockAgent(t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
