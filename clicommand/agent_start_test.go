@@ -25,65 +25,32 @@ func setupHooksPath(t *testing.T) (string, func()) {
 	return hooksPath, func() { _ = os.RemoveAll(hooksPath) }
 }
 
-func writeAgentHook(t *testing.T, dir, hookName, msg string) string {
-	t.Helper()
-
-	var filename, script string
-	if runtime.GOOS == "windows" {
-		filename = hookName + ".bat"
-		script = "@echo off\necho " + msg
-	} else {
-		filename = hookName
-		script = "echo " + msg
-	}
-	filepath := filepath.Join(dir, filename)
-	t.Logf("Creating %q with %q content", filepath, msg)
-	if err := os.WriteFile(filepath, []byte(script), 0o755); err != nil {
-		t.Fatalf("%+v", err)
-	}
-	t.Log("Providing the path with file created")
-	return filepath
-}
-
-func writeAgentHookScript(t *testing.T, dir, hookName, script string) string {
+func writeAgentHook(t *testing.T, dir, hookName, fixtureName string) string {
 	t.Helper()
 
 	filename := hookName
+	fixtureFilename := fixtureName + ".sh"
 	if runtime.GOOS == "windows" {
 		filename = hookName + ".bat"
-	}
-
-	filepath := filepath.Join(dir, filename)
-	t.Logf("Creating %q", filepath)
-	if err := os.WriteFile(filepath, []byte(script), 0o755); err != nil {
-		t.Fatalf("%+v", err)
-	}
-	return filepath
-}
-
-// envEchoHookScript reads the lifecycle-hook fixture that echoes the agent
-// identity env vars injected into agent-startup and agent-shutdown hooks. The
-// fixtures live in $REPO_ROOT/test/fixtures/agent-hook; the test working dir is
-// $REPO_ROOT/clicommand, so we go up one level to reach the repo root.
-func envEchoHookScript(t *testing.T) string {
-	t.Helper()
-
-	name := "env-hook.sh"
-	if runtime.GOOS == "windows" {
-		name = "env-hook.bat"
+		fixtureFilename = fixtureName + ".bat"
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("os.Getwd() = %v", err)
 	}
-	path := filepath.Join(wd, "..", "test", "fixtures", "agent-hook", name)
-
-	script, err := os.ReadFile(path)
+	fixturePath := filepath.Join(wd, "..", "test", "fixtures", "agent-hook", fixtureFilename)
+	script, err := os.ReadFile(fixturePath)
 	if err != nil {
-		t.Fatalf("os.ReadFile(%q) = %v", path, err)
+		t.Fatalf("os.ReadFile(%q) = %v", fixturePath, err)
 	}
-	return string(script)
+
+	filepath := filepath.Join(dir, filename)
+	t.Logf("Creating %q from %q", filepath, fixturePath)
+	if err := os.WriteFile(filepath, script, 0o755); err != nil {
+		t.Fatalf("%+v", err)
+	}
+	return filepath
 }
 
 func testAgentWorker(id, name string) *agent.AgentWorker {
@@ -115,7 +82,7 @@ func TestAgentStartupHook(t *testing.T) {
 
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
-		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello world")
+		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello-world")
 		log := logger.NewBuffer()
 		err := agentStartupHook(log, cfg(hooksPath), nil)
 		if err != nil {
@@ -178,11 +145,11 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 		t.Parallel()
 
 		hooksPath, closer := setupHooksPath(t)
-		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello new world")
+		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello-new-world")
 		defer closer()
 
 		additionalHooksPath, additionalCloser := setupHooksPath(t)
-		addFilepath := writeAgentHook(t, additionalHooksPath, "agent-startup", "hello additional world")
+		addFilepath := writeAgentHook(t, additionalHooksPath, "agent-startup", "hello-additional-world")
 		defer additionalCloser()
 
 		log := logger.NewBuffer()
@@ -268,7 +235,7 @@ func TestAgentStartupHookWithRegisteredAgentsEnv(t *testing.T) {
 	hooksPath, closer := setupHooksPath(t)
 	defer closer()
 
-	filepath := writeAgentHookScript(t, hooksPath, "agent-startup", envEchoHookScript(t))
+	filepath := writeAgentHook(t, hooksPath, "agent-startup", "env-hook")
 
 	log := logger.NewBuffer()
 	err := agentStartupHook(log, cfg(hooksPath), []*agent.AgentWorker{
@@ -306,7 +273,7 @@ func TestAgentShutdownHook(t *testing.T) {
 
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
-		filepath := writeAgentHook(t, hooksPath, "agent-shutdown", "hello world")
+		filepath := writeAgentHook(t, hooksPath, "agent-shutdown", "hello-world")
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg(hooksPath), nil)
 
@@ -347,7 +314,7 @@ func TestAgentShutdownHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
-		filepath := writeAgentHookScript(t, hooksPath, "agent-shutdown", envEchoHookScript(t))
+		filepath := writeAgentHook(t, hooksPath, "agent-shutdown", "env-hook")
 
 		log := logger.NewBuffer()
 		agentShutdownHook(log, cfg(hooksPath), []*agent.AgentWorker{
