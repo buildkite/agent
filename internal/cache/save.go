@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -394,10 +395,12 @@ func validateCacheStore(storeType, bucketURL string) error {
 		if bucketURL == "" {
 			return fmt.Errorf("BUILDKITE_AGENT_CACHE_STORE_URL must be set for the %s cache store", storeType)
 		}
-		// Note: We allow both s3:// and file:// for S3 store (file:// is for local testing)
-	case store.LocalHostedAgents:
-		if bucketURL != "" {
-			return fmt.Errorf("NSC store should not have bucket URL set, got: %s", bucketURL)
+		// s3:// for S3, nsc:// for Namespace artifact storage, and file:// for
+		// local testing.
+		switch scheme, _, _ := strings.Cut(bucketURL, "://"); scheme {
+		case "s3", "nsc", "file":
+		default:
+			return fmt.Errorf("unsupported cache store URL scheme %q for the %s cache store", scheme, storeType)
 		}
 	}
 

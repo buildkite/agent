@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,13 +17,62 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+// nscScheme is the URL scheme that routes an agent-managed cache store to NSC.
+const nscScheme = "nsc"
+
+// nscDefaultExpiry is the default artifact expiry passed to nsc artifact upload.
+// Cache entries are content-addressed and short-lived, so we cap storage growth
+// rather than relying on NSC's no-expiry default.
+//
+// TODO: 24h is a temporary stopgap. We ultimately want parity with the S3 path,
+// where the expiry can be extended (e.g. refreshed on cache hits) instead of a
+// fixed lifetime.
+const nscDefaultExpiry = "24h"
+
+// commandRunner executes an external command. It is a seam so tests can assert
+// the arguments passed to the nsc CLI without invoking the real binary.
+type commandRunner func(ctx context.Context, workingDir string, args ...string) (*CommandResult, error)
+
 // NscStore implements the Blob interface for NSC artifact storage which uses the nsc CLI tool
 // https://namespace.so/docs/reference/cli/artifact-download
 // https://namespace.so/docs/reference/cli/artifact-upload
-type NscStore struct{}
+type NscStore struct {
+	// namespace is taken from the nsc://<namespace> cache store URL and passed
+	// as --namespace to the nsc CLI. It is always non-empty.
+	namespace string
+	run       commandRunner
+}
 
-func NewNscStore() (*NscStore, error) {
-	return &NscStore{}, nil
+// NewNscStore creates a store backed by the nsc CLI. The namespace is parsed
+// from the nsc://<namespace> cache store URL and is required.
+func NewNscStore(bucketURL string) (*NscStore, error) {
+	namespace, err := parseNscNamespace(bucketURL)
+	if err != nil {
+		return nil, err
+	}
+	return &NscStore{namespace: namespace, run: runCommand}, nil
+}
+
+// parseNscNamespace extracts the namespace from an nsc://<namespace> cache store
+// URL. It errors on a non-nsc URL or a missing namespace.
+func parseNscNamespace(bucketURL string) (string, error) {
+	u, err := url.Parse(bucketURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid cache store URL %q: %w", bucketURL, err)
+	}
+	if u.Scheme != nscScheme {
+		return "", fmt.Errorf("expected %s:// cache store URL, got %q", nscScheme, bucketURL)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("nsc:// URL must include a namespace, e.g. nsc://my-namespace")
+	}
+	return u.Host, nil
+}
+
+// artifactArgs builds the nsc CLI argument list, including --namespace.
+func (n *NscStore) artifactArgs(args ...string) []string {
+	cmd := append([]string{"nsc", "artifact"}, args...)
+	return append(cmd, "--namespace", n.namespace)
 }
 
 // validateFilePath validates that a file path is safe for use in commands
@@ -98,7 +148,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferI
 	start := time.Now()
 
 	// Execute nsc artifact upload command
-	result, err := runCommand(ctx, "", "nsc", "artifact", "upload", filePath, key)
+	result, err := n.run(ctx, "", n.artifactArgs("upload", filePath, key, "--expires_in", nscDefaultExpiry)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute nsc upload command: %w", err)
 	}
@@ -146,7 +196,7 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 	start := time.Now()
 
 	// Execute nsc artifact download command
-	result, err := runCommand(ctx, "", "nsc", "artifact", "download", key, filePath)
+	result, err := n.run(ctx, "", n.artifactArgs("download", key, filePath)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute nsc download command: %w", err)
 	}
@@ -200,7 +250,7 @@ func runCommand(ctx context.Context, workingDir string, args ...string) (*Comman
 
 	// #nosec G204 - args are validated by callers (validateFilePath, validateKey)
 	// and this function is internal to the store package with controlled usage
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

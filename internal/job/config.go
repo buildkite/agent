@@ -3,6 +3,7 @@ package job
 import (
 	"log"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -52,6 +53,9 @@ type ExecutorConfig struct {
 
 	// Should git submodules be checked out
 	GitSubmodules bool `env:"BUILDKITE_GIT_SUBMODULES"`
+
+	// Whether to enable Git LFS operations during checkout
+	GitLFSEnabled bool `env:"BUILDKITE_GIT_LFS_ENABLED"`
 
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
@@ -282,8 +286,14 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 					log.Printf("warning: cannot parse %s=%q as %v, ignoring", tag, newStr, v.Type())
 					break
 				}
-				slice := strings.Split(newStr, ",")
-				v.Set(reflect.ValueOf(slice))
+				var newSlice []string
+				if newStr != "" {
+					newSlice = strings.Split(newStr, ",")
+				}
+				if slices.Equal(newSlice, v.Interface().([]string)) {
+					break
+				}
+				v.Set(reflect.ValueOf(newSlice))
 				changed[tag] = newStr
 
 			default:

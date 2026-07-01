@@ -571,3 +571,15 @@ func TestNewBlobStoreLocalFile(t *testing.T) {
 		t.Errorf("expected LocalFileBlob type, got %T", blob)
 	}
 }
+
+// file:// is accepted for agent_managed (local testing) and must reach the local
+// file store rather than the S3 store, matching validateCacheStore.
+func TestNewBlobStoreAgentManagedFile(t *testing.T) {
+	blob, err := NewBlobStore(t.Context(), AgentManaged, fileURL(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewBlobStore: %v", err)
+	}
+	if _, ok := blob.(*LocalFileBlob); !ok {
+		t.Errorf("expected LocalFileBlob type, got %T", blob)
+	}
+}
