@@ -330,7 +330,7 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 	// Run the process. This will block until it finishes.
 	if err := r.process.Run(ctx); err != nil {
 		// Send the error to job logs
-		_, _ = fmt.Fprintf(r.jobLogs, "Error running job: %s\n", err)
+		_, _ = fmt.Fprintf(r.jobLogs, "Error running job: %s\n", job.FormatJobError(err))
 
 		// The process did not run at all, so make sure it fails
 		return core.ProcessExit{
