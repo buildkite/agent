@@ -143,7 +143,7 @@ func TestSetupSparseCheckout_VersionFallback(t *testing.T) {
 	if active {
 		t.Fatalf("executor.setupSparseCheckout(ctx) active = true, want false")
 	}
-	if got, want := out.String(), "Sparse checkout requires git >= 2.26; falling back to full checkout"; !strings.Contains(got, want) {
+	if got, want := out.String(), "Sparse checkout requires git >= 2.27; falling back to full checkout"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
 	}
 
@@ -165,7 +165,7 @@ func TestSetupSparseCheckout_VersionFallbackDisablesPriorSparseConfig(t *testing
 	if _, err := executor.setupSparseCheckout(t.Context()); err != nil {
 		t.Fatalf("executor.setupSparseCheckout(ctx) error = %v, want nil", err)
 	}
-	if got, want := out.String(), "Sparse checkout requires git >= 2.26; falling back to full checkout"; !strings.Contains(got, want) {
+	if got, want := out.String(), "Sparse checkout requires git >= 2.27; falling back to full checkout"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
 	}
 	if got, want := out.String(), "Disabling sparse checkout from previous build"; !strings.Contains(got, want) {
