@@ -240,6 +240,36 @@ func TestGitClone(t *testing.T) {
 	}
 }
 
+func TestHasPartialCloneFilter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		flags []string
+		want  bool
+	}{
+		{name: "no filter", flags: []string{"-v", "--reference", "mirror"}, want: false},
+		{name: "filter blob:none with equals", flags: []string{"-v", "--filter=blob:none"}, want: true},
+		{name: "filter blob:none separate arg", flags: []string{"-v", "--filter", "blob:none"}, want: true},
+		{name: "filter tree:0 with equals", flags: []string{"-v", "--filter=tree:0"}, want: true},
+		{name: "filter tree:0 separate arg", flags: []string{"-v", "--filter", "tree:0"}, want: true},
+		{name: "multiple filters with blob:none", flags: []string{"--filter=blob:none", "--filter=tree:0"}, want: true},
+		{name: "multiple filters separate args", flags: []string{"--filter", "blob:none", "--filter", "tree:0"}, want: true},
+		{name: "filter prefix lookalike", flags: []string{"-v", "--filtered"}, want: false},
+		{name: "filter without value", flags: []string{"--filter"}, want: false},
+		{name: "empty", flags: nil, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := hasPartialCloneFilter(tt.flags); got != tt.want {
+				t.Errorf("hasPartialCloneFilter(%v) = %t, want %t", tt.flags, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGitClean(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
