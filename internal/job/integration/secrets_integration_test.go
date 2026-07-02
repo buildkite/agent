@@ -563,3 +563,79 @@ func TestSecretsIntegration_ProtectedEnvironmentVariableRejection(t *testing.T) 
 		}
 	}
 }
+
+func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		envVar             string
+		secretValue        string
+		noCheckoutOverride bool
+		wantErr            bool
+	}{
+		{name: "disabled_allows_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror"},
+		{name: "enabled_rejects_checkout_locked_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", noCheckoutOverride: true, wantErr: true},
+		{name: "enabled_rejects_sparse_checkout_paths_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", secretValue: "a/b", noCheckoutOverride: true, wantErr: true},
+		// The lock must not over-block: a non-checkout secret is still allowed.
+		{name: "enabled_allows_unscoped_secret", envVar: "MY_CUSTOM_VAR", secretValue: "hello", noCheckoutOverride: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("setting up executor tester: %v", err)
+			}
+			defer tester.Close()
+
+			apiServer := setupSecretsAPIServer(t, map[string]string{"CHECKOUT_SECRET": tc.secretValue})
+			defer apiServer.Close()
+
+			secretsJSON, err := json.Marshal([]pipeline.Secret{{
+				Key:                 "CHECKOUT_SECRET",
+				EnvironmentVariable: tc.envVar,
+			}})
+			if err != nil {
+				t.Fatalf("marshaling secrets: %v", err)
+			}
+
+			if !tc.wantErr {
+				tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
+					if got, want := c.GetEnv(tc.envVar), tc.secretValue; got != want {
+						_, _ = fmt.Fprintf(c.Stderr, "Expected %s=%q, got %q\n", tc.envVar, want, got)
+						c.Exit(1)
+						return
+					}
+					c.Exit(0)
+				})
+			}
+
+			env := []string{
+				fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
+				fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
+			}
+			if tc.noCheckoutOverride {
+				env = append(env, "BUILDKITE_NO_CHECKOUT_OVERRIDE=true")
+			}
+
+			err = tester.Run(t, env...)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected job to fail due to checkout-locked secret mapping, but it succeeded. Full output: %s", tester.Output)
+				}
+				if !strings.Contains(tester.Output, "checkout-locked environment variable") || !strings.Contains(tester.Output, tc.envVar) {
+					t.Fatalf("expected output to mention checkout-locked env rejection, got: %s", tester.Output)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("running executor tester: %v", err)
+			}
+			tester.CheckMocks(t)
+		})
+	}
+}

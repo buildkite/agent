@@ -375,3 +375,55 @@ func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
 		t.Errorf("Expected exit code 27 for job acquisition rejected, got: %d", exitErr.ExitCode())
 	}
 }
+
+func TestAgentStartLockCheckoutWhenCommandEvalDisabled(t *testing.T) {
+	t.Parallel()
+
+	// AgentStartConfig uses NoCommandEval, so the zero value leaves command-eval
+	// enabled and the lock off.
+	tests := []struct {
+		name string
+		cfg  AgentStartConfig
+		want bool
+	}{
+		{name: "explicit_flag", cfg: AgentStartConfig{NoCheckoutOverride: true}, want: true},
+		{name: "no_command_eval_forces_lock", cfg: AgentStartConfig{NoCommandEval: true}, want: true},
+		{name: "defaults_unlocked", cfg: AgentStartConfig{}, want: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tc.cfg.lockCheckoutWhenCommandEvalDisabled()
+			if got := tc.cfg.NoCheckoutOverride; got != tc.want {
+				t.Errorf("NoCheckoutOverride = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBootstrapLockCheckoutWhenCommandEvalDisabled(t *testing.T) {
+	t.Parallel()
+
+	// BootstrapConfig uses CommandEval, so the zero value disables command-eval
+	// and forces the lock on; "unlocked" cases must set CommandEval explicitly.
+	tests := []struct {
+		name string
+		cfg  BootstrapConfig
+		want bool
+	}{
+		{name: "explicit_flag", cfg: BootstrapConfig{NoCheckoutOverride: true, CommandEval: true}, want: true},
+		{name: "command_eval_disabled_forces_lock", cfg: BootstrapConfig{CommandEval: false}, want: true},
+		{name: "defaults_unlocked", cfg: BootstrapConfig{CommandEval: true}, want: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tc.cfg.lockCheckoutWhenCommandEvalDisabled()
+			if got := tc.cfg.NoCheckoutOverride; got != tc.want {
+				t.Errorf("NoCheckoutOverride = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

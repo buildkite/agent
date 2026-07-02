@@ -407,8 +407,9 @@ func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, erro
 func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
-	// sent by Buildkite. The variables below should always take
-	// precedence.
+	// sent by Buildkite. The variables below should always take precedence,
+	// except the checkout-scoped vars set via setCheckoutEnv, which defer to
+	// the Buildkite-sent value unless no-checkout-override is enabled.
 	env := make(map[string]string)
 	maps.Copy(env, r.conf.Job.Env)
 
@@ -440,6 +441,17 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 		env[name] = value
 	}
+	// For some checkout env vars, we allow the Job env (if present) to
+	// have higher precedence than the agent configuration, unless
+	// NoCheckoutOverride is set.
+	setCheckoutEnv := func(name, value string) {
+		if !r.conf.AgentConfiguration.NoCheckoutOverride {
+			if _, exists := env[name]; exists {
+				return
+			}
+		}
+		setEnv(name, value)
+	}
 
 	// Write out the job environment to file:
 	// - envShellFile: in k="v" format, with newlines escaped. If the
@@ -467,6 +479,7 @@ BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
 BUILDKITE_GIT_SUBMODULES
 BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG
+BUILDKITE_NO_CHECKOUT_OVERRIDE
 BUILDKITE_CANCEL_GRACE_PERIOD
 BUILDKITE_COMMAND_EVAL
 BUILDKITE_LOCAL_HOOKS_ENABLED
@@ -591,25 +604,37 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_BUILD_PATH", r.conf.AgentConfiguration.BuildPath)
 	setEnv("BUILDKITE_SOCKETS_PATH", r.conf.AgentConfiguration.SocketsPath)
 	setEnv("BUILDKITE_GIT_MIRRORS_PATH", r.conf.AgentConfiguration.GitMirrorsPath)
-	setEnv("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate))
+	setCheckoutEnv("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate))
 	setEnv("BUILDKITE_HOOKS_PATH", r.conf.AgentConfiguration.HooksPath)
 	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
-	// Disable cloning submodules if specified in Agent config as precedence
-	// else allow pipeline/step env to control it via BUILDKITE_GIT_SUBMODULES
-	if !r.conf.AgentConfiguration.GitSubmodules {
-		setEnv("BUILDKITE_GIT_SUBMODULES", "false")
+	// These three vars are only emitted by the agent on one side of their
+	// default (submodules off, skip-checkout on, skip-fetch on); on the other
+	// side the agent stays silent and lets pipeline/step env decide. That silent
+	// side would leak past no-checkout-override, so when the lock is on we emit
+	// the agent value unconditionally to keep agent config authoritative.
+	if r.conf.AgentConfiguration.NoCheckoutOverride {
+		setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+		setEnv("BUILDKITE_SKIP_CHECKOUT", fmt.Sprint(r.conf.AgentConfiguration.SkipCheckout))
+		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", fmt.Sprint(r.conf.AgentConfiguration.GitSkipFetchExistingCommits))
+	} else {
+		// Default submodules off when disabled in agent config, but let pipeline/
+		// step env override via BUILDKITE_GIT_SUBMODULES.
+		if !r.conf.AgentConfiguration.GitSubmodules {
+			setCheckoutEnv("BUILDKITE_GIT_SUBMODULES", "false")
+		}
+		// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
+		// or by pipeline/step env
+		// This is here now to make it ready for if/when we add skip_checkout to the core app
+		if r.conf.AgentConfiguration.SkipCheckout {
+			setCheckoutEnv("BUILDKITE_SKIP_CHECKOUT", "true")
+		}
+		if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
+			setCheckoutEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
+		}
 	}
-	// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
-	// or by pipeline/step env
-	// This is here now to make it ready for if/when we add skip_checkout to the core app
-	if r.conf.AgentConfiguration.SkipCheckout {
-		setEnv("BUILDKITE_SKIP_CHECKOUT", "true")
-	}
-	if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
-		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
-	}
+	setEnv("BUILDKITE_NO_CHECKOUT_OVERRIDE", fmt.Sprint(r.conf.AgentConfiguration.NoCheckoutOverride))
 	setEnv("BUILDKITE_CHECKOUT_ATTEMPTS", strconv.Itoa(r.conf.AgentConfiguration.CheckoutAttempts))
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
@@ -620,16 +645,13 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	setEnv("BUILDKITE_LOCAL_HOOKS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled))
 
-	setEnv("BUILDKITE_GIT_CHECKOUT_FLAGS", r.conf.AgentConfiguration.GitCheckoutFlags)
-	setEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
-	setEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
-
-	if len(r.conf.AgentConfiguration.GitSparseCheckoutPaths) > 0 {
-		setEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", strings.Join(r.conf.AgentConfiguration.GitSparseCheckoutPaths, ","))
-	}
-	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
+	setCheckoutEnv("BUILDKITE_GIT_CHECKOUT_FLAGS", r.conf.AgentConfiguration.GitCheckoutFlags)
+	setCheckoutEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
+	setCheckoutEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
+	setCheckoutEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", strings.Join(r.conf.AgentConfiguration.GitSparseCheckoutPaths, ","))
+	setCheckoutEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
 	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
-	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
+	setCheckoutEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
 	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
 	if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
 		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))

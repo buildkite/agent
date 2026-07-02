@@ -86,6 +86,7 @@ type BootstrapConfig struct {
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
 	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config" normalize:"list"`
+	NoCheckoutOverride           bool     `cli:"no-checkout-override"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -119,6 +120,16 @@ type BootstrapConfig struct {
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
+}
+
+// lockCheckoutWhenCommandEvalDisabled forces no-checkout-override on when
+// command-eval is disabled, so git flags can't be used to bypass it.
+// BootstrapConfig stores this as CommandEval; the AgentStartConfig sibling uses
+// NoCommandEval, so its check is inverted. Keep the two in sync.
+func (cfg *BootstrapConfig) lockCheckoutWhenCommandEvalDisabled() {
+	if !cfg.CommandEval {
+		cfg.NoCheckoutOverride = true
+	}
 }
 
 var BootstrapCommand = cli.Command{
@@ -242,6 +253,7 @@ var BootstrapCommand = cli.Command{
 
 		// Various git related flags shared with agent start
 		SkipCheckoutFlag,
+		NoCheckoutOverrideFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCloneMirrorFlagsFlag,
@@ -442,6 +454,8 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
 
+		cfg.lockCheckoutWhenCommandEvalDisabled()
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
 			AgentName:                    cfg.AgentName,
@@ -457,6 +471,7 @@ var BootstrapCommand = cli.Command{
 			SkipCheckout:                 cfg.SkipCheckout,
 			GitCheckoutTimeout:           cfg.GitCheckoutTimeout,
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
+			NoCheckoutOverride:           cfg.NoCheckoutOverride,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,

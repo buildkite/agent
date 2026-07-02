@@ -175,6 +175,7 @@ type AgentStartConfig struct {
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
 	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
+	NoCheckoutOverride          bool     `cli:"no-checkout-override"`
 	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
@@ -229,6 +230,16 @@ type AgentStartConfig struct {
 	TagsFromEC2                        bool          `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
 	TagsFromGCP                        bool          `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
 	DisconnectAfterJobTimeout          int           `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
+}
+
+// lockCheckoutWhenCommandEvalDisabled forces no-checkout-override on when
+// command-eval is disabled, so git flags can't be used to bypass it.
+// AgentStartConfig stores this as NoCommandEval; the BootstrapConfig sibling
+// uses CommandEval, so its check is inverted. Keep the two in sync.
+func (cfg *AgentStartConfig) lockCheckoutWhenCommandEvalDisabled() {
+	if cfg.NoCommandEval {
+		cfg.NoCheckoutOverride = true
+	}
 }
 
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
@@ -536,6 +547,7 @@ var AgentStartCommand = cli.Command{
 
 		// Various git related flags shared with bootstrap
 		SkipCheckoutFlag,
+		NoCheckoutOverrideFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCleanFlagsFlag,
@@ -917,6 +929,8 @@ var AgentStartCommand = cli.Command{
 			cfg.NoPlugins = true
 		}
 
+		cfg.lockCheckoutWhenCommandEvalDisabled()
+
 		// Guess the shell if none is provided
 		if cfg.Shell == "" {
 			cfg.Shell = DefaultShell()
@@ -1089,6 +1103,7 @@ var AgentStartCommand = cli.Command{
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,
 			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
+			NoCheckoutOverride:              cfg.NoCheckoutOverride,
 			CheckoutAttempts:                cfg.CheckoutAttempts,
 			SSHKeyscan:                      !cfg.NoSSHKeyscan,
 			CommandEval:                     !cfg.NoCommandEval,

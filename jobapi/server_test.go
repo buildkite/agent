@@ -37,6 +37,12 @@ func testEnviron() *env.Environment {
 	return e
 }
 
+func testEnvironWith(key, value string) *env.Environment {
+	e := testEnviron()
+	e.Set(key, value)
+	return e
+}
+
 func testServer(t *testing.T, e *env.Environment, mux *replacer.Mux, opts ...jobapi.ServerOpts) (*jobapi.Server, string, error) {
 	sockName, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
@@ -354,6 +360,200 @@ func TestPatchEnv(t *testing.T) {
 			testAPI(t, environ, req, client, c)
 		})
 	}
+}
+
+func TestPatchEnvAllowsCheckoutScopedVarsWhenNoCheckoutOverrideDisabled(t *testing.T) {
+	t.Parallel()
+
+	environ := testEnvironWith("BUILDKITE_GIT_CLONE_FLAGS", "-v")
+	srv, token, err := testServer(t, environ, replacer.NewMux())
+	if err != nil {
+		t.Fatalf("creating server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("starting server: %v", err)
+	}
+	defer func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("stopping server: %v", err)
+		}
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(&jobapi.EnvUpdateRequestPayload{
+		Env: map[string]*string{"BUILDKITE_GIT_CLONE_FLAGS": pt("--mirror")},
+	}); err != nil {
+		t.Fatalf("encoding request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "http://job/api/current-job/v0/env", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
+		expectedStatus: http.StatusOK,
+		expectedEnv:    testEnvironWith("BUILDKITE_GIT_CLONE_FLAGS", "--mirror").Dump(),
+	})
+}
+
+func TestPatchEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+	t.Parallel()
+
+	environ := testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false")
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	if err != nil {
+		t.Fatalf("creating server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("starting server: %v", err)
+	}
+	defer func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("stopping server: %v", err)
+		}
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(&jobapi.EnvUpdateRequestPayload{
+		Env: map[string]*string{"BUILDKITE_SKIP_CHECKOUT": pt("true")},
+	}); err != nil {
+		t.Fatalf("encoding request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "http://job/api/current-job/v0/env", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
+		expectedStatus: http.StatusUnprocessableEntity,
+		expectedError: &jobapi.ErrorResponse{
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]. Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled",
+		},
+		expectedEnv: testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false").Dump(),
+	})
+}
+
+func TestDeleteEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+	t.Parallel()
+
+	environ := testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false")
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	if err != nil {
+		t.Fatalf("creating server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("starting server: %v", err)
+	}
+	defer func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("stopping server: %v", err)
+		}
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(&jobapi.EnvDeleteRequest{Keys: []string{"BUILDKITE_SKIP_CHECKOUT"}}); err != nil {
+		t.Fatalf("encoding request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, "http://job/api/current-job/v0/env", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvDeleteRequest, jobapi.EnvDeleteResponse]{
+		expectedStatus: http.StatusUnprocessableEntity,
+		expectedError: &jobapi.ErrorResponse{
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]. Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled",
+		},
+		expectedEnv: testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false").Dump(),
+	})
+}
+
+func TestPatchEnvRejectsSparseCheckoutPathsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+	t.Parallel()
+
+	environ := testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "a/b")
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	if err != nil {
+		t.Fatalf("creating server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("starting server: %v", err)
+	}
+	defer func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("stopping server: %v", err)
+		}
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(&jobapi.EnvUpdateRequestPayload{
+		Env: map[string]*string{"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": pt("c/d")},
+	}); err != nil {
+		t.Fatalf("encoding request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "http://job/api/current-job/v0/env", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
+		expectedStatus: http.StatusUnprocessableEntity,
+		expectedError: &jobapi.ErrorResponse{
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS]. Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled",
+		},
+		expectedEnv: testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "a/b").Dump(),
+	})
+}
+
+func TestPatchEnvAllowsUnscopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+	t.Parallel()
+
+	// The lock must not over-block: a normal, non-checkout var stays writable
+	// while BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled.
+	environ := testEnviron()
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	if err != nil {
+		t.Fatalf("creating server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("starting server: %v", err)
+	}
+	defer func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("stopping server: %v", err)
+		}
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(&jobapi.EnvUpdateRequestPayload{
+		Env: map[string]*string{"MY_CUSTOM_VAR": pt("hello")},
+	}); err != nil {
+		t.Fatalf("encoding request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "http://job/api/current-job/v0/env", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
+		expectedStatus: http.StatusOK,
+		expectedEnv:    testEnvironWith("MY_CUSTOM_VAR", "hello").Dump(),
+	})
 }
 
 func TestGetEnv(t *testing.T) {

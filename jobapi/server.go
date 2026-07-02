@@ -22,6 +22,12 @@ func WithDebug() ServerOpts {
 	}
 }
 
+func WithNoCheckoutOverride() ServerOpts {
+	return func(s *Server) {
+		s.noCheckoutOverride = true
+	}
+}
+
 // WithPromiseFailureDeclarer sets the function the /promise-failure endpoint
 // uses to declare promised failures to the Buildkite API. Debouncing means it's
 // called at most once per successfully-declared exit status. If unset (e.g. in
@@ -42,9 +48,10 @@ type PromiseFailureDeclarer func(ctx context.Context, exitStatus int, reason str
 // and allows jobs to introspect and mutate their own state
 type Server struct {
 	// SocketPath is the path to the socket that the server is (or will be) listening on
-	SocketPath string
-	Logger     shell.Logger
-	debug      bool
+	SocketPath         string
+	Logger             shell.Logger
+	debug              bool
+	noCheckoutOverride bool
 
 	mtx       sync.RWMutex
 	environ   *env.Environment
