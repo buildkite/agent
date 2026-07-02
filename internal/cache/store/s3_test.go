@@ -3,6 +3,7 @@ package store
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/google/go-cmp/cmp"
@@ -266,6 +267,79 @@ func TestOptionsFromURL(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("OptionsFromURL mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestShouldRefreshExpiration(t *testing.T) {
+	last := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	expires := last.Add(10 * 24 * time.Hour) // 10-day lifecycle window
+	fraction := 0.20                         // refresh point is the last 2 days
+
+	tests := []struct {
+		name         string
+		expiresAt    time.Time
+		lastModified time.Time
+		now          time.Time
+		want         bool
+	}{
+		{
+			name:         "zero expiresAt refreshes",
+			expiresAt:    time.Time{},
+			lastModified: last,
+			now:          last.Add(5 * 24 * time.Hour),
+			want:         true,
+		},
+		{
+			name:         "zero lastModified refreshes",
+			expiresAt:    expires,
+			lastModified: time.Time{},
+			now:          last.Add(5 * 24 * time.Hour),
+			want:         true,
+		},
+		{
+			name:         "non-positive window refreshes",
+			expiresAt:    last,
+			lastModified: last.Add(time.Hour),
+			now:          last,
+			want:         true,
+		},
+		{
+			name:         "half the window remaining skips",
+			expiresAt:    expires,
+			lastModified: last,
+			now:          last.Add(5 * 24 * time.Hour),
+			want:         false,
+		},
+		{
+			name:         "exactly 20% remaining refreshes",
+			expiresAt:    expires,
+			lastModified: last,
+			now:          last.Add(8 * 24 * time.Hour),
+			want:         true,
+		},
+		{
+			name:         "10% remaining refreshes",
+			expiresAt:    expires,
+			lastModified: last,
+			now:          last.Add(9 * 24 * time.Hour),
+			want:         true,
+		},
+		{
+			name:         "already expired refreshes",
+			expiresAt:    expires,
+			lastModified: last,
+			now:          last.Add(11 * 24 * time.Hour),
+			want:         true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldRefreshExpiration(tt.expiresAt, tt.lastModified, tt.now, fraction)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("shouldRefreshExpiration mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

@@ -181,7 +181,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferI
 	}, nil
 }
 
-func (n *NscStore) Download(ctx context.Context, key, filePath string) (*TransferInfo, error) {
+func (n *NscStore) Download(ctx context.Context, key, filePath string, _ time.Time) (*TransferInfo, error) {
 	_, span := trace.Start(ctx, "NscStore.Download")
 	defer span.End()
 

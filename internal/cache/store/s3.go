@@ -308,8 +308,34 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 	}, nil
 }
 
+// restoreTTLRefreshFraction is the fraction of a cache object's lifecycle
+// window at or below which a restore refreshes its expiration (via a
+// self-CopyObject that resets LastModified). When more than this fraction
+// of the window remains, the refresh is skipped to avoid a synchronous
+// full-object server-side copy on every restore.
+const restoreTTLRefreshFraction = 0.20
+
+// shouldRefreshExpiration reports whether a restore should refresh the cache
+// object's lifecycle expiration. The lifecycle window is
+// (expiresAt - lastModified); the refresh runs when the remaining lifetime
+// (expiresAt - now) is at or below refreshFraction of that window. It also
+// refreshes defensively when expiresAt or lastModified is unknown (zero) or
+// the window is non-positive, preserving the prior always-refresh behaviour
+// when the fraction can't be computed.
+func shouldRefreshExpiration(expiresAt, lastModified, now time.Time, refreshFraction float64) bool {
+	if expiresAt.IsZero() || lastModified.IsZero() {
+		return true
+	}
+	window := expiresAt.Sub(lastModified)
+	if window <= 0 {
+		return true
+	}
+	remaining := expiresAt.Sub(now)
+	return float64(remaining) <= refreshFraction*float64(window)
+}
+
 // Download downloads a file from S3 using parallel range requests for large files
-func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferInfo, error) {
+func (b *S3Blob) Download(ctx context.Context, key, destPath string, expiresAt time.Time) (*TransferInfo, error) {
 	ctx, span := trace.Start(ctx, "S3Blob.Download")
 	defer span.End()
 
@@ -381,23 +407,57 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		attribute.Int("concurrency", b.downloadConcurrency),
 	)
 
-	// Copy the object to itself to reset the LastModified timestamp,
-	// which extends the lifecycle expiration.
-	copySource := fmt.Sprintf("%s/%s", b.bucketName, fullKey)
-	_, err = b.client.CopyObject(ctx, &s3.CopyObjectInput{
-		Bucket:            aws.String(b.bucketName),
-		Key:               aws.String(fullKey),
-		CopySource:        aws.String(copySource),
-		MetadataDirective: "REPLACE",
+	// Refresh the object's lifecycle expiration only when it's near expiry.
+	// Copying the object to itself resets its LastModified timestamp, but it's
+	// a synchronous full-object server-side copy, so we skip it when the blob
+	// still has plenty of life left (and the copy is best-effort: a failure,
+	// e.g. on objects above S3's 5GB CopyObject limit, must not fail the
+	// restore).
+	// Read the object's LastModified to size its lifecycle window for the
+	// refresh decision. On failure we leave it zero, which refreshes.
+	var lastModified time.Time
+	head, headErr := b.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(b.bucketName),
+		Key:    aws.String(fullKey),
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to refresh object expiration: %w", err)
+	if headErr != nil {
+		slog.Warn("failed to read object metadata for TTL refresh decision, refreshing",
+			"key", fullKey,
+			"bucket", b.bucketName,
+			"error", headErr,
+		)
+	} else if head.LastModified != nil {
+		lastModified = *head.LastModified
 	}
 
-	slog.Debug("refreshed object expiration",
-		"key", fullKey,
-		"bucket", b.bucketName,
-	)
+	if !shouldRefreshExpiration(expiresAt, lastModified, time.Now(), restoreTTLRefreshFraction) {
+		slog.Debug("skipping cache TTL refresh, blob has plenty of life left",
+			"key", fullKey,
+			"bucket", b.bucketName,
+			"expires_at", expiresAt,
+			"last_modified", lastModified,
+		)
+	} else {
+		copySource := fmt.Sprintf("%s/%s", b.bucketName, fullKey)
+		_, err = b.client.CopyObject(ctx, &s3.CopyObjectInput{
+			Bucket:            aws.String(b.bucketName),
+			Key:               aws.String(fullKey),
+			CopySource:        aws.String(copySource),
+			MetadataDirective: "REPLACE",
+		})
+		if err != nil {
+			slog.Warn("failed to refresh object expiration, continuing (non-fatal)",
+				"key", fullKey,
+				"bucket", b.bucketName,
+				"error", err,
+			)
+		} else {
+			slog.Debug("refreshed object expiration",
+				"key", fullKey,
+				"bucket", b.bucketName,
+			)
+		}
+	}
 
 	return &TransferInfo{
 		BytesTransferred: bytesWritten,

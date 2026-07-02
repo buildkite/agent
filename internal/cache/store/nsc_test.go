@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -289,7 +290,7 @@ func TestNscStore_ValidationShortCircuits(t *testing.T) {
 	if _, err := store.Upload(ctx, "invalid;path", "valid-key"); err == nil {
 		t.Error("Upload with unsafe path: expected error, got nil")
 	}
-	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt"); err == nil {
+	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt", time.Time{}); err == nil {
 		t.Error("Download with unsafe key: expected error, got nil")
 	}
 	if ran {
@@ -361,7 +362,7 @@ func TestNscStore_Integration(t *testing.T) {
 
 	// Test download
 	downloadFile := filepath.Join(tmpDir, "test-download.txt")
-	transferInfo, err = store.Download(ctx, key, downloadFile)
+	transferInfo, err = store.Download(ctx, key, downloadFile, time.Time{})
 	if err != nil {
 		t.Fatalf("Download should succeed: %v", err)
 	}
