@@ -178,9 +178,11 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 }
 
 func (u *GSUploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.BucketPath, artifact.Path}
+	if u.BucketPath == "" {
+		return artifact.Path
+	}
 
-	return strings.Join(parts, "/")
+	return path.Join(u.BucketPath, artifact.Path)
 }
 
 func (u *GSUploader) contentDisposition(a *api.Artifact) string {

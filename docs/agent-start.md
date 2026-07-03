@@ -22,6 +22,12 @@ goroutine which waits for all the workers to finish, then closes a channel.
 The effect is that `AgentPool` returns either `nil` once all workers have 
 stopped without error, or the first non-nil error.
 
+Once all workers have registered, the once-per-process `agent-startup` hook runs
+before the `AgentPool` starts. The `agent-startup` and `agent-shutdown` hooks
+receive `BUILDKITE_AGENT_IDS` and `BUILDKITE_AGENT_NAMES` as comma-separated
+lists in spawn order, allowing hook scripts to identify the registered spawned
+agents without querying the API.
+
 After connecting, `AgentWorker` runs two main goroutines: one periodically 
 calls `Heartbeat`, the other more frequently calls `Ping`. `Ping` is how the 
 worker discovers work from the API.
@@ -40,4 +46,3 @@ helper goroutines:
 
 * Copying PTY output
 * Waiting on context cancellation in order to hard-terminate the process
-

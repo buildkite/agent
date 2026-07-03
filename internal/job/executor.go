@@ -916,9 +916,11 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
-	// Force-set GIT_LFS_SKIP_SMUDGE=1 before any git operations so LFS
-	// objects are not downloaded automatically during checkout.
-	e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
+	// Suppress automatic LFS smudge only when LFS is enabled, so the checkout
+	// phase can materialise objects explicitly; otherwise git's default applies.
+	if e.GitLFSEnabled {
+		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
+	}
 
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {

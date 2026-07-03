@@ -123,6 +123,48 @@ func newCancelTestExecutor(t *testing.T) *Executor {
 	return e
 }
 
+// TestSetUpGitLFSSkipSmudge is a regression test for #4041: setUp used to set
+// GIT_LFS_SKIP_SMUDGE=1 unconditionally, disabling git's default LFS smudge for
+// every job. It must only be set when LFS handling is enabled.
+func TestSetUpGitLFSSkipSmudge(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name       string
+		lfsEnabled bool
+		wantSkip   bool
+	}{
+		{name: "lfs disabled leaves smudge enabled", lfsEnabled: false, wantSkip: false},
+		{name: "lfs enabled skips smudge", lfsEnabled: true, wantSkip: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			e := New(ExecutorConfig{GitLFSEnabled: test.lfsEnabled})
+
+			sh, err := shell.New(shell.WithEnv(env.New()))
+			if err != nil {
+				t.Fatalf("shell.New() error = %v, want nil", err)
+			}
+			// setUp requires a checkout path; supply one so it doesn't error.
+			sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", t.TempDir())
+			e.shell = sh
+
+			if err := e.setUp(t.Context()); err != nil {
+				t.Fatalf("e.setUp() error = %v, want nil", err)
+			}
+
+			got, ok := e.shell.Env.Get("GIT_LFS_SKIP_SMUDGE")
+			if ok != test.wantSkip {
+				t.Errorf("GIT_LFS_SKIP_SMUDGE present = %v, want %v", ok, test.wantSkip)
+			}
+			if test.wantSkip && got != "1" {
+				t.Errorf("GIT_LFS_SKIP_SMUDGE = %q, want %q", got, "1")
+			}
+		})
+	}
+}
+
 // TestCancelSetsJobCancelledEnv verifies the precedent set in #3213: any
 // cancellation surfaces BUILDKITE_JOB_CANCELLED=true to the post-command hook.
 func TestCancelSetsJobCancelledEnv(t *testing.T) {
