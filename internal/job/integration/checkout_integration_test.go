@@ -212,7 +212,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit(t *testin
 	// fallback path runs `sparse-checkout disable` to undo it. Crucially,
 	// `sparse-checkout set --cone ...` must NOT appear — its absence from
 	// this sequence is what proves the fallback worked.
-	expect("clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, ".")
+	expect("clone", "-v", "--sparse", "--", tester.Repo.Path, ".")
 	expect("clean", "-fdq")
 	expect("fetch", "-v", "--", "origin", "main")
 	expect("config", "--get", "core.sparseCheckout")

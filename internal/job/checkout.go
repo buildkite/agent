@@ -908,6 +908,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
+	// If sparse checkout paths are present, plan the sparse checkout.
+	sparsePlan := e.planSparseCheckout(ctx)
+
 	// On mirrors and dissociation:
 	//
 	// --reference makes the clone reuse objects from the mirror, using the
@@ -964,10 +967,16 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 			}
 		}
 
-		// When sparse checkout paths are present, use a partial clone so blobs
-		// outside the sparse set aren't downloaded if not yet specified.
-		if e.enableCloneFlagsForSparseCheckout(gitCloneFlags) {
-			gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
+		// If sparse checkout will actually apply, use a partial clone so blobs
+		// outside the sparse set aren't downloaded up front. Only when the user
+		// hasn't already supplied a --filter — git takes the last --filter on the
+		// command line and would silently override theirs.
+		if sparsePlan.supported {
+			if hasPartialCloneFilter(gitCloneFlags) {
+				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
+			} else {
+				gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
+			}
 		}
 
 		// Do the clone.
@@ -1005,7 +1014,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
-	sparseCheckoutActive, err := e.setupSparseCheckout(ctx)
+	sparseCheckoutActive, err := e.setupSparseCheckout(ctx, sparsePlan)
 	if err != nil {
 		return err
 	}
