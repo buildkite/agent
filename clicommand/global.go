@@ -38,7 +38,7 @@ var (
 	AgentRegisterTokenFlag = cli.StringFlag{
 		Name:   "token",
 		Value:  "",
-		Usage:  "Your account agent token",
+		Usage:  "Your cluster token or unclustered registration token. Prefix with file:// to read the token from a file, or fd:// to read it from an inherited file descriptor",
 		EnvVar: "BUILDKITE_AGENT_TOKEN",
 	}
 
