@@ -85,7 +85,7 @@ var ArtifactShasumCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "include-retried-jobs",
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from retried jobs in the search (default: false)",
+			Usage:  "Include artifacts from every attempt of retried jobs in the search, not just the latest attempt (default: false)",
 		},
 	}),
 	Action: func(c *cli.Context) error {
