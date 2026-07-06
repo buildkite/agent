@@ -158,16 +158,16 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 }
 
 // TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit exercises
-// the not-capable branch of setupSparseCheckout. It overrides `git --version`
-// via AndCallFunc to report an old git version, while every other invocation
-// passes through to the real binary. Asserts the fallback warning appears,
-// no sparse-checkout command is run, and the full tree is checked out.
+// the fallback path in planSparseCheckout when git is older than 2.27 (below
+// the cone-mode floor). It overrides `git --version` via AndCallFunc to
+// report an old git version, while every other invocation passes through to
+// the real binary.
 //
-// Note: the clone still receives --filter=blob:none here. That's by design —
-// enableCloneFlagsForSparseCheckout deliberately doesn't re-check the git
-// version (see its docstring), so the expected clone command matches the
-// capable-git case. The fallback is observable only via the warning in
-// output and the absence of `sparse-checkout set`.
+// The fallback is observable via: the warning in output, the absence of
+// auto-added --filter=blob:none on both clone and fetch, and the absence of
+// `sparse-checkout set --cone`. The user's own --sparse in
+// BUILDKITE_GIT_CLONE_FLAGS still initialises a sparse config, so the test
+// also asserts `sparse-checkout disable` runs to undo it.
 func TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit(t *testing.T) {
 	t.Parallel()
 	skipIfGitSparseCheckoutUnsupported(t)
