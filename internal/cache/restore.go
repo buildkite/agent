@@ -69,9 +69,6 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 
 	span.SetAttributes(
 		attribute.String("cache.id", cacheID),
-		attribute.String("cache.branch", c.branch),
-		attribute.String("cache.pipeline", c.pipeline),
-		attribute.String("cache.organization", c.organization),
 		attribute.String("cache.platform", c.platform),
 	)
 

@@ -180,10 +180,7 @@ func TestCacheEntryCreate_Success(t *testing.T) {
 			FileSize:    1024,
 			Compression: "zstd",
 		}},
-		Platform:     "linux/amd64",
-		Pipeline:     "test-pipeline",
-		Branch:       "main",
-		Organization: "test-org",
+		Platform: "linux/amd64",
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryCreate error = %v, want nil", err)
