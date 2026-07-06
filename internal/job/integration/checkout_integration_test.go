@@ -264,7 +264,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter(t *t
 	addSparseCheckoutFixture(t, tester.Repo)
 
 	env := []string{
-		"BUILDKITE_GIT_CLONE_FLAGS=-v --sparse",
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
@@ -277,7 +277,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter(t *t
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "--filter=blob:none", "-v", "--", "origin", "main"},
 		{"--version"},
 		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
@@ -616,7 +616,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.
 		{"clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "--filter=blob:none", "-v", "--", "origin", "main"},
 		{"--version"},
 		{"sparse-checkout", "set", "--cone", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},

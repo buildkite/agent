@@ -762,7 +762,7 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
-func (e *Executor) fetchSource(ctx context.Context) error {
+func (e *Executor) fetchSource(ctx context.Context, sparseCheckoutSupported bool) error {
 	// If configured, skip the fetch when the commit already exists locally.
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
@@ -773,6 +773,9 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 	}
 
 	gitFetchFlags := e.GitFetchFlags
+	if sparseCheckoutSupported && !strings.Contains(gitFetchFlags, "--filter") {
+		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
+	}
 
 	switch {
 	case e.RefSpec != "":
@@ -972,6 +975,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		// hasn't already supplied a --filter — git takes the last --filter on the
 		// command line and would silently override theirs.
 		if sparsePlan.supported {
+			if hasSparseCheckoutFlag(gitCloneFlags) {
+				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --sparse flag (preserving user-supplied sparse checkout).")
+			} else {
+				gitCloneFlags = append(gitCloneFlags, "--sparse")
+			}
 			if hasPartialCloneFilter(gitCloneFlags) {
 				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
 			} else {
@@ -1006,7 +1014,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 	}
 
-	if err := e.fetchSource(ctx); err != nil {
+	if err := e.fetchSource(ctx, sparsePlan.supported); err != nil {
 		return err
 	}
 
