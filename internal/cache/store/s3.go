@@ -111,13 +111,16 @@ type objectDownloader interface {
 	Download(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, options ...func(*manager.Downloader)) (int64, error) //nolint:staticcheck // SA1019: pending migration to transfermanager
 }
 
-// isPreconditionFailed reports whether err is an S3 412 PreconditionFailed. It
-// arises in two places: a download whose object ETag changes mid-transfer (a
-// concurrent restore's TTL-refresh CopyObject invalidates the SDK's If-Match
-// guard), surfaced as an *awshttp.ResponseError with HTTP status 412; and a
-// self-CopyObject whose CopySourceIfUnmodifiedSince precondition signals the
-// object was modified too recently to refresh, surfaced as a smithy.APIError
-// with code "PreconditionFailed". Both carriers are matched.
+// isPreconditionFailed returns true when an error is an S3 412 PreconditionFailed.
+// This happens when:
+//
+//  1. The ETag of an object changes mid-restore (e.g. A TTL-refresh CopyObject by
+//     a concurrent restore invalidates the If-Match guard).
+//     This presents as an *awshttp.ResponseError with HTTP status code 412.
+//
+//  2. The CopySourceIfUnmodifiedSince precondition was not met when performing a
+//     self-CopyObject, indicating that the object was modified too recently.
+//     This presents as a smithy.APIError with code "PreconditionFailed".
 func isPreconditionFailed(err error) bool {
 	var respErr *awshttp.ResponseError
 	if errors.As(err, &respErr) {
@@ -367,14 +370,14 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 	}, nil
 }
 
-// restoreRefreshInterval is the minimum age (time since last modification)
-// before a restore refreshes a cache object's lifecycle expiration via a
-// self-CopyObject that resets LastModified. Objects modified more recently are
-// left untouched (the copy is skipped by S3 via a precondition), so an
-// actively-restored cache is refreshed at most about once per interval instead
-// of on every restore. The actual S3 bucket lifecycle window isn't known to the
-// agent, so this is a heuristic: keep it comfortably below that window.
-const restoreRefreshInterval = 12 * time.Hour
+// restoreRefreshMinInterval is the minimum time-since-LastModified
+// before a restore operation extends a cache object's effective TTL
+// by refreshing its LastModified timestamp with a self-CopyObject operation.
+//
+// Objects modified within this interval are left untouched using the
+// S3 CopySourceIfUnmodifiedSince precondition so that a heavily-restored
+// cache object is refreshed at most once per interval.
+const restoreRefreshMinInterval = 12 * time.Hour
 
 // Download downloads a file from S3 using parallel range requests for large files
 func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferInfo, error) {
@@ -445,19 +448,22 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		attribute.Int("concurrency", b.downloadConcurrency),
 	)
 
-	// Refresh the object's lifecycle expiration by copying it to itself, which
-	// resets LastModified. The if-unmodified-since precondition makes S3 skip the
-	// copy (412) when the object was modified within restoreRefreshInterval, so a
-	// hot cache isn't rewritten on every restore. The refresh is best-effort: any
-	// failure (incl. objects over S3's 5GB CopyObject limit) must not fail the
-	// restore.
+	// Extend an object's effective TTL by performing CopyObject on itself to
+	// refresh its LastModified timestamp.
+	//
+	// The CopySourceIfUnmodifiedSince precondition aborts the operation with an
+	// HTTP status code 412 if the object's LastModified timestamp falls within
+	// restoreRefreshMinInterval.
+	//
+	// This refresh is best-effort only: any failure (incl. objects exceeding
+	// S3's 5GB CopyObject limit) must not cause the overall restore operation to fail.
 	copySource := fmt.Sprintf("%s/%s", b.bucketName, fullKey)
 	_, err = b.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:                      aws.String(b.bucketName),
 		Key:                         aws.String(fullKey),
 		CopySource:                  aws.String(copySource),
 		MetadataDirective:           "REPLACE",
-		CopySourceIfUnmodifiedSince: aws.Time(time.Now().Add(-restoreRefreshInterval)),
+		CopySourceIfUnmodifiedSince: aws.Time(time.Now().Add(-restoreRefreshMinInterval)),
 	})
 	switch {
 	case err == nil:
