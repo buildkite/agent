@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	envURL        = "http://job/api/current-job/v0/env"
-	workdirURL    = "http://job/api/current-job/v0/workdir"
-	redactionsURL = "http://job/api/current-job/v0/redactions"
+	envURL            = "http://job/api/current-job/v0/env"
+	workdirURL        = "http://job/api/current-job/v0/workdir"
+	redactionsURL     = "http://job/api/current-job/v0/redactions"
+	promiseFailureURL = "http://job/api/current-job/v0/promise-failure"
 )
 
 var (
@@ -120,4 +121,24 @@ func (c *Client) RedactionCreate(ctx context.Context, text string) (string, erro
 		return "", err
 	}
 	return resp.Redacted, nil
+}
+
+// DeclarePromiseFailure asks the Job API to declare a promised failure with the
+// given exit status and reason to the Buildkite API, blocking until it
+// completes. The server debounces repeated and concurrent calls for the same
+// exit status: concurrent callers share one in-flight call, and once it succeeds
+// later calls return from the cache. If the Job API handles the request, the
+// returned response describes whether the Buildkite API accepted or rejected the
+// declaration. Errors are reserved for Job API transport/request failures.
+func (c *Client) DeclarePromiseFailure(ctx context.Context, exitStatus int, reason string) (*PromiseFailureResponse, error) {
+	req := PromiseFailureRequest{
+		ExitStatus: exitStatus,
+		Reason:     reason,
+	}
+	var resp PromiseFailureResponse
+	if err := c.client.Do(ctx, http.MethodPost, promiseFailureURL, &req, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
 }

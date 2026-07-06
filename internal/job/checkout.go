@@ -262,6 +262,24 @@ func (e *Executor) checkout(ctx context.Context) error {
 			break
 		}
 
+		// Fail fast before any git work if git-lfs is required but missing.
+		// This operation only handles default checkout behavior, so it's possible for a custom checkout hook to require git-lfs but not have this check. That's a bit unfortunate, but we can add it to custom hooks later if needed.
+		//
+		// We probe via `git lfs version` rather than looking up `git-lfs` on
+		// PATH directly: git resolves subcommands via GIT_EXEC_PATH before
+		// falling back to PATH, so on platforms where git-lfs is bundled
+		// alongside git (notably Git for Windows) the binary is reachable to
+		// `git lfs ...` even when a PATH lookup would miss it. This matches
+		// the resolution path used by the actual LFS commands later.
+		if e.GitLFSEnabled {
+			// Leave stderr visible: when this probe fails it is almost always
+			// a misconfigured agent environment, and git's specific message
+			// (e.g. "'lfs' is not a git command") is the fastest diagnostic.
+			if _, err := e.shell.Command("git", "lfs", "version").RunAndCaptureStdout(ctx, shell.ShowStderr(true)); err != nil {
+				return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: %w", err)
+			}
+		}
+
 		maxAttempts := e.CheckoutAttempts
 		if maxAttempts <= 0 {
 			maxAttempts = 6
@@ -964,6 +982,15 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return fmt.Errorf("cleaning git repository: %w", err)
 	}
 
+	// Install LFS filter before fetch so the filter is registered before any
+	// network operation, following the conventional git-lfs setup order.
+	if e.GitLFSEnabled {
+		e.shell.Commentf("Installing Git LFS filter")
+		if err := e.shell.Command("git", "lfs", "install", "--local").Run(ctx); err != nil {
+			return fmt.Errorf("installing git lfs filter: %w", err)
+		}
+	}
+
 	if err := e.fetchSource(ctx); err != nil {
 		return err
 	}
@@ -1078,6 +1105,23 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 			if err := cmd.Run(ctx); err != nil {
 				return fmt.Errorf("resetting submodules: %w", err)
 			}
+		}
+	}
+
+	// When sparse-checkout is active, scope LFS to the same paths so we don't
+	// pull objects outside the sparse set (SUP-6529). If sparse fell back to a
+	// full checkout (e.g. git < 2.26), fetch unscoped so files outside the
+	// requested paths still get their LFS content.
+	if e.GitLFSEnabled {
+		lfsArgs := gitLFSFetchCheckoutArgs{
+			Shell: e.shell,
+			Retry: true,
+		}
+		if sparseCheckoutActive {
+			lfsArgs.Include = cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
+		}
+		if err := gitLFSFetchCheckout(ctx, lfsArgs); err != nil {
+			return err
 		}
 	}
 

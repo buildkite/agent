@@ -22,6 +22,22 @@ func WithDebug() ServerOpts {
 	}
 }
 
+// WithPromiseFailureDeclarer sets the function the /promise-failure endpoint
+// uses to declare promised failures to the Buildkite API. Debouncing means it's
+// called at most once per successfully-declared exit status. If unset (e.g. in
+// tests), the endpoint returns an error.
+func WithPromiseFailureDeclarer(d PromiseFailureDeclarer) ServerOpts {
+	return func(s *Server) {
+		s.promiseFailures.declare = d
+	}
+}
+
+// PromiseFailureDeclarer declares a promised failure for the current job to the
+// Buildkite API. It returns the status code of the most recent API response (0
+// if none was received, e.g. a network error after exhausting retries) and an
+// error describing any failure. A nil error means the declaration was accepted.
+type PromiseFailureDeclarer func(ctx context.Context, exitStatus int, reason string) (statusCode int, err error)
+
 // Server is a Job API server. It provides an HTTP API with which to interact with the job currently running in the buildkite agent
 // and allows jobs to introspect and mutate their own state
 type Server struct {
@@ -38,6 +54,9 @@ type Server struct {
 	// the /workdir endpoint, waiting to be applied by the executor once the hook
 	// process exits. Guarded by mtx.
 	pendingWorkdir string
+
+	// promiseFailures coalesces concurrent and repeated promise-failure calls.
+	promiseFailures *promiseFailureCoordinator
 
 	token   string
 	sockSvr *socket.Server
@@ -59,11 +78,12 @@ func NewServer(
 	}
 
 	s := &Server{
-		SocketPath: socketPath,
-		Logger:     logger,
-		environ:    environ,
-		redactors:  redactors,
-		token:      token,
+		SocketPath:      socketPath,
+		Logger:          logger,
+		environ:         environ,
+		redactors:       redactors,
+		promiseFailures: newPromiseFailureCoordinator(nil),
+		token:           token,
 	}
 
 	for _, o := range opts {

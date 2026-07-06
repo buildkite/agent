@@ -19,6 +19,7 @@ import (
 
 type fakeServer struct {
 	env         map[string]string
+	promised    []PromiseFailureRequest
 	sock, token string
 	svr         *http.Server
 }
@@ -54,6 +55,32 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = socket.WriteError(w, "invalid Authorization header", http.StatusForbidden)
 		return
 	}
+
+	if r.URL.Path == "/api/current-job/v0/promise-failure" {
+		var req PromiseFailureRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			_ = socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			return
+		}
+		f.promised = append(f.promised, req)
+		// Exit status 99 stands in for a declaration the Buildkite API rejects.
+		if req.ExitStatus == 99 {
+			if err := json.NewEncoder(w).Encode(&PromiseFailureResponse{
+				Outcome:        PromiseFailureDeclared,
+				Accepted:       false,
+				UpstreamStatus: http.StatusConflict,
+				Error:          "a different exit status was already declared",
+			}); err != nil {
+				_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+			}
+			return
+		}
+		if err := json.NewEncoder(w).Encode(&PromiseFailureResponse{Outcome: PromiseFailureDeclared, Accepted: true}); err != nil {
+			_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+		}
+		return
+	}
+
 	if r.URL.Path != "/api/current-job/v0/env" {
 		_ = socket.WriteError(w, fmt.Sprintf("not found: %q", r.URL.Path), http.StatusNotFound)
 		return
@@ -122,6 +149,59 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		_ = socket.WriteError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest)
+	}
+}
+
+func TestClientDeclarePromiseFailure(t *testing.T) {
+	t.Parallel()
+
+	svr, err := runFakeServer()
+	if err != nil {
+		t.Fatalf("runFakeServer() = %v", err)
+	}
+	defer svr.Close()
+
+	ctx, canc := context.WithTimeout(t.Context(), 10*time.Second)
+	t.Cleanup(canc)
+
+	cli, err := NewClient(ctx, svr.sock, svr.token)
+	if err != nil {
+		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
+	}
+
+	// A successful declaration returns the outcome and no error, and forwards the
+	// exit status and reason to the server.
+	result, err := cli.DeclarePromiseFailure(ctx, 1, "tests failed")
+	if err != nil {
+		t.Fatalf("cli.DeclarePromiseFailure(1) error = %v", err)
+	}
+	if result.Outcome != PromiseFailureDeclared {
+		t.Errorf("cli.DeclarePromiseFailure(1) outcome = %q, want %q", result.Outcome, PromiseFailureDeclared)
+	}
+	if !result.Accepted {
+		t.Errorf("cli.DeclarePromiseFailure(1) accepted = false, want true")
+	}
+
+	// A rejected declaration is still a successful Job API response. The response
+	// carries the Buildkite API status code so the caller can produce an accurate
+	// message without guessing where the error came from.
+	result, err = cli.DeclarePromiseFailure(ctx, 99, "")
+	if err != nil {
+		t.Fatalf("cli.DeclarePromiseFailure(99) error = %v, want nil", err)
+	}
+	if result.Accepted {
+		t.Errorf("cli.DeclarePromiseFailure(99) accepted = true, want false")
+	}
+	if result.UpstreamStatus != http.StatusConflict {
+		t.Errorf("result.UpstreamStatus = %d, want %d", result.UpstreamStatus, http.StatusConflict)
+	}
+
+	want := []PromiseFailureRequest{
+		{ExitStatus: 1, Reason: "tests failed"},
+		{ExitStatus: 99},
+	}
+	if diff := cmp.Diff(want, svr.promised); diff != "" {
+		t.Errorf("recorded promise-failure requests diff (-want +got):\n%s", diff)
 	}
 }
 
