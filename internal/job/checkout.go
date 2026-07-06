@@ -762,7 +762,7 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
-func (e *Executor) fetchSource(ctx context.Context, sparseCheckoutSupported bool) error {
+func (e *Executor) fetchSource(ctx context.Context, autoAddBloblessFilter bool) error {
 	// If configured, skip the fetch when the commit already exists locally.
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
@@ -773,7 +773,7 @@ func (e *Executor) fetchSource(ctx context.Context, sparseCheckoutSupported bool
 	}
 
 	gitFetchFlags := e.GitFetchFlags
-	if sparseCheckoutSupported && !strings.Contains(gitFetchFlags, "--filter") {
+	if autoAddBloblessFilter {
 		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
 	}
 
@@ -1014,7 +1014,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 	}
 
-	if err := e.fetchSource(ctx, sparsePlan.supported); err != nil {
+	autoAddBloblessFilter := sparsePlan.supported &&
+		!strings.Contains(e.GitCloneFlags, "--filter") &&
+		!strings.Contains(e.GitFetchFlags, "--filter")
+	if err := e.fetchSource(ctx, autoAddBloblessFilter); err != nil {
 		return err
 	}
 

@@ -296,6 +296,59 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter(t *t
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 }
 
+// TestCheckingOutLocalGitProjectWithSparseCheckoutPreservesUserFilter asserts
+// that when the user supplies their own --filter in BUILDKITE_GIT_CLONE_FLAGS,
+// sparse checkout preserves it on clone and does NOT prepend --filter=blob:none
+// to fetch. git clone --filter=X writes remote.origin.partialclonefilter=X into
+// the repo config, and subsequent fetches inherit it automatically — so
+// re-passing a filter on fetch would silently override the user's choice.
+func TestCheckingOutLocalGitProjectWithSparseCheckoutPreservesUserFilter(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=tree:0",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		// User's --filter=tree:0 is preserved; --sparse is still auto-added.
+		{"clone", "-v", "--filter=tree:0", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		// Fetch does NOT get --filter=blob:none prepended — the user's
+		// tree:0 filter is already stored in repo config and inherited here.
+		{"fetch", "-v", "--", "origin", "main"},
+		{"--version"},
+		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+}
+
 func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 	t.Parallel()
 	skipIfGitSparseCheckoutUnsupported(t)
