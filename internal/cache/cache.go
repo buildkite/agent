@@ -18,12 +18,6 @@ type Config struct {
 	Registry string
 	// BucketURL is the URL of the bucket (e.g., s3://bucket-name)
 	BucketURL string
-	// Branch is the branch associated with the cache
-	Branch string
-	// Pipeline is the pipeline slug for this cache
-	Pipeline string
-	// Organization is the organization slug for this cache
-	Organization string
 	// CacheConfigFile is the path to the cache configuration YAML file
 	CacheConfigFile string
 	// Names is a list of cache names (if empty, processes all caches)

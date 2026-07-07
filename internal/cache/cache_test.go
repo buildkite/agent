@@ -349,9 +349,6 @@ func TestNewClient_InvalidCacheIDs(t *testing.T) {
 		CacheConfigFile: configFile,
 		Names:           []string{"cache1", "invalid1", "cache2", "invalid2"},
 		BucketURL:       "s3://test-bucket",
-		Branch:          "main",
-		Pipeline:        "test-pipeline",
-		Organization:    "test-org",
 	}
 
 	_, _, err := newClient(logger.Discard, nil, cfg)
@@ -390,9 +387,6 @@ func TestNewClient_ValidCacheIDs(t *testing.T) {
 		CacheConfigFile: configFile,
 		Names:           []string{"cache1", "cache2"},
 		BucketURL:       "s3://test-bucket",
-		Branch:          "main",
-		Pipeline:        "test-pipeline",
-		Organization:    "test-org",
 	}
 
 	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)
@@ -428,9 +422,6 @@ func TestNewClient_AllCaches(t *testing.T) {
 		CacheConfigFile: configFile,
 		Names:           []string{},
 		BucketURL:       "s3://test-bucket",
-		Branch:          "main",
-		Pipeline:        "test-pipeline",
-		Organization:    "test-org",
 	}
 
 	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)

@@ -70,12 +70,7 @@ Cache Restoration Results:
 The command will report one of three outcomes for each cache:
   - Cache hit: Exact key match found and restored
   - Fallback used: No exact match, but a fallback key was found and restored
-  - Cache miss: No matching cache found
-
-The command automatically uses the following environment variables when available:
-  - BUILDKITE_BRANCH (for branch scoping)
-  - BUILDKITE_PIPELINE_SLUG (for pipeline scoping)
-  - BUILDKITE_ORGANIZATION_SLUG (for organization scoping)`
+  - Cache miss: No matching cache found`
 
 type CacheRestoreConfig struct {
 	GlobalConfig
@@ -111,9 +106,6 @@ var CacheRestoreCommand = cli.Command{
 		cacheCfg := cache.Config{
 			Registry:        cfg.Registry,
 			BucketURL:       cfg.BucketURL,
-			Branch:          cfg.Branch,
-			Pipeline:        cfg.Pipeline,
-			Organization:    cfg.Organization,
 			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 		}
