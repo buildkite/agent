@@ -65,8 +65,8 @@ github.com/DataDog/datadog-agent/pkg/util/scrubber v0.77.2 h1:scRKLBqTF9X5VSw9Kg
 github.com/DataDog/datadog-agent/pkg/util/scrubber v0.77.2/go.mod h1:Hr3AdFF9nP5JrGC0QeKhRzT0crtHHs8Lr/okrxeLTSw=
 github.com/DataDog/datadog-agent/pkg/version v0.77.2 h1:SwdMxK9BrtZ0/qUsJ/OKxOuyJ0E4Z8oWCyyZJlbkbd8=
 github.com/DataDog/datadog-agent/pkg/version v0.77.2/go.mod h1:h9eJjfeTHlYYv+kzq6n3rQ07qXGirdCCacn1Ryu4TFQ=
-github.com/DataDog/datadog-go/v5 v5.8.3 h1:s58CUJ9s8lezjhTNJO/SxkPBv2qZjS3ktpRSqGF5n0s=
-github.com/DataDog/datadog-go/v5 v5.8.3/go.mod h1:K9kcYBlxkcPP8tvvjZZKs/m1edNAUFzBbdpTUKfCsuw=
+github.com/DataDog/datadog-go/v5 v5.9.0 h1:0rhs5wBov9Iz+xLXLk4maaReHvOANM1ijSm2IKWtKFs=
+github.com/DataDog/datadog-go/v5 v5.9.0/go.mod h1:2SBt8zJu6r7sRQHZFMQ8oCukWTKj0ymwulmNgQzJ1JM=
 github.com/DataDog/dd-trace-go/v2 v2.7.1 h1:8xU6oq9rc7lIwlQlCcPjRrK1x+l2Bw0DRi6uGubpZvU=
 github.com/DataDog/dd-trace-go/v2 v2.7.1/go.mod h1:wpDvium/HsCzcTSmvpq4wieWBrnTm7Q+bUqkefKp/B0=
 github.com/DataDog/go-libddwaf/v4 v4.9.0 h1:a788e37iuH7sR9uIYHkulvTnp2FkXTiZ3yY/kuaHgZE=
