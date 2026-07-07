@@ -94,6 +94,7 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 	// Set host and pathPrefix to default values
 	host := "storage.googleapis.com"
 	pathPrefix := u.BucketName
+	suffix := ""
 
 	// Override default host if required.
 	if envHost, ok := os.LookupEnv("BUILDKITE_GCS_ACCESS_HOST"); ok {
@@ -105,22 +106,19 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 		pathPrefix = prefix
 	}
 
+	// If set, this is appended verbatim to the URL path.
+	if s, ok := os.LookupEnv("BUILDKITE_GCS_PATH_SUFFIX"); ok {
+		suffix = s
+	}
+
 	// Build the path from the prefix and the artifactPath
 	// Also ensure that we always have exactly one / between prefix and artifactPath
-	urlPath := path.Join(pathPrefix, u.artifactPath(artifact))
-
-	// BUILDKITE_GCS_PATH_SUFFIX appends a raw suffix to the artifact URL path
-	// (for example ";tab=live_object" for Google Cloud Console object-details
-	// deep links). It affects only the generated URL, never the uploaded object
-	// name (see artifactPath / DoWork), so it must be applied after path.Join.
-	if suffix, ok := os.LookupEnv("BUILDKITE_GCS_PATH_SUFFIX"); ok {
-		urlPath += suffix
-	}
+	path := path.Join(pathPrefix, u.artifactPath(artifact)) + suffix
 
 	artifactURL := &url.URL{
 		Scheme: "https",
 		Host:   host,
-		Path:   urlPath,
+		Path:   path,
 	}
 	return artifactURL.String()
 }
