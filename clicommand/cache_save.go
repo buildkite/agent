@@ -55,12 +55,7 @@ list of parts; each part is a literal string or one of { agent: os },
           - { agent: arch }
           - { checksum: package-lock.json }
         target_paths:
-          - node_modules
-
-The command automatically uses the following environment variables when available:
-  - BUILDKITE_BRANCH (for branch scoping)
-  - BUILDKITE_PIPELINE_SLUG (for pipeline scoping)
-  - BUILDKITE_ORGANIZATION_SLUG (for organization scoping)`
+          - node_modules`
 
 type CacheSaveConfig struct {
 	GlobalConfig
@@ -101,9 +96,6 @@ var CacheSaveCommand = cli.Command{
 		cacheCfg := cache.Config{
 			Registry:        cfg.Registry,
 			BucketURL:       cfg.BucketURL,
-			Branch:          cfg.Branch,
-			Pipeline:        cfg.Pipeline,
-			Organization:    cfg.Organization,
 			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 			Concurrency:     cfg.Concurrency,

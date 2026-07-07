@@ -1,10 +1,23 @@
 package store
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithy "github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
+	"github.com/buildkite/roko"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -271,6 +284,49 @@ func TestOptionsFromURL(t *testing.T) {
 	}
 }
 
+func TestIsPreconditionFailed(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "precondition failed API error (CopyObject refresh)",
+			err:  &smithy.GenericAPIError{Code: "PreconditionFailed", Message: "At least one of the pre-conditions you specified did not hold"},
+			want: true,
+		},
+		{
+			name: "412 response error (download ETag change)",
+			err:  responseErrorWithStatus(http.StatusPreconditionFailed),
+			want: true,
+		},
+		{
+			name: "different API error code",
+			err:  &smithy.GenericAPIError{Code: "NoSuchKey", Message: "The specified key does not exist"},
+			want: false,
+		},
+		{
+			name: "non-412 response error",
+			err:  responseErrorWithStatus(http.StatusInternalServerError),
+			want: false,
+		},
+		{
+			name: "plain error",
+			err:  errors.New("boom"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isPreconditionFailed(tt.err)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("isPreconditionFailed mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestGetFullKey(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -391,4 +447,111 @@ func TestResolveTransferSettings(t *testing.T) {
 			}
 		})
 	}
+}
+
+// responseErrorWithStatus builds a synthetic *awshttp.ResponseError carrying the
+// given HTTP status code, matching what the SDK surfaces on a failed request.
+func responseErrorWithStatus(status int) error {
+	return &awshttp.ResponseError{
+		ResponseError: &smithyhttp.ResponseError{
+			Response: &smithyhttp.Response{Response: &http.Response{StatusCode: status}},
+			Err:      fmt.Errorf("status %d", status),
+		},
+	}
+}
+
+// fakeDownloader is a test double for objectDownloader. It returns the result
+// for each successive call from results (the last entry repeats if exhausted),
+// writing payload to the destination on success so callers can assert bytes.
+type fakeDownloader struct {
+	calls   int
+	results []fakeDownloadResult
+}
+
+type fakeDownloadResult struct {
+	err     error
+	payload []byte
+}
+
+func (f *fakeDownloader) Download(_ context.Context, w io.WriterAt, _ *s3.GetObjectInput, _ ...func(*manager.Downloader)) (int64, error) { //nolint:staticcheck // SA1019: pending migration to transfermanager
+	res := f.results[min(f.calls, len(f.results)-1)]
+	f.calls++
+	if res.err != nil {
+		return 0, res.err
+	}
+	n, err := w.WriteAt(res.payload, 0)
+	return int64(n), err
+}
+
+// testRetrier builds a retrier that runs instantly (no real sleeps) so the
+// retry-loop tests are deterministic and fast.
+func testRetrier() *roko.Retrier {
+	return roko.NewRetrier(
+		roko.WithMaxAttempts(3),
+		roko.WithStrategy(roko.Constant(0)),
+		roko.WithSleepFunc(func(time.Duration) {}),
+	)
+}
+
+func TestDownloadWithRetry(t *testing.T) {
+	payload := []byte("cache-contents")
+
+	t.Run("retries 412 then succeeds", func(t *testing.T) {
+		destPath := filepath.Join(t.TempDir(), "dest")
+		fake := &fakeDownloader{results: []fakeDownloadResult{
+			{err: responseErrorWithStatus(http.StatusPreconditionFailed)},
+			{payload: payload},
+		}}
+
+		n, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		if err != nil {
+			t.Fatalf("downloadWithRetry: unexpected error: %v", err)
+		}
+		if fake.calls != 2 {
+			t.Errorf("downloader called %d times, want 2", fake.calls)
+		}
+		if n != int64(len(payload)) {
+			t.Errorf("bytes written = %d, want %d", n, len(payload))
+		}
+		got, err := os.ReadFile(destPath)
+		if err != nil {
+			t.Fatalf("read dest: %v", err)
+		}
+		if string(got) != string(payload) {
+			t.Errorf("dest content = %q, want %q", got, payload)
+		}
+	})
+
+	t.Run("persistent 412 exhausts attempts", func(t *testing.T) {
+		destPath := filepath.Join(t.TempDir(), "dest")
+		fake := &fakeDownloader{results: []fakeDownloadResult{
+			{err: responseErrorWithStatus(http.StatusPreconditionFailed)},
+		}}
+
+		_, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		if err == nil {
+			t.Fatal("downloadWithRetry: expected error, got nil")
+		}
+		if !isPreconditionFailed(err) {
+			t.Errorf("error %v is not a 412 PreconditionFailed", err)
+		}
+		if fake.calls != 3 {
+			t.Errorf("downloader called %d times, want 3", fake.calls)
+		}
+	})
+
+	t.Run("non-412 error fails without retry", func(t *testing.T) {
+		destPath := filepath.Join(t.TempDir(), "dest")
+		fake := &fakeDownloader{results: []fakeDownloadResult{
+			{err: responseErrorWithStatus(http.StatusInternalServerError)},
+		}}
+
+		_, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		if err == nil {
+			t.Fatal("downloadWithRetry: expected error, got nil")
+		}
+		if fake.calls != 1 {
+			t.Errorf("downloader called %d times, want 1", fake.calls)
+		}
+	})
 }
