@@ -80,14 +80,15 @@ type PipelineUploadConfig struct {
 	GlobalConfig
 	APIConfig
 
-	FilePaths       []string `cli:"arg:*" label:"upload paths"`
-	Replace         bool     `cli:"replace"`
-	Job             string   `cli:"job"` // required, but not in dry-run mode
-	DryRun          bool     `cli:"dry-run"`
-	DryRunFormat    string   `cli:"format"`
-	NoInterpolation bool     `cli:"no-interpolation"`
-	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
-	RejectSecrets   bool     `cli:"reject-secrets"`
+	FilePaths           []string `cli:"arg:*" label:"upload paths"`
+	Replace             bool     `cli:"replace"`
+	Job                 string   `cli:"job"` // required, but not in dry-run mode
+	DryRun              bool     `cli:"dry-run"`
+	DryRunFormat        string   `cli:"format"`
+	NoInterpolation     bool     `cli:"no-interpolation"`
+	RedactedVars        []string `cli:"redacted-vars" normalize:"list"`
+	RejectSecrets       bool     `cli:"reject-secrets"`
+	RejectParseWarnings bool     `cli:"reject-parse-warnings"`
 
 	// Used for if_changed processing
 	ApplyIfChanged   bool   `cli:"apply-if-changed"`
@@ -139,6 +140,11 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "reject-secrets",
 			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets (default: false)",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+		},
+		cli.BoolFlag{
+			Name:   "reject-parse-warnings",
+			Usage:  "When true, fail the pipeline upload if any warnings are encountered while parsing or interpolating the pipeline, rather than logging them and continuing with the upload (default: false)",
+			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_PARSE_WARNINGS",
 		},
 		cli.BoolTFlag{
 			Name:   "apply-if-changed",
@@ -333,12 +339,8 @@ var PipelineUploadCommand = cli.Command{
 			// For each pipeline in the input (could be multiple)...
 			count := 1
 			for result, err := range cfg.parseAndInterpolate(ctx, input.name, input.file, environ) {
-				if err != nil {
-					w := warning.As(err)
-					if w == nil {
-						return err
-					}
-					l.Warnf("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
+				if abort := cfg.handleParseError(l, input.name, err); abort != nil {
+					return abort
 				}
 
 				if len(cfg.RedactedVars) > 0 {
@@ -607,6 +609,30 @@ func searchForSecrets(
 	return nil
 }
 
+// handleParseError decides what to do with an error yielded by
+// parseAndInterpolate for the pipeline.
+func (cfg *PipelineUploadConfig) handleParseError(l logger.Logger, src string, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	w := warning.As(err)
+	if w == nil {
+		return err
+	}
+
+	if cfg.RejectParseWarnings {
+		return NewExitError(1, fmt.Errorf(
+			"pipeline %q parsed with warnings; refusing upload because --reject-parse-warnings is enabled:\n%v",
+			src,
+			w,
+		))
+	}
+
+	l.Warnf("There were some issues with the pipeline input - pipeline upload will proceed, but might not succeed:\n%v", w)
+	return nil
+}
+
 func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src string, input io.Reader, environ *env.Environment) iter.Seq2[*pipeline.Pipeline, error] {
 	return func(yield func(*pipeline.Pipeline, error) bool) {
 		for result, err := range pipeline.ParseAll(input) {
@@ -629,11 +655,22 @@ func (cfg *PipelineUploadConfig) parseAndInterpolate(ctx context.Context, src st
 					result.Env.Set(tracetools.EnvVarTraceContextKey, tracing)
 				}
 
+				// At this point err is either nil or a parse warning.
+				parseWarning := err
+
 				// Do the interpolation.
 				preferRuntimeEnv := experiments.IsEnabled(ctx, experiments.InterpolationPrefersRuntimeEnv)
-				err = result.Interpolate(environ, preferRuntimeEnv)
-				if err != nil {
-					err = fmt.Errorf("pipeline interpolation of %q failed: %w", src, err)
+				switch interpolationErr := result.Interpolate(environ, preferRuntimeEnv); {
+				case interpolationErr == nil:
+					err = parseWarning
+				case warning.Is(interpolationErr): // Combine interpolation warnings with parse warnings.
+					err = interpolationErr
+					if parseWarning != nil {
+						err = warning.Wrap(parseWarning, interpolationErr)
+					}
+
+				default:
+					err = fmt.Errorf("pipeline interpolation of %q failed: %w", src, interpolationErr)
 				}
 				// yield below
 			}

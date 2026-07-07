@@ -93,11 +93,26 @@ var KubernetesBootstrapCommand = cli.Command{
 		// given some higher-priority info from agent-stack-k8s or the
 		// container's default setup.
 		environ := env.FromSlice(os.Environ())
+
+		// Snapshot which containerShellPriority vars the command container set
+		// itself, before the loop below starts writing registration values into
+		// environ.
+		containerSetShell := make(map[string]bool, len(containerShellPriority))
+		for name := range containerShellPriority {
+			if _, set := environ.Get(name); set {
+				containerSetShell[name] = true
+			}
+		}
+
 		for name, val := range env.SeqSlice(regResp.Env) {
 			if _, skip := existingEnvPriority[name]; skip {
 				continue
 			}
 			if strings.HasPrefix(name, "KUBERNETES_") {
+				continue
+			}
+			if containerSetShell[name] {
+				// The command container set its own shell; keep it.
 				continue
 			}
 			environ.Set(name, val)
@@ -290,4 +305,12 @@ var existingEnvPriority = map[string]struct{}{
 	"SHLVL":    {},
 	"TERM":     {},
 	// "KUBERNETES_*": {}, // implemented as a strings.HasPrefix check
+}
+
+// containerShellPriority lists shell-selection vars where the command
+// container's own value wins if it sets one, else the agent's value is used
+// (the container's image may lack the agent's shell path, e.g. distroless).
+var containerShellPriority = map[string]struct{}{
+	"BUILDKITE_SHELL":       {},
+	"BUILDKITE_HOOKS_SHELL": {},
 }

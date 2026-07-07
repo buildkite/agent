@@ -62,9 +62,6 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 
 	span.SetAttributes(
 		attribute.String("cache.id", cacheID),
-		attribute.String("cache.branch", c.branch),
-		attribute.String("cache.pipeline", c.pipeline),
-		attribute.String("cache.organization", c.organization),
 		attribute.String("cache.platform", c.platform),
 		attribute.String("cache.format", c.format),
 	)
@@ -246,10 +243,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 				FileSize:    archiveInfo.Size,
 				Compression: c.format,
 			}},
-			Platform:     c.platform,
-			Pipeline:     c.pipeline,
-			Branch:       c.branch,
-			Organization: c.organization,
+			Platform: c.platform,
 		})
 		if api.BreakOnNonRetryable(r, createApiResp, err) {
 			return err

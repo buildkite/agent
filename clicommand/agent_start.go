@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/awslib"
 	"github.com/buildkite/agent/v3/internal/concurrently"
@@ -1389,10 +1390,10 @@ var AgentStartCommand = cli.Command{
 		pool := agent.NewAgentPool(workers, &agentConf)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer agentShutdownHook(l, cfg)
+		defer agentShutdownHook(l, cfg, workers)
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
-		if err := agentStartupHook(l, cfg); err != nil {
+		if err := agentStartupHook(l, cfg, workers); err != nil {
 			return fmt.Errorf("failed to run startup hook: %w", err)
 		}
 
@@ -1558,18 +1559,33 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 	}
 }
 
-func agentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
-	return agentLifecycleHook("agent-startup", log, cfg)
+func agentStartupHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) error {
+	return agentLifecycleHook("agent-startup", log, cfg, agentLifecycleHookEnv(workers))
 }
 
-func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
-	_ = agentLifecycleHook("agent-shutdown", log, cfg)
+func agentLifecycleHookEnv(workers []*agent.AgentWorker) *env.Environment {
+	environ := env.New()
+	agentIDs := make([]string, 0, len(workers))
+	agentNames := make([]string, 0, len(workers))
+	for _, worker := range workers {
+		agentIDs = append(agentIDs, worker.AgentID())
+		agentNames = append(agentNames, worker.AgentName())
+	}
+
+	environ.Set("BUILDKITE_AGENT_IDS", strings.Join(agentIDs, ","))
+	environ.Set("BUILDKITE_AGENT_NAMES", strings.Join(agentNames, ","))
+
+	return environ
+}
+
+func agentShutdownHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) {
+	_ = agentLifecycleHook("agent-shutdown", log, cfg, agentLifecycleHookEnv(workers))
 }
 
 // agentLifecycleHook looks for a hook script in the hooks path
 // and executes it if found. Output (stdout + stderr) is streamed into the main
 // agent logger. Exit status failure is logged and returned for the caller to handle
-func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig) error {
+func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig, hookEnv *env.Environment) error {
 	// search for hook (including .bat & .ps1 files on Windows)
 	hooks := []string{}
 	p, err := hook.Find(nil, cfg.HooksPath, hookName)
@@ -1608,6 +1624,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		log.Errorf("creating shell for %q hook: %v", hookName, err)
 		return err
 	}
+	sh.Env.Merge(hookEnv)
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
