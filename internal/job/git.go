@@ -92,26 +92,16 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	return nil
 }
 
-// hasPartialCloneFilter reports whether the given clone flags already include
-// any --filter=<spec> or --filter <spec> option. The caller (sparse checkout
-// setup) uses this to avoid stacking its own --filter=blob:none on top of a
-// user-supplied filter, since git takes the last --filter on the command line
-// and would silently override the user's choice.
+// hasPartialCloneFilter returns true if flags contains a
+// --filter=<spec> or --filter <spec> option.
 func hasPartialCloneFilter(flags []string) bool {
 	for i, f := range flags {
+		// Check for --filter=<spec>
 		if strings.HasPrefix(f, "--filter=") {
 			return true
 		}
+		// The --filter <spec> form only counts when a value actually follows it
 		if f == "--filter" && i+1 < len(flags) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasSparseCheckoutFlag(flags []string) bool {
-	for _, f := range flags {
-		if f == "--sparse" {
 			return true
 		}
 	}

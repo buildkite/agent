@@ -58,13 +58,12 @@ func TestSetupSparseCheckout_Enable(t *testing.T) {
 
 	git.Expect("sparse-checkout", "set", "--cone", ".buildkite/", "src/").AndExitWith(0)
 
-	plan := sparseCheckoutPlan{paths: []string{".buildkite/", "src/"}, supported: true}
-	active, err := executor.setupSparseCheckout(t.Context(), plan)
+	active, err := executor.setupSparseCheckout(t.Context(), []string{".buildkite/", "src/"})
 	if err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, plan) error = %v, want nil", err)
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
 	}
 	if !active {
-		t.Fatalf("executor.setupSparseCheckout(ctx, plan) active = false, want true")
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = false, want true")
 	}
 	if got, want := out.String(), "Setting up sparse checkout for paths: .buildkite/,src/"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
@@ -83,13 +82,12 @@ func TestSetupSparseCheckout_DisableWithPriorSparseConfig(t *testing.T) {
 	git.Expect("config", "--worktree", "--list").AndWriteToStdout("").AndExitWith(0)
 	git.Expect("config", "--unset", "extensions.worktreeConfig").AndExitWith(0)
 
-	plan := sparseCheckoutPlan{paths: []string{"src/"}, supported: false}
-	active, err := executor.setupSparseCheckout(t.Context(), plan)
+	active, err := executor.setupSparseCheckout(t.Context(), nil)
 	if err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, plan) error = %v, want nil", err)
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
 	}
 	if active {
-		t.Fatalf("executor.setupSparseCheckout(ctx, plan) active = true, want false")
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = true, want false")
 	}
 	if got, want := out.String(), "Disabling sparse checkout from previous build"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
@@ -108,9 +106,8 @@ func TestSetupSparseCheckout_DisablePreservesOtherWorktreeConfig(t *testing.T) {
 	git.Expect("config", "--worktree", "--list").AndWriteToStdout("user.something=value\n").AndExitWith(0)
 	git.Expect("config", "--unset", "extensions.worktreeConfig").NotCalled()
 
-	plan := sparseCheckoutPlan{paths: []string{"src/"}, supported: false}
-	if _, err := executor.setupSparseCheckout(t.Context(), plan); err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, plan) error = %v, want nil", err)
+	if _, err := executor.setupSparseCheckout(t.Context(), nil); err != nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
 	}
 
 	git.Check(t)
@@ -123,9 +120,8 @@ func TestSetupSparseCheckout_DisableWithoutPriorSparseConfig(t *testing.T) {
 	git.Expect("config").WithAnyArguments().NotCalled()
 	git.Expect("sparse-checkout").WithAnyArguments().NotCalled()
 
-	plan := sparseCheckoutPlan{paths: []string{"src/"}, supported: false}
-	if _, err := executor.setupSparseCheckout(t.Context(), plan); err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, plan) error = %v, want nil", err)
+	if _, err := executor.setupSparseCheckout(t.Context(), nil); err != nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
 	}
 
 	git.Check(t)
@@ -139,12 +135,9 @@ func TestSetupSparseCheckout_VersionFallback(t *testing.T) {
 	git.Expect("--version").AndWriteToStdout("git version 2.25.4").AndExitWith(0)
 	git.Expect("sparse-checkout").WithAnyArguments().NotCalled()
 
-	plan := executor.planSparseCheckout(t.Context())
-	if plan.supported {
-		t.Fatalf("planSparseCheckout(ctx).supported = true, want false")
-	}
-	if len(plan.paths) != 1 || plan.paths[0] != "src/" {
-		t.Fatalf("planSparseCheckout(ctx).paths = %#v, want [\"src/\"]", plan.paths)
+	paths := executor.resolveSparseCheckout(t.Context())
+	if len(paths) != 0 {
+		t.Fatalf("resolveSparseCheckout(ctx) = %#v, want nil (fallback to full checkout)", paths)
 	}
 	if got, want := out.String(), "Sparse checkout requires git >= 2.27; falling back to full checkout"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
@@ -159,18 +152,28 @@ func TestSetupSparseCheckout_VersionFallbackDisablesPriorSparseConfig(t *testing
 	executor.GitSparseCheckoutPaths = []string{"src/"}
 	createSparseCheckoutFile(t, executor.shell.Getwd())
 
+	// Old git: resolveSparseCheckout warns and returns nil paths, then
+	// setupSparseCheckout disables the prior sparse config left on disk.
+	git.Expect("--version").AndWriteToStdout("git version 2.25.4").AndExitWith(0)
 	git.Expect("config", "--get", "core.sparseCheckout").AndWriteToStdout("true\n").AndExitWith(0)
 	git.Expect("sparse-checkout", "disable").AndExitWith(0)
 	git.Expect("config", "--worktree", "--list").AndWriteToStdout("").AndExitWith(0)
 	git.Expect("config", "--unset", "extensions.worktreeConfig").AndExitWith(0)
 
-	plan := sparseCheckoutPlan{paths: []string{"src/"}, supported: false}
-	active, err := executor.setupSparseCheckout(t.Context(), plan)
+	sparsePaths := executor.resolveSparseCheckout(t.Context())
+	if len(sparsePaths) != 0 {
+		t.Fatalf("resolveSparseCheckout(ctx) = %#v, want nil (fallback to full checkout)", sparsePaths)
+	}
+
+	active, err := executor.setupSparseCheckout(t.Context(), sparsePaths)
 	if err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, plan) error = %v, want nil", err)
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
 	}
 	if active {
-		t.Fatalf("executor.setupSparseCheckout(ctx, plan) active = true, want false")
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = true, want false")
+	}
+	if got, want := out.String(), "Sparse checkout requires git >= 2.27; falling back to full checkout"; !strings.Contains(got, want) {
+		t.Fatalf("shell output = %q, want to contain %q", got, want)
 	}
 	if got, want := out.String(), "Disabling sparse checkout from previous build"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)

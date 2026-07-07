@@ -12,40 +12,29 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 )
 
-// sparseCheckoutPlan is the decision, made once at the top of the checkout,
-// about whether sparse checkout applies to this build. Data only — all state
-// mutation happens in setupSparseCheckout.
-type sparseCheckoutPlan struct {
-	paths     []string // cleaned; empty when sparse checkout is not requested
-	supported bool     // requested AND `sparse-checkout set --cone` is available (git >= 2.27)
-}
-
-// planSparseCheckout resolves whether sparse checkout can be applied to this
-// build. Called once, before the clone, so the pre-clone --filter decision
-// and the post-fetch `sparse-checkout set --cone` call share the same answer
-// without running `git --version` twice. Runs `git --version` only when
-// sparse checkout was actually requested.
-func (e *Executor) planSparseCheckout(ctx context.Context) sparseCheckoutPlan {
+// resolveSparseCheckout returns the cone paths to check out for this build, or
+// nil to check out the full tree — either because no paths were requested or
+// because git is too old (< 2.27).
+func (e *Executor) resolveSparseCheckout(ctx context.Context) []string {
 	paths := cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
 	if len(paths) == 0 {
-		return sparseCheckoutPlan{}
+		return nil
 	}
 
-	// 2.27 is the floor because setupSparseCheckout calls
-	// `git sparse-checkout set --cone <paths>` in a single call. Cone mode
-	// shipped in 2.26 but `--cone` was only accepted on the `init` subcommand
-	// then; `set --cone` landed in 2.27. On 2.26.x that call fails, so we
-	// fall back to a full checkout rather than carrying the older two-step.
+	// We require git >= 2.27 because setupSparseCheckout runs
+	// `git sparse-checkout set --cone <paths>` which is only supported by
+	// 2.27 and newer. On older git versions, fall back to a full checkout
+	// by returning nil.
 	ok, err := gitVersionAtLeast(ctx, e.shell, 2, 27)
 	if err != nil {
 		e.shell.Warningf("Sparse checkout requires git >= 2.27; falling back to full checkout (%v)", err)
-		return sparseCheckoutPlan{paths: paths}
+		return nil
 	}
 	if !ok {
 		e.shell.Warningf("Sparse checkout requires git >= 2.27; falling back to full checkout")
-		return sparseCheckoutPlan{paths: paths}
+		return nil
 	}
-	return sparseCheckoutPlan{paths: paths, supported: true}
+	return paths
 }
 
 func cleanGitSparseCheckoutPaths(paths []string) []string {
@@ -127,19 +116,19 @@ func (e *Executor) disableSparseCheckoutIfConfigured(ctx context.Context) {
 	}
 }
 
-// setupSparseCheckout applies a resolved plan to configure (or disable)
-// git sparse checkout for the current working tree. It returns true if
-// sparse checkout was successfully applied for this build, so callers can
-// adjust later behaviour (e.g. skip submodule init, which requires the full
-// tree).
-func (e *Executor) setupSparseCheckout(ctx context.Context, plan sparseCheckoutPlan) (bool, error) {
-	if len(plan.paths) == 0 || !plan.supported {
+// setupSparseCheckout configures git sparse checkout for the given cone paths.
+// When sparsePaths is empty it does a full checkout instead, disabling any
+// prior sparse checkout configuration. It returns true when sparse checkout is
+// applied, so callers can skip steps that need the full tree (e.g. submodule
+// init).
+func (e *Executor) setupSparseCheckout(ctx context.Context, sparsePaths []string) (bool, error) {
+	if len(sparsePaths) == 0 {
 		e.disableSparseCheckoutIfConfigured(ctx)
 		return false, nil
 	}
 
-	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(plan.paths, ","))
-	args := append([]string{"sparse-checkout", "set", "--cone"}, plan.paths...)
+	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(sparsePaths, ","))
+	args := append([]string{"sparse-checkout", "set", "--cone"}, sparsePaths...)
 	if err := e.shell.Command("git", args...).Run(ctx); err != nil {
 		return false, fmt.Errorf("setting sparse checkout paths: %w", err)
 	}
