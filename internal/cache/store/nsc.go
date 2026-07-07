@@ -202,6 +202,11 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 	}
 
 	if result.ExitCode != 0 {
+		// Distinguish a missing artifact (so restore can treat it as a
+		// cache miss and invalidate the stale entry) from other download failures.
+		if strings.Contains(result.Stderr, "not found") {
+			return nil, fmt.Errorf("%w: nsc key %s: %s", ErrBlobNotFound, key, strings.TrimSpace(result.Stderr))
+		}
 		return nil, fmt.Errorf("nsc download failed with exit code %d: %s", result.ExitCode, result.Stderr)
 	}
 

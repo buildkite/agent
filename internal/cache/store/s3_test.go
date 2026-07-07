@@ -15,6 +15,7 @@ import (
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithy "github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/buildkite/roko"
@@ -554,4 +555,30 @@ func TestDownloadWithRetry(t *testing.T) {
 			t.Errorf("downloader called %d times, want 1", fake.calls)
 		}
 	})
+}
+
+// TestIsNotFound covers the classification that Download maps to
+// store.ErrBlobNotFound: a missing S3 object surfaces as a typed
+// *types.NoSuchKey (even when wrapped), while other errors must not match.
+func TestIsNotFound(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "typed NoSuchKey", err: &types.NoSuchKey{}, want: true},
+		{name: "wrapped NoSuchKey", err: fmt.Errorf("download failed: %w", &types.NoSuchKey{}), want: true},
+		{name: "precondition failed (412)", err: responseErrorWithStatus(http.StatusPreconditionFailed), want: false},
+		{name: "internal error (500)", err: responseErrorWithStatus(http.StatusInternalServerError), want: false},
+		{name: "plain error", err: errors.New("boom"), want: false},
+		{name: "nil", err: nil, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isNotFound(tt.err); got != tt.want {
+				t.Errorf("isNotFound(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
 }

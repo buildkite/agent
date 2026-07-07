@@ -20,6 +20,9 @@ import (
 // mockAPIClient implements api.CacheClient for integration testing
 type mockAPIClient struct {
 	registries map[string]*mockRegistry
+	// expireCalls records the addresses passed to CacheEntryExpire, so tests can
+	// assert invalidation happened (and against which resolved key).
+	expireCalls []api.CacheEntryExpireReq
 }
 
 type mockRegistry struct {
@@ -172,6 +175,20 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 	}
 
 	return api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound}, false, nil, nil
+}
+
+func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, req api.CacheEntryExpireReq) (*api.Response, error) {
+	m.expireCalls = append(m.expireCalls, req)
+
+	reg, ok := m.registries[registry]
+	if !ok {
+		return nil, fmt.Errorf("registry not found: %s", registry)
+	}
+
+	// Hard delete: mirror the backend's delete_item so a subsequent save
+	// re-uploads the invalidated entry. Idempotent — a miss is not an error.
+	delete(reg.cache, cacheAddr(req.TargetPaths, req.CacheKey))
+	return nil, nil
 }
 
 // createRandomFile creates a file filled with random data
@@ -493,6 +510,67 @@ func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
 	}
 	if result.Key != "test-cache" {
 		t.Errorf("should return requested key, Key = %q, want %q", result.Key, "test-cache")
+	}
+}
+
+// TestCacheIntegration_RestoreMissingBlobInvalidates exercises the split-brain
+// recovery path: the entry still exists in the registry but its backing blob is
+// gone. Restore must degrade to a cache miss, invalidate the stale entry,
+// and let a subsequent save re-upload it.
+func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	// Save so the entry is committed and the blob exists.
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !saveResult.CacheEntryCreated {
+		t.Fatal("expected initial save to create an entry")
+	}
+
+	// Simulate the blob being lifecycle/TTL-deleted while the entry survives.
+	blobEntries, err := os.ReadDir(storageDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range blobEntries {
+		if err := os.RemoveAll(filepath.Join(storageDir, e.Name())); err != nil {
+			t.Fatalf("RemoveAll: %v", err)
+		}
+	}
+
+	// Restore must not error, must report a miss, and must invalidate the entry.
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with missing blob should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("missing blob should degrade to CacheRestored=false")
+	}
+	if restoreResult.CacheHit {
+		t.Error("missing blob should not be a cache hit")
+	}
+
+	// Exactly one expire, targeting the resolved entry address.
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	got := mockClient.expireCalls[0]
+	if len(got.CacheKey) != 1 || got.CacheKey[0].Value != "v1-test-key" {
+		t.Errorf("expire targeted cache_key %+v, want single part v1-test-key", got.CacheKey)
+	}
+
+	// A subsequent save must re-upload, proving the entry was invalidated.
+	resaveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("re-Save: %v", err)
+	}
+	if !resaveResult.CacheEntryCreated {
+		t.Error("expected re-save to re-create the invalidated entry")
 	}
 }
 

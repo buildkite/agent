@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -316,5 +317,60 @@ func TestCacheEntryCommit_Failure(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("CacheEntryCommit error = nil, want non-nil for bad request")
+	}
+}
+
+func TestCacheEntryExpire_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
+		}
+		if !strings.HasSuffix(r.URL.Path, "/cache_registries/test-slug/expire") {
+			t.Errorf("path = %q, want suffix %q", r.URL.Path, "/cache_registries/test-slug/expire")
+		}
+		var req api.CacheEntryExpireReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if len(req.TargetPaths) != 1 || req.TargetPaths[0] != "node_modules" {
+			t.Errorf("req.TargetPaths = %v, want [node_modules]", req.TargetPaths)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": "Cache entry expired", "existed": true})
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	_, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
+	})
+	if err != nil {
+		t.Fatalf("CacheEntryExpire error = %v, want nil", err)
+	}
+}
+
+// A non-2xx status (e.g. a missing /expire route during backend rollout, or a
+// CacheRegistryNotFound) must surface as an error rather than be swallowed as a
+// successful idempotent miss.
+func TestCacheEntryExpire_NonSuccessIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Not Found"})
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	_, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
+	})
+	if err == nil {
+		t.Error("CacheEntryExpire error = nil, want non-nil for non-2xx status")
 	}
 }
