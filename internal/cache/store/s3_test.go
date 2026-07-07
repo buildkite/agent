@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithy "github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/buildkite/roko"
 	"github.com/google/go-cmp/cmp"
@@ -277,6 +279,49 @@ func TestOptionsFromURL(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("OptionsFromURL mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsPreconditionFailed(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "precondition failed API error (CopyObject refresh)",
+			err:  &smithy.GenericAPIError{Code: "PreconditionFailed", Message: "At least one of the pre-conditions you specified did not hold"},
+			want: true,
+		},
+		{
+			name: "412 response error (download ETag change)",
+			err:  responseErrorWithStatus(http.StatusPreconditionFailed),
+			want: true,
+		},
+		{
+			name: "different API error code",
+			err:  &smithy.GenericAPIError{Code: "NoSuchKey", Message: "The specified key does not exist"},
+			want: false,
+		},
+		{
+			name: "non-412 response error",
+			err:  responseErrorWithStatus(http.StatusInternalServerError),
+			want: false,
+		},
+		{
+			name: "plain error",
+			err:  errors.New("boom"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isPreconditionFailed(tt.err)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("isPreconditionFailed mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

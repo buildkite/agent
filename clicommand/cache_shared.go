@@ -15,9 +15,6 @@ type CacheConfig struct {
 	Names           []string `cli:"name"`
 	Registry        string   `cli:"registry"`
 	BucketURL       string   `cli:"cache-store-url"`
-	Branch          string   `cli:"branch" validate:"required"`
-	Pipeline        string   `cli:"pipeline" validate:"required"`
-	Organization    string   `cli:"organization" validate:"required"`
 	CacheConfigFile string   `cli:"cache-config-file"`
 	Concurrency     int      `cli:"concurrency"`
 }
@@ -41,24 +38,6 @@ func cacheFlags() []cli.Flag {
 			Value:  "",
 			Usage:  "The URL of the cache store (e.g., s3://bucket-name); uploads/downloads use ambient credentials",
 			EnvVar: "BUILDKITE_AGENT_CACHE_STORE_URL",
-		},
-		cli.StringFlag{
-			Name:   "branch",
-			Value:  "",
-			Usage:  "Which branch should the cache be associated with",
-			EnvVar: "BUILDKITE_BRANCH",
-		},
-		cli.StringFlag{
-			Name:   "pipeline",
-			Value:  "",
-			Usage:  "The pipeline slug for this cache",
-			EnvVar: "BUILDKITE_PIPELINE_SLUG",
-		},
-		cli.StringFlag{
-			Name:   "organization",
-			Value:  "",
-			Usage:  "The organization slug for this cache",
-			EnvVar: "BUILDKITE_ORGANIZATION_SLUG",
 		},
 		cli.StringFlag{
 			Name:   "cache-config-file",
