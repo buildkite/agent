@@ -181,8 +181,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				"cache_id", cacheID, "err", err)
 			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 			// The blob is gone, so nothing was restored: clear the hit/fallback
-			// state set earlier so callers (which treat CacheHit || FallbackUsed
-			// as "restored") and the span reflect a clean miss.
+			// state set earlier so callers and the span reflect a clean miss.
 			result.CacheHit = false
 			result.FallbackUsed = false
 			result.CacheRestored = false
@@ -191,7 +190,6 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.hit", false),
 				attribute.Bool("cache.restored", false),
 				attribute.Bool("cache.invalidated", invalidated),
-				attribute.Int64("cache.duration_ms", result.TotalDuration.Milliseconds()),
 			)
 			span.SetStatus(codes.Ok, "cache miss (missing blob)")
 			c.callProgress(cacheID, "complete", "Cache miss (missing blob, invalidated stale entry)", 0, 0)

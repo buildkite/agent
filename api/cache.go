@@ -243,10 +243,6 @@ func (c *Client) CacheEntryRetrieve(ctx context.Context, registry string, retrie
 }
 
 // CacheEntryExpire invalidates a cache entry so a subsequent save re-uploads it.
-// The backend deletes by exact address and is idempotent — it returns 2xx
-// whether or not an entry existed — so any 2xx is success. Any other status
-// (including a 404 from a not-yet-deployed /expire route) is returned as an
-// error; callers use this best-effort and should not fail the restore on it.
 func (c *Client) CacheEntryExpire(ctx context.Context, registry string, expire CacheEntryExpireReq) (*Response, error) {
 	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryExpire")
 	defer span.End()

@@ -386,9 +386,7 @@ func TestNscStore_Integration(t *testing.T) {
 		transferInfo.Duration)
 }
 
-// TestNscStore_DownloadNotFound checks the store-specific not-found mapping:
-// a "not found" CLI failure surfaces as store.ErrBlobNotFound (so restore can
-// invalidate the stale entry), while other failures stay generic errors.
+// TestNscStore_DownloadNotFound checks the store-specific not-found mapping
 func TestNscStore_DownloadNotFound(t *testing.T) {
 	ctx := t.Context()
 	dest := filepath.Join(t.TempDir(), "dest")

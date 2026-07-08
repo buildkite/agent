@@ -20,8 +20,7 @@ import (
 // mockAPIClient implements api.CacheClient for integration testing
 type mockAPIClient struct {
 	registries map[string]*mockRegistry
-	// expireCalls records the addresses passed to CacheEntryExpire, so tests can
-	// assert invalidation happened (and against which resolved key).
+	// expireCalls records the addresses passed to CacheEntryExpire
 	expireCalls []api.CacheEntryExpireReq
 }
 
@@ -179,8 +178,8 @@ func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, r
 		return nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
-	// Hard delete: mirror the backend's delete_item so a subsequent save
-	// re-uploads the invalidated entry. Idempotent — a miss is not an error.
+	// Mirror the backend's delete_item so a subsequent save
+	// re-uploads the invalidated entry.
 	delete(reg.cache, cacheAddr(req.TargetPaths, req.CacheKey))
 	return nil, nil
 }

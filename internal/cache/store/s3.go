@@ -134,9 +134,7 @@ func isPreconditionFailed(err error) bool {
 	return false
 }
 
-// isNotFound reports whether err indicates the S3 object does not exist. The
-// multipart downloader issues ranged GetObjects, and a missing key surfaces as
-// a typed *types.NoSuchKey, so the caller can map it to store.ErrBlobNotFound.
+// isNotFound reports whether err indicates the S3 object does not exist.
 func isNotFound(err error) bool {
 	var nsk *types.NoSuchKey
 	return errors.As(err, &nsk)
