@@ -110,12 +110,7 @@ func hasPartialCloneFilter(flags []string) bool {
 }
 
 func hasSparseCheckoutFlag(flags []string) bool {
-	for _, f := range flags {
-		if f == "--sparse" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(flags, "--sparse")
 }
 
 func gitClone(ctx context.Context, sh *shell.Shell, gitCloneFlags []string, repository, dir string) error {
