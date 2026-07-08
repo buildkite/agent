@@ -40,9 +40,6 @@ type mockCacheEntry struct {
 	committed       bool
 	expiresAt       time.Time
 	platform        string
-	pipeline        string
-	branch          string
-	organization    string
 }
 
 // cacheAddr builds the v2 entry address from the order-insensitive target_paths
@@ -128,9 +125,6 @@ func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, r
 		committed:       false,
 		expiresAt:       time.Now().Add(7 * 24 * time.Hour),
 		platform:        req.Platform,
-		pipeline:        req.Pipeline,
-		branch:          req.Branch,
-		organization:    req.Organization,
 	}
 
 	reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)] = entry
@@ -288,14 +282,11 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *client, cach
 
 	// Create cache client
 	c := &client{
-		api:          mockClient,
-		bucketURL:    bucketURL,
-		format:       "zip",
-		branch:       "main",
-		pipeline:     "test-pipeline",
-		organization: "test-org",
-		platform:     "linux/amd64",
-		registry:     "~",
+		api:       mockClient,
+		bucketURL: bucketURL,
+		format:    "zip",
+		platform:  "linux/amd64",
+		registry:  "~",
 		caches: []configuration.Cache{
 			{
 				Name:        "test-cache",

@@ -56,13 +56,10 @@ type CacheBlob struct {
 
 // CacheEntryCreateReq is the request body for creating (storing) a cache entry.
 type CacheEntryCreateReq struct {
-	TargetPaths  []string       `json:"target_paths"`
-	CacheKey     []CacheKeyPart `json:"cache_key"`
-	Blobs        []CacheBlob    `json:"blobs"`
-	Pipeline     string         `json:"pipeline"`
-	Branch       string         `json:"branch"`
-	Organization string         `json:"owner"`
-	Platform     string         `json:"platform"`
+	TargetPaths []string       `json:"target_paths"`
+	CacheKey    []CacheKeyPart `json:"cache_key"`
+	Blobs       []CacheBlob    `json:"blobs"`
+	Platform    string         `json:"platform"`
 }
 
 // CacheEntryCreateResp describes how to upload the new cache entry. The storage
