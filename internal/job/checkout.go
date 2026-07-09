@@ -489,6 +489,15 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 		e.shell.Commentf("Acquiring mirror repository update lock")
 	}
 
+	if isMainRepository {
+		// Check if the commit is in the mirror before acquiring the lock
+		// This is an operation that is safe to perform concurrently.
+		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
+			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
+			return e.snapshotMirror(ctx, repository, mirrorDir)
+		}
+	}
+
 	// Lock the mirror dir to prevent concurrent updates
 	updateCtx, canc := context.WithTimeout(ctx, lockTimeout)
 	defer canc()
