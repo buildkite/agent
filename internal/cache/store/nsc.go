@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -20,13 +21,12 @@ import (
 // nscScheme is the URL scheme that routes an agent-managed cache store to NSC.
 const nscScheme = "nsc"
 
-// nscDefaultExpiry is the default artifact expiry passed to nsc artifact upload.
+// nscDefaultExpiry is the artifact lifetime used both when uploading a cache
+// entry (--expires_in) and when refreshing it on access (--ensure_minimum).
 // Cache entries are content-addressed and short-lived, so we cap storage growth
-// rather than relying on NSC's no-expiry default.
-//
-// TODO: 24h is a temporary stopgap. We ultimately want parity with the S3 path,
-// where the expiry can be extended (e.g. refreshed on cache hits) instead of a
-// fixed lifetime.
+// rather than relying on NSC's no-expiry default. Every restore pushes the
+// expiry back out to this duration from now, keeping hot caches alive while
+// letting cold ones expire.
 const nscDefaultExpiry = "24h"
 
 // commandRunner executes an external command. It is a seam so tests can assert
@@ -221,12 +221,57 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 		attribute.String("nsc_key", key),
 	)
 
+	// Refresh the artifact's TTL on access so hot caches stay alive, mirroring
+	// the S3 store's self-CopyObject refresh. Unlike CopyObject this is cheap,
+	// so we refresh on every restore rather than gating it behind a minimum
+	// interval.
+	n.refreshExpiry(ctx, key)
+
 	return &TransferInfo{
 		BytesTransferred: bytesTransferred,
 		TransferSpeed:    averageSpeed,
 		RequestID:        "", // NSC doesn't expose request IDs
 		Duration:         duration,
 	}, nil
+}
+
+// refreshExpiry pushes the artifact's expiry out to at least nscDefaultExpiry
+// from now via `nsc artifact extend --ensure_minimum`. Using --ensure_minimum
+// (rather than the additive --by) makes the refresh idempotent, so calling it
+// on every restore keeps a hot cache alive without growing its expiry unbounded.
+//
+// This is best-effort: any failure is logged and swallowed so a restore never
+// fails because its TTL could not be refreshed.
+func (n *NscStore) refreshExpiry(ctx context.Context, key string) {
+	if !n.extendSupported(ctx) {
+		// `nsc artifact extend` is still being rolled out by Namespace. Update
+		// the nsc CLI as a contingency so the command becomes available.
+		slog.Debug("nsc artifact extend unavailable, updating nsc CLI")
+		if _, err := n.run(ctx, "", "nsc", "version", "update"); err != nil {
+			slog.Warn("failed to update nsc CLI, skipping cache TTL refresh (non-fatal)",
+				"key", key, "error", err)
+			return
+		}
+	}
+
+	result, err := n.run(ctx, "", n.artifactArgs("extend", key, "--ensure_minimum", nscDefaultExpiry)...)
+	switch {
+	case err != nil:
+		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)
+	case result.ExitCode != 0:
+		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)",
+			"key", key, "exit_code", result.ExitCode, "stderr", result.Stderr)
+	default:
+		slog.Debug("refreshed cache TTL", "key", key)
+	}
+}
+
+// extendSupported reports whether the installed nsc CLI supports
+// `nsc artifact extend`. During Namespace's rollout of this command, older CLIs
+// exit non-zero for its --help.
+func (n *NscStore) extendSupported(ctx context.Context) bool {
+	result, err := n.run(ctx, "", "nsc", "artifact", "extend", "--help")
+	return err == nil && result.ExitCode == 0
 }
 
 type CommandResult struct {
