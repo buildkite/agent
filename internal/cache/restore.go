@@ -176,6 +176,25 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	// Download cache
 	tmpDir, archiveFile, transferInfo, err := c.downloadCache(ctx, retrieveResp, c.bucketURL)
 	if err != nil {
+		if errors.Is(err, store.ErrBlobNotFound) {
+			slog.Warn("cache blob missing, treating as miss and invalidating entry",
+				"cache_id", cacheID, "err", err)
+			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
+			// The blob is gone, so nothing was restored: clear the hit/fallback
+			// state set earlier so callers and the span reflect a clean miss.
+			result.CacheHit = false
+			result.FallbackUsed = false
+			result.CacheRestored = false
+			result.TotalDuration = time.Since(startTime)
+			span.SetAttributes(
+				attribute.Bool("cache.hit", false),
+				attribute.Bool("cache.restored", false),
+				attribute.Bool("cache.invalidated", invalidated),
+			)
+			span.SetStatus(codes.Ok, "cache miss (missing blob)")
+			c.callProgress(cacheID, "complete", "Cache miss (missing blob, invalidated stale entry)", 0, 0)
+			return result, nil
+		}
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to download cache")
 		return result, fmt.Errorf("failed to download cache: %w", err)
@@ -253,6 +272,40 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	c.callProgress(cacheID, "complete", "Cache restored successfully", 0, 0)
 
 	return result, nil
+}
+
+// invalidateStaleEntry uses the retrieve response to expire a cache entry whose
+// blob is missing, so a subsequent save re-uploads it.
+func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
+	if len(retrieveResp.TargetPaths) == 0 || len(retrieveResp.CacheKey) == 0 {
+		slog.Warn("cannot invalidate stale cache entry: retrieve response missing resolved address")
+		return false
+	}
+
+	req := api.CacheEntryExpireReq{
+		TargetPaths: retrieveResp.TargetPaths,
+		CacheKey:    retrieveResp.CacheKey,
+	}
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		apiResp, err := c.api.CacheEntryExpire(ctx, c.registry, req)
+		if api.BreakOnNonRetryable(r, apiResp, err) {
+			return err
+		}
+		if err != nil {
+			slog.Warn("cache entry invalidation failed, retrying", "err", err, "retrier", r.String())
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		slog.Warn("cache entry invalidation failed", "registry", c.registry, "err", err)
+		return false
+	}
+	return true
 }
 
 // downloadCache downloads a cache archive from storage

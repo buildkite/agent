@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -493,4 +494,33 @@ func TestNscStore_Integration(t *testing.T) {
 		transferInfo.BytesTransferred,
 		transferInfo.TransferSpeed,
 		transferInfo.Duration)
+}
+
+// TestNscStore_DownloadNotFound checks the store-specific not-found mapping
+func TestNscStore_DownloadNotFound(t *testing.T) {
+	ctx := t.Context()
+	dest := filepath.Join(t.TempDir(), "dest")
+
+	t.Run("stderr not found maps to ErrBlobNotFound", func(t *testing.T) {
+		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+			return &CommandResult{ExitCode: 1, Stderr: "Error: artifact not found"}, nil
+		}}
+		_, err := store.Download(ctx, "valid-key", dest)
+		if !errors.Is(err, ErrBlobNotFound) {
+			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
+		}
+	})
+
+	t.Run("other failures are not ErrBlobNotFound", func(t *testing.T) {
+		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+			return &CommandResult{ExitCode: 1, Stderr: "connection refused"}, nil
+		}}
+		_, err := store.Download(ctx, "valid-key", dest)
+		if err == nil {
+			t.Fatal("Download: expected error, got nil")
+		}
+		if errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Download err = %v, should not be ErrBlobNotFound", err)
+		}
+	})
 }

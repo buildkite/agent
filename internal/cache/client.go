@@ -31,6 +31,7 @@ type cacheAPI interface {
 	CacheEntryCreate(ctx context.Context, registry string, req api.CacheEntryCreateReq) (api.CacheEntryCreateResp, *api.Response, error)
 	CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, *api.Response, error)
 	CacheEntryRetrieve(ctx context.Context, registry string, req api.CacheEntryRetrieveReq) (api.CacheEntryRetrieveResp, bool, *api.Response, error)
+	CacheEntryExpire(ctx context.Context, registry string, req api.CacheEntryExpireReq) (*api.Response, error)
 }
 
 // Sentinel errors for common scenarios.

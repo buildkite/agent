@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithy "github.com/aws/smithy-go"
 	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
@@ -131,6 +132,12 @@ func isPreconditionFailed(err error) bool {
 		return apiErr.ErrorCode() == "PreconditionFailed"
 	}
 	return false
+}
+
+// isNotFound reports whether err indicates the S3 object does not exist.
+func isNotFound(err error) bool {
+	var nsk *types.NoSuchKey
+	return errors.As(err, &nsk)
 }
 
 // downloadWithRetry runs the multipart download, retrying on S3 412
@@ -420,6 +427,9 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		})
 	})
 	if err != nil {
+		if isNotFound(err) {
+			return nil, fmt.Errorf("%w: s3 key %s: %w", ErrBlobNotFound, fullKey, err)
+		}
 		return nil, fmt.Errorf("failed to download file from S3: %w", err)
 	}
 
