@@ -158,7 +158,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 }
 
 // TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit exercises
-// the fallback path in planSparseCheckout when git is older than 2.27 (below
+// the fallback path in resolveSparseCheckout when git is older than 2.27 (below
 // the cone-mode floor). It overrides `git --version` via AndCallFunc to
 // report an old git version, while every other invocation passes through to
 // the real binary.
@@ -250,8 +250,8 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit(t *testin
 // sparse checkout paths are configured but the user did NOT supply any
 // --filter in BUILDKITE_GIT_CLONE_FLAGS. The other sparse integration tests
 // all pre-supply --filter=blob:none, which short-circuits the auto-add and
-// therefore doesn't exercise enableCloneFlagsForSparseCheckout's "add it"
-// branch.
+// therefore doesn't exercise the "add it" branch of the clone-flag logic in
+// defaultCheckoutPhase.
 func TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter(t *testing.T) {
 	t.Parallel()
 	skipIfGitSparseCheckoutUnsupported(t)

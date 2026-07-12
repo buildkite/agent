@@ -762,7 +762,7 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
-func (e *Executor) fetchSource(ctx context.Context, autoAddBloblessFilter bool) error {
+func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) error {
 	// If configured, skip the fetch when the commit already exists locally.
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
@@ -773,7 +773,7 @@ func (e *Executor) fetchSource(ctx context.Context, autoAddBloblessFilter bool) 
 	}
 
 	gitFetchFlags := e.GitFetchFlags
-	if autoAddBloblessFilter {
+	if addBloblessFilter {
 		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
 	}
 
@@ -911,8 +911,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
-	// If sparse checkout paths are present, plan the sparse checkout.
-	sparsePlan := e.planSparseCheckout(ctx)
+	// Resolve the cone paths to check out (nil means a full checkout).
+	sparsePaths := e.resolveSparseCheckout(ctx)
 
 	// On mirrors and dissociation:
 	//
@@ -970,12 +970,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 			}
 		}
 
-		// If sparse checkout will actually apply, use a partial clone so blobs
-		// outside the sparse set aren't downloaded up front. Only when the user
-		// hasn't already supplied a --filter — git takes the last --filter on the
-		// command line and would silently override theirs.
-		if sparsePlan.supported {
-			if hasSparseCheckoutFlag(gitCloneFlags) {
+		// When sparse checkout applies, add two clone flags:
+		//   --sparse             clone in sparse mode
+		//   --filter=blob:none   make it a partial clone, so blobs outside the
+		//                        sparse set aren't downloaded up front
+		// Each flag is added only if the user hasn't already supplied their own.
+		if len(sparsePaths) > 0 {
+			if slices.Contains(gitCloneFlags, "--sparse") {
 				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --sparse flag (preserving user-supplied sparse checkout).")
 			} else {
 				gitCloneFlags = append(gitCloneFlags, "--sparse")
@@ -1014,10 +1015,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 	}
 
-	autoAddBloblessFilter := sparsePlan.supported &&
+	addBloblessFilter := len(sparsePaths) > 0 &&
 		!strings.Contains(e.GitCloneFlags, "--filter") &&
 		!strings.Contains(e.GitFetchFlags, "--filter")
-	if err := e.fetchSource(ctx, autoAddBloblessFilter); err != nil {
+	if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
 		return err
 	}
 
@@ -1025,7 +1026,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
-	sparseCheckoutActive, err := e.setupSparseCheckout(ctx, sparsePlan)
+	sparseCheckoutActive, err := e.setupSparseCheckout(ctx, sparsePaths)
 	if err != nil {
 		return err
 	}
