@@ -1,0 +1,69 @@
+# Cache-busting e2e: when restore finds a registry entry but its backing blob is
+# absent from storage (as happens when an S3 lifecycle rule / NSC TTL deletes the
+# blob), restore must degrade to a clean cache miss (not a hard failure) and
+# invalidate the stale entry, so a subsequent save re-uploads and the cache heals.
+#
+# We reproduce the "blob absent" state without needing S3 delete permissions: the
+# save step writes to one store prefix (.../original), while restore/re-save use a
+# different, empty prefix (.../fresh). The registry entry (keyed by cache_key, in
+# DynamoDB) is shared across steps, but restore against /fresh looks for the blob
+# where it isn't -> missing blob -> miss + invalidate. Prefixes are per-build so
+# concurrent runs don't collide.
+#
+# Flow: save (/original) -> restore (/fresh: expect miss + invalidate)
+#       -> re-save (/fresh) -> restore (/fresh: expect hit).
+env:
+  CACHE_CONFIG_B64: "{{ fixture "includes/cache_config.yml" | b64enc }}"
+agents:
+  queue: {{ .queue }}
+steps:
+  - key: save
+    # Anchor the assume-role plugin so the other steps can alias it (*assume_role).
+    plugins: &assume_role
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::172840064832:role/pipeline-agent-e2e-testing-buildkite-agent-e2e
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+    commands:
+      - export BUILDKITE_AGENT_CACHE_STORE_URL="s3://buildkite-agent-e2e-tests-shared/cache-e2e-test/$${BUILDKITE_BUILD_ID}/original?region=us-west-2"
+      - mkdir -p cache-src
+      - echo "hello cache" > cache-src/file.txt
+      - echo "$$CACHE_CONFIG_B64" | base64 -d > cache.yml
+      - {{ .buildkite_agent_binary }} cache save --cache-config-file cache.yml
+
+  - key: restore_miss
+    depends_on: save
+    plugins: *assume_role
+    commands:
+      # Different (empty) prefix: the entry exists but its blob is only in
+      # /original, so restore sees a missing blob. It must exit 0 (clean miss),
+      # NOT populate the target, and best-effort invalidate the stale entry.
+      - export BUILDKITE_AGENT_CACHE_STORE_URL="s3://buildkite-agent-e2e-tests-shared/cache-e2e-test/$${BUILDKITE_BUILD_ID}/fresh?region=us-west-2"
+      - echo "$$CACHE_CONFIG_B64" | base64 -d > cache.yml
+      - {{ .buildkite_agent_binary }} cache restore --cache-config-file cache.yml
+      - if [[ -f cache-src/file.txt ]]; then echo "expected a cache miss, but cache-src/file.txt was restored"; exit 1; fi
+
+  - key: resave
+    depends_on: restore_miss
+    plugins: *assume_role
+    commands:
+      - export BUILDKITE_AGENT_CACHE_STORE_URL="s3://buildkite-agent-e2e-tests-shared/cache-e2e-test/$${BUILDKITE_BUILD_ID}/fresh?region=us-west-2"
+      - mkdir -p cache-src
+      - echo "hello cache" > cache-src/file.txt
+      - echo "$$CACHE_CONFIG_B64" | base64 -d > cache.yml
+      # The entry was invalidated on the miss, so this save re-uploads to /fresh
+      # rather than short-circuiting on the existence peek.
+      - {{ .buildkite_agent_binary }} cache save --cache-config-file cache.yml
+
+  - key: restore_final
+    depends_on: resave
+    plugins: *assume_role
+    commands:
+      - export BUILDKITE_AGENT_CACHE_STORE_URL="s3://buildkite-agent-e2e-tests-shared/cache-e2e-test/$${BUILDKITE_BUILD_ID}/fresh?region=us-west-2"
+      - echo "$$CACHE_CONFIG_B64" | base64 -d > cache.yml
+      # Cache healed: restore now hits and round-trips the content.
+      - {{ .buildkite_agent_binary }} cache restore --cache-config-file cache.yml
+      - test -f cache-src/file.txt
+      - if [[ $(cat cache-src/file.txt) == "hello cache" ]]; then exit 0; else exit 1; fi

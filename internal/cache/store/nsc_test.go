@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -270,6 +271,116 @@ func TestNscStore_PassesNamespace(t *testing.T) {
 	}
 }
 
+// isCommand reports whether args starts with the given nsc subcommand tokens.
+func isCommand(args []string, tokens ...string) bool {
+	if len(args) < len(tokens) {
+		return false
+	}
+	for i, tok := range tokens {
+		if args[i] != tok {
+			return false
+		}
+	}
+	return true
+}
+
+// recordingRunner records every command invocation and delegates the result to
+// respond. When respond is nil, every command succeeds. Download commands write
+// their destination file so the store's os.Stat succeeds.
+func recordingRunner(calls *[][]string, respond func(args []string) (*CommandResult, error)) commandRunner {
+	return func(_ context.Context, _ string, args ...string) (*CommandResult, error) {
+		*calls = append(*calls, args)
+
+		if isCommand(args, "nsc", "artifact", "download") {
+			// download args: nsc artifact download <key> <filePath> ...
+			if err := os.WriteFile(args[4], []byte("data"), 0o600); err != nil {
+				return nil, err
+			}
+		}
+
+		if respond != nil {
+			return respond(args)
+		}
+		return &CommandResult{}, nil
+	}
+}
+
+func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
+	ctx := t.Context()
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	var calls [][]string
+	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
+
+	if _, err := store.Download(ctx, "key", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+
+	wantExtend := []string{"nsc", "artifact", "extend", "key", "--ensure_minimum", "24h", "--namespace", "my-namespace"}
+	var gotExtend []string
+	for _, c := range calls {
+		if isCommand(c, "nsc", "artifact", "extend") && !isCommand(c, "nsc", "artifact", "extend", "--help") {
+			gotExtend = c
+		}
+	}
+	if diff := cmp.Diff(wantExtend, gotExtend); diff != "" {
+		t.Errorf("extend args mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
+	ctx := t.Context()
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	var calls [][]string
+	respond := func(args []string) (*CommandResult, error) {
+		// Simulate an old CLI: `nsc artifact extend --help` exits non-zero.
+		if isCommand(args, "nsc", "artifact", "extend", "--help") {
+			return &CommandResult{ExitCode: 1}, nil
+		}
+		return &CommandResult{}, nil
+	}
+	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
+
+	if _, err := store.Download(ctx, "key", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+
+	var updated, extended bool
+	for _, c := range calls {
+		if isCommand(c, "nsc", "version", "update") {
+			updated = true
+		}
+		if isCommand(c, "nsc", "artifact", "extend", "key") {
+			extended = true
+		}
+	}
+	if !updated {
+		t.Error("expected nsc version update to run when extend is unsupported")
+	}
+	if !extended {
+		t.Error("expected nsc artifact extend to run after updating the CLI")
+	}
+}
+
+func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
+	ctx := t.Context()
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	respond := func(args []string) (*CommandResult, error) {
+		if isCommand(args, "nsc", "artifact", "extend", "key") {
+			return &CommandResult{ExitCode: 1, Stderr: "boom"}, nil
+		}
+		return &CommandResult{}, nil
+	}
+	var calls [][]string
+	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
+
+	if _, err := store.Download(ctx, "key", dest); err != nil {
+		t.Fatalf("Download should succeed despite a failed TTL refresh: %v", err)
+	}
+}
+
 func TestNewNscStore_RequiresNamespace(t *testing.T) {
 	if _, err := NewNscStore("nsc://"); err == nil {
 		t.Error(`NewNscStore("nsc://"): expected error, got nil`)
@@ -383,4 +494,33 @@ func TestNscStore_Integration(t *testing.T) {
 		transferInfo.BytesTransferred,
 		transferInfo.TransferSpeed,
 		transferInfo.Duration)
+}
+
+// TestNscStore_DownloadNotFound checks the store-specific not-found mapping
+func TestNscStore_DownloadNotFound(t *testing.T) {
+	ctx := t.Context()
+	dest := filepath.Join(t.TempDir(), "dest")
+
+	t.Run("stderr not found maps to ErrBlobNotFound", func(t *testing.T) {
+		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+			return &CommandResult{ExitCode: 1, Stderr: "Error: artifact not found"}, nil
+		}}
+		_, err := store.Download(ctx, "valid-key", dest)
+		if !errors.Is(err, ErrBlobNotFound) {
+			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
+		}
+	})
+
+	t.Run("other failures are not ErrBlobNotFound", func(t *testing.T) {
+		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+			return &CommandResult{ExitCode: 1, Stderr: "connection refused"}, nil
+		}}
+		_, err := store.Download(ctx, "valid-key", dest)
+		if err == nil {
+			t.Fatal("Download: expected error, got nil")
+		}
+		if errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Download err = %v, should not be ErrBlobNotFound", err)
+		}
+	})
 }
