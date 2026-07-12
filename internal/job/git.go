@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 
@@ -107,10 +106,6 @@ func hasPartialCloneFilter(flags []string) bool {
 		}
 	}
 	return false
-}
-
-func hasSparseCheckoutFlag(flags []string) bool {
-	return slices.Contains(flags, "--sparse")
 }
 
 func gitClone(ctx context.Context, sh *shell.Shell, gitCloneFlags []string, repository, dir string) error {
