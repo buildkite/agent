@@ -30,7 +30,11 @@ func (s *Server) router() chi.Router {
 		r.Patch("/env", s.patchEnv)
 		r.Delete("/env", s.deleteEnv)
 
+		r.Put("/workdir", s.setWorkdir)
+
 		r.Post("/redactions", s.createRedaction)
+
+		r.Post("/promise-failure", s.handlePromiseFailure)
 	})
 
 	return r

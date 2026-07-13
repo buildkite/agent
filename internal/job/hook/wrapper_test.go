@@ -1,12 +1,12 @@
 package hook_test
 
 import (
-	"context"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
@@ -70,7 +70,7 @@ echo "hello world"
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
 			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
@@ -169,7 +169,7 @@ echo hello world
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
 			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
@@ -237,6 +237,28 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 	)
 	if want := `scriptwrapper tried to wrap hook with invalid shebang: "#!/usr/bin/env ruby"`; err == nil || err.Error() != want {
 		t.Fatalf("hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(\"linux\")) error = %v, want error with message %q", err, want)
+	}
+}
+
+func TestWrapperUsesOverrideSelfForExecutorTester(t *testing.T) {
+	t.Setenv("BUILDKITE_JOB_ID", "1111-1111-1111-1111")
+	t.Setenv("BUILDKITE_OVERRIDE_SELF", "mock-buildkite-agent")
+
+	hookFilename := writeTestHook(t, "hook", "#!/bin/sh\ntrue\n")
+	wrapper, err := hook.NewWrapper(
+		hook.WithPath(hookFilename),
+		hook.WithOS("linux"),
+	)
+	if err != nil {
+		t.Fatalf("failed to create hook wrapper: %v", err)
+	}
+
+	wrapperContents, err := os.ReadFile(wrapper.Path())
+	if err != nil {
+		t.Fatalf("failed to read wrapper %q: %v", wrapper.Path(), err)
+	}
+	if !strings.Contains(string(wrapperContents), `"mock-buildkite-agent" env dump`) {
+		t.Fatalf("wrapper contents did not use override self:\n%s", wrapperContents)
 	}
 }
 

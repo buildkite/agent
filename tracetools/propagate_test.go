@@ -2,7 +2,6 @@ package tracetools
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/gob"
 	"errors"
@@ -112,7 +111,7 @@ func TestEncodeTraceContext(t *testing.T) {
 				t.Fatalf("ParseEncoding(%q) error = %v", test.encoding, err)
 			}
 
-			ctx := context.Background()
+			ctx := t.Context()
 			parent := opentracing.StartSpan("job.parent")
 			ctx = opentracing.ContextWithSpan(ctx, parent)
 

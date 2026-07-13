@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/api"
@@ -35,10 +34,10 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/internal/shellscript"
 	"github.com/buildkite/agent/v3/internal/tempfile"
+	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/go-pipeline"
-	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
 
@@ -74,6 +73,11 @@ type Executor struct {
 	// redactors for the job logs. The will be populated with values both from environment variable and through the Job API.
 	// In order for the latter to happen, a reference is passed into the the Job API server as well
 	redactors *replacer.Mux
+
+	// jobAPI is the Job API server for this job. It's retained so the executor
+	// can consume out-of-band requests made by hooks, such as a working
+	// directory set by an unwrapped hook via the /workdir endpoint.
+	jobAPI *jobapi.Server
 }
 
 // New returns a new executor instance
@@ -465,7 +469,19 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	// Passing an empty env changes through because in polyglot hook we can't detect
 	// env change.
 	// But we call this method anyway because a hook might use buildkite-agent env set to update environment.
-	e.applyEnvironmentChanges(hook.EnvChanges{})
+	//
+	// Unwrapped hooks can also request a working directory change via
+	// `buildkite-agent workdir set`, which the Job API records as a pending
+	// workdir. Consume it here and apply it via applyEnvironmentChanges (which
+	// calls shell.Chdir). Once applied it persists in shell.wd, so subsequent
+	// hooks and the command phase run in the new directory.
+	changes := hook.EnvChanges{}
+	if e.jobAPI != nil {
+		if wd, ok := e.jobAPI.TakePendingWorkdir(); ok {
+			changes = hook.EnvChangesForWorkdir(wd)
+		}
+	}
+	e.applyEnvironmentChanges(changes)
 	return nil
 }
 
@@ -551,30 +567,13 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		e.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
 	}
 
-	const maxHookRetry = 30
-
-	// Run the wrapper script
-	err = roko.NewRetrier(
-		roko.WithStrategy(roko.Constant(100*time.Millisecond)),
-		roko.WithMaxAttempts(maxHookRetry),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		// Run the script and only retry on ETXTBSY.
-		// This error occurs because of an unavoidable race between forking
-		// (which acquires open file descriptors of the parent process) and
-		// writing an executable (the script wrapper).
-		// See https://github.com/golang/go/issues/22315.
+	err = func() error {
 		script, err := e.shell.Script(script.Path(), e.HooksShell)
 		if err != nil {
-			r.Break()
 			return err
 		}
-		err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
-		if errors.Is(err, syscall.ETXTBSY) {
-			return err
-		}
-		r.Break()
-		return err
-	})
+		return script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
+	}()
 	if err != nil {
 		exitCode := shell.ExitCode(err)
 		e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(exitCode))
@@ -590,7 +589,8 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 
 		switch {
 		case errors.Is(err, syscall.ETXTBSY):
-			// If the underlying error is _still_ ETXTBSY, then inspect the file
+			// If the underlying error is _still_ ETXTBSY
+			// (after the retry within script.Run), then inspect the file
 			// to see what process had it open for write, to log something helpful
 			logOpenedHookInfo(e.shell.Logger, e.Debug, hookName, script.Path())
 
@@ -915,6 +915,12 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
+
+	// Suppress automatic LFS smudge only when LFS is enabled, so the checkout
+	// phase can materialise objects explicitly; otherwise git's default applies.
+	if e.GitLFSEnabled {
+		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
+	}
 
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {

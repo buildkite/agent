@@ -10,34 +10,33 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v3/internal/cache/configuration"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/zstash"
-	"github.com/buildkite/zstash/cache"
 	"github.com/google/go-cmp/cmp"
 )
 
 // mockCacheClient is a mock implementation of the CacheClient interface for testing
 type mockCacheClient struct {
-	saveFunc    func(ctx context.Context, cacheID string) (zstash.SaveResult, error)
-	restoreFunc func(ctx context.Context, cacheID string) (zstash.RestoreResult, error)
-	listFunc    func() []cache.Cache
+	saveFunc    func(ctx context.Context, cacheID string) (SaveResult, error)
+	restoreFunc func(ctx context.Context, cacheID string) (RestoreResult, error)
+	listFunc    func() []configuration.Cache
 }
 
-func (m *mockCacheClient) Save(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
+func (m *mockCacheClient) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	if m.saveFunc != nil {
 		return m.saveFunc(ctx, cacheID)
 	}
-	return zstash.SaveResult{}, nil
+	return SaveResult{}, nil
 }
 
-func (m *mockCacheClient) Restore(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
+func (m *mockCacheClient) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
 	if m.restoreFunc != nil {
 		return m.restoreFunc(ctx, cacheID)
 	}
-	return zstash.RestoreResult{}, nil
+	return RestoreResult{}, nil
 }
 
-func (m *mockCacheClient) ListCaches() []cache.Cache {
+func (m *mockCacheClient) ListCaches() []configuration.Cache {
 	if m.listFunc != nil {
 		return m.listFunc()
 	}
@@ -59,22 +58,22 @@ func createTempCacheConfig(t *testing.T, content string) string {
 
 // Tests for saveWithClient
 
-func TestSaveWithClient_CacheCreated(t *testing.T) {
+func TestSaveWithClient_CacheEntryCreated(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
-			return zstash.SaveResult{
-				CacheCreated: true,
-				Key:          "test-key-v1",
-				Archive: zstash.ArchiveMetrics{
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
+			return SaveResult{
+				CacheEntryCreated: true,
+				Key:               "test-key-v1",
+				Archive: ArchiveMetrics{
 					Size:             1024,
 					WrittenBytes:     1024,
 					WrittenEntries:   10,
 					CompressionRatio: 2.5,
 				},
-				Transfer: &zstash.TransferMetrics{
+				Transfer: &TransferMetrics{
 					TransferSpeed: 5.5,
 				},
 			}, nil
@@ -89,13 +88,13 @@ func TestSaveWithClient_CacheCreated(t *testing.T) {
 
 func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
-			return zstash.SaveResult{
-				CacheCreated: false,
-				Key:          "test-key-v1",
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
+			return SaveResult{
+				CacheEntryCreated: false,
+				Key:               "test-key-v1",
 			}, nil
 		},
 	}
@@ -108,22 +107,22 @@ func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 
 func TestSaveWithClient_MultipleCaches(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	callCount := 0
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
 			callCount++
-			return zstash.SaveResult{
-				CacheCreated: true,
-				Key:          fmt.Sprintf("key-%s", cacheID),
-				Archive: zstash.ArchiveMetrics{
+			return SaveResult{
+				CacheEntryCreated: true,
+				Key:               fmt.Sprintf("key-%s", cacheID),
+				Archive: ArchiveMetrics{
 					Size:             100,
 					WrittenBytes:     100,
 					WrittenEntries:   1,
 					CompressionRatio: 1.0,
 				},
-				Transfer: &zstash.TransferMetrics{
+				Transfer: &TransferMetrics{
 					TransferSpeed: 1.0,
 				},
 			}, nil
@@ -141,12 +140,12 @@ func TestSaveWithClient_MultipleCaches(t *testing.T) {
 
 func TestSaveWithClient_Error(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	expectedErr := errors.New("save failed")
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
-			return zstash.SaveResult{}, expectedErr
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
+			return SaveResult{}, expectedErr
 		},
 	}
 
@@ -164,12 +163,12 @@ func TestSaveWithClient_Error(t *testing.T) {
 
 func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
-		saveFunc: func(ctx context.Context, cacheID string) (zstash.SaveResult, error) {
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
 			t.Fatalf("Save should not be called with empty cache IDs")
-			return zstash.SaveResult{}, nil
+			return SaveResult{}, nil
 		},
 	}
 
@@ -183,22 +182,22 @@ func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 
 func TestRestoreWithClient_CacheHit(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			return zstash.RestoreResult{
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{
 				CacheHit:      true,
 				CacheRestored: true,
 				FallbackUsed:  false,
 				Key:           "test-key-v1",
-				Archive: zstash.ArchiveMetrics{
+				Archive: ArchiveMetrics{
 					Size:             1024,
 					WrittenBytes:     1024,
 					WrittenEntries:   10,
 					CompressionRatio: 2.5,
 				},
-				Transfer: zstash.TransferMetrics{
+				Transfer: TransferMetrics{
 					TransferSpeed: 5.5,
 				},
 			}, nil
@@ -213,22 +212,22 @@ func TestRestoreWithClient_CacheHit(t *testing.T) {
 
 func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			return zstash.RestoreResult{
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{
 				CacheHit:      false,
 				CacheRestored: true,
 				FallbackUsed:  true,
 				Key:           "test-key-fallback",
-				Archive: zstash.ArchiveMetrics{
+				Archive: ArchiveMetrics{
 					Size:             512,
 					WrittenBytes:     512,
 					WrittenEntries:   5,
 					CompressionRatio: 2.0,
 				},
-				Transfer: zstash.TransferMetrics{
+				Transfer: TransferMetrics{
 					TransferSpeed: 3.5,
 				},
 			}, nil
@@ -243,11 +242,11 @@ func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 
 func TestRestoreWithClient_CacheMiss(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			return zstash.RestoreResult{
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{
 				CacheHit:      false,
 				CacheRestored: false,
 				FallbackUsed:  false,
@@ -264,13 +263,13 @@ func TestRestoreWithClient_CacheMiss(t *testing.T) {
 
 func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	callCount := 0
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
 			callCount++
-			return zstash.RestoreResult{
+			return RestoreResult{
 				CacheHit:      true,
 				CacheRestored: true,
 				Key:           fmt.Sprintf("key-%s", cacheID),
@@ -289,12 +288,12 @@ func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 
 func TestRestoreWithClient_Error(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	expectedErr := errors.New("restore failed")
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
-			return zstash.RestoreResult{}, expectedErr
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{}, expectedErr
 		},
 	}
 
@@ -312,12 +311,12 @@ func TestRestoreWithClient_Error(t *testing.T) {
 
 func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mock := &mockCacheClient{
-		restoreFunc: func(ctx context.Context, cacheID string) (zstash.RestoreResult, error) {
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
 			t.Fatalf("Restore should not be called with empty cache IDs")
-			return zstash.RestoreResult{}, nil
+			return RestoreResult{}, nil
 		},
 	}
 
@@ -327,203 +326,112 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 	}
 }
 
-// Tests for loadCacheConfiguration
+// Tests for newClient
 
-func TestLoadCacheConfiguration_Valid(t *testing.T) {
+func TestNewClient_InvalidCacheIDs(t *testing.T) {
 	t.Parallel()
 
-	config := `dependencies:
-  - id: node
-    key: 'node-{{ checksum "package-lock.json" }}'
-    paths:
-      - node_modules
-  - id: ruby
-    key: 'ruby-{{ checksum "Gemfile.lock" }}'
-    paths:
-      - vendor/bundle
-`
-	configFile := createTempCacheConfig(t, config)
-
-	fileConfig, err := loadCacheConfiguration(configFile)
-	if err != nil {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want nil", configFile, err)
-	}
-	if got, want := len(fileConfig.Dependencies), 2; got != want {
-		t.Fatalf("len(fileConfig.Dependencies) = %d, want %d", got, want)
-	}
-	if got, want := fileConfig.Dependencies[0].ID, "node"; got != want {
-		t.Fatalf("fileConfig.Dependencies[0].ID = %q, want %q", got, want)
-	}
-	if got, want := fileConfig.Dependencies[1].ID, "ruby"; got != want {
-		t.Fatalf("fileConfig.Dependencies[1].ID = %q, want %q", got, want)
-	}
-}
-
-func TestLoadCacheConfiguration_InvalidYAML(t *testing.T) {
-	t.Parallel()
-
-	config := `dependencies:
-  - id: node
-    key: test
-    paths
-      - invalid indentation here
-    : wrong syntax
-`
-	configFile := createTempCacheConfig(t, config)
-
-	_, err := loadCacheConfiguration(configFile)
-	if err == nil {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want non-nil error", configFile, err)
-	}
-	if want := "failed to unmarshal cache config file"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want error containing %q", configFile, err, want)
-	}
-}
-
-func TestLoadCacheConfiguration_FileNotFound(t *testing.T) {
-	t.Parallel()
-
-	_, err := loadCacheConfiguration("/nonexistent/path/to/cache.yml")
-	if err == nil {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want non-nil error", "/nonexistent/path/to/cache.yml", err)
-	}
-	if want := "failed to read cache config file"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want error containing %q", "/nonexistent/path/to/cache.yml", err, want)
-	}
-}
-
-func TestLoadCacheConfiguration_EmptyFile(t *testing.T) {
-	t.Parallel()
-
-	configFile := createTempCacheConfig(t, "")
-
-	fileConfig, err := loadCacheConfiguration(configFile)
-	if err != nil {
-		t.Fatalf("loadCacheConfiguration(%q) error = %v, want nil", configFile, err)
-	}
-	if got := len(fileConfig.Dependencies); got != 0 {
-		t.Fatalf("len(fileConfig.Dependencies) = %d, want 0", got)
-	}
-}
-
-// Tests for setupCacheClient
-
-func TestSetupCacheClient_InvalidCacheIDs(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-
-	config := `dependencies:
-  - id: cache1
-    key: 'test-key-1'
-    paths:
+	config := `caches:
+  - name: cache1
+    cache_key:
+      - test-key-1
+    target_paths:
       - path1
-  - id: cache2
-    key: 'test-key-2'
-    paths:
+  - name: cache2
+    cache_key:
+      - test-key-2
+    target_paths:
       - path2
 `
 	configFile := createTempCacheConfig(t, config)
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             []string{"cache1", "invalid1", "cache2", "invalid2"},
+		Names:           []string{"cache1", "invalid1", "cache2", "invalid2"},
 		BucketURL:       "s3://test-bucket",
-		Branch:          "main",
-		Pipeline:        "test-pipeline",
-		Organization:    "test-org",
-		APIEndpoint:     "https://api.buildkite.com/v3",
-		APIToken:        "test-token",
 	}
 
-	_, _, err := setupCacheClient(ctx, logger.Discard, cfg)
+	_, _, err := newClient(logger.Discard, nil, cfg)
 	if err == nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want non-nil error", err)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want non-nil error", err)
 	}
-	if want := "cache IDs not found in configuration"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+	if want := "cache names not found in configuration"; !strings.Contains(err.Error(), want) {
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want error containing %q", err, want)
 	}
 	if want := "invalid1"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want error containing %q", err, want)
 	}
 	if want := "invalid2"; !strings.Contains(err.Error(), want) {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want error containing %q", err, want)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want error containing %q", err, want)
 	}
 }
 
-func TestSetupCacheClient_ValidCacheIDs(t *testing.T) {
+func TestNewClient_ValidCacheIDs(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
-	config := `dependencies:
-  - id: cache1
-    key: 'test-key-1'
-    paths:
+	config := `caches:
+  - name: cache1
+    cache_key:
+      - test-key-1
+    target_paths:
       - path1
-  - id: cache2
-    key: 'test-key-2'
-    paths:
+  - name: cache2
+    cache_key:
+      - test-key-2
+    target_paths:
       - path2
 `
 	configFile := createTempCacheConfig(t, config)
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             []string{"cache1", "cache2"},
+		Names:           []string{"cache1", "cache2"},
 		BucketURL:       "s3://test-bucket",
-		Branch:          "main",
-		Pipeline:        "test-pipeline",
-		Organization:    "test-org",
-		APIEndpoint:     "https://api.buildkite.com/v3",
-		APIToken:        "test-token",
 	}
 
-	client, cacheIDs, err := setupCacheClient(ctx, logger.Discard, cfg)
+	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)
 	if err != nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want nil", err)
 	}
 	if got := client; got == nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) = %v, want non-nil value", got)
 	}
 	if diff := cmp.Diff(cacheIDs, []string{"cache1", "cache2"}); diff != "" {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) diff (-got +want):\n%s", diff)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) diff (-got +want):\n%s", diff)
 	}
 }
 
-func TestSetupCacheClient_AllCaches(t *testing.T) {
+func TestNewClient_AllCaches(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 
-	config := `dependencies:
-  - id: cache1
-    key: 'test-key-1'
-    paths:
+	config := `caches:
+  - name: cache1
+    cache_key:
+      - test-key-1
+    target_paths:
       - path1
-  - id: cache2
-    key: 'test-key-2'
-    paths:
+  - name: cache2
+    cache_key:
+      - test-key-2
+    target_paths:
       - path2
 `
 	configFile := createTempCacheConfig(t, config)
 
 	cfg := Config{
 		CacheConfigFile: configFile,
-		Ids:             []string{},
+		Names:           []string{},
 		BucketURL:       "s3://test-bucket",
-		Branch:          "main",
-		Pipeline:        "test-pipeline",
-		Organization:    "test-org",
-		APIEndpoint:     "https://api.buildkite.com/v3",
-		APIToken:        "test-token",
 	}
 
-	client, cacheIDs, err := setupCacheClient(ctx, logger.Discard, cfg)
+	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)
 	if err != nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) error = %v, want nil", err)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want nil", err)
 	}
 	if got := client; got == nil {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) = %v, want non-nil value", got)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) = %v, want non-nil value", got)
 	}
 	if diff := cmp.Diff(slices.Sorted(slices.Values(cacheIDs)), slices.Sorted(slices.Values([]string{"cache1", "cache2"}))); diff != "" {
-		t.Fatalf("setupCacheClient(ctx, logger.Discard, cfg) sorted diff (-got +want):\n%s", diff)
+		t.Fatalf("newClient(logger.Discard, nil, cfg) sorted diff (-got +want):\n%s", diff)
 	}
 }

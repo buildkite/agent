@@ -37,7 +37,7 @@ command phase that executes the specified command in the created environment.
 You can run only specific phases with the --phases flag.
 
 The bootstrap is also responsible for executing hooks around the phases.
-See https://buildkite.com/docs/agent/v3/hooks for more details.
+See https://buildkite.com/docs/agent/hooks for more details.
 
 Example:
 
@@ -60,6 +60,7 @@ type BootstrapConfig struct {
 	PullRequest                  string   `cli:"pullrequest"`
 	PullRequestUsingMergeRefspec bool     `cli:"pull-request-using-merge-refspec"`
 	GitSubmodules                bool     `cli:"git-submodules"`
+	GitLFSEnabled                bool     `cli:"git-lfs-enabled"`
 	SSHKeyscan                   bool     `cli:"ssh-keyscan"`
 	AgentName                    string   `cli:"agent" validate:"required"`
 	Queue                        string   `cli:"queue"`
@@ -75,8 +76,11 @@ type BootstrapConfig struct {
 	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
+	GitSparseCheckoutPaths       []string `cli:"git-sparse-checkout-paths" normalize:"list"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
+	GitSSHKey                    string   `cli:"git-ssh-key"`
+	GitCommitVerification        string   `cli:"git-commit-verification"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode        string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
@@ -109,6 +113,7 @@ type BootstrapConfig struct {
 	TracingBackend               string   `cli:"tracing-backend"`
 	TracingServiceName           string   `cli:"tracing-service-name"`
 	TracingTraceParent           string   `cli:"tracing-traceparent"`
+	TracingTraceState            string   `cli:"tracing-tracestate"`
 	TracingPropagateTraceparent  bool     `cli:"tracing-propagate-traceparent"`
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
@@ -241,7 +246,14 @@ var BootstrapCommand = cli.Command{
 		GitCloneFlagsFlag,
 		GitCloneMirrorFlagsFlag,
 		GitCleanFlagsFlag,
+		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
+		GitSparseCheckoutPathsFlag,
+		cli.StringFlag{
+			Name:   "git-ssh-key",
+			Usage:  "SSH private key to use for git checkout",
+			EnvVar: "BUILDKITE_GIT_SSH_KEY",
+		},
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
@@ -300,6 +312,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Enable git submodules (default: true)",
 			EnvVar: "BUILDKITE_GIT_SUBMODULES",
 		},
+		cli.BoolFlag{
+			Name:   "git-lfs-enabled",
+			Usage:  "Enable Git LFS object download during checkout (default: false)",
+			EnvVar: "BUILDKITE_GIT_LFS_ENABLED",
+		},
 		cli.BoolTFlag{
 			Name:   "pty",
 			Usage:  "Run jobs within a pseudo terminal (default: true)",
@@ -337,6 +354,12 @@ var BootstrapCommand = cli.Command{
 			Name:   "tracing-traceparent",
 			Usage:  "W3C Trace Parent for tracing",
 			EnvVar: "BUILDKITE_TRACING_TRACEPARENT",
+			Value:  "",
+		},
+		cli.StringFlag{
+			Name:   "tracing-tracestate",
+			Usage:  "W3C Trace State for tracing",
+			EnvVar: "BUILDKITE_TRACING_TRACESTATE",
 			Value:  "",
 		},
 		cli.BoolFlag{
@@ -440,9 +463,13 @@ var BootstrapCommand = cli.Command{
 			Debug:                        cfg.Debug,
 			GitCheckoutFlags:             cfg.GitCheckoutFlags,
 			GitCleanFlags:                cfg.GitCleanFlags,
+			GitCommitVerification:        cfg.GitCommitVerification,
 			GitCloneFlags:                cfg.GitCloneFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitFetchFlags:                cfg.GitFetchFlags,
+			GitLFSEnabled:                cfg.GitLFSEnabled,
+			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
+			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
@@ -478,6 +505,7 @@ var BootstrapCommand = cli.Command{
 			TracingServiceName:           cfg.TracingServiceName,
 			TraceContextCodec:            traceContextCodec,
 			TracingTraceParent:           cfg.TracingTraceParent,
+			TracingTraceState:            cfg.TracingTraceState,
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
 			DisabledWarnings:             cfg.DisableWarningsFor,
@@ -489,7 +517,8 @@ var BootstrapCommand = cli.Command{
 		defer cancel()
 
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, os.Interrupt,
+		signal.Notify(
+			signals, os.Interrupt,
 			syscall.SIGHUP,
 			syscall.SIGTERM,
 			syscall.SIGINT,

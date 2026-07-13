@@ -1,11 +1,15 @@
 package job
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/socket"
 	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/version"
 )
 
 // startJobAPI starts the job API server, iff the OS of the box supports it otherwise it returns a
@@ -26,7 +30,9 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 		return cleanup, fmt.Errorf("creating job API socket path: %w", err)
 	}
 
-	jobAPIOpts := []jobapi.ServerOpts{}
+	jobAPIOpts := []jobapi.ServerOpts{
+		jobapi.WithPromiseFailureDeclarer(e.declarePromiseFailure),
+	}
 	if e.Debug {
 		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
 	}
@@ -34,6 +40,7 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API server: %w", err)
 	}
+	e.jobAPI = srv
 
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_TOKEN", token)
@@ -67,4 +74,27 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 			e.shell.Errorf("Error stopping Job API server: %v", err)
 		}
 	}, nil
+}
+
+// declarePromiseFailure declares a promised failure for the current job to the
+// Buildkite API. The Job API server debounces calls, so this runs at most once
+// per successfully-declared exit status. It returns the status code of the most
+// recent API response (0 if none was received, e.g. a network error) and an
+// error describing any failure.
+func (e *Executor) declarePromiseFailure(ctx context.Context, exitStatus int, reason string) (int, error) {
+	// logger.Discard keeps the access token (in HTTP debug dumps) out of the job
+	// log; retry warnings still go to the shell logger.
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint:     e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
+		Token:        e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
+		DisableHTTP2: e.shell.Env.GetBool("BUILDKITE_NO_HTTP2", false),
+		UserAgent:    version.UserAgent(),
+	})
+
+	req := &api.JobPromiseFailureRequest{
+		ExitStatus: exitStatus,
+		Reason:     reason,
+	}
+
+	return apiClient.PromiseFailureWithRetry(ctx, e.JobID, req, e.shell.Warningf)
 }

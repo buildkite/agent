@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -25,7 +24,7 @@ func TestAgentPause(t *testing.T) {
 	server := newAgentPauseTestServer(t)
 	defer server.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := AgentPauseConfig{
 		APIConfig: APIConfig{
 			AgentAccessToken: "agentaccesstoken",

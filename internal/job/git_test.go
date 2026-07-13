@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"errors"
 	"os"
 	"testing"
@@ -125,7 +124,7 @@ func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
 	// Use the real SSH bundled in the Go Docker image, with the config
 	// .buildkite/build/ssh.conf.
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sh := shell.NewTestShell(t)
 	sh.Env.Set("PATH", os.Getenv("PATH"))
@@ -178,7 +177,7 @@ func TestGitCheckRefFormat(t *testing.T) {
 
 func TestGitCheckoutValidatesRef(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	sh := shell.NewTestShell(t, shell.WithDryRun(true))
 	err := gitCheckout(ctx, sh, "", "--nope")
 	if got, want := err.Error(), `"--nope" is not a valid git ref format`; got != want {
@@ -188,7 +187,7 @@ func TestGitCheckoutValidatesRef(t *testing.T) {
 
 func TestGitCheckout(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var gotLog [][]string
 	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
@@ -210,7 +209,7 @@ func TestGitCheckout(t *testing.T) {
 
 func TestGitCheckoutSketchyArgs(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sh := shell.NewTestShell(t, shell.WithDryRun(true))
 	err := gitCheckout(ctx, sh, "-f -q", "  --hello")
@@ -221,7 +220,7 @@ func TestGitCheckoutSketchyArgs(t *testing.T) {
 
 func TestGitClone(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var gotLog [][]string
 	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
@@ -243,7 +242,7 @@ func TestGitClone(t *testing.T) {
 
 func TestGitClean(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var gotLog [][]string
 	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
@@ -265,7 +264,7 @@ func TestGitClean(t *testing.T) {
 
 func TestGitCleanSubmodules(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var gotLog [][]string
 	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
@@ -287,7 +286,7 @@ func TestGitCleanSubmodules(t *testing.T) {
 
 func TestGitFetch(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var gotLog [][]string
 	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
@@ -307,6 +306,63 @@ func TestGitFetch(t *testing.T) {
 	}
 
 	wantLog := [][]string{{absoluteGit, "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2"}}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestGitLFSFetchCheckout(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	if err := gitLFSFetchCheckout(ctx, gitLFSFetchCheckoutArgs{
+		Shell: sh,
+		Retry: true,
+	}); err != nil {
+		t.Fatalf("gitLFSFetchCheckout(ctx, ...) = %v", err)
+	}
+
+	wantLog := [][]string{
+		{absoluteGit, "lfs", "fetch"},
+		{absoluteGit, "lfs", "checkout"},
+	}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestGitLFSFetchCheckoutWithInclude(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	if err := gitLFSFetchCheckout(ctx, gitLFSFetchCheckoutArgs{
+		Shell:   sh,
+		Retry:   true,
+		Include: []string{"src/", "docs/"},
+	}); err != nil {
+		t.Fatalf("gitLFSFetchCheckout(ctx, ...) = %v", err)
+	}
+
+	wantLog := [][]string{
+		{absoluteGit, "lfs", "fetch", "--include=src/,docs/"},
+		{absoluteGit, "lfs", "checkout", "src/", "docs/"},
+	}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
 	}

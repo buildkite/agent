@@ -1,7 +1,6 @@
 package job
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -58,7 +57,7 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 	// When there's no tracing backend, the tracer should be a no-op.
 	e := New(ExecutorConfig{})
 
-	oriCtx := context.Background()
+	oriCtx := t.Context()
 	e.shell, err = shell.New()
 	if err != nil {
 		t.Errorf("shell.New() error = %v, want nil", err)
@@ -72,7 +71,7 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 
 	// If you call opentracing.GlobalTracer() without having set it first, it returns a NoopTracer
 	// In this test case, we haven't touched opentracing at all, so we get the NoopTracer
-	if got, want := reflect.TypeOf(opentracing.GlobalTracer()), reflect.TypeOf(opentracing.NoopTracer{}); got != want {
+	if got, want := reflect.TypeOf(opentracing.GlobalTracer()), reflect.TypeFor[opentracing.NoopTracer](); got != want {
 		t.Errorf("opentracing.GlobalTracer() = %v, want %v", got, want)
 	}
 	stopper()
@@ -85,7 +84,7 @@ func TestStartTracing_Datadog(t *testing.T) {
 	cfg := ExecutorConfig{TracingBackend: "datadog"}
 	e := New(cfg)
 
-	oriCtx := context.Background()
+	oriCtx := t.Context()
 	e.shell, err = shell.New()
 	if err != nil {
 		t.Errorf("shell.New() error = %v, want nil", err)
@@ -122,6 +121,48 @@ func newCancelTestExecutor(t *testing.T) *Executor {
 	e.shell = sh
 
 	return e
+}
+
+// TestSetUpGitLFSSkipSmudge is a regression test for #4041: setUp used to set
+// GIT_LFS_SKIP_SMUDGE=1 unconditionally, disabling git's default LFS smudge for
+// every job. It must only be set when LFS handling is enabled.
+func TestSetUpGitLFSSkipSmudge(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name       string
+		lfsEnabled bool
+		wantSkip   bool
+	}{
+		{name: "lfs disabled leaves smudge enabled", lfsEnabled: false, wantSkip: false},
+		{name: "lfs enabled skips smudge", lfsEnabled: true, wantSkip: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			e := New(ExecutorConfig{GitLFSEnabled: test.lfsEnabled})
+
+			sh, err := shell.New(shell.WithEnv(env.New()))
+			if err != nil {
+				t.Fatalf("shell.New() error = %v, want nil", err)
+			}
+			// setUp requires a checkout path; supply one so it doesn't error.
+			sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", t.TempDir())
+			e.shell = sh
+
+			if err := e.setUp(t.Context()); err != nil {
+				t.Fatalf("e.setUp() error = %v, want nil", err)
+			}
+
+			got, ok := e.shell.Env.Get("GIT_LFS_SKIP_SMUDGE")
+			if ok != test.wantSkip {
+				t.Errorf("GIT_LFS_SKIP_SMUDGE present = %v, want %v", ok, test.wantSkip)
+			}
+			if test.wantSkip && got != "1" {
+				t.Errorf("GIT_LFS_SKIP_SMUDGE = %q, want %q", got, "1")
+			}
+		})
+	}
 }
 
 // TestCancelSetsJobCancelledEnv verifies the precedent set in #3213: any

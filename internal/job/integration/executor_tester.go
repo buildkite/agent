@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -41,10 +42,11 @@ type ExecutorTester struct {
 	Repo          *gitRepository
 	Output        string
 
-	cmd      *exec.Cmd
-	cmdLock  sync.Mutex
-	hookMock *bintest.Mock
-	mocks    []*bintest.Mock
+	pendingLocalHooks bool
+	cmd               *exec.Cmd
+	cmdLock           sync.Mutex
+	hookMock          *bintest.Mock
+	mocks             []*bintest.Mock
 }
 
 func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
@@ -117,6 +119,7 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 			// use the mock instead.
 			"BUILDKITE_OVERRIDE_SELF=buildkite-agent",
 		},
+		HomeDir:    homeDir,
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
 		HooksDir:   hooksDir,
@@ -238,19 +241,30 @@ func (e *ExecutorTester) ExpectLocalHook(name string) *bintest.Expectation {
 		panic(err)
 	}
 
-	hookPath, err := e.writeHookScript(e.hookMock, name, hooksDir, "local", name)
+	_, err := e.writeHookScript(e.hookMock, name, hooksDir, "local", name)
 	if err != nil {
 		panic(err)
 	}
 
-	if err = e.Repo.Add(hookPath); err != nil {
-		panic(err)
-	}
-	if err = e.Repo.Commit("Added local hook file %s", name); err != nil {
-		panic(err)
-	}
+	e.pendingLocalHooks = true
 
 	return e.hookMock.Expect("local", name)
+}
+
+func (e *ExecutorTester) flushPendingLocalHooks() error {
+	if !e.pendingLocalHooks {
+		return nil
+	}
+
+	if err := e.Repo.Add(filepath.Join(".buildkite", "hooks")); err != nil {
+		return fmt.Errorf("adding local hooks: %w", err)
+	}
+	if err := e.Repo.Commit("Added local hook files"); err != nil {
+		return fmt.Errorf("committing local hooks: %w", err)
+	}
+
+	e.pendingLocalHooks = false
+	return nil
 }
 
 // ExpectGlobalHook creates a mock object and a script in the global buildkite hooks dir
@@ -267,6 +281,10 @@ func (e *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
 // Run the bootstrap and return any errors
 func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 	t.Helper()
+
+	if err := e.flushPendingLocalHooks(); err != nil {
+		return err
+	}
 
 	// Mock out the meta-data calls to the agent after checkout
 	if !e.HasMock("buildkite-agent") {
@@ -356,39 +374,24 @@ func (e *ExecutorTester) Close() {
 	_ = e.CloseErr()
 }
 
-// CloseErr closes the tester and returns any cleanup error.
+// CloseErr closes the tester and returns all cleanup errors.
 func (e *ExecutorTester) CloseErr() error {
+	var errs []error
 	for _, mock := range e.mocks {
-		if err := mock.Close(); err != nil {
-			return err
-		}
+		errs = append(errs, mock.Close())
 	}
 	if e.Repo != nil {
-		if err := e.Repo.CloseErr(); err != nil {
-			return err
-		}
+		errs = append(errs, e.Repo.CloseErr())
 	}
-	if err := os.RemoveAll(e.HomeDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.BuildDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.HooksDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.PathDir); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(e.PluginsDir); err != nil {
-		return err
-	}
-	if e.GitMirrorsDir != "" {
-		if err := os.RemoveAll(e.GitMirrorsDir); err != nil {
-			return err
-		}
-	}
-	return nil
+	errs = append(errs,
+		os.RemoveAll(e.HomeDir),
+		os.RemoveAll(e.BuildDir),
+		os.RemoveAll(e.HooksDir),
+		os.RemoveAll(e.PathDir),
+		os.RemoveAll(e.PluginsDir),
+		os.RemoveAll(e.GitMirrorsDir),
+	)
+	return errors.Join(errs...)
 }
 
 func mockEnvAsJSONOnStdout(e *ExecutorTester) func(c *bintest.Call) {

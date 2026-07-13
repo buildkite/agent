@@ -49,6 +49,16 @@ func (e EnvDeleteResponse) Normalize() {
 	sort.Strings(e.Deleted)
 }
 
+// WorkdirSetRequest is the request body for the PUT /workdir endpoint
+type WorkdirSetRequest struct {
+	Workdir string `json:"workdir"`
+}
+
+// WorkdirSetResponse echoes the absolute working directory.
+type WorkdirSetResponse struct {
+	Workdir string `json:"workdir"`
+}
+
 // RedactionCreateRequest is the request body for the POST /redactions endpoint
 type RedactionCreateRequest struct {
 	Redact string `json:"redact"`
@@ -57,4 +67,36 @@ type RedactionCreateRequest struct {
 // RedactionCreateResponse is the response body for the POST /redactions endpoint
 type RedactionCreateResponse struct {
 	Redacted string `json:"redacted"`
+}
+
+// PromiseFailureRequest is the request body for the POST /promise-failure endpoint
+type PromiseFailureRequest struct {
+	ExitStatus int    `json:"exit_status"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+// Promise failure outcomes, reported in PromiseFailureResponse.Outcome.
+const (
+	// PromiseFailureDeclared means this call declared the exit status to the
+	// Buildkite API.
+	PromiseFailureDeclared = "declared"
+	// PromiseFailureDebounced means an earlier call already declared this exit
+	// status, so this call shared that result without calling the Buildkite API.
+	PromiseFailureDebounced = "debounced"
+)
+
+// PromiseFailureResponse is the response body for the POST /promise-failure endpoint
+type PromiseFailureResponse struct {
+	// Outcome is PromiseFailureDeclared or PromiseFailureDebounced.
+	Outcome string `json:"outcome"`
+
+	// Accepted reports whether the Buildkite API accepted the promised failure.
+	Accepted bool `json:"accepted"`
+
+	// UpstreamStatus is the Buildkite API status, when one was received.
+	// Network errors that never received a response leave this as 0.
+	UpstreamStatus int `json:"upstream_status,omitempty"`
+
+	// Error is the Buildkite API declaration error, if Accepted is false.
+	Error string `json:"error,omitempty"`
 }

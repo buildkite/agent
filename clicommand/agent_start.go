@@ -26,8 +26,10 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/agentapi"
 	"github.com/buildkite/agent/v3/internal/awslib"
+	"github.com/buildkite/agent/v3/internal/concurrently"
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
@@ -162,11 +164,13 @@ type AgentStartConfig struct {
 	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags               string   `cli:"git-clean-flags"`
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
+	GitSparseCheckoutPaths      []string `cli:"git-sparse-checkout-paths" normalize:"list"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
 	GitCheckoutTimeout          int      `cli:"git-checkout-timeout"`
+	GitCommitVerification       string   `cli:"git-commit-verification"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
@@ -204,6 +208,7 @@ type AgentStartConfig struct {
 	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
 	TraceContextEncoding            string        `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
+	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -370,7 +375,8 @@ var AgentStartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Starts a Buildkite agent",
 	Description: startDescription,
-	Flags: append(globalFlags(),
+	Flags: append(
+		globalFlags(),
 		cli.StringFlag{
 			Name:   "config",
 			Value:  "",
@@ -533,7 +539,9 @@ var AgentStartCommand = cli.Command{
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCleanFlagsFlag,
+		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
+		GitSparseCheckoutPathsFlag,
 		GitCloneMirrorFlagsFlag,
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
@@ -776,6 +784,7 @@ var AgentStartCommand = cli.Command{
 		StrictSingleHooksFlag,
 		TraceContextEncodingFlag,
 		NoMultipartArtifactUploadFlag,
+		AgentArtifactUploadConcurrencyFlag,
 
 		// Deprecated flags which will be removed in v4
 		KubernetesLogCollectionGracePeriodFlag,
@@ -859,6 +868,11 @@ var AgentStartCommand = cli.Command{
 					verificationFailureBehaviors,
 				)
 			}
+		}
+
+		// Validate the commit verification option input
+		if v := cfg.GitCommitVerification; v != "" && v != "strict" && v != "warn" {
+			return fmt.Errorf("invalid value for --git-commit-verification: %q (must be \"strict\" or \"warn\")", v)
 		}
 
 		// Force some settings if on Windows (these aren't supported yet)
@@ -1068,7 +1082,9 @@ var AgentStartCommand = cli.Command{
 			GitCloneFlags:                   cfg.GitCloneFlags,
 			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                   cfg.GitCleanFlags,
+			GitCommitVerification:           cfg.GitCommitVerification,
 			GitFetchFlags:                   cfg.GitFetchFlags,
+			GitSparseCheckoutPaths:          cfg.GitSparseCheckoutPaths,
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,
@@ -1103,6 +1119,7 @@ var AgentStartCommand = cli.Command{
 			TracingPropagateTraceparent:     cfg.TracingPropagateTraceparent,
 			TraceContextEncoding:            cfg.TraceContextEncoding,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
+			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
 			KubernetesExec:                  cfg.KubernetesExec,
 			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
 			PingMode:                        cfg.PingMode,
@@ -1287,41 +1304,54 @@ var AgentStartCommand = cli.Command{
 
 		// Spawning multiple agents doesn't work if the agent is being
 		// booted in acquisition mode
-		if cfg.Spawn > 1 && cfg.AcquireJob != "" {
-			return errors.New("you can't spawn multiple agents and acquire a job at the same time")
+		if cfg.AcquireJob != "" {
+			if cfg.Spawn != 1 {
+				return errors.New("you can't spawn multiple agents and acquire a job at the same time")
+			}
+		} else { // not acquire-job mode
+			if cfg.Spawn < 1 {
+				return fmt.Errorf("invalid spawn %d, must be at least 1", cfg.Spawn)
+			}
 		}
 
-		var workers []*agent.AgentWorker
+		// Create register requests.
+		regReqs := make([]api.AgentRegisterRequest, 0, cfg.Spawn)
 
-		for i := 1; i <= cfg.Spawn; i++ {
+		for i := range cfg.Spawn {
+			index := i + 1
 			if cfg.Spawn == 1 {
 				l.Infof("Registering agent with Buildkite...")
 			} else {
-				l.Infof("Registering agent %d of %d with Buildkite...", i, cfg.Spawn)
+				l.Infof("Registering agent %d of %d with Buildkite...", index, cfg.Spawn)
 			}
 
 			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
-			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
+			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(index))
 
 			if cfg.SpawnWithPriority {
-				p := i
+				p := index
 				if experiments.IsEnabled(ctx, experiments.DescendingSpawnPriority) {
 					// This experiment helps jobs be assigned across all hosts
 					// in cases where the value of --spawn varies between hosts.
-					p = -i
+					p = -index
 				}
-				l.Infof("Assigning priority %d for agent %d", p, i)
+				l.Infof("Assigning priority %d for agent %d", p, index)
 				registerReq.Priority = strconv.Itoa(p)
 			}
 
+			regReqs = append(regReqs, registerReq)
+		}
+
+		// Send register requests.
+		workers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*agent.AgentWorker, error) {
 			// Register the agent with the buildkite API
-			reg, err := client.Register(ctx, registerReq)
+			reg, err := client.Register(ctx, regReq)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			// Create an agent worker to run the agent
-			workers = append(workers, agent.NewAgentWorker(
+			return agent.NewAgentWorker(
 				l.WithFields(logger.StringField("agent", reg.Name)),
 				reg,
 				mc,
@@ -1332,20 +1362,23 @@ var AgentStartCommand = cli.Command{
 					SignalGracePeriod:  signalGracePeriod,
 					Debug:              cfg.Debug,
 					DebugHTTP:          cfg.DebugHTTP,
-					SpawnIndex:         i,
+					SpawnIndex:         i + 1,
 					AgentStdout:        os.Stdout,
 				},
-			))
+			), nil
+		})
+		if err != nil {
+			return err
 		}
 
 		// Setup the agent pool that spawns agent workers
 		pool := agent.NewAgentPool(workers, &agentConf)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer agentShutdownHook(l, cfg)
+		defer agentShutdownHook(l, cfg, workers)
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
-		if err := agentStartupHook(l, cfg); err != nil {
+		if err := agentStartupHook(l, cfg, workers); err != nil {
 			return fmt.Errorf("failed to run startup hook: %w", err)
 		}
 
@@ -1396,7 +1429,6 @@ var AgentStartCommand = cli.Command{
 
 		default:
 			return err
-
 		}
 	},
 }
@@ -1512,18 +1544,33 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 	}
 }
 
-func agentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
-	return agentLifecycleHook("agent-startup", log, cfg)
+func agentStartupHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) error {
+	return agentLifecycleHook("agent-startup", log, cfg, agentLifecycleHookEnv(workers))
 }
 
-func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
-	_ = agentLifecycleHook("agent-shutdown", log, cfg)
+func agentLifecycleHookEnv(workers []*agent.AgentWorker) *env.Environment {
+	environ := env.New()
+	agentIDs := make([]string, 0, len(workers))
+	agentNames := make([]string, 0, len(workers))
+	for _, worker := range workers {
+		agentIDs = append(agentIDs, worker.AgentID())
+		agentNames = append(agentNames, worker.AgentName())
+	}
+
+	environ.Set("BUILDKITE_AGENT_IDS", strings.Join(agentIDs, ","))
+	environ.Set("BUILDKITE_AGENT_NAMES", strings.Join(agentNames, ","))
+
+	return environ
+}
+
+func agentShutdownHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) {
+	_ = agentLifecycleHook("agent-shutdown", log, cfg, agentLifecycleHookEnv(workers))
 }
 
 // agentLifecycleHook looks for a hook script in the hooks path
 // and executes it if found. Output (stdout + stderr) is streamed into the main
 // agent logger. Exit status failure is logged and returned for the caller to handle
-func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig) error {
+func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig, hookEnv *env.Environment) error {
 	// search for hook (including .bat & .ps1 files on Windows)
 	hooks := []string{}
 	p, err := hook.Find(nil, cfg.HooksPath, hookName)
@@ -1562,6 +1609,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		log.Errorf("creating shell for %q hook: %v", hookName, err)
 		return err
 	}
+	sh.Env.Merge(hookEnv)
 
 	var wg sync.WaitGroup
 	wg.Go(func() {

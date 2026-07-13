@@ -3,6 +3,7 @@ package job
 import (
 	"log"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -53,6 +54,9 @@ type ExecutorConfig struct {
 	// Should git submodules be checked out
 	GitSubmodules bool `env:"BUILDKITE_GIT_SUBMODULES"`
 
+	// Whether to enable Git LFS operations during checkout
+	GitLFSEnabled bool `env:"BUILDKITE_GIT_LFS_ENABLED"`
+
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
 
@@ -80,6 +84,9 @@ type ExecutorConfig struct {
 	// Skip the checkout phase entirely
 	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
 
+	// Comma-separated list of paths for git sparse checkout (cone mode).
+	GitSparseCheckoutPaths []string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"`
+
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
 
@@ -103,6 +110,12 @@ type ExecutorConfig struct {
 
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
+
+	// SSH private key to use for git checkout operations
+	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
+
+	// Enable git commit verification
+	GitCommitVerification string
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
 	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`
@@ -192,6 +205,12 @@ type ExecutorConfig struct {
 	// Traceing context information
 	TracingTraceParent string
 
+	// W3C tracestate accompanying TracingTraceParent. Plumbed through to the
+	// bootstrap environment whenever the server provides a value, but only
+	// attached to the OTel span context when TracingPropagateTraceparent is
+	// enabled (same opt-in gate as TracingTraceParent).
+	TracingTraceState string
+
 	// Accept traceparent context from Buildkite control plane
 	TracingPropagateTraceparent bool
 
@@ -267,8 +286,14 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 					log.Printf("warning: cannot parse %s=%q as %v, ignoring", tag, newStr, v.Type())
 					break
 				}
-				slice := strings.Split(newStr, ",")
-				v.Set(reflect.ValueOf(slice))
+				var newSlice []string
+				if newStr != "" {
+					newSlice = strings.Split(newStr, ",")
+				}
+				if slices.Equal(newSlice, v.Interface().([]string)) {
+					break
+				}
+				v.Set(reflect.ValueOf(newSlice))
 				changed[tag] = newStr
 
 			default:

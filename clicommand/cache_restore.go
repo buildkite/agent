@@ -2,8 +2,10 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/internal/cache"
 	"github.com/urfave/cli"
 	"go.opentelemetry.io/otel"
@@ -16,12 +18,14 @@ const cacheRestoreHelpDescription = `Usage:
 Description:
 
 Restores files from the cache for the current job based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml).
+defined in your cache config file (defaults to .buildkite/cache.yml or
+.buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be restored
-and their associated cache keys. Caches are scoped by organization, pipeline, and
-branch. If an exact cache match is not found, the command will attempt to use
-fallback keys if defined in your cache configuration.
+and their associated cache key. An entry is restored when its target_paths
+(an order-insensitive set) and the mandatory parts of its cache_key match. By
+default every key part is mandatory; mark a part with fallbackLimit: true to make
+every part after it optional.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
@@ -30,24 +34,35 @@ Example:
 
     $ buildkite-agent cache restore
 
-This will restore all caches defined in .buildkite/cache.yml. You can also restore
-specific caches by providing their IDs:
+This will restore all caches defined in the cache configuration file.
+You can also restore specific caches by providing their names:
 
-    $ buildkite-agent cache restore --ids "node"
+    $ buildkite-agent cache restore --name "node"
 
-The cache will be retrieved from the bucket specified by --bucket-url or your
-cache configuration.
+The cache is retrieved from BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url),
+downloaded directly using the agent's ambient credentials. The registry is
+selected by BUILDKITE_AGENT_CACHE_REGISTRY (or --registry); '~' selects the
+cluster default.
 
 Configuration File Format:
 
-The cache configuration file should be in YAML format:
+The cache configuration file should be in YAML format. cache_key is an ordered
+list of parts; each part is a literal string or one of { agent: os },
+{ agent: arch }, { checksum: <file> }, or { env: <VAR> }. Any one part may also
+set fallbackLimit: true to make every part after it optional for fallback
+matching (the marked part itself stays mandatory). In the example below an exact
+match is preferred, but if the lockfile changed, an entry matching node + os + arch
+is still restored, as the fallback is specified on arch, making node + os + arch mandatory, 
+but making checksum optional:
 
-    dependencies:
-      - id: node
-        key: '{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum "package-lock.json" }}'
-        fallback_keys:
-          - '{{ id }}-{{ agent.os }}-{{ agent.arch }}-'
-        paths:
+    caches:
+      - name: node
+        cache_key:
+          - node
+          - { agent: os }
+          - { agent: arch, fallbackLimit: true }
+          - { checksum: package-lock.json }
+        target_paths:
           - node_modules
 
 Cache Restoration Results:
@@ -55,12 +70,7 @@ Cache Restoration Results:
 The command will report one of three outcomes for each cache:
   - Cache hit: Exact key match found and restored
   - Fallback used: No exact match, but a fallback key was found and restored
-  - Cache miss: No matching cache found
-
-The command automatically uses the following environment variables when available:
-  - BUILDKITE_BRANCH (for branch scoping)
-  - BUILDKITE_PIPELINE_SLUG (for pipeline scoping)
-  - BUILDKITE_ORGANIZATION_SLUG (for organization scoping)`
+  - Cache miss: No matching cache found`
 
 type CacheRestoreConfig struct {
 	GlobalConfig
@@ -80,23 +90,27 @@ var CacheRestoreCommand = cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")
 		defer span.End()
 
-		l.Infof("Cache restore command executed")
+		// Emit a Buildkite group header as raw job-log output so the cache
+		// output is collapsed into its own group.
+		fmt.Println("--- :package: Restoring cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
+		apiClient := api.NewClient(l, apiCfg)
+
+		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		if err != nil {
+			return err
+		}
 
 		// Build cache configuration
 		cacheCfg := cache.Config{
+			Registry:        cfg.Registry,
 			BucketURL:       cfg.BucketURL,
-			Branch:          cfg.Branch,
-			Pipeline:        cfg.Pipeline,
-			Organization:    cfg.Organization,
-			CacheConfigFile: cfg.CacheConfigFile,
-			Ids:             cfg.Ids,
-			APIEndpoint:     apiCfg.Endpoint,
-			APIToken:        apiCfg.Token,
+			CacheConfigFile: cacheConfigFile,
+			Names:           cfg.Names,
 		}
 
 		// Perform cache restore (logging happens inside)
-		return cache.Restore(ctx, l, cacheCfg)
+		return cache.RunRestore(ctx, l, apiClient, cacheCfg)
 	},
 }

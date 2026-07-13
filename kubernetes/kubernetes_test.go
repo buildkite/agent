@@ -21,7 +21,7 @@ func TestOrderedClients(t *testing.T) {
 
 	clients := []*Client{{ID: 0}, {ID: 1}, {ID: 2}}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	for _, client := range clients {
@@ -60,7 +60,7 @@ func TestLivenessCheck(t *testing.T) {
 
 	clients := []*Client{{ID: 0}, {ID: 1}}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(cancel)
 
 	for _, client := range clients {
@@ -105,7 +105,7 @@ func TestDuplicateClients(t *testing.T) {
 	client0 := &Client{ID: 0, SocketPath: socketPath}
 	client1 := &Client{ID: 0, SocketPath: socketPath}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	if err := connect(ctx, client0); err != nil {
@@ -123,7 +123,7 @@ func TestExcessClients(t *testing.T) {
 	client0 := &Client{ID: 0, SocketPath: socketPath}
 	client1 := &Client{ID: 1, SocketPath: socketPath}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	if err := connect(ctx, client0); err != nil {
@@ -140,7 +140,7 @@ func TestWaitStatusNonZero(t *testing.T) {
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
 	client1 := &Client{ID: 1, SocketPath: runner.conf.SocketPath}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	if err := connect(ctx, client0); err != nil {
@@ -162,7 +162,7 @@ func TestWaitStatusNonZero(t *testing.T) {
 
 func TestInterruptBeforeStart(t *testing.T) {
 	runner := newRunner(t, 2)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
 
@@ -185,7 +185,7 @@ func TestInterruptBeforeStart(t *testing.T) {
 
 func TestTerminateBeforeStart(t *testing.T) {
 	runner := newRunner(t, 2)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
 
@@ -208,7 +208,7 @@ func TestTerminateBeforeStart(t *testing.T) {
 
 func TestInterruptAfterStart(t *testing.T) {
 	runner := newRunner(t, 2)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
 
@@ -237,7 +237,7 @@ func TestInterruptAfterStart(t *testing.T) {
 
 func TestTerminateAfterStart(t *testing.T) {
 	runner := newRunner(t, 2)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
 
@@ -282,7 +282,7 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 		ClientStartTimeout: 10 * time.Minute,
 		ClientLostTimeout:  2 * time.Second,
 	})
-	runnerCtx, cancelRunner := context.WithCancel(context.Background())
+	runnerCtx, cancelRunner := context.WithCancel(t.Context())
 	runErrCh := make(chan error, 1)
 	go func() {
 		runErrCh <- runner.Run(runnerCtx)

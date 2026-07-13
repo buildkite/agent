@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -25,7 +24,7 @@ func TestAgentResume(t *testing.T) {
 	server := newAgentResumeTestServer(t)
 	defer server.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := AgentResumeConfig{
 		APIConfig: APIConfig{
 			AgentAccessToken: "agentaccesstoken",

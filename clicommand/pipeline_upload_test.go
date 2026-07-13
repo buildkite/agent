@@ -1,7 +1,7 @@
 package clicommand
 
 import (
-	"context"
+	"errors"
 	"os"
 	"runtime"
 	"strings"
@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/ordered"
+	"github.com/buildkite/go-pipeline/warning"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -190,7 +191,7 @@ steps:
 			},
 		}}
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var gotPipelines []*pipeline.Pipeline
 
@@ -243,7 +244,7 @@ steps:
 				RedactedVars:  []string{},
 				RejectSecrets: true,
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			if test.preferRuntimeEnv {
 				ctx, _ = experiments.Enable(ctx, experiments.InterpolationPrefersRuntimeEnv)
 			}
@@ -264,6 +265,144 @@ steps:
 
 			if diff := cmp.Diff(gotCommands, test.wantCommands); diff != "" {
 				t.Errorf("commands diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestParseWarningsSurviveInterpolation checks that a parse-level warning is reported as a *Warning by parseAndInterpolate
+// regardless of whether interpolation is enabled.
+func TestParseWarningsSurviveInterpolation(t *testing.T) {
+	t.Parallel()
+	const pipelineYAML = `---
+steps:
+- llamas
+`
+
+	tests := []struct {
+		name          string
+		interpolation bool
+	}{
+		{name: "with interpolation", interpolation: true},
+		{name: "without interpolation", interpolation: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &PipelineUploadConfig{
+				NoInterpolation: !test.interpolation,
+				RedactedVars:    []string{},
+			}
+			ctx := t.Context()
+			environ := env.FromMap(map[string]string{})
+
+			var gotWarning bool
+			for _, err := range cfg.parseAndInterpolate(ctx, "test", strings.NewReader(pipelineYAML), environ) {
+				if err == nil {
+					continue
+				}
+				if w := warning.As(err); w != nil {
+					gotWarning = true
+					continue
+				}
+				t.Errorf("parseAndInterpolate yielded a non-warning error = %v; want a *Warning", err)
+			}
+
+			if !gotWarning {
+				t.Errorf("parseAndInterpolate(interpolation=%v) yielded no warning for %q; want a parse warning", test.interpolation, pipelineYAML)
+			}
+		})
+	}
+}
+
+// TestHandleParseError covers the bail-out decision for errors yielded by
+// parseAndInterpolate: hard errors always abort, warnings abort only when
+// --reject-parse-warnings is set, and otherwise warnings are logged and the
+// upload proceeds.
+func TestHandleParseError(t *testing.T) {
+	t.Parallel()
+
+	parseWarning := warning.Newf("unknown step type %q", "llamas")
+	hardError := errors.New("pipeline parsing failed")
+
+	tests := []struct {
+		desc                string
+		rejectParseWarnings bool
+		err                 error
+		wantAbort           bool
+		wantExitCode        int
+		wantLogContains     string
+	}{
+		{
+			desc:      "nil error proceeds",
+			err:       nil,
+			wantAbort: false,
+		},
+		{
+			desc:      "hard error aborts regardless of flag",
+			err:       hardError,
+			wantAbort: true,
+		},
+		{
+			desc:                "hard error aborts even with reject enabled",
+			err:                 hardError,
+			rejectParseWarnings: true,
+			wantAbort:           true,
+		},
+		{
+			desc:            "warning is logged and proceeds by default",
+			err:             parseWarning,
+			wantAbort:       false,
+			wantLogContains: "pipeline upload will proceed",
+		},
+		{
+			desc:                "warning aborts when reject enabled",
+			err:                 parseWarning,
+			rejectParseWarnings: true,
+			wantAbort:           true,
+			wantExitCode:        1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &PipelineUploadConfig{RejectParseWarnings: test.rejectParseWarnings}
+			l := logger.NewBuffer()
+
+			got := cfg.handleParseError(l, "test.yaml", test.err)
+
+			if test.wantAbort && got == nil {
+				t.Fatalf("handleParseError(...) = nil; want non-nil (abort)")
+			}
+			if !test.wantAbort && got != nil {
+				t.Fatalf("handleParseError(...) = %v; want nil (proceed)", got)
+			}
+
+			if test.wantExitCode != 0 {
+				var exitErr *ExitError
+				if !errors.As(got, &exitErr) {
+					t.Fatalf("handleParseError(...) = %v; want an *ExitError", got)
+				}
+				if exitErr.Code() != test.wantExitCode {
+					t.Errorf("ExitError code = %d; want %d", exitErr.Code(), test.wantExitCode)
+				}
+			}
+
+			var loggedWarning string
+			for _, m := range l.Messages {
+				if strings.HasPrefix(m, "[warn] ") {
+					loggedWarning = m
+				}
+			}
+			switch {
+			case test.wantLogContains == "" && loggedWarning != "":
+				t.Errorf("unexpected warning logged: %q", loggedWarning)
+			case test.wantLogContains != "" && !strings.Contains(loggedWarning, test.wantLogContains):
+				t.Errorf("warning log = %q; want it to contain %q", loggedWarning, test.wantLogContains)
 			}
 		})
 	}
@@ -307,7 +446,7 @@ steps:
 				RedactedVars:    []string{},
 				RejectSecrets:   true,
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 
 			var gotCommands []string
 

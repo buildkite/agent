@@ -1,0 +1,11 @@
+caches:
+  - name: filesystem_integrity
+    cache_key:
+      - cache-e2e-fs
+      - { env: BUILDKITE_BUILD_ID }
+    target_paths:
+      - fs-test
+      # The placeholder below is replaced with the resolved home directory at
+      # runtime, so this becomes a literal absolute path and exercises the
+      # IsAbs branch rather than tilde expansion in the cache archive mapping.
+      - __HOME__/cache-abs-fs

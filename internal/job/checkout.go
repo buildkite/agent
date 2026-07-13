@@ -213,10 +213,16 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	return nil
 }
 
+// errCheckoutAttemptTimedOut is a sentinel marker, joined into the error
+// returned by runDefaultCheckoutAttempt when the per-attempt timeout fires.
+// The retry loop matches it explicitly so a timeout-killed git process is
+// retried instead of being treated like a user signal.
+var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
+
 // runDefaultCheckoutAttempt runs defaultCheckoutPhase, applying a per-attempt
-// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the underlying
-// error is wrapped so the retry loop's generic failure path can log a
-// meaningful message and clean up before retrying.
+// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the returned
+// error is joined with errCheckoutAttemptTimedOut so the retry loop can
+// distinguish a timeout-kill from other signal-terminated processes.
 func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 	if e.GitCheckoutTimeout <= 0 {
 		return e.defaultCheckoutPhase(ctx)
@@ -228,7 +234,7 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 
 	err := e.defaultCheckoutPhase(attemptCtx)
 	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
-		return fmt.Errorf("checkout attempt timed out after %s: %w", timeout, err)
+		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimedOut, timeout, err)
 	}
 	return err
 }
@@ -256,6 +262,24 @@ func (e *Executor) checkout(ctx context.Context) error {
 			break
 		}
 
+		// Fail fast before any git work if git-lfs is required but missing.
+		// This operation only handles default checkout behavior, so it's possible for a custom checkout hook to require git-lfs but not have this check. That's a bit unfortunate, but we can add it to custom hooks later if needed.
+		//
+		// We probe via `git lfs version` rather than looking up `git-lfs` on
+		// PATH directly: git resolves subcommands via GIT_EXEC_PATH before
+		// falling back to PATH, so on platforms where git-lfs is bundled
+		// alongside git (notably Git for Windows) the binary is reachable to
+		// `git lfs ...` even when a PATH lookup would miss it. This matches
+		// the resolution path used by the actual LFS commands later.
+		if e.GitLFSEnabled {
+			// Leave stderr visible: when this probe fails it is almost always
+			// a misconfigured agent environment, and git's specific message
+			// (e.g. "'lfs' is not a git command") is the fastest diagnostic.
+			if _, err := e.shell.Command("git", "lfs", "version").RunAndCaptureStdout(ctx, shell.ShowStderr(true)); err != nil {
+				return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: %w", err)
+			}
+		}
+
 		maxAttempts := e.CheckoutAttempts
 		if maxAttempts <= 0 {
 			maxAttempts = 6
@@ -275,6 +299,20 @@ func (e *Executor) checkout(ctx context.Context) error {
 			var errGit *gitError
 
 			switch {
+			case errors.Is(err, errCheckoutAttemptTimedOut):
+				// The per-attempt timeout fired and git was signal-killed.
+				// Treat this like a generic transient failure: warn, clean
+				// the checkout dir, and let the retrier try again.
+				e.shell.Warningf("Checkout failed! %s (%s)", err, r)
+
+				if err := e.removeCheckoutDir(); err != nil {
+					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
+				}
+
+				if err := e.createCheckoutDir(); err != nil {
+					return err
+				}
+
 			case shell.IsExitError(err) && shell.ExitCode(err) == -1:
 				e.shell.Warningf("Checkout was interrupted by a signal")
 				r.Break()
@@ -838,6 +876,19 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
 	}
 
+	sshKeyPath, cleanupSSHKey, err := e.prepareGitSSHKey()
+	if err != nil {
+		return fmt.Errorf("preparing git ssh key: %w", err)
+	}
+	if cleanupSSHKey != nil {
+		defer func() {
+			if cleanupErr := cleanupSSHKey(); cleanupErr != nil {
+				cleanupErr = fmt.Errorf("cleaning up git ssh key %q: %w", sshKeyPath, cleanupErr)
+				retErr = errors.Join(retErr, cleanupErr)
+			}
+		}()
+	}
+
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
@@ -931,7 +982,25 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return fmt.Errorf("cleaning git repository: %w", err)
 	}
 
+	// Install LFS filter before fetch so the filter is registered before any
+	// network operation, following the conventional git-lfs setup order.
+	if e.GitLFSEnabled {
+		e.shell.Commentf("Installing Git LFS filter")
+		if err := e.shell.Command("git", "lfs", "install", "--local").Run(ctx); err != nil {
+			return fmt.Errorf("installing git lfs filter: %w", err)
+		}
+	}
+
 	if err := e.fetchSource(ctx); err != nil {
+		return err
+	}
+
+	if err := e.verifyCommit(ctx); err != nil {
+		return err
+	}
+
+	sparseCheckoutActive, err := e.setupSparseCheckout(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -949,10 +1018,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 
 	gitSubmodules := false
 	if hasGitSubmodules(e.shell) {
-		if e.GitSubmodules {
+		switch {
+		case sparseCheckoutActive:
+			e.shell.Commentf("Submodule initialization skipped during sparse checkout")
+		case e.GitSubmodules:
 			e.shell.Commentf("Git submodules detected")
 			gitSubmodules = true
-		} else {
+		default:
 			e.shell.OptionalWarningf("submodules-disabled", "This repository has submodules, but submodules are disabled")
 		}
 	}
@@ -1036,6 +1108,23 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 	}
 
+	// When sparse-checkout is active, scope LFS to the same paths so we don't
+	// pull objects outside the sparse set (SUP-6529). If sparse fell back to a
+	// full checkout (e.g. git < 2.26), fetch unscoped so files outside the
+	// requested paths still get their LFS content.
+	if e.GitLFSEnabled {
+		lfsArgs := gitLFSFetchCheckoutArgs{
+			Shell: e.shell,
+			Retry: true,
+		}
+		if sparseCheckoutActive {
+			lfsArgs.Include = cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
+		}
+		if err := gitLFSFetchCheckout(ctx, lfsArgs); err != nil {
+			return err
+		}
+	}
+
 	// Git clean after checkout. We need to do this because submodules could have
 	// changed in between the last checkout and this one. A double clean is the only
 	// good solution to this problem that we've found
@@ -1063,6 +1152,81 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	return nil
+}
+
+// prepareGitSSHKey materialises the configured GitSSHKey into a private
+// directory next to the build checkout and points GIT_SSH_COMMAND at it for
+// the duration of the checkout phase. It returns the path to the key file, a
+// cleanup function that removes the key and restores any previous
+// GIT_SSH_COMMAND, and an error. If no key is configured both the path and
+// cleanup are zero.
+//
+// Only the default checkout phase invokes this; custom checkout hooks must
+// arrange their own credentials.
+func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, retErr error) {
+	if e.GitSSHKey == "" {
+		return "", nil, nil
+	}
+
+	checkoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if !exists || checkoutPath == "" {
+		return "", nil, errors.New("BUILDKITE_BUILD_CHECKOUT_PATH is not set")
+	}
+
+	parentDir := filepath.Dir(checkoutPath)
+	if err := os.MkdirAll(parentDir, 0o700); err != nil {
+		return "", nil, fmt.Errorf("creating ssh key parent directory %q: %w", parentDir, err)
+	}
+
+	pattern := ".buildkite-ssh-key-"
+	if e.PipelineSlug != "" {
+		pattern += badCharsRE.ReplaceAllString(e.PipelineSlug, "-") + "-"
+	}
+
+	// os.MkdirTemp creates the directory with mode 0o700 on Unix, keeping the
+	// key file in its own private directory instead of beside the checkout.
+	sshKeyDir, err := os.MkdirTemp(parentDir, pattern)
+	if err != nil {
+		return "", nil, fmt.Errorf("creating ssh key directory: %w", err)
+	}
+	defer func() {
+		if retErr != nil {
+			_ = os.RemoveAll(sshKeyDir)
+		}
+	}()
+
+	sshKeyPath = filepath.Join(sshKeyDir, "id")
+	// Most SSH key parsers require a trailing newline; tolerate either form
+	// of input and always write a single one.
+	keyBytes := []byte(strings.TrimRight(e.GitSSHKey, "\n") + "\n")
+	if err := os.WriteFile(sshKeyPath, keyBytes, 0o600); err != nil {
+		return "", nil, fmt.Errorf("writing ssh key file: %w", err)
+	}
+
+	previousGitSSHCommand, hadPreviousGitSSHCommand := e.shell.Env.Get("GIT_SSH_COMMAND")
+	e.shell.Env.Set("GIT_SSH_COMMAND", gitSSHCommandForKeyFile(sshKeyPath, previousGitSSHCommand))
+
+	cleanup = func() error {
+		if hadPreviousGitSSHCommand {
+			e.shell.Env.Set("GIT_SSH_COMMAND", previousGitSSHCommand)
+		} else {
+			e.shell.Env.Remove("GIT_SSH_COMMAND")
+		}
+		if err := os.RemoveAll(sshKeyDir); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	return sshKeyPath, cleanup, nil
+}
+
+func gitSSHCommandForKeyFile(path, previous string) string {
+	keyOptions := fmt.Sprintf("-i %s -o IdentitiesOnly=yes", shellwords.Quote(path))
+	if previous == "" {
+		return "ssh " + keyOptions
+	}
+	return strings.TrimSpace(previous) + " " + keyOptions
 }
 
 // gitFetchWithFallback run git fetch for refspecs, when it fails on recoverable reason, it will retry fetching

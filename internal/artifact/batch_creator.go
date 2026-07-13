@@ -27,6 +27,9 @@ type BatchCreatorConfig struct {
 
 	// Whether to allow multipart uploads to the BK-hosted bucket.
 	AllowMultipart bool
+
+	// OnBatchCreated observes successful CreateArtifacts calls.
+	OnBatchCreated func(artifactCount int, duration time.Duration)
 }
 
 type BatchCreator struct {
@@ -80,6 +83,7 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 				roko.WithMaxAttempts(10),
 				roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
 			)
+			started := time.Now()
 			creation, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.ArtifactBatchCreateResponse, error) {
 				ctxTimeout := ctx
 				if timeout != 0 {
@@ -110,9 +114,13 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 
 				return creation, err
 			})
+			duration := time.Since(started)
 			if err != nil {
 				yield(nil, err)
 				return
+			}
+			if a.conf.OnBatchCreated != nil {
+				a.conf.OnBatchCreated(len(theseArtifacts), duration)
 			}
 
 			for index, id := range creation.ArtifactIDs {

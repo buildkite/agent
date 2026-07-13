@@ -24,7 +24,9 @@ type AgentConfiguration struct {
 	GitCloneFlags                   string
 	GitCloneMirrorFlags             string
 	GitCleanFlags                   string
+	GitCommitVerification           string
 	GitFetchFlags                   string
+	GitSparseCheckoutPaths          []string
 	GitSubmodules                   bool
 	GitSubmoduleCloneConfig         []string
 	SkipCheckout                    bool
@@ -76,6 +78,7 @@ type AgentConfiguration struct {
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
+	ArtifactUploadConcurrency    int
 
 	PingMode string
 }
