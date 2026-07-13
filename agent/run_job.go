@@ -77,7 +77,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		return errors.New("job already cancelled before running")
 	}
 
-	r.agentLogger.Infof("Starting job at %s#%s", r.conf.Job.Env["BUILDKITE_BUILD_URL"], r.conf.Job.ID)
+	r.agentLogger.Infof("Starting job at %s", r.conf.Job.URL())
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
 	defer done()
@@ -457,7 +457,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 		r.agentLogger.Errorf("Couldn't mark job as finished: %v", err)
 	}
 
-	r.agentLogger.Infof("Finished job at %s#%s", r.conf.Job.Env["BUILDKITE_BUILD_URL"], r.conf.Job.ID)
+	r.agentLogger.Infof("Finished job at %s", r.conf.Job.URL())
 }
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output

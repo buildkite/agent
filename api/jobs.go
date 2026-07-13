@@ -33,6 +33,17 @@ type Job struct {
 	Priority              int                        `json:"priority"`
 }
 
+// JobURL returns the URL that deep-links to a specific job on its build page,
+// e.g. "https://buildkite.com/org/pipeline/builds/42#0190abcd-...".
+func JobURL(buildURL, jobID string) string {
+	return fmt.Sprintf("%s#%s", buildURL, jobID)
+}
+
+// URL returns the URL that deep-links to this job on its build page.
+func (j *Job) URL() string {
+	return JobURL(j.Env["BUILDKITE_BUILD_URL"], j.ID)
+}
+
 type JobState struct {
 	State string `json:"state,omitempty"`
 }
