@@ -123,17 +123,10 @@ type BootstrapConfig struct {
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
 
-// checkoutOverrideMode parses the configured checkout-override mode and floors
-// it at from-job when command-eval is disabled, so a job can't use backend env
-// or secret git flags to bypass no-command-eval. BootstrapConfig stores
-// CommandEval; the AgentStartConfig sibling uses NoCommandEval, so its check is
-// inverted. Keep the two in sync.
+// checkoutOverrideMode resolves the configured mode, flooring it for command-eval.
+// BootstrapConfig stores CommandEval (the AgentStartConfig sibling stores NoCommandEval).
 func (cfg *BootstrapConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, error) {
-	mode, err := env.ParseCheckoutOverrideMode(cfg.CheckoutOverrideMode)
-	if err != nil {
-		return mode, err
-	}
-	return mode.FlooredForCommandEval(cfg.CommandEval), nil
+	return resolveCheckoutOverrideMode(cfg.CheckoutOverrideMode, cfg.CommandEval)
 }
 
 var BootstrapCommand = cli.Command{

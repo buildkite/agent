@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/logger"
@@ -338,6 +339,19 @@ type APIConfig struct {
 	TraceHTTP        bool   `cli:"trace-http"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
+}
+
+// resolveCheckoutOverrideMode parses a checkout-override mode value and floors it
+// at from-job when command-eval is disabled, so a job can't use backend env or
+// secret git flags to bypass no-command-eval. AgentStartConfig and BootstrapConfig
+// store the command-eval flag with opposite polarity, so each passes the resolved
+// boolean here.
+func resolveCheckoutOverrideMode(raw string, commandEvalEnabled bool) (env.CheckoutOverrideMode, error) {
+	mode, err := env.ParseCheckoutOverrideMode(raw)
+	if err != nil {
+		return mode, err
+	}
+	return mode.FlooredForCommandEval(commandEvalEnabled), nil
 }
 
 func globalFlags() []cli.Flag {
