@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
@@ -228,7 +229,7 @@ func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
 	buildID, _ := env.Get("BUILDKITE_BUILD_ID")
 	buildNumber, _ := env.Get("BUILDKITE_BUILD_NUMBER")
 	buildURL, _ := env.Get("BUILDKITE_BUILD_URL")
-	jobURL := fmt.Sprintf("%s#%s", buildURL, e.JobID)
+	jobURL := api.JobURL(buildURL, e.JobID)
 	source, _ := env.Get("BUILDKITE_SOURCE")
 
 	retry := 0
