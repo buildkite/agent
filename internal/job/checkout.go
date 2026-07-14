@@ -1026,7 +1026,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 	}
 
-	// Split the fetch flags into a slice of strings, so we can append to it if needed.
+	// Parse the fetch flags into tokens so we can check for a user-supplied --filter flag.
 	gitFetchFlags, err := shellwords.Split(e.GitFetchFlags)
 	if err != nil {
 		return fmt.Errorf("splitting --git-fetch-flags %q: %w", e.GitFetchFlags, err)
