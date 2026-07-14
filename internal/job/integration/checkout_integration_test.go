@@ -234,7 +234,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit(t *testin
 
 	tester.RunAndCheck(t, env...)
 
-	if want := "Sparse checkout requires git >= 2.27; falling back to full checkout"; !strings.Contains(tester.Output, want) {
+	if want := "Sparse checkout requires git >= 2.27, got 2.20; falling back to full checkout"; !strings.Contains(tester.Output, want)
 		t.Errorf("bootstrap output missing fallback warning %q\noutput:\n%s", want, tester.Output)
 	}
 
