@@ -342,6 +342,34 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantEnvValue:       "agent/path",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"},
 		},
+		// Empty agent config: sparse paths are exported unconditionally (unlike the
+		// main-era len()>0 guard), so cover the no-agent-paths edge. Unlocked must
+		// still defer to job env; locked must ignore it. The lock-on case exports an
+		// empty string where main left the var unset, which the checkout consumer
+		// treats identically (cleanGitSparseCheckoutPaths drops it).
+		{
+			name:    "none_preserves_job_env_sparse_paths_with_empty_agent_config",
+			varName: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": "job/path",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideNone,
+			},
+			wantEnvValue: "job/path",
+		},
+		{
+			name:    "strict_locks_sparse_paths_with_empty_agent_config",
+			varName: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": "job/path",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"},
+		},
 		// Inverse cases: when the agent config sits on the side that emits no var
 		// by default, the lock must still force the agent value (regression for the
 		// leak where backend job env survived while checkout override was locked).
