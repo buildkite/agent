@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"crypto/subtle"
 	"maps"
 	"net/http"
 	"strings"
@@ -64,7 +65,10 @@ func AuthMiddleware(token string, errorLogf func(f string, v ...any)) func(http.
 				return
 			}
 
-			if reqToken != token {
+			// IMO, constant-time comparison is overkill here, as any attacker
+			// would already be on the host as the same user (in order to access
+			// the socket). But it helps keep spurious vuln reports away.
+			if subtle.ConstantTimeCompare([]byte(reqToken), []byte(token)) == 0 {
 				if err := WriteError(w, "invalid authorization token", http.StatusUnauthorized); err != nil {
 					errorLogf("AuthMiddleware: couldn't write error response: %v", err)
 				}
