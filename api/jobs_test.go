@@ -13,6 +13,24 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 )
 
+func TestJobURL(t *testing.T) {
+	const buildURL = "https://buildkite.com/my-org/my-pipeline/builds/42"
+	const jobID = "b078e2d2-86e9-4c12-bf3b-612a8058d0a4"
+	const want = buildURL + "#" + jobID
+
+	if got := api.JobURL(buildURL, jobID); got != want {
+		t.Errorf("JobURL(%q, %q) = %q, want %q", buildURL, jobID, got, want)
+	}
+
+	job := &api.Job{
+		ID:  jobID,
+		Env: map[string]string{"BUILDKITE_BUILD_URL": buildURL},
+	}
+	if got := job.URL(); got != want {
+		t.Errorf("job.URL() = %q, want %q", got, want)
+	}
+}
+
 func TestPromiseFailure(t *testing.T) {
 	const jobID = "b078e2d2-86e9-4c12-bf3b-612a8058d0a4"
 	const accessToken = "llamas"

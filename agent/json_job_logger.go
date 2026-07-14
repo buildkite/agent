@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -27,7 +26,7 @@ func NewJSONJobLogger(conf JobRunnerConfig) JSONJobLogger {
 		logger.StringField("queue", job.Env["BUILDKITE_AGENT_META_DATA_QUEUE"]),
 		logger.StringField("build_id", job.Env["BUILDKITE_BUILD_ID"]),
 		logger.StringField("build_number", job.Env["BUILDKITE_BUILD_NUMBER"]),
-		logger.StringField("job_url", fmt.Sprintf("%s#%s", job.Env["BUILDKITE_BUILD_URL"], job.ID)),
+		logger.StringField("job_url", job.URL()),
 		logger.StringField("build_url", job.Env["BUILDKITE_BUILD_URL"]),
 		logger.StringField("job_id", job.ID),
 		logger.StringField("step_key", job.Env["BUILDKITE_STEP_KEY"]),
