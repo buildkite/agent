@@ -439,6 +439,18 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantEnvValue:       "false",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"},
 		},
+		{
+			name:    "none_allows_job_env_to_override_skip_fetch_existing_commits",
+			varName: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSkipFetchExistingCommits: true,
+				CheckoutOverrideMode:        env.CheckoutOverrideNone,
+			},
+			wantEnvValue: "false",
+		},
 		// The remaining checkout-scoped vars all flow through setCheckoutEnv; cover
 		// each in both directions so a regression in any one is caught. The git flag
 		// vars are the injection vectors the lock exists to contain.
