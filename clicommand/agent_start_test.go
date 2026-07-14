@@ -10,6 +10,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli"
@@ -376,53 +377,70 @@ func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
 	}
 }
 
-func TestAgentStartLockCheckoutWhenCommandEvalDisabled(t *testing.T) {
+func TestAgentStartCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
 	// AgentStartConfig uses NoCommandEval, so the zero value leaves command-eval
-	// enabled and the lock off.
+	// enabled; none is only floored to from-job when command-eval is disabled.
 	tests := []struct {
 		name string
 		cfg  AgentStartConfig
-		want bool
+		want env.CheckoutOverrideMode
 	}{
-		{name: "explicit_flag", cfg: AgentStartConfig{NoCheckoutOverride: true}, want: true},
-		{name: "no_command_eval_forces_lock", cfg: AgentStartConfig{NoCommandEval: true}, want: true},
-		{name: "defaults_unlocked", cfg: AgentStartConfig{}, want: false},
+		{name: "default_from_job", cfg: AgentStartConfig{}, want: env.CheckoutOverrideFromJob},
+		{name: "explicit_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "strict"}, want: env.CheckoutOverrideStrict},
+		{name: "explicit_none", cfg: AgentStartConfig{CheckoutOverrideMode: "none"}, want: env.CheckoutOverrideNone},
+		{name: "no_command_eval_floors_none_to_from_job", cfg: AgentStartConfig{CheckoutOverrideMode: "none", NoCommandEval: true}, want: env.CheckoutOverrideFromJob},
+		{name: "no_command_eval_leaves_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "strict", NoCommandEval: true}, want: env.CheckoutOverrideStrict},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			tc.cfg.lockCheckoutWhenCommandEvalDisabled()
-			if got := tc.cfg.NoCheckoutOverride; got != tc.want {
-				t.Errorf("NoCheckoutOverride = %v, want %v", got, tc.want)
+			got, err := tc.cfg.checkoutOverrideMode()
+			if err != nil {
+				t.Fatalf("checkoutOverrideMode() error = %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("checkoutOverrideMode() = %v, want %v", got, tc.want)
 			}
 		})
 	}
 }
 
-func TestBootstrapLockCheckoutWhenCommandEvalDisabled(t *testing.T) {
+func TestAgentStartCheckoutOverrideModeInvalid(t *testing.T) {
+	t.Parallel()
+	cfg := AgentStartConfig{CheckoutOverrideMode: "bogus"}
+	if _, err := cfg.checkoutOverrideMode(); err == nil {
+		t.Error("checkoutOverrideMode() with invalid mode: want error, got nil")
+	}
+}
+
+func TestBootstrapCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
-	// BootstrapConfig uses CommandEval, so the zero value disables command-eval
-	// and forces the lock on; "unlocked" cases must set CommandEval explicitly.
+	// BootstrapConfig uses CommandEval; the zero value disables command-eval and
+	// floors none to from-job, so cases that keep none must set CommandEval.
 	tests := []struct {
 		name string
 		cfg  BootstrapConfig
-		want bool
+		want env.CheckoutOverrideMode
 	}{
-		{name: "explicit_flag", cfg: BootstrapConfig{NoCheckoutOverride: true, CommandEval: true}, want: true},
-		{name: "command_eval_disabled_forces_lock", cfg: BootstrapConfig{CommandEval: false}, want: true},
-		{name: "defaults_unlocked", cfg: BootstrapConfig{CommandEval: true}, want: false},
+		{name: "default_from_job", cfg: BootstrapConfig{CommandEval: true}, want: env.CheckoutOverrideFromJob},
+		{name: "explicit_strict", cfg: BootstrapConfig{CheckoutOverrideMode: "strict", CommandEval: true}, want: env.CheckoutOverrideStrict},
+		{name: "explicit_none", cfg: BootstrapConfig{CheckoutOverrideMode: "none", CommandEval: true}, want: env.CheckoutOverrideNone},
+		{name: "command_eval_disabled_floors_none_to_from_job", cfg: BootstrapConfig{CheckoutOverrideMode: "none", CommandEval: false}, want: env.CheckoutOverrideFromJob},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			tc.cfg.lockCheckoutWhenCommandEvalDisabled()
-			if got := tc.cfg.NoCheckoutOverride; got != tc.want {
-				t.Errorf("NoCheckoutOverride = %v, want %v", got, tc.want)
+			got, err := tc.cfg.checkoutOverrideMode()
+			if err != nil {
+				t.Fatalf("checkoutOverrideMode() error = %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("checkoutOverrideMode() = %v, want %v", got, tc.want)
 			}
 		})
 	}

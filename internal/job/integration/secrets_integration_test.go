@@ -564,21 +564,30 @@ func TestSecretsIntegration_ProtectedEnvironmentVariableRejection(t *testing.T) 
 	}
 }
 
-func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
+func TestSecretsIntegration_CheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
+	// Secrets are an outside-the-job source, so both from-job (the default) and
+	// strict block a secret from setting a checkout-scoped var; only none allows
+	// it.
 	tests := []struct {
-		name               string
-		envVar             string
-		secretValue        string
-		noCheckoutOverride bool
-		wantErr            bool
+		name                string
+		envVar              string
+		secretValue         string
+		mode                string // BUILDKITE_CHECKOUT_OVERRIDE_MODE; "" leaves the default
+		commandEvalDisabled bool
+		wantErr             bool
 	}{
-		{name: "disabled_allows_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror"},
-		{name: "enabled_rejects_checkout_locked_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", noCheckoutOverride: true, wantErr: true},
-		{name: "enabled_rejects_sparse_checkout_paths_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", secretValue: "a/b", noCheckoutOverride: true, wantErr: true},
+		{name: "none_allows_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "none"},
+		{name: "default_rejects_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", wantErr: true},
+		{name: "from_job_rejects_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "from-job", wantErr: true},
+		{name: "strict_rejects_checkout_locked_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "strict", wantErr: true},
+		{name: "strict_rejects_sparse_checkout_paths_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", secretValue: "a/b", mode: "strict", wantErr: true},
 		// The lock must not over-block: a non-checkout secret is still allowed.
-		{name: "enabled_allows_unscoped_secret", envVar: "MY_CUSTOM_VAR", secretValue: "hello", noCheckoutOverride: true},
+		{name: "strict_allows_unscoped_secret", envVar: "MY_CUSTOM_VAR", secretValue: "hello", mode: "strict"},
+		// Disabling command-eval floors none up to from-job, so an outside-job
+		// secret that none would allow is now rejected.
+		{name: "none_floored_to_from_job_rejects_secret_when_command_eval_disabled", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "none", commandEvalDisabled: true, wantErr: true},
 	}
 
 	for _, tc := range tests {
@@ -617,8 +626,11 @@ func TestSecretsIntegration_NoCheckoutOverride(t *testing.T) {
 				fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
 				fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
 			}
-			if tc.noCheckoutOverride {
-				env = append(env, "BUILDKITE_NO_CHECKOUT_OVERRIDE=true")
+			if tc.mode != "" {
+				env = append(env, "BUILDKITE_CHECKOUT_OVERRIDE_MODE="+tc.mode)
+			}
+			if tc.commandEvalDisabled {
+				env = append(env, "BUILDKITE_COMMAND_EVAL=false")
 			}
 
 			err = tester.Run(t, env...)

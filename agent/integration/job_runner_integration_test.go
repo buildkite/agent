@@ -16,6 +16,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/bintest/v3"
 )
@@ -281,7 +282,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	}
 }
 
-func TestJobRunnerPassesNoCheckoutOverrideToBootstrapAndEnvFile(t *testing.T) {
+func TestJobRunnerPassesCheckoutOverrideModeToBootstrapAndEnvFile(t *testing.T) {
 	t.Parallel()
 
 	ctx, _ := experiments.Enable(t.Context(), experiments.PropagateAgentConfigVars)
@@ -303,8 +304,8 @@ func TestJobRunnerPassesNoCheckoutOverrideToBootstrapAndEnvFile(t *testing.T) {
 	})
 
 	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if got, want := c.GetEnv("BUILDKITE_NO_CHECKOUT_OVERRIDE"), "true"; got != want {
-			t.Errorf("c.GetEnv(BUILDKITE_NO_CHECKOUT_OVERRIDE) = %q, want %q", got, want)
+		if got, want := c.GetEnv("BUILDKITE_CHECKOUT_OVERRIDE_MODE"), "strict"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_CHECKOUT_OVERRIDE_MODE) = %q, want %q", got, want)
 			c.Exit(1)
 			return
 		}
@@ -317,8 +318,8 @@ func TestJobRunnerPassesNoCheckoutOverrideToBootstrapAndEnvFile(t *testing.T) {
 			return
 		}
 
-		if !strings.Contains(string(contents), "BUILDKITE_NO_CHECKOUT_OVERRIDE") {
-			t.Errorf("env file %q did not contain BUILDKITE_NO_CHECKOUT_OVERRIDE", envFile)
+		if !strings.Contains(string(contents), "BUILDKITE_CHECKOUT_OVERRIDE_MODE") {
+			t.Errorf("env file %q did not contain BUILDKITE_CHECKOUT_OVERRIDE_MODE", envFile)
 			c.Exit(1)
 			return
 		}
@@ -333,7 +334,7 @@ func TestJobRunnerPassesNoCheckoutOverrideToBootstrapAndEnvFile(t *testing.T) {
 	err := runJob(t, ctx, testRunJobConfig{
 		job:           j,
 		server:        server,
-		agentCfg:      agent.AgentConfiguration{NoCheckoutOverride: true},
+		agentCfg:      agent.AgentConfiguration{CheckoutOverrideMode: env.CheckoutOverrideStrict},
 		mockBootstrap: mb,
 	})
 	if err != nil {

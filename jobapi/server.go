@@ -22,9 +22,9 @@ func WithDebug() ServerOpts {
 	}
 }
 
-func WithNoCheckoutOverride() ServerOpts {
+func WithCheckoutOverrideMode(mode env.CheckoutOverrideMode) ServerOpts {
 	return func(s *Server) {
-		s.noCheckoutOverride = true
+		s.checkoutOverrideMode = mode
 	}
 }
 
@@ -48,10 +48,10 @@ type PromiseFailureDeclarer func(ctx context.Context, exitStatus int, reason str
 // and allows jobs to introspect and mutate their own state
 type Server struct {
 	// SocketPath is the path to the socket that the server is (or will be) listening on
-	SocketPath         string
-	Logger             shell.Logger
-	debug              bool
-	noCheckoutOverride bool
+	SocketPath           string
+	Logger               shell.Logger
+	debug                bool
+	checkoutOverrideMode env.CheckoutOverrideMode
 
 	mtx       sync.RWMutex
 	environ   *env.Environment

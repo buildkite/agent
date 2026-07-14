@@ -112,28 +112,28 @@ func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 	}
 }
 
-func TestReadFromEnvironmentDoesNotRefreshNoCheckoutOverride(t *testing.T) {
+func TestReadFromEnvironmentDoesNotRefreshCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
-	config := &ExecutorConfig{NoCheckoutOverride: true}
-	environ := env.FromSlice([]string{"BUILDKITE_NO_CHECKOUT_OVERRIDE=false"})
+	config := &ExecutorConfig{CheckoutOverrideMode: env.CheckoutOverrideStrict}
+	environ := env.FromSlice([]string{"BUILDKITE_CHECKOUT_OVERRIDE_MODE=none"})
 
 	changes := config.ReadFromEnvironment(environ)
 	if len(changes) != 0 {
 		t.Errorf("changes = %v, want none", changes)
 	}
-	if got, want := config.NoCheckoutOverride, true; got != want {
-		t.Errorf("config.NoCheckoutOverride = %t, want %t", got, want)
+	if got, want := config.CheckoutOverrideMode, env.CheckoutOverrideStrict; got != want {
+		t.Errorf("config.CheckoutOverrideMode = %v, want %v", got, want)
 	}
 }
 
-func TestReadFromEnvironmentSkipsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+func TestReadFromEnvironmentSkipsCheckoutScopedVarsWhenCheckoutLocked(t *testing.T) {
 	t.Parallel()
 
 	config := &ExecutorConfig{
-		NoCheckoutOverride: true,
-		SkipCheckout:       false,
-		GitCloneFlags:      "-v",
+		CheckoutOverrideMode: env.CheckoutOverrideStrict,
+		SkipCheckout:         false,
+		GitCloneFlags:        "-v",
 	}
 	environ := env.FromSlice([]string{
 		"BUILDKITE_SKIP_CHECKOUT=true",
@@ -149,6 +149,26 @@ func TestReadFromEnvironmentSkipsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled
 	}
 	if got, want := config.GitCloneFlags, "-v"; got != want {
 		t.Errorf("config.GitCloneFlags = %q, want %q", got, want)
+	}
+}
+
+func TestReadFromEnvironmentRefreshesCheckoutScopedVarsUnderFromJob(t *testing.T) {
+	t.Parallel()
+
+	// from-job lets hooks/plugins reconfigure checkout, so ReadFromEnvironment
+	// must apply their checkout-scoped changes rather than skip them.
+	config := &ExecutorConfig{
+		CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+		GitCloneFlags:        "-v",
+	}
+	environ := env.FromSlice([]string{"BUILDKITE_GIT_CLONE_FLAGS=--mirror"})
+
+	changes := config.ReadFromEnvironment(environ)
+	if got, want := config.GitCloneFlags, "--mirror"; got != want {
+		t.Errorf("config.GitCloneFlags = %q, want %q", got, want)
+	}
+	if _, ok := changes["BUILDKITE_GIT_CLONE_FLAGS"]; !ok {
+		t.Errorf("changes = %v, want it to contain BUILDKITE_GIT_CLONE_FLAGS", changes)
 	}
 }
 

@@ -362,9 +362,11 @@ func TestPatchEnv(t *testing.T) {
 	}
 }
 
-func TestPatchEnvAllowsCheckoutScopedVarsWhenNoCheckoutOverrideDisabled(t *testing.T) {
+func TestPatchEnvAllowsCheckoutScopedVarsUnderDefaultMode(t *testing.T) {
 	t.Parallel()
 
+	// The Job API is a within-job source, so the default mode (from-job) lets it
+	// write checkout-scoped vars; only strict blocks it.
 	environ := testEnvironWith("BUILDKITE_GIT_CLONE_FLAGS", "-v")
 	srv, token, err := testServer(t, environ, replacer.NewMux())
 	if err != nil {
@@ -399,11 +401,11 @@ func TestPatchEnvAllowsCheckoutScopedVarsWhenNoCheckoutOverrideDisabled(t *testi
 	})
 }
 
-func TestPatchEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+func TestPatchEnvRejectsCheckoutScopedVarsUnderStrict(t *testing.T) {
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -433,17 +435,17 @@ func TestPatchEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testi
 	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
 		expectedStatus: http.StatusUnprocessableEntity,
 		expectedError: &jobapi.ErrorResponse{
-			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]. Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled",
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]. Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=strict",
 		},
 		expectedEnv: testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false").Dump(),
 	})
 }
 
-func TestDeleteEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+func TestDeleteEnvRejectsCheckoutScopedVarsUnderStrict(t *testing.T) {
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -471,17 +473,17 @@ func TestDeleteEnvRejectsCheckoutScopedVarsWhenNoCheckoutOverrideEnabled(t *test
 	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvDeleteRequest, jobapi.EnvDeleteResponse]{
 		expectedStatus: http.StatusUnprocessableEntity,
 		expectedError: &jobapi.ErrorResponse{
-			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]. Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled",
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_SKIP_CHECKOUT]. Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=strict",
 		},
 		expectedEnv: testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false").Dump(),
 	})
 }
 
-func TestPatchEnvRejectsSparseCheckoutPathsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+func TestPatchEnvRejectsSparseCheckoutPathsUnderStrict(t *testing.T) {
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "a/b")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -511,19 +513,19 @@ func TestPatchEnvRejectsSparseCheckoutPathsWhenNoCheckoutOverrideEnabled(t *test
 	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
 		expectedStatus: http.StatusUnprocessableEntity,
 		expectedError: &jobapi.ErrorResponse{
-			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS]. Checkout-related variables are locked because BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled",
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS]. Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=strict",
 		},
 		expectedEnv: testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "a/b").Dump(),
 	})
 }
 
-func TestPatchEnvAllowsUnscopedVarsWhenNoCheckoutOverrideEnabled(t *testing.T) {
+func TestPatchEnvAllowsUnscopedVarsUnderStrict(t *testing.T) {
 	t.Parallel()
 
 	// The lock must not over-block: a normal, non-checkout var stays writable
-	// while BUILDKITE_NO_CHECKOUT_OVERRIDE is enabled.
+	// even under strict.
 	environ := testEnviron()
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithNoCheckoutOverride())
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}

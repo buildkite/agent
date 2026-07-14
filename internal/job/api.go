@@ -36,9 +36,7 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	if e.Debug {
 		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
 	}
-	if e.NoCheckoutOverride {
-		jobAPIOpts = append(jobAPIOpts, jobapi.WithNoCheckoutOverride())
-	}
+	jobAPIOpts = append(jobAPIOpts, jobapi.WithCheckoutOverrideMode(e.CheckoutOverrideMode))
 	srv, token, err := jobapi.NewServer(e.shell.Logger, socketPath, e.shell.Env, e.redactors, jobAPIOpts...)
 	if err != nil {
 		return cleanup, fmt.Errorf("creating job API server: %w", err)

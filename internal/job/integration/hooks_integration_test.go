@@ -120,37 +120,39 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
 }
 
-func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
+func TestEnvironmentHookCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
+	// An environment hook is a within-job source: the default (from-job) lets it
+	// set checkout vars; only strict blocks it.
 	tests := []struct {
 		name               string
 		envVar             string
 		envValue           string
-		noCheckoutOverride bool
+		mode               string // BUILDKITE_CHECKOUT_OVERRIDE_MODE; "" exercises the default
 		wantEnv            string
 		wantBlockedWarning bool
 	}{
 		{
-			name:     "disabled_allows_skip_checkout",
+			name:     "default_allows_skip_checkout",
 			envVar:   "BUILDKITE_SKIP_CHECKOUT",
 			envValue: "true",
 			wantEnv:  "true",
 		},
 		{
-			name:               "enabled_blocks_skip_checkout",
+			name:               "strict_blocks_skip_checkout",
 			envVar:             "BUILDKITE_SKIP_CHECKOUT",
 			envValue:           "true",
-			noCheckoutOverride: true,
+			mode:               "strict",
 			wantBlockedWarning: true,
 		},
 		{
 			// Sparse paths is only exercised in the blocked direction: the lock
 			// strips it before checkout, so the real checkout is unaffected.
-			name:               "enabled_blocks_sparse_checkout_paths",
+			name:               "strict_blocks_sparse_checkout_paths",
 			envVar:             "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
 			envValue:           "a/b",
-			noCheckoutOverride: true,
+			mode:               "strict",
 			wantBlockedWarning: true,
 		},
 	}
@@ -192,8 +194,8 @@ func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
 			})
 
 			env := []string{}
-			if tc.noCheckoutOverride {
-				env = append(env, "BUILDKITE_NO_CHECKOUT_OVERRIDE=true")
+			if tc.mode != "" {
+				env = append(env, "BUILDKITE_CHECKOUT_OVERRIDE_MODE="+tc.mode)
 			}
 
 			tester.RunAndCheck(t, env...)
@@ -207,12 +209,13 @@ func TestEnvironmentHookNoCheckoutOverride(t *testing.T) {
 	}
 }
 
-func TestEnvironmentHookCannotDisableNoCheckoutOverride(t *testing.T) {
+func TestEnvironmentHookCannotRelaxCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
-	// A hook must not be able to turn the lock off mid-job: exporting
-	// BUILDKITE_NO_CHECKOUT_OVERRIDE=false should be ignored, so a checkout-
-	// scoped var the same hook tries to set stays blocked.
+	// A hook must not be able to relax the mode mid-job: exporting
+	// BUILDKITE_CHECKOUT_OVERRIDE_MODE=none should be ignored while the agent
+	// runs with strict, so a checkout-scoped var the same hook tries to set
+	// stays blocked.
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
@@ -222,14 +225,14 @@ func TestEnvironmentHookCannotDisableNoCheckoutOverride(t *testing.T) {
 	filename := "environment"
 	script := []string{
 		"#!/usr/bin/env bash",
-		"export BUILDKITE_NO_CHECKOUT_OVERRIDE=false",
+		"export BUILDKITE_CHECKOUT_OVERRIDE_MODE=none",
 		"export BUILDKITE_SKIP_CHECKOUT=true",
 	}
 	if runtime.GOOS == "windows" {
 		filename = "environment.bat"
 		script = []string{
 			"@echo off",
-			"set BUILDKITE_NO_CHECKOUT_OVERRIDE=false",
+			"set BUILDKITE_CHECKOUT_OVERRIDE_MODE=none",
 			"set BUILDKITE_SKIP_CHECKOUT=true",
 		}
 	}
@@ -240,31 +243,31 @@ func TestEnvironmentHookCannotDisableNoCheckoutOverride(t *testing.T) {
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got == "true" {
-			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the lock to stay on and block it\n", got)
+			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want strict to stay on and block it\n", got)
 			c.Exit(1)
 			return
 		}
 		c.Exit(0)
 	})
 
-	tester.RunAndCheck(t, "BUILDKITE_NO_CHECKOUT_OVERRIDE=true")
+	tester.RunAndCheck(t, "BUILDKITE_CHECKOUT_OVERRIDE_MODE=strict")
 
-	// Both the lock var itself and the scoped var should be reported as blocked.
-	for _, want := range []string{"BUILDKITE_NO_CHECKOUT_OVERRIDE", "BUILDKITE_SKIP_CHECKOUT"} {
+	// Both the mode var itself and the scoped var should be reported as blocked.
+	for _, want := range []string{"BUILDKITE_CHECKOUT_OVERRIDE_MODE", "BUILDKITE_SKIP_CHECKOUT"} {
 		if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, want) {
 			t.Fatalf("output did not report %q as blocked\noutput: %s", want, tester.Output)
 		}
 	}
 }
 
-func TestNoCommandEvalAutoLocksCheckoutVars(t *testing.T) {
+func TestNoCommandEvalFloorsCheckoutOverrideModeToFromJob(t *testing.T) {
 	t.Parallel()
 
-	// no-command-eval implies no-checkout-override: with command eval disabled
-	// the agent must lock checkout vars so git flags cannot be used to bypass
-	// the no-command-eval protection. The job never sets
-	// BUILDKITE_NO_CHECKOUT_OVERRIDE; the lock is derived purely from
-	// command-eval being off.
+	// Disabling command-eval floors the mode up to from-job (none -> from-job;
+	// from-job and strict are unchanged). from-job only locks outside-job
+	// sources (backend job env, secrets), so a trusted agent hook can still set
+	// checkout vars even with command-eval off and mode=none. The floor's
+	// effect on outside-job sources is covered by the secrets integration test.
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
@@ -289,18 +292,18 @@ func TestNoCommandEvalAutoLocksCheckoutVars(t *testing.T) {
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got == "true" {
-			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the no-command-eval lock to block it\n", got)
+		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got != "true" {
+			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the hook's value to survive under from-job\n", got)
 			c.Exit(1)
 			return
 		}
 		c.Exit(0)
 	})
 
-	tester.RunAndCheck(t, "BUILDKITE_COMMAND_EVAL=false")
+	tester.RunAndCheck(t, "BUILDKITE_COMMAND_EVAL=false", "BUILDKITE_CHECKOUT_OVERRIDE_MODE=none")
 
-	if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT") {
-		t.Fatalf("expected BUILDKITE_SKIP_CHECKOUT to be reported as blocked\noutput: %s", tester.Output)
+	if strings.Contains(tester.Output, "env vars were blocked") && strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT") {
+		t.Fatalf("BUILDKITE_SKIP_CHECKOUT should not be blocked under from-job\noutput: %s", tester.Output)
 	}
 }
 

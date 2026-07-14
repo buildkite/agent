@@ -405,11 +405,17 @@ func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, erro
 
 // Creates the environment variables that will be used in the process and writes a flat environment file
 func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
+	// Captured before the local env map below shadows the env package name.
+	// Checkout-scoped vars are locked against backend job env under strict and
+	// from-job (i.e. every mode except none).
+	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
+	checkoutLockedFromJobEnv := checkoutMode != envutil.CheckoutOverrideNone
+
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
 	// sent by Buildkite. The variables below should always take precedence,
 	// except the checkout-scoped vars set via setCheckoutEnv, which defer to
-	// the Buildkite-sent value unless no-checkout-override is enabled.
+	// the Buildkite-sent value unless the checkout-override mode locks them.
 	env := make(map[string]string)
 	maps.Copy(env, r.conf.Job.Env)
 
@@ -441,11 +447,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 		env[name] = value
 	}
-	// For some checkout env vars, we allow the Job env (if present) to
-	// have higher precedence than the agent configuration, unless
-	// NoCheckoutOverride is set.
+	// For some checkout env vars, we allow the Job env (if present) to have
+	// higher precedence than the agent configuration, unless the checkout-override
+	// mode locks them. Only checkout-scoped vars are passed here.
 	setCheckoutEnv := func(name, value string) {
-		if !r.conf.AgentConfiguration.NoCheckoutOverride {
+		if !checkoutLockedFromJobEnv {
 			if _, exists := env[name]; exists {
 				return
 			}
@@ -479,7 +485,7 @@ BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
 BUILDKITE_GIT_SUBMODULES
 BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG
-BUILDKITE_NO_CHECKOUT_OVERRIDE
+BUILDKITE_CHECKOUT_OVERRIDE_MODE
 BUILDKITE_CANCEL_GRACE_PERIOD
 BUILDKITE_COMMAND_EVAL
 BUILDKITE_LOCAL_HOOKS_ENABLED
@@ -612,9 +618,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// These three vars are only emitted by the agent on one side of their
 	// default (submodules off, skip-checkout on, skip-fetch on); on the other
 	// side the agent stays silent and lets pipeline/step env decide. That silent
-	// side would leak past no-checkout-override, so when the lock is on we emit
-	// the agent value unconditionally to keep agent config authoritative.
-	if r.conf.AgentConfiguration.NoCheckoutOverride {
+	// side would leak past the checkout-override lock, so when the lock is on we
+	// emit the agent value unconditionally to keep agent config authoritative.
+	if checkoutLockedFromJobEnv {
 		setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
 		setEnv("BUILDKITE_SKIP_CHECKOUT", fmt.Sprint(r.conf.AgentConfiguration.SkipCheckout))
 		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", fmt.Sprint(r.conf.AgentConfiguration.GitSkipFetchExistingCommits))
@@ -634,7 +640,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 			setCheckoutEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
 		}
 	}
-	setEnv("BUILDKITE_NO_CHECKOUT_OVERRIDE", fmt.Sprint(r.conf.AgentConfiguration.NoCheckoutOverride))
+	setEnv("BUILDKITE_CHECKOUT_OVERRIDE_MODE", checkoutMode.String())
 	setEnv("BUILDKITE_CHECKOUT_ATTEMPTS", strconv.Itoa(r.conf.AgentConfiguration.CheckoutAttempts))
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))

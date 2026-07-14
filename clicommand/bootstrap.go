@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/self"
@@ -86,7 +87,7 @@ type BootstrapConfig struct {
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
 	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config" normalize:"list"`
-	NoCheckoutOverride           bool     `cli:"no-checkout-override"`
+	CheckoutOverrideMode         string   `cli:"checkout-override-mode"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -122,14 +123,17 @@ type BootstrapConfig struct {
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
 
-// lockCheckoutWhenCommandEvalDisabled forces no-checkout-override on when
-// command-eval is disabled, so git flags can't be used to bypass it.
-// BootstrapConfig stores this as CommandEval; the AgentStartConfig sibling uses
-// NoCommandEval, so its check is inverted. Keep the two in sync.
-func (cfg *BootstrapConfig) lockCheckoutWhenCommandEvalDisabled() {
-	if !cfg.CommandEval {
-		cfg.NoCheckoutOverride = true
+// checkoutOverrideMode parses the configured checkout-override mode and floors
+// it at from-job when command-eval is disabled, so a job can't use backend env
+// or secret git flags to bypass no-command-eval. BootstrapConfig stores
+// CommandEval; the AgentStartConfig sibling uses NoCommandEval, so its check is
+// inverted. Keep the two in sync.
+func (cfg *BootstrapConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, error) {
+	mode, err := env.ParseCheckoutOverrideMode(cfg.CheckoutOverrideMode)
+	if err != nil {
+		return mode, err
 	}
+	return mode.FlooredForCommandEval(cfg.CommandEval), nil
 }
 
 var BootstrapCommand = cli.Command{
@@ -253,7 +257,7 @@ var BootstrapCommand = cli.Command{
 
 		// Various git related flags shared with agent start
 		SkipCheckoutFlag,
-		NoCheckoutOverrideFlag,
+		CheckoutOverrideModeFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCloneMirrorFlagsFlag,
@@ -454,7 +458,10 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
 
-		cfg.lockCheckoutWhenCommandEvalDisabled()
+		checkoutMode, err := cfg.checkoutOverrideMode()
+		if err != nil {
+			return err
+		}
 
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
@@ -471,7 +478,7 @@ var BootstrapCommand = cli.Command{
 			SkipCheckout:                 cfg.SkipCheckout,
 			GitCheckoutTimeout:           cfg.GitCheckoutTimeout,
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
-			NoCheckoutOverride:           cfg.NoCheckoutOverride,
+			CheckoutOverrideMode:         checkoutMode,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,

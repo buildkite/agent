@@ -90,9 +90,9 @@ type ExecutorConfig struct {
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
 
-	// Lock the agent's checkout settings so the job cannot override them.
-	// Intentionally has no env tag so hooks cannot disable it at runtime.
-	NoCheckoutOverride bool
+	// Controls which sources may override the agent's checkout settings.
+	// Intentionally has no env tag so hooks cannot relax it at runtime.
+	CheckoutOverrideMode env.CheckoutOverrideMode
 
 	// Timeout in seconds for the git checkout phase (0 means no timeout)
 	GitCheckoutTimeout int `env:"BUILDKITE_GIT_CHECKOUT_TIMEOUT"`
@@ -251,7 +251,11 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 
 		// Find struct fields with env tag
 		if tag := f.Tag.Get("env"); tag != "" && environ.Exists(tag) {
-			if c.NoCheckoutOverride && env.IsCheckoutOverrideScoped(tag) {
+			// ReadFromEnvironment runs after applyEnvironmentChanges, so the
+			// checkout vars here come from within the job (hooks/plugins). Use the
+			// within-job predicate: from-job lets them reconfigure checkout, strict
+			// does not.
+			if env.IsCheckoutLockedFromWithinJob(tag, c.CheckoutOverrideMode) {
 				continue
 			}
 

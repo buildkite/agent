@@ -78,21 +78,21 @@ func TestRunningPlugins(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestPluginEnvironmentHookNoCheckoutOverride(t *testing.T) {
+func TestPluginEnvironmentHookCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
-	// A plugin's environment hook (e.g. git-clean) may set checkout flags by
-	// default, but no-checkout-override must block that mutation.
+	// A plugin's environment hook (e.g. git-clean) is a within-job source: the
+	// default (from-job) lets it set checkout flags; only strict blocks it.
 	tests := []struct {
-		name               string
-		envVar             string
-		envValue           string
-		noCheckoutOverride bool
-		wantBlocked        bool
+		name        string
+		envVar      string
+		envValue    string
+		mode        string // BUILDKITE_CHECKOUT_OVERRIDE_MODE; "" exercises the default
+		wantBlocked bool
 	}{
-		{name: "disabled_allows_plugin_to_override_skip_checkout", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true"},
-		{name: "enabled_blocks_plugin_skip_checkout_override", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true", noCheckoutOverride: true, wantBlocked: true},
-		{name: "enabled_blocks_plugin_sparse_checkout_paths_override", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", envValue: "a/b", noCheckoutOverride: true, wantBlocked: true},
+		{name: "default_allows_plugin_to_override_skip_checkout", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true"},
+		{name: "strict_blocks_plugin_skip_checkout_override", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true", mode: "strict", wantBlocked: true},
+		{name: "strict_blocks_plugin_sparse_checkout_paths_override", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", envValue: "a/b", mode: "strict", wantBlocked: true},
 	}
 
 	for _, tc := range tests {
@@ -146,8 +146,8 @@ func TestPluginEnvironmentHookNoCheckoutOverride(t *testing.T) {
 			})
 
 			env := []string{"BUILDKITE_PLUGINS=" + pluginJSON}
-			if tc.noCheckoutOverride {
-				env = append(env, "BUILDKITE_NO_CHECKOUT_OVERRIDE=true")
+			if tc.mode != "" {
+				env = append(env, "BUILDKITE_CHECKOUT_OVERRIDE_MODE="+tc.mode)
 			}
 
 			tester.RunAndCheck(t, env...)

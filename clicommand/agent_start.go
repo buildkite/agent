@@ -78,6 +78,8 @@ var (
 
 	mirrorCheckoutModes = []string{"dissociate", "reference"}
 
+	checkoutOverrideModes = env.CheckoutOverrideModeNames
+
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
 		regexp.MustCompile("^BUILDKITE$"),
 		regexp.MustCompile("^BUILDKITE_.*$"),
@@ -175,7 +177,7 @@ type AgentStartConfig struct {
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
 	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
-	NoCheckoutOverride          bool     `cli:"no-checkout-override"`
+	CheckoutOverrideMode        string   `cli:"checkout-override-mode"`
 	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
@@ -232,14 +234,17 @@ type AgentStartConfig struct {
 	DisconnectAfterJobTimeout          int           `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
-// lockCheckoutWhenCommandEvalDisabled forces no-checkout-override on when
-// command-eval is disabled, so git flags can't be used to bypass it.
-// AgentStartConfig stores this as NoCommandEval; the BootstrapConfig sibling
-// uses CommandEval, so its check is inverted. Keep the two in sync.
-func (cfg *AgentStartConfig) lockCheckoutWhenCommandEvalDisabled() {
-	if cfg.NoCommandEval {
-		cfg.NoCheckoutOverride = true
+// checkoutOverrideMode parses the configured checkout-override mode and floors
+// it at from-job when command-eval is disabled, so a job can't use backend env
+// or secret git flags to bypass no-command-eval. AgentStartConfig stores
+// NoCommandEval; the BootstrapConfig sibling uses CommandEval, so its check is
+// inverted. Keep the two in sync.
+func (cfg *AgentStartConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, error) {
+	mode, err := env.ParseCheckoutOverrideMode(cfg.CheckoutOverrideMode)
+	if err != nil {
+		return mode, err
 	}
+	return mode.FlooredForCommandEval(!cfg.NoCommandEval), nil
 }
 
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
@@ -547,7 +552,7 @@ var AgentStartCommand = cli.Command{
 
 		// Various git related flags shared with bootstrap
 		SkipCheckoutFlag,
-		NoCheckoutOverrideFlag,
+		CheckoutOverrideModeFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCleanFlagsFlag,
@@ -948,7 +953,10 @@ var AgentStartCommand = cli.Command{
 			cfg.NoPlugins = true
 		}
 
-		cfg.lockCheckoutWhenCommandEvalDisabled()
+		checkoutMode, err := cfg.checkoutOverrideMode()
+		if err != nil {
+			return err
+		}
 
 		// Guess the shell if none is provided
 		if cfg.Shell == "" {
@@ -1122,7 +1130,7 @@ var AgentStartCommand = cli.Command{
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,
 			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
-			NoCheckoutOverride:              cfg.NoCheckoutOverride,
+			CheckoutOverrideMode:            checkoutMode,
 			CheckoutAttempts:                cfg.CheckoutAttempts,
 			SSHKeyscan:                      !cfg.NoSSHKeyscan,
 			CommandEval:                     !cfg.NoCommandEval,
