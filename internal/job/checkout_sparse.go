@@ -25,13 +25,13 @@ func (e *Executor) resolveSparseCheckout(ctx context.Context) []string {
 	// `git sparse-checkout set --cone <paths>`, which was promoted
 	// from experimental to stable in git 2.27. On older git versions,
 	// fall back to a full checkout by returning nil.
-	ok, err := gitVersionAtLeast(ctx, e.shell, 2, 27)
+	ok, got, err := gitVersionAtLeast(ctx, e.shell, 2, 27)
 	if err != nil {
 		e.shell.Warningf("Sparse checkout requires git >= 2.27; falling back to full checkout (%v)", err)
 		return nil
 	}
 	if !ok {
-		e.shell.Warningf("Sparse checkout requires git >= 2.27; falling back to full checkout")
+		e.shell.Warningf("Sparse checkout requires git >= 2.27, got %s; falling back to full checkout", got)
 		return nil
 	}
 	return paths
@@ -55,21 +55,27 @@ func parseGitVersion(output string) (major, minor int, ok bool) {
 	return major, minor, true
 }
 
-func gitVersionAtLeast(ctx context.Context, sh *shell.Shell, major, minor int) (bool, error) {
+// gitVersionAtLeast reports whether the local git binary is at least
+// major.minor. It also returns the parsed "M.m" version string so callers can
+// include it in log output. The err return is reserved for actual failures
+// (git command failure, unparseable version output) — a git that is simply
+// too old returns (false, "M.m", nil), not an error.
+func gitVersionAtLeast(ctx context.Context, sh *shell.Shell, major, minor int) (ok bool, got string, err error) {
 	output, err := sh.Command("git", "--version").RunAndCaptureStdout(ctx)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
-	gitMajor, gitMinor, ok := parseGitVersion(strings.TrimSpace(output))
-	if !ok {
-		return false, fmt.Errorf("parsing git version from %q", strings.TrimSpace(output))
+	gitMajor, gitMinor, parseOK := parseGitVersion(strings.TrimSpace(output))
+	if !parseOK {
+		return false, "", fmt.Errorf("parsing git version from %q", strings.TrimSpace(output))
 	}
 
+	got = fmt.Sprintf("%d.%d", gitMajor, gitMinor)
 	if gitMajor != major {
-		return gitMajor > major, nil
+		return gitMajor > major, got, nil
 	}
-	return gitMinor >= minor, nil
+	return gitMinor >= minor, got, nil
 }
 
 // sparseCheckoutMayBeConfigured does a cheap filesystem check for marker files

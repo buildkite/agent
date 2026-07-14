@@ -54,11 +54,11 @@ func TestParseGitVersion(t *testing.T) {
 func TestSetupSparseCheckout_Enable(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
-	executor.GitSparseCheckoutPaths = []string{".buildkite/", "src/"}
 
+	paths := []string{".buildkite/", "src/"}
 	git.Expect("sparse-checkout", "set", "--cone", ".buildkite/", "src/").AndExitWith(0)
 
-	active, err := executor.setupSparseCheckout(t.Context(), []string{".buildkite/", "src/"})
+	active, err := executor.setupSparseCheckout(t.Context(), paths)
 	if err != nil {
 		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
 	}
@@ -139,7 +139,7 @@ func TestResolveSparseCheckout_VersionFallback(t *testing.T) {
 	if len(paths) != 0 {
 		t.Fatalf("resolveSparseCheckout(ctx) = %#v, want nil (fallback to full checkout)", paths)
 	}
-	if got, want := out.String(), "Sparse checkout requires git >= 2.27; falling back to full checkout"; !strings.Contains(got, want) {
+	if got, want := out.String(), "Sparse checkout requires git >= 2.27, got 2.25; falling back to full checkout"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
 	}
 
@@ -172,7 +172,7 @@ func TestSetupSparseCheckout_VersionFallbackDisablesPriorSparseConfig(t *testing
 	if active {
 		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = true, want false")
 	}
-	if got, want := out.String(), "Sparse checkout requires git >= 2.27; falling back to full checkout"; !strings.Contains(got, want) {
+	if got, want := out.String(), "Sparse checkout requires git >= 2.27, got 2.25; falling back to full checkout"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
 	}
 	if got, want := out.String(), "Disabling sparse checkout from previous build"; !strings.Contains(got, want) {
