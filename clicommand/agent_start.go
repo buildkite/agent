@@ -844,11 +844,30 @@ var AgentStartCommand = cli.Command{
 		},
 	),
 	Action: func(c *cli.Context) error {
+		// If a plaintext registration token was passed via the command line
+		// or environment, re-exec (on Unix) with the token passed over a pipe
+		// instead, so it isn't readable in /proc/PID/cmdline or
+		// /proc/PID/environ for the life of the agent. On success this
+		// replaces the process and never returns.
+		if err := reexecToScrubRegistrationToken(); err != nil {
+			_, _ = fmt.Fprintf(c.App.ErrWriter, "Couldn't re-exec to remove the registration token from the process command line/environment, continuing anyway: %v\n", err)
+		}
+
 		ctx := context.Background()
 		ctx, cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](ctx, c, withConfigFilePaths(
 			defaultConfigFilePaths(),
 		))
 		defer done()
+
+		// Resolve indirect registration tokens (fd://N from the re-exec
+		// above, or file://PATH) into the real token.
+		if isIndirectToken(cfg.Token) {
+			token, err := resolveRegistrationToken(cfg.Token)
+			if err != nil {
+				return fmt.Errorf("failed to resolve registration token %q: %w", cfg.Token, err)
+			}
+			cfg.Token = token
+		}
 
 		// used later to force the shutdown of the agent
 		ctx, cancel := context.WithCancel(ctx)

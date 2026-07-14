@@ -8,6 +8,45 @@ import (
 	"github.com/buildkite/agent/v3/api"
 )
 
+func TestGSUploaderURLAppendsPathSuffix(t *testing.T) {
+	t.Setenv("BUILDKITE_GCS_PATH_SUFFIX", ";tab=live_object")
+	for _, key := range []string{"BUILDKITE_GCS_ACCESS_HOST", "BUILDKITE_GCS_PATH_PREFIX"} {
+		if orig, ok := os.LookupEnv(key); ok {
+			os.Unsetenv(key) //nolint:errcheck // Best-effort.
+			t.Cleanup(func() {
+				os.Setenv(key, orig) //nolint:errcheck // Best-effort restore.
+			})
+		}
+	}
+
+	u := &GSUploader{
+		BucketName: "my-bucket",
+		BucketPath: "artifacts/my-pipeline/build-1/job-1",
+	}
+	artifact := &api.Artifact{Path: "index.html"}
+
+	got := u.URL(artifact)
+	want := "https://storage.googleapis.com/my-bucket/artifacts/my-pipeline/build-1/job-1/index.html;tab=live_object"
+	if got != want {
+		t.Errorf("URL() = %q, want %q", got, want)
+	}
+}
+
+func TestGSUploaderPathSuffixDoesNotAffectObjectName(t *testing.T) {
+	t.Setenv("BUILDKITE_GCS_PATH_SUFFIX", ";tab=live_object")
+
+	u := &GSUploader{
+		BucketName: "my-bucket",
+		BucketPath: "foo/bar",
+	}
+	artifact := &api.Artifact{Path: "index.html"}
+
+	// artifactPath is the object name used at upload — it must NOT include the suffix.
+	if got, want := u.artifactPath(artifact), "foo/bar/index.html"; got != want {
+		t.Errorf("artifactPath() = %q, want %q (suffix must not leak into object name)", got, want)
+	}
+}
+
 func TestParseGSDestination(t *testing.T) {
 	tests := []struct {
 		dest, bucket, path string
@@ -94,10 +133,10 @@ func TestGSUploaderArtifactPathNoLeadingSlash(t *testing.T) {
 // the two can never diverge again. Both the trailing-slash and no-slash forms
 // of a bucket-root destination are covered.
 func TestGSUploaderUploadKeyMatchesURL(t *testing.T) {
-	// URL() reads BUILDKITE_GCS_ACCESS_HOST and BUILDKITE_GCS_PATH_PREFIX via
-	// os.LookupEnv; the expected prefix below assumes the default environment,
-	// so unset them for the duration of the test.
-	for _, key := range []string{"BUILDKITE_GCS_ACCESS_HOST", "BUILDKITE_GCS_PATH_PREFIX"} {
+	// URL() reads BUILDKITE_GCS_ACCESS_HOST, BUILDKITE_GCS_PATH_PREFIX, and
+	// BUILDKITE_GCS_PATH_SUFFIX via os.LookupEnv; the expected prefix and key
+	// below assume the default environment, so unset them for the duration of the test.
+	for _, key := range []string{"BUILDKITE_GCS_ACCESS_HOST", "BUILDKITE_GCS_PATH_PREFIX", "BUILDKITE_GCS_PATH_SUFFIX"} {
 		if orig, ok := os.LookupEnv(key); ok {
 			os.Unsetenv(key) //nolint:errcheck // Best-effort.
 			t.Cleanup(func() {

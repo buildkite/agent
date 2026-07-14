@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -336,8 +337,8 @@ func TestLocalFileBlobDownloadNonExistent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to open source file") {
-		t.Errorf("error %q does not contain %q", err.Error(), "failed to open source file")
+	if !errors.Is(err, ErrBlobNotFound) {
+		t.Errorf("error %q is not ErrBlobNotFound", err.Error())
 	}
 }
 

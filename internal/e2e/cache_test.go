@@ -68,3 +68,20 @@ func TestCacheKeyFallback(t *testing.T) {
 		t.Errorf("Build state = %q, want %q", got, want)
 	}
 }
+
+// Test the cache-busting recovery path: when a blob is deleted from storage but
+// the registry entry survives (split-brain), restore degrades to a clean miss
+// and invalidates the stale entry, so a subsequent save re-uploads and a final
+// restore hits. The fixture nukes the blob from S3 between save and restore.
+func TestCacheMissingBlobReupload(t *testing.T) {
+	ctx := t.Context()
+
+	tc := newTestCase(t, "cache_missing_blob_reupload.yaml")
+
+	tc.startAgent()
+	build := tc.triggerBuild()
+	state := tc.waitForBuild(ctx, build)
+	if got, want := state, "passed"; got != want {
+		t.Errorf("Build state = %q, want %q", got, want)
+	}
+}

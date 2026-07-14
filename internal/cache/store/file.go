@@ -304,6 +304,9 @@ func (b *LocalFileBlob) Download(ctx context.Context, key, destPath string) (*Tr
 
 	srcFile, err := os.Open(dataPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: local key %s: %w", ErrBlobNotFound, key, err)
+		}
 		return nil, fmt.Errorf("failed to open source file: %w", err)
 	}
 	defer func() {

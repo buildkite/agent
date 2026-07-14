@@ -2,9 +2,14 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
+
+// ErrBlobNotFound is returned by a Blob's Download when the requested object
+// does not exist in the backing store.
+var ErrBlobNotFound = errors.New("blob not found")
 
 // Blob interface defines the operations for blob storage
 type Blob interface {
