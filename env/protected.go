@@ -1,5 +1,7 @@
 package env
 
+import "fmt"
+
 type protection struct {
 	// Some otherwise-protected env vars may be written from within the job
 	// being executed, including hooks and plugins.
@@ -52,6 +54,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION": {mutableFromWithinJob: true},
 	"BUILDKITE_BIN_PATH":                    {},
 	"BUILDKITE_BUILD_PATH":                  {},
+	"BUILDKITE_CHECKOUT_OVERRIDE_MODE":      {},
 	"BUILDKITE_COMMAND_EVAL":                {},
 	"BUILDKITE_CONFIG_PATH":                 {},
 	"BUILDKITE_CONTAINER_COUNT":             {},
@@ -64,7 +67,6 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_HOOKS_SHELL":                 {},
 	"BUILDKITE_KUBERNETES_EXEC":             {},
 	"BUILDKITE_LOCAL_HOOKS_ENABLED":         {},
-	"BUILDKITE_NO_CHECKOUT_OVERRIDE":        {},
 	"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH":  {mutableFromWithinJob: true},
 	"BUILDKITE_PLUGINS_ENABLED":             {},
 	"BUILDKITE_PLUGINS_PATH":                {},
@@ -113,9 +115,103 @@ func IsProtectedFromWithinJob(name string) bool {
 }
 
 // IsCheckoutOverrideScoped reports whether the environment variable is a
-// checkout-related var that is write-protected (against job env, secrets, hooks,
-// plugins, and the Job API) when no-checkout-override is enabled.
+// checkout-related var whose write-protection depends on the checkout-override
+// mode. Whether it's actually locked for a given source is decided by
+// IsCheckoutLocked and IsCheckoutLockedFromWithinJob.
 func IsCheckoutOverrideScoped(name string) bool {
 	_, exists := checkoutOverrideScope[normalizeKeyName(name)]
 	return exists
+}
+
+// CheckoutOverrideMode controls how much of the agent's checkout configuration a
+// job may override. It applies only to checkoutOverrideScope vars; protectedEnv
+// membership is independent of the mode.
+type CheckoutOverrideMode int
+
+const (
+	// CheckoutOverrideFromJob is the default and matches the agent's historical
+	// behaviour: checkout-scoped vars are locked against backend job env and
+	// secrets, but hooks, plugins, and the Job API may still set them so a job
+	// can tailor its own checkout.
+	CheckoutOverrideFromJob CheckoutOverrideMode = iota
+
+	// CheckoutOverrideStrict makes agent checkout config authoritative against
+	// every source: backend job env, secrets, hooks, plugins, and the Job API.
+	CheckoutOverrideStrict
+
+	// CheckoutOverrideNone lets any source override agent checkout config.
+	CheckoutOverrideNone
+)
+
+// Accepted flag/env values for the checkout-override modes.
+const (
+	checkoutOverrideFromJobName = "from-job"
+	checkoutOverrideStrictName  = "strict"
+	checkoutOverrideNoneName    = "none"
+)
+
+// CheckoutOverrideModeNames lists the accepted flag/env values, strictest first.
+var CheckoutOverrideModeNames = []string{
+	checkoutOverrideStrictName,
+	checkoutOverrideFromJobName,
+	checkoutOverrideNoneName,
+}
+
+func (m CheckoutOverrideMode) String() string {
+	switch m {
+	case CheckoutOverrideStrict:
+		return checkoutOverrideStrictName
+	case CheckoutOverrideNone:
+		return checkoutOverrideNoneName
+	default:
+		return checkoutOverrideFromJobName
+	}
+}
+
+// ParseCheckoutOverrideMode maps a flag/env value to a mode. An empty string
+// selects the default (from-job).
+func ParseCheckoutOverrideMode(s string) (CheckoutOverrideMode, error) {
+	switch s {
+	case "", checkoutOverrideFromJobName:
+		return CheckoutOverrideFromJob, nil
+	case checkoutOverrideStrictName:
+		return CheckoutOverrideStrict, nil
+	case checkoutOverrideNoneName:
+		return CheckoutOverrideNone, nil
+	default:
+		return CheckoutOverrideFromJob, fmt.Errorf("invalid checkout-override mode %q, must be one of %v", s, CheckoutOverrideModeNames)
+	}
+}
+
+// FlooredForCommandEval restricts the mode so command-eval can't be bypassed:
+// when command-eval is disabled, CheckoutOverrideNone is raised to
+// CheckoutOverrideFromJob, which still blocks backend job env and secret git
+// flags (the injection vector) while leaving hooks and plugins free to tailor
+// checkout.
+func (m CheckoutOverrideMode) FlooredForCommandEval(commandEvalEnabled bool) CheckoutOverrideMode {
+	if !commandEvalEnabled && m == CheckoutOverrideNone {
+		return CheckoutOverrideFromJob
+	}
+	return m
+}
+
+// IsCheckoutLocked reports whether a checkout-scoped var is locked against writes
+// from outside the running job (backend job env and secrets) under the given
+// mode. Vars that aren't checkout-scoped are governed by IsProtected instead.
+func IsCheckoutLocked(name string, mode CheckoutOverrideMode) bool {
+	if !IsCheckoutOverrideScoped(name) {
+		return false
+	}
+	return mode == CheckoutOverrideStrict || mode == CheckoutOverrideFromJob
+}
+
+// IsCheckoutLockedFromWithinJob reports whether a checkout-scoped var is locked
+// against writes from within the running job (hooks, plugins, and the Job API)
+// under the given mode. Vars that aren't checkout-scoped are governed by
+// IsProtectedFromWithinJob instead.
+func IsCheckoutLockedFromWithinJob(name string, mode CheckoutOverrideMode) bool {
+	if !IsCheckoutOverrideScoped(name) {
+		return false
+	}
+	return mode == CheckoutOverrideStrict
 }

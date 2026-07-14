@@ -16,6 +16,7 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_BUILD_PATH",
 		"BUILDKITE_COMMAND_EVAL",
 		"BUILDKITE_CONFIG_PATH",
+		"BUILDKITE_CHECKOUT_OVERRIDE_MODE",
 		"BUILDKITE_CONTAINER_COUNT",
 		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		"BUILDKITE_GIT_MIRRORS_PATH",
@@ -24,7 +25,6 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_HOOKS_PATH",
 		"BUILDKITE_KUBERNETES_EXEC",
 		"BUILDKITE_LOCAL_HOOKS_ENABLED",
-		"BUILDKITE_NO_CHECKOUT_OVERRIDE",
 		"BUILDKITE_PLUGINS_ENABLED",
 		"BUILDKITE_PLUGINS_PATH",
 		"BUILDKITE_SHELL",
@@ -86,9 +86,9 @@ func TestCheckoutOverrideScope(t *testing.T) {
 		"BUILDKITE_SKIP_CHECKOUT",
 	}
 
-	// These vars are conditionally locked: scoped, write-protected only when
-	// no-checkout-override is enabled. (Disjointness from protectedEnv is
-	// covered by TestProtectedAndCheckoutScopeDisjoint.)
+	// These vars are conditionally locked: scoped, write-protected depending on
+	// the checkout override mode. (Disjointness from protectedEnv is covered by
+	// TestProtectedAndCheckoutScopeDisjoint.)
 	for _, envVar := range scoped {
 		if got := IsCheckoutOverrideScoped(envVar); !got {
 			t.Errorf("IsCheckoutOverrideScoped(%q) = false, want true", envVar)
@@ -121,6 +121,91 @@ func TestCheckoutOverrideScope(t *testing.T) {
 	}
 	if IsCheckoutOverrideScoped("MY_CUSTOM_VAR") {
 		t.Errorf("IsCheckoutOverrideScoped(MY_CUSTOM_VAR) = true, want false")
+	}
+}
+
+func TestParseCheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in      string
+		want    CheckoutOverrideMode
+		wantErr bool
+	}{
+		{"", CheckoutOverrideFromJob, false}, // empty selects the default
+		{"from-job", CheckoutOverrideFromJob, false},
+		{"strict", CheckoutOverrideStrict, false},
+		{"none", CheckoutOverrideNone, false},
+		{"STRICT", CheckoutOverrideFromJob, true}, // case-sensitive
+		{"lockdown", CheckoutOverrideFromJob, true},
+	}
+
+	for _, tc := range cases {
+		got, err := ParseCheckoutOverrideMode(tc.in)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("ParseCheckoutOverrideMode(%q) err = %v, wantErr %t", tc.in, err, tc.wantErr)
+		}
+		if got != tc.want {
+			t.Errorf("ParseCheckoutOverrideMode(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestCheckoutOverrideModeStringRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	for _, m := range []CheckoutOverrideMode{CheckoutOverrideFromJob, CheckoutOverrideStrict, CheckoutOverrideNone} {
+		got, err := ParseCheckoutOverrideMode(m.String())
+		if err != nil {
+			t.Errorf("ParseCheckoutOverrideMode(%q): unexpected err %v", m.String(), err)
+		}
+		if got != m {
+			t.Errorf("round trip via %q = %v, want %v", m.String(), got, m)
+		}
+	}
+}
+
+func TestCheckoutLockPredicates(t *testing.T) {
+	t.Parallel()
+
+	const (
+		scoped    = "BUILDKITE_GIT_CLONE_FLAGS" // in checkoutOverrideScope
+		protected = "BUILDKITE_COMMAND_EVAL"    // in protectedEnv, not scoped
+		unscoped  = "MY_CUSTOM_VAR"             // in neither map
+	)
+
+	// The matrix from the design: strict locks every source; from-job locks the
+	// outside-job sources (backend env, secrets) but leaves within-job sources
+	// (hooks, plugins, Job API) open, matching the agent's historical behaviour;
+	// none locks nothing.
+	cases := []struct {
+		mode           CheckoutOverrideMode
+		wantFromJobEnv bool
+		wantWithinJob  bool
+	}{
+		{CheckoutOverrideStrict, true, true},
+		{CheckoutOverrideFromJob, true, false},
+		{CheckoutOverrideNone, false, false},
+	}
+
+	for _, tc := range cases {
+		if got := IsCheckoutLocked(scoped, tc.mode); got != tc.wantFromJobEnv {
+			t.Errorf("IsCheckoutLocked(%q, %v) = %t, want %t", scoped, tc.mode, got, tc.wantFromJobEnv)
+		}
+		if got := IsCheckoutLockedFromWithinJob(scoped, tc.mode); got != tc.wantWithinJob {
+			t.Errorf("IsCheckoutLockedFromWithinJob(%q, %v) = %t, want %t", scoped, tc.mode, got, tc.wantWithinJob)
+		}
+
+		// Non-checkout-scoped vars are never governed by the checkout predicates,
+		// regardless of mode; protectedEnv handles them via IsProtected*.
+		for _, name := range []string{protected, unscoped} {
+			if IsCheckoutLocked(name, tc.mode) {
+				t.Errorf("IsCheckoutLocked(%q, %v) = true, want false", name, tc.mode)
+			}
+			if IsCheckoutLockedFromWithinJob(name, tc.mode) {
+				t.Errorf("IsCheckoutLockedFromWithinJob(%q, %v) = true, want false", name, tc.mode)
+			}
+		}
 	}
 }
 
