@@ -171,11 +171,11 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout_WithGitMirrors(t *testing.
 		PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
+		{"--version"},
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
-		{"--version"},
 		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},

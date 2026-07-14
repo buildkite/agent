@@ -127,7 +127,7 @@ func TestSetupSparseCheckout_DisableWithoutPriorSparseConfig(t *testing.T) {
 	git.Check(t)
 }
 
-func TestSetupSparseCheckout_VersionFallback(t *testing.T) {
+func TestResolveSparseCheckout_VersionFallback(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
 	executor.GitSparseCheckoutPaths = []string{"src/"}

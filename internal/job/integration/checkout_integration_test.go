@@ -325,13 +325,13 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutPreservesUserFilter(t *test
 		PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
+		{"--version"},
 		// User's --filter=tree:0 is preserved; --sparse is still auto-added.
 		{"clone", "-v", "--filter=tree:0", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		// Fetch does NOT get --filter=blob:none prepended — the user's
 		// tree:0 filter is already stored in repo config and inherited here.
 		{"fetch", "-v", "--", "origin", "main"},
-		{"--version"},
 		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -372,10 +372,10 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
+		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
-		{"--version"},
 		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -499,10 +499,10 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 	git.ExpectAll([][]any{
+		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
-		{"--version"},
 		{"sparse-checkout", "set", "--cone", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -518,10 +518,10 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 	env[len(env)-1] = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/"
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
 	git.ExpectAll([][]any{
+		{"--version"},
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
-		{"--version"},
 		{"sparse-checkout", "set", "--cone", ".buildkite/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -666,11 +666,11 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.
 	git.Expect("submodule", "sync", "--recursive").NotCalled()
 	git.Expect("submodule", "update").WithAnyArguments().NotCalled()
 	git.ExpectAll([][]any{
+		{"--version"},
 		{"clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "--filter=blob:none", "-v", "--", "origin", "main"},
-		{"--version"},
 		{"sparse-checkout", "set", "--cone", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
