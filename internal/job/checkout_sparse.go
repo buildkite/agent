@@ -22,9 +22,8 @@ func (e *Executor) resolveSparseCheckout(ctx context.Context) []string {
 	}
 
 	// We require git >= 2.27 because setupSparseCheckout runs
-	// `git sparse-checkout set --cone <paths>` which is only supported by
-	// 2.27 and newer. On older git versions, fall back to a full checkout
-	// by returning nil.
+	// `git sparse-checkout set --cone <paths>` left experiment status.
+	//  On older git versions, fall back to a full checkout by returning nil.
 	ok, err := gitVersionAtLeast(ctx, e.shell, 2, 27)
 	if err != nil {
 		e.shell.Warningf("Sparse checkout requires git >= 2.27; falling back to full checkout (%v)", err)
