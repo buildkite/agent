@@ -363,6 +363,47 @@ func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 	}
 }
 
+func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
+	ctx := t.Context()
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	var calls [][]string
+	respond := func(args []string) (*CommandResult, error) {
+		if isCommand(args, "nsc", "artifact", "extend", "--help") {
+			return &CommandResult{
+				ExitCode: 0,
+				Stdout: "Artifact-related activities.\n" +
+					"Usage:\n  nsc artifact [command]\n" +
+					"Available Commands:\n" +
+					"  download   Download an artifact.\n" +
+					"  upload     Upload an artifact.\n",
+			}, nil
+		}
+		return &CommandResult{}, nil
+	}
+	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
+
+	if _, err := store.Download(ctx, "key", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+
+	var updated, extended bool
+	for _, c := range calls {
+		if isCommand(c, "nsc", "version", "update") {
+			updated = true
+		}
+		if isCommand(c, "nsc", "artifact", "extend", "key") {
+			extended = true
+		}
+	}
+	if !updated {
+		t.Error("expected nsc version update to run when extend --help exits 0 but omits --ensure_minimum")
+	}
+	if !extended {
+		t.Error("expected nsc artifact extend to run after updating the CLI")
+	}
+}
+
 func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
 	ctx := t.Context()
 	dest := filepath.Join(t.TempDir(), "out.txt")

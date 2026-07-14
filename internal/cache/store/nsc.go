@@ -275,7 +275,8 @@ func (n *NscStore) refreshExpiry(ctx context.Context, key string) {
 // exit non-zero for its --help.
 func (n *NscStore) extendSupported(ctx context.Context) bool {
 	result, err := n.run(ctx, "", "nsc", "artifact", "extend", "--help")
-	return err == nil && result.ExitCode == 0
+	return err == nil && result.ExitCode == 0 &&
+		strings.Contains(result.Stdout, "--ensure_minimum")
 }
 
 type CommandResult struct {
