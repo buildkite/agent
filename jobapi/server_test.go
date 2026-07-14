@@ -479,6 +479,44 @@ func TestDeleteEnvRejectsCheckoutScopedVarsUnderStrict(t *testing.T) {
 	})
 }
 
+func TestDeleteEnvAllowsCheckoutScopedVarsUnderDefaultMode(t *testing.T) {
+	t.Parallel()
+
+	// The Job API is a within-job source, so the default mode (from-job) lets it
+	// delete checkout-scoped vars; only strict blocks it.
+	environ := testEnvironWith("BUILDKITE_GIT_CLONE_FLAGS", "-v")
+	srv, token, err := testServer(t, environ, replacer.NewMux())
+	if err != nil {
+		t.Fatalf("creating server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("starting server: %v", err)
+	}
+	defer func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("stopping server: %v", err)
+		}
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(&jobapi.EnvDeleteRequest{Keys: []string{"BUILDKITE_GIT_CLONE_FLAGS"}}); err != nil {
+		t.Fatalf("encoding request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, "http://job/api/current-job/v0/env", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvDeleteRequest, jobapi.EnvDeleteResponse]{
+		expectedStatus:       http.StatusOK,
+		expectedResponseBody: &jobapi.EnvDeleteResponse{Deleted: []string{"BUILDKITE_GIT_CLONE_FLAGS"}},
+		expectedEnv:          testEnviron().Dump(),
+	})
+}
+
 func TestPatchEnvRejectsSparseCheckoutPathsUnderStrict(t *testing.T) {
 	t.Parallel()
 
