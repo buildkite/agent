@@ -552,6 +552,45 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantEnvValue:       "false",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"},
 		},
+		{
+			name:    "none_allows_job_env_to_override_checkout_timeout",
+			varName: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CHECKOUT_TIMEOUT": "99",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCheckoutTimeout:   60,
+				CheckoutOverrideMode: env.CheckoutOverrideNone,
+			},
+			wantEnvValue: "99",
+		},
+		{
+			name:    "strict_locks_checkout_timeout_to_agent_config",
+			varName: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CHECKOUT_TIMEOUT": "99",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCheckoutTimeout:   60,
+				CheckoutOverrideMode: env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "60",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CHECKOUT_TIMEOUT"},
+		},
+		{
+			// Agent timeout at its default 0 is the silent side: the lock must
+			// still emit it so a job can't reintroduce a checkout timeout.
+			name:    "strict_locks_checkout_timeout_off_to_agent_config",
+			varName: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CHECKOUT_TIMEOUT": "99",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "0",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CHECKOUT_TIMEOUT"},
+		},
 	}
 
 	for _, tc := range tests {

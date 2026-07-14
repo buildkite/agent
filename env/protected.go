@@ -85,6 +85,7 @@ var protectedEnv = map[string]protection{
 // are disjoint.
 var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_CHECKOUT_FLAGS":              {},
+	"BUILDKITE_GIT_CHECKOUT_TIMEOUT":            {},
 	"BUILDKITE_GIT_CLEAN_FLAGS":                 {},
 	"BUILDKITE_GIT_CLONE_FLAGS":                 {},
 	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":          {},
