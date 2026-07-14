@@ -76,13 +76,14 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_SSH_KEYSCAN":                 {},
 }
 
-// checkoutOverrideScope contains checkout-related vars that remain mutable in
-// hooks, plugins, Job API, and secrets by default so jobs can tailor checkout
-// behavior. When checkout override is enabled, those same vars become locked so
-// agent checkout config wins: git is riddled with shell injections, so letting a
-// job set git flags would otherwise be a way to bypass protections like
-// no-command-eval. Vars here must not also appear in protectedEnv; the two maps
-// are disjoint.
+// checkoutOverrideScope contains checkout-related vars whose write-protection
+// depends on the checkout-override mode (see CheckoutOverrideMode). Under the
+// default (from-job) they're locked against backend job env and secrets but
+// still mutable from hooks, plugins, and the Job API; strict locks them against
+// every source; none leaves them open. Locking matters because git is riddled
+// with shell injections, so letting a job set git flags would otherwise be a way
+// to bypass protections like no-command-eval. Vars here must not also appear in
+// protectedEnv; the two maps are disjoint.
 var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_CHECKOUT_FLAGS":              {},
 	"BUILDKITE_GIT_CHECKOUT_TIMEOUT":            {},
