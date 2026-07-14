@@ -405,7 +405,6 @@ func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, erro
 
 // Creates the environment variables that will be used in the process and writes a flat environment file
 func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
-	// Captured before the local env map below shadows the env package name.
 	// Checkout-scoped vars are locked against backend job env under strict and
 	// from-job (i.e. every mode except none).
 	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
