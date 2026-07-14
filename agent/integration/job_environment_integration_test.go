@@ -268,6 +268,21 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_FLAGS"},
 		},
 		{
+			// The zero value (unset CheckoutOverrideMode) is the default, from-job.
+			// Pin that the default blocks backend job env, so a future default flip
+			// or predicate change can't silently weaken it (regression for agent-7bu).
+			name:    "default_locks_clone_flags_to_agent_config",
+			varName: "BUILDKITE_GIT_CLONE_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CLONE_FLAGS": "--no-tags",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCloneFlags: "--mirror",
+			},
+			wantEnvValue:       "--mirror",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_FLAGS"},
+		},
+		{
 			name:    "none_allows_job_env_to_enable_submodules",
 			varName: "BUILDKITE_GIT_SUBMODULES",
 			jobEnv: map[string]string{
