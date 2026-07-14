@@ -914,6 +914,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	// Resolve the cone paths to check out (nil means a full checkout).
 	sparsePaths := e.resolveSparseCheckout(ctx)
 
+	// Split the git clone flags into a slice of strings, so we can append to it if needed.
+	gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
+	if err != nil {
+		return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
+	}
+
 	// On mirrors and dissociation:
 	//
 	// --reference makes the clone reuse objects from the mirror, using the
@@ -959,10 +965,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 
 		// Compute the clone flags. For mirrors we need --reference, and usually
 		// --dissociate.
-		gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
-		if err != nil {
-			return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
-		}
 		if mirrorDir != "" {
 			gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
 			if e.GitMirrorCheckoutMode == "dissociate" {
@@ -981,7 +983,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 			} else {
 				gitCloneFlags = append(gitCloneFlags, "--sparse")
 			}
-			if hasPartialCloneFilter(gitCloneFlags) {
+			if hasPartialFilterFlags(gitCloneFlags) {
 				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
 			} else {
 				gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
@@ -1015,9 +1017,14 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 	}
 
+	// Split the fetch flags into a slice of strings, so we can append to it if needed.
+	gitFetchFlags, err := shellwords.Split(e.GitFetchFlags)
+	if err != nil {
+		return fmt.Errorf("splitting --git-fetch-flags %q: %w", e.GitFetchFlags, err)
+	}
 	addBloblessFilter := len(sparsePaths) > 0 &&
-		!strings.Contains(e.GitCloneFlags, "--filter") &&
-		!strings.Contains(e.GitFetchFlags, "--filter")
+		!hasPartialFilterFlags(gitCloneFlags) &&
+		!hasPartialFilterFlags(gitFetchFlags)
 	if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
 		return err
 	}

@@ -240,7 +240,7 @@ func TestGitClone(t *testing.T) {
 	}
 }
 
-func TestHasPartialCloneFilter(t *testing.T) {
+func TestHasPartialFilterFlags(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -263,8 +263,8 @@ func TestHasPartialCloneFilter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := hasPartialCloneFilter(tt.flags); got != tt.want {
-				t.Errorf("hasPartialCloneFilter(%v) = %t, want %t", tt.flags, got, tt.want)
+			if got := hasPartialFilterFlags(tt.flags); got != tt.want {
+				t.Errorf("hasPartialFilterFlags(%v) = %t, want %t", tt.flags, got, tt.want)
 			}
 		})
 	}

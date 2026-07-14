@@ -92,9 +92,9 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	return nil
 }
 
-// hasPartialCloneFilter returns true if flags contains a
+// hasPartialFilterFlags returns true if flags contains a
 // --filter=<spec> or --filter <spec> option.
-func hasPartialCloneFilter(flags []string) bool {
+func hasPartialFilterFlags(flags []string) bool {
 	for i, f := range flags {
 		// Check for --filter=<spec>
 		if strings.HasPrefix(f, "--filter=") {
