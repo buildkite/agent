@@ -41,7 +41,7 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 	if len(protected) > 0 {
 		err := socket.WriteError(
 			w,
-			s.protectedEnvError(protected),
+			s.protectedEnvMessage(protected),
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
@@ -110,7 +110,7 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	if len(protected) > 0 {
 		err := socket.WriteError(
 			w,
-			s.protectedEnvError(protected),
+			s.protectedEnvMessage(protected),
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
@@ -151,10 +151,10 @@ func (s *Server) checkProtected(candidates []string) []string {
 	return protected
 }
 
-// protectedEnvError builds the rejection message for protected candidates,
+// protectedEnvMessage builds the rejection message for protected candidates,
 // noting when the rejection is due to the checkout-override lock rather than an
 // always-protected var.
-func (s *Server) protectedEnvError(protected []string) string {
+func (s *Server) protectedEnvMessage(protected []string) string {
 	msg := fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected)
 	for _, p := range protected {
 		if env.IsCheckoutLockedFromWithinJob(p, s.checkoutOverrideMode) {
