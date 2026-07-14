@@ -168,6 +168,45 @@ func TestCloneWithStdinPreservesOutputInterceptor(t *testing.T) {
 	}
 }
 
+func TestRunSharesOutputInterceptorForCombinedStdoutAndStderr(t *testing.T) {
+	t.Parallel()
+
+	proxy, err := bintest.CompileProxy("combined-output")
+	if err != nil {
+		t.Fatalf("bintest.CompileProxy(combined-output) error = %v", err)
+	}
+	defer func() {
+		if err := proxy.Close(); err != nil {
+			t.Errorf("proxy.Close() error = %v", err)
+		}
+	}()
+
+	out := &bytes.Buffer{}
+	interceptorCalls := 0
+	sh := newShellForTest(t,
+		shell.WithStdout(out),
+		shell.WithPTY(false),
+		shell.WithOutputInterceptor(func(_ context.Context, downstream io.Writer, _ map[string]string) io.Writer {
+			interceptorCalls++
+			return downstream
+		}),
+	)
+
+	go func() {
+		call := <-proxy.Ch
+		_, _ = io.WriteString(call.Stdout, "stdout")
+		_, _ = io.WriteString(call.Stderr, "stderr")
+		call.Exit(0)
+	}()
+
+	if err := sh.Command(proxy.Path).Run(t.Context()); err != nil {
+		t.Fatalf("Command.Run() error = %v", err)
+	}
+	if got, want := interceptorCalls, 1; got != want {
+		t.Errorf("output interceptor calls = %d, want %d for shared stdout/stderr", got, want)
+	}
+}
+
 func TestContextCancelInterrupts(t *testing.T) {
 	t.Parallel()
 

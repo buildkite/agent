@@ -728,9 +728,10 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 	}
 
-	if r.conf.AgentConfiguration.JobLogsOTLP {
-		setEnv("BUILDKITE_JOB_LOGS_OTLP", "true")
-	}
+	// This is an agent-operator setting, not a pipeline setting. Always
+	// overwrite the job-provided value so a pipeline cannot enable OTLP export
+	// or choose its destination when the agent operator has not opted in.
+	setEnv("BUILDKITE_JOB_LOGS_OTLP", fmt.Sprint(r.conf.AgentConfiguration.JobLogsOTLP))
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
 

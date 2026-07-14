@@ -20,6 +20,11 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
+// Keep newline-free output bounded while retaining normal line-oriented
+// records. This matches the maximum chunk size used by common log shippers and
+// avoids buffering an arbitrarily large process write until command exit.
+const otlpLogRecordMaxBytes = 64 * 1024
+
 type otlpJobLogger struct {
 	log       otellog.Logger
 	provider  *sdklog.LoggerProvider
@@ -65,7 +70,9 @@ func newOTLPJobLogger(ctx context.Context, e *Executor) (*otlpJobLogger, error) 
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	)
 	provider := sdklog.NewLoggerProvider(
-		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
+		// Job logs must not be silently dropped when the SDK batch queue fills.
+		// Back-pressure the command output on the exporter instead.
+		sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)),
 		sdklog.WithResource(resources),
 	)
 
@@ -193,18 +200,42 @@ func (e *otlpLineEmitter) Write(data []byte) (int, error) {
 	for len(data) > 0 {
 		i := bytes.IndexByte(data, '\n')
 		if i < 0 {
-			e.buf = append(e.buf, data...)
+			e.appendChunks(data)
 			return origLen, nil
 		}
 
-		line := append(e.buf, data[:i]...)
-		line = bytes.TrimSuffix(line, []byte{'\r'})
-		e.emit(string(line))
+		emittedChunk := e.appendChunks(data[:i])
+		e.buf = bytes.TrimSuffix(e.buf, []byte{'\r'})
+		if len(e.buf) > 0 || !emittedChunk {
+			e.emit(string(e.buf))
+		}
 		e.buf = e.buf[:0]
 		data = data[i+1:]
 	}
 
 	return origLen, nil
+}
+
+func (e *otlpLineEmitter) appendChunks(data []byte) bool {
+	emitted := false
+	for len(data) > 0 {
+		// Keep one full chunk buffered until we see either more data or a line
+		// terminator. This lets Write strip a trailing carriage return when a
+		// CRLF sequence arrives across separate writes without exceeding the
+		// memory bound.
+		if len(e.buf) == otlpLogRecordMaxBytes {
+			e.emit(string(e.buf))
+			e.buf = e.buf[:0]
+			emitted = true
+		}
+		remaining := otlpLogRecordMaxBytes - len(e.buf)
+		if remaining > len(data) {
+			remaining = len(data)
+		}
+		e.buf = append(e.buf, data[:remaining]...)
+		data = data[remaining:]
+	}
+	return emitted
 }
 
 func (e *otlpLineEmitter) flush() {

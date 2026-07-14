@@ -193,3 +193,36 @@ func TestOTLPJobLoggerRedactsSecretsSplitAcrossWrites(t *testing.T) {
 		t.Errorf("OTLP record body leaked secret split across writes: %q", body)
 	}
 }
+
+func TestOTLPJobLoggerChunksUnterminatedOutput(t *testing.T) {
+	t.Parallel()
+
+	cap := &captureLogger{}
+	l := newTestOTLPJobLogger(cap)
+	w := l.Wrap(t.Context(), &bytes.Buffer{}, nil)
+	line := strings.Repeat("x", otlpLogRecordMaxBytes*2+17)
+
+	if _, err := w.Write([]byte(line)); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	cap.mu.Lock()
+	if got, want := len(cap.bodies), 2; got != want {
+		cap.mu.Unlock()
+		t.Fatalf("records before Flush = %d, want %d", got, want)
+	}
+	cap.mu.Unlock()
+
+	if f, ok := w.(interface{ Flush() }); ok {
+		f.Flush()
+	}
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	if got, want := len(cap.bodies), 3; got != want {
+		t.Fatalf("records after Flush = %d, want %d", got, want)
+	}
+	if got := strings.Join(cap.bodies, ""); got != line {
+		t.Errorf("rejoined record bodies differ from input: got %d bytes, want %d", len(got), len(line))
+	}
+}

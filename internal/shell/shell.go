@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -496,16 +497,28 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 
 	var flushers []interface{ Flush() }
 	if c.shell.outputInterceptor != nil {
-		if cfg.captureStdout == nil && stdout != nil && stdout != io.Discard {
+		// stdout and stderr normally share the same downstream job-log writer.
+		// Preserve that shared stream through the interceptor as well so
+		// stateful processing such as redaction can match values split across
+		// writes to the two file descriptors.
+		if cfg.captureStdout == nil && sameWriter(stdout, stderr) && stdout != nil && stdout != io.Discard {
 			stdout = c.shell.outputInterceptor(ctx, stdout, cfg.outputAttrs)
+			stderr = stdout
 			if f, ok := stdout.(interface{ Flush() }); ok {
 				flushers = append(flushers, f)
 			}
-		}
-		if stderr != nil && stderr != io.Discard {
-			stderr = c.shell.outputInterceptor(ctx, stderr, cfg.outputAttrs)
-			if f, ok := stderr.(interface{ Flush() }); ok {
-				flushers = append(flushers, f)
+		} else {
+			if cfg.captureStdout == nil && stdout != nil && stdout != io.Discard {
+				stdout = c.shell.outputInterceptor(ctx, stdout, cfg.outputAttrs)
+				if f, ok := stdout.(interface{ Flush() }); ok {
+					flushers = append(flushers, f)
+				}
+			}
+			if stderr != nil && stderr != io.Discard {
+				stderr = c.shell.outputInterceptor(ctx, stderr, cfg.outputAttrs)
+				if f, ok := stderr.(interface{ Flush() }); ok {
+					flushers = append(flushers, f)
+				}
 			}
 		}
 	}
@@ -519,6 +532,14 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 	cmdCfg.Done = cfg.done
 
 	return c.shell.executeCommand(ctx, cmdCfg, stdout, stderr, pty)
+}
+
+func sameWriter(a, b io.Writer) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	av, bv := reflect.ValueOf(a), reflect.ValueOf(b)
+	return av.Type() == bv.Type() && av.Comparable() && av.Interface() == bv.Interface()
 }
 
 // RunAndCaptureStdout is Run, but automatically sets options:
