@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -21,6 +22,17 @@ import (
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 )
+
+type synchronizedWriter struct {
+	mu  sync.Mutex
+	out io.Writer
+}
+
+func (w *synchronizedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.out.Write(p)
+}
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
 	t.Parallel()
@@ -183,12 +195,13 @@ func TestRunSharesOutputInterceptorForCombinedStdoutAndStderr(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	interceptorCalls := 0
+	smelled := map[string]bool{"stdout": false, "stderr": false}
 	sh := newShellForTest(t,
 		shell.WithStdout(out),
 		shell.WithPTY(false),
 		shell.WithOutputInterceptor(func(_ context.Context, downstream io.Writer, _ map[string]string) io.Writer {
 			interceptorCalls++
-			return downstream
+			return &synchronizedWriter{out: downstream}
 		}),
 	)
 
@@ -199,11 +212,16 @@ func TestRunSharesOutputInterceptorForCombinedStdoutAndStderr(t *testing.T) {
 		call.Exit(0)
 	}()
 
-	if err := sh.Command(proxy.Path).Run(t.Context()); err != nil {
+	if err := sh.Command(proxy.Path).Run(t.Context(), shell.WithStringSearch(smelled)); err != nil {
 		t.Fatalf("Command.Run() error = %v", err)
 	}
 	if got, want := interceptorCalls, 1; got != want {
-		t.Errorf("output interceptor calls = %d, want %d for shared stdout/stderr", got, want)
+		t.Errorf("output interceptor calls = %d, want %d for shared stdout/stderr with string search", got, want)
+	}
+	for output, found := range smelled {
+		if !found {
+			t.Errorf("WithStringSearch did not find %q", output)
+		}
 	}
 }
 

@@ -474,27 +474,6 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 		stderr = io.Discard
 	}
 
-	// If we're performing a string search, wrap the current stdout and stderr
-	// in olfactors, and report which ones were detected through the map.
-	if cfg.smells != nil {
-		smells := make([]string, 0, len(cfg.smells))
-		for s := range cfg.smells {
-			smells = append(smells, s)
-		}
-		so, o1 := olfactor.New(stdout, smells)
-		se, o2 := olfactor.New(stderr, smells)
-		stdout, stderr = so, se
-
-		defer func() {
-			for _, smelt := range o1.AllSmelt() {
-				cfg.smells[smelt] = true
-			}
-			for _, smelt := range o2.AllSmelt() {
-				cfg.smells[smelt] = true
-			}
-		}()
-	}
-
 	var flushers []interface{ Flush() }
 	if c.shell.outputInterceptor != nil {
 		// stdout and stderr normally share the same downstream job-log writer.
@@ -521,6 +500,31 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 				}
 			}
 		}
+	}
+
+	// If we're performing a string search, wrap the intercepted stdout and
+	// stderr in olfactors and report which ones were detected through the map.
+	// Interception must happen first: olfactor uses separate wrappers for each
+	// stream, which would otherwise hide that both ultimately share the same
+	// job-log writer and incorrectly split stateful processing such as OTLP
+	// redaction.
+	if cfg.smells != nil {
+		smells := make([]string, 0, len(cfg.smells))
+		for s := range cfg.smells {
+			smells = append(smells, s)
+		}
+		so, o1 := olfactor.New(stdout, smells)
+		se, o2 := olfactor.New(stderr, smells)
+		stdout, stderr = so, se
+
+		defer func() {
+			for _, smelt := range o1.AllSmelt() {
+				cfg.smells[smelt] = true
+			}
+			for _, smelt := range o2.AllSmelt() {
+				cfg.smells[smelt] = true
+			}
+		}()
 	}
 	defer func() {
 		for _, f := range flushers {
