@@ -100,6 +100,16 @@ var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_SKIP_CHECKOUT":                   {},
 }
 
+// Some checkout-related vars are intentionally governed by neither the mode nor
+// checkoutOverrideScope. BUILDKITE_GIT_SSH_KEY and BUILDKITE_GIT_LFS_ENABLED are
+// in no map at all, so any source may set them in every mode: a job supplying its
+// own deploy key or LFS toggle configures its own checkout without escalating the
+// agent's privileges, and neither is a shell-flag injection vector. BUILDKITE_REPO
+// and BUILDKITE_REFSPEC stay mutableFromWithinJob in protectedEnv, so hooks and
+// plugins may set them even under strict, while backend job env and secrets are
+// still blocked by IsProtected. The checkout-override mode does not change any of
+// this.
+
 // IsProtected reports whether the environment variable is write-protected when
 // the write is coming from job-level env or secrets.
 func IsProtected(name string) bool {
@@ -140,8 +150,10 @@ const (
 	// which locked checkout-scoped vars against backend job env.
 	CheckoutOverrideFromJob CheckoutOverrideMode = iota
 
-	// CheckoutOverrideStrict makes agent checkout config authoritative against
-	// every source: pipeline/step env, secrets, hooks, plugins, and the Job API.
+	// CheckoutOverrideStrict locks the checkoutOverrideScope vars against every
+	// source: pipeline/step env, secrets, hooks, plugins, and the Job API. Vars
+	// outside that scope (see the exclusions note on checkoutOverrideScope) are
+	// unaffected by the mode.
 	CheckoutOverrideStrict
 
 	// CheckoutOverrideNone lets any source, including secrets, override the

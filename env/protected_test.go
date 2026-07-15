@@ -209,6 +209,48 @@ func TestCheckoutLockPredicates(t *testing.T) {
 	}
 }
 
+// TestCheckoutOverrideModeExclusions pins the checkout-related vars that the mode
+// deliberately does not govern, so a future change that scopes or protects them
+// has to update these expectations on purpose.
+func TestCheckoutOverrideModeExclusions(t *testing.T) {
+	t.Parallel()
+
+	// GIT_SSH_KEY and GIT_LFS_ENABLED are in neither map, so any source can set
+	// them in every mode, including strict.
+	for _, name := range []string{"BUILDKITE_GIT_SSH_KEY", "BUILDKITE_GIT_LFS_ENABLED"} {
+		if IsProtected(name) {
+			t.Errorf("IsProtected(%q) = true, want false", name)
+		}
+		if IsCheckoutOverrideScoped(name) {
+			t.Errorf("IsCheckoutOverrideScoped(%q) = true, want false", name)
+		}
+		if IsCheckoutLocked(name, CheckoutOverrideStrict) {
+			t.Errorf("IsCheckoutLocked(%q, strict) = true, want false", name)
+		}
+		if IsCheckoutLockedForSecrets(name, CheckoutOverrideStrict) {
+			t.Errorf("IsCheckoutLockedForSecrets(%q, strict) = true, want false", name)
+		}
+	}
+
+	// REPO and REFSPEC are not checkout-override-scoped, so the mode never locks
+	// them; they stay mutableFromWithinJob in protectedEnv (hooks and plugins may
+	// set them even under strict, while backend job env and secrets are blocked).
+	for _, name := range []string{"BUILDKITE_REPO", "BUILDKITE_REFSPEC"} {
+		if IsCheckoutOverrideScoped(name) {
+			t.Errorf("IsCheckoutOverrideScoped(%q) = true, want false", name)
+		}
+		if IsCheckoutLocked(name, CheckoutOverrideStrict) {
+			t.Errorf("IsCheckoutLocked(%q, strict) = true, want false", name)
+		}
+		if !IsProtected(name) {
+			t.Errorf("IsProtected(%q) = false, want true", name)
+		}
+		if IsProtectedFromWithinJob(name) {
+			t.Errorf("IsProtectedFromWithinJob(%q) = true, want false", name)
+		}
+	}
+}
+
 func TestRestrictedForCommandEval(t *testing.T) {
 	t.Parallel()
 
