@@ -76,6 +76,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":  {},
 	"BUILDKITE_HOOKS_PATH":                  {},
 	"BUILDKITE_HOOKS_SHELL":                 {},
+	"BUILDKITE_JOB_CONTEXT_DIR":             {},
 	"BUILDKITE_KUBERNETES_EXEC":             {},
 	"BUILDKITE_LOCAL_HOOKS_ENABLED":         {},
 	"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH":  {mutableFromWithinJob: true},
