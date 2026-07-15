@@ -320,6 +320,52 @@ func TestEnvironmentHookCannotRelaxCheckoutOverrideMode(t *testing.T) {
 	}
 }
 
+func TestEnvironmentHookEnablingLFSSetsSkipSmudge(t *testing.T) {
+	t.Parallel()
+
+	// A hook that enables LFS after setUp's skip-smudge decision must still get
+	// GIT_LFS_SKIP_SMUDGE set before checkout, so LFS objects go through the
+	// controlled fetch/checkout path rather than the automatic smudge filter. The
+	// hook also skips checkout so the command hook can assert without git-lfs
+	// installed (from-job lets a hook set both vars).
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	filename := "environment"
+	script := []string{
+		"#!/usr/bin/env bash",
+		"export BUILDKITE_GIT_LFS_ENABLED=true",
+		"export BUILDKITE_SKIP_CHECKOUT=true",
+	}
+	if runtime.GOOS == "windows" {
+		filename = "environment.bat"
+		script = []string{
+			"@echo off",
+			"set BUILDKITE_GIT_LFS_ENABLED=true",
+			"set BUILDKITE_SKIP_CHECKOUT=true",
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got := c.GetEnv("GIT_LFS_SKIP_SMUDGE"); got != "1" {
+			_, _ = fmt.Fprintf(c.Stderr, "GIT_LFS_SKIP_SMUDGE=%q, want \"1\" after a hook enabled LFS\n", got)
+			c.Exit(1)
+			return
+		}
+		c.Exit(0)
+	})
+
+	// Agent LFS defaults off; the hook is the only thing enabling it.
+	tester.RunAndCheck(t)
+}
+
 func TestNoCommandEvalFloorsCheckoutOverrideModeToStrict(t *testing.T) {
 	t.Parallel()
 

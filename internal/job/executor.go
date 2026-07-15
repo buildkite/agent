@@ -666,6 +666,14 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// Note this func mutates/refreshes the ExecutorConfig too.
 	executorConfigEnvChanges := e.ReadFromEnvironment(e.shell.Env)
 
+	// If a hook, plugin, or the Job API just enabled LFS, ensure GIT_LFS_SKIP_SMUDGE
+	// is set before checkout so LFS objects go through the controlled fetch/checkout
+	// path rather than the automatic smudge filter. setUp handles the agent-config
+	// and secret paths; this covers within-job sources that flip it afterward.
+	if e.GitLFSEnabled {
+		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
+	}
+
 	// Print out the env vars that changed. As we go through each
 	// one, we'll determine if it was a special environment variable
 	// that has changed the executor configuration at runtime.
