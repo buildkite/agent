@@ -762,3 +762,51 @@ func TestSecretsIntegration_CheckoutScopedSecretReachesCheckout(t *testing.T) {
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 	)
 }
+
+// BUILDKITE_GIT_LFS_ENABLED sits outside both protection maps, so a secret can
+// enable LFS in any mode. GIT_LFS_SKIP_SMUDGE must then be set before checkout so
+// LFS objects go through the controlled fetch/checkout path rather than the
+// automatic smudge filter. The skip-smudge decision runs after the secret refresh
+// in setUp, so it sees the secret-enabled LFS. The environment hook is the last
+// setUp step before checkout, so it observes the final env; it exits non-zero to
+// stop before the real LFS checkout flow (which needs git-lfs installed).
+func TestSecretsIntegration_SecretEnabledLFSSetsSkipSmudge(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	apiServer := setupSecretsAPIServer(t, map[string]string{"LFS_TOGGLE": "true"})
+	defer apiServer.Close()
+
+	secretsJSON, err := json.Marshal([]pipeline.Secret{{
+		Key:                 "LFS_TOGGLE",
+		EnvironmentVariable: "BUILDKITE_GIT_LFS_ENABLED",
+	}})
+	if err != nil {
+		t.Fatalf("marshaling secrets: %v", err)
+	}
+
+	tester.ExpectGlobalHook("environment").AndCallFunc(func(c *bintest.Call) {
+		// Report only the non-secret marker, not the secret-backed LFS value.
+		_, _ = fmt.Fprintf(c.Stderr, "SKIP_SMUDGE=%q\n", c.GetEnv("GIT_LFS_SKIP_SMUDGE"))
+		c.Exit(1)
+	})
+
+	// Agent LFS defaults off, so a skip-smudge of "1" can only come from the secret
+	// enabling LFS before the (post-refresh) skip-smudge block.
+	err = tester.Run(t,
+		fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
+		fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
+	)
+	if err == nil {
+		t.Fatalf("expected job to stop at the environment hook, but it succeeded. Full output: %s", tester.Output)
+	}
+
+	if !strings.Contains(tester.Output, `SKIP_SMUDGE="1"`) {
+		t.Fatalf("expected GIT_LFS_SKIP_SMUDGE=1 before checkout after a secret enabled LFS, got: %s", tester.Output)
+	}
+}

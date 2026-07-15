@@ -917,12 +917,6 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
-	// Suppress automatic LFS smudge only when LFS is enabled, so the checkout
-	// phase can materialise objects explicitly; otherwise git's default applies.
-	if e.GitLFSEnabled {
-		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
-	}
-
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {
 		if err := e.fetchAndSetSecrets(ctx); err != nil {
@@ -935,6 +929,14 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 		// a refresh before checkout. We don't route through applyEnvironmentChanges
 		// because its change logging would print the secret value.
 		e.ReadFromEnvironment(e.shell.Env)
+	}
+
+	// Suppress automatic LFS smudge only when LFS is enabled, so the checkout
+	// phase can materialise objects explicitly; otherwise git's default applies.
+	// After the secret refresh above so a secret that enables LFS is honoured here
+	// rather than leaving smudge on for the plain checkout.
+	if e.GitLFSEnabled {
+		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
 	}
 
 	// It's important to do this before checking out plugins, in case you want
